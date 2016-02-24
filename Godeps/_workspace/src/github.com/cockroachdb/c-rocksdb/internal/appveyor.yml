@@ -1,0 +1,10 @@
+version: 1.0.{build}
+before_build:
+- md %APPVEYOR_BUILD_FOLDER%\build
+- cd %APPVEYOR_BUILD_FOLDER%\build
+- cmake -G "Visual Studio 12 Win64" ..
+- cd ..
+build:
+  project: build\ALL_BUILD.vcxproj
+  verbosity: minimal
+test: off

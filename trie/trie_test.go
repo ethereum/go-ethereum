@@ -27,6 +27,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/diskdb"
 )
 
 func init() {
@@ -461,7 +462,7 @@ func tempDB() (string, Database) {
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	db, err := ethdb.NewLDBDatabase(dir, 300*1024)
+	db, err := diskdb.New(dir, 300*1024, 64)
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

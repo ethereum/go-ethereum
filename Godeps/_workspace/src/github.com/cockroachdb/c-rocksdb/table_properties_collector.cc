@@ -1,0 +1,1 @@
+internal/db/table_properties_collector.cc

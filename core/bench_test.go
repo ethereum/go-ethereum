@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/diskdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -153,7 +154,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 			b.Fatalf("cannot create temporary directory: %v", err)
 		}
 		defer os.RemoveAll(dir)
-		db, err = ethdb.NewLDBDatabase(dir, 0)
+		db, err = diskdb.New(dir, 0, 0)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}

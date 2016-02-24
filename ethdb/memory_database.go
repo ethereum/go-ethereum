@@ -89,7 +89,7 @@ func (db *MemDatabase) Delete(key []byte) error {
 	return nil
 }
 
-func (db *MemDatabase) Close() {}
+func (db *MemDatabase) Close() error { return nil }
 
 func (db *MemDatabase) NewBatch() Batch {
 	return &memBatch{db: db}
@@ -111,7 +111,7 @@ func (b *memBatch) Put(key, value []byte) error {
 	return nil
 }
 
-func (b *memBatch) Write() error {
+func (b *memBatch) Commit() error {
 	b.lock.RLock()
 	defer b.lock.RUnlock()
 

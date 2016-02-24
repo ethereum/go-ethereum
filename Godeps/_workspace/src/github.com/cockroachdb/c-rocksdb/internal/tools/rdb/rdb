@@ -1,0 +1,3 @@
+#!/bin/bash
+
+node -e "RDB = require('./build/Release/rdb').DBWrapper; console.log('Loaded rocksdb in variable RDB'); repl = require('repl').start('> ');"

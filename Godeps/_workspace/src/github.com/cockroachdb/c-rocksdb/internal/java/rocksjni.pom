@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project
+        xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+        xmlns="http://maven.apache.org/POM/4.0.0"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <modelVersion>4.0.0</modelVersion>
+    <name>RocksDB JNI</name>
+    <url>http://rocksdb.org/</url>
+    <groupId>org.rocksdb</groupId>
+    <artifactId>rocksdbjni</artifactId>
+    <!-- Version will be automatically replaced -->
+    <version>-</version>
+    <description>RocksDB fat jar that contains .so files for linux32 and linux64, and jnilib files
+        for Mac OSX.
+    </description>
+    <licenses>
+        <license>
+            <name>Apache License 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <scm>
+        <connection>scm:git:git://github.com/dropwizard/metrics.git</connection>
+        <developerConnection>scm:git:git@github.com:dropwizard/metrics.git</developerConnection>
+        <url>http://github.com/dropwizard/metrics/</url>
+        <tag>HEAD</tag>
+    </scm>
+    <developers>
+        <developer>
+            <name>Facebook</name>
+            <email>help@facebook.com</email>
+            <timezone>America/New_York</timezone>
+            <roles>
+                <role>architect</role>
+            </roles>
+        </developer>
+    </developers>
+
+    <properties>
+        <project.build.source>1.7</project.build.source>
+        <project.build.target>1.7</project.build.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.2</version>
+                <configuration>
+                    <source>${project.build.source}</source>
+                    <target>${project.build.target}</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.18.1</version>
+                <configuration>
+                    <argLine>${argLine} -ea -Xcheck:jni -Djava.library.path=${project.build.directory}</argLine>
+                    <useManifestOnlyJar>false</useManifestOnlyJar>  
+                    <useSystemClassLoader>false</useSystemClassLoader>
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.build.directory}/*</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.7.2.201409121644</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.gmaven</groupId>
+                <artifactId>groovy-maven-plugin</artifactId>
+                <version>2.0</version>
+                <executions>
+                    <execution>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>execute</goal>
+                        </goals>
+                        <configuration>
+                            <defaults>
+                                <name>Xenu</name>
+                            </defaults>
+                            <source>
+                                String fileContents = new File("${project.basedir}/../include/rocksdb/version.h").getText('UTF-8')
+                                matcher = (fileContents =~ /(?s).*ROCKSDB_MAJOR ([0-9]+).*?/)
+                                String major_version = matcher.getAt(0).getAt(1)
+                                matcher = (fileContents =~ /(?s).*ROCKSDB_MINOR ([0-9]+).*?/)
+                                String minor_version = matcher.getAt(0).getAt(1)
+                                matcher = (fileContents =~ /(?s).*ROCKSDB_PATCH ([0-9]+).*?/)
+                                String patch_version = matcher.getAt(0).getAt(1)
+                                String version = String.format('%s.%s.%s', major_version, minor_version, patch_version)
+                                // Set version to be used in pom.properties
+                                project.version = version
+                                // Set version to be set as jar name
+                                project.build.finalName = project.artifactId + "-" + version
+                            </source>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>1.7.1</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-all</artifactId>
+            <version>1.10.19</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

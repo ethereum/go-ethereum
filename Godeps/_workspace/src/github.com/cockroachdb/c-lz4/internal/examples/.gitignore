@@ -1,0 +1,8 @@
+/Makefile.lz4*
+/printVersion
+/doubleBuffer
+/ringBuffer
+/ringBufferHC
+/lineCompress
+/frameCompress
+/*.exe

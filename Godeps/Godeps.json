@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.5.2",
+	"GoVersion": "go1.6",
 	"Packages": [
 		"./..."
 	],
@@ -8,6 +8,18 @@
 		{
 			"ImportPath": "github.com/Gustav-Simonsson/go-opencl/cl",
 			"Rev": "593e01cfc4f3353585015321e01951d4a907d3ef"
+		},
+		{
+			"ImportPath": "github.com/cockroachdb/c-lz4",
+			"Rev": "c40aaae2fc50293eb8750b34632bc3efe813e23f"
+		},
+		{
+			"ImportPath": "github.com/cockroachdb/c-rocksdb",
+			"Rev": "c0124c907c74b579d9d3d48eb96471bef270bc25"
+		},
+		{
+			"ImportPath": "github.com/cockroachdb/c-snappy",
+			"Rev": "5c6d0932e0adaffce4bfca7bdf2ac37f79952ccf"
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",

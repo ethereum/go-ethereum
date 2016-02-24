@@ -1,0 +1,17 @@
+dependencies:
+  pre:
+    - ./install-clang-3.6.sh
+  override:
+    - go get -t -d -v ./...
+    - cp -R /home/ubuntu/c-rocksdb $GOPATH/src/github.com/cockroachdb/
+    - go build -v github.com/cockroachdb/c-rocksdb
+
+test:
+  override:
+    - go test -v -race github.com/cockroachdb/c-rocksdb/...
+
+machine:
+  environment:
+    GOPATH: /home/ubuntu/.go_project
+    CC:     /usr/lib/llvm-3.6/bin/clang
+    CXX:    /usr/lib/llvm-3.6/bin/clang++

@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="doc.css" />
+<title>RocksDB</title>
+</head>
+
+<body>
+<h1>RocksDB</h1>
+<address>The Facebook Database Engineering Team</address>
+<address>Build on earlier work on leveldb by Sanjay Ghemawat
+               (sanjay@google.com) and Jeff Dean (jeff@google.com)</address>
+<p>
+The <code>rocksdb</code> library provides a persistent key value store.  Keys and
+values are arbitrary byte arrays.  The keys are ordered within the key
+value store according to a user-specified comparator function.
+
+<p>
+<h1>Opening A Database</h1>
+<p>
+A <code>rocksdb</code> database has a name which corresponds to a file system
+directory.  All of the contents of database are stored in this
+directory.  The following example shows how to open a database,
+creating it if necessary:
+<p>
+<pre>
+  #include &lt;assert&gt;
+  #include "rocksdb/db.h"
+
+  rocksdb::DB* db;
+  rocksdb::Options options;
+  options.create_if_missing = true;
+  rocksdb::Status status = rocksdb::DB::Open(options, "/tmp/testdb", &amp;db);
+  assert(status.ok());
+  ...
+</pre>
+If you want to raise an error if the database already exists, add
+the following line before the <code>rocksdb::DB::Open</code> call:
+<pre>
+  options.error_if_exists = true;
+</pre>
+<h1>Status</h1>
+<p>
+You may have noticed the <code>rocksdb::Status</code> type above.  Values of this
+type are returned by most functions in <code>rocksdb</code> that may encounter an
+error.  You can check if such a result is ok, and also print an
+associated error message:
+<p>
+<pre>
+   rocksdb::Status s = ...;
+   if (!s.ok()) cerr &lt;&lt; s.ToString() &lt;&lt; endl;
+</pre>
+<h1>Closing A Database</h1>
+<p>
+When you are done with a database, just delete the database object.
+Example:
+<p>
+<pre>
+  ... open the db as described above ...
+  ... do something with db ...
+  delete db;
+</pre>
+<h1>Reads And Writes</h1>
+<p>
+The database provides <code>Put</code>, <code>Delete</code>, and <code>Get</code> methods to
+modify/query the database.  For example, the following code
+moves the value stored under key1 to key2.
+<pre>
+  std::string value;
+  rocksdb::Status s = db-&gt;Get(rocksdb::ReadOptions(), key1, &amp;value);
+  if (s.ok()) s = db-&gt;Put(rocksdb::WriteOptions(), key2, value);
+  if (s.ok()) s = db-&gt;Delete(rocksdb::WriteOptions(), key1);
+</pre>
+
+<h1>Atomic Updates</h1>
+<p>
+Note that if the process dies after the Put of key2 but before the
+delete of key1, the same value may be left stored under multiple keys.
+Such problems can be avoided by using the <code>WriteBatch</code> class to
+atomically apply a set of updates:
+<p>
+<pre>
+  #include "rocksdb/write_batch.h"
+  ...
+  std::string value;
+  rocksdb::Status s = db-&gt;Get(rocksdb::ReadOptions(), key1, &amp;value);
+  if (s.ok()) {
+    rocksdb::WriteBatch batch;
+    batch.Delete(key1);
+    batch.Put(key2, value);
+    s = db-&gt;Write(rocksdb::WriteOptions(), &amp;batch);
+  }
+</pre>
+The <code>WriteBatch</code> holds a sequence of edits to be made to the database,
+and these edits within the batch are applied in order.  Note that we
+called <code>Delete</code> before <code>Put</code> so that if <code>key1</code> is identical to <code>key2</code>,
+we do not end up erroneously dropping the value entirely.
+<p>
+Apart from its atomicity benefits, <code>WriteBatch</code> may also be used to
+speed up bulk updates by placing lots of individual mutations into the
+same batch.
+
+<h1>Synchronous Writes</h1>
+By default, each write to <code>leveldb</code> is asynchronous: it
+returns after pushing the write from the process into the operating
+system.  The transfer from operating system memory to the underlying
+persistent storage happens asynchronously.  The <code>sync</code> flag
+can be turned on for a particular write to make the write operation
+not return until the data being written has been pushed all the way to
+persistent storage.  (On Posix systems, this is implemented by calling
+either <code>fsync(...)</code> or <code>fdatasync(...)</code> or
+<code>msync(..., MS_SYNC)</code> before the write operation returns.)
+<pre>
+  rocksdb::WriteOptions write_options;
+  write_options.sync = true;
+  db-&gt;Put(write_options, ...);
+</pre>
+Asynchronous writes are often more than a thousand times as fast as
+synchronous writes.  The downside of asynchronous writes is that a
+crash of the machine may cause the last few updates to be lost.  Note
+that a crash of just the writing process (i.e., not a reboot) will not
+cause any loss since even when <code>sync</code> is false, an update
+is pushed from the process memory into the operating system before it
+is considered done.
+
+<p>
+Asynchronous writes can often be used safely.  For example, when
+loading a large amount of data into the database you can handle lost
+updates by restarting the bulk load after a crash.  A hybrid scheme is
+also possible where every Nth write is synchronous, and in the event
+of a crash, the bulk load is restarted just after the last synchronous
+write finished by the previous run.  (The synchronous write can update
+a marker that describes where to restart on a crash.)
+
+<p>
+<code>WriteBatch</code> provides an alternative to asynchronous writes.
+Multiple updates may be placed in the same <code>WriteBatch</code> and
+applied together using a synchronous write (i.e.,
+<code>write_options.sync</code> is set to true).  The extra cost of
+the synchronous write will be amortized across all of the writes in
+the batch.
+
+<p>
+We also provide a way to completely disable Write Ahead Log for a
+particular write. If you set write_option.disableWAL to true, the
+write will not go to the log at all and may be lost in an event of
+process crash.
+
+<p>
+When opening a DB, you can disable syncing of data files by setting
+Options::disableDataSync to true. This can be useful when doing
+bulk-loading or big idempotent operations. Once the operation is
+finished, you can manually call sync() to flush all dirty buffers
+to stable storage.
+
+<p>
+RocksDB by default uses faster fdatasync() to sync files. If you want
+to use fsync(), you can set Options::use_fsync to true. You should set
+this to true on filesystems like ext3 that can lose files after a
+reboot.
+
+<p>
+<h1>Concurrency</h1>
+<p>
+A database may only be opened by one process at a time.
+The <code>rocksdb</code> implementation acquires a lock from the
+operating system to prevent misuse.  Within a single process, the
+same <code>rocksdb::DB</code> object may be safely shared by multiple
+concurrent threads.  I.e., different threads may write into or fetch
+iterators or call <code>Get</code> on the same database without any
+external synchronization (the leveldb implementation will
+automatically do the required synchronization).  However other objects
+(like Iterator and WriteBatch) may require external synchronization.
+If two threads share such an object, they must protect access to it
+using their own locking protocol.  More details are available in
+the public header files.
+
+<p>
+<h1>Merge operators</h1>
+<p>
+Merge operators provide efficient support for read-modify-write operation.
+More on the interface and implementation can be found on:
+<p>
+<a href="https://github.com/facebook/rocksdb/wiki/Merge-Operator">
+    Merge Operator</a>
+<p>
+<a href="https://github.com/facebook/rocksdb/wiki/Merge-Operator-Implementation">
+    Merge Operator Implementation</a>
+
+<p>
+<h1>Iteration</h1>
+<p>
+The following example demonstrates how to print all key,value pairs
+in a database.
+<p>
+<pre>
+  rocksdb::Iterator* it = db-&gt;NewIterator(rocksdb::ReadOptions());
+  for (it-&gt;SeekToFirst(); it-&gt;Valid(); it-&gt;Next()) {
+    cout &lt;&lt; it-&gt;key().ToString() &lt;&lt; ": "  &lt;&lt; it-&gt;value().ToString() &lt;&lt; endl;
+  }
+  assert(it-&gt;status().ok());  // Check for any errors found during the scan
+  delete it;
+</pre>
+The following variation shows how to process just the keys in the
+range <code>[start,limit)</code>:
+<p>
+<pre>
+  for (it-&gt;Seek(start);
+       it-&gt;Valid() &amp;&amp; it-&gt;key().ToString() &lt; limit;
+       it-&gt;Next()) {
+    ...
+  }
+</pre>
+You can also process entries in reverse order.  (Caveat: reverse
+iteration may be somewhat slower than forward iteration.)
+<p>
+<pre>
+  for (it-&gt;SeekToLast(); it-&gt;Valid(); it-&gt;Prev()) {
+    ...
+  }
+</pre>
+<h1>Snapshots</h1>
+<p>
+Snapshots provide consistent read-only views over the entire state of
+the key-value store.  <code>ReadOptions::snapshot</code> may be non-NULL to indicate
+that a read should operate on a particular version of the DB state.
+If <code>ReadOptions::snapshot</code> is NULL, the read will operate on an
+implicit snapshot of the current state.
+<p>
+Snapshots are created by the DB::GetSnapshot() method:
+<p>
+<pre>
+  rocksdb::ReadOptions options;
+  options.snapshot = db-&gt;GetSnapshot();
+  ... apply some updates to db ...
+  rocksdb::Iterator* iter = db-&gt;NewIterator(options);
+  ... read using iter to view the state when the snapshot was created ...
+  delete iter;
+  db-&gt;ReleaseSnapshot(options.snapshot);
+</pre>
+Note that when a snapshot is no longer needed, it should be released
+using the DB::ReleaseSnapshot interface.  This allows the
+implementation to get rid of state that was being maintained just to
+support reading as of that snapshot.
+<h1>Slice</h1>
+<p>
+The return value of the <code>it->key()</code> and <code>it->value()</code> calls above
+are instances of the <code>rocksdb::Slice</code> type.  <code>Slice</code> is a simple
+structure that contains a length and a pointer to an external byte
+array.  Returning a <code>Slice</code> is a cheaper alternative to returning a
+<code>std::string</code> since we do not need to copy potentially large keys and
+values.  In addition, <code>rocksdb</code> methods do not return null-terminated
+C-style strings since <code>rocksdb</code> keys and values are allowed to
+contain '\0' bytes.
+<p>
+C++ strings and null-terminated C-style strings can be easily converted
+to a Slice:
+<p>
+<pre>
+   rocksdb::Slice s1 = "hello";
+
+   std::string str("world");
+   rocksdb::Slice s2 = str;
+</pre>
+A Slice can be easily converted back to a C++ string:
+<pre>
+   std::string str = s1.ToString();
+   assert(str == std::string("hello"));
+</pre>
+Be careful when using Slices since it is up to the caller to ensure that
+the external byte array into which the Slice points remains live while
+the Slice is in use.  For example, the following is buggy:
+<p>
+<pre>
+   rocksdb::Slice slice;
+   if (...) {
+     std::string str = ...;
+     slice = str;
+   }
+   Use(slice);
+</pre>
+When the <code>if</code> statement goes out of scope, <code>str</code> will be destroyed and the
+backing storage for <code>slice</code> will disappear.
+<p>
+<h1>Comparators</h1>
+<p>
+The preceding examples used the default ordering function for key,
+which orders bytes lexicographically.  You can however supply a custom
+comparator when opening a database.  For example, suppose each
+database key consists of two numbers and we should sort by the first
+number, breaking ties by the second number.  First, define a proper
+subclass of <code>rocksdb::Comparator</code> that expresses these rules:
+<p>
+<pre>
+  class TwoPartComparator : public rocksdb::Comparator {
+   public:
+    // Three-way comparison function:
+    //   if a &lt; b: negative result
+    //   if a &gt; b: positive result
+    //   else: zero result
+    int Compare(const rocksdb::Slice&amp; a, const rocksdb::Slice&amp; b) const {
+      int a1, a2, b1, b2;
+      ParseKey(a, &amp;a1, &amp;a2);
+      ParseKey(b, &amp;b1, &amp;b2);
+      if (a1 &lt; b1) return -1;
+      if (a1 &gt; b1) return +1;
+      if (a2 &lt; b2) return -1;
+      if (a2 &gt; b2) return +1;
+      return 0;
+    }
+
+    // Ignore the following methods for now:
+    const char* Name() const { return "TwoPartComparator"; }
+    void FindShortestSeparator(std::string*, const rocksdb::Slice&amp;) const { }
+    void FindShortSuccessor(std::string*) const { }
+  };
+</pre>
+Now create a database using this custom comparator:
+<p>
+<pre>
+  TwoPartComparator cmp;
+  rocksdb::DB* db;
+  rocksdb::Options options;
+  options.create_if_missing = true;
+  options.comparator = &amp;cmp;
+  rocksdb::Status status = rocksdb::DB::Open(options, "/tmp/testdb", &amp;db);
+  ...
+</pre>
+<h2>Backwards compatibility</h2>
+<p>
+The result of the comparator's <code>Name</code> method is attached to the
+database when it is created, and is checked on every subsequent
+database open.  If the name changes, the <code>rocksdb::DB::Open</code> call will
+fail.  Therefore, change the name if and only if the new key format
+and comparison function are incompatible with existing databases, and
+it is ok to discard the contents of all existing databases.
+<p>
+You can however still gradually evolve your key format over time with
+a little bit of pre-planning.  For example, you could store a version
+number at the end of each key (one byte should suffice for most uses).
+When you wish to switch to a new key format (e.g., adding an optional
+third part to the keys processed by <code>TwoPartComparator</code>),
+(a) keep the same comparator name (b) increment the version number
+for new keys (c) change the comparator function so it uses the
+version numbers found in the keys to decide how to interpret them.
+
+
+<p>
+<h1>MemTable and Table factories</h1>
+<p>
+By default, we keep the data in memory in skiplist memtable and the data
+on disk in a table format described here:
+<a href="https://github.com/facebook/rocksdb/wiki/Rocksdb-Table-Format">
+    RocksDB Table Format</a>.
+<p>
+Since one of the goals of RocksDB is to have
+different parts of the system easily pluggable, we support different
+implementations of both memtable and table format. You can supply
+your own memtable factory by setting <code>Options::memtable_factory</code>
+and your own table factory by setting <code>Options::table_factory</code>.
+For available memtable factories, please refer to
+<code>rocksdb/memtablerep.h</code> and for table factores to
+<code>rocksdb/table.h</code>. These features are both in active development
+and please be wary of any API changes that might break your application
+going forward.
+<p>
+You can also read more about memtables here:
+<a href="https://github.com/facebook/rocksdb/wiki/Rocksdb-Architecture-Guide#memtables">
+Memtables wiki
+</a>
+
+<p>
+<h1>Performance</h1>
+<p>
+Performance can be tuned by changing the default values of the
+types defined in <code>include/rocksdb/options.h</code>.
+
+<p>
+<h2>Block size</h2>
+<p>
+<code>rocksdb</code> groups adjacent keys together into the same block and such a
+block is the unit of transfer to and from persistent storage.  The
+default block size is approximately 4096 uncompressed bytes.
+Applications that mostly do bulk scans over the contents of the
+database may wish to increase this size.  Applications that do a lot
+of point reads of small values may wish to switch to a smaller block
+size if performance measurements indicate an improvement.  There isn't
+much benefit in using blocks smaller than one kilobyte, or larger than
+a few megabytes.  Also note that compression will be more effective
+with larger block sizes. To change block size parameter, use
+<code>Options::block_size</code>.
+<p>
+<h2>Write buffer</h2>
+<p>
+<code>Options::write_buffer_size</code> specifies the amount of data
+to build up in memory before converting to a sorted on-disk file.
+Larger values increase performance, especially during bulk loads.
+Up to max_write_buffer_number write buffers may be held in memory
+at the same time,
+so you may wish to adjust this parameter to control memory usage.
+Also, a larger write buffer will result in a longer recovery time
+the next time the database is opened.
+Related option is
+<code>Options::max_write_buffer_number</code>, which is maximum number
+of write buffers that are built up in memory. The default is 2, so that
+when 1 write buffer is being flushed to storage, new writes can continue
+to the other write buffer.
+<code>Options::min_write_buffer_number_to_merge</code> is the minimum number
+of write buffers that will be merged together before writing to storage.
+If set to 1, then all write buffers are flushed to L0 as individual files and
+this increases read amplification because a get request has to check in all
+of these files. Also, an in-memory merge may result in writing lesser
+data to storage if there are duplicate records in each of these
+individual write buffers.  Default: 1
+<p>
+<h2>Compression</h2>
+<p>
+Each block is individually compressed before being written to
+persistent storage.  Compression is on by default since the default
+compression method is very fast, and is automatically disabled for
+uncompressible data.  In rare cases, applications may want to disable
+compression entirely, but should only do so if benchmarks show a
+performance improvement:
+<p>
+<pre>
+  rocksdb::Options options;
+  options.compression = rocksdb::kNoCompression;
+  ... rocksdb::DB::Open(options, name, ...) ....
+</pre>
+<h2>Cache</h2>
+<p>
+The contents of the database are stored in a set of files in the
+filesystem and each file stores a sequence of compressed blocks.  If
+<code>options.block_cache</code> is non-NULL, it is used to cache frequently
+used uncompressed block contents. If <code>options.block_cache_compressed</code>
+is non-NULL, it is used to cache frequently used compressed blocks. Compressed
+cache is an alternative to OS cache, which also caches compressed blocks. If
+compressed cache is used, the OS cache will be disabled automatically by setting
+<code>options.allow_os_buffer</code> to false.
+<p>
+<pre>
+  #include "rocksdb/cache.h"
+
+  rocksdb::Options options;
+  options.block_cache = rocksdb::NewLRUCache(100 * 1048576);  // 100MB uncompressed cache
+  options.block_cache_compressed = rocksdb::NewLRUCache(100 * 1048576);  // 100MB compressed cache
+  rocksdb::DB* db;
+  rocksdb::DB::Open(options, name, &db);
+  ... use the db ...
+  delete db
+  delete options.block_cache;
+  delete options.block_cache_compressed;
+</pre>
+<p>
+When performing a bulk read, the application may wish to disable
+caching so that the data processed by the bulk read does not end up
+displacing most of the cached contents.  A per-iterator option can be
+used to achieve this:
+<p>
+<pre>
+  rocksdb::ReadOptions options;
+  options.fill_cache = false;
+  rocksdb::Iterator* it = db-&gt;NewIterator(options);
+  for (it-&gt;SeekToFirst(); it-&gt;Valid(); it-&gt;Next()) {
+    ...
+  }
+</pre>
+<p>
+You can also disable block cache by setting <code>options.no_block_cache</code>
+to true.
+<h2>Key Layout</h2>
+<p>
+Note that the unit of disk transfer and caching is a block.  Adjacent
+keys (according to the database sort order) will usually be placed in
+the same block.  Therefore the application can improve its performance
+by placing keys that are accessed together near each other and placing
+infrequently used keys in a separate region of the key space.
+<p>
+For example, suppose we are implementing a simple file system on top
+of <code>rocksdb</code>.  The types of entries we might wish to store are:
+<p>
+<pre>
+   filename -&gt; permission-bits, length, list of file_block_ids
+   file_block_id -&gt; data
+</pre>
+We might want to prefix <code>filename</code> keys with one letter (say '/') and the
+<code>file_block_id</code> keys with a different letter (say '0') so that scans
+over just the metadata do not force us to fetch and cache bulky file
+contents.
+<p>
+<h2>Filters</h2>
+<p>
+Because of the way <code>rocksdb</code> data is organized on disk,
+a single <code>Get()</code> call may involve multiple reads from disk.
+The optional <code>FilterPolicy</code> mechanism can be used to reduce
+the number of disk reads substantially.
+<pre>
+   rocksdb::Options options;
+   options.filter_policy = NewBloomFilter(10);
+   rocksdb::DB* db;
+   rocksdb::DB::Open(options, "/tmp/testdb", &amp;db);
+   ... use the database ...
+   delete db;
+   delete options.filter_policy;
+</pre>
+The preceding code associates a
+<a href="http://en.wikipedia.org/wiki/Bloom_filter">Bloom filter</a>
+based filtering policy with the database.  Bloom filter based
+filtering relies on keeping some number of bits of data in memory per
+key (in this case 10 bits per key since that is the argument we passed
+to NewBloomFilter).  This filter will reduce the number of unnecessary
+disk reads needed for <code>Get()</code> calls by a factor of
+approximately a 100.  Increasing the bits per key will lead to a
+larger reduction at the cost of more memory usage.  We recommend that
+applications whose working set does not fit in memory and that do a
+lot of random reads set a filter policy.
+<p>
+If you are using a custom comparator, you should ensure that the filter
+policy you are using is compatible with your comparator.  For example,
+consider a comparator that ignores trailing spaces when comparing keys.
+<code>NewBloomFilter</code> must not be used with such a comparator.
+Instead, the application should provide a custom filter policy that
+also ignores trailing spaces.  For example:
+<pre>
+  class CustomFilterPolicy : public rocksdb::FilterPolicy {
+   private:
+    FilterPolicy* builtin_policy_;
+   public:
+    CustomFilterPolicy() : builtin_policy_(NewBloomFilter(10)) { }
+    ~CustomFilterPolicy() { delete builtin_policy_; }
+
+    const char* Name() const { return "IgnoreTrailingSpacesFilter"; }
+
+    void CreateFilter(const Slice* keys, int n, std::string* dst) const {
+      // Use builtin bloom filter code after removing trailing spaces
+      std::vector&lt;Slice&gt; trimmed(n);
+      for (int i = 0; i &lt; n; i++) {
+        trimmed[i] = RemoveTrailingSpaces(keys[i]);
+      }
+      return builtin_policy_-&gt;CreateFilter(&amp;trimmed[i], n, dst);
+    }
+
+    bool KeyMayMatch(const Slice& key, const Slice& filter) const {
+      // Use builtin bloom filter code after removing trailing spaces
+      return builtin_policy_-&gt;KeyMayMatch(RemoveTrailingSpaces(key), filter);
+    }
+  };
+</pre>
+<p>
+Advanced applications may provide a filter policy that does not use
+a bloom filter but uses some other mechanism for summarizing a set
+of keys.  See <code>rocksdb/filter_policy.h</code> for detail.
+<p>
+<h1>Checksums</h1>
+<p>
+<code>rocksdb</code> associates checksums with all data it stores in the file system.
+There are two separate controls provided over how aggressively these
+checksums are verified:
+<p>
+<ul>
+<li> <code>ReadOptions::verify_checksums</code> may be set to true to force
+  checksum verification of all data that is read from the file system on
+  behalf of a particular read.  By default, no such verification is
+  done.
+<p>
+<li> <code>Options::paranoid_checks</code> may be set to true before opening a
+  database to make the database implementation raise an error as soon as
+  it detects an internal corruption.  Depending on which portion of the
+  database has been corrupted, the error may be raised when the database
+  is opened, or later by another database operation.  By default,
+  paranoid checking is off so that the database can be used even if
+  parts of its persistent storage have been corrupted.
+<p>
+  If a database is corrupted (perhaps it cannot be opened when
+  paranoid checking is turned on), the <code>rocksdb::RepairDB</code> function
+  may be used to recover as much of the data as possible.
+<p>
+</ul>
+
+<p>
+<h1>Compaction</h1>
+<p>
+You can read more on Compactions here:
+<a href="https://github.com/facebook/rocksdb/wiki/Rocksdb-Architecture-Guide#multi-threaded-compactions">
+    Multi-threaded compactions
+</a>
+<p>
+Here we give overview of the options that impact behavior of Compactions:
+<ul>
+<p>
+<li><code>Options::compaction_style</code> - RocksDB currently supports two
+compaction algorithms - Universal  style and Level style. This option switches
+between the two.  Can be kCompactionStyleUniversal or kCompactionStyleLevel.
+If this is kCompactionStyleUniversal, then you can configure universal style
+parameters with <code>Options::compaction_options_universal</code>.
+<p>
+<li><code>Options::disable_auto_compactions</code> - Disable automatic compactions.
+Manual compactions can still be issued on this database.
+<p>
+<li><code>Options::compaction_filter</code> - Allows an application to modify/delete
+a key-value during background compaction. The client must provide
+compaction_filter_factory if it requires a new compaction filter to be used
+for different compaction processes. Client should specify only one of filter
+or factory.
+<p>
+<li><code>Options::compaction_filter_factory</code> - a factory that provides
+compaction filter objects which allow an application to modify/delete a
+key-value during background compaction.
+</ul>
+<p>
+Other options impacting performance of compactions and when they get triggered
+are:
+<ul>
+<p>
+<li> <code>Options::access_hint_on_compaction_start</code> - Specify the file access
+pattern once a compaction is started. It will be applied to all input files of a compaction. Default: NORMAL
+<p>
+<li> <code>Options::level0_file_num_compaction_trigger</code> -  Number of files to trigger level-0 compaction.
+A negative value means that level-0 compaction will not be triggered by number of files at all.
+<p>
+<li> <code>Options::max_mem_compaction_level</code> -  Maximum level to which a new compacted memtable is pushed if it
+does not create overlap.  We try to push to level 2 to avoid the relatively expensive level 0=>1 compactions and to avoid some
+expensive manifest file operations.  We do not push all the way to the largest level since that can generate a lot of wasted disk
+space if the same key space is being repeatedly overwritten.
+<p>
+<li> <code>Options::target_file_size_base</code> and <code>Options::target_file_size_multiplier</code> -
+Target file size for compaction.  target_file_size_base is per-file size for level-1.
+Target file size for level L can be calculated by target_file_size_base * (target_file_size_multiplier ^ (L-1))
+For example, if target_file_size_base is 2MB and target_file_size_multiplier is 10, then each file on level-1 will
+be 2MB, and each file on level 2 will be 20MB, and each file on level-3 will be 200MB. Default target_file_size_base is 2MB
+and default target_file_size_multiplier is 1.
+<p>
+<li> <code>Options::expanded_compaction_factor</code> -  Maximum number of bytes in all compacted files.  We avoid expanding
+the lower level file set of a compaction if it would make the total compaction cover more than
+(expanded_compaction_factor * targetFileSizeLevel()) many bytes.
+<p>
+<li> <code>Options::source_compaction_factor</code> -    Maximum number of bytes in all source files to be compacted in a
+single compaction run. We avoid picking too many files in the source level so that we do not exceed the total source bytes
+for compaction to exceed (source_compaction_factor * targetFileSizeLevel()) many bytes.
+Default:1, i.e. pick maxfilesize amount of data as the source of a compaction.
+<p>
+<li> <code>Options::max_grandparent_overlap_factor</code> -   Control maximum bytes of overlaps in grandparent (i.e., level+2) before we
+stop building a single file in a level->level+1 compaction.
+<p>
+<li> <code>Options::max_background_compactions</code> - Maximum number of concurrent background jobs, submitted to
+the default LOW priority thread pool
+</ul>
+
+<p>
+You can learn more about all of those options in <code>rocksdb/options.h</code>
+
+<h2> Universal style compaction specific settings</h2>
+<p>
+If you're using Universal style compaction, there is an object <code>CompactionOptionsUniversal</code>
+that hold all the different options for that compaction. The exact definition is in
+<code>rocksdb/universal_compaction.h</code> and you can set it in <code>Options::compaction_options_universal</code>.
+Here we give short overview of options in <code>CompactionOptionsUniversal</code>:
+<ul>
+<p>
+<li> <code>CompactionOptionsUniversal::size_ratio</code> - Percentage flexibility while comparing file size. If the candidate file(s)
+   size is 1% smaller than the next file's size, then include next file into
+   this candidate set.  Default: 1
+<p>
+<li> <code>CompactionOptionsUniversal::min_merge_width</code> - The minimum number of files in a single compaction run. Default: 2
+<p>
+<li> <code>CompactionOptionsUniversal::max_merge_width</code> - The maximum number of files in a single compaction run. Default: UINT_MAX
+<p>
+<li> <code>CompactionOptionsUniversal::max_size_amplification_percent</code> - The size amplification is defined as the amount (in percentage) of
+additional storage needed to store a single byte of data in the database.  For example, a size amplification of 2% means that a database that
+contains 100 bytes of user-data may occupy upto 102 bytes of physical storage. By this definition, a fully compacted database has
+a size amplification of 0%. Rocksdb uses the following heuristic to calculate size amplification: it assumes that all files excluding
+the earliest file contribute to the size amplification.  Default: 200, which means that a 100 byte database could require upto
+300 bytes of storage.
+<p>
+<li> <code>CompactionOptionsUniversal::compression_size_percent</code> - If this option is set to be -1 (the default value), all the output files
+will follow compression type specified.  If this option is not negative, we will try to make sure compressed
+size is just above this value. In normal cases, at least this percentage
+of data will be compressed.
+When we are compacting to a new file, here is the criteria whether
+it needs to be compressed: assuming here are the list of files sorted
+by generation time: [ A1...An B1...Bm C1...Ct ],
+where A1 is the newest and Ct is the oldest, and we are going to compact
+B1...Bm, we calculate the total size of all the files as total_size, as
+well as  the total size of C1...Ct as total_C, the compaction output file
+will be compressed iff total_C / total_size < this percentage
+<p>
+<li> <code>CompactionOptionsUniversal::stop_style</code> - The algorithm used to stop picking files into a single compaction run.
+Can be kCompactionStopStyleSimilarSize (pick files of similar size) or kCompactionStopStyleTotalSize (total size of picked files > next file).
+Default: kCompactionStopStyleTotalSize
+</ul>
+
+<h1>Thread pools</h1>
+<p>
+A thread pool is associated with Env environment object. The client has to create a thread pool by setting the number of background
+threads using method <code>Env::SetBackgroundThreads()</code> defined in <code>rocksdb/env.h</code>.
+We use the thread pool for compactions and memtable flushes.
+Since memtable flushes are in critical code path (stalling memtable flush can stall writes, increasing p99), we suggest
+having two thread pools - with priorities HIGH and LOW. Memtable flushes can be set up to be scheduled on HIGH thread pool.
+There are two options available for configuration of background compactions and flushes:
+<ul>
+<p>
+<li> <code>Options::max_background_compactions</code> - Maximum number of concurrent background jobs,
+submitted to the default LOW priority thread pool
+<p>
+<li> <code>Options::max_background_flushes</code> - Maximum number of concurrent background memtable flush jobs, submitted to
+the HIGH priority thread pool.  By default, all background jobs (major compaction and memtable flush) go
+to the LOW priority pool. If this option is set to a positive number, memtable flush jobs will be submitted to the HIGH priority pool.
+It is important when the same Env is shared by multiple db instances.  Without a separate pool, long running major compaction jobs could
+potentially block memtable flush jobs of other db instances, leading to unnecessary Put stalls.
+</ul>
+<p>
+<pre>
+  #include "rocksdb/env.h"
+  #include "rocksdb/db.h"
+
+  auto env = rocksdb::Env::Default();
+  env->SetBackgroundThreads(2, rocksdb::Env::LOW);
+  env->SetBackgroundThreads(1, rocksdb::Env::HIGH);
+  rocksdb::DB* db;
+  rocksdb::Options options;
+  options.env = env;
+  options.max_background_compactions = 2;
+  options.max_background_flushes = 1;
+  rocksdb::Status status = rocksdb::DB::Open(options, "/tmp/testdb", &amp;db);
+  assert(status.ok());
+  ...
+</pre>
+<h1>Approximate Sizes</h1>
+<p>
+The <code>GetApproximateSizes</code> method can used to get the approximate
+number of bytes of file system space used by one or more key ranges.
+<p>
+<pre>
+   rocksdb::Range ranges[2];
+   ranges[0] = rocksdb::Range("a", "c");
+   ranges[1] = rocksdb::Range("x", "z");
+   uint64_t sizes[2];
+   rocksdb::Status s = db-&gt;GetApproximateSizes(ranges, 2, sizes);
+</pre>
+The preceding call will set <code>sizes[0]</code> to the approximate number of
+bytes of file system space used by the key range <code>[a..c)</code> and
+<code>sizes[1]</code> to the approximate number of bytes used by the key range
+<code>[x..z)</code>.
+<p>
+<h1>Environment</h1>
+<p>
+All file operations (and other operating system calls) issued by the
+<code>rocksdb</code> implementation are routed through a <code>rocksdb::Env</code> object.
+Sophisticated clients may wish to provide their own <code>Env</code>
+implementation to get better control.  For example, an application may
+introduce artificial delays in the file IO paths to limit the impact
+of <code>rocksdb</code> on other activities in the system.
+<p>
+<pre>
+  class SlowEnv : public rocksdb::Env {
+    .. implementation of the Env interface ...
+  };
+
+  SlowEnv env;
+  rocksdb::Options options;
+  options.env = &amp;env;
+  Status s = rocksdb::DB::Open(options, ...);
+</pre>
+<h1>Porting</h1>
+<p>
+<code>rocksdb</code> may be ported to a new platform by providing platform
+specific implementations of the types/methods/functions exported by
+<code>rocksdb/port/port.h</code>.  See <code>rocksdb/port/port_example.h</code> for more
+details.
+<p>
+In addition, the new platform may need a new default <code>rocksdb::Env</code>
+implementation.  See <code>rocksdb/util/env_posix.h</code> for an example.
+
+<h1>Statistics</h1>
+<p>
+To be able to efficiently tune your application, it is always helpful if you
+have access to usage statistics. You can collect those statistics by setting
+<code>Options::table_properties_collectors</code> or
+<code>Options::statistics</code>. For more information, refer to
+<code>rocksdb/table_properties.h</code> and <code>rocksdb/statistics.h</code>.
+These should not add significant overhead to your application and we
+recommend exporting them to other monitoring tools.
+
+<h1>Purging WAL files</h1>
+<p>
+By default, old write-ahead logs are deleted automatically when they fall out
+of scope and application doesn't need them anymore. There are options that
+enable the user to archive the logs and then delete them lazily, either in
+TTL fashion or based on size limit.
+
+The options are <code>Options::WAL_ttl_seconds</code> and
+<code>Options::WAL_size_limit_MB</code>. Here is how they can be used:
+<ul>
+<li>
+<p>
+If both set to 0, logs will be deleted asap and will never get into the archive.
+<li>
+<p>
+If <code>WAL_ttl_seconds</code> is 0 and WAL_size_limit_MB is not 0, WAL
+files will be checked every 10 min and if total size is greater then
+<code>WAL_size_limit_MB</code>, they will be deleted starting with the
+earliest until size_limit is met. All empty files will be deleted.
+<li>
+<p>
+If <code>WAL_ttl_seconds</code> is not 0 and WAL_size_limit_MB is 0, then
+WAL files will be checked every <code>WAL_ttl_seconds / 2</code> and those
+that are older than WAL_ttl_seconds will be deleted.
+<li>
+<p>
+If both are not 0, WAL files will be checked every 10 min and both
+checks will be performed with ttl being first.
+</ul>
+
+<h1>Other Information</h1>
+<p>
+Details about the <code>rocksdb</code> implementation may be found in
+the following documents:
+<ul>
+<li> <a href="https://github.com/facebook/rocksdb/wiki/Rocksdb-Architecture-Guide">
+  RocksDB Architecture Guide</a>
+<li> <a href="https://github.com/facebook/rocksdb/wiki/Rocksdb-Table-Format">
+    Format of an immutable Table file</a>
+<li> <a href="log_format.txt">Format of a log file</a>
+</ul>
+
+</body>
+</html>

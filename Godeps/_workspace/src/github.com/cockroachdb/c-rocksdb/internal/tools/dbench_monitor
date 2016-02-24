@@ -1,0 +1,102 @@
+#!/bin/bash
+#
+#(c) 2004-present, Facebook Inc. All rights reserved.
+#
+#see LICENSE file for more information on use/redistribution rights.
+#
+
+#
+#dbench_monitor: monitor db_bench process for violation of memory utilization
+#
+#default usage will monitor 'virtual memory size'. See below for standard options
+#passed to db_bench during this test.
+#
+# See also: ./pflag for the actual monitoring script that does the work
+#
+#NOTE:
+#  You may end up with some /tmp/ files if db_bench OR
+#  this script OR ./pflag was killed unceremoniously
+#
+#  If you see the script taking a long time, trying "kill"
+#  will usually cleanly exit.
+#
+#
+DIR=`dirname $0`
+LOG=/tmp/`basename $0`.$$
+DB_BENCH="$DIR/../db_bench";
+PFLAG=${DIR}/pflag
+
+usage() {
+    cat <<HELP; exit
+
+Usage: $0  [-h]
+
+-h: prints this help message
+
+This program will run the db_bench script to monitor memory usage
+using the 'pflag' program. It launches db_bench with default settings
+for certain arguments. You can change the defaults passed to
+'db_bench' program, by setting the following environment 
+variables:
+
+  bs [block_size]
+  ztype [compression_type]
+  benches [benchmarks]
+  reads [reads]
+  threads [threads]
+  cs [cache_size]
+  vsize [value_size]
+  comp [compression_ratio]
+  num [num]
+
+See the code for more info
+
+HELP
+
+}
+
+[ ! -x ${DB_BENCH} ] && echo "WARNING: ${DB_BENCH} doesn't exist, abort!" && exit -1;
+
+[ "x$1" = "x-h" ] && usage;
+
+trap 'rm -f ${LOG}; kill ${PID}; echo "Interrupted, exiting";' 1 2 3 15
+
+touch $LOG;
+
+: ${bs:=16384}
+: ${ztype:=zlib}
+: ${benches:=readwhilewriting}
+: ${reads:=$((1*1024*1024))};
+: ${threads:=8}
+: ${vsize:=2000}
+: ${comp:=0.5}
+: ${num:=10000}
+: ${cs:=$((1*1024*1024*1024))};
+
+DEBUG=1    #Set to 0 to remove chattiness 
+
+
+if [ "x$DEBUG" != "x" ]; then
+  #
+  #NOTE: under some circumstances, --use_existing_db may leave LOCK files under ${TMPDIR}/rocksdb/*
+  #cleanup the dir and re-run
+  #
+  echo DEBUG: Will run $DB_BENCH --block_size=$bs --compression_type=$ztype --benchmarks="$benches" --reads="$reads" --threads="$threads" --cache_size=$cs  --value_size=$vsize --compression_ratio=$comp --num=$num --use_existing_db 
+
+fi
+
+$DB_BENCH --block_size=$bs --compression_type=$ztype --benchmarks="$benches" --reads="$reads" --threads="$threads" --cache_size=$cs  --value_size=$vsize --compression_ratio=$comp --num=$num --use_existing_db >$LOG 2>&1 &
+
+if [ $? -ne 0 ]; then
+  warn "WARNING: ${DB_BENCH} did not launch successfully! Abort!";
+  exit;
+fi
+PID=$!
+
+#
+#Start the monitoring. Default is "vsz" monitoring for upto cache_size ($cs) value of virtual mem
+#You could also monitor RSS and CPUTIME (bsdtime). Try 'pflag -h' for how to do this
+#
+${PFLAG} -p $PID -v
+
+rm -f $LOG;

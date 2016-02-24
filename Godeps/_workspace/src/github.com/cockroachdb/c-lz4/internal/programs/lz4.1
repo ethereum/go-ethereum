@@ -1,0 +1,221 @@
+\"
+\" lz4.1: This is a manual page for 'lz4' program. This file is part of the
+\" lz4 <https://code.google.com/p/lz4/> project.
+\" Author: Yann Collet
+\"
+
+\" No hyphenation
+.hy 0
+.nr HY 0
+
+.TH lz4 "1" "2015-03-21" "lz4" "User Commands"
+.SH NAME
+\fBlz4, unlz4, lz4cat\fR \- Compress or decompress .lz4 files
+
+.SH SYNOPSIS
+.TP 5
+\fBlz4\fR [\fBOPTIONS\fR] [-|INPUT-FILE] <OUTPUT-FILE>
+.PP
+.B unlz4
+is equivalent to
+.BR "lz4 \-d" 
+.br
+.B lz4cat
+is equivalent to
+.BR "lz4 \-dc" 
+.br
+.PP
+When writing scripts that need to decompress files,
+it is recommended to always use the name
+.B lz4
+with appropriate arguments
+.RB ( "lz4 \-d"
+or
+.BR "lz4 \-dc" )
+instead of the names
+.B unlz4
+and
+.BR lz4cat .
+
+
+.SH DESCRIPTION
+.PP
+\fBlz4\fR is an extremely fast lossless compression algorithm,
+based on \fBbyte-aligned LZ77\fR family of compression scheme.
+\fBlz4\fR offers compression speeds of 400 MB/s per core, linearly scalable with multi-core CPUs. 
+It features an extremely fast decoder, with speed in multiple GB/s per core,
+typically reaching RAM speed limit on multi-core systems. 
+.B lz4
+supports a command line syntax similar to
+.BR gzip (1).
+The native file format is the
+.B .lz4
+format.
+
+.SS "Concatenation of .lz4 files"
+It is possible to concatenate
+.B .lz4
+files as is.
+.B lz4
+will decompress such files as if they were a single
+.B .lz4
+file. For example:
+  lz4 file1  > foo.lz4
+  lz4 file2 >> foo.lz4
+ then
+  lz4cat foo.lz4
+ is equivalent to :
+  cat file1 file2
+
+.PP
+
+.SH OPTIONS
+.
+.SS "Short commands concatenation"
+In some cases, some options can be expressed using short command
+.B "-x"
+or long command
+.B "--long-word" .
+Short commands can be concatenated together. For example,
+.B "-d -c"
+is equivalent to
+.B "-dc" .
+Long commands cannot be concatenated.
+They must be clearly separated by a space.
+.SS "Multiple commands"
+When multiple contradictory commands are issued on a same command line,
+only the latest one will be applied.
+.
+.SS "Operation mode"
+.TP
+.BR \-z ", " \-\-compress
+Compress.
+This is the default operation mode 
+when no operation mode option is specified ,
+no other operation mode is implied from the command name 
+(for example,
+.B unlz4
+implies
+.B \-\-decompress ),
+nor from the input file name
+(for example, a file extension
+.B .lz4
+implies
+.B \-\-decompress
+by default).
+.B -z
+can also be used to force compression of an already compressed
+.B .lz4
+file.
+.TP
+.BR \-d ", " \-\-decompress ", " \-\-uncompress
+Decompress.
+.B --decompress
+is also the default operation when the input filename has an
+.B .lz4
+extensionq
+.TP
+.BR \-t ", " \-\-test
+Test the integrity of compressed
+.B .lz4
+files.
+The decompressed data is discarded.
+No files are created nor removed.
+.
+.SS "Operation modifiers"
+.TP
+.B \-1
+ fast compression (default)
+.TP
+.B \-9
+ high compression
+
+.TP
+.BR \-f ", " --[no-]force
+ This option has several effects:
+.RS
+.IP \(bu 3
+If the target file already exists,
+overwrite it without prompting.
+.IP \(bu 3
+When used with
+.B \-\-decompress
+and
+.B lz4
+cannot recognize the type of the source file,
+copy the source file as is to standard output.
+This allows
+.B lz4cat
+.B \-\-force
+to be used like
+.BR cat (1)
+for files that have not been compressed with
+.BR lz4 .
+.RE
+
+.TP
+.BR \-c ", " \--stdout ", " \--to-stdout
+ force write to standard output, even if it is the console
+
+.TP
+.BR \-m ", " \--multiple
+ Multiple file names.
+ By default, the second filename is used as the output filename for the compressed file.
+ With
+.B -m
+, you can specify any number of input filenames. Each of them will be compressed
+independently, and the resulting name of the compressed file will be
+.B filename.lz4
+.
+
+.TP
+.B \-B#
+ block size [4-7](default : 7)
+ B4= 64KB ; B5= 256KB ; B6= 1MB ; B7= 4MB
+.TP
+.B \-BD
+ block dependency (improve compression ratio)
+.TP
+.B \--[no-]frame-crc
+ select frame checksum (default:enabled)
+.TP
+.B \--[no-]content-size
+ header includes original size (default:not present)
+ Note : this option can only be activated when the original size can be determined,
+hence for a file. It won't work with unknown source size, such as stdin or pipe.
+.TP
+.B \--[no-]sparse 
+ sparse mode support (default:enabled on file, disabled on stdout)
+.TP
+.B \-l
+ use Legacy format (useful for Linux Kernel compression)
+.
+.SS "Other options"
+.TP
+.BR \-v ", " --verbose
+ verbose mode
+.TP
+.BR \-q ", " --quiet
+ suppress warnings; specify twice to suppress errors too
+.TP
+.B \-h/\-H
+ display help/long help and exit
+.TP
+.BR \-V ", " \--version
+ display Version number and exit
+.TP
+.BR \-k ", " \--keep
+ Don't delete source file.
+This is default behavior anyway, so this option is just for compatibility with gzip/xz.
+.TP
+.B \-b
+ benchmark file(s)
+.TP
+.B \-i#
+ iteration loops [1-9](default : 3), benchmark mode only
+
+.SH BUGS
+Report bugs at: https://github.com/Cyan4973/lz4
+
+.SH AUTHOR
+Yann Collet
