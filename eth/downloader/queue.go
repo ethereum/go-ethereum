@@ -39,7 +39,7 @@ import (
 )
 
 var (
-	blockCacheLimit   = 1024 // Maximum number of blocks to cache before throttling the download
+	blockCacheLimit   = 8192 // Maximum number of blocks to cache before throttling the download
 	maxInFlightStates = 4096 // Maximum number of state downloads to allow concurrently
 )
 
