@@ -51,6 +51,10 @@ const (
 	respTimeout = 500 * time.Millisecond
 	sendTimeout = 500 * time.Millisecond
 	expiration  = 20 * time.Second
+
+	ntpFailureThreshold = 32               // Continuous timeouts after which to check NTP
+	ntpWarningCooldown  = 10 * time.Minute // Minimum amount of time to pass before repeating NTP warning
+	driftThreshold      = 10 * time.Second // Allowed clock drift before warning user
 )
 
 // RPC packet types
@@ -316,13 +320,15 @@ func (t *udp) handleReply(from NodeID, ptype byte, req packet) bool {
 	}
 }
 
-// loop runs in its own goroutin. it keeps track of
+// loop runs in its own goroutine. it keeps track of
 // the refresh timer and the pending reply queue.
 func (t *udp) loop() {
 	var (
-		plist       = list.New()
-		timeout     = time.NewTimer(0)
-		nextTimeout *pending // head of plist when timeout was last reset
+		plist        = list.New()
+		timeout      = time.NewTimer(0)
+		nextTimeout  *pending // head of plist when timeout was last reset
+		contTimeouts = 0      // number of continuous timeouts to do NTP checks
+		ntpWarnTime  = time.Unix(0, 0)
 	)
 	<-timeout.C // ignore first timeout
 	defer timeout.Stop()
@@ -377,19 +383,31 @@ func (t *udp) loop() {
 						p.errc <- nil
 						plist.Remove(el)
 					}
+					// Reset the continuous timeout counter (time drift detection)
+					contTimeouts = 0
 				}
 			}
 			r.matched <- matched
 
 		case now := <-timeout.C:
 			nextTimeout = nil
+
 			// Notify and remove callbacks whose deadline is in the past.
 			for el := plist.Front(); el != nil; el = el.Next() {
 				p := el.Value.(*pending)
 				if now.After(p.deadline) || now.Equal(p.deadline) {
 					p.errc <- errTimeout
 					plist.Remove(el)
+					contTimeouts++
 				}
+			}
+			// If we've accumulated too many timeouts, do an NTP time sync check
+			if contTimeouts > ntpFailureThreshold {
+				if time.Since(ntpWarnTime) >= ntpWarningCooldown {
+					ntpWarnTime = time.Now()
+					go checkClockDrift()
+				}
+				contTimeouts = 0
 			}
 		}
 	}
