@@ -39,8 +39,15 @@ var OpenFileLimit = 64
 // cacheRatio specifies how the total alloted cache is distributed between the
 // various system databases.
 var cacheRatio = map[string]float64{
-	"dapp":      2.0 / 13.0,
-	"chaindata": 11.0 / 13.0,
+	"dapp":      0.0,
+	"chaindata": 1.0,
+}
+
+// handleRatio specifies how the total alloted file descriptors is distributed
+// between the various system databases.
+var handleRatio = map[string]float64{
+	"dapp":      0.0,
+	"chaindata": 1.0,
 }
 
 type LDBDatabase struct {
@@ -62,17 +69,21 @@ type LDBDatabase struct {
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object.
-func NewLDBDatabase(file string, cache int) (*LDBDatabase, error) {
-	// Calculate the cache allowance for this particular database
+func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
+	// Calculate the cache and file descriptor allowance for this particular database
 	cache = int(float64(cache) * cacheRatio[filepath.Base(file)])
 	if cache < 16 {
 		cache = 16
 	}
-	glog.V(logger.Info).Infof("Alloted %dMB cache to %s", cache, file)
+	handles = int(float64(handles) * handleRatio[filepath.Base(file)])
+	if handles < 16 {
+		handles = 16
+	}
+	glog.V(logger.Info).Infof("Alloted %dMB cache and %d file handles to %s", cache, handles, file)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
-		OpenFilesCacheCapacity: OpenFileLimit,
+		OpenFilesCacheCapacity: handles,
 		BlockCacheCapacity:     cache / 2 * opt.MiB,
 		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
 	})
