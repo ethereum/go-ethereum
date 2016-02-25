@@ -726,12 +726,12 @@ func (self *BlockChain) writeHeader(header *types.Header) error {
 		return ParentError(header.ParentHash)
 	}
 
-	localTd := self.GetTd(self.currentHeader.Hash())
-	externTd := new(big.Int).Add(header.Difficulty, ptd)
-
 	// Make sure no inconsistent state is leaked during insertion
 	self.mu.Lock()
 	defer self.mu.Unlock()
+
+	localTd := self.GetTd(self.currentHeader.Hash())
+	externTd := new(big.Int).Add(header.Difficulty, ptd)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
