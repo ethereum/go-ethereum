@@ -41,7 +41,7 @@ var (
 	Sha256WordGas          = big.NewInt(12)     //
 
 	MinGasLimit     = big.NewInt(5000)    // Minimum the gas limit may ever be.
-	GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
+	GenesisGasLimit = big.NewInt(4712388) // Gas limit of the Genesis block.
 
 	Sha3Gas              = big.NewInt(30)     // Once per SHA3 operation.
 	Sha256Gas            = big.NewInt(60)     //
