@@ -649,8 +649,15 @@ func (env *Work) commitTransactions(mux *event.TypeMux, transactions types.Trans
 			coalescedLogs = append(coalescedLogs, logs...)
 		}
 	}
-	if len(coalescedLogs) > 0 {
-		go mux.Post(core.PendingLogsEvent{Logs: coalescedLogs})
+	if len(coalescedLogs) > 0 || env.tcount > 0 {
+		go func(logs vm.Logs, tcount int) {
+			if len(logs) > 0 {
+				mux.Post(core.PendingLogsEvent{Logs: logs})
+			}
+			if tcount > 0 {
+				mux.Post(core.PendingStateEvent{})
+			}
+		}(coalescedLogs, env.tcount)
 	}
 }
 
