@@ -123,6 +123,30 @@ type chainManager interface {
 	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
 }
 
+// proxy interface to core.BlockChain
+type blockChain interface {
+	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
+	Genesis() *types.Block
+	CurrentHeader() *types.Header
+	CurrentBlock() *types.Block
+	CurrentFastBlock() *types.Block
+	HasHeader(hash common.Hash) bool
+	HasBlock(hash common.Hash) bool
+	HasBlockAndState(hash common.Hash) bool
+	GetHeader(hash common.Hash) *types.Header
+	GetHeaderByNumber(number uint64) *types.Header
+	GetBlock(hash common.Hash) *types.Block
+	GetBlockByNumber(number uint64) *types.Block
+	GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash
+	GetBodyRLP(hash common.Hash) rlp.RawValue
+	FastSyncCommitHead(hash common.Hash) error
+	GetTd(hash common.Hash) *big.Int
+	InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error)
+	InsertChain(chain types.Blocks) (int, error)
+	InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error)
+	Rollback(chain []common.Hash)
+}
+
 // statusData is the network packet for the status message.
 type statusData struct {
 	ProtocolVersion uint32
