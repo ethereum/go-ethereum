@@ -119,7 +119,6 @@ func newLightweightJSRE(docRoot string, client rpc.Client, datadir string, inter
 		lr.SetCtrlCAborts(true)
 		lr.SetWordCompleter(makeCompleter(js))
 		lr.SetTabCompletionStyle(liner.TabPrints)
-		lr.SetMultiLineMode(true)
 		js.prompter = lr
 		js.atexit = func() {
 			js.withHistory(datadir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
