@@ -661,7 +661,7 @@ func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 
 	pending := self.ethereum.TxPool().GetTransactions()
 	for _, p := range pending {
-		if pFrom, err := p.From(); err == nil && pFrom == from && p.SigHash() == args.Tx.tx.SigHash() {
+		if pFrom, err := p.FromFrontier(); err == nil && pFrom == from && p.SigHash() == args.Tx.tx.SigHash() {
 			self.ethereum.TxPool().RemoveTx(common.HexToHash(args.Tx.Hash))
 			return self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
 		}
@@ -688,7 +688,7 @@ func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error
 
 	var ltxs []*tx
 	for _, tx := range txs {
-		if from, _ := tx.From(); accountSet.Has(from) {
+		if from, _ := tx.FromFrontier(); accountSet.Has(from) {
 			ltxs = append(ltxs, newTx(tx))
 		}
 	}

@@ -349,7 +349,7 @@ func NewTransactionRes(tx *types.Transaction) *TransactionRes {
 	// v.BlockHash =
 	// v.BlockNumber =
 	// v.TxIndex =
-	from, _ := tx.From()
+	from, _ := tx.FromFrontier()
 	v.From = newHexData(from)
 	v.To = newHexData(tx.To())
 	v.Value = newHexNum(tx.Value())
