@@ -472,6 +472,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		cfg.DataDir += "/testnet"
 		cfg.NetworkId = 2
 		cfg.TestNet = true
+		// overwrite homestead block
+		params.HomesteadBlock = params.TestNetHomesteadBlock
 	}
 
 	if ctx.GlobalBool(VMEnableJitFlag.Name) {
