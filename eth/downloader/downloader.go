@@ -1263,8 +1263,10 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 					case ch <- false:
 					case <-d.cancelCh:
 					}
-					return nil
 				}
+			}
+			if !cont {
+				return nil
 			}
 			// Queue not yet full, fetch the next batch
 			from += uint64(len(headers))
