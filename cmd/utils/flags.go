@@ -183,7 +183,7 @@ var (
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
 		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
+		Value: new(big.Int).Mul(big.NewInt(20), common.Shannon).String(),
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -356,7 +356,7 @@ var (
 	GpoMinGasPriceFlag = cli.StringFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
+		Value: new(big.Int).Mul(big.NewInt(20), common.Shannon).String(),
 	}
 	GpoMaxGasPriceFlag = cli.StringFlag{
 		Name:  "gpomax",
@@ -472,6 +472,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		cfg.DataDir += "/testnet"
 		cfg.NetworkId = 2
 		cfg.TestNet = true
+		// overwrite homestead block
+		params.HomesteadBlock = params.TestNetHomesteadBlock
 	}
 
 	if ctx.GlobalBool(VMEnableJitFlag.Name) {

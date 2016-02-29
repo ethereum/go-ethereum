@@ -2570,7 +2570,7 @@
         },
         "transaction" : {
             "data" : "0x6001600155601080600c6000396000f3006000355415600957005b60203560003555",
-            "gasLimit" : "0xb44e",
+            "gasLimit" : "0x1314e",
             "gasPrice" : "0x01",
             "nonce" : "0x00",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
@@ -2648,36 +2648,28 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "0x0de0b6b3a7658689",
+                "balance" : "0x0de0b6b3a76586a0",
                 "code" : "0x7f6001600155601080600c6000396000f3006000355415600957005b602035600060005260356020536055602153602260006017f0",
                 "nonce" : "0x01",
                 "storage" : {
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "0x011d70",
+                "balance" : "0x011d6f",
                 "code" : "0x",
                 "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "0x0de0b6b3a7615bf0",
+                "balance" : "0x0de0b6b3a7615bf1",
                 "code" : "0x",
                 "nonce" : "0x01",
                 "storage" : {
                 }
-            },
-            "d2571607e241ecf590ed94b12d87c94babe36db6" : {
-                "balance" : "0x17",
-                "code" : "0x",
-                "nonce" : "0x00",
-                "storage" : {
-                    "0x01" : "0x01"
-                }
             }
         },
-        "postStateRoot" : "86a4e893a117e2e38a77247e6b01a29680bb0e0fc68807885231f527720d18c0",
+        "postStateRoot" : "3e4b203d9a716a8209c2af59c485f3c1e5bb7b97d482313676dcd64410ed6563",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "0x0de0b6b3a7640000",
@@ -2696,7 +2688,7 @@
         },
         "transaction" : {
             "data" : "",
-            "gasLimit" : "0x0129ef",
+            "gasLimit" : "0x011d6f",
             "gasPrice" : "0x01",
             "nonce" : "0x00",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",

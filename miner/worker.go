@@ -19,7 +19,6 @@ package miner
 import (
 	"fmt"
 	"math/big"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -495,12 +494,12 @@ func (self *worker) commitNewWork() {
 
 	/* //approach 1
 	transactions := self.eth.TxPool().GetTransactions()
-	sort.Sort(types.TxByNonce{transactions})
+	sort.Sort(types.TxByNonce(transactions))
 	*/
 
 	//approach 2
 	transactions := self.eth.TxPool().GetTransactions()
-	sort.Sort(types.TxByPriceAndNonce{transactions})
+	types.SortByPriceAndNonce(transactions)
 
 	/* // approach 3
 	// commit transactions for this run.
@@ -524,8 +523,8 @@ func (self *worker) commitNewWork() {
 			multiTxOwner = append(multiTxOwner, txs...)
 		}
 	}
-	sort.Sort(types.TxByPrice{singleTxOwner})
-	sort.Sort(types.TxByNonce{multiTxOwner})
+	sort.Sort(types.TxByPrice(singleTxOwner))
+	sort.Sort(types.TxByNonce(multiTxOwner))
 	transactions := append(singleTxOwner, multiTxOwner...)
 	*/
 
@@ -591,7 +590,8 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *big.Int, bc *core.BlockChain) {
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 	for _, tx := range transactions {
-		// We can skip err. It has already been validated in the tx pool
+		// Error may be ignored here. The error has already been checked
+		// during transaction acceptance is the transaction pool.
 		from, _ := tx.From()
 
 		// Check if it falls within margin. Txs from owned accounts are always processed.

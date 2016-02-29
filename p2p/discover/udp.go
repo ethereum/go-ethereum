@@ -67,6 +67,8 @@ type (
 		Version    uint
 		From, To   rpcEndpoint
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// pong is the reply to ping.
@@ -78,18 +80,24 @@ type (
 
 		ReplyTok   []byte // This contains the hash of the ping packet.
 		Expiration uint64 // Absolute timestamp at which the packet becomes invalid.
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// findnode is a query for nodes close to the given target.
 	findnode struct {
 		Target     NodeID // doesn't need to be an actual public key
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	// reply to findnode
 	neighbors struct {
 		Nodes      []rpcNode
 		Expiration uint64
+		// Ignore additional fields (for forward compatibility).
+		Rest []rlp.RawValue `rlp:"tail"`
 	}
 
 	rpcNode struct {
@@ -447,8 +455,11 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	return packet, nil
 }
 
-type tempError interface {
-	Temporary() bool
+func isTemporaryError(err error) bool {
+	tempErr, ok := err.(interface {
+		Temporary() bool
+	})
+	return ok && tempErr.Temporary() || isPacketTooBig(err)
 }
 
 // readLoop runs in its own goroutine. it handles incoming UDP packets.
@@ -460,7 +471,7 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if tempErr, ok := err.(tempError); ok && tempErr.Temporary() {
+		if isTemporaryError(err) {
 			// Ignore temporary read errors.
 			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
 			continue
@@ -513,7 +524,8 @@ func decodePacket(buf []byte) (packet, NodeID, []byte, error) {
 	default:
 		return nil, fromID, hash, fmt.Errorf("unknown type: %d", ptype)
 	}
-	err = rlp.DecodeBytes(sigdata[1:], req)
+	s := rlp.NewStream(bytes.NewReader(sigdata[1:]), 0)
+	err = s.Decode(req)
 	return req, fromID, hash, err
 }
 

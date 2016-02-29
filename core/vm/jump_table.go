@@ -1,13 +1,29 @@
 package vm
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/params"
+)
 
 type jumpPtr struct {
 	fn    instrFn
 	valid bool
 }
 
-var jumpTable [256]jumpPtr
+type vmJumpTable [256]jumpPtr
+
+func (jt vmJumpTable) init(blockNumber *big.Int) {
+	// when initialising a new VM execution we must first check the homestead
+	// changes.
+	if params.IsHomestead(blockNumber) {
+		jumpTable[DELEGATECALL] = jumpPtr{opDelegateCall, true}
+	} else {
+		jumpTable[DELEGATECALL] = jumpPtr{nil, false}
+	}
+}
+
+var jumpTable vmJumpTable
 
 func init() {
 	jumpTable[ADD] = jumpPtr{opAdd, true}

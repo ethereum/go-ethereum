@@ -20,14 +20,8 @@ package secp256k1
 
 /*
 #cgo CFLAGS: -I./libsecp256k1
-#cgo darwin CFLAGS: -I/usr/local/include
-#cgo freebsd CFLAGS: -I/usr/local/include
-#cgo linux,arm CFLAGS: -I/usr/local/arm/include
-#cgo LDFLAGS: -lgmp
-#cgo darwin LDFLAGS: -L/usr/local/lib
-#cgo freebsd LDFLAGS: -L/usr/local/lib
-#cgo linux,arm LDFLAGS: -L/usr/local/arm/lib
-#define USE_NUM_GMP
+#cgo CFLAGS: -I./libsecp256k1/src/
+#define USE_NUM_NONE
 #define USE_FIELD_10X26
 #define USE_FIELD_INV_BUILTIN
 #define USE_SCALAR_8X32
@@ -44,6 +38,7 @@ import "C"
 
 import (
 	"errors"
+	"math/big"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
@@ -60,9 +55,17 @@ import (
 */
 
 // holds ptr to secp256k1_context_struct (see secp256k1/include/secp256k1.h)
-var context *C.secp256k1_context
+var (
+	context *C.secp256k1_context
+	N       *big.Int
+	HalfN   *big.Int
+)
 
 func init() {
+	N, _ = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+	// N / 2 == 57896044618658097711785492504343953926418782139537452191302581570759080747168
+	HalfN, _ = new(big.Int).SetString("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0", 16)
+
 	// around 20 ms on a modern CPU.
 	context = C.secp256k1_context_create(3) // SECP256K1_START_SIGN | SECP256K1_START_VERIFY
 	C.secp256k1_context_set_illegal_callback(context, C.callbackFunc(C.secp256k1GoPanicIllegal), nil)

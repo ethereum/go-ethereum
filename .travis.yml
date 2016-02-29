@@ -20,10 +20,6 @@ env:
   global:
     - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
 sudo: false
-addons:
-  apt:
-    packages:
-    - libgmp3-dev
 notifications:
   webhooks:
     urls:
