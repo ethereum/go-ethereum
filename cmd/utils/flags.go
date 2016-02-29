@@ -672,6 +672,8 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 			ethConf.Genesis = core.TestNetGenesisBlock()
 		}
 		state.StartingNonce = 1048576 // (2**20)
+		// overwrite homestead block
+		params.HomesteadBlock = params.TestNetHomesteadBlock
 
 	case ctx.GlobalBool(DevModeFlag.Name):
 		// Override the base network stack configs

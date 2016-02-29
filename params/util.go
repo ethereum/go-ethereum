@@ -18,7 +18,11 @@ package params
 
 import "math/big"
 
-var HomesteadBlock *big.Int = big.NewInt(2000000)
+var (
+	TestNetHomesteadBlock = big.NewInt(494000)    // testnet homestead block
+	MainNetHomesteadBlock = big.NewInt(2000000)   // mainnet homestead block
+	HomesteadBlock        = MainNetHomesteadBlock // homestead block used to check against
+)
 
 func IsHomestead(blockNumber *big.Int) bool {
 	// for unit tests TODO: flip to true after homestead is live
