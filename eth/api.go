@@ -582,11 +582,7 @@ func (s *PublicBlockChainAPI) GetCode(address common.Address, blockNr rpc.BlockN
 	if state == nil || err != nil {
 		return "", err
 	}
-	res := state.GetCode(address)
-	if len(res) == 0 { // backwards compatibility
-		return "0x", nil
-	}
-	return common.ToHex(res), nil
+	return common.BytesToHex(state.GetCode(address)), nil
 }
 
 // GetStorageAt returns the storage from the state at the given address, key and
@@ -671,10 +667,7 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
 	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
-	if len(res) == 0 { // backwards compatibility
-		return "0x", gas, err
-	}
-	return common.ToHex(res), gas, err
+	return common.BytesToHex(res), gas, err
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -1102,7 +1095,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(encodedTx string) (string,
 // be unlocked.
 func (s *PublicTransactionPoolAPI) Sign(address common.Address, data string) (string, error) {
 	signature, error := s.am.Sign(accounts.Account{Address: address}, common.HexToHash(data).Bytes())
-	return common.ToHex(signature), error
+	return common.BytesToHex(signature), error
 }
 
 type SignTransactionArgs struct {
@@ -1194,7 +1187,7 @@ func newTx(t *types.Transaction) *Tx {
 		From:     from,
 		Value:    rpc.NewHexNumber(t.Value()),
 		Nonce:    rpc.NewHexNumber(t.Nonce()),
-		Data:     "0x" + common.Bytes2Hex(t.Data()),
+		Data:     common.BytesToHex(t.Data()),
 		GasLimit: rpc.NewHexNumber(t.Gas()),
 		GasPrice: rpc.NewHexNumber(t.GasPrice()),
 		Hash:     t.Hash(),
@@ -1241,7 +1234,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(args *SignTransactionArgs) (*
 		return nil, err
 	}
 
-	return &SignTransactionResult{"0x" + common.Bytes2Hex(data), newTx(tx)}, nil
+	return &SignTransactionResult{common.BytesToHex(data), newTx(tx)}, nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool and have a from address that is one of

@@ -111,11 +111,12 @@ func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpc
 	codehex := xeth.CodeAt(contractAddress)
 	codeb := xeth.CodeAtBytes(contractAddress)
 
-	if codehex == "0x" {
+	if codehex == "0x" || codehex == "0X" {
 		err = fmt.Errorf("contract (%v) not found", contractAddress)
 		return
 	}
 	codehash := common.BytesToHash(crypto.Keccak256(codeb))
+
 	// set up nameresolver with natspecreg + urlhint contract addresses
 	reg := registrar.New(xeth)
 

@@ -17,6 +17,7 @@
 package state
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -39,7 +40,7 @@ type World struct {
 
 func (self *StateDB) RawDump() World {
 	world := World{
-		Root:     common.Bytes2Hex(self.trie.Root()),
+		Root:     hex.EncodeToString(self.trie.Root()),
 		Accounts: make(map[string]Account),
 	}
 
@@ -48,14 +49,14 @@ func (self *StateDB) RawDump() World {
 		addr := self.trie.GetKey(it.Key)
 		stateObject, _ := DecodeObject(common.BytesToAddress(addr), self.db, it.Value)
 
-		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: common.Bytes2Hex(stateObject.Root()), CodeHash: common.Bytes2Hex(stateObject.codeHash), Code: common.Bytes2Hex(stateObject.Code())}
+		account := Account{Balance: stateObject.balance.String(), Nonce: stateObject.nonce, Root: hex.EncodeToString(stateObject.Root()), CodeHash: hex.EncodeToString(stateObject.codeHash), Code: hex.EncodeToString(stateObject.Code())}
 		account.Storage = make(map[string]string)
 
 		storageIt := stateObject.trie.Iterator()
 		for storageIt.Next() {
-			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+			account.Storage[hex.EncodeToString(self.trie.GetKey(storageIt.Key))] = hex.EncodeToString(storageIt.Value)
 		}
-		world.Accounts[common.Bytes2Hex(addr)] = account
+		world.Accounts[hex.EncodeToString(addr)] = account
 	}
 	return world
 }

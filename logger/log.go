@@ -21,12 +21,14 @@ import (
 	"io"
 	"log"
 	"os"
-
-	"github.com/ethereum/go-ethereum/common"
+	"path/filepath"
 )
 
 func openLogFile(datadir string, filename string) *os.File {
-	path := common.AbsolutePath(datadir, filename)
+	path := filename
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(datadir, filename)
+	}
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		panic(fmt.Sprintf("error opening log file '%s': %v", filename, err))

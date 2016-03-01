@@ -573,7 +573,7 @@ func newFilterId() (string, error) {
 	if n != 16 {
 		return "", errors.New("Unable to generate filter id")
 	}
-	return "0x" + hex.EncodeToString(subid[:]), nil
+	return common.BytesToHex(subid[:]), nil
 }
 
 // toRPCLogs is a helper that will convert a vm.Logs array to an structure which

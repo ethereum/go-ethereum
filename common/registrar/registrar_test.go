@@ -52,7 +52,7 @@ func (self *testBackend) initUrlHint() {
 	mapaddr := storageMapping(storageIdx2Addr(1), hash[:])
 
 	key := storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(0)))
-	self.contracts[UrlHintAddr[2:]][key] = common.ToHex([]byte(url))
+	self.contracts[UrlHintAddr[2:]][key] = common.NumberToHex([]byte(url))
 	key = storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(1)))
 	self.contracts[UrlHintAddr[2:]][key] = "0x0"
 }

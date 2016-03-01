@@ -18,11 +18,11 @@ package core
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -43,7 +43,7 @@ func ReportBlock(block *types.Block, err error) {
 
 	blockRlp, _ := rlp.EncodeToBytes(block)
 	data := map[string]interface{}{
-		"block":     common.Bytes2Hex(blockRlp),
+		"block":     hex.EncodeToString(blockRlp),
 		"errortype": err.Error(),
 		"hints": map[string]interface{}{
 			"receipts": "NYI",

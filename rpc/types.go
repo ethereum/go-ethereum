@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"gopkg.in/fatih/set.v0"
 )
@@ -220,11 +221,7 @@ func (h *HexNumber) UnmarshalJSON(input []byte) error {
 // MarshalJSON serialize the hex number instance to a hex representation.
 func (h *HexNumber) MarshalJSON() ([]byte, error) {
 	if h != nil {
-		hn := (*big.Int)(h)
-		if hn.BitLen() == 0 {
-			return []byte(`"0x0"`), nil
-		}
-		return []byte(fmt.Sprintf(`"0x%x"`, hn)), nil
+		return []byte(`"` + common.NumberToHex((*big.Int)(h).Bytes()) + `"`), nil
 	}
 	return nil, nil
 }

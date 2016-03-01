@@ -74,7 +74,7 @@ func (s *PublicWhisperAPI) NewIdentity() (string, error) {
 	}
 
 	identity := s.w.NewIdentity()
-	return common.ToHex(crypto.FromECDSAPub(&identity.PublicKey)), nil
+	return common.BytesToHex(crypto.FromECDSAPub(&identity.PublicKey)), nil
 }
 
 type NewFilterArgs struct {
@@ -403,11 +403,11 @@ func NewWhisperMessage(message *Message) WhisperMessage {
 	return WhisperMessage{
 		ref: message,
 
-		Payload: common.ToHex(message.Payload),
-		From:    common.ToHex(crypto.FromECDSAPub(message.Recover())),
-		To:      common.ToHex(crypto.FromECDSAPub(message.To)),
+		Payload: common.BytesToHex(message.Payload),
+		From:    common.BytesToHex(crypto.FromECDSAPub(message.Recover())),
+		To:      common.BytesToHex(crypto.FromECDSAPub(message.To)),
 		Sent:    message.Sent.Unix(),
 		TTL:     int64(message.TTL / time.Second),
-		Hash:    common.ToHex(message.Hash.Bytes()),
+		Hash:    common.BytesToHex(message.Hash.Bytes()),
 	}
 }

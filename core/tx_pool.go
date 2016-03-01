@@ -17,6 +17,7 @@
 package core
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -288,14 +289,14 @@ func (self *TxPool) add(tx *types.Transaction) error {
 	if glog.V(logger.Debug) {
 		var toname string
 		if to := tx.To(); to != nil {
-			toname = common.Bytes2Hex(to[:4])
+			toname = hex.EncodeToString(to[:4])
 		} else {
 			toname = "[NEW_CONTRACT]"
 		}
 		// we can ignore the error here because From is
 		// verified in ValidateTransaction.
 		f, _ := tx.From()
-		from := common.Bytes2Hex(f[:4])
+		from := hex.EncodeToString(f[:4])
 		glog.Infof("(t) %x => %s (%v) %x\n", from, toname, tx.Value, hash)
 	}
 

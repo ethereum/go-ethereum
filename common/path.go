@@ -56,11 +56,11 @@ func FileExist(filePath string) bool {
 	return true
 }
 
-func AbsolutePath(Datadir string, filename string) string {
+func AbsolutePath(datadir string, filename string) string {
 	if filepath.IsAbs(filename) {
 		return filename
 	}
-	return filepath.Join(Datadir, filename)
+	return filepath.Join(datadir, filename)
 }
 
 func HomeDir() string {

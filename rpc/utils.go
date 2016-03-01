@@ -18,7 +18,6 @@ package rpc
 
 import (
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -26,6 +25,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/net/context"
 )
 
@@ -211,7 +211,7 @@ func newSubscriptionId() (string, error) {
 	if n != 16 {
 		return "", errors.New("Unable to generate subscription id")
 	}
-	return "0x" + hex.EncodeToString(subid[:]), nil
+	return common.BytesToHex(subid[:]), nil
 }
 
 // SupportedModules returns the collection of API's that the RPC server offers

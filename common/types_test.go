@@ -29,3 +29,38 @@ func TestBytesConversion(t *testing.T) {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
 }
+
+// Tests whether addresses are correctly matched against allowed form and data
+// content.
+func TestIsHexAddress(t *testing.T) {
+	tests := []struct {
+		address string
+		valid   bool
+	}{
+		{"", false},                                             // Empty, without optional 0x prefix
+		{"0x", false},                                           // Empty, with optional 0x prefix
+		{"00", false},                                           // Too short, without optional 0x prefix
+		{"0x00", false},                                         // Too short, with optional 0x prefix
+		{"00000000000000000000000000000000000000", false},       // Too short (even), without optional 0x prefix
+		{"0x00000000000000000000000000000000000000", false},     // Too short (even), with optional 0x prefix
+		{"000000000000000000000000000000000000000", false},      // Too short (odd), without optional 0x prefix
+		{"0x000000000000000000000000000000000000000", false},    // Too short (odd), with optional 0x prefix
+		{"0000000000000000000000000000000000000000", true},      // Valid, without optional 0x prefix
+		{"0x0000000000000000000000000000000000000000", true},    // Valid, with optional 0x prefix
+		{"0x00000000000000000000000000000000000000", false},     // Length / prefix combo invalidity
+		{"00x0000000000000000000000000000000000000", false},     // Invalid content, without optional 0x prefix
+		{"0x0x00000000000000000000000000000000000000", false},   // Invalid content, with optional 0x prefix
+		{"abcdefghijklmnopqrstuvwxyz0123456789xxxx", false},     // Invalid content, without optional 0x prefix
+		{"0xabcdefghijklmnopqrstuvwxyz0123456789xxxx", false},   // Invalid content, with optional 0x prefix
+		{"00000000000000000000000000000000000000000", false},    // Too long (odd), without optional 0x prefix
+		{"0x00000000000000000000000000000000000000000", false},  // Too long (odd), with optional 0x prefix
+		{"000000000000000000000000000000000000000000", false},   // Too long (even), without optional 0x prefix
+		{"0x000000000000000000000000000000000000000000", false}, // Too long (even), with optional 0x prefix
+	}
+
+	for i, tt := range tests {
+		if valid := IsHexAddress(tt.address); valid != tt.valid {
+			t.Errorf("test %d: address validity mismatch: have %v, want %v", i, valid, tt.valid)
+		}
+	}
+}

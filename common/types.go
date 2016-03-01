@@ -50,7 +50,7 @@ func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
-func (h Hash) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
+func (h Hash) Hex() string   { return BytesToHex(h[:]) }
 
 // UnmarshalJSON parses a hash in its hex from to a hash.
 func (h *Hash) UnmarshalJSON(input []byte) error {
@@ -110,7 +110,8 @@ func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
 func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
-// Ethereum address or not.
+// Ethereum address or not. The accepted format is a 40 hex-character string,
+// optionally prefixed by 0x or 0X.
 func IsHexAddress(s string) bool {
 	if len(s) == 2+2*AddressLength && IsHex(s) {
 		return true
@@ -126,7 +127,7 @@ func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return Bytes2Big(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
-func (a Address) Hex() string   { return "0x" + Bytes2Hex(a[:]) }
+func (a Address) Hex() string   { return BytesToHex(a[:]) }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
@@ -182,8 +183,7 @@ func (a *Address) UnmarshalJSON(data []byte) error {
 // 	hex(value[:4])...(hex[len(value)-4:])
 func PP(value []byte) string {
 	if len(value) <= 8 {
-		return Bytes2Hex(value)
+		return hex.EncodeToString(value)
 	}
-
 	return fmt.Sprintf("%x...%x", value[:4], value[len(value)-4])
 }
