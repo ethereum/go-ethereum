@@ -78,7 +78,7 @@ func MessageCreatesContract(msg Message) bool {
 	return msg.To() == nil
 }
 
-// IntrinsicGas computes the 'intrisic gas' for a message
+// IntrinsicGas computes the 'intrinsic gas' for a message
 // with the given data.
 func IntrinsicGas(data []byte, contractCreation, homestead bool) *big.Int {
 	igas := new(big.Int)
