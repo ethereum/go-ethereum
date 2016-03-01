@@ -332,7 +332,7 @@ function uploadFile(files, nr, uri) {
     img.src = "/bzz:/" + i + "/imgs/" + file.name;
     return;
   }};
-  xhr.open("PUT", uri + "/imgs/" + file.name, true);
+  xhr.open("PUT", uri + "imgs/" + file.name, true);
   xhr.setRequestHeader('Content-Type', file.type);
 
   var reader = new FileReader();
