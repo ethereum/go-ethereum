@@ -51,8 +51,8 @@ func TestJSONRequestParsing(t *testing.T) {
 		t.Fatalf("Expected method 'Add' but got '%s'", requests[0].method)
 	}
 
-	if requests[0].id != 1234 {
-		t.Fatalf("Expected id 1234 but got %d", requests[0].id)
+	if id, ok := requests[0].id.(float64); !ok || id != 1234 {
+		t.Fatalf("Expected id 1234 but got %v", requests[0].id)
 	}
 
 	var arg int

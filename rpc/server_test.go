@@ -109,7 +109,7 @@ func (c *ServerTestCodec) ReadRequestHeaders() ([]rpcRequest, bool, RPCError) {
 	if c.counter == 1 {
 		var req JSONRequest
 		json.Unmarshal(c.input, &req)
-		return []rpcRequest{rpcRequest{id: *req.Id, isPubSub: false, service: "test", method: req.Method, params: req.Payload}}, false, nil
+		return []rpcRequest{rpcRequest{id: req.Id, isPubSub: false, service: "test", method: req.Method, params: req.Payload}}, false, nil
 	}
 
 	// requests are executes in parallel, wait a bit before returning an error so that the previous request has time to
@@ -172,15 +172,15 @@ func (c *ServerTestCodec) ParseRequestArguments(argTypes []reflect.Type, payload
 	return argValues, nil
 }
 
-func (c *ServerTestCodec) CreateResponse(id int64, reply interface{}) interface{} {
+func (c *ServerTestCodec) CreateResponse(id interface{}, reply interface{}) interface{} {
 	return &JSONSuccessResponse{Version: jsonRPCVersion, Id: id, Result: reply}
 }
 
-func (c *ServerTestCodec) CreateErrorResponse(id *int64, err RPCError) interface{} {
+func (c *ServerTestCodec) CreateErrorResponse(id interface{}, err RPCError) interface{} {
 	return &JSONErrResponse{Version: jsonRPCVersion, Id: id, Error: JSONError{Code: err.Code(), Message: err.Error()}}
 }
 
-func (c *ServerTestCodec) CreateErrorResponseWithInfo(id *int64, err RPCError, info interface{}) interface{} {
+func (c *ServerTestCodec) CreateErrorResponseWithInfo(id interface{}, err RPCError, info interface{}) interface{} {
 	return &JSONErrResponse{Version: jsonRPCVersion, Id: id,
 		Error: JSONError{Code: err.Code(), Message: err.Error(), Data: info}}
 }

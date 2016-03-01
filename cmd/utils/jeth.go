@@ -37,7 +37,7 @@ func NewJeth(re *jsre.JSRE, client rpc.Client) *Jeth {
 	return &Jeth{re, client}
 }
 
-func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id *int64) (response otto.Value) {
+func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
 	m := rpc.JSONErrResponse{
 		Version: "2.0",
 		Id:      id,
