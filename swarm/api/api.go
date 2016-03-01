@@ -54,7 +54,7 @@ func (self *Api) Store(data storage.SectionReader, wg *sync.WaitGroup) (key stor
 // DNS Resolver
 func (self *Api) Resolve(hostPort string, nameresolver bool) (contentHash storage.Key, err error) {
 	if hashMatcher.MatchString(hostPort) || self.dns == nil {
-		glog.V(logger.Debug).Infof("[BZZ] host is a contentHash: '%v'", contentHash)
+		glog.V(logger.Debug).Infof("[BZZ] host is a contentHash: '%v'", hostPort)
 		return storage.Key(common.Hex2Bytes(hostPort)), nil
 	}
 	if !nameresolver {
@@ -77,19 +77,17 @@ func parse(uri string) (hostPort, path string) {
 		return
 	}
 	// beginning with slash is now optional
-	if len(parts[0]) == 0 {
+	for len(parts[i]) == 0 {
 		i++
 	}
 	hostPort = parts[i]
-	if len(parts) > i+1 {
-		path = parts[i+1]
-		if len(parts) == 3 {
-			path += "/" + parts[2]
+	for i < len(parts)-1 {
+		i++
+		if len(path) > 0 {
+			path = path + "/" + parts[i]
+		} else {
+			path = parts[i]
 		}
-		path += "/"
-	}
-	if len(path) > 0 {
-		path = "/" + path
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: host: '%s', path '%s' requested.", hostPort, path)
 	return
@@ -99,6 +97,7 @@ func (self *Api) parseAndResolve(uri string, nameresolver bool) (contentHash sto
 	hostPort, path = parse(uri)
 	//resolving host and port
 	contentHash, err = self.Resolve(hostPort, nameresolver)
+	glog.V(logger.Debug).Infof("[BZZ] Resolved '%s' to contentHash: '%s', path: '%s'", uri, contentHash, path)
 	return
 }
 
