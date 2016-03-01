@@ -288,7 +288,7 @@ function uploadFile(files, nr, uri) {
       var xhr = new XMLHttpRequest();
       xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
         var i = xhr.responseText;
-        window.location.replace("/bzz://" + i + "/");
+        window.location.replace("/bzz:/" + i + "/");
       }};
       sendImgs(xhr, uri);
     }
@@ -327,12 +327,12 @@ function uploadFile(files, nr, uri) {
       imgData[0] = "imgs/" + file.name;
       imgData[1] = [img.naturalWidth, img.naturalHeight];
       imgs.data.splice(eidx, 0, {img: imgData, thumb: thumbData, blur: blur});
-      uploadFile(files, nr + 1, "/" + i + "/");
+      uploadFile(files, nr + 1, "/bzz:/" + i + "/");
     }
-    img.src = "/" + i + "/imgs/" + file.name;
+    img.src = "/bzz:/" + i + "/imgs/" + file.name;
     return;
   }};
-  xhr.open("PUT", uri + "imgs/" + file.name, true);
+  xhr.open("PUT", uri + "/imgs/" + file.name, true);
   xhr.setRequestHeader('Content-Type', file.type);
 
   var reader = new FileReader();
@@ -361,9 +361,9 @@ function deleteImg()
     var xhrd = new XMLHttpRequest();
     xhrd.onreadystatechange = function () {  if (xhrd.readyState === 4) {
       var j = xhrd.responseText;
-      window.location.replace("/bzz://" + j + "/");
+      window.location.replace("/bzz:/" + j + "/");
     }};
-    xhrd.open("DELETE", "/bzz://" + i + "/" + fname, true);
+    xhrd.open("DELETE", "/bzz%3A/" + i + "/" + fname, true);
     xhrd.send();
   }};
 
@@ -378,7 +378,7 @@ function moveUpDown(off)
   var xhr = new XMLHttpRequest();
   xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
     var i = xhr.responseText;
-    window.location.replace("/bzz://" + i + "/#" + (eidx + off));
+    window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
   }};
   sendImgs(xhr, "");
 }
