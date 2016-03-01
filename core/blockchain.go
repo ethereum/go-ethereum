@@ -80,11 +80,12 @@ const (
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
+	config *ChainConfig // chain & network configuration
+
 	hc           *HeaderChain
 	chainDb      ethdb.Database
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
-	vmConfig     *vm.Config
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
@@ -113,13 +114,14 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialiser the default Ethereum Validator and
 // Processor.
-func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
+func NewBlockChain(chainDb ethdb.Database, config *ChainConfig, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
 	bc := &BlockChain{
+		config:       config,
 		chainDb:      chainDb,
 		eventMux:     mux,
 		quit:         make(chan struct{}),
@@ -129,24 +131,21 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		futureBlocks: futureBlocks,
 		pow:          pow,
 	}
-	bc.SetValidator(NewBlockValidator(bc, pow))
-	bc.SetProcessor(NewStateProcessor(bc))
+	bc.SetValidator(NewBlockValidator(config, bc, pow))
+	bc.SetProcessor(NewStateProcessor(config, bc))
 
 	gv := func() HeaderValidator { return bc.Validator() }
 	var err error
-	bc.hc, err = NewHeaderChain(chainDb, gv, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(chainDb, config, gv, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-		bc.genesisBlock, err = WriteDefaultGenesisBlock(chainDb)
-		if err != nil {
-			return nil, err
-		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		return nil, ErrNoGenesis
 	}
+
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -161,10 +160,6 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
-}
-
-func (self *BlockChain) SetConfig(vmConfig *vm.Config) {
-	self.vmConfig = vmConfig
 }
 
 func (self *BlockChain) getProcInterrupt() bool {
@@ -896,7 +891,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(block, statedb, self.vmConfig)
+		receipts, logs, usedGas, err := self.processor.Process(block, statedb, self.config.VmConfig)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err

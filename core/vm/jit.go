@@ -30,27 +30,24 @@ import (
 	"github.com/hashicorp/golang-lru"
 )
 
+// progStatus is the type for the JIT program status.
 type progStatus int32
 
 const (
-	progUnknown progStatus = iota
-	progCompile
-	progReady
-	progError
+	progUnknown progStatus = iota // unknown status
+	progCompile                   // compile status
+	progReady                     // ready for use status
+	progError                     // error status (usually caused during compilation)
 
-	defaultJitMaxCache int = 64
+	defaultJitMaxCache int = 64 // maximum amount of jit cached programs
 )
 
-var (
-	EnableJit   bool // Enables the JIT VM
-	ForceJit    bool // Force the JIT, skip byte VM
-	MaxProgSize int  // Max cache size for JIT Programs
-)
+var MaxProgSize int // Max cache size for JIT programs
 
-var programs *lru.Cache
+var programs *lru.Cache // lru cache for the JIT programs.
 
 func init() {
-	programs, _ = lru.New(defaultJitMaxCache)
+	SetJITCacheSize(defaultJitMaxCache)
 }
 
 // SetJITCacheSize recreates the program cache with the max given size. Setting
@@ -322,7 +319,7 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 		}()
 	}
 
-	homestead := params.IsHomestead(env.BlockNumber())
+	homestead := env.RuleSet().IsHomestead(env.BlockNumber())
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 

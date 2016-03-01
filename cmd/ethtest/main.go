@@ -27,6 +27,7 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
 )
 
@@ -73,9 +74,9 @@ func runTestWithReader(test string, r io.Reader) error {
 	var err error
 	switch strings.ToLower(test) {
 	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
-		err = tests.RunBlockTestWithReader(r, skipTests)
+		err = tests.RunBlockTestWithReader(params.MainNetHomesteadBlock, r, skipTests)
 	case "st", "state", "statetest", "statetests":
-		err = tests.RunStateTestWithReader(r, skipTests)
+		err = tests.RunStateTestWithReader(tests.RuleSet{params.MainNetHomesteadBlock}, r, skipTests)
 	case "tx", "transactiontest", "transactiontests":
 		err = tests.RunTransactionTestsWithReader(r, skipTests)
 	case "vm", "vmtest", "vmtests":

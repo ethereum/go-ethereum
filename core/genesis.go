@@ -43,15 +43,16 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 
 	var genesis struct {
-		Nonce      string
-		Timestamp  string
-		ParentHash string
-		ExtraData  string
-		GasLimit   string
-		Difficulty string
-		Mixhash    string
-		Coinbase   string
-		Alloc      map[string]struct {
+		ChainConfig *ChainConfig
+		Nonce       string
+		Timestamp   string
+		ParentHash  string
+		ExtraData   string
+		GasLimit    string
+		Difficulty  string
+		Mixhash     string
+		Coinbase    string
+		Alloc       map[string]struct {
 			Code    string
 			Storage map[string]string
 			Balance string
@@ -114,6 +115,10 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := WriteHeadBlockHash(chainDb, block.Hash()); err != nil {
 		return nil, err
 	}
+	if err := WriteChainConfig(chainDb, block.Hash(), genesis.ChainConfig); err != nil {
+		return nil, err
+	}
+
 	return block, nil
 }
 

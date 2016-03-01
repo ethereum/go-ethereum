@@ -106,6 +106,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
 
 	ethConf := &eth.Config{
+		ChainConfig:      &core.ChainConfig{HomesteadBlock: new(big.Int)},
 		TestGenesisState: db,
 		AccountManager:   accman,
 		DocRoot:          "/",

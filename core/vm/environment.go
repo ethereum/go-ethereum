@@ -22,9 +22,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// RuleSet is an interface that defines the current rule set during the
+// execution of the EVM instructions (e.g. whether it's homestead)
+type RuleSet interface {
+	IsHomestead(*big.Int) bool
+}
+
 // Environment is an EVM requirement and helper which allows access to outside
 // information such as states.
 type Environment interface {
+	// The current ruleset
+	RuleSet() RuleSet
 	// The state database
 	Db() Database
 	// Creates a restorable snapshot
@@ -53,10 +61,10 @@ type Environment interface {
 	AddLog(*Log)
 	// Type of the VM
 	Vm() Vm
-	// Current calling depth
+	// Get the curret calling depth
 	Depth() int
+	// Set the current calling depth
 	SetDepth(i int)
-
 	// Call another contract
 	Call(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context

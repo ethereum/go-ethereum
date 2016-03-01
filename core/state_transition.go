@@ -124,7 +124,7 @@ func (self *StateTransition) from() (vm.Account, error) {
 		f   common.Address
 		err error
 	)
-	if params.IsHomestead(self.env.BlockNumber()) {
+	if self.env.RuleSet().IsHomestead(self.env.BlockNumber()) {
 		f, err = self.msg.From()
 	} else {
 		f, err = self.msg.FromFrontier()
@@ -216,7 +216,7 @@ func (self *StateTransition) transitionDb() (ret []byte, usedGas *big.Int, err e
 	msg := self.msg
 	sender, _ := self.from() // err checked in preCheck
 
-	homestead := params.IsHomestead(self.env.BlockNumber())
+	homestead := self.env.RuleSet().IsHomestead(self.env.BlockNumber())
 	contractCreation := MessageCreatesContract(msg)
 	// Pay intrinsic gas
 	if err = self.useGas(IntrinsicGas(self.data, contractCreation, homestead)); err != nil {

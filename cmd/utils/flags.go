@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -172,6 +171,11 @@ var (
 	MiningGPUFlag = cli.StringFlag{
 		Name:  "minergpus",
 		Usage: "List of GPUs to use for mining (e.g. '0,1' will use the first two GPUs found)",
+	}
+	TargetGasLimitFlag = cli.StringFlag{
+		Name:  "targetgaslimit",
+		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
+		Value: params.GenesisGasLimit.String(),
 	}
 	AutoDAGFlag = cli.BoolFlag{
 		Name:  "autodag",
@@ -656,6 +660,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	accman := MakeAccountManager(ctx)
 
 	ethConf := &eth.Config{
+		ChainConfig:             MustMakeChainConfig(ctx),
 		Genesis:                 MakeGenesisBlock(ctx),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
@@ -701,8 +706,6 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 			ethConf.Genesis = core.TestNetGenesisBlock()
 		}
 		state.StartingNonce = 1048576 // (2**20)
-		// overwrite homestead block
-		params.HomesteadBlock = params.TestNetHomesteadBlock
 
 	case ctx.GlobalBool(DevModeFlag.Name):
 		// Override the base network stack configs
@@ -758,25 +761,56 @@ func SetupNetwork(ctx *cli.Context) {
 		core.BlockReward = big.NewInt(1.5e+18)
 		core.ExpDiffPeriod = big.NewInt(math.MaxInt64)
 	}
+	params.TargetGasLimit = common.String2Big(ctx.GlobalString(TargetGasLimitFlag.Name))
 }
 
-// SetupVM configured the VM package's global settings
-func SetupVM(ctx *cli.Context) {
-	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
-	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
-	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
+// MustMakeChainConfig reads the chain configuration from the given database.
+func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
+	var (
+		db      = MakeChainDatabase(ctx)
+		genesis = core.GetBlock(db, core.GetCanonicalHash(db, 0))
+	)
+	defer db.Close()
+
+	chainConfig, err := core.GetChainConfig(db, genesis.Hash())
+	if err != nil {
+		if err != core.ChainConfigNotFoundErr {
+			Fatalf("Could not make chain configuration: %v", err)
+		}
+		var homesteadBlockNo *big.Int
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			homesteadBlockNo = params.TestNetHomesteadBlock
+		} else {
+			homesteadBlockNo = params.MainNetHomesteadBlock
+		}
+
+		chainConfig = &core.ChainConfig{
+			HomesteadBlock: homesteadBlockNo,
+		}
+	}
+	return chainConfig
+}
+
+// MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
+func MakeChainDatabase(ctx *cli.Context) ethdb.Database {
+	var (
+		datadir = MustMakeDataDir(ctx)
+		cache   = ctx.GlobalInt(CacheFlag.Name)
+		handles = MakeDatabaseHandles()
+	)
+
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache, handles)
+	if err != nil {
+		Fatalf("Could not open database: %v", err)
+	}
+	return chainDb
 }
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database) {
-	datadir := MustMakeDataDir(ctx)
-	cache := ctx.GlobalInt(CacheFlag.Name)
-	handles := MakeDatabaseHandles()
-
 	var err error
-	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache, handles); err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
+	chainDb = MakeChainDatabase(ctx)
+
 	if ctx.GlobalBool(OlympicFlag.Name) {
 		_, err := core.WriteTestNetGenesisBlock(chainDb)
 		if err != nil {
@@ -784,10 +818,10 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 		}
 	}
 
-	eventMux := new(event.TypeMux)
-	pow := ethash.New()
-	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewBlockChain(chainDb, pow, eventMux)
+	chainConfig := MustMakeChainConfig(ctx)
+
+	var eventMux event.TypeMux
+	chain, err = core.NewBlockChain(chainDb, chainConfig, ethash.New(), &eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}

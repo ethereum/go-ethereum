@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -60,6 +59,7 @@ type stateFn func() (*state.StateDB, error)
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
+	config       *ChainConfig
 	quit         chan bool // Quitting channel
 	currentState stateFn   // The state function which will allow us to do some pre checks
 	pendingState *state.ManagedState
@@ -75,8 +75,9 @@ type TxPool struct {
 	homestead bool
 }
 
-func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+func NewTxPool(config *ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	pool := &TxPool{
+		config:       config,
 		pending:      make(map[common.Hash]*types.Transaction),
 		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
 		quit:         make(chan bool),
@@ -102,7 +103,7 @@ func (pool *TxPool) eventLoop() {
 		switch ev := ev.Data.(type) {
 		case ChainHeadEvent:
 			pool.mu.Lock()
-			if ev.Block != nil && params.IsHomestead(ev.Block.Number()) {
+			if ev.Block != nil && pool.config.IsHomestead(ev.Block.Number()) {
 				pool.homestead = true
 			}
 

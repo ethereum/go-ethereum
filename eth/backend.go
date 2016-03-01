@@ -63,6 +63,8 @@ var (
 )
 
 type Config struct {
+	ChainConfig *core.ChainConfig // chain configuration
+
 	NetworkId int    // Network ID to use for selecting peers to connect to
 	Genesis   string // Genesis JSON to seed the chain database with
 	FastSync  bool   // Enables the state download based fast synchronisation algorithm
@@ -100,6 +102,7 @@ type Config struct {
 }
 
 type Ethereum struct {
+	chainConfig *core.ChainConfig
 	// Channel for shutting down the ethereum
 	shutdownChan chan bool
 
@@ -166,12 +169,17 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	// Load up any custom genesis block if requested
 	if len(config.Genesis) > 0 {
+		// Using println instead of glog to make sure it **always** displays regardless of
+		// verbosity settings.
+		common.PrintDepricationWarning("--genesis is deprecated. Switch to use 'geth init /path/to/file'")
+
 		block, err := core.WriteGenesisBlock(chainDb, strings.NewReader(config.Genesis))
 		if err != nil {
 			return nil, err
 		}
 		glog.V(logger.Info).Infof("Successfully wrote custom genesis block: %x", block.Hash())
 	}
+
 	// Load up a test setup if directly injected
 	if config.TestGenesisState != nil {
 		chainDb = config.TestGenesisState
@@ -227,26 +235,38 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	default:
 		eth.pow = ethash.New()
 	}
-	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.pow, eth.EventMux())
-	eth.blockchain.SetConfig(&vm.Config{
+
+	// load the genesis block or write a new one if no genesis
+	// block is prenent in the database.
+	genesis := core.GetBlock(chainDb, core.GetCanonicalHash(chainDb, 0))
+	if genesis == nil {
+		genesis, err = core.WriteDefaultGenesisBlock(chainDb)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+	}
+
+	eth.chainConfig = config.ChainConfig
+	eth.chainConfig.VmConfig = vm.Config{
 		EnableJit: config.EnableJit,
 		ForceJit:  config.ForceJit,
-	})
+	}
 
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
-			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
+			return nil, fmt.Errorf(`No chain found. Please initialise a new chain using the "init" subcommand.`)
 		}
 		return nil, err
 	}
-	newPool := core.NewTxPool(eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
+	newPool := core.NewTxPool(eth.chainConfig, eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
-	if eth.protocolManager, err = NewProtocolManager(config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
@@ -275,7 +295,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicBlockChainAPI(s.BlockChain(), s.Miner(), s.ChainDb(), s.EventMux(), s.AccountManager()),
+			Service:   NewPublicBlockChainAPI(s.chainConfig, s.BlockChain(), s.Miner(), s.ChainDb(), s.EventMux(), s.AccountManager()),
 			Public:    true,
 		}, {
 			Namespace: "eth",
@@ -319,7 +339,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s),
+			Service:   NewPrivateDebugAPI(s.chainConfig, s),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
@@ -328,7 +348,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
-			Service:   ethreg.NewPrivateRegistarAPI(s.BlockChain(), s.ChainDb(), s.TxPool(), s.AccountManager()),
+			Service:   ethreg.NewPrivateRegistarAPI(s.chainConfig, s.BlockChain(), s.ChainDb(), s.TxPool(), s.AccountManager()),
 		},
 	}
 }

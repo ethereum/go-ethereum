@@ -24,9 +24,14 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 )
+
+// Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)
+var chainConfig = &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
@@ -46,7 +51,7 @@ type SimulatedBackend struct {
 func NewSimulatedBackend(accounts ...core.GenesisAccount) *SimulatedBackend {
 	database, _ := ethdb.NewMemDatabase()
 	core.WriteGenesisBlockForTesting(database, accounts...)
-	blockchain, _ := core.NewBlockChain(database, new(core.FakePow), new(event.TypeMux))
+	blockchain, _ := core.NewBlockChain(database, chainConfig, new(core.FakePow), new(event.TypeMux))
 
 	backend := &SimulatedBackend{
 		database:   database,
@@ -102,7 +107,7 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		data:     data,
 	}
 	// Execute the call and return
-	vmenv := core.NewEnv(statedb, b.blockchain, msg, block.Header(), nil)
+	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 
 	out, _, err := core.ApplyMessage(vmenv, msg, gaspool)
@@ -145,7 +150,7 @@ func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *com
 		data:     data,
 	}
 	// Execute the call and return
-	vmenv := core.NewEnv(statedb, b.blockchain, msg, block.Header(), nil)
+	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 
 	_, gas, err := core.ApplyMessage(vmenv, msg, gaspool)

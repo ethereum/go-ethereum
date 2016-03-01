@@ -40,7 +40,7 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 
 	var m event.TypeMux
 	key, _ := crypto.GenerateKey()
-	newPool := NewTxPool(&m, func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	newPool := NewTxPool(testChainConfig(), &m, func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	newPool.resetState()
 	return newPool, key
 }

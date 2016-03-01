@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
@@ -35,6 +36,7 @@ import (
 
 // registryAPIBackend is a backend for an Ethereum Registry.
 type registryAPIBackend struct {
+	config  *core.ChainConfig
 	bc      *core.BlockChain
 	chainDb ethdb.Database
 	txPool  *core.TxPool
@@ -43,12 +45,22 @@ type registryAPIBackend struct {
 
 // PrivateRegistarAPI offers various functions to access the Ethereum registry.
 type PrivateRegistarAPI struct {
-	be *registryAPIBackend
+	config *core.ChainConfig
+	be     *registryAPIBackend
 }
 
 // NewPrivateRegistarAPI creates a new PrivateRegistarAPI instance.
-func NewPrivateRegistarAPI(bc *core.BlockChain, chainDb ethdb.Database, txPool *core.TxPool, am *accounts.Manager) *PrivateRegistarAPI {
-	return &PrivateRegistarAPI{&registryAPIBackend{bc, chainDb, txPool, am}}
+func NewPrivateRegistarAPI(config *core.ChainConfig, bc *core.BlockChain, chainDb ethdb.Database, txPool *core.TxPool, am *accounts.Manager) *PrivateRegistarAPI {
+	return &PrivateRegistarAPI{
+		config: config,
+		be: &registryAPIBackend{
+			config:  config,
+			bc:      bc,
+			chainDb: chainDb,
+			txPool:  txPool,
+			am:      am,
+		},
+	}
 }
 
 // SetGlobalRegistrar allows clients to set the global registry for the node.
@@ -179,7 +191,7 @@ func (be *registryAPIBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr
 	}
 
 	header := be.bc.CurrentBlock().Header()
-	vmenv := core.NewEnv(statedb, be.bc, msg, header, nil)
+	vmenv := core.NewEnv(statedb, be.config, be.bc, msg, header, vm.Config{})
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
 

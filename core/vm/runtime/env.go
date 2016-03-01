@@ -27,8 +27,9 @@ import (
 
 // Env is a basic runtime environment required for running the EVM.
 type Env struct {
-	depth int
-	state *state.StateDB
+	ruleSet vm.RuleSet
+	depth   int
+	state   *state.StateDB
 
 	origin   common.Address
 	coinbase common.Address
@@ -48,6 +49,7 @@ type Env struct {
 // NewEnv returns a new vm.Environment
 func NewEnv(cfg *Config, state *state.StateDB) vm.Environment {
 	env := &Env{
+		ruleSet:    cfg.RuleSet,
 		state:      state,
 		origin:     cfg.Origin,
 		coinbase:   cfg.Coinbase,
@@ -56,7 +58,7 @@ func NewEnv(cfg *Config, state *state.StateDB) vm.Environment {
 		difficulty: cfg.Difficulty,
 		gasLimit:   cfg.GasLimit,
 	}
-	env.evm = vm.New(env, &vm.Config{
+	env.evm = vm.New(env, vm.Config{
 		Debug:     cfg.Debug,
 		EnableJit: !cfg.DisableJit,
 		ForceJit:  !cfg.DisableJit,
@@ -77,6 +79,7 @@ func (self *Env) AddStructLog(log vm.StructLog) {
 	self.logs = append(self.logs, log)
 }
 
+func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
 func (self *Env) Vm() vm.Vm                { return self.evm }
 func (self *Env) Origin() common.Address   { return self.origin }
 func (self *Env) BlockNumber() *big.Int    { return self.number }

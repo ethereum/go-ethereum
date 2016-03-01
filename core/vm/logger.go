@@ -89,7 +89,7 @@ func newLogger(cfg LogConfig, env Environment) *Logger {
 // captureState logs a new structured log message and pushes it out to the environment
 //
 // captureState also tracks SSTORE ops to track dirty values.
-func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, contract *Contract, err error) {
+func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, contract *Contract, depth int, err error) {
 	// short circuit if no log collector is present
 	if l.cfg.Collector == nil {
 		return
