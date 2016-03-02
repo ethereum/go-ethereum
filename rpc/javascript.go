@@ -22,7 +22,6 @@ var (
 		"personal": Personal_JS,
 		"txpool":   TxPool_JS,
 		"admin":    Admin_JS,
-		"db":       Db_JS,
 		"eth":      Eth_JS,
 		"miner":    Miner_JS,
 		"debug":    Debug_JS,
@@ -118,12 +117,6 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
-			name: 'verbosity',
-			call: 'admin_verbosity',
-			params: 1,
-			inputFormatter: [web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
 			name: 'setSolc',
 			call: 'admin_setSolc',
 			params: 1
@@ -217,18 +210,6 @@ web3._extend({
 });
 `
 
-const Db_JS = `
-web3._extend({
-	property: 'db',
-	methods:
-	[
-	],
-	properties:
-	[
-	]
-});
-`
-
 const Eth_JS = `
 web3._extend({
 	property: 'eth',
@@ -278,14 +259,7 @@ web3._extend({
 const Net_JS = `
 web3._extend({
 	property: 'net',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'addPeer',
-			call: 'net_addPeer',
-			params: 1
-		})
-	],
+	methods: [],
 	properties:
 	[
 		new web3._extend.Property({
@@ -413,9 +387,7 @@ web3._extend({
 			params: 4
 		})
 	],
-	properties:
-	[
-	]
+	properties: []
 });
 `
 
@@ -469,24 +441,14 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter]
 		})
 	],
-	properties:
-	[
-		new web3._extend.Property({
-			name: 'hashrate',
-			getter: 'miner_hashrate',
-			outputFormatter: web3._extend.utils.toDecimal
-		})
-	]
+	properties: []
 });
 `
 
 const Shh_JS = `
 web3._extend({
 	property: 'shh',
-	methods:
-	[
-
-	],
+	methods: [],
 	properties:
 	[
 		new web3._extend.Property({
