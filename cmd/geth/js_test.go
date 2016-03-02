@@ -42,18 +42,17 @@ import (
 const (
 	testSolcPath = ""
 	solcVersion  = "0.9.23"
-
-	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
-	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-	testBalance = "10000000000000000000"
+	testAddress  = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	testBalance  = "10000000000000000000"
 	// of empty string
 	testHash = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 )
 
 var (
-	versionRE   = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
-	testNodeKey = crypto.ToECDSA(common.Hex2Bytes("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f"))
-	testGenesis = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
+	versionRE      = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
+	testNodeKey, _ = crypto.HexToECDSA("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f")
+	testAccount, _ = crypto.HexToECDSA("e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674")
+	testGenesis    = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
 )
 
 type testjethre struct {
@@ -99,12 +98,9 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 		t.Fatalf("failed to create node: %v", err)
 	}
 	// Initialize and register the Ethereum protocol
-	keystore := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
-	accman := accounts.NewManager(keystore)
-
+	accman := accounts.NewPlaintextManager(filepath.Join(tmp, "keystore"))
 	db, _ := ethdb.NewMemDatabase()
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
-
 	ethConf := &eth.Config{
 		ChainConfig:      &core.ChainConfig{HomesteadBlock: new(big.Int)},
 		TestGenesisState: db,
@@ -122,15 +118,11 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 		t.Fatalf("failed to register ethereum protocol: %v", err)
 	}
 	// Initialize all the keys for testing
-	keyb, err := crypto.HexToECDSA(testKey)
+	a, err := accman.ImportECDSA(testAccount, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := crypto.NewKeyFromECDSA(keyb)
-	if err := keystore.StoreKey(key, ""); err != nil {
-		t.Fatal(err)
-	}
-	if err := accman.Unlock(key.Address, ""); err != nil {
+	if err := accman.Unlock(a.Address, ""); err != nil {
 		t.Fatal(err)
 	}
 	// Start the node and assemble the REPL tester

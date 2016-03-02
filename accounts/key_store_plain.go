@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package crypto
+package accounts
 
 import (
 	"encoding/hex"
@@ -29,29 +29,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type KeyStore interface {
-	// create new key using io.Reader entropy source and optionally using auth string
-	GenerateNewKey(io.Reader, string) (*Key, error)
-	GetKey(common.Address, string) (*Key, error) // get key from addr and auth string
-	GetKeyAddresses() ([]common.Address, error)  // get all addresses
-	StoreKey(*Key, string) error                 // store key optionally using auth string
-	DeleteKey(common.Address, string) error      // delete key by addr and auth string
-	Cleanup(keyAddr common.Address) (err error)
-}
-
 type keyStorePlain struct {
 	keysDirPath string
 }
 
-func NewKeyStorePlain(path string) KeyStore {
+func newKeyStorePlain(path string) keyStore {
 	return &keyStorePlain{path}
 }
 
 func (ks keyStorePlain) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
-	return GenerateNewKeyDefault(ks, rand, auth)
+	return generateNewKeyDefault(ks, rand, auth)
 }
 
-func GenerateNewKeyDefault(ks KeyStore, rand io.Reader, auth string) (key *Key, err error) {
+func generateNewKeyDefault(ks keyStore, rand io.Reader, auth string) (key *Key, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("GenerateNewKey error: %v", r)

@@ -106,18 +106,17 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 		return nil, err
 	}
 	// Create the keystore and inject an unlocked account if requested
-	keystore := crypto.NewKeyStorePassphrase(keydir, crypto.StandardScryptN, crypto.StandardScryptP)
-	accman := accounts.NewManager(keystore)
-
+	accman := accounts.NewPlaintextManager(keydir)
 	if len(privkey) > 0 {
 		key, err := crypto.HexToECDSA(privkey)
 		if err != nil {
 			return nil, err
 		}
-		if err := keystore.StoreKey(crypto.NewKeyFromECDSA(key), ""); err != nil {
+		a, err := accman.ImportECDSA(key, "")
+		if err != nil {
 			return nil, err
 		}
-		if err := accman.Unlock(crypto.NewKeyFromECDSA(key).Address, ""); err != nil {
+		if err := accman.Unlock(a.Address, ""); err != nil {
 			return nil, err
 		}
 	}

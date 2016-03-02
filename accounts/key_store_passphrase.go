@@ -23,7 +23,7 @@ The crypto is documented at https://github.com/ethereum/wiki/wiki/Web3-Secret-St
 
 */
 
-package crypto
+package accounts
 
 import (
 	"bytes"
@@ -36,6 +36,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
@@ -63,12 +64,12 @@ type keyStorePassphrase struct {
 	scryptP     int
 }
 
-func NewKeyStorePassphrase(path string, scryptN int, scryptP int) KeyStore {
+func newKeyStorePassphrase(path string, scryptN int, scryptP int) keyStore {
 	return &keyStorePassphrase{path, scryptN, scryptP}
 }
 
 func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
-	return GenerateNewKeyDefault(ks, rand, auth)
+	return generateNewKeyDefault(ks, rand, auth)
 }
 
 func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
@@ -101,14 +102,14 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 		return nil, err
 	}
 	encryptKey := derivedKey[:16]
-	keyBytes := FromECDSA(key.PrivateKey)
+	keyBytes := crypto.FromECDSA(key.PrivateKey)
 
 	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
 	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
 	if err != nil {
 		return nil, err
 	}
-	mac := Keccak256(derivedKey[16:32], cipherText)
+	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
 
 	scryptParamsJSON := make(map[string]interface{}, 5)
 	scryptParamsJSON["n"] = scryptN
@@ -175,10 +176,10 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := ToECDSA(keyBytes)
+	key := crypto.ToECDSA(keyBytes)
 	return &Key{
 		Id:         uuid.UUID(keyId),
-		Address:    PubkeyToAddress(key.PublicKey),
+		Address:    crypto.PubkeyToAddress(key.PublicKey),
 		PrivateKey: key,
 	}, nil
 }
@@ -230,7 +231,7 @@ func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byt
 		return nil, nil, err
 	}
 
-	calculatedMAC := Keccak256(derivedKey[16:32], cipherText)
+	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
 		return nil, nil, errors.New("Decryption failed: MAC mismatch")
 	}
@@ -264,12 +265,12 @@ func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byt
 		return nil, nil, err
 	}
 
-	calculatedMAC := Keccak256(derivedKey[16:32], cipherText)
+	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
 		return nil, nil, errors.New("Decryption failed: MAC mismatch")
 	}
 
-	plainText, err := aesCBCDecrypt(Keccak256(derivedKey[:16])[:16], cipherText, iv)
+	plainText, err := aesCBCDecrypt(crypto.Keccak256(derivedKey[:16])[:16], cipherText, iv)
 	if err != nil {
 		return nil, nil, err
 	}

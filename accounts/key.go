@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package crypto
+package accounts
 
 import (
 	"bytes"
@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/pborman/uuid"
 )
@@ -40,6 +41,16 @@ type Key struct {
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
+}
+
+type keyStore interface {
+	// create new key using io.Reader entropy source and optionally using auth string
+	GenerateNewKey(io.Reader, string) (*Key, error)
+	GetKey(common.Address, string) (*Key, error) // get key from addr and auth string
+	GetKeyAddresses() ([]common.Address, error)  // get all addresses
+	StoreKey(*Key, string) error                 // store key optionally using auth string
+	DeleteKey(common.Address, string) error      // delete key by addr and auth string
+	Cleanup(keyAddr common.Address) (err error)
 }
 
 type plainKeyJSON struct {
@@ -87,7 +98,7 @@ type scryptParamsJSON struct {
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
 		hex.EncodeToString(k.Address[:]),
-		hex.EncodeToString(FromECDSA(k.PrivateKey)),
+		hex.EncodeToString(crypto.FromECDSA(k.PrivateKey)),
 		k.Id.String(),
 		version,
 	}
@@ -116,16 +127,16 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	}
 
 	k.Address = common.BytesToAddress(addr)
-	k.PrivateKey = ToECDSA(privkey)
+	k.PrivateKey = crypto.ToECDSA(privkey)
 
 	return nil
 }
 
-func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
+func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
 		Id:         id,
-		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
+		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key
@@ -143,7 +154,7 @@ func NewKey(rand io.Reader) *Key {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
 
-	return NewKeyFromECDSA(privateKeyECDSA)
+	return newKeyFromECDSA(privateKeyECDSA)
 }
 
 // generate key whose address fits into < 155 bits so it can fit into
@@ -160,7 +171,7 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
-	key := NewKeyFromECDSA(privateKeyECDSA)
+	key := newKeyFromECDSA(privateKeyECDSA)
 	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
 		return NewKeyForDirectICAP(rand)
 	}

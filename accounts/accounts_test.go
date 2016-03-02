@@ -21,17 +21,14 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var testSigData = make([]byte, 32)
 
 func TestSign(t *testing.T) {
-	dir, ks := tmpKeyStore(t, crypto.NewKeyStorePlain)
+	dir, am := tmpManager(t, false)
 	defer os.RemoveAll(dir)
 
-	am := NewManager(ks)
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
 	am.Unlock(a1.Address, "")
@@ -43,10 +40,9 @@ func TestSign(t *testing.T) {
 }
 
 func TestTimedUnlock(t *testing.T) {
-	dir, ks := tmpKeyStore(t, crypto.NewKeyStorePlain)
+	dir, am := tmpManager(t, false)
 	defer os.RemoveAll(dir)
 
-	am := NewManager(ks)
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
 
@@ -76,10 +72,9 @@ func TestTimedUnlock(t *testing.T) {
 }
 
 func TestOverrideUnlock(t *testing.T) {
-	dir, ks := tmpKeyStore(t, crypto.NewKeyStorePlain)
+	dir, am := tmpManager(t, false)
 	defer os.RemoveAll(dir)
 
-	am := NewManager(ks)
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
 
@@ -115,11 +110,10 @@ func TestOverrideUnlock(t *testing.T) {
 
 // This test should fail under -race if signing races the expiration goroutine.
 func TestSignRace(t *testing.T) {
-	dir, ks := tmpKeyStore(t, crypto.NewKeyStorePlain)
+	dir, am := tmpManager(t, false)
 	defer os.RemoveAll(dir)
 
 	// Create a test account.
-	am := NewManager(ks)
 	a1, err := am.NewAccount("")
 	if err != nil {
 		t.Fatal("could not create the test account", err)
@@ -141,10 +135,14 @@ func TestSignRace(t *testing.T) {
 	t.Errorf("Account did not lock within the timeout")
 }
 
-func tmpKeyStore(t *testing.T, new func(string) crypto.KeyStore) (string, crypto.KeyStore) {
+func tmpManager(t *testing.T, encrypted bool) (string, *Manager) {
 	d, err := ioutil.TempDir("", "eth-keystore-test")
 	if err != nil {
 		t.Fatal(err)
+	}
+	new := NewPlaintextManager
+	if encrypted {
+		new = func(kd string) *Manager { return NewManager(kd, LightScryptN, LightScryptP) }
 	}
 	return d, new(d)
 }

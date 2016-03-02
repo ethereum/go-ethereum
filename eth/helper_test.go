@@ -4,6 +4,7 @@
 package eth
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
 	"sync"
@@ -94,10 +95,9 @@ func (p *testTxPool) GetTransactions() types.Transactions {
 }
 
 // newTestTransaction create a new dummy transaction.
-func newTestTransaction(from *crypto.Key, nonce uint64, datasize int) *types.Transaction {
+func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
 	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = tx.SignECDSA(from.PrivateKey)
-
+	tx, _ = tx.SignECDSA(from)
 	return tx
 }
 

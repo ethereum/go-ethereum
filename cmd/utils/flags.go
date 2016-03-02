@@ -551,20 +551,15 @@ func MakeDatabaseHandles() int {
 // MakeAccountManager creates an account manager from set command line flags.
 func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	// Create the keystore crypto primitive, light if requested
-	scryptN := crypto.StandardScryptN
-	scryptP := crypto.StandardScryptP
-
+	scryptN := accounts.StandardScryptN
+	scryptP := accounts.StandardScryptP
 	if ctx.GlobalBool(LightKDFFlag.Name) {
-		scryptN = crypto.LightScryptN
-		scryptP = crypto.LightScryptP
+		scryptN = accounts.LightScryptN
+		scryptP = accounts.LightScryptP
 	}
-	// Assemble an account manager using the configured datadir
-	var (
-		datadir     = MustMakeDataDir(ctx)
-		keystoredir = MakeKeyStoreDir(datadir, ctx)
-		keystore    = crypto.NewKeyStorePassphrase(keystoredir, scryptN, scryptP)
-	)
-	return accounts.NewManager(keystore)
+	datadir := MustMakeDataDir(ctx)
+	keydir := MakeKeyStoreDir(datadir, ctx)
+	return accounts.NewManager(keydir, scryptN, scryptP)
 }
 
 // MakeAddress converts an account specified directly as a hex encoded string or

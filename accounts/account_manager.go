@@ -19,9 +19,6 @@
 // This abstracts part of a user's interaction with an account she controls.
 package accounts
 
-// Currently this is pretty much a passthrough to the KeyStore interface,
-// and accounts persistence is derived from stored keys' addresses
-
 import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
@@ -49,19 +46,26 @@ func (acc *Account) MarshalJSON() ([]byte, error) {
 }
 
 type Manager struct {
-	keyStore crypto.KeyStore
+	keyStore keyStore
 	unlocked map[common.Address]*unlocked
 	mutex    sync.RWMutex
 }
 
 type unlocked struct {
-	*crypto.Key
+	*Key
 	abort chan struct{}
 }
 
-func NewManager(keyStore crypto.KeyStore) *Manager {
+func NewManager(keydir string, scryptN, scryptP int) *Manager {
 	return &Manager{
-		keyStore: keyStore,
+		keyStore: newKeyStorePassphrase(keydir, scryptN, scryptP),
+		unlocked: make(map[common.Address]*unlocked),
+	}
+}
+
+func NewPlaintextManager(keydir string) *Manager {
+	return &Manager{
+		keyStore: newKeyStorePlain(keydir),
 		unlocked: make(map[common.Address]*unlocked),
 	}
 }
@@ -216,19 +220,23 @@ func (am *Manager) Export(path string, addr common.Address, keyAuth string) erro
 }
 
 func (am *Manager) Import(path string, keyAuth string) (Account, error) {
-	privateKeyECDSA, err := crypto.LoadECDSA(path)
+	priv, err := crypto.LoadECDSA(path)
 	if err != nil {
 		return Account{}, err
 	}
-	key := crypto.NewKeyFromECDSA(privateKeyECDSA)
-	if err = am.keyStore.StoreKey(key, keyAuth); err != nil {
+	return am.ImportECDSA(priv, keyAuth)
+}
+
+func (am *Manager) ImportECDSA(priv *ecdsa.PrivateKey, keyAuth string) (Account, error) {
+	key := newKeyFromECDSA(priv)
+	if err := am.keyStore.StoreKey(key, keyAuth); err != nil {
 		return Account{}, err
 	}
 	return Account{Address: key.Address}, nil
 }
 
 func (am *Manager) Update(addr common.Address, authFrom, authTo string) (err error) {
-	var key *crypto.Key
+	var key *Key
 	key, err = am.keyStore.GetKey(addr, authFrom)
 
 	if err == nil {
@@ -241,8 +249,8 @@ func (am *Manager) Update(addr common.Address, authFrom, authTo string) (err err
 }
 
 func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Account, err error) {
-	var key *crypto.Key
-	key, err = crypto.ImportPreSaleKey(am.keyStore, keyJSON, password)
+	var key *Key
+	key, err = importPreSaleKey(am.keyStore, keyJSON, password)
 	if err != nil {
 		return
 	}

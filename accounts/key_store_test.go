@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package crypto
+package accounts
 
 import (
 	"encoding/hex"
@@ -24,11 +24,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 func TestKeyStorePlain(t *testing.T) {
-	ks := NewKeyStorePlain(common.DefaultDataDir())
+	ks := newKeyStorePlain(common.DefaultDataDir())
 	pass := "" // not used but required by API
 	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
@@ -56,7 +57,7 @@ func TestKeyStorePlain(t *testing.T) {
 }
 
 func TestKeyStorePassphrase(t *testing.T) {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
+	ks := newKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
 	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
@@ -82,7 +83,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 }
 
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
+	ks := newKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
 	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
 	if err != nil {
@@ -110,16 +111,16 @@ func TestImportPreSaleKey(t *testing.T) {
 	// python pyethsaletool.py genwallet
 	// with password "foo"
 	fileContent := "{\"encseed\": \"26d87f5f2bf9835f9a47eefae571bc09f9107bb13d54ff12a4ec095d01f83897494cf34f7bed2ed34126ecba9db7b62de56c9d7cd136520a0427bfb11b8954ba7ac39b90d4650d3448e31185affcd74226a68f1e94b1108e6e0a4a91cdd83eba\", \"ethaddr\": \"d4584b5f6229b7be90727b0fc8c6b91bb427821f\", \"email\": \"gustav.simonsson@gmail.com\", \"btcaddr\": \"1EVknXyFC68kKNLkh6YnKzW41svSRoaAcx\"}"
-	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
+	ks := newKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
-	_, err := ImportPreSaleKey(ks, []byte(fileContent), pass)
+	_, err := importPreSaleKey(ks, []byte(fileContent), pass)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 // Test and utils for the key store tests in the Ethereum JSON tests;
-// tests/KeyStoreTests/basic_tests.json
+// testdataKeyStoreTests/basic_tests.json
 type KeyStoreTestV3 struct {
 	Json     encryptedKeyJSONV3
 	Password string
@@ -133,7 +134,7 @@ type KeyStoreTestV1 struct {
 }
 
 func TestV3_PBKDF2_1(t *testing.T) {
-	tests := loadKeyStoreTestV3("tests/v3_test_vector.json", t)
+	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
 	testDecryptV3(tests["wikipage_test_vector_pbkdf2"], t)
 }
 
@@ -153,7 +154,7 @@ func TestV3_PBKDF2_4(t *testing.T) {
 }
 
 func TestV3_Scrypt_1(t *testing.T) {
-	tests := loadKeyStoreTestV3("tests/v3_test_vector.json", t)
+	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
 	testDecryptV3(tests["wikipage_test_vector_scrypt"], t)
 }
 
@@ -163,12 +164,12 @@ func TestV3_Scrypt_2(t *testing.T) {
 }
 
 func TestV1_1(t *testing.T) {
-	tests := loadKeyStoreTestV1("tests/v1_test_vector.json", t)
+	tests := loadKeyStoreTestV1("testdata/v1_test_vector.json", t)
 	testDecryptV1(tests["test1"], t)
 }
 
 func TestV1_2(t *testing.T) {
-	ks := NewKeyStorePassphrase("tests/v1", LightScryptN, LightScryptP)
+	ks := newKeyStorePassphrase("testdata/v1", LightScryptN, LightScryptP)
 	addr := common.HexToAddress("cb61d5a9c4896fb9658090b597ef0e7be6f7b67e")
 	k, err := ks.GetKey(addr, "g")
 	if err != nil {
@@ -178,7 +179,7 @@ func TestV1_2(t *testing.T) {
 		t.Fatal(fmt.Errorf("Unexpected address: %v, expected %v", k.Address, addr))
 	}
 
-	privHex := hex.EncodeToString(FromECDSA(k.PrivateKey))
+	privHex := hex.EncodeToString(crypto.FromECDSA(k.PrivateKey))
 	expectedHex := "d1b1178d3529626a1a93e073f65028370d14c7eb0936eb42abef05db6f37ad7d"
 	if privHex != expectedHex {
 		t.Fatal(fmt.Errorf("Unexpected privkey: %v, expected %v", privHex, expectedHex))

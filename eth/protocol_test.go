@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"crypto/rand"
 	"fmt"
 	"sync"
 	"testing"
@@ -35,7 +34,7 @@ func init() {
 	// glog.SetV(6)
 }
 
-var testAccount = crypto.NewKey(rand.Reader)
+var testAccount, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
 // Tests that handshake failures are detected and reported correctly.
 func TestStatusMsgErrors61(t *testing.T) { testStatusMsgErrors(t, 61) }
