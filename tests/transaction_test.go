@@ -35,8 +35,30 @@ func TestWrongRLPTransactions(t *testing.T) {
 	}
 }
 
-func Test10MBtx(t *testing.T) {
+func Test10MBTransactions(t *testing.T) {
 	err := RunTransactionTests(filepath.Join(transactionTestDir, "tt10mbDataField.json"), TransSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// homestead tests
+func TestHomesteadTransactions(t *testing.T) {
+	err := RunTransactionTests(filepath.Join(transactionTestDir, "Homestead", "ttTransactionTest.json"), TransSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadWrongRLPTransactions(t *testing.T) {
+	err := RunTransactionTests(filepath.Join(transactionTestDir, "Homestead", "ttWrongRLPTransaction.json"), TransSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomestead10MBTransactions(t *testing.T) {
+	err := RunTransactionTests(filepath.Join(transactionTestDir, "Homestead", "tt10mbDataField.json"), TransSkipTests)
 	if err != nil {
 		t.Fatal(err)
 	}

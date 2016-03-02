@@ -123,17 +123,17 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
-		if skipTest[name] {
+		if skipTest[name] /*|| name != "callcodecallcode_11" */ {
 			glog.Infoln("Skipping state test", name)
-			return nil
+			continue
 		}
 
-		//fmt.Println("StateTest name:", name)
+		//fmt.Println("StateTest:", name)
 		if err := runStateTest(test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
-		glog.Infoln("State test passed: ", name)
+		//glog.Infoln("State test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil
@@ -182,13 +182,16 @@ func runStateTest(test VmTest) error {
 	// check post state
 	for addr, account := range test.Post {
 		obj := statedb.GetStateObject(common.HexToAddress(addr))
+		if obj == nil {
+			return fmt.Errorf("did not find expected post-state account: %s", addr)
+		}
 
 		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-			return fmt.Errorf("(%x) balance failed. Expected %v, got %v => %v\n", obj.Address().Bytes()[:4], account.Balance, obj.Balance(), new(big.Int).Sub(common.Big(account.Balance), obj.Balance()))
+			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], common.String2Big(account.Balance), obj.Balance())
 		}
 
 		if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-			return fmt.Errorf("(%x) nonce failed. Expected %v, got %v\n", obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
+			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
 		}
 
 		for addr, value := range account.Storage {
@@ -196,14 +199,14 @@ func runStateTest(test VmTest) error {
 			vexp := common.HexToHash(value)
 
 			if v != vexp {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
+				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", obj.Address().Bytes(), addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}
 
 	root, _ := statedb.Commit()
 	if common.HexToHash(test.PostStateRoot) != root {
-		return fmt.Errorf("Post state root error. Expected %s, got %x", test.PostStateRoot, root)
+		return fmt.Errorf("Post state root error. Expected: %s have: %x", test.PostStateRoot, root)
 	}
 
 	// check logs
@@ -232,7 +235,7 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Log
 	}
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
-
+	vm.Debug = false
 	snapshot := statedb.Copy()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
