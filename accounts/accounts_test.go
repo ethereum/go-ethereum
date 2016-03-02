@@ -120,7 +120,7 @@ func TestSignRace(t *testing.T) {
 	}
 
 	if err := am.TimedUnlock(a1.Address, "", 15*time.Millisecond); err != nil {
-		t.Fatalf("could not unlock the test account", err)
+		t.Fatal("could not unlock the test account", err)
 	}
 	end := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(end) {

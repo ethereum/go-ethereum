@@ -32,7 +32,7 @@ func TestKeyEncryptDecrypt(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		// Try a bad password first
 		if _, err := DecryptKey(keyjson, password+"bad"); err == nil {
-			t.Error("test %d: json key decrypted with bad password", i)
+			t.Errorf("test %d: json key decrypted with bad password", i)
 		}
 		// Decrypt with the correct password
 		key, err := DecryptKey(keyjson, password)
@@ -45,7 +45,7 @@ func TestKeyEncryptDecrypt(t *testing.T) {
 		// Recrypt with a new password and start over
 		password += "new data appended"
 		if keyjson, err = EncryptKey(key, password, LightScryptN, LightScryptP); err != nil {
-			t.Errorf("test %d: failed to recrypt key %v", err)
+			t.Errorf("test %d: failed to recrypt key %v", i, err)
 		}
 	}
 }
