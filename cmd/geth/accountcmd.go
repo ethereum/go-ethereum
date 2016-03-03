@@ -23,7 +23,6 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -166,17 +165,13 @@ nodes.
 
 func accountList(ctx *cli.Context) {
 	accman := utils.MakeAccountManager(ctx)
-	accts, err := accman.Accounts()
-	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
-	}
-	for i, acct := range accts {
+	for i, acct := range accman.Accounts() {
 		fmt.Printf("Account #%d: %x\n", i, acct)
 	}
 }
 
 // tries unlocking the specified account a few times.
-func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (common.Address, string) {
+func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(accman, address)
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
@@ -190,7 +185,7 @@ func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i
 	}
 	// All trials expended to unlock account, bail out
 	utils.Fatalf("Failed to unlock account: %s", address)
-	return common.Address{}, ""
+	return accounts.Account{}, ""
 }
 
 // getPassPhrase retrieves the passwor associated with an account, either fetched

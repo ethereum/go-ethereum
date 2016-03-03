@@ -61,17 +61,6 @@ type testjethre struct {
 	client      *httpclient.HTTPClient
 }
 
-func (self *testjethre) UnlockAccount(acc []byte) bool {
-	var ethereum *eth.Ethereum
-	self.stack.Service(&ethereum)
-
-	err := ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
-	if err != nil {
-		panic("unable to unlock")
-	}
-	return true
-}
-
 // Temporary disabled while natspec hasn't been migrated
 //func (self *testjethre) ConfirmTransaction(tx string) bool {
 //	var ethereum *eth.Ethereum
@@ -122,7 +111,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := accman.Unlock(a.Address, ""); err != nil {
+	if err := accman.Unlock(a, ""); err != nil {
 		t.Fatal(err)
 	}
 	// Start the node and assemble the REPL tester

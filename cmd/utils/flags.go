@@ -564,27 +564,23 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 
 // MakeAddress converts an account specified directly as a hex encoded string or
 // a key index in the key store to an internal account representation.
-func MakeAddress(accman *accounts.Manager, account string) (a common.Address, err error) {
+func MakeAddress(accman *accounts.Manager, account string) (accounts.Account, error) {
 	// If the specified account is a valid address, return it
 	if common.IsHexAddress(account) {
-		return common.HexToAddress(account), nil
+		return accounts.Account{Address: common.HexToAddress(account)}, nil
 	}
 	// Otherwise try to interpret the account as a keystore index
 	index, err := strconv.Atoi(account)
 	if err != nil {
-		return a, fmt.Errorf("invalid account address or index %q", account)
+		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
 	}
-	hex, err := accman.AddressByIndex(index)
-	if err != nil {
-		return a, fmt.Errorf("can't get account #%d (%v)", index, err)
-	}
-	return common.HexToAddress(hex), nil
+	return accman.AccountByIndex(index)
 }
 
 // MakeEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func MakeEtherbase(accman *accounts.Manager, ctx *cli.Context) common.Address {
-	accounts, _ := accman.Accounts()
+	accounts := accman.Accounts()
 	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 		return common.Address{}
@@ -594,11 +590,11 @@ func MakeEtherbase(accman *accounts.Manager, ctx *cli.Context) common.Address {
 		return common.Address{}
 	}
 	// If the specified etherbase is a valid address, return it
-	addr, err := MakeAddress(accman, etherbase)
+	account, err := MakeAddress(accman, etherbase)
 	if err != nil {
 		Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
 	}
-	return addr
+	return account.Address
 }
 
 // MakeMinerExtra resolves extradata for the miner from the set command line flags

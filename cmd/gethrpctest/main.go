@@ -116,7 +116,7 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 		if err != nil {
 			return nil, err
 		}
-		if err := accman.Unlock(a.Address, ""); err != nil {
+		if err := accman.Unlock(a, ""); err != nil {
 			return nil, err
 		}
 	}

@@ -31,7 +31,7 @@ func TestSign(t *testing.T) {
 
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
-	am.Unlock(a1.Address, "")
+	am.Unlock(a1, "")
 
 	_, err = am.Sign(a1, testSigData)
 	if err != nil {
@@ -53,7 +53,7 @@ func TestTimedUnlock(t *testing.T) {
 	}
 
 	// Signing with passphrase works
-	if err = am.TimedUnlock(a1.Address, pass, 100*time.Millisecond); err != nil {
+	if err = am.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,7 +79,7 @@ func TestOverrideUnlock(t *testing.T) {
 	a1, err := am.NewAccount(pass)
 
 	// Unlock indefinitely
-	if err = am.Unlock(a1.Address, pass); err != nil {
+	if err = am.Unlock(a1, pass); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,7 +90,7 @@ func TestOverrideUnlock(t *testing.T) {
 	}
 
 	// reset unlock to a shorter period, invalidates the previous unlock
-	if err = am.TimedUnlock(a1.Address, pass, 100*time.Millisecond); err != nil {
+	if err = am.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,7 +119,7 @@ func TestSignRace(t *testing.T) {
 		t.Fatal("could not create the test account", err)
 	}
 
-	if err := am.TimedUnlock(a1.Address, "", 15*time.Millisecond); err != nil {
+	if err := am.TimedUnlock(a1, "", 15*time.Millisecond); err != nil {
 		t.Fatal("could not unlock the test account", err)
 	}
 	end := time.Now().Add(500 * time.Millisecond)

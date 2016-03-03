@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/registrar"
@@ -281,7 +282,8 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	if err := self.stack.Service(&ethereum); err != nil {
 		return false
 	}
-	if err := ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
+	a := accounts.Account{Address: common.BytesToAddress(addr)}
+	if err := ethereum.AccountManager().Unlock(a, pass); err != nil {
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")
