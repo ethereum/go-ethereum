@@ -19,28 +19,70 @@ package accounts
 import (
 	"io/ioutil"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var testSigData = make([]byte, 32)
 
+func TestManager(t *testing.T) {
+	dir, am := tmpManager(t, true)
+	defer os.RemoveAll(dir)
+
+	a, err := am.NewAccount("foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(a.File, dir) {
+		t.Errorf("account file %s doesn't have dir prefix", a.File)
+	}
+	stat, err := os.Stat(a.File)
+	if err != nil {
+		t.Fatalf("account file %s doesn't exist (%v)", a.File, err)
+	}
+	if runtime.GOOS != "windows" && stat.Mode() != 0600 {
+		t.Fatalf("account file has wrong mode: got %o, want %o", stat.Mode(), 0600)
+	}
+	if !am.HasAddress(a.Address) {
+		t.Errorf("HasAccount(%x) should've returned true", a.Address)
+	}
+	if err := am.Update(a, "foo", "bar"); err != nil {
+		t.Errorf("Update error: %v", err)
+	}
+	if err := am.DeleteAccount(a, "bar"); err != nil {
+		t.Errorf("DeleteAccount error: %v", err)
+	}
+	if common.FileExist(a.File) {
+		t.Errorf("account file %s should be gone after DeleteAccount", a.File)
+	}
+	if am.HasAddress(a.Address) {
+		t.Errorf("HasAccount(%x) should've returned true after DeleteAccount", a.Address)
+	}
+}
+
 func TestSign(t *testing.T) {
-	dir, am := tmpManager(t, false)
+	dir, am := tmpManager(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "" // not used but required by API
 	a1, err := am.NewAccount(pass)
-	am.Unlock(a1, "")
-
-	_, err = am.Sign(a1, testSigData)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := am.Unlock(a1, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := am.Sign(a1, testSigData); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestTimedUnlock(t *testing.T) {
-	dir, am := tmpManager(t, false)
+	dir, am := tmpManager(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
@@ -142,7 +184,7 @@ func tmpManager(t *testing.T, encrypted bool) (string, *Manager) {
 	}
 	new := NewPlaintextManager
 	if encrypted {
-		new = func(kd string) *Manager { return NewManager(kd, LightScryptN, LightScryptP) }
+		new = func(kd string) *Manager { return NewManager(kd, veryLightScryptN, veryLightScryptP) }
 	}
 	return d, new(d)
 }

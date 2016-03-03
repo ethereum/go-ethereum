@@ -33,7 +33,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"io/ioutil"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -64,32 +65,37 @@ type keyStorePassphrase struct {
 	scryptP     int
 }
 
-func newKeyStorePassphrase(path string, scryptN int, scryptP int) keyStore {
-	return &keyStorePassphrase{path, scryptN, scryptP}
+func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
+	// Load the key from the keystore and decrypt its contents
+	keyjson, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	key, err := DecryptKey(keyjson, auth)
+	if err != nil {
+		return nil, err
+	}
+	// Make sure we're really operating on the requested key (no swap attacks)
+	if key.Address != addr {
+		return nil, fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, addr)
+	}
+	return key, nil
 }
 
-func (ks keyStorePassphrase) GenerateNewKey(rand io.Reader, auth string) (key *Key, err error) {
-	return generateNewKeyDefault(ks, rand, auth)
-}
-
-func (ks keyStorePassphrase) GetKey(keyAddr common.Address, auth string) (key *Key, err error) {
-	return decryptKeyFromFile(ks.keysDirPath, keyAddr, auth)
-}
-
-func (ks keyStorePassphrase) Cleanup(keyAddr common.Address) (err error) {
-	return cleanup(ks.keysDirPath, keyAddr)
-}
-
-func (ks keyStorePassphrase) GetKeyAddresses() (addresses []common.Address, err error) {
-	return getKeyAddresses(ks.keysDirPath)
-}
-
-func (ks keyStorePassphrase) StoreKey(key *Key, auth string) error {
+func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
 	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
 	if err != nil {
 		return err
 	}
-	return writeKeyFile(key.Address, ks.keysDirPath, keyjson)
+	return writeKeyFile(filename, keyjson)
+}
+
+func (ks keyStorePassphrase) JoinPath(filename string) string {
+	if filepath.IsAbs(filename) {
+		return filename
+	} else {
+		return filepath.Join(ks.keysDirPath, filename)
+	}
 }
 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json
@@ -139,14 +145,6 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 	return json.Marshal(encryptedKeyJSONV3)
 }
 
-func (ks keyStorePassphrase) DeleteKey(keyAddr common.Address, auth string) error {
-	// only delete if correct passphrase is given
-	if _, err := decryptKeyFromFile(ks.keysDirPath, keyAddr, auth); err != nil {
-		return err
-	}
-	return deleteKey(ks.keysDirPath, keyAddr)
-}
-
 // DecryptKey decrypts a key from a json blob, returning the private key itself.
 func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	// Parse the json into a simple map to fetch the key version
@@ -182,23 +180,6 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		Address:    crypto.PubkeyToAddress(key.PublicKey),
 		PrivateKey: key,
 	}, nil
-}
-
-func decryptKeyFromFile(keysDirPath string, keyAddr common.Address, auth string) (*Key, error) {
-	// Load the key from the keystore and decrypt its contents
-	keyjson, err := getKeyFile(keysDirPath, keyAddr)
-	if err != nil {
-		return nil, err
-	}
-	key, err := DecryptKey(keyjson, auth)
-	if err != nil {
-		return nil, err
-	}
-	// Make sure we're really operating on the requested key (no swap attacks)
-	if keyAddr != key.Address {
-		return nil, fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, keyAddr)
-	}
-	return key, nil
 }
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {

@@ -168,7 +168,7 @@ nodes.
 func accountList(ctx *cli.Context) {
 	accman := utils.MakeAccountManager(ctx)
 	for i, acct := range accman.Accounts() {
-		fmt.Printf("Account #%d: %x\n", i, acct)
+		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
 	}
 }
 
@@ -230,7 +230,7 @@ func accountCreate(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", account)
+	fmt.Printf("Address: {%x}\n", account.Address)
 }
 
 // accountUpdate transitions an account from a previous format to the current
@@ -265,7 +265,7 @@ func importWallet(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", acct)
+	fmt.Printf("Address: {%x}\n", acct.Address)
 }
 
 func accountImport(ctx *cli.Context) {
@@ -279,5 +279,5 @@ func accountImport(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", acct)
+	fmt.Printf("Address: {%x}\n", acct.Address)
 }

@@ -19,6 +19,7 @@ package main
 import (
 	"io/ioutil"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -50,11 +51,19 @@ func TestAccountList(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
 	geth := runGeth(t, "--datadir", datadir, "account")
 	defer geth.expectExit()
-	geth.expect(`
-Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8}
-Account #1: {f466859ead1932d743d622cb74fc058882e8648a}
-Account #2: {289d485d9771714cce91d3393d764e1311907acc}
+	if runtime.GOOS == "windows" {
+		geth.expect(`
+Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} {{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Account #1: {f466859ead1932d743d622cb74fc058882e8648a} {{.Datadir}}\keystore\aaa
+Account #2: {289d485d9771714cce91d3393d764e1311907acc} {{.Datadir}}\keystore\zzz
 `)
+	} else {
+		geth.expect(`
+Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} {{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Account #1: {f466859ead1932d743d622cb74fc058882e8648a} {{.Datadir}}/keystore/aaa
+Account #2: {289d485d9771714cce91d3393d764e1311907acc} {{.Datadir}}/keystore/zzz
+`)
+	}
 }
 
 func TestAccountNew(t *testing.T) {

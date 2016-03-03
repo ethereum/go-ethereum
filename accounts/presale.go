@@ -31,14 +31,15 @@ import (
 )
 
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
-func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (*Key, error) {
+func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (Account, *Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)
 	if err != nil {
-		return nil, err
+		return Account{}, nil, err
 	}
 	key.Id = uuid.NewRandom()
-	err = keyStore.StoreKey(key, password)
-	return key, err
+	a := Account{Address: key.Address, File: keyStore.JoinPath(keyFileName(key.Address))}
+	err = keyStore.StoreKey(a.File, key, password)
+	return a, key, err
 }
 
 func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error) {

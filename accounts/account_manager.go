@@ -22,8 +22,12 @@ package accounts
 import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -32,22 +36,28 @@ import (
 )
 
 var (
-	ErrLocked = errors.New("account is locked")
-	ErrNoKeys = errors.New("no keys in store")
+	ErrLocked  = errors.New("account is locked")
+	ErrNoMatch = errors.New("no key for given address or file")
 )
 
 type Account struct {
 	Address common.Address
+	File    string
 }
 
 func (acc *Account) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + acc.Address.Hex() + `"`), nil
 }
 
+func (acc *Account) UnmarshalJSON(raw []byte) error {
+	return json.Unmarshal(raw, &acc.Address)
+}
+
 type Manager struct {
+	cache    *addrCache
 	keyStore keyStore
+	mu       sync.RWMutex
 	unlocked map[common.Address]*unlocked
-	mutex    sync.RWMutex
 }
 
 type unlocked struct {
@@ -56,36 +66,62 @@ type unlocked struct {
 }
 
 func NewManager(keydir string, scryptN, scryptP int) *Manager {
-	return &Manager{
-		keyStore: newKeyStorePassphrase(keydir, scryptN, scryptP),
-		unlocked: make(map[common.Address]*unlocked),
-	}
+	keydir, _ = filepath.Abs(keydir)
+	am := &Manager{keyStore: &keyStorePassphrase{keydir, scryptN, scryptP}}
+	am.init(keydir)
+	return am
 }
 
 func NewPlaintextManager(keydir string) *Manager {
-	return &Manager{
-		keyStore: newKeyStorePlain(keydir),
-		unlocked: make(map[common.Address]*unlocked),
-	}
+	keydir, _ = filepath.Abs(keydir)
+	am := &Manager{keyStore: &keyStorePlain{keydir}}
+	am.init(keydir)
+	return am
+}
+
+func (am *Manager) init(keydir string) {
+	am.unlocked = make(map[common.Address]*unlocked)
+	am.cache = newAddrCache(keydir)
+	// TODO: In order for this finalizer to work, there must be no references
+	// to am. addrCache doesn't keep a reference but unlocked keys do,
+	// so the finalizer will not trigger until all timed unlocks have expired.
+	runtime.SetFinalizer(am, func(m *Manager) {
+		m.cache.close()
+	})
 }
 
 func (am *Manager) HasAddress(addr common.Address) bool {
-	accounts := am.Accounts()
-	for _, acct := range accounts {
-		if acct.Address == addr {
-			return true
-		}
-	}
-	return false
+	return am.cache.hasAddress(addr)
+}
+
+func (am *Manager) Accounts() []Account {
+	return am.cache.accounts()
 }
 
 func (am *Manager) DeleteAccount(a Account, auth string) error {
-	return am.keyStore.DeleteKey(a.Address, auth)
+	// Decrypting the key isn't really necessary, but we do
+	// it anyway to check the password and zero out the key
+	// immediately afterwards.
+	a, key, err := am.getDecryptedKey(a, auth)
+	if key != nil {
+		zeroKey(key.PrivateKey)
+	}
+	if err != nil {
+		return err
+	}
+	// The order is crucial here. The key is dropped from the
+	// cache after the file is gone so that a reload happening in
+	// between won't insert it into the cache again.
+	err = os.Remove(a.File)
+	if err == nil {
+		am.cache.delete(a)
+	}
+	return err
 }
 
 func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
-	am.mutex.RLock()
-	defer am.mutex.RUnlock()
+	am.mu.RLock()
+	defer am.mu.RUnlock()
 	unlockedKey, found := am.unlocked[a.Address]
 	if !found {
 		return nil, ErrLocked
@@ -100,12 +136,12 @@ func (am *Manager) Unlock(a Account, keyAuth string) error {
 }
 
 func (am *Manager) Lock(addr common.Address) error {
-	am.mutex.Lock()
+	am.mu.Lock()
 	if unl, found := am.unlocked[addr]; found {
-		am.mutex.Unlock()
+		am.mu.Unlock()
 		am.expire(addr, unl, time.Duration(0)*time.Nanosecond)
 	} else {
-		am.mutex.Unlock()
+		am.mu.Unlock()
 	}
 	return nil
 }
@@ -117,15 +153,14 @@ func (am *Manager) Lock(addr common.Address) error {
 // If the accout is already unlocked, TimedUnlock extends or shortens
 // the active unlock timeout.
 func (am *Manager) TimedUnlock(a Account, keyAuth string, timeout time.Duration) error {
-	key, err := am.keyStore.GetKey(a.Address, keyAuth)
+	_, key, err := am.getDecryptedKey(a, keyAuth)
 	if err != nil {
 		return err
 	}
-	var u *unlocked
-	am.mutex.Lock()
-	defer am.mutex.Unlock()
-	var found bool
-	u, found = am.unlocked[a.Address]
+
+	am.mu.Lock()
+	defer am.mu.Unlock()
+	u, found := am.unlocked[a.Address]
 	if found {
 		// terminate dropLater for this key to avoid unexpected drops.
 		if u.abort != nil {
@@ -142,6 +177,18 @@ func (am *Manager) TimedUnlock(a Account, keyAuth string, timeout time.Duration)
 	return nil
 }
 
+func (am *Manager) getDecryptedKey(a Account, auth string) (Account, *Key, error) {
+	am.cache.maybeReload()
+	am.cache.mu.Lock()
+	a, err := am.cache.find(a)
+	am.cache.mu.Unlock()
+	if err != nil {
+		return a, nil, err
+	}
+	key, err := am.keyStore.GetKey(a.Address, a.File, auth)
+	return a, key, err
+}
+
 func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duration) {
 	t := time.NewTimer(timeout)
 	defer t.Stop()
@@ -149,7 +196,7 @@ func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duratio
 	case <-u.abort:
 		// just quit
 	case <-t.C:
-		am.mutex.Lock()
+		am.mu.Lock()
 		// only drop if it's still the same key instance that dropLater
 		// was launched with. we can check that using pointer equality
 		// because the map stores a new pointer every time the key is
@@ -158,52 +205,33 @@ func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duratio
 			zeroKey(u.PrivateKey)
 			delete(am.unlocked, addr)
 		}
-		am.mutex.Unlock()
+		am.mu.Unlock()
 	}
 }
 
 func (am *Manager) NewAccount(auth string) (Account, error) {
-	key, err := am.keyStore.GenerateNewKey(crand.Reader, auth)
+	_, account, err := storeNewKey(am.keyStore, crand.Reader, auth)
 	if err != nil {
 		return Account{}, err
 	}
-	return Account{Address: key.Address}, nil
+	// Add the account to the cache immediately rather
+	// than waiting for file system notifications to pick it up.
+	am.cache.add(account)
+	return account, nil
 }
 
 func (am *Manager) AccountByIndex(index int) (Account, error) {
-	addrs, err := am.keyStore.GetKeyAddresses()
-	if err != nil {
-		return Account{}, err
+	accounts := am.Accounts()
+	if index < 0 || index >= len(accounts) {
+		return Account{}, fmt.Errorf("account index %d out of range [0, %d]", index, len(accounts)-1)
 	}
-	if index < 0 || index >= len(addrs) {
-		return Account{}, fmt.Errorf("account index %d not in range [0, %d]", index, len(addrs)-1)
-	}
-	return Account{Address: addrs[index]}, nil
-}
-
-func (am *Manager) Accounts() []Account {
-	addresses, _ := am.keyStore.GetKeyAddresses()
-	accounts := make([]Account, len(addresses))
-	for i, addr := range addresses {
-		accounts[i] = Account{
-			Address: addr,
-		}
-	}
-	return accounts
-}
-
-// zeroKey zeroes a private key in memory.
-func zeroKey(k *ecdsa.PrivateKey) {
-	b := k.D.Bits()
-	for i := range b {
-		b[i] = 0
-	}
+	return accounts[index], nil
 }
 
 // USE WITH CAUTION = this will save an unencrypted private key on disk
 // no cli or js interface
 func (am *Manager) Export(path string, a Account, keyAuth string) error {
-	key, err := am.keyStore.GetKey(a.Address, keyAuth)
+	_, key, err := am.getDecryptedKey(a, keyAuth)
 	if err != nil {
 		return err
 	}
@@ -220,30 +248,35 @@ func (am *Manager) Import(path string, keyAuth string) (Account, error) {
 
 func (am *Manager) ImportECDSA(priv *ecdsa.PrivateKey, keyAuth string) (Account, error) {
 	key := newKeyFromECDSA(priv)
-	if err := am.keyStore.StoreKey(key, keyAuth); err != nil {
+	a := Account{Address: key.Address, File: am.keyStore.JoinPath(keyFileName(key.Address))}
+	if err := am.keyStore.StoreKey(a.File, key, keyAuth); err != nil {
 		return Account{}, err
 	}
-	return Account{Address: key.Address}, nil
+	am.cache.add(a)
+	return a, nil
 }
 
-func (am *Manager) Update(a Account, authFrom, authTo string) (err error) {
-	var key *Key
-	key, err = am.keyStore.GetKey(a.Address, authFrom)
-
-	if err == nil {
-		err = am.keyStore.StoreKey(key, authTo)
-		if err == nil {
-			am.keyStore.Cleanup(a.Address)
-		}
-	}
-	return
-}
-
-func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (acc Account, err error) {
-	var key *Key
-	key, err = importPreSaleKey(am.keyStore, keyJSON, password)
+func (am *Manager) Update(a Account, authFrom, authTo string) error {
+	a, key, err := am.getDecryptedKey(a, authFrom)
 	if err != nil {
-		return
+		return err
 	}
-	return Account{Address: key.Address}, nil
+	return am.keyStore.StoreKey(a.File, key, authTo)
+}
+
+func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (Account, error) {
+	a, _, err := importPreSaleKey(am.keyStore, keyJSON, password)
+	if err != nil {
+		return a, err
+	}
+	am.cache.add(a)
+	return a, nil
+}
+
+// zeroKey zeroes a private key in memory.
+func zeroKey(k *ecdsa.PrivateKey) {
+	b := k.D.Bits()
+	for i := range b {
+		b[i] = 0
+	}
 }

@@ -5,9 +5,9 @@ The "good" key files which are supposed to be loadable are:
 
 - File: UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
   Address: 0x7ef5a6135f1fd6a02593eedc869c6d41d934aef8
-- File: UTC--2016-03-23T09-30-22.528630983Z--f466859ead1932d743d622cb74fc058882e8648a
+- File: aaa
   Address: 0xf466859ead1932d743d622cb74fc058882e8648a
-- File: UTC--2016-03-23T09-30-26.532308523Z--289d485d9771714cce91d3393d764e1311907acc
+- File: zzz
   Address: 0x289d485d9771714cce91d3393d764e1311907acc
 
 The other files (including this README) are broken in various ways
