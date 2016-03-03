@@ -1,28 +1,28 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 )
 
 const (
@@ -53,16 +53,16 @@ type shhhandler func(*shhApi, *shared.Request) (interface{}, error)
 // shh api provider
 type shhApi struct {
 	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	methods  map[string]shhhandler
 	codec    codec.ApiCoder
 }
 
 // create a new whisper api instance
-func NewShhApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *shhApi {
+func NewShhApi(xeth *xeth.XEth, exp *exp.Expanse, coder codec.Codec) *shhApi {
 	return &shhApi{
 		xeth:     xeth,
-		ethereum: eth,
+		expanse: exp,
 		methods:  shhMapping,
 		codec:    coder.New(nil),
 	}

@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package trie implements Merkle Patricia Tries.
 package trie
@@ -23,12 +23,13 @@ import (
 	"fmt"
 	"hash"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/crypto/sha3"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rlp"
 )
 
 const defaultCacheCapacity = 800

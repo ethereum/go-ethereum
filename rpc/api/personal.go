@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 )
 
 const (
@@ -46,16 +46,16 @@ type personalhandler func(*personalApi, *shared.Request) (interface{}, error)
 // net api provider
 type personalApi struct {
 	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	methods  map[string]personalhandler
 	codec    codec.ApiCoder
 }
 
 // create a new net api instance
-func NewPersonalApi(xeth *xeth.XEth, eth *eth.Ethereum, coder codec.Codec) *personalApi {
+func NewPersonalApi(xeth *xeth.XEth, exp *exp.Expanse, coder codec.Codec) *personalApi {
 	return &personalApi{
 		xeth:     xeth,
-		ethereum: eth,
+		expanse: exp,
 		methods:  personalMapping,
 		codec:    coder.New(nil),
 	}
@@ -112,7 +112,7 @@ func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 	} else {
 		passwd = *args.Passphrase
 	}
-	am := self.ethereum.AccountManager()
+	am := self.expanse.AccountManager()
 	acc, err := am.NewAccount(passwd)
 	return acc.Address.Hex(), err
 }
@@ -131,7 +131,7 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 		return fe.UnlockAccount(common.HexToAddress(args.Address).Bytes()), nil
 	}
 
-	am := self.ethereum.AccountManager()
+	am := self.expanse.AccountManager()
 	addr := common.HexToAddress(args.Address)
 
 	err := am.TimedUnlock(addr, *args.Passphrase, time.Duration(args.Duration)*time.Second)

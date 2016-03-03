@@ -1,24 +1,26 @@
 # common
 
 [![Build
-Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+Status](https://travis-ci.org/expanse/go-expanse.png?branch=master)](https://travis-ci.org/expanse/go-expanse)
 
-The common package contains the ethereum utility library.
+The common package contains the expanse utility library.
 
 # Installation
 
-As a subdirectory the main go-ethereum repository, you get it with
-`go get github.com/ethereum/go-ethereum`.
+As a subdirectory the main go-expanse repository, you get it with
+`go get github.com/expanse-project/go-expanse`.
 
 # Usage
 
 ## RLP (Recursive Linear Prefix) Encoding
 
-RLP Encoding is an encoding scheme used by the Ethereum project. It
-encodes any native value or list to a string.
 
-More in depth information about the encoding scheme see the
-[Wiki](http://wiki.ethereum.org/index.php/RLP) article.
+RLP Encoding is an encoding scheme utilized by the Expanse project. It
+encodes any native value or list to string.
+
+More in depth information about the Encoding scheme see the [Wiki](http://wiki.expanse.org/index.php/RLP)
+article.
+
 
 ```go
 rlp := common.Encode("doge")
@@ -32,10 +34,11 @@ fmt.Println(decoded) // => ["dog" "cat"]
 
 ## Patricia Trie
 
-Patricie Tree is a merkle trie used by the Ethereum project.
+Patricie Tree is a merkle tree utilized by the Expanse project.
+
 
 More in depth information about the (modified) Patricia Trie can be
-found on the [Wiki](http://wiki.ethereum.org/index.php/Patricia_Tree).
+found on the [Wiki](http://wiki.expanse.org/index.php/Patricia_Tree).
 
 The patricia trie uses a db as backend and could be anything as long as
 it satisfies the Database interface found in `common/db.go`.

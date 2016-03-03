@@ -10,23 +10,23 @@ fi
 # Create fake Go workspace if it doesn't exist yet.
 workspace="$PWD/build/_workspace"
 root="$PWD"
-ethdir="$workspace/src/github.com/ethereum"
-if [ ! -L "$ethdir/go-ethereum" ]; then
+ethdir="$workspace/src/github.com/expanse-project"
+if [ ! -L "$ethdir/go-expanse" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
-    ln -s ../../../../../. go-ethereum
+    ln -s ../../../../../. go-expanse
     cd "$root"
 fi
 
 # Set up the environment to use the workspace.
 # Also add Godeps workspace so we build using canned dependencies.
-GOPATH="$ethdir/go-ethereum/Godeps/_workspace:$workspace"
+GOPATH="$ethdir/go-expanse/Godeps/_workspace:$workspace"
 GOBIN="$PWD/build/bin"
 export GOPATH GOBIN
 
 # Run the command inside the workspace.
-cd "$ethdir/go-ethereum"
-PWD="$ethdir/go-ethereum"
+cd "$ethdir/go-expanse"
+PWD="$ethdir/go-expanse"
 
 # Launch the arguments with the configured environment.
 exec "$@"

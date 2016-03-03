@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package logger
 
@@ -83,7 +83,7 @@ type EthMinerNewBlock struct {
 }
 
 func (l *EthMinerNewBlock) EventName() string {
-	return "eth.miner.new_block"
+	return "exp.miner.new_block"
 }
 
 type EthChainReceivedNewBlock struct {
@@ -96,7 +96,7 @@ type EthChainReceivedNewBlock struct {
 }
 
 func (l *EthChainReceivedNewBlock) EventName() string {
-	return "eth.chain.received.new_block"
+	return "exp.chain.received.new_block"
 }
 
 type EthChainNewHead struct {
@@ -108,7 +108,7 @@ type EthChainNewHead struct {
 }
 
 func (l *EthChainNewHead) EventName() string {
-	return "eth.chain.new_head"
+	return "exp.chain.new_head"
 }
 
 type EthTxReceived struct {
@@ -118,7 +118,7 @@ type EthTxReceived struct {
 }
 
 func (l *EthTxReceived) EventName() string {
-	return "eth.tx.received"
+	return "exp.tx.received"
 }
 
 //
@@ -212,7 +212,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *P2PEthDisconnectingBadBlock) EventName() string {
-// 	return "p2p.eth.disconnecting.bad_block"
+// 	return "p2p.exp.disconnecting.bad_block"
 // }
 
 // type P2PEthDisconnectingBadTx struct {
@@ -223,7 +223,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *P2PEthDisconnectingBadTx) EventName() string {
-// 	return "p2p.eth.disconnecting.bad_tx"
+// 	return "p2p.exp.disconnecting.bad_tx"
 // }
 
 // type EthNewBlockBroadcasted struct {
@@ -236,7 +236,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockBroadcasted) EventName() string {
-// 	return "eth.newblock.broadcasted"
+// 	return "exp.newblock.broadcasted"
 // }
 
 // type EthNewBlockIsKnown struct {
@@ -249,7 +249,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockIsKnown) EventName() string {
-// 	return "eth.newblock.is_known"
+// 	return "exp.newblock.is_known"
 // }
 
 // type EthNewBlockIsNew struct {
@@ -262,7 +262,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockIsNew) EventName() string {
-// 	return "eth.newblock.is_new"
+// 	return "exp.newblock.is_new"
 // }
 
 // type EthNewBlockMissingParent struct {
@@ -275,7 +275,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockMissingParent) EventName() string {
-// 	return "eth.newblock.missing_parent"
+// 	return "exp.newblock.missing_parent"
 // }
 
 // type EthNewBlockIsInvalid struct {
@@ -288,7 +288,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockIsInvalid) EventName() string {
-// 	return "eth.newblock.is_invalid"
+// 	return "exp.newblock.is_invalid"
 // }
 
 // type EthNewBlockChainIsOlder struct {
@@ -301,7 +301,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockChainIsOlder) EventName() string {
-// 	return "eth.newblock.chain.is_older"
+// 	return "exp.newblock.chain.is_older"
 // }
 
 // type EthNewBlockChainIsCanonical struct {
@@ -314,7 +314,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockChainIsCanonical) EventName() string {
-// 	return "eth.newblock.chain.is_cannonical"
+// 	return "exp.newblock.chain.is_cannonical"
 // }
 
 // type EthNewBlockChainNotCanonical struct {
@@ -327,7 +327,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthNewBlockChainNotCanonical) EventName() string {
-// 	return "eth.newblock.chain.not_cannonical"
+// 	return "exp.newblock.chain.not_cannonical"
 // }
 
 // type EthTxCreated struct {
@@ -340,7 +340,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthTxCreated) EventName() string {
-// 	return "eth.tx.created"
+// 	return "exp.tx.created"
 // }
 
 // type EthTxBroadcasted struct {
@@ -352,7 +352,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthTxBroadcasted) EventName() string {
-// 	return "eth.tx.broadcasted"
+// 	return "exp.tx.broadcasted"
 // }
 
 // type EthTxValidated struct {
@@ -364,7 +364,7 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthTxValidated) EventName() string {
-// 	return "eth.tx.validated"
+// 	return "exp.tx.validated"
 // }
 
 // type EthTxIsInvalid struct {
@@ -377,5 +377,5 @@ func (l *EthTxReceived) EventName() string {
 // }
 
 // func (l *EthTxIsInvalid) EventName() string {
-// 	return "eth.tx.is_invalid"
+// 	return "exp.tx.is_invalid"
 // }

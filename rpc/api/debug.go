@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package api
 
@@ -21,15 +21,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/ethash"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/xeth"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -56,16 +56,16 @@ type debughandler func(*debugApi, *shared.Request) (interface{}, error)
 // admin api provider
 type debugApi struct {
 	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
+	expanse *exp.Expanse
 	methods  map[string]debughandler
 	codec    codec.ApiCoder
 }
 
 // create a new debug api instance
-func NewDebugApi(xeth *xeth.XEth, ethereum *eth.Ethereum, coder codec.Codec) *debugApi {
+func NewDebugApi(xeth *xeth.XEth, expanse *exp.Expanse, coder codec.Codec) *debugApi {
 	return &debugApi{
 		xeth:     xeth,
-		ethereum: ethereum,
+		expanse: expanse,
 		methods:  DebugMapping,
 		codec:    coder.New(nil),
 	}
@@ -120,7 +120,7 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
 
-	stateDb, err := state.New(block.Root(), self.ethereum.ChainDb())
+	stateDb, err := state.New(block.Root(), self.expanse.ChainDb())
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (self *debugApi) SetHead(req *shared.Request) (interface{}, error) {
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-	self.ethereum.BlockChain().SetHead(uint64(args.BlockNumber))
+	self.expanse.BlockChain().SetHead(uint64(args.BlockNumber))
 
 	return nil, nil
 }
@@ -167,8 +167,9 @@ func (self *debugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 	defer func() { vm.Debug = old }()
 	vm.Debug = true
 
+
 	var (
-		blockchain = self.ethereum.BlockChain()
+		blockchain = self.expanse.BlockChain()
 		validator  = blockchain.Validator()
 		processor  = blockchain.Processor()
 	)
@@ -177,7 +178,7 @@ func (self *debugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 	if err != nil {
 		return false, err
 	}
-	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), self.ethereum.ChainDb())
+	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), self.expanse.ChainDb())
 	if err != nil {
 		return false, err
 	}

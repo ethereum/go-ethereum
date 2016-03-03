@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
-// ethtest executes Ethereum JSON tests.
+// exptest executes Expanse JSON tests.
 package main
 
 import (
@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/tests"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/tests"
 )
 
 var (
@@ -49,7 +49,7 @@ var (
 		Name:   "file",
 		Usage:  "Test file or directory. Directories are searched for .json files 1 level deep",
 		Value:  defaultDir,
-		EnvVar: "ETHEREUM_TEST_PATH",
+		EnvVar: "EXPANSE_TEST_PATH",
 	}
 	ContinueOnErrorFlag = cli.BoolFlag{
 		Name:  "continue",
@@ -204,11 +204,11 @@ func main() {
 	glog.SetToStderr(true)
 
 	app := cli.NewApp()
-	app.Name = "ethtest"
-	app.Usage = "go-ethereum test interface"
+	app.Name = "exptest"
+	app.Usage = "go-expanse test interface"
 	app.Action = setupApp
 	app.Version = "0.2.0"
-	app.Author = "go-ethereum team"
+	app.Author = "go-expanse team"
 
 	app.Flags = []cli.Flag{
 		TestFlag,

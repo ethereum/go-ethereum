@@ -20,9 +20,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/expanse-project/go-expanse/accounts/abi"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/vm"
 )
 
 func TestDefaults(t *testing.T) {

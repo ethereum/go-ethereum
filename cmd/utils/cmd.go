@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-ethereum commands.
+// Package utils contains internal helper functions for go-expanse commands.
 package utils
 
 import (
@@ -26,13 +26,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/peterh/liner"
 )
 
@@ -110,10 +110,10 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-func StartEthereum(ethereum *eth.Ethereum) {
-	glog.V(logger.Info).Infoln("Starting", ethereum.Name())
-	if err := ethereum.Start(); err != nil {
-		Fatalf("Error starting Ethereum: %v", err)
+func StartExpanse(expanse *exp.Expanse) {
+	glog.V(logger.Info).Infoln("Starting", expanse.Name())
+	if err := expanse.Start(); err != nil {
+		Fatalf("Error starting Expanse: %v", err)
 	}
 	go func() {
 		sigc := make(chan os.Signal, 1)
@@ -121,7 +121,7 @@ func StartEthereum(ethereum *eth.Ethereum) {
 		defer signal.Stop(sigc)
 		<-sigc
 		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
-		go ethereum.Stop()
+		go expanse.Stop()
 		logger.Flush()
 		for i := 10; i > 0; i-- {
 			<-sigc

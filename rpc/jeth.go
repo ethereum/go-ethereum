@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package rpc
 
@@ -20,26 +20,27 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/jsre"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rpc/comms"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
+	"github.com/expanse-project/go-expanse/xeth"
 
 	"github.com/robertkrimen/otto"
 )
 
 type Jeth struct {
-	ethApi shared.EthereumApi
+	ethApi shared.ExpanseApi
 	re     *jsre.JSRE
-	client comms.EthereumClient
+	client comms.ExpanseClient
 	fe     xeth.Frontend
 }
 
-func NewJeth(ethApi shared.EthereumApi, re *jsre.JSRE, client comms.EthereumClient, fe xeth.Frontend) *Jeth {
+
+func NewJeth(ethApi shared.ExpanseApi, re *jsre.JSRE, client comms.ExpanseClient, fe xeth.Frontend) *Jeth {
 	return &Jeth{ethApi, re, client, fe}
 }
 

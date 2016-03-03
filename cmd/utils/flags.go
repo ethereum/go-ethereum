@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
 package utils
 
@@ -30,26 +30,26 @@ import (
 	"strconv"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/codec"
-	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/rpc/useragent"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/ethash"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-project/go-expanse/p2p/nat"
+	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-project/go-expanse/rpc/api"
+	"github.com/expanse-project/go-expanse/rpc/codec"
+	"github.com/expanse-project/go-expanse/rpc/comms"
+	"github.com/expanse-project/go-expanse/rpc/shared"
+	"github.com/expanse-project/go-expanse/rpc/useragent"
+	"github.com/expanse-project/go-expanse/xeth"
 )
 
 func init() {
@@ -107,7 +107,7 @@ var (
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 0=Olympic, 1=Frontier, 2=Morden)",
-		Value: eth.NetworkId,
+		Value: exp.NetworkId,
 	}
 	OlympicFlag = cli.BoolFlag{
 		Name:  "olympic",
@@ -268,7 +268,7 @@ var (
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
-		Value: 8545,
+		Value: 9656,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -312,7 +312,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 30303,
+		Value: 42786,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -413,8 +413,8 @@ func MakeNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 	return key
 }
 
-// MakeEthConfig creates ethereum options from set command line flags.
-func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+// MakeEthConfig creates expanse options from set command line flags.
+func MakeEthConfig(clientID, version string, ctx *cli.Context) *exp.Config {
 	customName := ctx.GlobalString(IdentityFlag.Name)
 	if len(customName) > 0 {
 		clientID += "/" + customName
@@ -424,8 +424,9 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
-	// Assemble the entire eth configuration and return
-	cfg := &eth.Config{
+
+	// Assemble the entire exp configuration and return
+	cfg := &exp.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 MustDataDir(ctx),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
@@ -496,7 +497,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 			cfg.Shh = true
 		}
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
-			cfg.DataDir = os.TempDir() + "/ethereum_dev_mode"
+			cfg.DataDir = os.TempDir() + "/expanse_dev_mode"
 		}
 		cfg.PowTest = true
 		cfg.DevMode = true
@@ -534,6 +535,7 @@ func SetupVM(ctx *cli.Context) {
 	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
 }
+
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database) {
@@ -597,7 +599,7 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	} else {
 		ipcpath = common.DefaultIpcPath()
 		if ctx.GlobalIsSet(DataDirFlag.Name) {
-			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc")
+			ipcpath = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "gexp.ipc")
 		}
 		if ctx.GlobalIsSet(IPCPathFlag.Name) {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
@@ -607,15 +609,16 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	return
 }
 
-func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
+func StartIPC(exp *exp.Expanse, ctx *cli.Context) error {
 	config := comms.IpcConfig{
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		fe := useragent.NewRemoteFrontend(conn, eth.AccountManager())
-		xeth := xeth.New(eth, fe)
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, eth)
+
+	initializer := func(conn net.Conn) (comms.Stopper, shared.ExpanseApi, error) {
+		fe := useragent.NewRemoteFrontend(conn, exp.AccountManager())
+		xeth := xeth.New(exp, fe)
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, exp)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -625,17 +628,17 @@ func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
 	return comms.StartIpc(config, codec.JSON, initializer)
 }
 
-func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
+func StartRPC(exp *exp.Expanse, ctx *cli.Context) error {
 	config := comms.HttpConfig{
 		ListenAddress: ctx.GlobalString(RPCListenAddrFlag.Name),
 		ListenPort:    uint(ctx.GlobalInt(RPCPortFlag.Name)),
 		CorsDomain:    ctx.GlobalString(RPCCORSDomainFlag.Name),
 	}
 
-	xeth := xeth.New(eth, nil)
+	xeth := xeth.New(exp, nil)
 	codec := codec.JSON
 
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, exp)
 	if err != nil {
 		return err
 	}

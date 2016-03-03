@@ -30,19 +30,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-project/go-expanse/trie"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -157,7 +157,7 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		glog.V(logger.Info).Infoln("WARNING: Wrote default expanse genesis block")
 	}
 	if err := bc.loadLastState(); err != nil {
 		return nil, err

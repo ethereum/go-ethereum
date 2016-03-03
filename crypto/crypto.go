@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
@@ -33,11 +33,11 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto/ecies"
+	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-project/go-expanse/crypto/sha3"
+	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
@@ -68,7 +68,7 @@ func Sha3Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
-// Creates an ethereum address given the bytes and the nonce
+// Creates an expanse address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Sha3(data)[12:])
@@ -261,7 +261,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	iv := encSeedBytes[:16]
 	cipherText := encSeedBytes[16:]
 	/*
-		See https://github.com/ethereum/pyethsaletool
+		See https://github.com/expanse-project/pyethsaletool
 
 		pyethsaletool generates the encryption key from password by
 		2000 rounds of PBKDF2 with HMAC-SHA-256 using password as salt (:().

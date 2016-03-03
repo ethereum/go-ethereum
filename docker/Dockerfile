@@ -1,5 +1,6 @@
 FROM ubuntu:wily
-MAINTAINER caktux
+MAINTAINER chrisfranko
+
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -8,14 +9,28 @@ RUN apt-get update
 RUN apt-get upgrade -q -y
 RUN apt-get dist-upgrade -q -y
 
-# Install Ethereum
-RUN apt-get install -q -y software-properties-common
-RUN add-apt-repository ppa:ethereum/ethereum
-RUN add-apt-repository ppa:ethereum/ethereum-dev
-RUN apt-get update
-RUN apt-get install -q -y geth
+# Let our containers upgrade themselves
+RUN apt-get install -q -y unattended-upgrades
 
-EXPOSE 8545
-EXPOSE 30303
+# Install Expanse
+RUN apt-get install -q -y curl git mercurial binutils bison gcc make libgmp3-dev build-essential
 
-ENTRYPOINT ["/usr/bin/geth"]
+# Install Go
+RUN \
+  mkdir -p /goroot && \
+  curl https://storage.googleapis.com/golang/go1.4.2.linux-amd64.tar.gz | tar xvzf - -C /goroot --strip-components=1
+
+# Set environment variables.
+ENV GOROOT /goroot
+ENV GOPATH /gopath
+ENV PATH $GOROOT/bin:$GOPATH/bin:$PATH
+
+RUN git clone http://www.github.com/expanse-project/go-expanse.git
+RUN cd go-expanse && make gexp
+
+RUN cp build/bin/gexp /usr/bin/gexp
+
+EXPOSE 9656
+EXPOSE 42786
+
+ENTRYPOINT ["/usr/bin/gexp"]

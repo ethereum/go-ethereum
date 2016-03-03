@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package miner
 
@@ -23,17 +23,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/pow"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/pow"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -97,7 +97,7 @@ type worker struct {
 	quit   chan struct{}
 	pow    pow.PoW
 
-	eth     core.Backend
+	exp     core.Backend
 	chain   *core.BlockChain
 	proc    core.Validator
 	chainDb ethdb.Database
@@ -122,15 +122,15 @@ type worker struct {
 	fullValidation bool
 }
 
-func newWorker(coinbase common.Address, eth core.Backend) *worker {
+func newWorker(coinbase common.Address, exp core.Backend) *worker {
 	worker := &worker{
-		eth:            eth,
-		mux:            eth.EventMux(),
-		chainDb:        eth.ChainDb(),
+		exp:            exp,
+		mux:            exp.EventMux(),
+		chainDb:        exp.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
-		chain:          eth.BlockChain(),
-		proc:           eth.BlockChain().Validator(),
+		chain:          exp.BlockChain(),
+		proc:           exp.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
@@ -290,7 +290,7 @@ func (self *worker) wait() {
 					continue
 				}
 
-				auxValidator := self.eth.BlockChain().AuxValidator()
+				auxValidator := self.exp.BlockChain().AuxValidator()
 				if err := core.ValidateHeader(auxValidator, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
 					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 					continue
@@ -371,7 +371,7 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
-	state, err := state.New(parent.Root(), self.eth.ChainDb())
+	state, err := state.New(parent.Root(), self.exp.ChainDb())
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		work.family.Add(ancestor.Hash())
 		work.ancestors.Add(ancestor.Hash())
 	}
-	accounts, _ := self.eth.AccountManager().Accounts()
+	accounts, _ := self.exp.AccountManager().Accounts()
 
 	// Keep track of transactions which return errors so they can be removed
 	work.remove = set.New()
@@ -498,14 +498,14 @@ func (self *worker) commitNewWork() {
 	*/
 
 	//approach 2
-	transactions := self.eth.TxPool().GetTransactions()
+	transactions := self.exp.TxPool().GetTransactions()
 	types.SortByPriceAndNonce(transactions)
 
 	/* // approach 3
 	// commit transactions for this run.
 	txPerOwner := make(map[common.Address]types.Transactions)
 	// Sort transactions by owner
-	for _, tx := range self.eth.TxPool().GetTransactions() {
+	for _, tx := range self.exp.TxPool().GetTransactions() {
 		from, _ := tx.From() // we can ignore the sender error
 		txPerOwner[from] = append(txPerOwner[from], tx)
 	}
@@ -529,7 +529,7 @@ func (self *worker) commitNewWork() {
 	*/
 
 	work.commitTransactions(transactions, self.gasPrice, self.chain)
-	self.eth.TxPool().RemoveTransactions(work.lowGasTxs)
+	self.exp.TxPool().RemoveTransactions(work.lowGasTxs)
 
 	// compute uncles for the new block.
 	var (
