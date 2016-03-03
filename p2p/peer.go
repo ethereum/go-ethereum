@@ -56,6 +56,9 @@ type protoHandshake struct {
 	Caps       []Cap
 	ListenPort uint64
 	ID         discover.NodeID
+
+	// Ignore additional fields (for forward compatibility).
+	Rest []rlp.RawValue `rlp:"tail"`
 }
 
 // Peer represents a connected remote node.

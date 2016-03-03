@@ -30,7 +30,7 @@ For prerequisites and detailed build instructions please read the
 [Installation Instructions](https://github.com/expanse-project/go-expanse/wiki/Building-Expanse)
 on the wiki.
 
-Building gexp requires two external dependencies, Go and GMP.
+Building gexp requires both a Go and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
 

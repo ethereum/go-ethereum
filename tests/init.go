@@ -44,6 +44,9 @@ var (
 		"TRANSCT__RandomByteAtTheEnd",
 		"BLOCK__ZeroByteAtTheEnd",
 		"TRANSCT__ZeroByteAtTheEnd",
+
+		"ChainAtoChainB_blockorder2",
+		"ChainAtoChainB_blockorder1",
 	}
 
 	/* Go client does not support transaction (account) nonces above 2^64. This

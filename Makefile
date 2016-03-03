@@ -10,7 +10,7 @@
 
 GOBIN = build/bin
 
-CROSSDEPS = https://gmplib.org/download/gmp/gmp-6.0.0a.tar.bz2
+MODE ?= default
 GO ?= latest
 
 gexp:
@@ -26,32 +26,51 @@ gexp-linux: xgo gexp-linux-arm gexp-linux-386 gexp-linux-amd64
 	@echo "Linux cross compilation done:"
 	@ls -l $(GOBIN)/gexp-linux-*
 
-gexp-linux-arm: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=linux/arm -v $(shell build/flags.sh) ./cmd/gexp
-	@echo "Linux ARM cross compilation done:"
-	@ls -l $(GOBIN)/gexp-linux-* | grep arm
-
 gexp-linux-386: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=linux/386 -v $(shell build/flags.sh) ./cmd/gexp
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=linux/386 -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Linux 386 cross compilation done:"
 	@ls -l $(GOBIN)/gexp-linux-* | grep 386
 
 gexp-linux-amd64: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=linux/amd64 -v $(shell build/flags.sh) ./cmd/gexp
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=linux/amd64 -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Linux amd64 cross compilation done:"
 	@ls -l $(GOBIN)/gexp-linux-* | grep amd64
 
-gexp-darwin: xgo gexp-darwin-386 gexp-darwin-amd64
+gexp-linux-arm: gexp-linux-arm-5 gexp-linux-arm-6 gexp-linux-arm-7 gexp-linux-arm64
+	@echo "Linux ARM cross compilation done:"
+	@ls -l $(GOBIN)/gexp-linux-* | grep arm
+
+gexp-linux-arm-5: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=linux/arm-5 -v $(shell build/flags.sh) ./cmd/gexp
+	@echo "Linux ARMv5 cross compilation done:"
+	@ls -l $(GOBIN)/gexp-linux-* | grep arm-5
+
+gexp-linux-arm-6: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=linux/arm-6 -v $(shell build/flags.sh) ./cmd/gexp
+	@echo "Linux ARMv6 cross compilation done:"
+	@ls -l $(GOBIN)/gexp-linux-* | grep arm-6
+
+gexp-linux-arm-7: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=linux/arm-7 -v $(shell build/flags.sh) ./cmd/gexp
+	@echo "Linux ARMv7 cross compilation done:"
+	@ls -l $(GOBIN)/gexp-linux-* | grep arm-7
+
+gexp-linux-arm64: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=linux/arm64 -v $(shell build/flags.sh) ./cmd/gexp
+	@echo "Linux ARM64 cross compilation done:"
+	@ls -l $(GOBIN)/gexp-linux-* | grep arm64
+
+gexp-darwin: gexp-darwin-386 gexp-darwin-amd64
 	@echo "Darwin cross compilation done:"
 	@ls -l $(GOBIN)/gexp-darwin-*
 
 gexp-darwin-386: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=darwin/386 -v $(shell build/flags.sh) ./cmd/gexp
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=darwin/386 -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Darwin 386 cross compilation done:"
 	@ls -l $(GOBIN)/gexp-darwin-* | grep 386
 
 gexp-darwin-amd64: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=darwin/amd64 -v $(shell build/flags.sh) ./cmd/gexp
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=darwin/amd64 -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Darwin amd64 cross compilation done:"
 	@ls -l $(GOBIN)/gexp-darwin-* | grep amd64
 
@@ -60,28 +79,33 @@ gexp-windows: xgo gexp-windows-386 gexp-windows-amd64
 	@ls -l $(GOBIN)/gexp-windows-*
 
 gexp-windows-386: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=windows/386 -v $(shell build/flags.sh) ./cmd/gexp
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=windows/386 -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Windows 386 cross compilation done:"
 	@ls -l $(GOBIN)/gexp-windows-* | grep 386
 
 gexp-windows-amd64: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=windows/amd64 -v $(shell build/flags.sh) ./cmd/gexp
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=windows/amd64 -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Windows amd64 cross compilation done:"
 	@ls -l $(GOBIN)/gexp-windows-* | grep amd64
 
-gexp-android: xgo gexp-android-16 gexp-android-21
+gexp-android: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=android/* -v $(shell build/flags.sh) ./cmd/gexp
 	@echo "Android cross compilation done:"
 	@ls -l $(GOBIN)/gexp-android-*
 
-gexp-android-16: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=android-16/* -v $(shell build/flags.sh) ./cmd/gexp
-	@echo "Android 16 cross compilation done:"
-	@ls -l $(GOBIN)/gexp-android-16-*
+gexp-ios: gexp-ios-arm-7 gexp-ios-arm64
+	@echo "iOS cross compilation done:"
+	@ls -l $(GOBIN)/gexp-ios-*
 
-gexp-android-21: xgo
-	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --deps=$(CROSSDEPS) --targets=android-21/* -v $(shell build/flags.sh) ./cmd/gexp
-	@echo "Android 21 cross compilation done:"
-	@ls -l $(GOBIN)/gexp-android-21-*
+gexp-ios-arm-7: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=ios/arm-7 -v $(shell build/flags.sh) ./cmd/gexp
+	@echo "iOS ARMv7 cross compilation done:"
+	@ls -l $(GOBIN)/gexp-ios-* | grep arm-7
+
+gexp-ios-arm64: xgo
+	build/env.sh $(GOBIN)/xgo --go=$(GO) --buildmode=$(MODE) --dest=$(GOBIN) --targets=ios-7.0/arm64 -v $(shell build/flags.sh) ./cmd/gexp
+	@echo "iOS ARM64 cross compilation done:"
+	@ls -l $(GOBIN)/gexp-ios-* | grep arm64
 
 evm:
 	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm

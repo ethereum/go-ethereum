@@ -63,11 +63,12 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours one particular struct tag,
-// "nil". This tag applies to pointer-typed fields and changes the
+// The decoding of struct fields honours two struct tags, "tail" and
+// "nil". For an explanation of "tail", see the example.
+// The "nil" tag applies to pointer-typed fields and changes the
 // decoding rules for the field such that input values of size zero
-// decode as a nil pointer. This tag can be useful when decoding recursive
-// types.
+// decode as a nil pointer. This tag can be useful when decoding
+// recursive types.
 //
 //     type StructWithEmptyOK struct {
 //         Foo *[20]byte `rlp:"nil"`
@@ -190,7 +191,7 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	case kind == reflect.String:
 		return decodeString, nil
 	case kind == reflect.Slice || kind == reflect.Array:
-		return makeListDecoder(typ)
+		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
 		return makeStructDecoder(typ)
 	case kind == reflect.Ptr:
@@ -264,7 +265,7 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeListDecoder(typ reflect.Type) (decoder, error) {
+func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 	etype := typ.Elem()
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
@@ -277,15 +278,26 @@ func makeListDecoder(typ reflect.Type) (decoder, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	isArray := typ.Kind() == reflect.Array
-	return func(s *Stream, val reflect.Value) error {
-		if isArray {
+	var dec decoder
+	switch {
+	case typ.Kind() == reflect.Array:
+		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListArray(s, val, etypeinfo.decoder)
-		} else {
+		}
+	case tag.tail:
+		// A slice with "tail" tag can occur as the last field
+		// of a struct and is upposed to swallow all remaining
+		// list elements. The struct decoder already called s.List,
+		// proceed directly to decoding the elements.
+		dec = func(s *Stream, val reflect.Value) error {
+			return decodeSliceElems(s, val, etypeinfo.decoder)
+		}
+	default:
+		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListSlice(s, val, etypeinfo.decoder)
 		}
-	}, nil
+	}
+	return dec, nil
 }
 
 func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
@@ -297,7 +309,13 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 		val.Set(reflect.MakeSlice(val.Type(), 0, 0))
 		return s.ListEnd()
 	}
+	if err := decodeSliceElems(s, val, elemdec); err != nil {
+		return err
+	}
+	return s.ListEnd()
+}
 
+func decodeSliceElems(s *Stream, val reflect.Value, elemdec decoder) error {
 	i := 0
 	for ; ; i++ {
 		// grow slice if necessary
@@ -323,12 +341,11 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 	if i < val.Len() {
 		val.SetLen(i)
 	}
-	return s.ListEnd()
+	return nil
 }
 
 func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
-	_, err := s.List()
-	if err != nil {
+	if _, err := s.List(); err != nil {
 		return wrapStreamError(err, val.Type())
 	}
 	vlen := val.Len()
@@ -398,11 +415,11 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		return nil, err
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
-		if _, err = s.List(); err != nil {
+		if _, err := s.List(); err != nil {
 			return wrapStreamError(err, typ)
 		}
 		for _, f := range fields {
-			err = f.info.decoder(s, val.Field(f.index))
+			err := f.info.decoder(s, val.Field(f.index))
 			if err == EOL {
 				return &decodeError{msg: "too few elements", typ: typ}
 			} else if err != nil {

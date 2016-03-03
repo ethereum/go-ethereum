@@ -125,14 +125,17 @@ type vmBench struct {
 
 type account struct{}
 
-func (account) SubBalance(amount *big.Int)   {}
-func (account) AddBalance(amount *big.Int)   {}
-func (account) SetBalance(*big.Int)          {}
-func (account) SetNonce(uint64)              {}
-func (account) Balance() *big.Int            { return nil }
-func (account) Address() common.Address      { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int) {}
-func (account) SetCode([]byte)               {}
+func (account) SubBalance(amount *big.Int)             {}
+func (account) AddBalance(amount *big.Int)             {}
+func (account) SetAddress(common.Address)              {}
+func (account) Value() *big.Int                        { return nil }
+func (account) SetBalance(*big.Int)                    {}
+func (account) SetNonce(uint64)                        {}
+func (account) Balance() *big.Int                      { return nil }
+func (account) Address() common.Address                { return common.Address{} }
+func (account) ReturnGas(*big.Int, *big.Int)           {}
+func (account) SetCode([]byte)                         {}
+func (account) EachStorage(cb func(key, value []byte)) {}
 
 func runVmBench(test vmBench, b *testing.B) {
 	var sender account
@@ -204,4 +207,7 @@ func (self *Env) CallCode(caller ContractRef, addr common.Address, data []byte, 
 }
 func (self *Env) Create(caller ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
 	return nil, common.Address{}, nil
+}
+func (self *Env) DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+	return nil, nil
 }
