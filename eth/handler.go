@@ -493,7 +493,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			uncles[i] = body.Uncles
 		}
 		// Filter out any explicitly requested bodies, deliver the rest to the downloader
-		if trasactions, uncles := pm.fetcher.FilterBodies(trasactions, uncles, time.Now()); len(trasactions) > 0 || len(uncles) > 0 {
+		filter := len(trasactions) > 0 || len(uncles) > 0
+		if filter {
+			trasactions, uncles = pm.fetcher.FilterBodies(trasactions, uncles, time.Now())
+		}
+		if len(trasactions) > 0 || len(uncles) > 0 || !filter {
 			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
 			if err != nil {
 				glog.V(logger.Debug).Infoln(err)
