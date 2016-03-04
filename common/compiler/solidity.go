@@ -157,7 +157,7 @@ func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
 		return nil, fmt.Errorf("solc: %v\n%s", err, string(stderr.Bytes()))
 	}
 	// Sanity check that something was actually built
-	matches, _ := filepath.Glob(wd + "/*\\.bin*")
+	matches, _ := filepath.Glob(filepath.Join(wd, "*.bin*"))
 	if len(matches) < 1 {
 		return nil, fmt.Errorf("solc: no build results found")
 	}
