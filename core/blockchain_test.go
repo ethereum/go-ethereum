@@ -471,11 +471,14 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 
 func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
-	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
-	bc.headerCache, _ = lru.New(100)
+	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}}
+	bc.hc = &HeaderChain{chainDb: db, genesisHeader: genesis.Header(), rand: rand.New(rand.NewSource(0))}
+	bc.hc.getValidator = func() HeaderValidator { return bc.Validator() }
+	bc.hc.procInterrupt = bc.getProcInterrupt
+	bc.hc.headerCache, _ = lru.New(100)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
-	bc.tdCache, _ = lru.New(100)
+	bc.hc.tdCache, _ = lru.New(100)
 	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.SetValidator(bproc{})

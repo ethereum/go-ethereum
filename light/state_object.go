@@ -102,7 +102,7 @@ func NewStateObject(address common.Address, odr OdrBackend) *StateObject {
 		codeHash: emptyCodeHash,
 		storage:  make(Storage),
 	}
-	object.trie = NewLightTrie(common.Hash{}, odr, true)
+	object.trie = NewLightTrie(nil, odr, true)
 	return object
 }
 
@@ -181,6 +181,9 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 	c.dirty = true
 }
 
+// ReturnGas returns the gas back to the origin. Used by the Virtual machine or Closures
+func (c *StateObject) ReturnGas(gas, price *big.Int) {}
+
 // Copy creates a copy of the state object
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address(), self.odr)
@@ -235,6 +238,23 @@ func (self *StateObject) Nonce() uint64 {
 	return self.nonce
 }
 
+// EachStorage calls a callback function for every key/value pair found
+// in the local storage cache. Note that unlike core/state.StateObject,
+// light.StateObject only returns cached values and doesn't download the
+// entire storage tree.
+func (self *StateObject) EachStorage(cb func(key, value []byte)) {
+	for h, v := range self.storage {
+		cb([]byte(h), v.Bytes())
+	}
+}
+
+// Never called, but must be present to allow StateObject to be used
+// as a vm.Account interface that also satisfies the vm.ContractRef
+// interface. Interfaces are awesome.
+func (self *StateObject) Value() *big.Int {
+	panic("Value on StateObject should never be called")
+}
+
 // Encoding
 
 type extStateObject struct {
@@ -245,7 +265,7 @@ type extStateObject struct {
 }
 
 // DecodeObject decodes an RLP-encoded state object.
-func DecodeObject(ctx context.Context, address common.Address, odr OdrBackend, data []byte) (*StateObject, error) {
+func DecodeObject(ctx context.Context, stateID *TrieID, address common.Address, odr OdrBackend, data []byte) (*StateObject, error) {
 	var (
 		obj = &StateObject{address: address, odr: odr, storage: make(Storage)}
 		ext extStateObject
@@ -254,9 +274,10 @@ func DecodeObject(ctx context.Context, address common.Address, odr OdrBackend, d
 	if err = rlp.DecodeBytes(data, &ext); err != nil {
 		return nil, err
 	}
-	obj.trie = NewLightTrie(ext.Root, odr, true)
+	trieID := StorageTrieID(stateID, address, ext.Root)
+	obj.trie = NewLightTrie(trieID, odr, true)
 	if !bytes.Equal(ext.CodeHash, emptyCodeHash) {
-		if obj.code, err = retrieveNodeData(ctx, obj.odr, common.BytesToHash(ext.CodeHash)); err != nil {
+		if obj.code, err = retrieveContractCode(ctx, obj.odr, trieID, common.BytesToHash(ext.CodeHash)); err != nil {
 			return nil, fmt.Errorf("can't find code for hash %x: %v", ext.CodeHash, err)
 		}
 	}
