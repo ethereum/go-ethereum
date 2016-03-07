@@ -102,6 +102,10 @@ var (
 		Usage: "Data directory for the databases and keystore",
 		Value: DirectoryString{common.DefaultDataDir()},
 	}
+	KeyStoreDirFlag = DirectoryFlag{
+		Name:  "keystore",
+		Usage: "Directory for the keystore (default = inside the datadir)",
+	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 0=Olympic, 1=Frontier, 2=Morden)",
@@ -393,6 +397,16 @@ func MustMakeDataDir(ctx *cli.Context) string {
 	return ""
 }
 
+// MakeKeyStoreDir resolves the folder to use for storing the account keys from the
+// set command line flags, returning the explicitly requested path, or one inside
+// the data directory otherwise.
+func MakeKeyStoreDir(datadir string, ctx *cli.Context) string {
+	if path := ctx.GlobalString(KeyStoreDirFlag.Name); path != "" {
+		return path
+	}
+	return filepath.Join(datadir, "keystore")
+}
+
 // MakeIPCPath creates an IPC path configuration from the set command line flags,
 // returning an empty string if IPC was explicitly disabled, or the set path.
 func MakeIPCPath(ctx *cli.Context) string {
@@ -525,8 +539,9 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	}
 	// Assemble an account manager using the configured datadir
 	var (
-		datadir  = MustMakeDataDir(ctx)
-		keystore = crypto.NewKeyStorePassphrase(filepath.Join(datadir, "keystore"), scryptN, scryptP)
+		datadir     = MustMakeDataDir(ctx)
+		keystoredir = MakeKeyStoreDir(datadir, ctx)
+		keystore    = crypto.NewKeyStorePassphrase(keystoredir, scryptN, scryptP)
 	)
 	return accounts.NewManager(keystore)
 }
