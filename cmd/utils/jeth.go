@@ -58,7 +58,7 @@ func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id *int64) (
 
 // UnlockAccount asks the user for the password and than executes the jeth.UnlockAccount callback in the jsre
 func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
-	var cmd, account, passwd string
+	var account, passwd string
 	timeout := int64(300)
 	var ok bool
 
@@ -92,8 +92,7 @@ func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		}
 	}
 
-	cmd = fmt.Sprintf("jeth.unlockAccount('%s', '%s', %d)", account, passwd, timeout)
-	if val, err := call.Otto.Run(cmd); err == nil {
+	if val, err := call.Otto.Call("jeth.unlockAccount", nil, account, passwd, timeout); err == nil {
 		return val
 	}
 
@@ -102,8 +101,10 @@ func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 
 // NewAccount asks the user for the password and than executes the jeth.newAccount callback in the jsre
 func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
+	var passwd string
 	if len(call.ArgumentList) == 0 {
-		passwd, err := PromptPassword("Passphrase: ", true)
+		var err error
+		passwd, err = PromptPassword("Passphrase: ", true)
 		if err != nil {
 			return otto.FalseValue()
 		}
@@ -116,13 +117,18 @@ func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
 			fmt.Println("Passphrases don't match")
 			return otto.FalseValue()
 		}
-
-		cmd := fmt.Sprintf("jeth.newAccount('%s')", passwd)
-		if val, err := call.Otto.Run(cmd); err == nil {
-			return val
-		}
+	} else if len(call.ArgumentList) == 1 && call.Argument(0).IsString() {
+		passwd, _ = call.Argument(0).ToString()
 	} else {
-		fmt.Println("New account doesn't expect argument(s), you will be prompted for a password")
+		fmt.Println("expected 0 or 1 string argument")
+		return otto.FalseValue()
+	}
+
+	if ret, err := call.Otto.Call("jeth.newAccount", nil, passwd); err == nil {
+		return ret
+	} else {
+		fmt.Printf("%v\n", err)
+		return otto.FalseValue()
 	}
 
 	return otto.FalseValue()
