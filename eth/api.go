@@ -660,10 +660,10 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 		data:     common.FromHex(args.Data),
 	}
 	if msg.gas.Cmp(common.Big0) == 0 {
-		msg.gas = big.NewInt(50000000)
+		msg.gas = common.MaxBig
 	}
 	if msg.gasPrice.Cmp(common.Big0) == 0 {
-		msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
+		msg.gasPrice = big.NewInt(1)
 	}
 
 	// Execute the call and return
@@ -1168,7 +1168,7 @@ func (tx *Tx) UnmarshalJSON(b []byte) (err error) {
 		tx.GasLimit = rpc.NewHexNumber(0)
 	}
 	if tx.GasPrice == nil {
-		tx.GasPrice = rpc.NewHexNumber(int64(50000000000))
+		tx.GasPrice = rpc.NewHexNumber(0)
 	}
 
 	contractCreation := (req.To == nil)
