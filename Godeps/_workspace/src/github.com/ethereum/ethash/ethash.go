@@ -108,10 +108,13 @@ func freeCache(cache *cache) {
 // Light implements the Verify half of the proof of work. It uses a few small
 // in-memory caches to verify the nonces found by Full.
 type Light struct {
-	test      bool              // if set use a smaller cache size
-	mu        sync.Mutex        // protects the per-epoch map of DAGs
-	caches    map[uint64]*cache // currently cached verification DAGs
-	NumCaches int               // Maximum number of DAGs to cache before eviction (only init, don't modify)
+	test bool // If set, use a smaller cache size
+
+	mu     sync.Mutex        // Protects the per-epoch map of verification caches
+	caches map[uint64]*cache // Currently maintained verification caches
+	future *cache            // Pre-generated cache for the estimated future DAG
+
+	NumCaches int // Maximum number of caches to keep before eviction (only init, don't modify)
 }
 
 // Verify checks whether the block's nonce is valid.
@@ -192,12 +195,25 @@ func (l *Light) getCache(blockNum uint64) *cache {
 					evict = cache
 				}
 			}
-			glog.V(logger.Info).Infof("Evicting DAG for epoch %d in favour of epoch %d", evict.epoch, epoch)
+			glog.V(logger.Debug).Infof("Evicting DAG for epoch %d in favour of epoch %d", evict.epoch, epoch)
 			delete(l.caches, evict.epoch)
 		}
-		// Create and return a new DAG for the epoch
-		c = &cache{epoch: epoch, test: l.test}
+		// If we have the new DAG pre-generated, use that, otherwise create a new one
+		if l.future != nil && l.future.epoch == epoch {
+			glog.V(logger.Debug).Infof("Using pre-generated DAG for epoch %d", epoch)
+			c, l.future = l.future, nil
+		} else {
+			glog.V(logger.Debug).Infof("No pre-generated DAG available, creating new for epoch %d", epoch)
+			c = &cache{epoch: epoch, test: l.test}
+		}
 		l.caches[epoch] = c
+
+		// If we just used up the future cache, or need a refresh, regenerate
+		if l.future == nil || l.future.epoch <= epoch {
+			glog.V(logger.Debug).Infof("Pre-generating DAG for epoch %d", epoch+1)
+			l.future = &cache{epoch: epoch + 1, test: l.test}
+			go l.future.generate()
+		}
 	}
 	c.used = time.Now()
 	l.mu.Unlock()
