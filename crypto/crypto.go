@@ -350,13 +350,12 @@ func zeroBytes(bytes []byte) {
 	}
 }
 
-
-// for input read: https://github.com/ethereum/EIPs/issues/55
-// modelled after the JavaScript function toChecksumAddress()
-// Convert address into checksummed address
+// ChecksumAddress converts an address into a checksummed address.
+// It returns a 42-letter string starting with "0x".
+// The checksum algorithm is discussed in https://github.com/ethereum/EIPs/issues/55
 func ChecksumAddress(a common.Address) string {
-	address := strings.Replace(strings.ToLower(hex.EncodeToString(a.Bytes())), "0x", "", 1)
-	addressHash := hex.EncodeToString(Sha3([]byte(common.Bytes2Hex(a.Bytes()))))
+	address := hex.EncodeToString(a[:]) // hex.EncodeToString is always lower case without 0x prefix
+	addressHash := hex.EncodeToString(Sha3([]byte(common.Bytes2Hex(a[:]))))
 	checksumAddress := "0x"
 	for i := 0; i < len(address); i++ {
 		// If ith character is 8 to f then make it uppercase
@@ -370,8 +369,9 @@ func ChecksumAddress(a common.Address) string {
 	return checksumAddress
 }
 
-// Convert address in Hex format, with or without prefixed 0x into checksummed address
+// ChecksumAddressHex converts an address into a checksummed address.
+// The input s may or may not be prefixed with "0x".
+// The returned string is 42 long and always includes the prefix "0x".
 func ChecksumAddressHex(s string) string {
-	return ChecksumAddress(common.HexToAddress(strings.Replace(strings.ToLower(s), "0x", "", 1)))
+	return ChecksumAddress(common.HexToAddress(s))
 }
-

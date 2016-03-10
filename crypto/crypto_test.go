@@ -26,7 +26,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -249,13 +248,10 @@ func TestPythonIntegration(t *testing.T) {
 	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg1, k1, sig1)
 }
 
-
+// TestChecksumAddress performs 4 groups of tests: a) all caps,
+// b) all lower, c) mixed lower and upper case, and
+// d) examples taken from myetherwallet.com
 func TestChecksumAddress(t *testing.T) {
-	// 4 groups of tests:
-	// All caps
-	// All lower
-	// Normal = mixed
-	// Taken from myetherwallet.com
 	testcases := []string{
 		"0x52908400098527886E0F7030069857D2E4169EE7",
 		"0x8617E340B3D01FA5F11F306F4090FD50E238070D",
@@ -289,8 +285,7 @@ func TestChecksumAddress(t *testing.T) {
 
 	failed, passed := 0, 0
 	for i := 0; i < len(testcases); i++ {
-		ba, _ := hex.DecodeString(strings.Replace(testcases[i], "0x", "", 1))
-		ca := ChecksumAddress(common.BytesToAddress(ba))
+		ca := ChecksumAddress(common.HexToAddress(testcases[i]))
 		if testcases[i] == ca {
 			passed++
 		} else {
@@ -386,4 +381,3 @@ func TestChecksumAddressHex(t *testing.T) {
 	}
 	fmt.Printf("Passed %d tests and failed %d tests out of %d.\n", passed, failed, passed+failed)
 }
-
