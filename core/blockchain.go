@@ -1268,12 +1268,14 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // event about them
 func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	var (
-		newChain    types.Blocks
-		commonBlock *types.Block
-		oldStart    = oldBlock
-		newStart    = newBlock
-		deletedTxs  types.Transactions
-		deletedLogs vm.Logs
+		newChain          types.Blocks
+		oldChain          types.Blocks
+		commonBlock       *types.Block
+		oldStart          = oldBlock
+		newStart          = newBlock
+		deletedTxs        types.Transactions
+		deletedLogs       vm.Logs
+		deletedLogsByHash = make(map[common.Hash]vm.Logs)
 		// collectLogs collects the logs that were generated during the
 		// processing of the block that corresponds with the given hash.
 		// These logs are later announced as deleted.
@@ -1282,6 +1284,8 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			receipts := GetBlockReceipts(self.chainDb, h)
 			for _, receipt := range receipts {
 				deletedLogs = append(deletedLogs, receipt.Logs...)
+
+				deletedLogsByHash[h] = receipt.Logs
 			}
 		}
 	)
@@ -1290,6 +1294,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// reduce old chain
 		for oldBlock = oldBlock; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
+			oldChain = append(oldChain, oldBlock)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 
 			collectLogs(oldBlock.Hash())
@@ -1313,6 +1318,8 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			commonBlock = oldBlock
 			break
 		}
+
+		oldChain = append(oldChain, oldBlock)
 		newChain = append(newChain, newBlock)
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 		collectLogs(oldBlock.Hash())
@@ -1367,6 +1374,14 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	if len(deletedLogs) > 0 {
 		go self.eventMux.Post(RemovedLogsEvent{deletedLogs})
+	}
+
+	if len(oldChain) > 0 {
+		go func() {
+			for _, block := range oldChain {
+				self.eventMux.Post(ChainSideEvent{Block: block, Logs: deletedLogsByHash[block.Hash()]})
+			}
+		}()
 	}
 
 	return nil
