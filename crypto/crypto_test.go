@@ -24,9 +24,9 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"strings"
 	"testing"
 	"time"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -249,7 +249,6 @@ func TestPythonIntegration(t *testing.T) {
 	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg1, k1, sig1)
 }
 
-
 func TestChecksumAddress(t *testing.T) {
 	// 4 groups of tests:
 	// All caps
@@ -386,4 +385,3 @@ func TestChecksumAddressHex(t *testing.T) {
 	}
 	fmt.Printf("Passed %d tests and failed %d tests out of %d.\n", passed, failed, passed+failed)
 }
-

@@ -350,7 +350,6 @@ func zeroBytes(bytes []byte) {
 	}
 }
 
-
 // for input read: https://github.com/ethereum/EIPs/issues/55
 // modelled after the JavaScript function toChecksumAddress()
 // Convert address into checksummed address
@@ -374,4 +373,3 @@ func ChecksumAddress(a common.Address) string {
 func ChecksumAddressHex(s string) string {
 	return ChecksumAddress(common.HexToAddress(strings.Replace(strings.ToLower(s), "0x", "", 1)))
 }
-
