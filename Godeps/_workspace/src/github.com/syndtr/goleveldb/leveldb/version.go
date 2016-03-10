@@ -79,7 +79,7 @@ func (v *version) release() {
 	v.s.vmu.Unlock()
 }
 
-func (v *version) walkOverlapping(aux tFiles, ikey iKey, f func(level int, t *tFile) bool, lf func(level int) bool) {
+func (v *version) walkOverlapping(aux tFiles, ikey internalKey, f func(level int, t *tFile) bool, lf func(level int) bool) {
 	ukey := ikey.ukey()
 
 	// Aux level.
@@ -130,7 +130,7 @@ func (v *version) walkOverlapping(aux tFiles, ikey iKey, f func(level int, t *tF
 	}
 }
 
-func (v *version) get(aux tFiles, ikey iKey, ro *opt.ReadOptions, noValue bool) (value []byte, tcomp bool, err error) {
+func (v *version) get(aux tFiles, ikey internalKey, ro *opt.ReadOptions, noValue bool) (value []byte, tcomp bool, err error) {
 	ukey := ikey.ukey()
 
 	var (
@@ -140,7 +140,7 @@ func (v *version) get(aux tFiles, ikey iKey, ro *opt.ReadOptions, noValue bool) 
 		// Level-0.
 		zfound bool
 		zseq   uint64
-		zkt    kType
+		zkt    keyType
 		zval   []byte
 	)
 
@@ -176,7 +176,7 @@ func (v *version) get(aux tFiles, ikey iKey, ro *opt.ReadOptions, noValue bool) 
 			return false
 		}
 
-		if fukey, fseq, fkt, fkerr := parseIkey(fikey); fkerr == nil {
+		if fukey, fseq, fkt, fkerr := parseInternalKey(fikey); fkerr == nil {
 			if v.s.icmp.uCompare(ukey, fukey) == 0 {
 				// Level <= 0 may overlaps each-other.
 				if level <= 0 {
@@ -188,12 +188,12 @@ func (v *version) get(aux tFiles, ikey iKey, ro *opt.ReadOptions, noValue bool) 
 					}
 				} else {
 					switch fkt {
-					case ktVal:
+					case keyTypeVal:
 						value = fval
 						err = nil
-					case ktDel:
+					case keyTypeDel:
 					default:
-						panic("leveldb: invalid iKey type")
+						panic("leveldb: invalid internalKey type")
 					}
 					return false
 				}
@@ -207,12 +207,12 @@ func (v *version) get(aux tFiles, ikey iKey, ro *opt.ReadOptions, noValue bool) 
 	}, func(level int) bool {
 		if zfound {
 			switch zkt {
-			case ktVal:
+			case keyTypeVal:
 				value = zval
 				err = nil
-			case ktDel:
+			case keyTypeDel:
 			default:
-				panic("leveldb: invalid iKey type")
+				panic("leveldb: invalid internalKey type")
 			}
 			return false
 		}
@@ -227,19 +227,18 @@ func (v *version) get(aux tFiles, ikey iKey, ro *opt.ReadOptions, noValue bool) 
 	return
 }
 
-func (v *version) sampleSeek(ikey iKey) (tcomp bool) {
+func (v *version) sampleSeek(ikey internalKey) (tcomp bool) {
 	var tset *tSet
 
 	v.walkOverlapping(nil, ikey, func(level int, t *tFile) bool {
 		if tset == nil {
 			tset = &tSet{level, t}
 			return true
-		} else {
-			if tset.table.consumeSeek() <= 0 {
-				tcomp = atomic.CompareAndSwapPointer(&v.cSeek, nil, unsafe.Pointer(tset))
-			}
-			return false
 		}
+		if tset.table.consumeSeek() <= 0 {
+			tcomp = atomic.CompareAndSwapPointer(&v.cSeek, nil, unsafe.Pointer(tset))
+		}
+		return false
 	}, nil)
 
 	return
@@ -286,12 +285,12 @@ func (v *version) tLen(level int) int {
 	return 0
 }
 
-func (v *version) offsetOf(ikey iKey) (n uint64, err error) {
+func (v *version) offsetOf(ikey internalKey) (n int64, err error) {
 	for level, tables := range v.levels {
 		for _, t := range tables {
 			if v.s.icmp.Compare(t.imax, ikey) <= 0 {
 				// Entire file is before "ikey", so just add the file size
-				n += uint64(t.size)
+				n += t.size
 			} else if v.s.icmp.Compare(t.imin, ikey) > 0 {
 				// Entire file is after "ikey", so ignore
 				if level > 0 {
@@ -303,12 +302,11 @@ func (v *version) offsetOf(ikey iKey) (n uint64, err error) {
 			} else {
 				// "ikey" falls in the range for this table. Add the
 				// approximate offset of "ikey" within the table.
-				var nn uint64
-				nn, err = v.s.tops.offsetOf(t, ikey)
-				if err != nil {
+				if m, err := v.s.tops.offsetOf(t, ikey); err == nil {
+					n += m
+				} else {
 					return 0, err
 				}
-				n += nn
 			}
 		}
 	}

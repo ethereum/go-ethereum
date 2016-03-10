@@ -57,7 +57,7 @@ func (db *DB) setSeq(seq uint64) {
 	atomic.StoreUint64(&db.seq, seq)
 }
 
-func (db *DB) sampleSeek(ikey iKey) {
+func (db *DB) sampleSeek(ikey internalKey) {
 	v := db.s.version()
 	if v.sampleSeek(ikey) {
 		// Trigger table compaction.

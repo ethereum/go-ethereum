@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	errInvalidIkey = errors.New("leveldb: Iterator: invalid internal key")
+	errInvalidInternalKey = errors.New("leveldb: Iterator: invalid internal key")
 )
 
 type memdbReleaser struct {
@@ -70,10 +70,10 @@ func (db *DB) newIterator(auxm *memDB, auxt tFiles, seq uint64, slice *util.Rang
 	if slice != nil {
 		islice = &util.Range{}
 		if slice.Start != nil {
-			islice.Start = makeIkey(nil, slice.Start, kMaxSeq, ktSeek)
+			islice.Start = makeInternalKey(nil, slice.Start, keyMaxSeq, keyTypeSeek)
 		}
 		if slice.Limit != nil {
-			islice.Limit = makeIkey(nil, slice.Limit, kMaxSeq, ktSeek)
+			islice.Limit = makeInternalKey(nil, slice.Limit, keyMaxSeq, keyTypeSeek)
 		}
 	}
 	rawIter := db.newRawIterator(auxm, auxt, islice, ro)
@@ -187,7 +187,7 @@ func (i *dbIter) Seek(key []byte) bool {
 		return false
 	}
 
-	ikey := makeIkey(nil, key, i.seq, ktSeek)
+	ikey := makeInternalKey(nil, key, i.seq, keyTypeSeek)
 	if i.iter.Seek(ikey) {
 		i.dir = dirSOI
 		return i.next()
@@ -199,15 +199,15 @@ func (i *dbIter) Seek(key []byte) bool {
 
 func (i *dbIter) next() bool {
 	for {
-		if ukey, seq, kt, kerr := parseIkey(i.iter.Key()); kerr == nil {
+		if ukey, seq, kt, kerr := parseInternalKey(i.iter.Key()); kerr == nil {
 			i.sampleSeek()
 			if seq <= i.seq {
 				switch kt {
-				case ktDel:
+				case keyTypeDel:
 					// Skip deleted key.
 					i.key = append(i.key[:0], ukey...)
 					i.dir = dirForward
-				case ktVal:
+				case keyTypeVal:
 					if i.dir == dirSOI || i.icmp.uCompare(ukey, i.key) > 0 {
 						i.key = append(i.key[:0], ukey...)
 						i.value = append(i.value[:0], i.iter.Value()...)
@@ -250,13 +250,13 @@ func (i *dbIter) prev() bool {
 	del := true
 	if i.iter.Valid() {
 		for {
-			if ukey, seq, kt, kerr := parseIkey(i.iter.Key()); kerr == nil {
+			if ukey, seq, kt, kerr := parseInternalKey(i.iter.Key()); kerr == nil {
 				i.sampleSeek()
 				if seq <= i.seq {
 					if !del && i.icmp.uCompare(ukey, i.key) < 0 {
 						return true
 					}
-					del = (kt == ktDel)
+					del = (kt == keyTypeDel)
 					if !del {
 						i.key = append(i.key[:0], ukey...)
 						i.value = append(i.value[:0], i.iter.Value()...)
@@ -292,7 +292,7 @@ func (i *dbIter) Prev() bool {
 		return i.Last()
 	case dirForward:
 		for i.iter.Prev() {
-			if ukey, _, _, kerr := parseIkey(i.iter.Key()); kerr == nil {
+			if ukey, _, _, kerr := parseInternalKey(i.iter.Key()); kerr == nil {
 				i.sampleSeek()
 				if i.icmp.uCompare(ukey, i.key) < 0 {
 					goto cont

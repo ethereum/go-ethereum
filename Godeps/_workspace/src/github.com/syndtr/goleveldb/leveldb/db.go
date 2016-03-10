@@ -315,7 +315,7 @@ func recoverTable(s *session, o *opt.Options) error {
 		tw := table.NewWriter(writer, o)
 		for iter.Next() {
 			key := iter.Key()
-			if validIkey(key) {
+			if validInternalKey(key) {
 				err = tw.Append(key, iter.Value())
 				if err != nil {
 					return
@@ -380,7 +380,7 @@ func recoverTable(s *session, o *opt.Options) error {
 		// Scan the table.
 		for iter.Next() {
 			key := iter.Key()
-			_, seq, _, kerr := parseIkey(key)
+			_, seq, _, kerr := parseInternalKey(key)
 			if kerr != nil {
 				tcorruptedKey++
 				continue
@@ -472,15 +472,15 @@ func recoverTable(s *session, o *opt.Options) error {
 
 func (db *DB) recoverJournal() error {
 	// Get all journals and sort it by file number.
-	fds_, err := db.s.stor.List(storage.TypeJournal)
+	rawFds, err := db.s.stor.List(storage.TypeJournal)
 	if err != nil {
 		return err
 	}
-	sortFds(fds_)
+	sortFds(rawFds)
 
 	// Journals that will be recovered.
 	var fds []storage.FileDesc
-	for _, fd := range fds_ {
+	for _, fd := range rawFds {
 		if fd.Num >= db.s.stJournalNum || fd.Num == db.s.stPrevJournalNum {
 			fds = append(fds, fd)
 		}
@@ -633,15 +633,15 @@ func (db *DB) recoverJournal() error {
 
 func (db *DB) recoverJournalRO() error {
 	// Get all journals and sort it by file number.
-	fds_, err := db.s.stor.List(storage.TypeJournal)
+	rawFds, err := db.s.stor.List(storage.TypeJournal)
 	if err != nil {
 		return err
 	}
-	sortFds(fds_)
+	sortFds(rawFds)
 
 	// Journals that will be recovered.
 	var fds []storage.FileDesc
-	for _, fd := range fds_ {
+	for _, fd := range rawFds {
 		if fd.Num >= db.s.stJournalNum || fd.Num == db.s.stPrevJournalNum {
 			fds = append(fds, fd)
 		}
@@ -728,16 +728,16 @@ func (db *DB) recoverJournalRO() error {
 	return nil
 }
 
-func memGet(mdb *memdb.DB, ikey iKey, icmp *iComparer) (ok bool, mv []byte, err error) {
+func memGet(mdb *memdb.DB, ikey internalKey, icmp *iComparer) (ok bool, mv []byte, err error) {
 	mk, mv, err := mdb.Find(ikey)
 	if err == nil {
-		ukey, _, kt, kerr := parseIkey(mk)
+		ukey, _, kt, kerr := parseInternalKey(mk)
 		if kerr != nil {
 			// Shouldn't have had happen.
 			panic(kerr)
 		}
 		if icmp.uCompare(ukey, ikey.ukey()) == 0 {
-			if kt == ktDel {
+			if kt == keyTypeDel {
 				return true, nil, ErrNotFound
 			}
 			return true, mv, nil
@@ -750,7 +750,7 @@ func memGet(mdb *memdb.DB, ikey iKey, icmp *iComparer) (ok bool, mv []byte, err 
 }
 
 func (db *DB) get(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.ReadOptions) (value []byte, err error) {
-	ikey := makeIkey(nil, key, seq, ktSeek)
+	ikey := makeInternalKey(nil, key, seq, keyTypeSeek)
 
 	if auxm != nil {
 		if ok, mv, me := memGet(auxm, ikey, db.s.icmp); ok {
@@ -788,7 +788,7 @@ func nilIfNotFound(err error) error {
 }
 
 func (db *DB) has(auxm *memdb.DB, auxt tFiles, key []byte, seq uint64, ro *opt.ReadOptions) (ret bool, err error) {
-	ikey := makeIkey(nil, key, seq, ktSeek)
+	ikey := makeInternalKey(nil, key, seq, keyTypeSeek)
 
 	if auxm != nil {
 		if ok, _, me := memGet(auxm, ikey, db.s.icmp); ok {
@@ -997,8 +997,8 @@ func (db *DB) SizeOf(ranges []util.Range) (Sizes, error) {
 
 	sizes := make(Sizes, 0, len(ranges))
 	for _, r := range ranges {
-		imin := makeIkey(nil, r.Start, kMaxSeq, ktSeek)
-		imax := makeIkey(nil, r.Limit, kMaxSeq, ktSeek)
+		imin := makeInternalKey(nil, r.Start, keyMaxSeq, keyTypeSeek)
+		imax := makeInternalKey(nil, r.Limit, keyMaxSeq, keyTypeSeek)
 		start, err := v.offsetOf(imin)
 		if err != nil {
 			return nil, err
@@ -1007,7 +1007,7 @@ func (db *DB) SizeOf(ranges []util.Range) (Sizes, error) {
 		if err != nil {
 			return nil, err
 		}
-		var size uint64
+		var size int64
 		if limit >= start {
 			size = limit - start
 		}

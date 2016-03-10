@@ -108,8 +108,8 @@ func (tr *Transaction) flush() error {
 	return nil
 }
 
-func (tr *Transaction) put(kt kType, key, value []byte) error {
-	tr.ikScratch = makeIkey(tr.ikScratch, key, tr.seq+1, kt)
+func (tr *Transaction) put(kt keyType, key, value []byte) error {
+	tr.ikScratch = makeInternalKey(tr.ikScratch, key, tr.seq+1, kt)
 	if tr.mem.Free() < len(tr.ikScratch)+len(value) {
 		if err := tr.flush(); err != nil {
 			return err
@@ -134,7 +134,7 @@ func (tr *Transaction) Put(key, value []byte, wo *opt.WriteOptions) error {
 	if tr.closed {
 		return errTransactionDone
 	}
-	return tr.put(ktVal, key, value)
+	return tr.put(keyTypeVal, key, value)
 }
 
 // Delete deletes the value for the given key.
@@ -148,7 +148,7 @@ func (tr *Transaction) Delete(key []byte, wo *opt.WriteOptions) error {
 	if tr.closed {
 		return errTransactionDone
 	}
-	return tr.put(ktDel, key, nil)
+	return tr.put(keyTypeDel, key, nil)
 }
 
 // Write apply the given batch to the transaction. The batch will be applied
@@ -167,7 +167,7 @@ func (tr *Transaction) Write(b *Batch, wo *opt.WriteOptions) error {
 	if tr.closed {
 		return errTransactionDone
 	}
-	return b.decodeRec(func(i int, kt kType, key, value []byte) error {
+	return b.decodeRec(func(i int, kt keyType, key, value []byte) error {
 		return tr.put(kt, key, value)
 	})
 }

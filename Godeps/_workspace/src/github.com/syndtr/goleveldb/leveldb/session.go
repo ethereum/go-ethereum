@@ -18,6 +18,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
+// ErrManifestCorrupted records manifest corruption.
 type ErrManifestCorrupted struct {
 	Field  string
 	Reason string
@@ -50,8 +51,8 @@ type session struct {
 	manifestWriter storage.Writer
 	manifestFd     storage.FileDesc
 
-	stCompPtrs []iKey   // compaction pointers; need external synchronization
-	stVersion  *version // current version
+	stCompPtrs []internalKey // compaction pointers; need external synchronization
+	stVersion  *version      // current version
 	vmu        sync.Mutex
 }
 
@@ -146,7 +147,7 @@ func (s *session) recover() (err error) {
 		if err == nil {
 			// save compact pointers
 			for _, r := range rec.compPtrs {
-				s.setCompPtr(r.level, iKey(r.ikey))
+				s.setCompPtr(r.level, internalKey(r.ikey))
 			}
 			// commit record to version staging
 			staging.commit(rec)
@@ -154,9 +155,8 @@ func (s *session) recover() (err error) {
 			err = errors.SetFd(err, fd)
 			if strict || !errors.IsCorrupted(err) {
 				return
-			} else {
-				s.logf("manifest error: %v (skipped)", errors.SetFd(err, fd))
 			}
+			s.logf("manifest error: %v (skipped)", errors.SetFd(err, fd))
 		}
 		rec.resetCompPtrs()
 		rec.resetAddedTables()

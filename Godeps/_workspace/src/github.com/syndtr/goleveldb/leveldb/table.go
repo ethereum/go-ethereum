@@ -24,7 +24,7 @@ type tFile struct {
 	fd         storage.FileDesc
 	seekLeft   int32
 	size       int64
-	imin, imax iKey
+	imin, imax internalKey
 }
 
 // Returns true if given key is after largest key of this table.
@@ -48,7 +48,7 @@ func (t *tFile) consumeSeek() int32 {
 }
 
 // Creates new tFile.
-func newTableFile(fd storage.FileDesc, size int64, imin, imax iKey) *tFile {
+func newTableFile(fd storage.FileDesc, size int64, imin, imax internalKey) *tFile {
 	f := &tFile{
 		fd:   fd,
 		size: size,
@@ -136,7 +136,7 @@ func (tf tFiles) size() (sum int64) {
 
 // Searches smallest index of tables whose its smallest
 // key is after or equal with given key.
-func (tf tFiles) searchMin(icmp *iComparer, ikey iKey) int {
+func (tf tFiles) searchMin(icmp *iComparer, ikey internalKey) int {
 	return sort.Search(len(tf), func(i int) bool {
 		return icmp.Compare(tf[i].imin, ikey) >= 0
 	})
@@ -144,7 +144,7 @@ func (tf tFiles) searchMin(icmp *iComparer, ikey iKey) int {
 
 // Searches smallest index of tables whose its largest
 // key is after or equal with given key.
-func (tf tFiles) searchMax(icmp *iComparer, ikey iKey) int {
+func (tf tFiles) searchMax(icmp *iComparer, ikey internalKey) int {
 	return sort.Search(len(tf), func(i int) bool {
 		return icmp.Compare(tf[i].imax, ikey) >= 0
 	})
@@ -166,7 +166,7 @@ func (tf tFiles) overlaps(icmp *iComparer, umin, umax []byte, unsorted bool) boo
 	i := 0
 	if len(umin) > 0 {
 		// Find the earliest possible internal key for min.
-		i = tf.searchMax(icmp, makeIkey(nil, umin, kMaxSeq, ktSeek))
+		i = tf.searchMax(icmp, makeInternalKey(nil, umin, keyMaxSeq, keyTypeSeek))
 	}
 	if i >= len(tf) {
 		// Beginning of range is after all files, so no overlap.
@@ -209,7 +209,7 @@ func (tf tFiles) getOverlaps(dst tFiles, icmp *iComparer, umin, umax []byte, ove
 }
 
 // Returns tables key range.
-func (tf tFiles) getRange(icmp *iComparer) (imin, imax iKey) {
+func (tf tFiles) getRange(icmp *iComparer) (imin, imax internalKey) {
 	for i, t := range tf {
 		if i == 0 {
 			imin, imax = t.imin, t.imax
@@ -231,10 +231,10 @@ func (tf tFiles) newIndexIterator(tops *tOps, icmp *iComparer, slice *util.Range
 	if slice != nil {
 		var start, limit int
 		if slice.Start != nil {
-			start = tf.searchMax(icmp, iKey(slice.Start))
+			start = tf.searchMax(icmp, internalKey(slice.Start))
 		}
 		if slice.Limit != nil {
-			limit = tf.searchMin(icmp, iKey(slice.Limit))
+			limit = tf.searchMin(icmp, internalKey(slice.Limit))
 		} else {
 			limit = tf.Len()
 		}
@@ -259,7 +259,7 @@ type tFilesArrayIndexer struct {
 }
 
 func (a *tFilesArrayIndexer) Search(key []byte) int {
-	return a.searchMax(a.icmp, iKey(key))
+	return a.searchMax(a.icmp, internalKey(key))
 }
 
 func (a *tFilesArrayIndexer) Get(i int) iterator.Iterator {
@@ -351,9 +351,9 @@ func (t *tOps) open(f *tFile) (ch *cache.Handle, err error) {
 			return 0, nil
 		}
 
-		var bcache *cache.CacheGetter
+		var bcache *cache.NamespaceGetter
 		if t.bcache != nil {
-			bcache = &cache.CacheGetter{Cache: t.bcache, NS: uint64(f.fd.Num)}
+			bcache = &cache.NamespaceGetter{Cache: t.bcache, NS: uint64(f.fd.Num)}
 		}
 
 		var tr *table.Reader
@@ -393,14 +393,13 @@ func (t *tOps) findKey(f *tFile, key []byte, ro *opt.ReadOptions) (rkey []byte, 
 }
 
 // Returns approximate offset of the given key.
-func (t *tOps) offsetOf(f *tFile, key []byte) (offset uint64, err error) {
+func (t *tOps) offsetOf(f *tFile, key []byte) (offset int64, err error) {
 	ch, err := t.open(f)
 	if err != nil {
 		return
 	}
 	defer ch.Release()
-	offset_, err := ch.Value().(*table.Reader).OffsetOf(key)
-	return uint64(offset_), err
+	return ch.Value().(*table.Reader).OffsetOf(key)
 }
 
 // Creates an iterator from the given table.
@@ -515,7 +514,7 @@ func (w *tWriter) finish() (f *tFile, err error) {
 			return
 		}
 	}
-	f = newTableFile(w.fd, int64(w.tw.BytesLen()), iKey(w.first), iKey(w.last))
+	f = newTableFile(w.fd, int64(w.tw.BytesLen()), internalKey(w.first), internalKey(w.last))
 	return
 }
 

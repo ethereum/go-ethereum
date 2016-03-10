@@ -106,17 +106,17 @@ func (s *session) reuseFileNum(num int64) {
 }
 
 // Set compaction ptr at given level; need external synchronization.
-func (s *session) setCompPtr(level int, ik iKey) {
+func (s *session) setCompPtr(level int, ik internalKey) {
 	if level >= len(s.stCompPtrs) {
-		newCompPtrs := make([]iKey, level+1)
+		newCompPtrs := make([]internalKey, level+1)
 		copy(newCompPtrs, s.stCompPtrs)
 		s.stCompPtrs = newCompPtrs
 	}
-	s.stCompPtrs[level] = append(iKey{}, ik...)
+	s.stCompPtrs[level] = append(internalKey{}, ik...)
 }
 
 // Get compaction ptr at given level; need external synchronization.
-func (s *session) getCompPtr(level int) iKey {
+func (s *session) getCompPtr(level int) internalKey {
 	if level >= len(s.stCompPtrs) {
 		return nil
 	}
@@ -165,7 +165,7 @@ func (s *session) recordCommited(rec *sessionRecord) {
 	}
 
 	for _, r := range rec.compPtrs {
-		s.setCompPtr(r.level, iKey(r.ikey))
+		s.setCompPtr(r.level, internalKey(r.ikey))
 	}
 }
 

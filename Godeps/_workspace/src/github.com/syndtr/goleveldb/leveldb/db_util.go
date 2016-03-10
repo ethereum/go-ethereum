@@ -21,14 +21,16 @@ type Reader interface {
 	NewIterator(slice *util.Range, ro *opt.ReadOptions) iterator.Iterator
 }
 
-type Sizes []uint64
+// Sizes is list of size.
+type Sizes []int64
 
 // Sum returns sum of the sizes.
-func (p Sizes) Sum() (n uint64) {
-	for _, s := range p {
-		n += s
+func (sizes Sizes) Sum() int64 {
+	var sum int64
+	for _, size := range sizes {
+		sum += size
 	}
-	return n
+	return sum
 }
 
 // Logging.
