@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
@@ -654,7 +655,7 @@ func accountCreate(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: %x\n", acct)
+	fmt.Printf("Address: %s\n", crypto.ChecksumAddress(acct.Address))
 }
 
 func accountUpdate(ctx *cli.Context) {

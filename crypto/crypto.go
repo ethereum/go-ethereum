@@ -41,6 +41,9 @@ import (
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
+
+	"strconv"
+	"strings"
 )
 
 var secp256k1n *big.Int
@@ -346,3 +349,29 @@ func zeroBytes(bytes []byte) {
 		bytes[i] = 0
 	}
 }
+
+
+// for input read: https://github.com/ethereum/EIPs/issues/55
+// modelled after the JavaScript function toChecksumAddress()
+// Convert address into checksummed address
+func ChecksumAddress(a common.Address) string {
+	address := strings.Replace(strings.ToLower(hex.EncodeToString(a.Bytes())), "0x", "", 1)
+	addressHash := hex.EncodeToString(Sha3([]byte(common.Bytes2Hex(a.Bytes()))))
+	checksumAddress := "0x"
+	for i := 0; i < len(address); i++ {
+		// If ith character is 8 to f then make it uppercase
+		l, _ := strconv.ParseInt(string(addressHash[i]), 16, 16)
+		if l > 7 {
+			checksumAddress += strings.ToUpper(string(address[i]))
+		} else {
+			checksumAddress += string(address[i])
+		}
+	}
+	return checksumAddress
+}
+
+// Convert address in Hex format, with or without prefixed 0x into checksummed address
+func ChecksumAddressHex(s string) string {
+	return ChecksumAddress(common.HexToAddress(strings.Replace(strings.ToLower(s), "0x", "", 1)))
+}
+
