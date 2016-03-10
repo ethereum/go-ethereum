@@ -452,7 +452,7 @@ func (b *tableCompactionBuilder) run(cnt *compactionTransactCounter) error {
 		}
 
 		ikey := iter.Key()
-		ukey, seq, kt, kerr := parseIkey(ikey)
+		ukey, seq, kt, kerr := parseInternalKey(ikey)
 
 		if kerr == nil {
 			shouldStop := !resumed && b.c.shouldStopBefore(ikey)
@@ -478,14 +478,14 @@ func (b *tableCompactionBuilder) run(cnt *compactionTransactCounter) error {
 
 				hasLastUkey = true
 				lastUkey = append(lastUkey[:0], ukey...)
-				lastSeq = kMaxSeq
+				lastSeq = keyMaxSeq
 			}
 
 			switch {
 			case lastSeq <= b.minSeq:
 				// Dropped because newer entry for same user key exist
 				fallthrough // (A)
-			case kt == ktDel && seq <= b.minSeq && b.c.baseLevelForKey(lastUkey):
+			case kt == keyTypeDel && seq <= b.minSeq && b.c.baseLevelForKey(lastUkey):
 				// For this user key:
 				// (1) there is no data in higher levels
 				// (2) data in lower levels will have larger seq numbers
@@ -507,7 +507,7 @@ func (b *tableCompactionBuilder) run(cnt *compactionTransactCounter) error {
 			// Don't drop corrupted keys.
 			hasLastUkey = false
 			lastUkey = lastUkey[:0]
-			lastSeq = kMaxSeq
+			lastSeq = keyMaxSeq
 			b.kerrCnt++
 		}
 
@@ -548,9 +548,7 @@ func (db *DB) tableCompaction(c *compaction, noTrivial bool) {
 		db.logf("table@move L%d@%d -> L%d", c.sourceLevel, t.fd.Num, c.sourceLevel+1)
 		rec.delTable(c.sourceLevel, t.fd.Num)
 		rec.addTableFile(c.sourceLevel+1, t)
-		db.compactionTransactFunc("table@move", func(cnt *compactionTransactCounter) (err error) {
-			return db.s.commit(rec)
-		}, nil)
+		db.compactionCommit("table-move", rec)
 		return
 	}
 

@@ -139,7 +139,7 @@ type compaction struct {
 	gpi               int
 	seenKey           bool
 	gpOverlappedBytes int64
-	imin, imax        iKey
+	imin, imax        internalKey
 	tPtrs             []int
 	released          bool
 
@@ -242,7 +242,7 @@ func (c *compaction) baseLevelForKey(ukey []byte) bool {
 	return true
 }
 
-func (c *compaction) shouldStopBefore(ikey iKey) bool {
+func (c *compaction) shouldStopBefore(ikey internalKey) bool {
 	for ; c.gpi < len(c.gp); c.gpi++ {
 		gp := c.gp[c.gpi]
 		if c.s.icmp.Compare(ikey, gp.imax) <= 0 {
