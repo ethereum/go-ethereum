@@ -368,7 +368,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
 	defer bc.mu.Unlock()
 
 	// Prepare the genesis block and reinitialise the chain
-	if err := WriteTd(bc.chainDb, genesis.Hash(), genesis.Difficulty()); err != nil {
+	if err := bc.hc.WriteTd(genesis.Hash(), genesis.Difficulty()); err != nil {
 		glog.Fatalf("failed to write genesis block TD: %v", err)
 	}
 	if err := WriteBlock(bc.chainDb, genesis); err != nil {
@@ -788,7 +788,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 		status = SideStatTy
 	}
 	// Irrelevant of the canonical status, write the block itself to the database
-	if err := WriteTd(self.chainDb, block.Hash(), externTd); err != nil {
+	if err := self.hc.WriteTd(block.Hash(), externTd); err != nil {
 		glog.Fatalf("failed to write block total difficulty: %v", err)
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
