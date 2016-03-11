@@ -55,6 +55,7 @@ var (
 	memprofilerateFlag = cli.IntFlag{
 		Name:  "memprofilerate",
 		Usage: "Turn on memory profiling with the given rate",
+		Value: runtime.MemProfileRate,
 	}
 	blockprofilerateFlag = cli.IntFlag{
 		Name:  "blockprofilerate",
