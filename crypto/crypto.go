@@ -354,8 +354,8 @@ func zeroBytes(bytes []byte) {
 // It returns a 42-letter string starting with "0x".
 // The checksum algorithm is discussed in https://github.com/ethereum/EIPs/issues/55
 func ChecksumAddress(a common.Address) string {
-	address := hex.EncodeToString(a[:]) // hex.EncodeToString is always lower case without 0x prefix
-	addressHash := hex.EncodeToString(Sha3([]byte(common.Bytes2Hex(a[:]))))
+	address := hex.EncodeToString(a[:])                          // hex.EncodeToString is always lower case without 0x prefix
+	addressHash := hex.EncodeToString(Sha3([]byte(a.Hex()[2:]))) // skip the "0x" at the beginning
 	checksumAddress := "0x"
 	for i := 0; i < len(address); i++ {
 		// If ith character is 8 to f then make it uppercase
