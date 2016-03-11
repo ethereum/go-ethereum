@@ -85,10 +85,9 @@ type BlockChain struct {
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
 
-	mu      sync.RWMutex
-	chainmu sync.RWMutex
-	tsmu    sync.RWMutex
-	procmu  sync.RWMutex
+	mu      sync.RWMutex // global mutex for locking chain operations
+	chainmu sync.RWMutex // blockchain insertion lock
+	procmu  sync.RWMutex // block processor lock
 
 	checkpoint       int          // checkpoint counts towards the new checkpoint
 	currentBlock     *types.Block // Current head of the block chain
@@ -99,15 +98,15 @@ type BlockChain struct {
 	blockCache   *lru.Cache // Cache for the most recent entire blocks
 	futureBlocks *lru.Cache // future blocks are blocks added for later processing
 
-	quit    chan struct{}
-	running int32 // running must be called automically
+	quit    chan struct{} // blockchain quit channel
+	running int32         // running must be called automically
 	// procInterrupt must be atomically called
-	procInterrupt int32 // interrupt signaler for block processing
-	wg            sync.WaitGroup
+	procInterrupt int32          // interrupt signaler for block processing
+	wg            sync.WaitGroup // chain processing wait group for shutting down
 
 	pow       pow.PoW
-	processor Processor
-	validator Validator
+	processor Processor // block processor interface
+	validator Validator // block and state validator interface
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -567,10 +566,11 @@ func (bc *BlockChain) Stop() {
 }
 
 func (self *BlockChain) procFutureBlocks() {
-	blocks := make([]*types.Block, self.futureBlocks.Len())
-	for i, hash := range self.futureBlocks.Keys() {
-		block, _ := self.futureBlocks.Get(hash)
-		blocks[i] = block.(*types.Block)
+	blocks := make([]*types.Block, 0, self.futureBlocks.Len())
+	for _, hash := range self.futureBlocks.Keys() {
+		if block, exist := self.futureBlocks.Get(hash); exist {
+			blocks = append(blocks, block.(*types.Block))
+		}
 	}
 	if len(blocks) > 0 {
 		types.BlockBy(types.Number).Sort(blocks)
@@ -794,6 +794,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 	if err := WriteBlock(self.chainDb, block); err != nil {
 		glog.Fatalf("filed to write block contents: %v", err)
 	}
+
 	self.futureBlocks.Remove(block.Hash())
 
 	return
