@@ -43,11 +43,13 @@ type HeaderChain struct {
 	chainDb       ethdb.Database
 	genesisHeader *types.Header
 
-	currentHeader *types.Header // Current head of the header chain (may be above the block chain!)
-	headerCache   *lru.Cache    // Cache for the most recent block headers
-	tdCache       *lru.Cache    // Cache for the most recent block total difficulties
+	currentHeader     *types.Header // Current head of the header chain (may be above the block chain!)
+	currentHeaderHash common.Hash   // Hash of the current head of the header chain (prevent recomputing all the time)
 
-	procInterrupt  func() bool
+	headerCache *lru.Cache // Cache for the most recent block headers
+	tdCache     *lru.Cache // Cache for the most recent block total difficulties
+
+	procInterrupt func() bool
 
 	rand         *mrand.Rand
 	getValidator getHeaderValidatorFn
@@ -95,6 +97,7 @@ func NewHeaderChain(chainDb ethdb.Database, getValidator getHeaderValidatorFn, p
 			hc.currentHeader = chead
 		}
 	}
+	hc.currentHeaderHash = hc.currentHeader.Hash()
 
 	return hc, nil
 }
@@ -109,12 +112,17 @@ func NewHeaderChain(chainDb ethdb.Database, getValidator getHeaderValidatorFn, p
 // in two scenarios: pure-header mode of operation (light clients), or properly
 // separated header/block phases (non-archive clients).
 func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, err error) {
+	// Cache some values to prevent constant recalculation
+	var (
+		hash   = header.Hash()
+		number = header.Number.Uint64()
+	)
 	// Calculate the total difficulty of the header
 	ptd := hc.GetTd(header.ParentHash)
 	if ptd == nil {
 		return NonStatTy, ParentError(header.ParentHash)
 	}
-	localTd := hc.GetTd(hc.currentHeader.Hash())
+	localTd := hc.GetTd(hc.currentHeaderHash)
 	externTd := new(big.Int).Add(header.Difficulty, ptd)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
@@ -122,34 +130,44 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
 		// Delete any canonical number assignments above the new head
-		for i := header.Number.Uint64() + 1; GetCanonicalHash(hc.chainDb, i) != (common.Hash{}); i++ {
+		for i := number + 1; GetCanonicalHash(hc.chainDb, i) != (common.Hash{}); i++ {
 			DeleteCanonicalHash(hc.chainDb, i)
 		}
 		// Overwrite any stale canonical number assignments
-		head := hc.GetHeader(header.ParentHash)
-		for GetCanonicalHash(hc.chainDb, head.Number.Uint64()) != head.Hash() {
-			WriteCanonicalHash(hc.chainDb, head.Hash(), head.Number.Uint64())
-			head = hc.GetHeader(head.ParentHash)
+		var (
+			headHash   = header.ParentHash
+			headHeader = hc.GetHeader(headHash)
+			headNumber = headHeader.Number.Uint64()
+		)
+		for GetCanonicalHash(hc.chainDb, headNumber) != headHash {
+			WriteCanonicalHash(hc.chainDb, headHash, headNumber)
+
+			headHash = headHeader.ParentHash
+			headHeader = hc.GetHeader(headHash)
+			headNumber = headHeader.Number.Uint64()
 		}
 		// Extend the canonical chain with the new header
-		if err := WriteCanonicalHash(hc.chainDb, header.Hash(), header.Number.Uint64()); err != nil {
+		if err := WriteCanonicalHash(hc.chainDb, hash, number); err != nil {
 			glog.Fatalf("failed to insert header number: %v", err)
 		}
-		if err := WriteHeadHeaderHash(hc.chainDb, header.Hash()); err != nil {
+		if err := WriteHeadHeaderHash(hc.chainDb, hash); err != nil {
 			glog.Fatalf("failed to insert head header hash: %v", err)
 		}
-		hc.currentHeader = types.CopyHeader(header)
+		hc.currentHeaderHash, hc.currentHeader = hash, types.CopyHeader(header)
+
 		status = CanonStatTy
 	} else {
 		status = SideStatTy
 	}
 	// Irrelevant of the canonical status, write the header itself to the database
-	if err := WriteTd(hc.chainDb, header.Hash(), externTd); err != nil {
+	if err := hc.WriteTd(hash, externTd); err != nil {
 		glog.Fatalf("failed to write header total difficulty: %v", err)
 	}
 	if err := WriteHeader(hc.chainDb, header); err != nil {
 		glog.Fatalf("failed to write header contents: %v", err)
 	}
+	hc.headerCache.Add(hash, header)
+
 	return
 }
 
@@ -285,10 +303,11 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 	// Iterate the headers until enough is collected or the genesis reached
 	chain := make([]common.Hash, 0, max)
 	for i := uint64(0); i < max; i++ {
-		if header = hc.GetHeader(header.ParentHash); header == nil {
+		next := header.ParentHash
+		if header = hc.GetHeader(next); header == nil {
 			break
 		}
-		chain = append(chain, header.Hash())
+		chain = append(chain, next)
 		if header.Number.Cmp(common.Big0) == 0 {
 			break
 		}
@@ -312,6 +331,16 @@ func (hc *HeaderChain) GetTd(hash common.Hash) *big.Int {
 	return td
 }
 
+// WriteTd stores a block's total difficulty into the database, also caching it
+// along the way.
+func (hc *HeaderChain) WriteTd(hash common.Hash, td *big.Int) error {
+	if err := WriteTd(hc.chainDb, hash, td); err != nil {
+		return err
+	}
+	hc.tdCache.Add(hash, new(big.Int).Set(td))
+	return nil
+}
+
 // GetHeader retrieves a block header from the database by hash, caching it if
 // found.
 func (hc *HeaderChain) GetHeader(hash common.Hash) *types.Header {
@@ -324,7 +353,7 @@ func (hc *HeaderChain) GetHeader(hash common.Hash) *types.Header {
 		return nil
 	}
 	// Cache the found header for next time and return
-	hc.headerCache.Add(header.Hash(), header)
+	hc.headerCache.Add(hash, header)
 	return header
 }
 
@@ -356,6 +385,7 @@ func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 		glog.Fatalf("failed to insert head header hash: %v", err)
 	}
 	hc.currentHeader = head
+	hc.currentHeaderHash = head.Hash()
 }
 
 // DeleteCallback is a callback function that is called by SetHead before
@@ -390,7 +420,9 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	if hc.currentHeader == nil {
 		hc.currentHeader = hc.genesisHeader
 	}
-	if err := WriteHeadHeaderHash(hc.chainDb, hc.currentHeader.Hash()); err != nil {
+	hc.currentHeaderHash = hc.currentHeader.Hash()
+
+	if err := WriteHeadHeaderHash(hc.chainDb, hc.currentHeaderHash); err != nil {
 		glog.Fatalf("failed to reset head header hash: %v", err)
 	}
 }
