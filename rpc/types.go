@@ -56,7 +56,7 @@ type service struct {
 
 // serverRequest is an incoming request
 type serverRequest struct {
-	id            int64
+	id            interface{}
 	svcname       string
 	rcvr          reflect.Value
 	callb         *callback
@@ -85,7 +85,7 @@ type Server struct {
 type rpcRequest struct {
 	service  string
 	method   string
-	id       int64
+	id       interface{}
 	isPubSub bool
 	params   interface{}
 }
@@ -106,12 +106,12 @@ type ServerCodec interface {
 	ReadRequestHeaders() ([]rpcRequest, bool, RPCError)
 	// Parse request argument to the given types
 	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, RPCError)
-	// Assemble success response
-	CreateResponse(int64, interface{}) interface{}
-	// Assemble error response
-	CreateErrorResponse(*int64, RPCError) interface{}
+	// Assemble success response, expects response id and payload
+	CreateResponse(interface{}, interface{}) interface{}
+	// Assemble error response, expects response id and error
+	CreateErrorResponse(interface{}, RPCError) interface{}
 	// Assemble error response with extra information about the error through info
-	CreateErrorResponseWithInfo(id *int64, err RPCError, info interface{}) interface{}
+	CreateErrorResponseWithInfo(id interface{}, err RPCError, info interface{}) interface{}
 	// Create notification response
 	CreateNotification(string, interface{}) interface{}
 	// Write msg to client.
@@ -205,43 +205,6 @@ func (h *HexNumber) Uint64() uint64 {
 
 func (h *HexNumber) BigInt() *big.Int {
 	return (*big.Int)(h)
-}
-
-type Number int64
-
-func (n *Number) UnmarshalJSON(data []byte) error {
-	input := strings.TrimSpace(string(data))
-
-	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
-		input = input[1 : len(input)-1]
-	}
-
-	if len(input) == 0 {
-		*n = Number(latestBlockNumber.Int64())
-		return nil
-	}
-
-	in := new(big.Int)
-	_, ok := in.SetString(input, 0)
-
-	if !ok { // test if user supplied string tag
-		return fmt.Errorf(`invalid number %s`, data)
-	}
-
-	if in.Cmp(earliestBlockNumber) >= 0 && in.Cmp(maxBlockNumber) <= 0 {
-		*n = Number(in.Int64())
-		return nil
-	}
-
-	return fmt.Errorf("blocknumber not in range [%d, %d]", earliestBlockNumber, maxBlockNumber)
-}
-
-func (n *Number) Int64() int64 {
-	return *(*int64)(n)
-}
-
-func (n *Number) BigInt() *big.Int {
-	return big.NewInt(n.Int64())
 }
 
 var (

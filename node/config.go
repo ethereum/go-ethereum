@@ -127,10 +127,10 @@ type Config struct {
 	// ephemeral nodes).
 	WSPort int
 
-	// WSDomains is the list of domain to accept websocket requests from. Please be
+	// WSOrigins is the list of domain to accept websocket requests from. Please be
 	// aware that the server can only act upon the HTTP request the client sends and
 	// cannot verify the validity of the request header.
-	WSDomains string
+	WSOrigins string
 
 	// WSModules is a list of API modules to expose via the websocket RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be

@@ -37,7 +37,8 @@ func NewJeth(re *jsre.JSRE, client rpc.Client) *Jeth {
 	return &Jeth{re, client}
 }
 
-func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id *int64) (response otto.Value) {
+// err returns an error object for the given error code and message.
+func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface{}) (response otto.Value) {
 	m := rpc.JSONErrResponse{
 		Version: "2.0",
 		Id:      id,
@@ -56,44 +57,50 @@ func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id *int64) (
 	return res
 }
 
-// UnlockAccount asks the user for the password and than executes the jeth.UnlockAccount callback in the jsre
+// UnlockAccount asks the user for the password and than executes the jeth.UnlockAccount callback in the jsre.
+// It will need the public address for the account to unlock as first argument.
+// The second argument is an optional string with the password. If not given the user is prompted for the password.
+// The third argument is an optional integer which specifies for how long the account will be unlocked (in seconds).
 func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
-	var account, passwd string
-	timeout := int64(300)
-	var ok bool
+	var account, passwd otto.Value
+	duration := otto.NullValue()
 
-	if len(call.ArgumentList) == 0 {
-		fmt.Println("expected address of account to unlock")
+	if !call.Argument(0).IsString() {
+		fmt.Println("first argument must be the account to unlock")
 		return otto.FalseValue()
 	}
 
-	if len(call.ArgumentList) >= 1 {
-		if accountExport, err := call.Argument(0).Export(); err == nil {
-			if account, ok = accountExport.(string); ok {
-				if len(call.ArgumentList) == 1 {
-					fmt.Printf("Unlock account %s\n", account)
-					passwd, err = PromptPassword("Passphrase: ", true)
-					if err != nil {
-						return otto.FalseValue()
-					}
-				}
-			}
+	account = call.Argument(0)
+
+	// if password is not given or as null value -> ask user for password
+	if call.Argument(1).IsUndefined() || call.Argument(1).IsNull() {
+		fmt.Printf("Unlock account %s\n", account)
+		if password, err := PromptPassword("Passphrase: ", true); err == nil {
+			passwd, _ = otto.ToValue(password)
+		} else {
+			throwJSExeception(err.Error())
 		}
-	}
-	if len(call.ArgumentList) >= 2 {
-		if passwdExport, err := call.Argument(1).Export(); err == nil {
-			passwd, _ = passwdExport.(string)
+	} else {
+		if !call.Argument(1).IsString() {
+			throwJSExeception("password must be a string")
 		}
+		passwd = call.Argument(1)
 	}
 
-	if len(call.ArgumentList) >= 3 {
-		if timeoutExport, err := call.Argument(2).Export(); err == nil {
-			timeout, _ = timeoutExport.(int64)
+	// third argument is the duration how long the account must be unlocked.
+	// verify that its a number.
+	if call.Argument(2).IsDefined() && !call.Argument(2).IsNull() {
+		if !call.Argument(2).IsNumber() {
+			throwJSExeception("unlock duration must be a number")
 		}
+		duration = call.Argument(2)
 	}
 
-	if val, err := call.Otto.Call("jeth.unlockAccount", nil, account, passwd, timeout); err == nil {
+	// jeth.unlockAccount will send the request to the backend.
+	if val, err := call.Otto.Call("jeth.unlockAccount", nil, account, passwd, duration); err == nil {
 		return val
+	} else {
+		throwJSExeception(err.Error())
 	}
 
 	return otto.FalseValue()
@@ -134,19 +141,31 @@ func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	return otto.FalseValue()
 }
 
+// Send will serialize the first argument, send it to the node and returns the response.
 func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
-	reqif, err := call.Argument(0).Export()
-	if err != nil {
-		return self.err(call, -32700, err.Error(), nil)
+	// verify we got a batch request (array) or a single request (object)
+	ro := call.Argument(0).Object()
+	if ro == nil || (ro.Class() != "Array" && ro.Class() != "Object") {
+		throwJSExeception("Internal Error: request must be an object or array")
 	}
 
-	jsonreq, err := json.Marshal(reqif)
+	// convert otto vm arguments to go values by JSON serialising and parsing.
+	data, err := call.Otto.Call("JSON.stringify", nil, ro)
+	if err != nil {
+		throwJSExeception(err.Error())
+	}
+
+	jsonreq, _ := data.ToString()
+
+	// parse arguments to JSON rpc requests, either to an array (batch) or to a single request.
 	var reqs []rpc.JSONRequest
 	batch := true
-	err = json.Unmarshal(jsonreq, &reqs)
-	if err != nil {
+	if err = json.Unmarshal([]byte(jsonreq), &reqs); err != nil {
+		// single request?
 		reqs = make([]rpc.JSONRequest, 1)
-		err = json.Unmarshal(jsonreq, &reqs[0])
+		if err = json.Unmarshal([]byte(jsonreq), &reqs[0]); err != nil {
+			throwJSExeception("invalid request")
+		}
 		batch = false
 	}
 
@@ -154,47 +173,50 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 	call.Otto.Run("var ret_response = new Array(response_len);")
 
 	for i, req := range reqs {
-		err := self.client.Send(&req)
-		if err != nil {
+		if err := self.client.Send(&req); err != nil {
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
 
 		result := make(map[string]interface{})
-		err = self.client.Recv(&result)
-		if err != nil {
+		if err = self.client.Recv(&result); err != nil {
 			return self.err(call, -32603, err.Error(), req.Id)
 		}
 
-		_, isSuccessResponse := result["result"]
-		_, isErrorResponse := result["error"]
-		if !isSuccessResponse && !isErrorResponse {
-			return self.err(call, -32603, fmt.Sprintf("Invalid response"), new(int64))
-		}
-
 		id, _ := result["id"]
-		call.Otto.Set("ret_id", id)
-
 		jsonver, _ := result["jsonrpc"]
-		call.Otto.Set("ret_jsonrpc", jsonver)
 
-		var payload []byte
-		if isSuccessResponse {
-			payload, _ = json.Marshal(result["result"])
-		} else if isErrorResponse {
-			payload, _ = json.Marshal(result["error"])
-		}
-		call.Otto.Set("ret_result", string(payload))
+		call.Otto.Set("ret_id", id)
+		call.Otto.Set("ret_jsonrpc", jsonver)
 		call.Otto.Set("response_idx", i)
 
-		response, err = call.Otto.Run(`
-		ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
-		`)
+		// call was successful
+		if res, ok := result["result"]; ok {
+			payload, _ := json.Marshal(res)
+			call.Otto.Set("ret_result", string(payload))
+			response, err = call.Otto.Run(`
+				ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, result: JSON.parse(ret_result) };
+			`)
+			continue
+		}
+
+		// request returned an error
+		if res, ok := result["error"]; ok {
+			payload, _ := json.Marshal(res)
+			call.Otto.Set("ret_result", string(payload))
+			response, err = call.Otto.Run(`
+				ret_response[response_idx] = { jsonrpc: ret_jsonrpc, id: ret_id, error: JSON.parse(ret_result) };
+			`)
+			continue
+		}
+
+		return self.err(call, -32603, fmt.Sprintf("Invalid response"), new(int64))
 	}
 
 	if !batch {
 		call.Otto.Run("ret_response = ret_response[0];")
 	}
 
+	// if a callback was given execute it.
 	if call.Argument(1).IsObject() {
 		call.Otto.Set("callback", call.Argument(1))
 		call.Otto.Run(`
@@ -206,53 +228,6 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 
 	return
 }
-
-/*
-// handleRequest will handle user agent requests by interacting with the user and sending
-// the user response back to the geth service
-func (self *Jeth) handleRequest(req *shared.Request) bool {
-	var err error
-	var args []interface{}
-	if err = json.Unmarshal(req.Params, &args); err != nil {
-		glog.V(logger.Info).Infof("Unable to parse agent request - %v\n", err)
-		return false
-	}
-
-	switch req.Method {
-	case useragent.AskPasswordMethod:
-		return self.askPassword(req.Id, req.Jsonrpc, args)
-	case useragent.ConfirmTransactionMethod:
-		return self.confirmTransaction(req.Id, req.Jsonrpc, args)
-	}
-
-	return false
-}
-
-// askPassword will ask the user to supply the password for a given account
-func (self *Jeth) askPassword(id interface{}, jsonrpc string, args []interface{}) bool {
-	var err error
-	var passwd string
-	if len(args) >= 1 {
-		if account, ok := args[0].(string); ok {
-			fmt.Printf("Unlock account %s\n", account)
-		} else {
-			return false
-		}
-	}
-	passwd, err = PromptPassword("Passphrase: ", true)
-
-	if err = self.client.Send(shared.NewRpcResponse(id, jsonrpc, passwd, err)); err != nil {
-		glog.V(logger.Info).Infof("Unable to send user agent ask password response - %v\n", err)
-	}
-
-	return err == nil
-}
-
-func (self *Jeth) confirmTransaction(id interface{}, jsonrpc string, args []interface{}) bool {
-	// Accept all tx which are send from this console
-	return self.client.Send(shared.NewRpcResponse(id, jsonrpc, true, nil)) == nil
-}
-*/
 
 // throwJSExeception panics on an otto value, the Otto VM will then throw msg as a javascript error.
 func throwJSExeception(msg interface{}) otto.Value {

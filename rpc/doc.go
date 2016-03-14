@@ -29,10 +29,22 @@ Methods that satisfy the following criteria are made available for remote access
  - method returned value(s) must be exported or builtin types
 
 An example method:
- func (s *CalcService) Div(a, b int) (int, error)
+ func (s *CalcService) Add(a, b int) (int, error)
 
 When the returned error isn't nil the returned integer is ignored and the error is
 send back to the client. Otherwise the returned integer is send back to the client.
+
+Optional arguments are supported by accepting pointer values as arguments. E.g.
+if we want to do the addition in an optional finite field we can accept a mod
+argument as pointer value.
+
+ func (s *CalService) Add(a, b int, mod *int) (int, error)
+
+This RPC method can be called with 2 integers and a null value as third argument.
+In that case the mod argument will be nil. Or it can be called with 3 integers,
+in that case mod will be pointing to the given third argument. Since the optional
+argument is the last argument the RPC package will also accept 2 integers as
+arguments. It will pass the mod argument as nil to the RPC method.
 
 The server offers the ServeCodec method which accepts a ServerCodec instance. It will
 read requests from the codec, process the request and sends the response back to the

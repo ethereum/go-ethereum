@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -96,8 +97,8 @@ type PublicEthereumAPI struct {
 }
 
 // NewPublicEthereumAPI creates a new Ethereum protocol API.
-func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
-	return &PublicEthereumAPI{e, NewGasPriceOracle(e)}
+func NewPublicEthereumAPI(e *Ethereum, gpo *GasPriceOracle) *PublicEthereumAPI {
+	return &PublicEthereumAPI{e, gpo}
 }
 
 // GasPrice returns a suggestion for a gas price.
@@ -108,11 +109,7 @@ func (s *PublicEthereumAPI) GasPrice() *big.Int {
 // GetCompilers returns the collection of available smart contract compilers
 func (s *PublicEthereumAPI) GetCompilers() ([]string, error) {
 	solc, err := s.e.Solc()
-	if err != nil {
-		return nil, err
-	}
-
-	if solc != nil {
+	if err != nil && solc != nil {
 		return []string{"Solidity"}, nil
 	}
 
@@ -240,9 +237,15 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
-// Start the miner with the given number of threads
-func (s *PrivateMinerAPI) Start(threads rpc.HexNumber) (bool, error) {
+// Start the miner with the given number of threads. If threads is nil the number of
+// workers started is equal to the number of logical CPU's that are usable by this process.
+func (s *PrivateMinerAPI) Start(threads *rpc.HexNumber) (bool, error) {
 	s.e.StartAutoDAG()
+
+	if threads == nil {
+		threads = rpc.NewHexNumber(runtime.NumCPU())
+	}
+
 	err := s.e.StartMining(threads.Int(), "")
 	if err == nil {
 		return true, nil
@@ -265,7 +268,7 @@ func (s *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 }
 
 // SetGasPrice sets the minimum accepted gas price for the miner.
-func (s *PrivateMinerAPI) SetGasPrice(gasPrice rpc.Number) bool {
+func (s *PrivateMinerAPI) SetGasPrice(gasPrice rpc.HexNumber) bool {
 	s.e.Miner().SetGasPrice(gasPrice.BigInt())
 	return true
 }
@@ -440,10 +443,15 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 	return common.Address{}, err
 }
 
-// UnlockAccount will unlock the account associated with the given address with the given password for duration seconds.
-// It returns an indication if the action was successful.
-func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration int) bool {
-	if err := s.am.TimedUnlock(addr, password, time.Duration(duration)*time.Second); err != nil {
+// UnlockAccount will unlock the account associated with the given address with
+// the given password for duration seconds. If duration is nil it will use a
+// default of 300 seconds. It returns an indication if the account was unlocked.
+func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *rpc.HexNumber) bool {
+	if duration == nil {
+		duration = rpc.NewHexNumber(300)
+	}
+
+	if err := s.am.TimedUnlock(addr, password, time.Duration(duration.Int())*time.Second); err != nil {
 		glog.V(logger.Info).Infof("%v\n", err)
 		return false
 	}
@@ -458,7 +466,7 @@ func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
-	config   *core.ChainConfig
+	config                  *core.ChainConfig
 	bc                      *core.BlockChain
 	chainDb                 ethdb.Database
 	eventMux                *event.TypeMux
@@ -466,10 +474,11 @@ type PublicBlockChainAPI struct {
 	newBlockSubscriptions   map[string]func(core.ChainEvent) error // callbacks for new block subscriptions
 	am                      *accounts.Manager
 	miner                   *miner.Miner
+	gpo                     *GasPriceOracle
 }
 
 // NewPublicBlockChainAPI creates a new Etheruem blockchain API.
-func NewPublicBlockChainAPI(config *core.ChainConfig, bc *core.BlockChain, m *miner.Miner, chainDb ethdb.Database, eventMux *event.TypeMux, am *accounts.Manager) *PublicBlockChainAPI {
+func NewPublicBlockChainAPI(config *core.ChainConfig, bc *core.BlockChain, m *miner.Miner, chainDb ethdb.Database, gpo *GasPriceOracle, eventMux *event.TypeMux, am *accounts.Manager) *PublicBlockChainAPI {
 	api := &PublicBlockChainAPI{
 		config:   config,
 		bc:       bc,
@@ -478,6 +487,7 @@ func NewPublicBlockChainAPI(config *core.ChainConfig, bc *core.BlockChain, m *mi
 		eventMux: eventMux,
 		am:       am,
 		newBlockSubscriptions: make(map[string]func(core.ChainEvent) error),
+		gpo: gpo,
 	}
 
 	go api.subscriptionLoop()
@@ -674,8 +684,8 @@ func (m callmsg) Data() []byte                          { return m.data }
 type CallArgs struct {
 	From     common.Address  `json:"from"`
 	To       *common.Address `json:"to"`
-	Gas      rpc.HexNumber   `json:"gas"`
-	GasPrice rpc.HexNumber   `json:"gasPrice"`
+	Gas      *rpc.HexNumber  `json:"gas"`
+	GasPrice *rpc.HexNumber  `json:"gasPrice"`
 	Value    rpc.HexNumber   `json:"value"`
 	Data     string          `json:"data"`
 }
@@ -711,11 +721,11 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 		value:    args.Value.BigInt(),
 		data:     common.FromHex(args.Data),
 	}
-	if msg.gas.Cmp(common.Big0) == 0 {
+	if msg.gas == nil {
 		msg.gas = big.NewInt(50000000)
 	}
-	if msg.gasPrice.Cmp(common.Big0) == 0 {
-		msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
+	if msg.gasPrice == nil {
+		msg.gasPrice = s.gpo.SuggestPrice()
 	}
 
 	// Execute the call and return
@@ -882,10 +892,10 @@ type PublicTransactionPoolAPI struct {
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicTransactionPoolAPI(e *Ethereum) *PublicTransactionPoolAPI {
+func NewPublicTransactionPoolAPI(e *Ethereum, gpo *GasPriceOracle) *PublicTransactionPoolAPI {
 	api := &PublicTransactionPoolAPI{
 		eventMux:      e.EventMux(),
-		gpo:           NewGasPriceOracle(e),
+		gpo:           gpo,
 		chainDb:       e.ChainDb(),
 		bc:            e.BlockChain(),
 		am:            e.AccountManager(),
@@ -1306,7 +1316,7 @@ func newTx(t *types.Transaction) *Tx {
 // SignTransaction will sign the given transaction with the from account.
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
-func (s *PublicTransactionPoolAPI) SignTransaction(args *SignTransactionArgs) (*SignTransactionResult, error) {
+func (s *PublicTransactionPoolAPI) SignTransaction(args SignTransactionArgs) (*SignTransactionResult, error) {
 	if args.Gas == nil {
 		args.Gas = rpc.NewHexNumber(defaultGas)
 	}
@@ -1397,7 +1407,7 @@ func (s *PublicTransactionPoolAPI) NewPendingTransactions(ctx context.Context) (
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove the given transaction from the
 // pool and reinsert it with the new gas price and limit.
-func (s *PublicTransactionPoolAPI) Resend(tx *Tx, gasPrice, gasLimit *rpc.HexNumber) (common.Hash, error) {
+func (s *PublicTransactionPoolAPI) Resend(tx Tx, gasPrice, gasLimit *rpc.HexNumber) (common.Hash, error) {
 
 	pending := s.txPool.GetTransactions()
 	for _, p := range pending {

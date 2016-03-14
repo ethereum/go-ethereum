@@ -84,7 +84,7 @@ type NewFilterArgs struct {
 }
 
 // NewWhisperFilter creates and registers a new message filter to watch for inbound whisper messages.
-func (s *PublicWhisperAPI) NewFilter(args *NewFilterArgs) (*rpc.HexNumber, error) {
+func (s *PublicWhisperAPI) NewFilter(args NewFilterArgs) (*rpc.HexNumber, error) {
 	if s.w == nil {
 		return nil, whisperOffLineErr
 	}
@@ -171,7 +171,7 @@ type PostArgs struct {
 }
 
 // Post injects a message into the whisper network for distribution.
-func (s *PublicWhisperAPI) Post(args *PostArgs) (bool, error) {
+func (s *PublicWhisperAPI) Post(args PostArgs) (bool, error) {
 	if s.w == nil {
 		return false, whisperOffLineErr
 	}

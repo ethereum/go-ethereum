@@ -18,10 +18,9 @@ package rpc
 
 import (
 	"encoding/json"
-	"fmt"
+	"net"
 	"reflect"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 )
@@ -69,10 +68,6 @@ func (s *Service) Subscription(ctx context.Context) (Subscription, error) {
 	return nil, nil
 }
 
-func (s *Service) SubsriptionWithArgs(ctx context.Context, a, b int) (Subscription, error) {
-	return nil, nil
-}
-
 func TestServerRegisterName(t *testing.T) {
 	server := NewServer()
 	service := new(Service)
@@ -94,182 +89,67 @@ func TestServerRegisterName(t *testing.T) {
 		t.Errorf("Expected 4 callbacks for service 'calc', got %d", len(svc.callbacks))
 	}
 
-	if len(svc.subscriptions) != 2 {
-		t.Errorf("Expected 2 subscriptions for service 'calc', got %d", len(svc.subscriptions))
+	if len(svc.subscriptions) != 1 {
+		t.Errorf("Expected 1 subscription for service 'calc', got %d", len(svc.subscriptions))
 	}
 }
 
-// dummy codec used for testing RPC method execution
-type ServerTestCodec struct {
-	counter int
-	input   []byte
-	output  string
-	closer  chan interface{}
-}
+func testServerMethodExecution(t *testing.T, method string) {
+	server := NewServer()
+	service := new(Service)
 
-func (c *ServerTestCodec) ReadRequestHeaders() ([]rpcRequest, bool, RPCError) {
-	c.counter += 1
-
-	if c.counter == 1 {
-		var req JSONRequest
-		json.Unmarshal(c.input, &req)
-		return []rpcRequest{rpcRequest{id: *req.Id, isPubSub: false, service: "test", method: req.Method, params: req.Payload}}, false, nil
+	if err := server.RegisterName("test", service); err != nil {
+		t.Fatalf("%v", err)
 	}
 
-	// requests are executes in parallel, wait a bit before returning an error so that the previous request has time to
-	// be executed
-	timer := time.NewTimer(time.Duration(2) * time.Second)
-	<-timer.C
+	stringArg := "string arg"
+	intArg := 1122
+	argsArg := &Args{"abcde"}
+	params := []interface{}{stringArg, intArg, argsArg}
 
-	return nil, false, &invalidRequestError{"connection closed"}
-}
-
-func (c *ServerTestCodec) ParseRequestArguments(argTypes []reflect.Type, payload interface{}) ([]reflect.Value, RPCError) {
-
-	args, _ := payload.(json.RawMessage)
-
-	argValues := make([]reflect.Value, len(argTypes))
-	params := make([]interface{}, len(argTypes))
-
-	n, err := countArguments(args)
-	if err != nil {
-		return nil, &invalidParamsError{err.Error()}
-	}
-	if n != len(argTypes) {
-		return nil, &invalidParamsError{fmt.Sprintf("insufficient params, want %d have %d", len(argTypes), n)}
-
+	request := map[string]interface{}{
+		"id":      12345,
+		"method":  "test_" + method,
+		"version": "2.0",
+		"params":  params,
 	}
 
-	for i, t := range argTypes {
-		if t.Kind() == reflect.Ptr {
-			// values must be pointers for the Unmarshal method, reflect.
-			// Dereference otherwise reflect.New would create **SomeType
-			argValues[i] = reflect.New(t.Elem())
-			params[i] = argValues[i].Interface()
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
 
-			// when not specified blockNumbers are by default latest (-1)
-			if blockNumber, ok := params[i].(*BlockNumber); ok {
-				*blockNumber = BlockNumber(-1)
-			}
-		} else {
-			argValues[i] = reflect.New(t)
-			params[i] = argValues[i].Interface()
+	go server.ServeCodec(NewJSONCodec(serverConn), OptionMethodInvocation)
 
-			// when not specified blockNumbers are by default latest (-1)
-			if blockNumber, ok := params[i].(*BlockNumber); ok {
-				*blockNumber = BlockNumber(-1)
-			}
+	out := json.NewEncoder(clientConn)
+	in := json.NewDecoder(clientConn)
+
+	if err := out.Encode(request); err != nil {
+		t.Fatal(err)
+	}
+
+	response := JSONSuccessResponse{Result: &Result{}}
+	if err := in.Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+
+	if result, ok := response.Result.(*Result); ok {
+		if result.String != stringArg {
+			t.Errorf("expected %s, got : %s\n", stringArg, result.String)
 		}
-	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
-		return nil, &invalidParamsError{err.Error()}
-	}
-
-	// Convert pointers back to values where necessary
-	for i, a := range argValues {
-		if a.Kind() != argTypes[i].Kind() {
-			argValues[i] = reflect.Indirect(argValues[i])
+		if result.Int != intArg {
+			t.Errorf("expected %d, got %d\n", intArg, result.Int)
 		}
-	}
-
-	return argValues, nil
-}
-
-func (c *ServerTestCodec) CreateResponse(id int64, reply interface{}) interface{} {
-	return &JSONSuccessResponse{Version: jsonRPCVersion, Id: id, Result: reply}
-}
-
-func (c *ServerTestCodec) CreateErrorResponse(id *int64, err RPCError) interface{} {
-	return &JSONErrResponse{Version: jsonRPCVersion, Id: id, Error: JSONError{Code: err.Code(), Message: err.Error()}}
-}
-
-func (c *ServerTestCodec) CreateErrorResponseWithInfo(id *int64, err RPCError, info interface{}) interface{} {
-	return &JSONErrResponse{Version: jsonRPCVersion, Id: id,
-		Error: JSONError{Code: err.Code(), Message: err.Error(), Data: info}}
-}
-
-func (c *ServerTestCodec) CreateNotification(subid string, event interface{}) interface{} {
-	return &jsonNotification{Version: jsonRPCVersion, Method: notificationMethod,
-		Params: jsonSubscription{Subscription: subid, Result: event}}
-}
-
-func (c *ServerTestCodec) Write(msg interface{}) error {
-	if len(c.output) == 0 { // only capture first response
-		if o, err := json.Marshal(msg); err != nil {
-			return err
-		} else {
-			c.output = string(o)
+		if !reflect.DeepEqual(result.Args, argsArg) {
+			t.Errorf("expected %v, got %v\n", argsArg, result)
 		}
+	} else {
+		t.Fatalf("invalid response: expected *Result - got: %T", response.Result)
 	}
-
-	return nil
-}
-
-func (c *ServerTestCodec) Close() {
-	close(c.closer)
-}
-
-func (c *ServerTestCodec) Closed() <-chan interface{} {
-	return c.closer
 }
 
 func TestServerMethodExecution(t *testing.T) {
-	server := NewServer()
-	service := new(Service)
-
-	if err := server.RegisterName("test", service); err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	id := int64(12345)
-	req := JSONRequest{
-		Method:  "echo",
-		Version: "2.0",
-		Id:      &id,
-	}
-	args := []interface{}{"string arg", 1122, &Args{"qwerty"}}
-	req.Payload, _ = json.Marshal(&args)
-
-	input, _ := json.Marshal(&req)
-	codec := &ServerTestCodec{input: input, closer: make(chan interface{})}
-	go server.ServeCodec(codec, OptionMethodInvocation)
-
-	<-codec.closer
-
-	expected := `{"jsonrpc":"2.0","id":12345,"result":{"String":"string arg","Int":1122,"Args":{"S":"qwerty"}}}`
-
-	if expected != codec.output {
-		t.Fatalf("expected %s, got %s\n", expected, codec.output)
-	}
+	testServerMethodExecution(t, "echo")
 }
 
 func TestServerMethodWithCtx(t *testing.T) {
-	server := NewServer()
-	service := new(Service)
-
-	if err := server.RegisterName("test", service); err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	id := int64(12345)
-	req := JSONRequest{
-		Method:  "echoWithCtx",
-		Version: "2.0",
-		Id:      &id,
-	}
-	args := []interface{}{"string arg", 1122, &Args{"qwerty"}}
-	req.Payload, _ = json.Marshal(&args)
-
-	input, _ := json.Marshal(&req)
-	codec := &ServerTestCodec{input: input, closer: make(chan interface{})}
-	go server.ServeCodec(codec, OptionMethodInvocation)
-
-	<-codec.closer
-
-	expected := `{"jsonrpc":"2.0","id":12345,"result":{"String":"string arg","Int":1122,"Args":{"S":"qwerty"}}}`
-
-	if expected != codec.output {
-		t.Fatalf("expected %s, got %s\n", expected, codec.output)
-	}
+	testServerMethodExecution(t, "echoWithCtx")
 }

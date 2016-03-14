@@ -20,12 +20,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
-
-	"io"
 
 	"github.com/rs/cors"
 )
@@ -36,8 +35,9 @@ const (
 
 // httpClient connects to a geth RPC server over HTTP.
 type httpClient struct {
-	endpoint *url.URL // HTTP-RPC server endpoint
-	lastRes  []byte   // HTTP requests are synchronous, store last response
+	endpoint   *url.URL    // HTTP-RPC server endpoint
+	httpClient http.Client // reuse connection
+	lastRes    []byte      // HTTP requests are synchronous, store last response
 }
 
 // NewHTTPClient create a new RPC clients that connection to a geth RPC server
@@ -57,30 +57,22 @@ func (client *httpClient) Send(msg interface{}) error {
 	var err error
 
 	client.lastRes = nil
-
 	if body, err = json.Marshal(msg); err != nil {
 		return err
 	}
 
-	httpReq, err := http.NewRequest("POST", client.endpoint.String(), bytes.NewBuffer(body))
+	resp, err := client.httpClient.Post(client.endpoint.String(), "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
 
-	httpClient := http.Client{}
-	resp, err := httpClient.Do(httpReq)
-	if err != nil {
-		return err
-	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode == http.StatusOK {
 		client.lastRes, err = ioutil.ReadAll(resp.Body)
 		return err
 	}
 
-	return fmt.Errorf("unable to handle request")
+	return fmt.Errorf("request failed: %s", resp.Status)
 }
 
 // Recv will try to deserialize the last received response into the given msg.

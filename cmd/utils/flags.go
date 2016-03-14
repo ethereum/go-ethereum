@@ -287,9 +287,9 @@ var (
 		Usage: "API's offered over the WS-RPC interface",
 		Value: rpc.DefaultHTTPApis,
 	}
-	WSAllowedDomainsFlag = cli.StringFlag{
-		Name:  "wsdomains",
-		Usage: "Domains from which to accept websockets requests (can be spoofed)",
+	WSAllowedOriginsFlag = cli.StringFlag{
+		Name:  "wsorigins",
+		Usage: "Origins from which to accept websockets requests",
 		Value: "",
 	}
 	ExecFlag = cli.StringFlag{
@@ -655,7 +655,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		HTTPModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
 		WSHost:          MakeWSRpcHost(ctx),
 		WSPort:          ctx.GlobalInt(WSPortFlag.Name),
-		WSDomains:       ctx.GlobalString(WSAllowedDomainsFlag.Name),
+		WSOrigins:       ctx.GlobalString(WSAllowedOriginsFlag.Name),
 		WSModules:       strings.Split(ctx.GlobalString(WSApiFlag.Name), ","),
 	}
 	// Configure the Ethereum service

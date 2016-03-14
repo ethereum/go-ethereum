@@ -88,10 +88,10 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 }
 
 // NewWSServer creates a new websocket RPC server around an API provider.
-func NewWSServer(cors string, handler *Server) *http.Server {
+func NewWSServer(allowedOrigins string, handler *Server) *http.Server {
 	return &http.Server{
 		Handler: websocket.Server{
-			Handshake: wsHandshakeValidator(strings.Split(cors, ",")),
+			Handshake: wsHandshakeValidator(strings.Split(allowedOrigins, ",")),
 			Handler: func(conn *websocket.Conn) {
 				handler.ServeCodec(NewJSONCodec(&wsReaderWriterCloser{conn}),
 					OptionMethodInvocation|OptionSubscriptions)
