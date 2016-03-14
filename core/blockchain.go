@@ -765,7 +765,7 @@ func (self *BlockChain) writeHeader(header *types.Header) error {
 		glog.Fatalf("failed to write header total difficulty: %v", err)
 	}
 	if err := WriteHeader(self.chainDb, header); err != nil {
-		glog.Fatalf("filed to write header contents: %v", err)
+		glog.Fatalf("failed to write header contents: %v", err)
 	}
 	return nil
 }
@@ -1085,7 +1085,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status writeStatus, err 
 		glog.Fatalf("failed to write block total difficulty: %v", err)
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
-		glog.Fatalf("filed to write block contents: %v", err)
+		glog.Fatalf("failed to write block contents: %v", err)
 	}
 	self.futureBlocks.Remove(block.Hash())
 
