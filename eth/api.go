@@ -979,6 +979,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 	}
 
 	fields := map[string]interface{}{
+		"root":              common.Bytes2Hex(receipt.PostState),
 		"blockHash":         txBlock,
 		"blockNumber":       rpc.NewHexNumber(blockIndex),
 		"transactionHash":   txHash,
@@ -1637,6 +1638,7 @@ type structLogRes struct {
 	Op      string            `json:"op"`
 	Gas     *big.Int          `json:"gas"`
 	GasCost *big.Int          `json:"gasCost"`
+	Depth   int               `json:"depth"`
 	Error   error             `json:"error"`
 	Stack   []string          `json:"stack"`
 	Memory  []string          `json:"memory"`
@@ -1661,6 +1663,7 @@ func formatLogs(structLogs []vm.StructLog) []structLogRes {
 			Op:      trace.Op.String(),
 			Gas:     trace.Gas,
 			GasCost: trace.GasCost,
+			Depth:   trace.Depth,
 			Error:   trace.Err,
 			Stack:   make([]string, len(trace.Stack)),
 			Storage: make(map[string]string),
