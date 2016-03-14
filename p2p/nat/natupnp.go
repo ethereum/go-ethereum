@@ -139,6 +139,7 @@ func discoverUPnP() Interface {
 func discover(out chan<- *upnp, target string, matcher func(*goupnp.RootDevice, goupnp.ServiceClient) *upnp) {
 	devs, err := goupnp.DiscoverDevices(target)
 	if err != nil {
+		out <- nil
 		return
 	}
 	found := false
