@@ -17,10 +17,10 @@ var (
 )
 
 type StateProcessor struct {
-	bc *BlockChain
+	bc blockGetter
 }
 
-func NewStateProcessor(bc *BlockChain) *StateProcessor {
+func NewStateProcessor(bc blockGetter) *StateProcessor {
 	return &StateProcessor{bc}
 }
 
@@ -60,7 +60,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 //
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
-func ApplyTransaction(bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int) (*types.Receipt, vm.Logs, *big.Int, error) {
+func ApplyTransaction(bc blockGetter, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int) (*types.Receipt, vm.Logs, *big.Int, error) {
 	_, gas, err := ApplyMessage(NewEnv(statedb, bc, tx, header), tx, gp)
 	if err != nil {
 		return nil, nil, nil, err
