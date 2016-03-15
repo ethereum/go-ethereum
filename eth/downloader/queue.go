@@ -976,7 +976,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(error, i
 	accepted, errs := 0, make([]error, 0)
 	process := []trie.SyncResult{}
 	for _, blob := range data {
-		// Skip any state trie entires that were not requested
+		// Skip any state trie entries that were not requested
 		hash := common.BytesToHash(crypto.Keccak256(blob))
 		if _, ok := request.Hashes[hash]; !ok {
 			errs = append(errs, fmt.Errorf("non-requested state data %x", hash))

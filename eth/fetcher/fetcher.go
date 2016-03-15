@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package fetcher contains the block announcement based synchonisation.
+// Package fetcher contains the block announcement based synchronisation.
 package fetcher
 
 import (
@@ -34,7 +34,7 @@ import (
 const (
 	arriveTimeout = 500 * time.Millisecond // Time allowance before an announced block is explicitly requested
 	gatherSlack   = 100 * time.Millisecond // Interval used to collate almost-expired announces with fetches
-	fetchTimeout  = 5 * time.Second        // Maximum alloted time to return an explicitly requested block
+	fetchTimeout  = 5 * time.Second        // Maximum allotted time to return an explicitly requested block
 	maxUncleDist  = 7                      // Maximum allowed backward distance from the chain head
 	maxQueueDist  = 32                     // Maximum allowed distance from the chain head to queue
 	hashLimit     = 256                    // Maximum number of unique blocks a peer may have announced
@@ -176,7 +176,7 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 	}
 }
 
-// Start boots up the announcement based synchoniser, accepting and processing
+// Start boots up the announcement based synchroniser, accepting and processing
 // hash notifications and block fetches until termination requested.
 func (f *Fetcher) Start() {
 	go f.loop()

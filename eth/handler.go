@@ -590,7 +590,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == NewBlockHashesMsg:
-		// Retrieve and deseralize the remote new block hashes notification
+		// Retrieve and deserialize the remote new block hashes notification
 		type announce struct {
 			Hash   common.Hash
 			Number uint64

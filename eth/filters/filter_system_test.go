@@ -96,6 +96,6 @@ func TestCallbacks(t *testing.T) {
 	select {
 	case <-pendingLogDone:
 	case <-failTimer.C:
-		t.Error("pending log filter failed to trigger (timout)")
+		t.Error("pending log filter failed to trigger (timeout)")
 	}
 }

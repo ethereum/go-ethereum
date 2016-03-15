@@ -197,7 +197,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, ha
 // block where synchronisation started at (may have failed/suspended); the block
 // or header sync is currently at; and the latest known block which the sync targets.
 //
-// In addition, during the state download phase of fast synchonisation the number
+// In addition, during the state download phase of fast synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
 func (d *Downloader) Progress() (uint64, uint64, uint64, uint64, uint64) {
@@ -280,7 +280,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 // it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
-	// Mock out the synchonisation if testing
+	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
 	}
@@ -709,7 +709,7 @@ func (d *Downloader) fetchHashes61(p *peer, td *big.Int, from uint64) error {
 				}
 				// If no hashes were retrieved at all, the peer violated it's TD promise that it had a
 				// better chain compared to ours. The only exception is if it's promised blocks were
-				// already imported by other means (e.g. fecher):
+				// already imported by other means (e.g. fetcher):
 				//
 				// R <remote peer>, L <local node>: Both at block 10
 				// R: Mine block 11, and propagate it to L
@@ -1180,7 +1180,7 @@ func (d *Downloader) fetchHeaders(p *peer, td *big.Int, from uint64) error {
 				}
 				// If no headers were retrieved at all, the peer violated it's TD promise that it had a
 				// better chain compared to ours. The only exception is if it's promised blocks were
-				// already imported by other means (e.g. fecher):
+				// already imported by other means (e.g. fetcher):
 				//
 				// R <remote peer>, L <local node>: Both at block 10
 				// R: Mine block 11, and propagate it to L
@@ -1621,7 +1621,7 @@ func (d *Downloader) DeliverBlocks(id string, blocks []*types.Block) (err error)
 	return d.deliver(id, d.blockCh, &blockPack{id, blocks}, blockInMeter, blockDropMeter)
 }
 
-// DeliverHeaders injects a new batch of blck headers received from a remote
+// DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
 func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
 	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
