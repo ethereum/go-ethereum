@@ -102,7 +102,7 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
 
-	// set inital state object value
+	// set initial state object value
 	s.state.SetState(stateobjaddr, storageaddr, data1)
 	// get snapshot of current state
 	snapshot := s.state.Copy()

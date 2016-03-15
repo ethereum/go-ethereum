@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// GetHashFn returns a function for which the VM env can query block hashes thru
+// GetHashFn returns a function for which the VM env can query block hashes through
 // up to the limit defined by the Yellow Paper and uses the given block chain
 // to query for information.
 func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {

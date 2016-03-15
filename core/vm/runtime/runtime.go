@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-// Config is a basic type specifing certain configuration flags for running
+// Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
 	Difficulty  *big.Int

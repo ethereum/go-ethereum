@@ -58,7 +58,7 @@ func NewBlockValidator(blockchain *BlockChain, pow pow.PoW) *BlockValidator {
 // the block header's transaction and uncle roots.
 //
 // ValidateBlock does not validate the header's pow. The pow work validated
-// seperately so we can process them in paralel.
+// separately so we can process them in parallel.
 //
 // ValidateBlock also validates and makes sure that any previous state (or present)
 // state that might or might not be present is checked to make sure that fast
@@ -106,7 +106,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state
 // transition, such as amount of used gas, the receipt roots and the state root
-// itself. ValidateState returns a database batch if the validation was a succes
+// itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
 	header := block.Header()
@@ -297,7 +297,7 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 	periodCount := new(big.Int).Add(parentNumber, common.Big1)
 	periodCount.Div(periodCount, ExpDiffPeriod)
 
-	// the exponential factor, commonly refered to as "the bomb"
+	// the exponential factor, commonly referred to as "the bomb"
 	// diff = diff + 2^(periodCount - 2)
 	if periodCount.Cmp(common.Big1) > 0 {
 		y.Sub(periodCount, common.Big2)

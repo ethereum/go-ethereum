@@ -34,7 +34,7 @@ import (
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
-// mix-hash) that a suffcient amount of computation has been carried
+// mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
 type BlockNonce [8]byte
 

@@ -331,7 +331,7 @@ func TestTransactionDropping(t *testing.T) {
 
 // Tests that if a transaction is dropped from the current pending pool (e.g. out
 // of fund), all consecutive (still valid, but not executable) transactions are
-// postponed back into the future queue to prevent broadcating them.
+// postponed back into the future queue to prevent broadcasting them.
 func TestTransactionPostponing(t *testing.T) {
 	// Create a test account and fund it
 	pool, key := setupTxPool()

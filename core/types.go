@@ -39,7 +39,7 @@ import (
 // if it failed to do so.
 //
 // ValidateState validates the given statedb and optionally the receipts and
-// gas used. The implementor should decide what to do with the given input.
+// gas used. The implementer should decide what to do with the given input.
 type Validator interface {
 	HeaderValidator
 	ValidateBlock(block *types.Block) error

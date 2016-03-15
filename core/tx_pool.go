@@ -60,8 +60,8 @@ type stateFn func() (*state.StateDB, error)
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	quit         chan bool // Quiting channel
-	currentState stateFn   // The state function which will allow us to do some pre checkes
+	quit         chan bool // Quitting channel
+	currentState stateFn   // The state function which will allow us to do some pre checks
 	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
 	minGasPrice  *big.Int
@@ -357,7 +357,7 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 		}
 	}
 
-	// check and validate the queueue
+	// check and validate the queue
 	self.checkQueue()
 }
 

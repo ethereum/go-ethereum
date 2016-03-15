@@ -138,7 +138,7 @@ func llvm2big(m *i256) *big.Int {
 }
 
 // llvm2bytesRef creates a []byte slice that references byte buffer on LLVM side (as of that not controller by GC)
-// User must asure that referenced memory is available to Go until the data is copied or not needed any more
+// User must ensure that referenced memory is available to Go until the data is copied or not needed any more
 func llvm2bytesRef(data *byte, length uint64) []byte {
 	if length == 0 {
 		return nil
@@ -171,7 +171,7 @@ func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *bi
 
 	// TODO: Move it to Env.Call() or sth
 	if Precompiled[string(me.Address())] != nil {
-		// if it's address of precopiled contract
+		// if it's address of precompiled contract
 		// fallback to standard VM
 		stdVm := New(self.env)
 		return stdVm.Run(me, caller, code, value, gas, price, callData)
@@ -348,7 +348,7 @@ func env_create(_vm unsafe.Pointer, _gas *int64, _value unsafe.Pointer, initData
 	gas := big.NewInt(*_gas)
 	ret, suberr, ref := vm.env.Create(vm.me, nil, initData, gas, vm.price, value)
 	if suberr == nil {
-		dataGas := big.NewInt(int64(len(ret))) // TODO: Nto the best design. env.Create can do it, it has the reference to gas counter
+		dataGas := big.NewInt(int64(len(ret))) // TODO: Not the best design. env.Create can do it, it has the reference to gas counter
 		dataGas.Mul(dataGas, params.CreateDataGas)
 		gas.Sub(gas, dataGas)
 		*result = hash2llvm(ref.Address())
