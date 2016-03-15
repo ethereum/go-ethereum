@@ -47,7 +47,7 @@ const (
 	logFilterTy
 )
 
-// PublicFilterAPI offers support to create and manage filters. This will allow externa clients to retrieve various
+// PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
 	mux *event.TypeMux

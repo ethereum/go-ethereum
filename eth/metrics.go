@@ -72,7 +72,7 @@ type meteredMsgReadWriter struct {
 }
 
 // newMeteredMsgWriter wraps a p2p MsgReadWriter with metering support. If the
-// metrics system is disabled, this fucntion returns the original object.
+// metrics system is disabled, this function returns the original object.
 func newMeteredMsgWriter(rw p2p.MsgReadWriter) p2p.MsgReadWriter {
 	if !metrics.Enabled {
 		return rw

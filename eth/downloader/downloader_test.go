@@ -277,7 +277,7 @@ func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) 
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anthing in case of errors
+	// Do a quick check, as the blockchain.InsertHeaderChain doesn't insert anything in case of errors
 	if _, ok := dl.ownHeaders[headers[0].ParentHash]; !ok {
 		return 0, errors.New("unknown parent")
 	}
@@ -958,7 +958,7 @@ func testMultiSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 }
 
 // Tests that synchronisations behave well in multi-version protocol environments
-// and not wreak havok on other nodes in the network.
+// and not wreak havoc on other nodes in the network.
 func TestMultiProtoSynchronisation61(t *testing.T)      { testMultiProtoSync(t, 61, FullSync) }
 func TestMultiProtoSynchronisation62(t *testing.T)      { testMultiProtoSync(t, 62, FullSync) }
 func TestMultiProtoSynchronisation63Full(t *testing.T)  { testMultiProtoSync(t, 63, FullSync) }
@@ -1188,7 +1188,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	// Synchronise with the valid peer and make sure sync succeeds. Since the last
 	// rollback should also disable fast syncing for this process, verify that we
 	// did a fresh full sync. Note, we can't assert anything about the receipts
-	// since we won't purge the database of them, hence we can't use asserOwnChain.
+	// since we won't purge the database of them, hence we can't use assertOwnChain.
 	tester.newPeer("valid", protocol, hashes, headers, blocks, receipts)
 	if err := tester.sync("valid", nil, mode); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)

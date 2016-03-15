@@ -51,7 +51,7 @@ const defaultGas = uint64(90000)
 
 // blockByNumber is a commonly used helper function which retrieves and returns
 // the block for the given block number, capable of handling two special blocks:
-// rpc.LatestBlockNumber adn rpc.PendingBlockNumber. It returns nil when no block
+// rpc.LatestBlockNumber and rpc.PendingBlockNumber. It returns nil when no block
 // could be found.
 func blockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber) *types.Block {
 	// Pending block is only known by the miner
@@ -67,7 +67,7 @@ func blockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber)
 
 // stateAndBlockByNumber is a commonly used helper function which retrieves and
 // returns the state and containing block for the given block number, capable of
-// handling two special states: rpc.LatestBlockNumber adn rpc.PendingBlockNumber.
+// handling two special states: rpc.LatestBlockNumber and rpc.PendingBlockNumber.
 // It returns nil when no block or state could be found.
 func stateAndBlockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber, chainDb ethdb.Database) (*state.StateDB, *types.Block, error) {
 	// Pending state is only known by the miner
@@ -90,7 +90,7 @@ type PublicEthereumAPI struct {
 	gpo *GasPriceOracle
 }
 
-// NewPublicEthereumAPI creates a new Etheruem protocol API.
+// NewPublicEthereumAPI creates a new Ethereum protocol API.
 func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
 	return &PublicEthereumAPI{e, NewGasPriceOracle(e)}
 }
@@ -148,7 +148,7 @@ func (s *PublicEthereumAPI) Hashrate() *rpc.HexNumber {
 	return rpc.NewHexNumber(s.e.Miner().HashRate())
 }
 
-// Syncing returns false in case the node is currently not synching with the network. It can be up to date or has not
+// Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronise from
 // - currentBlock:  block number this node is currently importing
@@ -600,7 +600,7 @@ func (s *PublicBlockChainAPI) GetStorageAt(address common.Address, key string, b
 	return state.GetState(address, common.HexToHash(key)).Hex(), nil
 }
 
-// callmsg is the message type used for call transations.
+// callmsg is the message type used for call transactions.
 type callmsg struct {
 	from          *state.StateObject
 	to            *common.Address
@@ -678,7 +678,7 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 }
 
 // Call executes the given transaction on the state for the given block number.
-// It doesn't make and changes in the state/blockchain and is usefull to execute and retrieve values.
+// It doesn't make and changes in the state/blockchain and is useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(args CallArgs, blockNr rpc.BlockNumber) (string, error) {
 	result, _, err := s.doCall(args, blockNr)
 	return result, err
@@ -1545,7 +1545,7 @@ func (api *PrivateDebugAPI) SetHead(number uint64) {
 	api.eth.BlockChain().SetHead(number)
 }
 
-// StructLogRes stores a structured log emitted by the evm while replaying a
+// StructLogRes stores a structured log emitted by the EVM while replaying a
 // transaction in debug mode
 type structLogRes struct {
 	Pc      uint64            `json:"pc"`
@@ -1558,7 +1558,7 @@ type structLogRes struct {
 	Storage map[string]string `json:"storage"`
 }
 
-// TransactionExecutionRes groups all structured logs emitted by the evm
+// TransactionExecutionRes groups all structured logs emitted by the EVM
 // while replaying a transaction in debug mode as well as the amount of
 // gas used and the return value
 type TransactionExecutionResult struct {
@@ -1614,7 +1614,7 @@ func (s *PrivateDebugAPI) doReplayTransaction(txHash common.Hash) ([]vm.StructLo
 	return vmenv.StructLogs(), ret, gas, nil
 }
 
-// Executes a transaction and returns the structured logs of the evm
+// Executes a transaction and returns the structured logs of the EVM
 // gathered during the execution
 func (s *PrivateDebugAPI) ReplayTransaction(txHash common.Hash, stackDepth int, memorySize int, storageSize int) (*TransactionExecutionResult, error) {
 
@@ -1690,7 +1690,7 @@ type PublicNetAPI struct {
 	networkVersion int
 }
 
-// NewPublicNetAPI creates a new net api instance.
+// NewPublicNetAPI creates a new net API instance.
 func NewPublicNetAPI(net *p2p.Server, networkVersion int) *PublicNetAPI {
 	return &PublicNetAPI{net, networkVersion}
 }
