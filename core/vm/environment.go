@@ -34,9 +34,9 @@ type Environment interface {
 	MakeSnapshot() Database
 	// Set database to previous snapshot
 	SetSnapshot(Database)
-	// Address of the original invoker (first occurance of the VM invoker)
+	// Address of the original invoker (first occurrence of the VM invoker)
 	Origin() common.Address
-	// The block number this VM is invoken on
+	// The block number this VM is invoked on
 	BlockNumber() *big.Int
 	// The n'th hash ago from this block number
 	GetHash(uint64) common.Hash
@@ -101,7 +101,7 @@ type Database interface {
 	IsDeleted(common.Address) bool
 }
 
-// StructLog is emited to the Environment each cycle and lists information about the curent internal state
+// StructLog is emitted to the Environment each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
 	Pc      uint64

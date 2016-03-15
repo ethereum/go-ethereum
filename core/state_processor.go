@@ -55,7 +55,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 	return receipts, allLogs, totalUsedGas, err
 }
 
-// ApplyTransaction attemps to apply a transaction to the given state database
+// ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment.
 //
 // ApplyTransactions returns the generated receipts and vm logs during the

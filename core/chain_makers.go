@@ -108,7 +108,7 @@ func (b *BlockGen) Number() *big.Int {
 // backing transaction.
 //
 // AddUncheckedReceipts will cause consensus failures when used during real
-// chain processing. This is best used in conjuction with raw block insertion.
+// chain processing. This is best used in conjunction with raw block insertion.
 func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 	b.receipts = append(b.receipts, receipt)
 }
@@ -215,7 +215,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
-	// Create te new chain database
+	// Create the new chain database
 	db, _ := ethdb.NewMemDatabase()
 	evmux := &event.TypeMux{}
 

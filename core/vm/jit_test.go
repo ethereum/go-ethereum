@@ -77,7 +77,7 @@ func TestCompiling(t *testing.T) {
 	}
 
 	if len(prog.instructions) != 1 {
-		t.Error("exected 1 compiled instruction, got", len(prog.instructions))
+		t.Error("expected 1 compiled instruction, got", len(prog.instructions))
 	}
 }
 

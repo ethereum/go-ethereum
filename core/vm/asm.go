@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Dissassemble dissassembles the byte code and returns the string
+// Disassemble disassembles the byte code and returns the string
 // representation (human readable opcodes).
 func Disassemble(script []byte) (asm []string) {
 	pc := new(big.Int)

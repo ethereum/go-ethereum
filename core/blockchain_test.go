@@ -578,7 +578,7 @@ func testBadHashes(t *testing.T, full bool) {
 	}
 }
 
-// Tests that bad hashes are detected on boot, and the chan rolled back to a
+// Tests that bad hashes are detected on boot, and the chain rolled back to a
 // good state prior to the bad hash.
 func TestReorgBadHeaderHashes(t *testing.T) { testReorgBadHashes(t, false) }
 func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
@@ -589,7 +589,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
-	// Create a chain, import and ban aferwards
+	// Create a chain, import and ban afterwards
 	headers := makeHeaderChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
 	blocks := makeBlockChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
 
@@ -889,7 +889,7 @@ func TestChainTxReorgs(t *testing.T) {
 	var pastDrop, freshDrop *types.Transaction
 
 	// Create three transactions that will be added in the forked chain:
-	//  - pastAdd:   transaction added before the reorganiztion is detected
+	//  - pastAdd:   transaction added before the reorganization is detected
 	//  - freshAdd:  transaction added at the exact block the reorg is detected
 	//  - futureAdd: transaction added after the reorg has already finished
 	var pastAdd, freshAdd, futureAdd *types.Transaction
@@ -1086,7 +1086,7 @@ done:
 	// make sure no more events are fired
 	select {
 	case e := <-subs.Chan():
-		t.Errorf("unexectped event fired: %v", e)
+		t.Errorf("unexpected event fired: %v", e)
 	case <-time.After(250 * time.Millisecond):
 	}
 

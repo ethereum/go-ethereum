@@ -63,7 +63,7 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	)
 	if EnableJit {
 		// If the JIT is enabled check the status of the JIT program,
-		// if it doesn't exist compile a new program in a seperate
+		// if it doesn't exist compile a new program in a separate
 		// goroutine or wait for compilation to finish if the JIT is
 		// forced.
 		switch GetProgramStatus(codehash) {
@@ -80,7 +80,7 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 				glog.V(logger.Info).Infoln("error compiling program", err)
 			} else {
 				// create and compile the program. Compilation
-				// is done in a seperate goroutine
+				// is done in a separate goroutine
 				program = NewProgram(contract.Code)
 				go func() {
 					err := CompileProgram(program)
@@ -103,7 +103,7 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		stack   = newstack()    // local stack
 		statedb = self.env.Db() // current state
 		// For optimisation reason we're using uint64 as the program counter.
-		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Pratically much less so feasible.
+		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
 		pc = uint64(0) // program counter
 
 		// jump evaluates and checks whether the given jump destination is a valid one
@@ -271,7 +271,7 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 		// This checks for 3 scenario's and calculates gas accordingly
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
 		// 2. From a non-zero value address to a zero-value address (DELETE)
-		// 3. From a nen-zero to a non-zero                         (CHANGE)
+		// 3. From a non-zero to a non-zero                         (CHANGE)
 		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
 			// 0 => non 0
 			g = params.SstoreSetGas
