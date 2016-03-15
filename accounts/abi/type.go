@@ -163,6 +163,13 @@ func (t Type) String() (out string) {
 	return t.stringKind
 }
 
+// packBytesSlice packs the given bytes as [L, V] as the canonical representation
+// bytes slice
+func packBytesSlice(bytes []byte, l int) []byte {
+	len := packNum(reflect.ValueOf(l), UintTy)
+	return append(len, common.RightPadBytes(bytes, (l+31)/32*32)...)
+}
+
 // Test the given input parameter `v` and checks if it matches certain
 // criteria
 // * Big integers are checks for ptr types and if the given value is
@@ -193,8 +200,14 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 		if t.Size > -1 && value.Len() > t.Size {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
 		}
-		return []byte(common.LeftPadString(t.String(), 32)), nil
+
+		return packBytesSlice([]byte(value.String()), value.Len()), nil
 	case reflect.Slice:
+		// if the param is a bytes type, pack the slice up as a string
+		if t.T == BytesTy {
+			return packBytesSlice(value.Bytes(), value.Len()), nil
+		}
+
 		if t.Size > -1 && value.Len() > t.Size {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
 		}
