@@ -247,3 +247,137 @@ func TestPythonIntegration(t *testing.T) {
 	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg0, k1, sig0)
 	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg1, k1, sig1)
 }
+
+// TestChecksumAddress performs 4 groups of tests: a) all caps,
+// b) all lower, c) mixed lower and upper case, and
+// d) examples taken from myetherwallet.com
+func TestChecksumAddress(t *testing.T) {
+	testcases := []string{
+		"0x52908400098527886E0F7030069857D2E4169EE7",
+		"0x8617E340B3D01FA5F11F306F4090FD50E238070D",
+
+		"0xde709f2102306220921060314715629080e2fb77",
+		"0x27b1fdb04752bbc536007a920d24acb045561c26",
+
+		"0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+		"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+		"0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB",
+		"0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb",
+
+		"0x5A4EAB120fB44eb6684E5e32785702FF45ea344D",
+		"0x5be4BDC48CeF65dbCbCaD5218B1A7D37F58A0741",
+		"0xa7dD84573f5ffF821baf2205745f768F8edCDD58",
+		"0x027a49d11d118c0060746F1990273FcB8c2fC196",
+		"0x689E3fE51F45760Ab73D237d28fc1d2C8EaC6D71",
+		"0x97D509F0b388daE6D000C33193F4645D1e71Dc54",
+		"0xa4Fd5bD20Cf5A7CF1c5A6015D2b3e08A3eC1b1a7",
+		"0x230AE42Daf56B494E4b9E6D8Cce99F5E14FE29c1",
+		"0xC19D1EDB7FC943f2abbF576f6058c2425B347AB9",
+		"0x4f936Bb00CaaD116adc3861146dd8f68BF66F4E6",
+		"0xE74287ECA7B7151Fd194cdf7680EB50752671c47",
+		"0x5d32a30FBc5bddF39293CE3a9D74E4505dEb621D",
+		"0x27cBC66cbE3625c2857ce3CF77A9933e589545DF",
+		"0xE2A5f301EA7e461880Fe9A6B4b7EC1aBD023129A",
+		"0xe0DFdDA1D174aB7315C753EA198885ee88B52763",
+		"0x843655C78939365298FD9515b489939bADca64Ec",
+		"0x6bB7a54E4ef381e4C64009DDa0A9ED127aab852C",
+	}
+
+	failed, passed := 0, 0
+	for i := 0; i < len(testcases); i++ {
+		ca := ChecksumAddress(common.HexToAddress(testcases[i]))
+		if testcases[i] == ca {
+			passed++
+		} else {
+			failed++
+			t.Errorf("Failed to compute ChecksumAddress for address " + testcases[i] + ": \n\tExpected=" + testcases[i] + "\n\tReceived=" + ca)
+		}
+	}
+	fmt.Printf("Passed %d tests and failed %d tests out of %d.\n", passed, failed, passed+failed)
+}
+
+func TestChecksumAddressHex(t *testing.T) {
+	testcases := []string{
+		"0x52908400098527886E0F7030069857D2E4169EE7",
+		"0x8617E340B3D01FA5F11F306F4090FD50E238070D",
+
+		"0xde709f2102306220921060314715629080e2fb77",
+		"0x27b1fdb04752bbc536007a920d24acb045561c26",
+
+		"0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+		"0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+		"0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB",
+		"0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb",
+
+		"0x5A4EAB120fB44eb6684E5e32785702FF45ea344D",
+		"0x5be4BDC48CeF65dbCbCaD5218B1A7D37F58A0741",
+		"0xa7dD84573f5ffF821baf2205745f768F8edCDD58",
+		"0x027a49d11d118c0060746F1990273FcB8c2fC196",
+		"0x689E3fE51F45760Ab73D237d28fc1d2C8EaC6D71",
+		"0x97D509F0b388daE6D000C33193F4645D1e71Dc54",
+		"0xa4Fd5bD20Cf5A7CF1c5A6015D2b3e08A3eC1b1a7",
+		"0x230AE42Daf56B494E4b9E6D8Cce99F5E14FE29c1",
+		"0xC19D1EDB7FC943f2abbF576f6058c2425B347AB9",
+		"0x4f936Bb00CaaD116adc3861146dd8f68BF66F4E6",
+		"0xE74287ECA7B7151Fd194cdf7680EB50752671c47",
+		"0x5d32a30FBc5bddF39293CE3a9D74E4505dEb621D",
+		"0x27cBC66cbE3625c2857ce3CF77A9933e589545DF",
+		"0xE2A5f301EA7e461880Fe9A6B4b7EC1aBD023129A",
+		"0xe0DFdDA1D174aB7315C753EA198885ee88B52763",
+		"0x843655C78939365298FD9515b489939bADca64Ec",
+		"0x6bB7a54E4ef381e4C64009DDa0A9ED127aab852C",
+	}
+
+	failed, passed := 0, 0
+	for i := 0; i < len(testcases); i++ {
+		ca := ChecksumAddressHex(testcases[i])
+		if testcases[i] == ca {
+			passed++
+		} else {
+			failed++
+			t.Errorf("Failed to compute ChecksumAddressHex for address " + testcases[i] + ": \n\tExpected=" + testcases[i] + "\n\tReceived=" + ca)
+		}
+	}
+
+	testcases = []string{
+		"52908400098527886E0F7030069857D2E4169EE7",
+		"8617E340B3D01FA5F11F306F4090FD50E238070D",
+
+		"de709f2102306220921060314715629080e2fb77",
+		"27b1fdb04752bbc536007a920d24acb045561c26",
+
+		"5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed",
+		"fB6916095ca1df60bB79Ce92cE3Ea74c37c5d359",
+		"dbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB",
+		"D1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb",
+
+		"5A4EAB120fB44eb6684E5e32785702FF45ea344D",
+		"5be4BDC48CeF65dbCbCaD5218B1A7D37F58A0741",
+		"a7dD84573f5ffF821baf2205745f768F8edCDD58",
+		"027a49d11d118c0060746F1990273FcB8c2fC196",
+		"689E3fE51F45760Ab73D237d28fc1d2C8EaC6D71",
+		"97D509F0b388daE6D000C33193F4645D1e71Dc54",
+		"a4Fd5bD20Cf5A7CF1c5A6015D2b3e08A3eC1b1a7",
+		"230AE42Daf56B494E4b9E6D8Cce99F5E14FE29c1",
+		"C19D1EDB7FC943f2abbF576f6058c2425B347AB9",
+		"4f936Bb00CaaD116adc3861146dd8f68BF66F4E6",
+		"E74287ECA7B7151Fd194cdf7680EB50752671c47",
+		"5d32a30FBc5bddF39293CE3a9D74E4505dEb621D",
+		"27cBC66cbE3625c2857ce3CF77A9933e589545DF",
+		"E2A5f301EA7e461880Fe9A6B4b7EC1aBD023129A",
+		"e0DFdDA1D174aB7315C753EA198885ee88B52763",
+		"843655C78939365298FD9515b489939bADca64Ec",
+		"6bB7a54E4ef381e4C64009DDa0A9ED127aab852C",
+	}
+
+	for i := 0; i < len(testcases); i++ {
+		ca := ChecksumAddressHex(testcases[i])
+		if "0x"+testcases[i] == ca {
+			passed++
+		} else {
+			failed++
+			t.Errorf("Failed to compute ChecksumAddressHex for address " + testcases[i] + ": \n\tExpected=" + testcases[i] + "\n\tReceived=" + ca)
+		}
+	}
+	fmt.Printf("Passed %d tests and failed %d tests out of %d.\n", passed, failed, passed+failed)
+}

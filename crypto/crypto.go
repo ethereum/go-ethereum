@@ -36,6 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/ripemd160"
+
+	"strconv"
+	"strings"
 )
 
 func Keccak256(data ...[]byte) []byte {
@@ -221,4 +224,32 @@ func zeroBytes(bytes []byte) {
 	for i := range bytes {
 		bytes[i] = 0
 	}
+}
+
+// ChecksumAddress converts an address into a checksummed address.
+// It returns a 42-letter string starting with "0x".
+// The checksum algorithm is discussed in https://github.com/ethereum/EIPs/issues/55
+func ChecksumAddress(a common.Address) string {
+	// hex.EncodeToString is always lower case without 0x prefix
+	address := hex.EncodeToString(a[:])
+	// skip the "0x" at the beginning
+	addressHash := hex.EncodeToString(Sha3([]byte(a.Hex()[2:])))
+	checksumAddress := "0x"
+	for i := 0; i < len(address); i++ {
+		// If ith character is 8 to f then make it uppercase
+		l, _ := strconv.ParseInt(string(addressHash[i]), 16, 16)
+		if l > 7 {
+			checksumAddress += strings.ToUpper(string(address[i]))
+		} else {
+			checksumAddress += string(address[i])
+		}
+	}
+	return checksumAddress
+}
+
+// ChecksumAddressHex converts an address into a checksummed address.
+// The input s may or may not be prefixed with "0x".
+// The returned string is 42 long and always includes the prefix "0x".
+func ChecksumAddressHex(s string) string {
+	return ChecksumAddress(common.HexToAddress(s))
 }
