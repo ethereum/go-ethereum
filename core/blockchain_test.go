@@ -168,7 +168,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		if err := blockchain.Validator().ValidateHeader(header, blockchain.GetHeader(header.ParentHash), false); err != nil {
 			return err
 		}
-		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
+		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
 		blockchain.mu.Lock()
 		WriteTd(blockchain.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, blockchain.GetTd(header.ParentHash)))
 		WriteHeader(blockchain.chainDb, header)
@@ -491,7 +491,7 @@ func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	return bc
 }
 
-// Tests that reorganizing a long difficult chain after a short easy one
+// Tests that reorganising a long difficult chain after a short easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgLongHeaders(t *testing.T) { testReorgLong(t, false) }
 func TestReorgLongBlocks(t *testing.T)  { testReorgLong(t, true) }
@@ -500,7 +500,7 @@ func testReorgLong(t *testing.T, full bool) {
 	testReorg(t, []int{1, 2, 4}, []int{1, 2, 3, 4}, 10, full)
 }
 
-// Tests that reorganizing a short difficult chain after a long easy one
+// Tests that reorganising a short difficult chain after a long easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgShortHeaders(t *testing.T) { testReorgShort(t, false) }
 func TestReorgShortBlocks(t *testing.T)  { testReorgShort(t, true) }
@@ -858,7 +858,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	assert(t, "light", light, height/2, 0, 0)
 }
 
-// Tests that chain reorganizations handle transaction removals and reinsertions.
+// Tests that chain reorganisations handle transaction removals and reinsertions.
 func TestChainTxReorgs(t *testing.T) {
 	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
 	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.

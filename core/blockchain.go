@@ -775,7 +775,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
 	if externTd.Cmp(localTd) > 0 || (externTd.Cmp(localTd) == 0 && mrand.Float64() < 0.5) {
-		// Reorganize the chain if the parent is not the head block
+		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != self.currentBlock.Hash() {
 			if err := self.reorg(self.currentBlock, block); err != nil {
 				return NonStatTy, err

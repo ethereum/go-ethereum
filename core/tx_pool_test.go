@@ -366,7 +366,7 @@ func TestTransactionPostponing(t *testing.T) {
 	if len(pool.queue[account]) != 0 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", len(pool.queue), 0)
 	}
-	// Reduce the balance of the account, and check that transactions are reorganized
+	// Reduce the balance of the account, and check that transactions are reorganised
 	state.AddBalance(account, big.NewInt(-750))
 	pool.resetState()
 
