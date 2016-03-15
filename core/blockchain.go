@@ -99,7 +99,7 @@ type BlockChain struct {
 	futureBlocks *lru.Cache // future blocks are blocks added for later processing
 
 	quit    chan struct{} // blockchain quit channel
-	running int32         // running must be called automically
+	running int32         // running must be called atomically
 	// procInterrupt must be atomically called
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
@@ -792,7 +792,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 		glog.Fatalf("failed to write block total difficulty: %v", err)
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
-		glog.Fatalf("filed to write block contents: %v", err)
+		glog.Fatalf("failed to write block contents: %v", err)
 	}
 
 	self.futureBlocks.Remove(block.Hash())
@@ -1134,7 +1134,7 @@ func reportBlock(block *types.Block, err error) {
 //
 // The verify parameter can be used to fine tune whether nonce verification
 // should be done or not. The reason behind the optional check is because some
-// of the header retrieval mechanisms already need to verfy nonces, as well as
+// of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	// Make sure only one thread manipulates the chain at once
