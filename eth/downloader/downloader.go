@@ -534,7 +534,7 @@ func (d *Downloader) fetchHeight61(p *peer) (uint64, error) {
 // findAncestor61 tries to locate the common ancestor block of the local chain and
 // a remote peers blockchain. In the general case when our node was in sync and
 // on the correct chain, checking the top N blocks should already get us a match.
-// In the rare scenario when we ended up on a long reorganization (i.e. none of
+// In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head blocks match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
@@ -960,7 +960,7 @@ func (d *Downloader) fetchHeight(p *peer) (uint64, error) {
 // findAncestor tries to locate the common ancestor link of the local chain and
 // a remote peers blockchain. In the general case when our node was in sync and
 // on the correct chain, checking the top N links should already get us a match.
-// In the rare scenario when we ended up on a long reorganization (i.e. none of
+// In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
