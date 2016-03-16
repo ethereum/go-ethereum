@@ -1,0 +1,27 @@
+FROM jeanblanchard/alpine-glibc
+MAINTAINER Jim Alateras <jima@comware.com.au>
+
+ENV APP_HOME /app
+ENV APP_USER ethereum
+ENV APP_GROUP ethereum
+ENV PATH $APP_HOME:$PATH
+ENV ETHEREUM_BIN=https://github.com/ethereum/go-ethereum/releases/download/v1.3.5/geth-Linux64-20160303152500-1.3.5-34b622a.tar.bz2
+
+RUN \
+  addgroup -S $APP_USER && \
+  adduser -S -s /bin/bash -G $APP_GROUP $APP_USER
+
+RUN \
+  apk add --update bash wget && \
+  mkdir -p $APP_HOME && \
+  cd $APP_HOME && \
+  wget -qO- --no-check-certificate $ETHEREUM_BIN | tar xvjf - && \
+  chown -R $APP_USER:$APP_GROUP $APP_HOME && \
+  rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
+
+EXPOSE 8545
+EXPOSE 30303
+
+USER $APP_USER
+WORKDIR $APP_HOME
+CMD ["./geth"]
