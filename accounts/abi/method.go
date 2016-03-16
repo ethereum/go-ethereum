@@ -67,8 +67,11 @@ func (m Method) String() string {
 		}
 		outputs[i] += output.Type.String()
 	}
-
-	return fmt.Sprintf("function %v(%v) returns(%v)", m.Name, strings.Join(inputs, ", "), strings.Join(outputs, ", "))
+	constant := ""
+	if m.Const {
+		constant = "constant "
+	}
+	return fmt.Sprintf("function %v(%v) %sreturns(%v)", m.Name, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
 }
 
 func (m Method) Id() []byte {

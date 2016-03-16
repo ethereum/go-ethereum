@@ -268,12 +268,12 @@ func set(dst, src reflect.Value, output Argument) error {
 
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
-		Type    string
-		Name    string
-		Const   bool
-		Indexed bool
-		Inputs  []Argument
-		Outputs []Argument
+		Type     string
+		Name     string
+		Constant bool
+		Indexed  bool
+		Inputs   []Argument
+		Outputs  []Argument
 	}
 
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -288,7 +288,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		case "function", "":
 			abi.Methods[field.Name] = Method{
 				Name:    field.Name,
-				Const:   field.Const,
+				Const:   field.Constant,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}
