@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package abi
+// Package bind generates Ethereum contract Go bindings.
+package bind
 
 import (
 	"bytes"
@@ -22,6 +23,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/tools/imports"
 )
 
@@ -31,7 +33,7 @@ import (
 // manually maintain hard coded strings that break on runtime.
 func Bind(jsonABI string, pkg string, kind string) (string, error) {
 	// Parse the actual ABI to generate the binding for
-	abi, err := JSON(strings.NewReader(jsonABI))
+	abi, err := abi.JSON(strings.NewReader(jsonABI))
 	if err != nil {
 		return "", err
 	}
@@ -75,18 +77,18 @@ func bindContract(kind string, abi string) string {
 	// Generate the Go struct with all the maintenance fields
 	code += fmt.Sprintf("// %s is an auto generated Go binding around an Ethereum contract.\n", kind)
 	code += fmt.Sprintf("type %s struct {\n", kind)
-	code += fmt.Sprintf("contract *abi.BoundContract // Generic contract wrapper for the low level calls\n")
+	code += fmt.Sprintf("contract *bind.BoundContract // Generic contract wrapper for the low level calls\n")
 	code += fmt.Sprintf("}\n\n")
 
 	// Generate the constructor to create a bound contract
 	code += fmt.Sprintf("// New%s creates a new instance of %s, bound to a specific deployed contract.\n", kind, kind)
-	code += fmt.Sprintf("func New%s(address common.Address, blockchain *core.BlockChain, opts abi.ContractOpts) (*%s, error) {\n", kind, kind)
+	code += fmt.Sprintf("func New%s(address common.Address, blockchain *core.BlockChain, opts bind.ContractOpts) (*%s, error) {\n", kind, kind)
 	code += fmt.Sprintf("  parsed, err := abi.JSON(strings.NewReader(%sABI))\n", kind)
 	code += fmt.Sprintf("  if err != nil {\n")
 	code += fmt.Sprintf("    return nil, err\n")
 	code += fmt.Sprintf("  }\n")
 	code += fmt.Sprintf("  return &%s{\n", kind)
-	code += fmt.Sprintf("    contract: abi.NewBoundContract(address, parsed, blockchain, opts),\n")
+	code += fmt.Sprintf("    contract: bind.NewBoundContract(address, parsed, blockchain, opts),\n")
 	code += fmt.Sprintf("  }, nil\n")
 	code += fmt.Sprintf("}")
 
@@ -94,7 +96,7 @@ func bindContract(kind string, abi string) string {
 }
 
 // bindMethod
-func bindMethod(kind string, method Method) string {
+func bindMethod(kind string, method abi.Method) string {
 	var (
 		name     = strings.ToUpper(method.Name[:1]) + method.Name[1:]
 		prologue = new(bytes.Buffer)
@@ -123,7 +125,7 @@ func bindMethod(kind string, method Method) string {
 	if method.Const {
 		return fmt.Sprintf("%s\n%s\nfunc (_%s *%s) %s(%s) (%s) {\n%s\n}\n", prologue, docs, kind, kind, name, strings.Join(args, ","), strings.Join(returns, ","), bindCallBody(kind, method.Name, args, returns))
 	} else {
-		args = append([]string{"auth *abi.AuthOpts"}, args...)
+		args = append([]string{"auth *bind.AuthOpts"}, args...)
 		return fmt.Sprintf("%s\n%s\nfunc (_%s *%s) %s(%s) (*types.Transaction, error) {\n%s\n}\n", prologue, docs, kind, kind, name, strings.Join(args, ","), bindTransactionBody(kind, method.Name, args))
 	}
 }
@@ -131,43 +133,45 @@ func bindMethod(kind string, method Method) string {
 // bindType converts a Solidity type to a Go one. Since there is no clear mapping
 // from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
 // mapped will use an upscaled type (e.g. *big.Int).
-func bindType(kind Type) string {
+func bindType(kind abi.Type) string {
+	stringKind := kind.String()
+
 	switch {
-	case kind.stringKind == "address":
+	case stringKind == "address":
 		return "common.Address"
 
-	case kind.stringKind == "hash":
+	case stringKind == "hash":
 		return "common.Hash"
 
-	case strings.HasPrefix(kind.stringKind, "bytes"):
-		if kind.stringKind == "bytes" {
+	case strings.HasPrefix(stringKind, "bytes"):
+		if stringKind == "bytes" {
 			return "[]byte"
 		}
-		return fmt.Sprintf("[%s]byte", kind.stringKind[5:])
+		return fmt.Sprintf("[%s]byte", stringKind[5:])
 
-	case strings.HasPrefix(kind.stringKind, "int"):
-		switch kind.stringKind[:3] {
+	case strings.HasPrefix(stringKind, "int"):
+		switch stringKind[:3] {
 		case "8", "16", "32", "64":
-			return kind.stringKind
+			return stringKind
 		}
 		return "*big.Int"
 
-	case strings.HasPrefix(kind.stringKind, "uint"):
-		switch kind.stringKind[:4] {
+	case strings.HasPrefix(stringKind, "uint"):
+		switch stringKind[:4] {
 		case "8", "16", "32", "64":
-			return kind.stringKind
+			return stringKind
 		}
 		return "*big.Int"
 
 	default:
-		return kind.stringKind
+		return stringKind
 	}
 }
 
 // bindReturn creates the list of return parameters for a method invocation. If
 // all the fields of the return type are named, and there is more than one value
 // being returned, the returns are wrapped in a result struct.
-func bindReturn(prologue *bytes.Buffer, method string, outputs []Argument) ([]string, string) {
+func bindReturn(prologue *bytes.Buffer, method string, outputs []abi.Argument) ([]string, string) {
 	// Generate the anonymous return list for when a struct is not needed/possible
 	var (
 		returns   = make([]string, 0, len(outputs)+1)
@@ -191,7 +195,7 @@ func bindReturn(prologue *bytes.Buffer, method string, outputs []Argument) ([]st
 
 // bindReturnStruct creates a Go structure with the specified fields to be used
 // as the return type from a method call.
-func bindReturnStruct(method string, returns []Argument) (string, string) {
+func bindReturnStruct(method string, returns []abi.Argument) (string, string) {
 	fields := make([]string, 0, len(returns))
 	for _, ret := range returns {
 		fields = append(fields, fmt.Sprintf("%s %s", strings.ToUpper(ret.Name[:1])+ret.Name[1:], bindType(ret.Type)))

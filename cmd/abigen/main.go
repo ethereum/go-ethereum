@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 )
 
 var (
@@ -54,17 +54,17 @@ func main() {
 	if kind == "" {
 		kind = *pkgFlag
 	}
-	bind, err := abi.Bind(string(in), *pkgFlag, kind)
+	code, err := bind.Bind(string(in), *pkgFlag, kind)
 	if err != nil {
 		fmt.Printf("Failed to generate ABI binding: %v\n", err)
 		os.Exit(-1)
 	}
 	// Either flush it out to a file or display on the standard output
 	if *outFlag == "" {
-		fmt.Printf("%s\n", bind)
+		fmt.Printf("%s\n", code)
 		return
 	}
-	if err := ioutil.WriteFile(*outFlag, []byte(bind), 0600); err != nil {
+	if err := ioutil.WriteFile(*outFlag, []byte(code), 0600); err != nil {
 		fmt.Printf("Failed to write ABI binding: %v\n", err)
 		os.Exit(-1)
 	}

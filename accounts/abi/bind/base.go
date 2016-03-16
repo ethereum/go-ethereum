@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package abi
+package bind
 
 import (
 	"errors"
@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/barakmich/glog"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -74,7 +75,7 @@ type AuthOpts struct {
 // higher level contract bindings to operate.
 type BoundContract struct {
 	address common.Address // Deployment address of the contract on the Ethereum blockchain
-	abi     ABI            // Reflect based ABI to access the correct Ethereum methods
+	abi     abi.ABI        // Reflect based ABI to access the correct Ethereum methods
 
 	blockchain *core.BlockChain      // Ethereum blockchain to use for state retrieval
 	options    *ContractOpts         // Options fine tuning contract behaviour
@@ -83,7 +84,7 @@ type BoundContract struct {
 
 // NewBoundContract initialises a new ABI and returns the contract. It does not
 // deploy the contract, hence the name.
-func NewBoundContract(address common.Address, abi ABI, blockchain *core.BlockChain, opts ContractOpts) *BoundContract {
+func NewBoundContract(address common.Address, abi abi.ABI, blockchain *core.BlockChain, opts ContractOpts) *BoundContract {
 	// Initialize any needed values for the contract options
 	if opts.EventMux == nil {
 		opts.EventMux = new(event.TypeMux)
