@@ -58,7 +58,7 @@ func TestApiDirUpload0(t *testing.T) {
 		resp = testGet(t, api, bzzhash+"/img/logo.png")
 		exp = expResponse(content, "image/png", 0)
 
-		_, _, _, err = api.Get(bzzhash)
+		_, _, _, err = api.Get(bzzhash, true)
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
@@ -91,17 +91,17 @@ func TestApiDirUploadModify(t *testing.T) {
 			return
 		}
 
-		bzzhash, err = api.Modify(bzzhash, "index.html", "", "")
+		bzzhash, err = api.Modify(bzzhash+"/index.html", "", "", true)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash, "index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8")
+		bzzhash, err = api.Modify(bzzhash+"/index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash, "img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8")
+		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -120,7 +120,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		resp = testGet(t, api, bzzhash+"/index.css")
 		exp = expResponse(content, "text/css", 0)
 
-		_, _, _, err = api.Get(bzzhash)
+		_, _, _, err = api.Get(bzzhash, true)
 		if err == nil {
 			t.Errorf("expected error: %v", err)
 		}
