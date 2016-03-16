@@ -689,7 +689,7 @@ func (s *PublicBlockChainAPI) Call(args CallArgs, blockNr rpc.BlockNumber) (stri
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the given transaction.
 func (s *PublicBlockChainAPI) EstimateGas(args CallArgs) (*rpc.HexNumber, error) {
-	_, gas, err := s.doCall(args, rpc.LatestBlockNumber)
+	_, gas, err := s.doCall(args, rpc.PendingBlockNumber)
 	return rpc.NewHexNumber(gas), err
 }
 
