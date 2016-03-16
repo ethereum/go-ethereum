@@ -164,12 +164,9 @@ func (self *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
-func (self *Miner) PendingState() *state.StateDB {
-	return self.worker.pendingState()
-}
-
-func (self *Miner) PendingBlock() *types.Block {
-	return self.worker.pendingBlock()
+// Pending returns the currently pending block and associated state.
+func (self *Miner) Pending() (*types.Block, *state.StateDB) {
+	return self.worker.pending()
 }
 
 func (self *Miner) SetEtherbase(addr common.Address) {
