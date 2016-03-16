@@ -17,6 +17,7 @@ RUN \
   cd $APP_HOME && \
   wget -qO- --no-check-certificate $ETHEREUM_BIN | tar xvjf - && \
   chown -R $APP_USER:$APP_GROUP $APP_HOME && \
+  apk del --purge wget  && \
   rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 EXPOSE 8545
