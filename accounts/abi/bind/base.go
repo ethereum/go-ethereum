@@ -21,39 +21,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/barakmich/glog"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
 )
-
-// GasOracleFn is a gas price oracle function callback to request the suggestion
-// of an estimated gas price that should be used to execute a paid transaction.
-type GasOracleFn func() *big.Int
-
-// MinerStateFn is a callback method to retrieve the currently pending state
-// according ti our local mining instance.
-type MinerStateFn func() (*types.Block, *state.StateDB)
-
-// TxScheduleFn is a callback method to schedule a transaction for execution.
-type TxScheduleFn func(*types.Transaction) error
-
-// ContractOpts is the set of contract parameters that can be used to fine tune
-// behavior tailoring to a specific use case.
-type ContractOpts struct {
-	Database   ethdb.Database // Chain and state database needed to access past logs
-	EventMux   *event.TypeMux // Event multiplexer to publish log events merged with others
-	GasOracle  GasOracleFn    // Gas price oracle to allow not specifying transaction prices
-	MinerState MinerStateFn   // Pending state retriever to allow nonce and gas limit estimation
-	TxSchedule TxScheduleFn   // Transaction scheduler to inject a transaction into the pool
-}
 
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
@@ -74,28 +45,20 @@ type AuthOpts struct {
 // Ethereum network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
 type BoundContract struct {
-	address common.Address // Deployment address of the contract on the Ethereum blockchain
-	abi     abi.ABI        // Reflect based ABI to access the correct Ethereum methods
-
-	blockchain *core.BlockChain      // Ethereum blockchain to use for state retrieval
-	options    *ContractOpts         // Options fine tuning contract behaviour
-	filters    *filters.FilterSystem // Filter system to handle the contract events
+	address    common.Address     // Deployment address of the contract on the Ethereum blockchain
+	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
+	caller     ContractCaller     // Read interface to interact with the blockchain
+	transactor ContractTransactor // Write interface to interact with the blockchain
 }
 
-// NewBoundContract initialises a new ABI and returns the contract. It does not
-// deploy the contract, hence the name.
-func NewBoundContract(address common.Address, abi abi.ABI, blockchain *core.BlockChain, opts ContractOpts) *BoundContract {
-	// Initialize any needed values for the contract options
-	if opts.EventMux == nil {
-		opts.EventMux = new(event.TypeMux)
-	}
-	// Create and return the contract base
+// NewBoundContract creates a low level contract interface through which calls
+// and transactions may be made through.
+func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor) *BoundContract {
 	return &BoundContract{
 		address:    address,
 		abi:        abi,
-		blockchain: blockchain,
-		options:    &opts,
-		filters:    filters.NewFilterSystem(opts.EventMux),
+		caller:     caller,
+		transactor: transactor,
 	}
 }
 
@@ -104,28 +67,20 @@ func NewBoundContract(address common.Address, abi abi.ABI, blockchain *core.Bloc
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
 func (c *BoundContract) Call(result interface{}, method string, params ...interface{}) error {
-	return c.abi.Call(c.execute, result, method, params...)
-}
-
-// execute runs the contract code for the given input value and returns the output.
-func (c *BoundContract) execute(input []byte) []byte {
-	state, _ := c.blockchain.State()
-
-	output, err := runtime.Call(c.address, input, &runtime.Config{
-		GetHashFn: core.GetHashFn(c.blockchain.CurrentBlock().ParentHash(), c.blockchain),
-		State:     state,
-	})
+	input, err := c.abi.Pack(method, params...)
 	if err != nil {
-		glog.V(logger.Warn).Infof("contract call failed: %v", err)
-		return nil
+		return err
 	}
-	return output
+	output, err := c.caller.ContractCall(c.address, input)
+	if err != nil {
+		return err
+	}
+	return c.abi.Unpack(result, method, output)
 }
 
 // Transact invokes the (paid) contract method with params as input values and
 // value as the fund transfer to the contract.
 func (c *BoundContract) Transact(opts *AuthOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	// Pack up the method and arguments into an input data blob
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
 		return nil, err
@@ -135,39 +90,32 @@ func (c *BoundContract) Transact(opts *AuthOpts, method string, params ...interf
 	if value == nil {
 		value = new(big.Int)
 	}
-	nonce := opts.Nonce
-	if nonce == nil {
-		if c.options.MinerState == nil {
-			return nil, errors.New("account nonce nil and no miner state retriever specified to estimate")
+	nonce := uint64(0)
+	if opts.Nonce == nil {
+		nonce, err = c.transactor.AccountNonce(opts.Account)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve account nonce: %v", err)
 		}
-		_, statedb := c.options.MinerState()
-		if statedb == nil {
-			return nil, errors.New("miner state retriever returned nil")
-		}
-		nonce = new(big.Int).SetUint64(statedb.GetNonce(opts.Account))
+	} else {
+		nonce = opts.Nonce.Uint64()
 	}
 	// Figure out the gas allowance and gas price values
 	gasPrice := opts.GasPrice
 	if gasPrice == nil {
-		if c.options.GasOracle == nil {
-			return nil, errors.New("gas price nil and no price oracle set")
-		}
-		if gasPrice = c.options.GasOracle(); gasPrice == nil {
-			return nil, errors.New("gas oracle suggested nil price")
+		gasPrice, err = c.transactor.GasPrice()
+		if err != nil {
+			return nil, fmt.Errorf("failed to suggest gas price: %v", err)
 		}
 	}
 	gasLimit := opts.GasLimit
 	if gasLimit == nil {
-		limit, err := c.estimate(opts.Account, value, gasPrice, input)
+		gasLimit, err = c.transactor.GasLimit(opts.Account, c.address, value, input)
 		if err != nil {
-			return nil, fmt.Errorf("gas estimation failed: %v", err)
-		}
-		if gasLimit = limit; gasLimit == nil {
-			return nil, errors.New("gas estimator suggested nil limit")
+			return nil, fmt.Errorf("failed to exstimate gas needed: %v", err)
 		}
 	}
 	// Create the transaction, sign it and schedule it for execution
-	rawTx := types.NewTransaction(nonce.Uint64(), c.address, value, gasLimit, gasPrice, input)
+	rawTx := types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
@@ -175,63 +123,8 @@ func (c *BoundContract) Transact(opts *AuthOpts, method string, params ...interf
 	if err != nil {
 		return nil, err
 	}
-	if c.options.TxSchedule == nil {
-		return nil, errors.New("no transaction scheduler configured")
-	}
-	if err := c.options.TxSchedule(signedTx); err != nil {
+	if err := c.transactor.SendTransaction(signedTx); err != nil {
 		return nil, err
 	}
 	return signedTx, nil
 }
-
-// estimate tries to calculate the approximate gas required by a transaction.
-func (c *BoundContract) estimate(sender common.Address, value, price *big.Int, input []byte) (*big.Int, error) {
-	// Create a copy of the current state db to screw around with
-	if c.options.MinerState == nil {
-		return nil, errors.New("no miner state retriever configured")
-	}
-	block, statedb := c.options.MinerState()
-	if block == nil || statedb == nil {
-		return nil, errors.New("pending miner state nil")
-	}
-	statedb = statedb.Copy()
-
-	// Set infinite balance to the sender account
-	from := statedb.GetOrNewStateObject(sender)
-	from.SetBalance(common.MaxBig)
-
-	// Assemble the call invocation to measure the gas usage
-	msg := callmsg{
-		from:     from,
-		to:       &c.address,
-		gasLimit: block.GasLimit(),
-		gasPrice: price,
-		value:    value,
-		data:     input,
-	}
-	// Execute the call and return
-	vmenv := core.NewEnv(statedb, c.blockchain, msg, block.Header())
-	gaspool := new(core.GasPool).AddGas(common.MaxBig)
-
-	_, gas, err := core.ApplyMessage(vmenv, msg, gaspool)
-	return gas, err
-}
-
-// callmsg implements core.Message to allow passing it as a transaction simulator.
-type callmsg struct {
-	from     *state.StateObject
-	to       *common.Address
-	gasLimit *big.Int
-	gasPrice *big.Int
-	value    *big.Int
-	data     []byte
-}
-
-func (m callmsg) From() (common.Address, error)         { return m.from.Address(), nil }
-func (m callmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
-func (m callmsg) Nonce() uint64                         { return m.from.Nonce() }
-func (m callmsg) To() *common.Address                   { return m.to }
-func (m callmsg) GasPrice() *big.Int                    { return m.gasPrice }
-func (m callmsg) Gas() *big.Int                         { return m.gasLimit }
-func (m callmsg) Value() *big.Int                       { return m.value }
-func (m callmsg) Data() []byte                          { return m.data }
