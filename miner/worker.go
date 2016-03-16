@@ -152,13 +152,7 @@ func (self *worker) setEtherbase(addr common.Address) {
 	self.coinbase = addr
 }
 
-func (self *worker) pendingState() *state.StateDB {
-	self.currentMu.Lock()
-	defer self.currentMu.Unlock()
-	return self.current.state
-}
-
-func (self *worker) pendingBlock() *types.Block {
+func (self *worker) pending() (*types.Block, *state.StateDB) {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
 
@@ -168,9 +162,9 @@ func (self *worker) pendingBlock() *types.Block {
 			self.current.txs,
 			nil,
 			self.current.receipts,
-		)
+		), self.current.state
 	}
-	return self.current.Block
+	return self.current.Block, self.current.state
 }
 
 func (self *worker) start() {

@@ -56,7 +56,8 @@ const defaultGas = uint64(90000)
 func blockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber) *types.Block {
 	// Pending block is only known by the miner
 	if blockNr == rpc.PendingBlockNumber {
-		return m.PendingBlock()
+		block, _ := m.Pending()
+		return block
 	}
 	// Otherwise resolve and return the block
 	if blockNr == rpc.LatestBlockNumber {
@@ -72,7 +73,8 @@ func blockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber)
 func stateAndBlockByNumber(m *miner.Miner, bc *core.BlockChain, blockNr rpc.BlockNumber, chainDb ethdb.Database) (*state.StateDB, *types.Block, error) {
 	// Pending state is only known by the miner
 	if blockNr == rpc.PendingBlockNumber {
-		return m.PendingState(), m.PendingBlock(), nil
+		block, state := m.Pending()
+		return state, block, nil
 	}
 	// Otherwise resolve the block number and return its state
 	block := blockByNumber(m, bc, blockNr)
