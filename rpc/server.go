@@ -160,11 +160,11 @@ func (s *Server) ServeCodec(codec ServerCodec) {
 			if batch {
 				resps := make([]interface{}, len(reqs))
 				for i, r := range reqs {
-					resps[i] = codec.CreateErrorResponse(&r.id, err)
+					resps[i] = codec.CreateErrorResponse(r.id, err)
 				}
 				codec.Write(resps)
 			} else {
-				codec.Write(codec.CreateErrorResponse(&reqs[0].id, err))
+				codec.Write(codec.CreateErrorResponse(reqs[0].id, err))
 			}
 			break
 		}
@@ -279,7 +279,7 @@ func (s *Server) unsubscribe(subid string) bool {
 // handle executes a request and returns the response from the callback.
 func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverRequest) interface{} {
 	if req.err != nil {
-		return codec.CreateErrorResponse(&req.id, req.err)
+		return codec.CreateErrorResponse(req.id, req.err)
 	}
 
 	if req.isUnsubscribe { // first param must be the subscription id
@@ -288,17 +288,17 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 			if s.unsubscribe(subid) {
 				return codec.CreateResponse(req.id, true)
 			} else {
-				return codec.CreateErrorResponse(&req.id,
+				return codec.CreateErrorResponse(req.id,
 					&callbackError{fmt.Sprintf("subscription '%s' not found", subid)})
 			}
 		}
-		return codec.CreateErrorResponse(&req.id, &invalidParamsError{"Expected subscription id as argument"})
+		return codec.CreateErrorResponse(req.id, &invalidParamsError{"Expected subscription id as argument"})
 	}
 
 	if req.callb.isSubscribe {
 		subid, err := s.createSubscription(codec, req)
 		if err != nil {
-			return codec.CreateErrorResponse(&req.id, &callbackError{err.Error()})
+			return codec.CreateErrorResponse(req.id, &callbackError{err.Error()})
 		}
 		return codec.CreateResponse(req.id, subid)
 	}
@@ -308,7 +308,7 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 		rpcErr := &invalidParamsError{fmt.Sprintf("%s%s%s expects %d parameters, got %d",
 			req.svcname, serviceMethodSeparator, req.callb.method.Name,
 			len(req.callb.argTypes), len(req.args))}
-		return codec.CreateErrorResponse(&req.id, rpcErr)
+		return codec.CreateErrorResponse(req.id, rpcErr)
 	}
 
 	arguments := []reflect.Value{req.callb.rcvr}
@@ -328,7 +328,7 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 	if req.callb.errPos >= 0 { // test if method returned an error
 		if !reply[req.callb.errPos].IsNil() {
 			e := reply[req.callb.errPos].Interface().(error)
-			res := codec.CreateErrorResponse(&req.id, &callbackError{e.Error()})
+			res := codec.CreateErrorResponse(req.id, &callbackError{e.Error()})
 			return res
 		}
 	}
@@ -339,7 +339,7 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest) {
 	var response interface{}
 	if req.err != nil {
-		response = codec.CreateErrorResponse(&req.id, req.err)
+		response = codec.CreateErrorResponse(req.id, req.err)
 	} else {
 		response = s.handle(ctx, codec, req)
 	}
@@ -355,7 +355,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 	responses := make([]interface{}, len(requests))
 	for i, req := range requests {
 		if req.err != nil {
-			responses[i] = codec.CreateErrorResponse(&req.id, req.err)
+			responses[i] = codec.CreateErrorResponse(req.id, req.err)
 		} else {
 			responses[i] = s.handle(ctx, codec, req)
 		}

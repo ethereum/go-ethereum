@@ -57,7 +57,7 @@ type service struct {
 
 // serverRequest is an incoming request
 type serverRequest struct {
-	id            int64
+	id            interface{}
 	svcname       string
 	rcvr          reflect.Value
 	callb         *callback
@@ -86,7 +86,7 @@ type Server struct {
 type rpcRequest struct {
 	service  string
 	method   string
-	id       int64
+	id       interface{}
 	isPubSub bool
 	params   interface{}
 }
@@ -108,11 +108,11 @@ type ServerCodec interface {
 	// Parse request argument to the given types
 	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, RPCError)
 	// Assemble success response
-	CreateResponse(int64, interface{}) interface{}
+	CreateResponse(interface{}, interface{}) interface{}
 	// Assemble error response
-	CreateErrorResponse(*int64, RPCError) interface{}
+	CreateErrorResponse(interface{}, RPCError) interface{}
 	// Assemble error response with extra information about the error through info
-	CreateErrorResponseWithInfo(id *int64, err RPCError, info interface{}) interface{}
+	CreateErrorResponseWithInfo(id interface{}, err RPCError, info interface{}) interface{}
 	// Create notification response
 	CreateNotification(string, interface{}) interface{}
 	// Write msg to client.
