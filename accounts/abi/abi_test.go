@@ -365,6 +365,134 @@ func ExampleJSON() {
 	// 1f2c40920000000000000000000000000000000000000000000000000000000000000001
 }
 
+func TestInputVariableInputLength(t *testing.T) {
+	const definition = `[
+	{ "type" : "function", "name" : "strOne", "const" : true, "inputs" : [ { "name" : "str", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bytesOne", "const" : true, "inputs" : [ { "name" : "str", "type" : "bytes" } ] },
+	{ "type" : "function", "name" : "strTwo", "const" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "str1", "type" : "string" } ] }
+]`
+
+	abi, err := JSON(strings.NewReader(definition))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// test one string
+	strin := "hello world"
+	strpack, err := abi.Pack("strOne", strin)
+	if err != nil {
+		t.Error(err)
+	}
+
+	offset := make([]byte, 32)
+	offset[31] = 32
+	length := make([]byte, 32)
+	length[31] = byte(len(strin))
+	value := common.RightPadBytes([]byte(strin), 32)
+	exp := append(offset, append(length, value...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	strpack = strpack[4:]
+	if !bytes.Equal(strpack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, strpack)
+	}
+
+	// test one bytes
+	btspack, err := abi.Pack("bytesOne", []byte(strin))
+	if err != nil {
+		t.Error(err)
+	}
+	// ignore first 4 bytes of the output. This is the function identifier
+	btspack = btspack[4:]
+	if !bytes.Equal(btspack, exp) {
+		t.Errorf("expected %x, got %x\n", exp, btspack)
+	}
+
+	//  test two strings
+	str1 := "hello"
+	str2 := "world"
+	str2pack, err := abi.Pack("strTwo", str1, str2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	offset1 := make([]byte, 32)
+	offset1[31] = 64
+	length1 := make([]byte, 32)
+	length1[31] = byte(len(str1))
+	value1 := common.RightPadBytes([]byte(str1), 32)
+
+	offset2 := make([]byte, 32)
+	offset2[31] = 128
+	length2 := make([]byte, 32)
+	length2[31] = byte(len(str2))
+	value2 := common.RightPadBytes([]byte(str2), 32)
+
+	exp2 := append(offset1, offset2...)
+	exp2 = append(exp2, append(length1, value1...)...)
+	exp2 = append(exp2, append(length2, value2...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	str2pack = str2pack[4:]
+	if !bytes.Equal(str2pack, exp2) {
+		t.Errorf("expected %x, got %x\n", exp, str2pack)
+	}
+
+	// test two strings, first > 32, second < 32
+	str1 = strings.Repeat("a", 33)
+	str2pack, err = abi.Pack("strTwo", str1, str2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	offset1 = make([]byte, 32)
+	offset1[31] = 64
+	length1 = make([]byte, 32)
+	length1[31] = byte(len(str1))
+	value1 = common.RightPadBytes([]byte(str1), 64)
+	offset2[31] = 160
+
+	exp2 = append(offset1, offset2...)
+	exp2 = append(exp2, append(length1, value1...)...)
+	exp2 = append(exp2, append(length2, value2...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	str2pack = str2pack[4:]
+	if !bytes.Equal(str2pack, exp2) {
+		t.Errorf("expected %x, got %x\n", exp, str2pack)
+	}
+
+	// test two strings, first > 32, second >32
+	str1 = strings.Repeat("a", 33)
+	str2 = strings.Repeat("a", 33)
+	str2pack, err = abi.Pack("strTwo", str1, str2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	offset1 = make([]byte, 32)
+	offset1[31] = 64
+	length1 = make([]byte, 32)
+	length1[31] = byte(len(str1))
+	value1 = common.RightPadBytes([]byte(str1), 64)
+
+	offset2 = make([]byte, 32)
+	offset2[31] = 160
+	length2 = make([]byte, 32)
+	length2[31] = byte(len(str2))
+	value2 = common.RightPadBytes([]byte(str2), 64)
+
+	exp2 = append(offset1, offset2...)
+	exp2 = append(exp2, append(length1, value1...)...)
+	exp2 = append(exp2, append(length2, value2...)...)
+
+	// ignore first 4 bytes of the output. This is the function identifier
+	str2pack = str2pack[4:]
+	if !bytes.Equal(str2pack, exp2) {
+		t.Errorf("expected %x, got %x\n", exp, str2pack)
+	}
+}
+
 func TestBytes(t *testing.T) {
 	const definition = `[
 	{ "type" : "function", "name" : "balance", "const" : true, "inputs" : [ { "name" : "address", "type" : "bytes20" } ] },

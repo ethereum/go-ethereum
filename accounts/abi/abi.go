@@ -56,17 +56,36 @@ func JSON(reader io.Reader) (ABI, error) {
 func (abi ABI) pack(name string, args ...interface{}) ([]byte, error) {
 	method := abi.Methods[name]
 
+	// variable input is the output appended at the end of packed
+	// output. This is used for strings and bytes types input.
+	var variableInput []byte
+
 	var ret []byte
 	for i, a := range args {
 		input := method.Inputs[i]
-
+		// pack the input
 		packed, err := input.Type.pack(a)
 		if err != nil {
 			return nil, fmt.Errorf("`%s` %v", name, err)
 		}
-		ret = append(ret, packed...)
 
+		// check for a string or bytes input type
+		switch input.Type.T {
+		case StringTy, BytesTy:
+			// calculate the offset
+			offset := len(method.Inputs)*32 + len(variableInput)
+			// set the offset
+			ret = append(ret, packNum(reflect.ValueOf(offset), UintTy)...)
+			// Append the packed output to the variable input. The variable input
+			// will be appended at the end of the input.
+			variableInput = append(variableInput, packed...)
+		default:
+			// append the packed value to the input
+			ret = append(ret, packed...)
+		}
 	}
+	// append the variable input at the end of the packed input
+	ret = append(ret, variableInput...)
 
 	return ret, nil
 }
