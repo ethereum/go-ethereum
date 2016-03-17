@@ -25,10 +25,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+type blockGetter interface {
+	GetBlock(common.Hash) *types.Block
+}
+
 // GetHashFn returns a function for which the VM env can query block hashes through
 // up to the limit defined by the Yellow Paper and uses the given block chain
 // to query for information.
-func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
+func GetHashFn(ref common.Hash, chain blockGetter) func(n uint64) common.Hash {
 	return func(n uint64) common.Hash {
 		for block := chain.GetBlock(ref); block != nil; block = chain.GetBlock(block.ParentHash()) {
 			if block.NumberU64() == n {
@@ -45,7 +49,7 @@ type VMEnv struct {
 	header *types.Header
 	msg    Message
 	depth  int
-	chain  *BlockChain
+	chain  blockGetter
 	typ    vm.Type
 
 	getHashFn func(uint64) common.Hash
@@ -53,7 +57,7 @@ type VMEnv struct {
 	logs []vm.StructLog
 }
 
-func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *types.Header) *VMEnv {
+func NewEnv(state *state.StateDB, chain blockGetter, msg Message, header *types.Header) *VMEnv {
 	return &VMEnv{
 		chain:     chain,
 		state:     state,

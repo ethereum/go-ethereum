@@ -84,7 +84,8 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 		return err
 	}
 	// verify the uncles are correctly rewarded
-	if err := v.VerifyUncles(block, parent); err != nil {
+	ancestors := v.bc.GetBlocksFromHash(block.ParentHash(), 7)
+	if err := VerifyUncles(v.Pow, block, parent, ancestors); err != nil {
 		return err
 	}
 
@@ -109,6 +110,10 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
+	return ValidateState(block, parent, statedb, receipts, usedGas)
+}
+
+func ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
 	header := block.Header()
 	if block.GasUsed().Cmp(usedGas) != 0 {
 		return ValidationError(fmt.Sprintf("gas used error (%v / %v)", block.GasUsed(), usedGas))
@@ -136,7 +141,7 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 // consensus rules to the various block headers included; it will return an
 // error if any of the included uncle headers were invalid. It returns an error
 // if the validation failed.
-func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
+func VerifyUncles(pow pow.PoW, block, parent *types.Block, ancestorList []*types.Block) error {
 	// validate that there at most 2 uncles included in this block
 	if len(block.Uncles()) > 2 {
 		return ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(block.Uncles()))
@@ -144,7 +149,7 @@ func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
 
 	uncles := set.New()
 	ancestors := make(map[common.Hash]*types.Block)
-	for _, ancestor := range v.bc.GetBlocksFromHash(block.ParentHash(), 7) {
+	for _, ancestor := range ancestorList {
 		ancestors[ancestor.Hash()] = ancestor
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
 		for _, uncle := range ancestor.Uncles() {
@@ -175,7 +180,7 @@ func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := ValidateHeader(v.Pow, uncle, ancestors[uncle.ParentHash].Header(), true, true); err != nil {
+		if err := ValidateHeader(pow, uncle, ancestors[uncle.ParentHash].Header(), true, true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
