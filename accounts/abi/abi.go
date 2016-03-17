@@ -30,8 +30,9 @@ import (
 // invokable methods. It will allow you to type check function calls and
 // packs data accordingly.
 type ABI struct {
-	Methods map[string]Method
-	Events  map[string]Event
+	Constructor Method
+	Methods     map[string]Method
+	Events      map[string]Event
 }
 
 // JSON returns a parsed ABI interface and error if it failed.
@@ -48,9 +49,7 @@ func JSON(reader io.Reader) (ABI, error) {
 
 // tests, tests whether the given input would result in a successful
 // call. Checks argument list count and matches input to `input`.
-func (abi ABI) pack(name string, args ...interface{}) ([]byte, error) {
-	method := abi.Methods[name]
-
+func (abi ABI) pack(method Method, args ...interface{}) ([]byte, error) {
 	// variable input is the output appended at the end of packed
 	// output. This is used for strings and bytes types input.
 	var variableInput []byte
@@ -61,7 +60,7 @@ func (abi ABI) pack(name string, args ...interface{}) ([]byte, error) {
 		// pack the input
 		packed, err := input.Type.pack(a)
 		if err != nil {
-			return nil, fmt.Errorf("`%s` %v", name, err)
+			return nil, fmt.Errorf("`%s` %v", method.Name, err)
 		}
 
 		// check for a string or bytes input type
@@ -91,26 +90,31 @@ func (abi ABI) pack(name string, args ...interface{}) ([]byte, error) {
 // Method ids are created from the first 4 bytes of the hash of the
 // methods string signature. (signature = baz(uint32,string32))
 func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
-	method, exist := abi.Methods[name]
-	if !exist {
-		return nil, fmt.Errorf("method '%s' not found", name)
-	}
+	// Fetch the ABI of the requested method
+	var method Method
 
-	// start with argument count match
+	if name == "" {
+		method = abi.Constructor
+	} else {
+		m, exist := abi.Methods[name]
+		if !exist {
+			return nil, fmt.Errorf("method '%s' not found", name)
+		}
+		method = m
+	}
+	// Make sure arguments match up and pack them
 	if len(args) != len(method.Inputs) {
 		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Inputs))
 	}
-
-	arguments, err := abi.pack(name, args...)
+	arguments, err := abi.pack(method, args...)
 	if err != nil {
 		return nil, err
 	}
-
-	// Set function id
-	packed := abi.Methods[name].Id()
-	packed = append(packed, arguments...)
-
-	return packed, nil
+	// Pack up the method ID too if not a constructor and return
+	if name == "" {
+		return arguments, nil
+	}
+	return append(method.Id(), arguments...), nil
 }
 
 // toGoType parses the input and casts it to the proper type defined by the ABI
@@ -283,6 +287,10 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 	abi.Events = make(map[string]Event)
 	for _, field := range fields {
 		switch field.Type {
+		case "constructor":
+			abi.Constructor = Method{
+				Inputs: field.Inputs,
+			}
 		// empty defaults to function according to the abi spec
 		case "function", "":
 			abi.Methods[field.Name] = Method{

@@ -27,9 +27,10 @@ import (
 
 var (
 	abiFlag = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
+	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
 	pkgFlag = flag.String("pkg", "", "Go package name to generate the binding into")
 	typFlag = flag.String("type", "", "Go struct name for the binding (default = package name)")
-	outFlag = flag.String("out", "", "Output path for the generated binding")
+	outFlag = flag.String("out", "", "Output path for the generated binding (default = stdout)")
 )
 
 func main() {
@@ -44,17 +45,25 @@ func main() {
 		fmt.Printf("No destination Go package specified (--pkg)\n")
 		os.Exit(-1)
 	}
-	// Generate the contract binding
-	in, err := ioutil.ReadFile(*abiFlag)
+	// Read the ABI json from disk and optionally the contract bytecode too
+	abi, err := ioutil.ReadFile(*abiFlag)
 	if err != nil {
 		fmt.Printf("Failed to read input ABI: %v\n", err)
 		os.Exit(-1)
 	}
+	bin := []byte{}
+	if *binFlag != "" {
+		if bin, err = ioutil.ReadFile(*binFlag); err != nil {
+			fmt.Printf("Failed to read input bytecode: %v\n", err)
+			os.Exit(-1)
+		}
+	}
+	// Generate the contract binding
 	kind := *typFlag
 	if kind == "" {
 		kind = *pkgFlag
 	}
-	code, err := bind.Bind(string(in), *pkgFlag, kind)
+	code, err := bind.Bind(string(abi), string(bin), *pkgFlag, kind)
 	if err != nil {
 		fmt.Printf("Failed to generate ABI binding: %v\n", err)
 		os.Exit(-1)

@@ -24,14 +24,21 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
 // sign the transaction before submission.
 type SignerFn func(common.Address, *types.Transaction) (*types.Transaction, error)
 
-// AuthOpts is the authorization data required to create a valid Ethereum transaction.
-type AuthOpts struct {
+// CallOpts is the collection of options to fine tune a contract call request.
+type CallOpts struct {
+	Pending bool // Whether to operate on the pending state or the last known one
+}
+
+// TransactOpts is the collection of authorization data required to create a
+// valid Ethereum transaction.
+type TransactOpts struct {
 	Account common.Address // Ethereum account to send the transaction from
 	Nonce   *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer  SignerFn       // Method to use for signing the transaction (mandatory)
@@ -62,16 +69,43 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 	}
 }
 
+// DeployContract deploys a contract onto the Ethereum blockchain and binds the
+// deployment address with a Go wrapper.
+func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
+	// Sanity check the authorization options
+	if opts == nil {
+		return common.Address{}, nil, nil, errors.New("transaction options missing")
+	}
+	// Otherwise try to deploy the contract
+	c := NewBoundContract(common.Address{}, abi, backend.(ContractCaller), backend.(ContractTransactor))
+
+	input, err := c.abi.Pack("", params...)
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	tx, err := c.transact(opts, nil, append(bytecode, input...))
+	if err != nil {
+		return common.Address{}, nil, nil, err
+	}
+	c.address = crypto.CreateAddress(opts.Account, tx.Nonce())
+	return c.address, tx, c, nil
+}
+
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (c *BoundContract) Call(result interface{}, method string, params ...interface{}) error {
+func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, params ...interface{}) error {
+	// Don't crash on a lazy user
+	if opts == nil {
+		opts = new(CallOpts)
+	}
+	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
 		return err
 	}
-	output, err := c.caller.ContractCall(c.address, input)
+	output, err := c.caller.ContractCall(c.address, input, opts.Pending)
 	if err != nil {
 		return err
 	}
@@ -80,11 +114,24 @@ func (c *BoundContract) Call(result interface{}, method string, params ...interf
 
 // Transact invokes the (paid) contract method with params as input values and
 // value as the fund transfer to the contract.
-func (c *BoundContract) Transact(opts *AuthOpts, method string, params ...interface{}) (*types.Transaction, error) {
+func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
+	// Sanity check the authorization options
+	if opts == nil {
+		return nil, errors.New("transaction options missing")
+	}
+	// Otherwise pack up the parameters and invoke the contract
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
 		return nil, err
 	}
+	return c.transact(opts, &c.address, input)
+}
+
+// transact executes an actual transaction invocation, first deriving any missing
+// authorization fields, and then scheduling the transaction for execution.
+func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
+	var err error
+
 	// Ensure a valid value field and resolve the account nonce
 	value := opts.Value
 	if value == nil {
@@ -109,13 +156,18 @@ func (c *BoundContract) Transact(opts *AuthOpts, method string, params ...interf
 	}
 	gasLimit := opts.GasLimit
 	if gasLimit == nil {
-		gasLimit, err = c.transactor.GasLimit(opts.Account, c.address, value, input)
+		gasLimit, err = c.transactor.GasLimit(opts.Account, contract, value, input)
 		if err != nil {
 			return nil, fmt.Errorf("failed to exstimate gas needed: %v", err)
 		}
 	}
 	// Create the transaction, sign it and schedule it for execution
-	rawTx := types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
+	var rawTx *types.Transaction
+	if contract == nil {
+		rawTx = types.NewContractCreation(nonce, value, gasLimit, gasPrice, input)
+	} else {
+		rawTx = types.NewTransaction(nonce, c.address, value, gasLimit, gasPrice, input)
+	}
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
