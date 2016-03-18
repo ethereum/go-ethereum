@@ -26,11 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Executer is an executer method for performing state executions. It takes one
-// argument which is the input data and expects output data to be returned as
-// multiple 32 byte word length concatenated slice
-type Executer func(datain []byte) []byte
-
 // The ABI holds information about a contract's context and available
 // invokable methods. It will allow you to type check function calls and
 // packs data accordingly.
@@ -169,21 +164,6 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	return nil, fmt.Errorf("abi: unknown type %v", t.Type.T)
 }
 
-// Call will unmarshal the output of the call in v. It will return an error if
-// invalid type is given or if the output is too short to conform to the ABI
-// spec.
-//
-// Call supports all of the available types and accepts a struct or an interface
-// slice if the return is a tuple.
-func (abi ABI) Call(executer Executer, v interface{}, name string, args ...interface{}) error {
-	callData, err := abi.Pack(name, args...)
-	if err != nil {
-		return err
-	}
-
-	return abi.unmarshal(v, name, executer(callData))
-}
-
 // these variable are used to determine certain types during type assertion for
 // assignment.
 var (
@@ -193,8 +173,8 @@ var (
 	r_byte       = reflect.TypeOf(byte(0))
 )
 
-// unmarshal output in v according to the abi specification
-func (abi ABI) unmarshal(v interface{}, name string, output []byte) error {
+// Unpack output in v according to the abi specification
+func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 	var method = abi.Methods[name]
 
 	if len(output) == 0 {

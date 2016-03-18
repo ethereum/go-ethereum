@@ -579,7 +579,7 @@ func TestMultiReturnWithStruct(t *testing.T) {
 		Int    *big.Int
 		String string
 	}
-	err = abi.unmarshal(&inter, "multi", buff.Bytes())
+	err = abi.Unpack(&inter, "multi", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -597,7 +597,7 @@ func TestMultiReturnWithStruct(t *testing.T) {
 		Int    *big.Int
 	}
 
-	err = abi.unmarshal(&reversed, "multi", buff.Bytes())
+	err = abi.Unpack(&reversed, "multi", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -629,7 +629,7 @@ func TestMultiReturnWithSlice(t *testing.T) {
 	buff.Write(common.RightPadBytes([]byte(stringOut), 32))
 
 	var inter []interface{}
-	err = abi.unmarshal(&inter, "multi", buff.Bytes())
+	err = abi.Unpack(&inter, "multi", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -661,13 +661,13 @@ func TestMarshalArrays(t *testing.T) {
 	output := common.LeftPadBytes([]byte{1}, 32)
 
 	var bytes10 [10]byte
-	err = abi.unmarshal(&bytes10, "bytes32", output)
+	err = abi.Unpack(&bytes10, "bytes32", output)
 	if err == nil || err.Error() != "abi: cannot unmarshal src (len=32) in to dst (len=10)" {
 		t.Error("expected error or bytes32 not be assignable to bytes10:", err)
 	}
 
 	var bytes32 [32]byte
-	err = abi.unmarshal(&bytes32, "bytes32", output)
+	err = abi.Unpack(&bytes32, "bytes32", output)
 	if err != nil {
 		t.Error("didn't expect error:", err)
 	}
@@ -681,13 +681,13 @@ func TestMarshalArrays(t *testing.T) {
 	)
 
 	var b10 B10
-	err = abi.unmarshal(&b10, "bytes32", output)
+	err = abi.Unpack(&b10, "bytes32", output)
 	if err == nil || err.Error() != "abi: cannot unmarshal src (len=32) in to dst (len=10)" {
 		t.Error("expected error or bytes32 not be assignable to bytes10:", err)
 	}
 
 	var b32 B32
-	err = abi.unmarshal(&b32, "bytes32", output)
+	err = abi.Unpack(&b32, "bytes32", output)
 	if err != nil {
 		t.Error("didn't expect error:", err)
 	}
@@ -697,7 +697,7 @@ func TestMarshalArrays(t *testing.T) {
 
 	output[10] = 1
 	var shortAssignLong [32]byte
-	err = abi.unmarshal(&shortAssignLong, "bytes10", output)
+	err = abi.Unpack(&shortAssignLong, "bytes10", output)
 	if err != nil {
 		t.Error("didn't expect error:", err)
 	}
@@ -722,7 +722,7 @@ func TestUnmarshal(t *testing.T) {
 
 	// marshal int
 	var Int *big.Int
-	err = abi.unmarshal(&Int, "int", common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
+	err = abi.Unpack(&Int, "int", common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -733,7 +733,7 @@ func TestUnmarshal(t *testing.T) {
 
 	// marshal bool
 	var Bool bool
-	err = abi.unmarshal(&Bool, "bool", common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
+	err = abi.Unpack(&Bool, "bool", common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -750,7 +750,7 @@ func TestUnmarshal(t *testing.T) {
 	buff.Write(bytesOut)
 
 	var Bytes []byte
-	err = abi.unmarshal(&Bytes, "bytes", buff.Bytes())
+	err = abi.Unpack(&Bytes, "bytes", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -766,7 +766,7 @@ func TestUnmarshal(t *testing.T) {
 	bytesOut = common.RightPadBytes([]byte("hello"), 64)
 	buff.Write(bytesOut)
 
-	err = abi.unmarshal(&Bytes, "bytes", buff.Bytes())
+	err = abi.Unpack(&Bytes, "bytes", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -782,7 +782,7 @@ func TestUnmarshal(t *testing.T) {
 	bytesOut = common.RightPadBytes([]byte("hello"), 63)
 	buff.Write(bytesOut)
 
-	err = abi.unmarshal(&Bytes, "bytes", buff.Bytes())
+	err = abi.Unpack(&Bytes, "bytes", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -792,7 +792,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	// marshal dynamic bytes output empty
-	err = abi.unmarshal(&Bytes, "bytes", nil)
+	err = abi.Unpack(&Bytes, "bytes", nil)
 	if err == nil {
 		t.Error("expected error")
 	}
@@ -803,7 +803,7 @@ func TestUnmarshal(t *testing.T) {
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000005"))
 	buff.Write(common.RightPadBytes([]byte("hello"), 32))
 
-	err = abi.unmarshal(&Bytes, "bytes", buff.Bytes())
+	err = abi.Unpack(&Bytes, "bytes", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -817,7 +817,7 @@ func TestUnmarshal(t *testing.T) {
 	buff.Write(common.RightPadBytes([]byte("hello"), 32))
 
 	var hash common.Hash
-	err = abi.unmarshal(&hash, "fixed", buff.Bytes())
+	err = abi.Unpack(&hash, "fixed", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	}
@@ -830,12 +830,12 @@ func TestUnmarshal(t *testing.T) {
 	// marshal error
 	buff.Reset()
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020"))
-	err = abi.unmarshal(&Bytes, "bytes", buff.Bytes())
+	err = abi.Unpack(&Bytes, "bytes", buff.Bytes())
 	if err == nil {
 		t.Error("expected error")
 	}
 
-	err = abi.unmarshal(&Bytes, "multi", make([]byte, 64))
+	err = abi.Unpack(&Bytes, "multi", make([]byte, 64))
 	if err == nil {
 		t.Error("expected error")
 	}
@@ -850,7 +850,7 @@ func TestUnmarshal(t *testing.T) {
 	buff.Write(bytesOut)
 
 	var out []interface{}
-	err = abi.unmarshal(&out, "mixedBytes", buff.Bytes())
+	err = abi.Unpack(&out, "mixedBytes", buff.Bytes())
 	if err != nil {
 		t.Fatal("didn't expect error:", err)
 	}
