@@ -120,6 +120,10 @@
 			"Rev": "51425a2415d21afadfd55cd93432c0bc69e9598d"
 		},
 		{
+			"ImportPath": "github.com/rjeczalik/notify",
+			"Rev": "5dd6205716539662f8f14ab513552b41eab69d5d"
+		},
+		{
 			"ImportPath": "github.com/robertkrimen/otto",
 			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
 		},
