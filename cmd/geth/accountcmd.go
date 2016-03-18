@@ -23,6 +23,8 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var (
@@ -180,6 +182,7 @@ func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
 		password := getPassPhrase(prompt, false, i, passwords)
 		if err := accman.Unlock(account, password); err == nil {
+			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
 			return account, password
 		}
 	}
@@ -199,7 +202,9 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 		return passwords[len(passwords)-1]
 	}
 	// Otherwise prompt the user for the password
-	fmt.Println(prompt)
+	if prompt != "" {
+		fmt.Println(prompt)
+	}
 	password, err := utils.Stdin.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
