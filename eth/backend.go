@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -90,6 +91,9 @@ type Config struct {
 	GpobaseStepDown         int
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
+
+	EnableJit bool
+	ForceJit  bool
 
 	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
@@ -225,6 +229,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.pow, eth.EventMux())
+	eth.blockchain.SetConfig(&vm.Config{
+		EnableJit: config.EnableJit,
+		ForceJit:  config.ForceJit,
+	})
+
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
