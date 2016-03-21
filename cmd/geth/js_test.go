@@ -94,7 +94,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 		t.Fatal(err)
 	}
 	// Create a networkless protocol stack
-	stack, err := node.New(&node.Config{PrivateKey: testNodeKey, Name: "test", NoDiscovery: true})
+	stack, err := node.New(&node.Config{DataDir: tmp, PrivateKey: testNodeKey, Name: "test", NoDiscovery: true})
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}

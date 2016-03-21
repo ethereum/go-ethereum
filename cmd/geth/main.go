@@ -373,6 +373,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	app.After = func(ctx *cli.Context) error {
 		logger.Flush()
 		debug.Exit()
+		utils.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }
@@ -595,12 +596,12 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	}
 	// Otherwise prompt the user for the password
 	fmt.Println(prompt)
-	password, err := utils.PromptPassword("Passphrase: ", true)
+	password, err := utils.Stdin.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
 	}
 	if confirmation {
-		confirm, err := utils.PromptPassword("Repeat passphrase: ", false)
+		confirm, err := utils.Stdin.PasswordPrompt("Repeat passphrase: ")
 		if err != nil {
 			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
 		}
