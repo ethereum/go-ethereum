@@ -17,53 +17,97 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common/compiler"
 )
 
 var (
 	abiFlag = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
 	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
-	pkgFlag = flag.String("pkg", "", "Go package name to generate the binding into")
 	typFlag = flag.String("type", "", "Go struct name for the binding (default = package name)")
-	outFlag = flag.String("out", "", "Output path for the generated binding (default = stdout)")
+
+	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
+	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
+
+	pkgFlag = flag.String("pkg", "", "Go package name to generate the binding into")
+	outFlag = flag.String("out", "", "Output file for the generated binding (default = stdout)")
 )
 
 func main() {
-	// Parse and validate the command line flags
+	// Parse and ensure all needed inputs are specified
 	flag.Parse()
 
-	if *abiFlag == "" {
-		fmt.Printf("No contract ABI path specified (--abi)\n")
+	if *abiFlag == "" && *solFlag == "" {
+		fmt.Printf("No contract ABI (--abi) or Solidity source (--sol) specified\n")
+		os.Exit(-1)
+	} else if (*abiFlag != "" || *binFlag != "" || *typFlag != "") && *solFlag != "" {
+		fmt.Printf("Contract ABI (--abi), bytecode (--bin) and type (--type) flags are mutually exclusive with the Solidity source (--sol) flag\n")
 		os.Exit(-1)
 	}
 	if *pkgFlag == "" {
 		fmt.Printf("No destination Go package specified (--pkg)\n")
 		os.Exit(-1)
 	}
-	// Read the ABI json from disk and optionally the contract bytecode too
-	abi, err := ioutil.ReadFile(*abiFlag)
-	if err != nil {
-		fmt.Printf("Failed to read input ABI: %v\n", err)
-		os.Exit(-1)
-	}
-	bin := []byte{}
-	if *binFlag != "" {
-		if bin, err = ioutil.ReadFile(*binFlag); err != nil {
-			fmt.Printf("Failed to read input bytecode: %v\n", err)
+	// If the entire solidity code was specified, build and bind based on that
+	var (
+		abis  []string
+		bins  []string
+		types []string
+	)
+	if *solFlag != "" {
+		solc, err := compiler.New(*solcFlag)
+		if err != nil {
+			fmt.Printf("Failed to locate Solidity compiler: %v\n", err)
 			os.Exit(-1)
 		}
+		source, err := ioutil.ReadFile(*solFlag)
+		if err != nil {
+			fmt.Printf("Failed to read Soldity source code: %v\n", err)
+			os.Exit(-1)
+		}
+		contracts, err := solc.Compile(string(source))
+		if err != nil {
+			fmt.Printf("Failed to build Solidity contract: %v\n", err)
+			os.Exit(-1)
+		}
+		for name, contract := range contracts {
+			abi, _ := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
+			abis = append(abis, string(abi))
+			bins = append(bins, contract.Code)
+			types = append(types, name)
+		}
+	} else {
+		// Otherwise load up the ABI, optional bytecode and type name from the parameters
+		abi, err := ioutil.ReadFile(*abiFlag)
+		if err != nil {
+			fmt.Printf("Failed to read input ABI: %v\n", err)
+			os.Exit(-1)
+		}
+		abis = append(abis, string(abi))
+
+		bin := []byte{}
+		if *binFlag != "" {
+			if bin, err = ioutil.ReadFile(*binFlag); err != nil {
+				fmt.Printf("Failed to read input bytecode: %v\n", err)
+				os.Exit(-1)
+			}
+		}
+		bins = append(bins, string(bin))
+
+		kind := *typFlag
+		if kind == "" {
+			kind = *pkgFlag
+		}
+		types = append(types, kind)
 	}
 	// Generate the contract binding
-	kind := *typFlag
-	if kind == "" {
-		kind = *pkgFlag
-	}
-	code, err := bind.Bind(string(abi), string(bin), *pkgFlag, kind)
+	code, err := bind.Bind(types, abis, bins, *pkgFlag)
 	if err != nil {
 		fmt.Printf("Failed to generate ABI binding: %v\n", err)
 		os.Exit(-1)

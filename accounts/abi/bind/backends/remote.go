@@ -30,6 +30,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// This nil assignment ensures compile time that rpcBackend implements bind.ContractBackend.
+var _ bind.ContractBackend = (*rpcBackend)(nil)
+
 // rpcBackend implements bind.ContractBackend, and acts as the data provider to
 // Ethereum contracts bound to Go structs. It uses an RPC connection to delegate
 // all its functionality.
@@ -53,16 +56,16 @@ func NewRPCBackend(client rpc.Client) bind.ContractBackend {
 // request is a JSON RPC request package assembled internally from the client
 // method calls.
 type request struct {
-	JsonRpc string        `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
-	Id      int           `json:"id"`      // Auto incrementing ID number for this request
+	JSONRPC string        `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
+	ID      int           `json:"id"`      // Auto incrementing ID number for this request
 	Method  string        `json:"method"`  // Remote procedure name to invoke on the server
 	Params  []interface{} `json:"params"`  // List of parameters to pass through (keep types simple)
 }
 
 // response is a JSON RPC response package sent back from the API server.
 type response struct {
-	JsonRpc string          `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
-	Id      int             `json:"id"`      // Auto incrementing ID number for this request
+	JSONRPC string          `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
+	ID      int             `json:"id"`      // Auto incrementing ID number for this request
 	Error   json.RawMessage `json:"error"`   // Any error returned by the remote side
 	Result  json.RawMessage `json:"result"`  // Whatever the remote side sends us in reply
 }
@@ -71,9 +74,9 @@ type response struct {
 //
 // This is currently painfully non-concurrent, but it will have to do until we
 // find the time for niceties like this :P
-func (backend *rpcBackend) request(method string, params []interface{}) (json.RawMessage, error) {
-	backend.lock.Lock()
-	defer backend.lock.Unlock()
+func (b *rpcBackend) request(method string, params []interface{}) (json.RawMessage, error) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
 
 	// Ugly hack to serialize an empty list properly
 	if params == nil {
@@ -81,16 +84,16 @@ func (backend *rpcBackend) request(method string, params []interface{}) (json.Ra
 	}
 	// Assemble the request object
 	req := &request{
-		JsonRpc: "2.0",
-		Id:      int(atomic.AddUint32(&backend.autoid, 1)),
+		JSONRPC: "2.0",
+		ID:      int(atomic.AddUint32(&b.autoid, 1)),
 		Method:  method,
 		Params:  params,
 	}
-	if err := backend.client.Send(req); err != nil {
+	if err := b.client.Send(req); err != nil {
 		return nil, err
 	}
 	res := new(response)
-	if err := backend.client.Recv(res); err != nil {
+	if err := b.client.Recv(res); err != nil {
 		return nil, err
 	}
 	if len(res.Error) > 0 {
@@ -127,9 +130,9 @@ func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending 
 	return common.FromHex(hex), nil
 }
 
-// AccountNonce implements ContractTransactor.AccountNonce, delegating the
-// current account nonce retrieval to the remote node.
-func (b *rpcBackend) AccountNonce(account common.Address) (uint64, error) {
+// PendingAccountNonce implements ContractTransactor.PendingAccountNonce, delegating
+// the current account nonce retrieval to the remote node.
+func (b *rpcBackend) PendingAccountNonce(account common.Address) (uint64, error) {
 	res, err := b.request("eth_getTransactionCount", []interface{}{account.Hex(), "pending"})
 	if err != nil {
 		return 0, err
@@ -138,12 +141,16 @@ func (b *rpcBackend) AccountNonce(account common.Address) (uint64, error) {
 	if err := json.Unmarshal(res, &hex); err != nil {
 		return 0, err
 	}
-	return new(big.Int).SetBytes(common.FromHex(hex)).Uint64(), nil
+	nonce, ok := new(big.Int).SetString(hex, 0)
+	if !ok {
+		return 0, fmt.Errorf("invalid nonce hex: %s", hex)
+	}
+	return nonce.Uint64(), nil
 }
 
-// GasPrice implements ContractTransactor.GasPrice, delegating the gas price
-// oracle request to the remote node.
-func (b *rpcBackend) GasPrice() (*big.Int, error) {
+// SuggestGasPrice implements ContractTransactor.SuggestGasPrice, delegating the
+// gas price oracle request to the remote node.
+func (b *rpcBackend) SuggestGasPrice() (*big.Int, error) {
 	res, err := b.request("eth_gasPrice", nil)
 	if err != nil {
 		return nil, err
@@ -152,12 +159,16 @@ func (b *rpcBackend) GasPrice() (*big.Int, error) {
 	if err := json.Unmarshal(res, &hex); err != nil {
 		return nil, err
 	}
-	return new(big.Int).SetBytes(common.FromHex(hex)), nil
+	price, ok := new(big.Int).SetString(hex, 0)
+	if !ok {
+		return nil, fmt.Errorf("invalid price hex: %s", hex)
+	}
+	return price, nil
 }
 
-// GasLimit implements ContractTransactor.GasLimit, delegating the gas estimation
-// to the remote node.
-func (b *rpcBackend) GasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
+// EstimateGasLimit implements ContractTransactor.EstimateGasLimit, delegating
+// the gas estimation to the remote node.
+func (b *rpcBackend) EstimateGasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
 	// Pack up the request into an RPC argument
 	args := struct {
 		From  common.Address  `json:"from"`
@@ -179,12 +190,15 @@ func (b *rpcBackend) GasLimit(sender common.Address, contract *common.Address, v
 	if err := json.Unmarshal(res, &hex); err != nil {
 		return nil, err
 	}
-	// Convert the response back to a Go byte slice and return
-	return new(big.Int).SetBytes(common.FromHex(hex)), nil
+	estimate, ok := new(big.Int).SetString(hex, 0)
+	if !ok {
+		return nil, fmt.Errorf("invalid estimate hex: %s", hex)
+	}
+	return estimate, nil
 }
 
-// Transact implements ContractTransactor.SendTransaction, delegating the raw
-// transaction injection to the remote node.
+// SendTransaction implements ContractTransactor.SendTransaction, delegating the
+// raw transaction injection to the remote node.
 func (b *rpcBackend) SendTransaction(tx *types.Transaction) error {
 	data, err := rlp.EncodeToBytes(tx)
 	if err != nil {

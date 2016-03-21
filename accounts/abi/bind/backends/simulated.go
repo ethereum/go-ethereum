@@ -19,6 +19,7 @@ package backends
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -26,6 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
+
+// This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
+var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
@@ -79,13 +83,11 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		statedb *state.StateDB
 	)
 	if pending {
-		block, statedb = b.pendingBlock, b.pendingState
+		block, statedb = b.pendingBlock, b.pendingState.Copy()
 	} else {
 		block = b.blockchain.CurrentBlock()
 		statedb, _ = b.blockchain.State()
 	}
-	statedb = statedb.Copy()
-
 	// Set infinite balance to the a fake caller account
 	from := statedb.GetOrNewStateObject(common.Address{})
 	from.SetBalance(common.MaxBig)
@@ -100,28 +102,29 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		data:     data,
 	}
 	// Execute the call and return
-	vmenv := core.NewEnv(statedb, b.blockchain, msg, block.Header())
+	vmenv := core.NewEnv(statedb, b.blockchain, msg, block.Header(), nil)
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 
 	out, _, err := core.ApplyMessage(vmenv, msg, gaspool)
 	return out, err
 }
 
-// AccountNonce implements ContractTransactor.AccountNonce, retrieving the nonce
-// currently pending for the account.
-func (b *SimulatedBackend) AccountNonce(account common.Address) (uint64, error) {
+// PendingAccountNonce implements ContractTransactor.PendingAccountNonce, retrieving
+// the nonce currently pending for the account.
+func (b *SimulatedBackend) PendingAccountNonce(account common.Address) (uint64, error) {
 	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
 }
 
-// GasPrice implements ContractTransactor.GasPrice. Since the simulated chain
-// doens't have miners, we just return a gas price of 1 for any call.
-func (b *SimulatedBackend) GasPrice() (*big.Int, error) {
+// SuggestGasPrice implements ContractTransactor.SuggestGasPrice. Since the simulated
+// chain doens't have miners, we just return a gas price of 1 for any call.
+func (b *SimulatedBackend) SuggestGasPrice() (*big.Int, error) {
 	return big.NewInt(1), nil
 }
 
-// GasLimit implements ContractTransactor.GasLimit, executing the requested code
-// against the currently pending block/state and returning the used gas.
-func (b *SimulatedBackend) GasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
+// EstimateGasLimit implements ContractTransactor.EstimateGasLimit, executing the
+// requested code against the currently pending block/state and returning the used
+// gas.
+func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
 	// Create a copy of the currently pending state db to screw around with
 	var (
 		block   = b.pendingBlock
@@ -142,14 +145,14 @@ func (b *SimulatedBackend) GasLimit(sender common.Address, contract *common.Addr
 		data:     data,
 	}
 	// Execute the call and return
-	vmenv := core.NewEnv(statedb, b.blockchain, msg, block.Header())
+	vmenv := core.NewEnv(statedb, b.blockchain, msg, block.Header(), nil)
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 
 	_, gas, err := core.ApplyMessage(vmenv, msg, gaspool)
 	return gas, err
 }
 
-// Transact implements ContractTransactor.SendTransaction, delegating the raw
+// SendTransaction implements ContractTransactor.SendTransaction, delegating the raw
 // transaction injection to the remote node.
 func (b *SimulatedBackend) SendTransaction(tx *types.Transaction) error {
 	blocks, _ := core.GenerateChain(b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {

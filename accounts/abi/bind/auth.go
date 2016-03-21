@@ -18,6 +18,8 @@ package bind
 
 import (
 	"errors"
+	"io"
+	"io/ioutil"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -25,9 +27,13 @@ import (
 )
 
 // NewTransactor is a utility method to easily create a transaction signer from
-// an encrypted json key file and the associated passphrase.
-func NewTransactor(keyjson string, passphrase string) (*TransactOpts, error) {
-	key, err := crypto.DecryptKey([]byte(keyjson), passphrase)
+// an encrypted json key stream and the associated passphrase.
+func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
+	json, err := ioutil.ReadAll(keyin)
+	if err != nil {
+		return nil, err
+	}
+	key, err := crypto.DecryptKey(json, passphrase)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +44,7 @@ func NewTransactor(keyjson string, passphrase string) (*TransactOpts, error) {
 // from a plain go-ethereum crypto key.
 func NewKeyedTransactor(key *crypto.Key) *TransactOpts {
 	return &TransactOpts{
-		Account: key.Address,
+		From: key.Address,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != key.Address {
 				return nil, errors.New("not authorized to sign this account")

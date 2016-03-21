@@ -39,9 +39,9 @@ type CallOpts struct {
 // TransactOpts is the collection of authorization data required to create a
 // valid Ethereum transaction.
 type TransactOpts struct {
-	Account common.Address // Ethereum account to send the transaction from
-	Nonce   *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
-	Signer  SignerFn       // Method to use for signing the transaction (mandatory)
+	From   common.Address // Ethereum account to send the transaction from
+	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
+	Signer SignerFn       // Method to use for signing the transaction (mandatory)
 
 	Value    *big.Int // Funds to transfer along along the transaction (nil = 0 = no funds)
 	GasPrice *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
@@ -72,12 +72,8 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a Go wrapper.
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
-	// Sanity check the authorization options
-	if opts == nil {
-		return common.Address{}, nil, nil, errors.New("transaction options missing")
-	}
 	// Otherwise try to deploy the contract
-	c := NewBoundContract(common.Address{}, abi, backend.(ContractCaller), backend.(ContractTransactor))
+	c := NewBoundContract(common.Address{}, abi, backend, backend)
 
 	input, err := c.abi.Pack("", params...)
 	if err != nil {
@@ -87,7 +83,7 @@ func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend Co
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	c.address = crypto.CreateAddress(opts.Account, tx.Nonce())
+	c.address = crypto.CreateAddress(opts.From, tx.Nonce())
 	return c.address, tx, c, nil
 }
 
@@ -115,10 +111,6 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 // Transact invokes the (paid) contract method with params as input values and
 // value as the fund transfer to the contract.
 func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	// Sanity check the authorization options
-	if opts == nil {
-		return nil, errors.New("transaction options missing")
-	}
 	// Otherwise pack up the parameters and invoke the contract
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
@@ -139,7 +131,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	nonce := uint64(0)
 	if opts.Nonce == nil {
-		nonce, err = c.transactor.AccountNonce(opts.Account)
+		nonce, err = c.transactor.PendingAccountNonce(opts.From)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve account nonce: %v", err)
 		}
@@ -149,14 +141,14 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	// Figure out the gas allowance and gas price values
 	gasPrice := opts.GasPrice
 	if gasPrice == nil {
-		gasPrice, err = c.transactor.GasPrice()
+		gasPrice, err = c.transactor.SuggestGasPrice()
 		if err != nil {
 			return nil, fmt.Errorf("failed to suggest gas price: %v", err)
 		}
 	}
 	gasLimit := opts.GasLimit
 	if gasLimit == nil {
-		gasLimit, err = c.transactor.GasLimit(opts.Account, contract, value, input)
+		gasLimit, err = c.transactor.EstimateGasLimit(opts.From, contract, value, input)
 		if err != nil {
 			return nil, fmt.Errorf("failed to exstimate gas needed: %v", err)
 		}
@@ -171,7 +163,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
-	signedTx, err := opts.Signer(opts.Account, rawTx)
+	signedTx, err := opts.Signer(opts.From, rawTx)
 	if err != nil {
 		return nil, err
 	}

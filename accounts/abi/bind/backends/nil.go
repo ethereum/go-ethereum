@@ -24,6 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+// This nil assignment ensures compile time that nilBackend implements bind.ContractBackend.
+var _ bind.ContractBackend = (*nilBackend)(nil)
+
 // nilBackend implements bind.ContractBackend, but panics on any method call.
 // Its sole purpose is to support the binding tests to construct the generated
 // wrappers without calling any methods on them.
@@ -32,12 +35,12 @@ type nilBackend struct{}
 func (*nilBackend) ContractCall(common.Address, []byte, bool) ([]byte, error) {
 	panic("not implemented")
 }
-func (*nilBackend) GasLimit(common.Address, *common.Address, *big.Int, []byte) (*big.Int, error) {
+func (*nilBackend) EstimateGasLimit(common.Address, *common.Address, *big.Int, []byte) (*big.Int, error) {
 	panic("not implemented")
 }
-func (*nilBackend) GasPrice() (*big.Int, error)                 { panic("not implemented") }
-func (*nilBackend) AccountNonce(common.Address) (uint64, error) { panic("not implemented") }
-func (*nilBackend) SendTransaction(*types.Transaction) error    { panic("not implemented") }
+func (*nilBackend) SuggestGasPrice() (*big.Int, error)                 { panic("not implemented") }
+func (*nilBackend) PendingAccountNonce(common.Address) (uint64, error) { panic("not implemented") }
+func (*nilBackend) SendTransaction(*types.Transaction) error           { panic("not implemented") }
 
 // NewNilBackend creates a new binding backend that can be used for instantiation
 // but will panic on any invocation. Its sole purpose is to help testing.

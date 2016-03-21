@@ -15,13 +15,17 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package bind generates Ethereum contract Go bindings.
+//
+// Detailed usage document and tutorial available on the go-ethereum Wiki page:
+// https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
 package bind
 
 import (
 	"bytes"
 	"fmt"
-	"sort"
 	"strings"
+	"text/template"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"golang.org/x/tools/imports"
@@ -31,254 +35,84 @@ import (
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(abijson string, bytecode string, pkg string, kind string) (string, error) {
-	// Parse the actual ABI to generate the binding for
-	abi, err := abi.JSON(strings.NewReader(abijson))
-	if err != nil {
-		return "", err
-	}
-	// Generate the contract type, fields and methods
-	code := new(bytes.Buffer)
-	kind = strings.ToUpper(kind[:1]) + kind[1:]
+func Bind(types []string, abis []string, bytecodes []string, pkg string) (string, error) {
+	// Process each individual contract requested binding
+	contracts := make(map[string]*tmplContract)
 
-	fmt.Fprintf(code, "%s\n", bindContract(kind, strings.TrimSpace(abijson)))
-	fmt.Fprintf(code, "%s\n", bindConstructor(kind, strings.TrimSpace(bytecode), abi.Constructor))
+	for i := 0; i < len(types); i++ {
+		// Parse the actual ABI to generate the binding for
+		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
+		if err != nil {
+			return "", err
+		}
+		// Strip any whitespace from the JSON ABI
+		strippedABI := strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) {
+				return -1
+			}
+			return r
+		}, abis[i])
 
-	methods := make([]string, 0, len(abi.Methods))
-	for name, _ := range abi.Methods {
-		methods = append(methods, name)
-	}
-	sort.Strings(methods)
+		// Extract the call and transact methods, and sort them alphabetically
+		var (
+			calls     = make(map[string]*tmplMethod)
+			transacts = make(map[string]*tmplMethod)
+		)
+		for _, original := range evmABI.Methods {
+			// Normalize the method for capital cases and non-anonymous inputs/outputs
+			normalized := original
+			normalized.Name = capitalise(original.Name)
 
-	for _, method := range methods {
-		fmt.Fprintf(code, "%s\n", bindMethod(kind, abi.Methods[method]))
+			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
+			copy(normalized.Inputs, original.Inputs)
+			for j, input := range normalized.Inputs {
+				if input.Name == "" {
+					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+				}
+			}
+			normalized.Outputs = make([]abi.Argument, len(original.Outputs))
+			copy(normalized.Outputs, original.Outputs)
+			for j, output := range normalized.Outputs {
+				if output.Name != "" {
+					normalized.Outputs[j].Name = capitalise(output.Name)
+				}
+			}
+			// Append the methos to the call or transact lists
+			if original.Const {
+				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
+			} else {
+				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
+			}
+		}
+		contracts[types[i]] = &tmplContract{
+			Type:        capitalise(types[i]),
+			InputABI:    strippedABI,
+			InputBin:    strings.TrimSpace(bytecodes[i]),
+			Constructor: evmABI.Constructor,
+			Calls:       calls,
+			Transacts:   transacts,
+		}
 	}
-	// Format the code with goimports and return
+	// Generate the contract template data content and render it
+	data := &tmplData{
+		Package:   pkg,
+		Contracts: contracts,
+	}
 	buffer := new(bytes.Buffer)
 
-	fmt.Fprintf(buffer, "// This file is an automatically generated Go binding based on the contract ABI\n")
-	fmt.Fprintf(buffer, "// defined in %sABI. Do not modify as any change will likely be lost!\n\n", kind)
-	fmt.Fprintf(buffer, "package %s\n\n", pkg)
-	fmt.Fprintf(buffer, "%s\n\n", string(code.Bytes()))
-
-	blob, err := imports.Process("", buffer.Bytes(), nil)
+	funcs := map[string]interface{}{
+		"bindtype": bindType,
+	}
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource))
+	if err := tmpl.Execute(buffer, data); err != nil {
+		return "", err
+	}
+	// Pass the code through goimports to clean it up and double check
+	code, err := imports.Process("", buffer.Bytes(), nil)
 	if err != nil {
-		return "", fmt.Errorf("%v\n%s", err, code)
+		return "", fmt.Errorf("%v\n%s", err, buffer)
 	}
-	return string(blob), nil
-}
-
-// bindContract generates the basic wrapper code for interacting with an Ethereum
-// contract via the abi package. All contract methods will call into the generic
-// ones generated here.
-func bindContract(kind string, abijson string) string {
-	code := ""
-
-	// Generate the hard coded ABI used for Ethereum interaction
-	code += fmt.Sprintf("// Ethereum ABI used to generate the binding from.\nconst %sABI = `%s`\n\n", kind, abijson)
-
-	// Generate the high level contract wrapper types
-	code += fmt.Sprintf("// %s is an auto generated Go binding around an Ethereum contract.\n", kind)
-	code += fmt.Sprintf("type %s struct {\n", kind)
-	code += fmt.Sprintf("  %sCaller     // Read-only binding to the contract\n", kind)
-	code += fmt.Sprintf("  %sTransactor // Write-only binding to the contract\n", kind)
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// %sCaller is an auto generated read-only Go binding around an Ethereum contract.\n", kind)
-	code += fmt.Sprintf("type %sCaller struct {\n", kind)
-	code += fmt.Sprintf("  contract *bind.BoundContract // Generic contract wrapper for the low level calls\n")
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// %sTransactor is an auto generated write-only Go binding around an Ethereum contract.\n", kind)
-	code += fmt.Sprintf("type %sTransactor struct {\n", kind)
-	code += fmt.Sprintf("  contract *bind.BoundContract // Generic contract wrapper for the low level calls\n")
-	code += fmt.Sprintf("}\n\n")
-
-	// Generate the high level contract session wrapper types
-	code += fmt.Sprintf("// %sSession is an auto generated Go binding around an Ethereum contract,\n// with pre-set call and transact options.\n", kind)
-	code += fmt.Sprintf("type %sSession struct {\n", kind)
-	code += fmt.Sprintf("  Contract     *%s               // Generic contract binding to set the session for\n", kind)
-	code += fmt.Sprintf("  CallOpts     bind.CallOpts     // Call options to use throughout this session\n")
-	code += fmt.Sprintf("  TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session\n")
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// %sCallerSession is an auto generated read-only Go binding around an Ethereum contract,\n// with pre-set call options.\n", kind)
-	code += fmt.Sprintf("type %sCallerSession struct {\n", kind)
-	code += fmt.Sprintf("  Contract *%sCaller     // Generic contract caller binding to set the session for\n", kind)
-	code += fmt.Sprintf("  CallOpts bind.CallOpts // Call options to use throughout this session\n")
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// %sTransactorSession is an auto generated write-only Go binding around an Ethereum contract,\n// with pre-set transact options.\n", kind)
-	code += fmt.Sprintf("type %sTransactorSession struct {\n", kind)
-	code += fmt.Sprintf("  Contract     *%sTransactor     // Generic contract transactor binding to set the session for\n", kind)
-	code += fmt.Sprintf("  TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session\n")
-	code += fmt.Sprintf("}\n\n")
-
-	// Generate the constructor to create a bound contract
-	code += fmt.Sprintf("// New%s creates a new instance of %s, bound to a specific deployed contract.\n", kind, kind)
-	code += fmt.Sprintf("func New%s(address common.Address, backend bind.ContractBackend) (*%s, error) {\n", kind, kind)
-	code += fmt.Sprintf("  contract, err := bind%s(address, backend.(bind.ContractCaller), backend.(bind.ContractTransactor))\n", kind)
-	code += fmt.Sprintf("  if err != nil {\n")
-	code += fmt.Sprintf("    return nil, err\n")
-	code += fmt.Sprintf("  }\n")
-	code += fmt.Sprintf("  return &%s{%sCaller: %sCaller{contract: contract}, %sTransactor: %sTransactor{contract: contract}}, nil\n", kind, kind, kind, kind, kind)
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// New%sCaller creates a new read-only instance of %s, bound to a specific deployed contract.\n", kind, kind)
-	code += fmt.Sprintf("func New%sCaller(address common.Address, caller bind.ContractCaller) (*%sCaller, error) {\n", kind, kind)
-	code += fmt.Sprintf("  contract, err := bind%s(address, caller, nil)\n", kind)
-	code += fmt.Sprintf("  if err != nil {\n")
-	code += fmt.Sprintf("    return nil, err\n")
-	code += fmt.Sprintf("  }\n")
-	code += fmt.Sprintf("  return &%sCaller{contract: contract}, nil\n", kind)
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// New%sTransactor creates a new write-only instance of %s, bound to a specific deployed contract.\n", kind, kind)
-	code += fmt.Sprintf("func New%sTransactor(address common.Address, transactor bind.ContractTransactor) (*%sTransactor, error) {\n", kind, kind)
-	code += fmt.Sprintf("  contract, err := bind%s(address, nil, transactor)\n", kind)
-	code += fmt.Sprintf("  if err != nil {\n")
-	code += fmt.Sprintf("    return nil, err\n")
-	code += fmt.Sprintf("  }\n")
-	code += fmt.Sprintf("  return &%sTransactor{contract: contract}, nil\n", kind)
-	code += fmt.Sprintf("}\n\n")
-
-	code += fmt.Sprintf("// bind%s binds a generic wrapper to an already deployed contract.\n", kind)
-	code += fmt.Sprintf("func bind%s(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {\n", kind)
-	code += fmt.Sprintf("  parsed, err := abi.JSON(strings.NewReader(%sABI))\n", kind)
-	code += fmt.Sprintf("  if err != nil {\n")
-	code += fmt.Sprintf("    return nil, err\n")
-	code += fmt.Sprintf("  }\n")
-	code += fmt.Sprintf("  return bind.NewBoundContract(address, parsed, caller, transactor), nil\n")
-	code += fmt.Sprintf("}")
-
-	return code
-}
-
-// bindConstructor
-func bindConstructor(kind string, bytecode string, constructor abi.Method) string {
-	// If no byte code was supplied, we cannot deploy
-	if bytecode == "" {
-		return ""
-	}
-	// Otherwise store the bytecode into a global constant
-	code := fmt.Sprintf("// Ethereum VM bytecode used for deploying new contracts.\nconst %sBin = `%s`\n\n", kind, bytecode)
-
-	// Generate the argument list for the constructor
-	args := make([]string, 0, len(constructor.Inputs))
-	for i, arg := range constructor.Inputs {
-		param := arg.Name
-		if param == "" {
-			param = fmt.Sprintf("arg%d", i)
-		}
-		args = append(args, fmt.Sprintf("%s %s", param, bindType(arg.Type)))
-	}
-	arglist := ""
-	if len(args) > 0 {
-		arglist = "," + strings.Join(args, ",")
-	}
-	// Generate the cal parameter list for the dpeloyer
-	params := make([]string, len(args))
-	for i, param := range args {
-		params[i] = strings.Split(param, " ")[0]
-	}
-	paramlist := ""
-	if len(params) > 0 {
-		paramlist = "," + strings.Join(params, ",")
-	}
-	// And generate the global deployment function
-	code += fmt.Sprintf("// Deploy%s deploys a new contract, binding an instance of %s to it.\n", kind, kind)
-	code += fmt.Sprintf("func Deploy%s(auth *bind.TransactOpts, backend bind.ContractBackend %s) (common.Address, *types.Transaction, *%s, error) {\n", kind, arglist, kind)
-	code += fmt.Sprintf("  parsed, err := abi.JSON(strings.NewReader(%sABI))\n", kind)
-	code += fmt.Sprintf("  if err != nil {\n")
-	code += fmt.Sprintf("    return common.Address{}, nil, nil, err\n")
-	code += fmt.Sprintf("  }\n")
-	code += fmt.Sprintf("  address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(%sBin), backend %s)\n", kind, paramlist)
-	code += fmt.Sprintf("  if err != nil {\n")
-	code += fmt.Sprintf("    return common.Address{}, nil, nil, err\n")
-	code += fmt.Sprintf("  }\n")
-	code += fmt.Sprintf("  return address, tx, &%s{%sCaller: %sCaller{contract: contract}, %sTransactor: %sTransactor{contract: contract}}, nil\n", kind, kind, kind, kind, kind)
-	code += fmt.Sprintf("}\n\n")
-
-	return code
-}
-
-// bindMethod
-func bindMethod(kind string, method abi.Method) string {
-	var (
-		name     = strings.ToUpper(method.Name[:1]) + method.Name[1:]
-		prologue = new(bytes.Buffer)
-	)
-	// Generate the argument and return list for the function
-	args := make([]string, 0, len(method.Inputs))
-	for i, arg := range method.Inputs {
-		param := arg.Name
-		if param == "" {
-			param = fmt.Sprintf("arg%d", i)
-		}
-		args = append(args, fmt.Sprintf("%s %s", param, bindType(arg.Type)))
-	}
-	returns, _ := bindReturn(prologue, name, method.Outputs)
-
-	// Generate the docs to help with coding against the binding
-	callTypeDoc := "free data retrieval call"
-	if !method.Const {
-		callTypeDoc = "paid mutator transaction"
-	}
-	docs := fmt.Sprintf("// %s is a %s binding the contract method 0x%x.\n", name, callTypeDoc, method.Id())
-	docs += fmt.Sprintf("// \n")
-	docs += fmt.Sprintf("// Solidity: %s", strings.TrimPrefix(method.String(), "function "))
-
-	// Generate the passthrough argument list for sessions
-	params := make([]string, len(args))
-	for i, param := range args {
-		params[i] = strings.Split(param, " ")[0]
-	}
-	sessargs := ""
-	if len(params) > 0 {
-		sessargs = "," + strings.Join(params, ",")
-	}
-	// Generate the method itself for both the read/write version and the combo too
-	code := fmt.Sprintf("%s\n", prologue)
-	if method.Const {
-		// Create the main call implementation
-		callargs := append([]string{"opts *bind.CallOpts"}, args...)
-
-		code += fmt.Sprintf("%s\n", docs)
-		code += fmt.Sprintf("func (_%s *%sCaller) %s(%s) (%s) {\n", kind, kind, name, strings.Join(callargs, ","), strings.Join(returns, ","))
-		code += fmt.Sprintf("  %s\n", bindCallBody(kind, method.Name, callargs, returns))
-		code += fmt.Sprintf("}\n\n")
-
-		// Create the wrapping session call implementation
-		code += fmt.Sprintf("%s\n", docs)
-		code += fmt.Sprintf("func (_%s *%sSession) %s(%s) (%s) {\n", kind, kind, name, strings.Join(args, ","), strings.Join(returns, ","))
-		code += fmt.Sprintf("  return _%s.Contract.%s(&_%s.CallOpts %s)\n", kind, name, kind, sessargs)
-		code += fmt.Sprintf("}\n\n")
-
-		code += fmt.Sprintf("%s\n", docs)
-		code += fmt.Sprintf("func (_%s *%sCallerSession) %s(%s) (%s) {\n", kind, kind, name, strings.Join(args, ","), strings.Join(returns, ","))
-		code += fmt.Sprintf("  return _%s.Contract.%s(&_%s.CallOpts %s)\n", kind, name, kind, sessargs)
-		code += fmt.Sprintf("}\n\n")
-	} else {
-		// Create the main transaction implementation
-		txargs := append([]string{"opts *bind.TransactOpts"}, args...)
-
-		code += fmt.Sprintf("%s\n", docs)
-		code += fmt.Sprintf("func (_%s *%sTransactor) %s(%s) (*types.Transaction, error) {\n", kind, kind, name, strings.Join(txargs, ","))
-		code += fmt.Sprintf("  %s\n", bindTransactionBody(kind, method.Name, txargs))
-		code += fmt.Sprintf("}\n\n")
-
-		// Create the wrapping session call implementation
-		code += fmt.Sprintf("%s\n", docs)
-		code += fmt.Sprintf("func (_%s *%sSession) %s(%s) (*types.Transaction, error) {\n", kind, kind, name, strings.Join(args, ","))
-		code += fmt.Sprintf("  return _%s.Contract.%s(&_%s.TransactOpts %s)\n", kind, name, kind, sessargs)
-		code += fmt.Sprintf("}\n\n")
-
-		code += fmt.Sprintf("%s\n", docs)
-		code += fmt.Sprintf("func (_%s *%sTransactorSession) %s(%s) (*types.Transaction, error) {\n", kind, kind, name, strings.Join(args, ","))
-		code += fmt.Sprintf("  return _%s.Contract.%s(&_%s.TransactOpts %s)\n", kind, name, kind, sessargs)
-		code += fmt.Sprintf("}\n\n")
-	}
-	return code
+	return string(code), nil
 }
 
 // bindType converts a Solidity type to a Go one. Since there is no clear mapping
@@ -319,102 +153,21 @@ func bindType(kind abi.Type) string {
 	}
 }
 
-// bindReturn creates the list of return parameters for a method invocation. If
-// all the fields of the return type are named, and there is more than one value
-// being returned, the returns are wrapped in a result struct.
-func bindReturn(prologue *bytes.Buffer, method string, outputs []abi.Argument) ([]string, string) {
-	// Generate the anonymous return list for when a struct is not needed/possible
-	var (
-		returns   = make([]string, 0, len(outputs)+1)
-		anonymous = false
-	)
-	for _, ret := range outputs {
-		returns = append(returns, bindType(ret.Type))
-		if ret.Name == "" {
-			anonymous = true
+// capitalise makes the first character of a string upper case.
+func capitalise(input string) string {
+	return strings.ToUpper(input[:1]) + input[1:]
+}
+
+// structured checks whether a method has enough information to return a proper
+// Go struct ot if flat returns are needed.
+func structured(method abi.Method) bool {
+	if len(method.Outputs) < 2 {
+		return false
+	}
+	for _, out := range method.Outputs {
+		if out.Name == "" {
+			return false
 		}
 	}
-	if anonymous || len(returns) < 2 {
-		returns = append(returns, "error")
-		return returns, ""
-	}
-	// If the returns are named and numerous, wrap in a result struct
-	wrapper, impl := bindReturnStruct(method, outputs)
-	prologue.WriteString(impl + "\n")
-	return []string{"*" + wrapper, "error"}, wrapper
-}
-
-// bindReturnStruct creates a Go structure with the specified fields to be used
-// as the return type from a method call.
-func bindReturnStruct(method string, returns []abi.Argument) (string, string) {
-	fields := make([]string, 0, len(returns))
-	for _, ret := range returns {
-		fields = append(fields, fmt.Sprintf("%s %s", strings.ToUpper(ret.Name[:1])+ret.Name[1:], bindType(ret.Type)))
-	}
-	kind := fmt.Sprintf("%sResult", method)
-	docs := fmt.Sprintf("// %s is the result of the %s invocation.", kind, method)
-
-	return kind, fmt.Sprintf("%s\ntype %s struct {\n%s\n}", docs, kind, strings.Join(fields, "\n"))
-}
-
-// bindCallBody creates the Go code to declare a batch of return values, invoke
-// an Ethereum method call with the requested parameters, parse the binary output
-// into the return values and return them.
-func bindCallBody(kind string, method string, params []string, returns []string) string {
-	body := ""
-
-	// Allocate memory for each of the return values
-	rets := make([]string, 0, len(returns)-1)
-	if len(returns) > 1 {
-		body += "var ("
-		for i, kind := range returns[:len(returns)-1] { // Omit the final error
-			name := fmt.Sprintf("ret%d", i)
-
-			rets = append(rets, name)
-			body += fmt.Sprintf("%s = new(%s)\n", name, kind)
-		}
-		body += ")\n"
-	}
-	// Assemble a single collector variable for the result ABI initialization
-	result := strings.Join(rets, ",")
-	if len(returns) > 2 {
-		result = "[]interface{}{" + result + "}"
-	}
-	// Extract the parameter list into a flat variable name list
-	inputs := make([]string, len(params)-1) // Omit the call options
-	for i, param := range params[1:] {
-		inputs[i] = strings.Split(param, " ")[0]
-	}
-	input := ""
-	if len(inputs) > 0 {
-		input = "," + strings.Join(inputs, ",")
-	}
-	// Request executing the contract call and return the results with the errors
-	body += fmt.Sprintf("err := _%s.contract.Call(opts, %s, \"%s\" %s)\n", kind, result, method, input)
-
-	outs := make([]string, 0, len(returns))
-	for _, ret := range rets { // Handle th final error separately
-		outs = append(outs, "*"+ret)
-	}
-	outs = append(outs, "err")
-
-	body += fmt.Sprintf("return %s", strings.Join(outs, ","))
-
-	return body
-}
-
-// bindTransactionBody creates the Go code to invoke an Ethereum transaction call
-// with the requested parameters, and return the assembled transaction object.
-func bindTransactionBody(kind string, method string, params []string) string {
-	// Extract the parameter list into a flat variable name list
-	inputs := make([]string, len(params)-1) // Omit the auth options
-	for i, param := range params[1:] {
-		inputs[i] = strings.Split(param, " ")[0]
-	}
-	input := ""
-	if len(inputs) > 0 {
-		input = "," + strings.Join(inputs, ",")
-	}
-	// Request executing the contract call and return the results with the errors
-	return fmt.Sprintf("return _%s.contract.Transact(opts, \"%s\" %s)", kind, method, input)
+	return true
 }
