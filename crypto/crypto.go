@@ -217,19 +217,6 @@ func Decrypt(prv *ecdsa.PrivateKey, ct []byte) ([]byte, error) {
 	return key.Decrypt(rand.Reader, ct, nil, nil)
 }
 
-// Used only by block tests.
-func ImportBlockTestKey(privKeyBytes []byte) error {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir()+"/keystore", LightScryptN, LightScryptP)
-	ecKey := ToECDSA(privKeyBytes)
-	key := &Key{
-		Id:         uuid.NewRandom(),
-		Address:    PubkeyToAddress(ecKey.PublicKey),
-		PrivateKey: ecKey,
-	}
-	err := ks.StoreKey(key, "")
-	return err
-}
-
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
 func ImportPreSaleKey(keyStore KeyStore, keyJSON []byte, password string) (*Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)

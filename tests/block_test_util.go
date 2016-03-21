@@ -22,23 +22,18 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -160,45 +155,39 @@ func runBlockTests(homesteadBlock *big.Int, bt map[string]*BlockTest, skipTests 
 
 	}
 	return nil
-
 }
-func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
-	am := accounts.NewManager(ks)
-	db, _ := ethdb.NewMemDatabase()
 
+func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
 	// import pre accounts & construct test genesis block & state root
-	_, err := test.InsertPreState(db, am)
-	if err != nil {
+	db, _ := ethdb.NewMemDatabase()
+	if _, err := test.InsertPreState(db); err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	cfg := &eth.Config{
-		ChainConfig:      &core.ChainConfig{HomesteadBlock: homesteadBlock},
-		TestGenesisState: db,
-		TestGenesisBlock: test.Genesis,
-		Etherbase:        common.Address{},
-		AccountManager:   am,
-		PowShared:        true,
-	}
-	ethereum, err := eth.New(&node.ServiceContext{EventMux: new(event.TypeMux)}, cfg)
+	core.WriteTd(db, test.Genesis.Hash(), test.Genesis.Difficulty())
+	core.WriteBlock(db, test.Genesis)
+	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
+	core.WriteHeadBlockHash(db, test.Genesis.Hash())
+	evmux := new(event.TypeMux)
+	config := &core.ChainConfig{HomesteadBlock: homesteadBlock}
+	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux)
 	if err != nil {
 		return err
 	}
-	cm := ethereum.BlockChain()
+
 	//vm.Debug = true
-	validBlocks, err := test.TryBlocksInsert(cm)
+	validBlocks, err := test.TryBlocksInsert(chain)
 	if err != nil {
 		return err
 	}
 
 	lastblockhash := common.HexToHash(test.lastblockhash)
-	cmlast := cm.LastBlockHash()
+	cmlast := chain.LastBlockHash()
 	if lastblockhash != cmlast {
 		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
 	}
 
-	newDB, err := cm.State()
+	newDB, err := chain.State()
 	if err != nil {
 		return err
 	}
@@ -206,21 +195,17 @@ func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
 
-	return test.ValidateImportedHeaders(cm, validBlocks)
+	return test.ValidateImportedHeaders(chain, validBlocks)
 }
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
+func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 	statedb, err := state.New(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 	for addrString, acct := range t.preAccounts {
-		addr, err := hex.DecodeString(addrString)
-		if err != nil {
-			return nil, err
-		}
 		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
 		if err != nil {
 			return nil, err
@@ -233,16 +218,6 @@ func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*st
 		if err != nil {
 			return nil, err
 		}
-
-		if acct.PrivateKey != "" {
-			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
-			err = crypto.ImportBlockTestKey(privkey)
-			err = am.TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		obj := statedb.CreateAccount(common.HexToAddress(addrString))
 		obj.SetCode(code)
 		obj.SetBalance(balance)

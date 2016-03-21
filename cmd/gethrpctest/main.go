@@ -123,7 +123,7 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 	}
 	// Initialize and register the Ethereum protocol
 	db, _ := ethdb.NewMemDatabase()
-	if _, err := test.InsertPreState(db, accman); err != nil {
+	if _, err := test.InsertPreState(db); err != nil {
 		return nil, err
 	}
 	ethConf := &eth.Config{
