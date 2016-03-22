@@ -357,6 +357,10 @@ var (
 		Name:  "bzznoswap",
 		Usage: "Swarm SWAP disabled (false)",
 	}
+	SwarmSyncDisabled = cli.BoolFlag{
+		Name:  "bzznosync",
+		Usage: "Swarm Syncing disabled (false)",
+	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -788,9 +792,10 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		if len(bzzport) > 0 {
 			bzzconfig.Port = bzzport
 		}
-		swap := ctx.GlobalBool(SwarmSwapDisabled.Name)
+		swapEnabled := !ctx.GlobalBool(SwarmSwapDisabled.Name)
+		syncEnabled := !ctx.GlobalBool(SwarmSyncDisabled.Name)
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return swarm.NewSwarm(ctx, bzzconfig, swap)
+			return swarm.NewSwarm(ctx, bzzconfig, swapEnabled, syncEnabled)
 		}); err != nil {
 			Fatalf("Failed to register the Swarm service: %v", err)
 		}

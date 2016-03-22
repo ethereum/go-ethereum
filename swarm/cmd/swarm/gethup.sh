@@ -13,6 +13,8 @@ shift
 # created to the latest, so that monitoring be easier with the same filename
 # TODO: use this if GETH not set
 # GETH=geth
+echo "ls -l $GETH"
+ls -l $GETH
 
 # geth CLI params       e.g., (dd=04, run=09)
 datetag=`date "+%c%y%m%d-%H%M%S"|cut -d ' ' -f 5`
@@ -21,37 +23,46 @@ log=$root/log/$id.$datetag.log     # /tmp/eth/04.09.log
 linklog=$root/log/$id.current.log     # /tmp/eth/04.09.log
 stablelog=$root/log/$id.log     # /tmp/eth/04.09.log
 password=$id            # 04
-port=345$id              # 34504
-bzzport=622$id              # 62204
-rpcport=62$id            # 6204
+port=303$id              # 34504
+bzzport=322$id              # 32204
+rpcport=32$id            # 3204
 
 mkdir -p $root/data
+mkdir -p $root/enodes
+mkdir -p $root/pids
 mkdir -p $root/log
 ln -sf "$log" "$linklog"
 # if we do not have an account, create one
 # will not prompt for password, we use the double digit instance id as passwd
 # NEVER EVER USE THESE ACCOUNTS FOR INTERACTING WITH A LIVE CHAIN
-if [ ! -d "$root/keystore/$id" ]; then
-  # echo "create an account with password $id"
-  # echo "create an account with password $id [DO NOT EVER USE THIS ON LIVE]"
-  mkdir -p $root/keystore/$id
+keystoredir="$datadir/keystore/"
+echo "KeyStore dir: $keystoredir"
+if [ ! -d "$keystoredir" ]; then
+  echo "create an account with password $id [DO NOT EVER USE THIS ON LIVE]"
+  # mkdir -p $datadir/keystore
   $GETH --datadir $datadir --password <(echo -n $id) account new >/dev/null 2>&1
-# create account with password 00, 01, ...
+      # create account with password 00, 01, ...
   # note that the account key will be stored also separately outside
   # datadir
   # this way you can safely clear the data directory and still keep your key
   # under `<rootdir>/keystore/dd
-
-  cp -R "$datadir/keystore" $root/keystore/$id
+  # LS=`ls $datadir/keystore`
+  # echo $LS
+  while [ ! -d "$keystoredir" ]; do
+    echo "."
+    ((i++))
+    if ((i>10)); then break; fi
+    sleep 1
+  done
+  echo "copying keys $datadir/keystore $root/keystore/$id"
+  mkdir -p $root/keystore/$id
+  cp -R "$datadir/keystore/" $root/keystore/$id
 fi
 
-# echo "copying keys $root/keystore/$id $datadir/keystore"
-# ls $root/keystore/$id/keystore/ $datadir/keystore
-
-# mkdir -p $datadir/keystore
+# # mkdir -p $datadir/keystore
 # if [ ! -d "$datadir/keystore" ]; then
-# echo "copying keys $root/keystore/$id $datadir/keystore"
-cp -R $root/keystore/$id/keystore/ $datadir/keystore/
+#   echo "copying keys $root/keystore/$id $datadir/keystore"
+#   cp -R $root/keystore/$id/keystore/ $datadir/keystore/
 # fi
 
 
@@ -63,10 +74,10 @@ else
   pattern='\[\:\:\]'
 fi
 
-# echo -n "enode for instance $id...  "
+geth="$GETH --datadir $datadir --port $port"
 
+# echo -n "enode for instance $id...  "
 if [ ! "$GETH" = "" ] && [ ! -f $root/enodes/$id.enode ]; then
-  geth="$GETH --datadir $root/data/$id --port $port"
   cmd="$geth js <(echo 'console.log(admin.nodeInfo.enode); exit();') "
   # echo $cmd '2>/dev/null |grep enode | perl -pe "s/'$pattern'/'$ip_addr'/g" | perl -pe "s/^/\"/; s/\s*$/\"/;" > '$root/enodes/$id.enode
   eval $cmd 2>/dev/null |grep enode | perl -pe "s/$pattern/$ip_addr/g" | perl -pe "s/^/\"/; s/\s*\$/\"/;" > $root/enodes/$id.enode
@@ -86,17 +97,17 @@ if [ ! -f $root/pids/$id.pid ]; then
   # - listening on port 303dd, (like 30300, 30301, ...)
   # - with the account unlocked
   # - launching json-rpc server on port 81dd (like 8100, 8101, 8102, ...)
-  BZZKEY=`$GETH --datadir=$datadir account list|head -n1|perl -ne '/([a-f0-9]{40})/ && print $1'`
+  # echo "BZZKEY=$geth account list|head -n1|perl -ne '/([a-f0-9]{40})/ && print \$1'"
+  BZZKEY=`$geth account list|head -n1|perl -ne '/([a-f0-9]{40})/ && print \$1'`
   echo -n "starting instance $id ($BZZKEY @ $datadir )..."
-  # echo "$GETH --datadir=$datadir \
-  #   --identity=$id \
-  #   --bzzaccount=$BZZKEY --bzzport=$bzzport \
-  #   --port=$port \
-  #   --unlock=$BZZKEY \
-  #   --password=<(echo -n $id) \
-  #   --rpc --rpcport=$rpcport --rpccorsdomain='*' $* \
-  #   2>&1 | tee "$stablelog" > "$log" &  # comment out if you pipe it to a tty etc.
-  # " >&2
+  echo "$geth \
+    --identity=$id \
+    --bzzaccount=$BZZKEY --bzzport=$bzzport \
+    --unlock=$BZZKEY \
+    --password=<(echo -n $id) \
+    --rpc --rpcport=$rpcport --rpccorsdomain='*' $* \
+    2>&1 | tee "$stablelog" > "$log" &  # comment out if you pipe it to a tty etc.
+  " >&2
 
   if [ -f $log ] && [ -f $root/stablelog ]; then
     cp $stablelog `cat $root/prevlog`
@@ -118,6 +129,7 @@ if [ ! -f $root/pids/$id.pid ]; then
   # echo $pid > $root/pids/$id.pid
   #echo $! > $root/pids/$id.pid
   while true; do
+    # echo $GETH --ipcpath=$datadir/geth.ipc --exec="net" attach
     $GETH --ipcpath=$datadir/geth.ipc --exec="net" attach > /dev/null 2>&1 && break
     sleep 1
     echo -n "."

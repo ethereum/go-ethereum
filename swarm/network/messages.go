@@ -109,7 +109,7 @@ type retrieveRequestMsgData struct {
 	MaxSize  uint64      // maximum size of delivery accepted
 	MaxPeers uint64      // maximum number of peers returned
 	Timeout  uint64      // the longest time we are expecting a response
-	timeout  *time.Time  // [not serialied]}
+	timeout  *time.Time  // [not serialised]}
 	from     *peer       //
 }
 
@@ -234,7 +234,7 @@ peer/protocol instance when the node is registered by hive as online{
 */
 
 type syncRequestMsgData struct {
-	SyncState *syncState `rlp:"nil"`
+	SyncState *syncState `rlp:"nil"	`
 }
 
 func (self *syncRequestMsgData) String() string {

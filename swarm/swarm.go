@@ -43,7 +43,7 @@ type Swarm struct {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) (self *Swarm, err error) {
+func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled, syncEnabled bool) (self *Swarm, err error) {
 
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
@@ -77,6 +77,8 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	self.hive = network.NewHive(
 		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
 		config.HiveParams,                    // configuration parameters
+		swapEnabled,                          // SWAP enabled
+		syncEnabled,                          // syncronisation enabled
 	)
 	glog.V(logger.Debug).Infof("[BZZ] Set up swarm network with Kademlia hive")
 
@@ -110,12 +112,15 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	glog.V(logger.Debug).Infof("[BZZ] -> Web3 virtual server API")
 
 	// set chequebook
+
 	if swapEnabled {
 		err = self.SetChequebook(backend)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to set chequebook for SWAP: %v", err)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] -> cheque book for SWAP")
+		glog.V(logger.Debug).Infof("[BZZ] -> cheque book for SWAP: %v", self.config.Swap.Chequebook())
+	} else {
+		glog.V(logger.Debug).Infof("[BZZ] SWAP disabled: no cheque book set")
 	}
 	return self, nil
 }
@@ -206,7 +211,7 @@ func (self *Swarm) APIs() []rpc.API {
 		rpc.API{Namespace, Version, api.NewControl(self.api, self.hive), false},
 		// rpc.API{Namespace, Version, api.NewAdmin(self), false},
 		// TODO: external apis exposed
-		rpc.API{"chequebook", chequebook.Version, chequebook.NewApi(self.config.Swap.Chequebook()), true},
+		rpc.API{"chequebook", chequebook.Version, chequebook.NewApi(self.config.Swap.Chequebook), true},
 	}
 }
 

@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // Handler for storage/retrieval related protocol requests
@@ -51,6 +51,7 @@ func (self *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error
 	if err != nil {
 		return err
 	}
+	// set peers state to persist
 	p.syncState = req.State
 	return nil
 }

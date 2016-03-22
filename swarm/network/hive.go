@@ -32,8 +32,12 @@ type Hive struct {
 	path         string
 	toggle       chan bool
 	more         chan bool
-	blockRead    bool
-	blockWrite   bool
+
+	// for testing only
+	swapEnabled bool
+	syncEnabled bool
+	blockRead   bool
+	blockWrite  bool
 }
 
 const (
@@ -62,14 +66,24 @@ func NewHiveParams(path string) *HiveParams {
 	}
 }
 
-func NewHive(addr common.Hash, params *HiveParams) *Hive {
+func NewHive(addr common.Hash, params *HiveParams, swapEnabled, syncEnabled bool) *Hive {
 	kad := kademlia.New(kademlia.Address(addr), params.KadParams)
 	return &Hive{
 		callInterval: params.CallInterval,
 		kad:          kad,
 		addr:         kad.Addr(),
 		path:         params.KadDbPath,
+		swapEnabled:  swapEnabled,
+		syncEnabled:  syncEnabled,
 	}
+}
+
+func (self *Hive) SyncEnabled(on bool) {
+	self.syncEnabled = on
+}
+
+func (self *Hive) SwapEnabled(on bool) {
+	self.swapEnabled = on
 }
 
 func (self *Hive) BlockNetworkRead(on bool) {

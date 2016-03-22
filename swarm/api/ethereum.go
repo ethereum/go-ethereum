@@ -56,7 +56,7 @@ func NewEthApi(ethereum *eth.Ethereum) *ethApi {
 // Note: this is not threadsafe, only called in JS single process and tests
 func (self *ethApi) UpdateState() (wait chan *big.Int) {
 	wait = make(chan *big.Int)
-	self.state, _ = state.New(self.eth.BlockChain().GetBlockByNumber(0).Root(), self.eth.ChainDb())
+	self.state, _ = state.New(self.eth.BlockChain().CurrentBlock().Root(), self.eth.ChainDb())
 
 	go func() {
 		eventSub := self.eth.EventMux().Subscribe(core.ChainHeadEvent{})
@@ -128,6 +128,10 @@ func (self *ethApi) GetTxReceipt(txhash common.Hash) *types.Receipt {
 
 func (self *ethApi) StorageAt(addr, storageAddr string) string {
 	return self.state.GetState(common.HexToAddress(addr), common.HexToHash(storageAddr)).Hex()
+}
+
+func (self *ethApi) BalanceAt(address common.Address) string {
+	return self.state.GetBalance(address).String()
 }
 
 func (self *ethApi) CodeAt(address string) string {

@@ -42,25 +42,26 @@ var searchTimeout = 3 * time.Second
 func (self *forwarder) Retrieve(chunk *storage.Chunk) {
 	peers := self.hive.getPeers(chunk.Key, 0)
 	glog.V(logger.Detail).Infof("[BZZ] forwarder.Retrieve: %v - received %d peers from KΛÐΞMLIΛ...", chunk.Key.Log(), len(peers))
+OUT:
 	for _, p := range peers {
 		glog.V(logger.Detail).Infof("[BZZ] forwarder.Retrieve: sending retrieveRequest %v to peer [%v]", chunk.Key.Log(), p)
-		var req *retrieveRequestMsgData
-	OUT:
 		for _, recipients := range chunk.Req.Requesters {
 			for _, recipient := range recipients {
 				req := recipient.(*retrieveRequestMsgData)
 				if req.from.Addr() == p.Addr() {
-					break OUT
+					continue OUT
 				}
 			}
 		}
-		if req != nil {
-			if err := p.swap.Add(-1); err == nil {
-				p.retrieve(req)
-				break
-			} else {
-				glog.V(logger.Warn).Infof("[BZZ] forwarder.Retrieve: unable to send retrieveRequest to peer [%v]: %v", chunk.Key.Log(), err)
-			}
+		req := &retrieveRequestMsgData{
+			Key: chunk.Key,
+			Id:  generateId(),
+		}
+		if err := p.swap.Add(-1); err == nil {
+			p.retrieve(req)
+			break OUT
+		} else {
+			glog.V(logger.Warn).Infof("[BZZ] forwarder.Retrieve: unable to send retrieveRequest to peer [%v]: %v", chunk.Key.Log(), err)
 		}
 	}
 }
