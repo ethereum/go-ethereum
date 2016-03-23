@@ -84,6 +84,7 @@ type BlockChain struct {
 	chainDb      ethdb.Database
 	eventMux     *event.TypeMux
 	genesisBlock *types.Block
+	vmConfig     *vm.Config
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
@@ -160,6 +161,10 @@ func NewBlockChain(chainDb ethdb.Database, pow pow.PoW, mux *event.TypeMux) (*Bl
 	// Take ownership of this particular state
 	go bc.update()
 	return bc, nil
+}
+
+func (self *BlockChain) SetConfig(vmConfig *vm.Config) {
+	self.vmConfig = vmConfig
 }
 
 func (self *BlockChain) getProcInterrupt() bool {
@@ -891,7 +896,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(block, statedb)
+		receipts, logs, usedGas, err := self.processor.Process(block, statedb, self.vmConfig)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err

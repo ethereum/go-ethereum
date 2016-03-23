@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -105,7 +106,6 @@ func init() {
 }
 
 func run(ctx *cli.Context) {
-	vm.Debug = ctx.GlobalBool(DebugFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(ForceJitFlag.Name)
 	vm.EnableJit = !ctx.GlobalBool(DisableJitFlag.Name)
 
@@ -118,7 +118,9 @@ func run(ctx *cli.Context) {
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
 
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)))
+	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), &vm.Config{
+		Debug: ctx.GlobalBool(DebugFlag.Name),
+	})
 
 	tstart := time.Now()
 	ret, e := vmenv.Call(
@@ -174,17 +176,25 @@ type VMEnv struct {
 	Gas   *big.Int
 	time  *big.Int
 	logs  []vm.StructLog
+
+	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
-	return &VMEnv{
+func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg *vm.Config) *VMEnv {
+	params.HomesteadBlock = new(big.Int)
+	env := &VMEnv{
 		state:      state,
 		transactor: &transactor,
 		value:      value,
 		time:       big.NewInt(time.Now().Unix()),
 	}
+	cfg.Logger.Collector = env
+
+	env.evm = vm.New(env, cfg)
+	return env
 }
 
+func (self *VMEnv) Vm() vm.Vm                  { return self.evm }
 func (self *VMEnv) Db() vm.Database            { return self.state }
 func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }
 func (self *VMEnv) SetSnapshot(db vm.Database) { self.state.Set(db.(*state.StateDB)) }

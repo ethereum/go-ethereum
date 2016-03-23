@@ -28,7 +28,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
+
+func init() {
+	glog.SetV(0)
+}
 
 func checkLogs(tlog []Log, logs vm.Logs) error {
 
@@ -143,12 +148,15 @@ type Env struct {
 	logs []vm.StructLog
 
 	vmTest bool
+
+	evm *vm.EVM
 }
 
 func NewEnv(state *state.StateDB) *Env {
-	return &Env{
+	env := &Env{
 		state: state,
 	}
+	return env
 }
 
 func (self *Env) StructLogs() []vm.StructLog {
@@ -171,9 +179,12 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
 
+	env.evm = vm.New(env, nil)
+
 	return env
 }
 
+func (self *Env) Vm() vm.Vm                { return self.evm }
 func (self *Env) Origin() common.Address   { return self.origin }
 func (self *Env) BlockNumber() *big.Int    { return self.number }
 func (self *Env) Coinbase() common.Address { return self.coinbase }

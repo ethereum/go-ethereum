@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"sync"
@@ -669,7 +670,7 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header())
+	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header(), nil)
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
 	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
@@ -980,6 +981,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 	}
 
 	fields := map[string]interface{}{
+		"root":              common.Bytes2Hex(receipt.PostState),
 		"blockHash":         txBlock,
 		"blockNumber":       rpc.NewHexNumber(blockIndex),
 		"transactionHash":   txHash,
@@ -1508,38 +1510,113 @@ func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
 	return &PrivateDebugAPI{eth: eth}
 }
 
-// ProcessBlock reprocesses an already owned block.
-func (api *PrivateDebugAPI) ProcessBlock(number uint64) (bool, error) {
+// BlockTraceResults is the returned value when replaying a block to check for
+// consensus results and full VM trace logs for all included transactions.
+type BlockTraceResult struct {
+	Validated  bool           `json: "validated"`
+	StructLogs []structLogRes `json:"structLogs"`
+	Error      error          `json:"error"`
+}
+
+// TraceBlock processes the given block's RLP but does not import the block in to
+// the chain.
+func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config vm.Config) BlockTraceResult {
+	var block types.Block
+	err := rlp.Decode(bytes.NewReader(blockRlp), &block)
+	if err != nil {
+		return BlockTraceResult{Error: fmt.Errorf("could not decode block: %v", err)}
+	}
+
+	validated, logs, err := api.traceBlock(&block, config)
+	return BlockTraceResult{
+		Validated:  validated,
+		StructLogs: formatLogs(logs),
+		Error:      err,
+	}
+}
+
+// TraceBlockFromFile loads the block's RLP from the given file name and attempts to
+// process it but does not import the block in to the chain.
+func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config vm.Config) BlockTraceResult {
+	blockRlp, err := ioutil.ReadFile(file)
+	if err != nil {
+		return BlockTraceResult{Error: fmt.Errorf("could not read file: %v", err)}
+	}
+	return api.TraceBlock(blockRlp, config)
+}
+
+// TraceProcessBlock processes the block by canonical block number.
+func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config vm.Config) BlockTraceResult {
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlockByNumber(number)
 	if block == nil {
-		return false, fmt.Errorf("block #%d not found", number)
+		return BlockTraceResult{Error: fmt.Errorf("block #%d not found", number)}
 	}
-	// Temporarily enable debugging
-	defer func(old bool) { vm.Debug = old }(vm.Debug)
-	vm.Debug = true
 
+	validated, logs, err := api.traceBlock(block, config)
+	return BlockTraceResult{
+		Validated:  validated,
+		StructLogs: formatLogs(logs),
+		Error:      err,
+	}
+}
+
+// TraceBlockByHash processes the block by hash.
+func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config vm.Config) BlockTraceResult {
+	// Fetch the block that we aim to reprocess
+	block := api.eth.BlockChain().GetBlock(hash)
+	if block == nil {
+		return BlockTraceResult{Error: fmt.Errorf("block #%x not found", hash)}
+	}
+
+	validated, logs, err := api.traceBlock(block, config)
+	return BlockTraceResult{
+		Validated:  validated,
+		StructLogs: formatLogs(logs),
+		Error:      err,
+	}
+}
+
+// TraceCollector collects EVM structered logs.
+//
+// TraceCollector implements vm.Collector
+type TraceCollector struct {
+	traces []vm.StructLog
+}
+
+// AddStructLog adds a structered log.
+func (t *TraceCollector) AddStructLog(slog vm.StructLog) {
+	t.traces = append(t.traces, slog)
+}
+
+// traceBlock processes the given block but does not save the state.
+func (api *PrivateDebugAPI) traceBlock(block *types.Block, config vm.Config) (bool, []vm.StructLog, error) {
 	// Validate and reprocess the block
 	var (
 		blockchain = api.eth.BlockChain()
 		validator  = blockchain.Validator()
 		processor  = blockchain.Processor()
+		collector  = &TraceCollector{}
 	)
+	config.Debug = true // make sure debug is set.
+	config.Logger.Collector = collector
+
 	if err := core.ValidateHeader(blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false); err != nil {
-		return false, err
+		return false, collector.traces, err
 	}
 	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), api.eth.ChainDb())
 	if err != nil {
-		return false, err
+		return false, collector.traces, err
 	}
-	receipts, _, usedGas, err := processor.Process(block, statedb)
+
+	receipts, _, usedGas, err := processor.Process(block, statedb, &config)
 	if err != nil {
-		return false, err
+		return false, collector.traces, err
 	}
 	if err := validator.ValidateState(block, blockchain.GetBlock(block.ParentHash()), statedb, receipts, usedGas); err != nil {
-		return false, err
+		return false, collector.traces, err
 	}
-	return true, nil
+	return true, collector.traces, nil
 }
 
 // SetHead rewinds the head of the blockchain to a previous block.
@@ -1547,51 +1624,93 @@ func (api *PrivateDebugAPI) SetHead(number uint64) {
 	api.eth.BlockChain().SetHead(number)
 }
 
-// StructLogRes stores a structured log emitted by the EVM while replaying a
+// ExecutionResult groups all structured logs emitted by the EVM
+// while replaying a transaction in debug mode as well as the amount of
+// gas used and the return value
+type ExecutionResult struct {
+	Gas         *big.Int       `json:"gas"`
+	ReturnValue string         `json:"returnValue"`
+	StructLogs  []structLogRes `json:"structLogs"`
+}
+
+// structLogRes stores a structured log emitted by the EVM while replaying a
 // transaction in debug mode
 type structLogRes struct {
 	Pc      uint64            `json:"pc"`
 	Op      string            `json:"op"`
 	Gas     *big.Int          `json:"gas"`
 	GasCost *big.Int          `json:"gasCost"`
+	Depth   int               `json:"depth"`
 	Error   error             `json:"error"`
 	Stack   []string          `json:"stack"`
-	Memory  map[string]string `json:"memory"`
+	Memory  []string          `json:"memory"`
 	Storage map[string]string `json:"storage"`
 }
 
-// TransactionExecutionRes groups all structured logs emitted by the EVM
-// while replaying a transaction in debug mode as well as the amount of
-// gas used and the return value
-type TransactionExecutionResult struct {
-	Gas         *big.Int       `json:"gas"`
-	ReturnValue string         `json:"returnValue"`
-	StructLogs  []structLogRes `json:"structLogs"`
+// VmLoggerOptions are the options used for debugging transactions and capturing
+// specific data.
+type VmLoggerOptions struct {
+	DisableMemory  bool // disable memory capture
+	DisableStack   bool // disable stack capture
+	DisableStorage bool // disable storage capture
+	FullStorage    bool // show full storage (slow)
 }
 
-func (s *PrivateDebugAPI) doReplayTransaction(txHash common.Hash) ([]vm.StructLog, []byte, *big.Int, error) {
+// formatLogs formats EVM returned structured logs for json output
+func formatLogs(structLogs []vm.StructLog) []structLogRes {
+	formattedStructLogs := make([]structLogRes, len(structLogs))
+	for index, trace := range structLogs {
+		formattedStructLogs[index] = structLogRes{
+			Pc:      trace.Pc,
+			Op:      trace.Op.String(),
+			Gas:     trace.Gas,
+			GasCost: trace.GasCost,
+			Depth:   trace.Depth,
+			Error:   trace.Err,
+			Stack:   make([]string, len(trace.Stack)),
+			Storage: make(map[string]string),
+		}
+
+		for i, stackValue := range trace.Stack {
+			formattedStructLogs[index].Stack[i] = fmt.Sprintf("%x", common.LeftPadBytes(stackValue.Bytes(), 32))
+		}
+
+		for i := 0; i+32 <= len(trace.Memory); i += 32 {
+			formattedStructLogs[index].Memory = append(formattedStructLogs[index].Memory, fmt.Sprintf("%x", trace.Memory[i:i+32]))
+		}
+
+		for i, storageValue := range trace.Storage {
+			formattedStructLogs[index].Storage[fmt.Sprintf("%x", i)] = fmt.Sprintf("%x", storageValue)
+		}
+	}
+	return formattedStructLogs
+}
+
+// TraceTransaction returns the structured logs created during the execution of EVM
+// and returns them as a JSON object.
+func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger vm.LogConfig) (*ExecutionResult, error) {
 	// Retrieve the tx from the chain
 	tx, _, blockIndex, _ := core.GetTransaction(s.eth.ChainDb(), txHash)
 
 	if tx == nil {
-		return nil, nil, nil, fmt.Errorf("Transaction not found")
+		return nil, fmt.Errorf("Transaction not found")
 	}
 
 	block := s.eth.BlockChain().GetBlockByNumber(blockIndex - 1)
 	if block == nil {
-		return nil, nil, nil, fmt.Errorf("Unable to retrieve prior block")
+		return nil, fmt.Errorf("Unable to retrieve prior block")
 	}
 
 	// Create the state database
 	stateDb, err := state.New(block.Root(), s.eth.ChainDb())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	txFrom, err := tx.FromFrontier()
 
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Unable to create transaction sender")
+		return nil, fmt.Errorf("Unable to create transaction sender")
 	}
 	from := stateDb.GetOrNewStateObject(txFrom)
 	msg := callmsg{
@@ -1603,87 +1722,72 @@ func (s *PrivateDebugAPI) doReplayTransaction(txHash common.Hash) ([]vm.StructLo
 		data:     tx.Data(),
 	}
 
-	vmenv := core.NewEnv(stateDb, s.eth.BlockChain(), msg, block.Header())
+	vmenv := core.NewEnv(stateDb, s.eth.BlockChain(), msg, block.Header(), &vm.Config{
+		Debug:  true,
+		Logger: logger,
+	})
 	gp := new(core.GasPool).AddGas(block.GasLimit())
-	vm.GenerateStructLogs = true
-	defer func() { vm.GenerateStructLogs = false }()
 
 	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Error executing transaction %v", err)
+		return nil, fmt.Errorf("Error executing transaction %v", err)
 	}
 
-	return vmenv.StructLogs(), ret, gas, nil
-}
-
-// Executes a transaction and returns the structured logs of the EVM
-// gathered during the execution
-func (s *PrivateDebugAPI) ReplayTransaction(txHash common.Hash, stackDepth int, memorySize int, storageSize int) (*TransactionExecutionResult, error) {
-
-	structLogs, ret, gas, err := s.doReplayTransaction(txHash)
-
-	if err != nil {
-		return nil, err
-	}
-
-	res := TransactionExecutionResult{
+	return &ExecutionResult{
 		Gas:         gas,
 		ReturnValue: fmt.Sprintf("%x", ret),
-		StructLogs:  make([]structLogRes, len(structLogs)),
+		StructLogs:  formatLogs(vmenv.StructLogs()),
+	}, nil
+}
+
+func (s *PublicBlockChainAPI) TraceCall(args CallArgs, blockNr rpc.BlockNumber) (*ExecutionResult, error) {
+	// Fetch the state associated with the block number
+	stateDb, block, err := stateAndBlockByNumber(s.miner, s.bc, blockNr, s.chainDb)
+	if stateDb == nil || err != nil {
+		return nil, err
+	}
+	stateDb = stateDb.Copy()
+
+	// Retrieve the account state object to interact with
+	var from *state.StateObject
+	if args.From == (common.Address{}) {
+		accounts, err := s.am.Accounts()
+		if err != nil || len(accounts) == 0 {
+			from = stateDb.GetOrNewStateObject(common.Address{})
+		} else {
+			from = stateDb.GetOrNewStateObject(accounts[0].Address)
+		}
+	} else {
+		from = stateDb.GetOrNewStateObject(args.From)
+	}
+	from.SetBalance(common.MaxBig)
+
+	// Assemble the CALL invocation
+	msg := callmsg{
+		from:     from,
+		to:       args.To,
+		gas:      args.Gas.BigInt(),
+		gasPrice: args.GasPrice.BigInt(),
+		value:    args.Value.BigInt(),
+		data:     common.FromHex(args.Data),
+	}
+	if msg.gas.Cmp(common.Big0) == 0 {
+		msg.gas = big.NewInt(50000000)
+	}
+	if msg.gasPrice.Cmp(common.Big0) == 0 {
+		msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
 	}
 
-	for index, trace := range structLogs {
+	// Execute the call and return
+	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header(), nil)
+	gp := new(core.GasPool).AddGas(common.MaxBig)
 
-		stackLength := len(trace.Stack)
-
-		// Return full stack by default
-		if stackDepth != -1 && stackDepth < stackLength {
-			stackLength = stackDepth
-		}
-
-		res.StructLogs[index] = structLogRes{
-			Pc:      trace.Pc,
-			Op:      trace.Op.String(),
-			Gas:     trace.Gas,
-			GasCost: trace.GasCost,
-			Error:   trace.Err,
-			Stack:   make([]string, stackLength),
-			Memory:  make(map[string]string),
-			Storage: make(map[string]string),
-		}
-
-		for i := 0; i < stackLength; i++ {
-			res.StructLogs[index].Stack[i] = fmt.Sprintf("%x", common.LeftPadBytes(trace.Stack[i].Bytes(), 32))
-		}
-
-		addr := 0
-		memorySizeLocal := memorySize
-
-		// Return full memory by default
-		if memorySize == -1 {
-			memorySizeLocal = len(trace.Memory)
-		}
-
-		for i := 0; i+16 <= len(trace.Memory) && addr < memorySizeLocal; i += 16 {
-			res.StructLogs[index].Memory[fmt.Sprintf("%04d", addr*16)] = fmt.Sprintf("%x", trace.Memory[i:i+16])
-			addr++
-		}
-
-		storageLength := len(trace.Stack)
-		if storageSize != -1 && storageSize < storageLength {
-			storageLength = storageSize
-		}
-
-		i := 0
-		for storageIndex, storageValue := range trace.Storage {
-			if i >= storageLength {
-				break
-			}
-			res.StructLogs[index].Storage[fmt.Sprintf("%x", storageIndex)] = fmt.Sprintf("%x", storageValue)
-			i++
-		}
-	}
-	return &res, nil
+	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	return &ExecutionResult{
+		Gas:         gas,
+		ReturnValue: fmt.Sprintf("%x", ret),
+		StructLogs:  formatLogs(vmenv.StructLogs()),
+	}, nil
 }
 
 // PublicNetAPI offers network related RPC methods

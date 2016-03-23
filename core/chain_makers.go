@@ -91,7 +91,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, _, _, err := ApplyTransaction(nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed)
+	receipt, _, _, err := ApplyTransaction(nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, nil)
 	if err != nil {
 		panic(err)
 	}

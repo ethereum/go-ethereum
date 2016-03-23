@@ -60,7 +60,7 @@ func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, gasPric
 }
 
 func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.Address, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
-	evm := vm.NewVm(env)
+	evm := env.Vm()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if env.Depth() > int(params.CallCreateDepth.Int64()) {
@@ -136,7 +136,7 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 }
 
 func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toAddr, codeAddr *common.Address, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
-	evm := vm.NewVm(env)
+	evm := env.Vm()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if env.Depth() > int(params.CallCreateDepth.Int64()) {

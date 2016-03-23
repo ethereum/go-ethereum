@@ -22,9 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// Environment is is required by the virtual machine to get information from
-// it's own isolated environment.
-
 // Environment is an EVM requirement and helper which allows access to outside
 // information such as states.
 type Environment interface {
@@ -54,14 +51,8 @@ type Environment interface {
 	Transfer(from, to Account, amount *big.Int)
 	// Adds a LOG to the state
 	AddLog(*Log)
-	// Adds a structured log to the env
-	AddStructLog(StructLog)
-	// Returns all coalesced structured logs
-	StructLogs() []StructLog
-
 	// Type of the VM
-	VmType() Type
-
+	Vm() Vm
 	// Current calling depth
 	Depth() int
 	SetDepth(i int)
@@ -76,7 +67,15 @@ type Environment interface {
 	Create(me ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error)
 }
 
-// Database is a EVM database for full state querying
+// Vm is the basic interface for an implementation of the EVM.
+type Vm interface {
+	// Run should execute the given contract with the input given in in
+	// and return the contract execution return bytes or an error if it
+	// failed.
+	Run(c *Contract, in []byte) ([]byte, error)
+}
+
+// Database is a EVM database for full state querying.
 type Database interface {
 	GetAccount(common.Address) Account
 	CreateAccount(common.Address) Account
@@ -101,19 +100,7 @@ type Database interface {
 	IsDeleted(common.Address) bool
 }
 
-// StructLog is emitted to the Environment each cycle and lists information about the current internal state
-// prior to the execution of the statement.
-type StructLog struct {
-	Pc      uint64
-	Op      OpCode
-	Gas     *big.Int
-	GasCost *big.Int
-	Memory  []byte
-	Stack   []*big.Int
-	Storage map[common.Hash][]byte
-	Err     error
-}
-
+// Account represents a contract or basic ethereum account.
 type Account interface {
 	SubBalance(amount *big.Int)
 	AddBalance(amount *big.Int)
@@ -123,6 +110,6 @@ type Account interface {
 	Address() common.Address
 	ReturnGas(*big.Int, *big.Int)
 	SetCode([]byte)
-	EachStorage(cb func(key, value []byte))
+	ForEachStorage(cb func(key, value common.Hash) bool)
 	Value() *big.Int
 }

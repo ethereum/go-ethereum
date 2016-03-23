@@ -597,7 +597,6 @@ func opDelegateCall(instr instruction, pc *uint64, env Environment, contract *Co
 	toAddr := common.BigToAddress(to)
 	args := memory.Get(inOffset.Int64(), inSize.Int64())
 	ret, err := env.DelegateCall(contract, toAddr, args, gas, contract.Price)
-
 	if err != nil {
 		stack.push(new(big.Int))
 	} else {

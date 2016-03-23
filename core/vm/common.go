@@ -21,14 +21,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-// Global Debug flag indicating Debug VM (full logging)
-var Debug bool
-
-var GenerateStructLogs bool = false
 
 // Type is the VM type accepted by **NewVm**
 type Type byte
@@ -50,19 +44,6 @@ var (
 
 	max = big.NewInt(math.MaxInt64) // Maximum 64 bit integer
 )
-
-// NewVm returns a new VM based on the Environment
-func NewVm(env Environment) VirtualMachine {
-	switch env.VmType() {
-	case JitVmTy:
-		return NewJitVm(env)
-	default:
-		glog.V(0).Infoln("unsupported vm type %d", env.VmType())
-		fallthrough
-	case StdVmTy:
-		return New(env)
-	}
-}
 
 // calculates the memory size required for a step
 func calcMemSize(off, l *big.Int) *big.Int {

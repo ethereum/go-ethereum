@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -84,17 +83,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	}
 	setDefaults(cfg)
 
-	// defer the call to setting back the original values
-	defer func(debug, forceJit, enableJit bool) {
-		vm.Debug = debug
-		vm.ForceJit = forceJit
-		vm.EnableJit = enableJit
-	}(vm.Debug, vm.ForceJit, vm.EnableJit)
-
-	vm.ForceJit = !cfg.DisableJit
-	vm.EnableJit = !cfg.DisableJit
-	vm.Debug = cfg.Debug
-
 	if cfg.State == nil {
 		db, _ := ethdb.NewMemDatabase()
 		cfg.State, _ = state.New(common.Hash{}, db)
@@ -117,9 +105,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.Value,
 	)
 
-	if cfg.Debug {
-		vm.StdErrFormat(vmenv.StructLogs())
-	}
 	return ret, cfg.State, err
 }
 
@@ -130,17 +115,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 // be set.
 func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 	setDefaults(cfg)
-
-	// defer the call to setting back the original values
-	defer func(debug, forceJit, enableJit bool) {
-		vm.Debug = debug
-		vm.ForceJit = forceJit
-		vm.EnableJit = enableJit
-	}(vm.Debug, vm.ForceJit, vm.EnableJit)
-
-	vm.ForceJit = !cfg.DisableJit
-	vm.EnableJit = !cfg.DisableJit
-	vm.Debug = cfg.Debug
 
 	vmenv := NewEnv(cfg, cfg.State)
 
@@ -155,8 +129,5 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 		cfg.Value,
 	)
 
-	if cfg.Debug {
-		vm.StdErrFormat(vmenv.StructLogs())
-	}
 	return ret, err
 }
