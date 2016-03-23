@@ -245,7 +245,7 @@ var (
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
-		Usage: "Domains from which to accept cross origin requests (browser enforced)",
+		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
 	RPCApiFlag = cli.StringFlag{
