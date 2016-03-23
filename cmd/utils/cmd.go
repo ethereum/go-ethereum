@@ -92,6 +92,7 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	}
 	fmt.Print(prompt)
 	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	input = strings.TrimRight(input, "\r\n")
 	fmt.Println()
 	return input, err
 }
