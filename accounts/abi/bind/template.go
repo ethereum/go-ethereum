@@ -148,8 +148,8 @@ package {{.Package}}
 
 	{{range .Calls}}
 		{{if .Structured}}
-			// {{.Normalized.Name}}Result is the result of the {{.Normalized.Name}} invocation."
-			type {{.Normalized.Name}}Result struct {
+			// {{$contract.Type}}{{.Normalized.Name}}Result is the result of the {{.Normalized.Name}} invocation.
+			type {{$contract.Type}}{{.Normalized.Name}}Result struct {
 					{{range .Normalized.Outputs}}{{.Name}} {{bindtype .Type}}
 					{{end}}
 			}
@@ -158,9 +158,9 @@ package {{.Package}}
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
 		//
 		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}(opts *bind.CallOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}{{.Normalized.Name}}Result,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type}},{{end}}{{end}} error) {
+		func (_{{$contract.Type}} *{{$contract.Type}}Caller) {{.Normalized.Name}}(opts *bind.CallOpts {{range .Normalized.Inputs}}, {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}{{$contract.Type}}{{.Normalized.Name}}Result,{{else}}{{range .Normalized.Outputs}}{{bindtype .Type}},{{end}}{{end}} error) {
 			var (
-				{{if .Structured}}ret = new({{.Normalized.Name}}Result){{else}}{{range $i, $_ := .Normalized.Outputs}}ret{{$i}} = new({{bindtype .Type}})
+				{{if .Structured}}ret = new({{$contract.Type}}{{.Normalized.Name}}Result){{else}}{{range $i, $_ := .Normalized.Outputs}}ret{{$i}} = new({{bindtype .Type}})
 				{{end}}{{end}}
 			)
 			out := {{if .Structured}}ret{{else}}{{if eq (len .Normalized.Outputs) 1}}ret0{{else}}[]interface{}{
@@ -174,14 +174,14 @@ package {{.Package}}
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
 		//
 		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}Session) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}{{.Normalized.Name}}Result, {{else}} {{range .Normalized.Outputs}}{{bindtype .Type}},{{end}} {{end}} error) {
+		func (_{{$contract.Type}} *{{$contract.Type}}Session) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}{{$contract.Type}}{{.Normalized.Name}}Result, {{else}} {{range .Normalized.Outputs}}{{bindtype .Type}},{{end}} {{end}} error) {
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.CallOpts {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 
 		// {{.Normalized.Name}} is a free data retrieval call binding the contract method 0x{{printf "%x" .Original.Id}}.
 		//
 		// Solidity: {{.Original.String}}
-		func (_{{$contract.Type}} *{{$contract.Type}}CallerSession) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}{{.Normalized.Name}}Result, {{else}} {{range .Normalized.Outputs}}{{bindtype .Type}},{{end}} {{end}} error) {
+		func (_{{$contract.Type}} *{{$contract.Type}}CallerSession) {{.Normalized.Name}}({{range $i, $_ := .Normalized.Inputs}}{{if ne $i 0}},{{end}} {{.Name}} {{bindtype .Type}} {{end}}) ({{if .Structured}}{{$contract.Type}}{{.Normalized.Name}}Result, {{else}} {{range .Normalized.Outputs}}{{bindtype .Type}},{{end}} {{end}} error) {
 		  return _{{$contract.Type}}.Contract.{{.Normalized.Name}}(&_{{$contract.Type}}.CallOpts {{range .Normalized.Inputs}}, {{.Name}}{{end}})
 		}
 	{{end}}
