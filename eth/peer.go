@@ -388,6 +388,20 @@ func (ps *peerSet) Unregister(id string) error {
 	return nil
 }
 
+// AllPeerIDs returns a list of all registered peer IDs
+func (ps *peerSet) AllPeerIDs() []string {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+	
+	res := make([]string, len(ps.peers))	
+	idx := 0
+	for id, _ := range ps.peers {
+		res[idx] = id
+		idx++
+	}
+	return res
+}
+
 // Peer retrieves the registered peer with the given id.
 func (ps *peerSet) Peer(id string) *peer {
 	ps.lock.RLock()

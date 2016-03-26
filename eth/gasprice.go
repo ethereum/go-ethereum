@@ -103,6 +103,10 @@ func (self *GasPriceOracle) processPastBlocks(chain *core.BlockChain) {
 func (self *GasPriceOracle) listenLoop() {
 	events := self.eth.EventMux().Subscribe(core.ChainEvent{}, core.ChainSplitEvent{})
 	defer events.Unsubscribe()
+	if !events.LoopStarted() {
+		return
+	}
+	defer events.LoopStopped()
 
 	for event := range events.Chan() {
 		switch event := event.Data.(type) {

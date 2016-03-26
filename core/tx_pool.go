@@ -98,6 +98,10 @@ func (pool *TxPool) eventLoop() {
 	// Track chain events. When a chain events occurs (new chain canon block)
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
+	if !pool.events.LoopStarted() {
+		return
+	}
+	defer pool.events.LoopStopped()
 	for ev := range pool.events.Chan() {
 		switch ev := ev.Data.(type) {
 		case ChainHeadEvent:

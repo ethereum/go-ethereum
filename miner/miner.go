@@ -64,6 +64,10 @@ func New(eth core.Backend, mux *event.TypeMux, pow pow.PoW) *Miner {
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
+	if !events.LoopStarted() {
+		return
+	}
+	defer events.LoopStopped()
 out:
 	for ev := range events.Chan() {
 		switch ev.Data.(type) {
