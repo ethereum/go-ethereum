@@ -22,7 +22,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -81,19 +81,20 @@ type jsonNotification struct {
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It also has support for parsing arguments
 // and serializing (result) objects.
 type jsonCodec struct {
-	closed   chan interface{}
-	isClosed int32
-	d        *json.Decoder
-	e        *json.Encoder
-	req      JSONRequest
-	rw       io.ReadWriteCloser
+	closed    chan interface{}
+	closer    sync.Once
+	d         *json.Decoder
+	muEncoder sync.Mutex
+	e         *json.Encoder
+	req       JSONRequest
+	rw        io.ReadWriteCloser
 }
 
 // NewJSONCodec creates a new RPC server codec with support for JSON-RPC 2.0
 func NewJSONCodec(rwc io.ReadWriteCloser) ServerCodec {
 	d := json.NewDecoder(rwc)
 	d.UseNumber()
-	return &jsonCodec{closed: make(chan interface{}), d: d, e: json.NewEncoder(rwc), rw: rwc, isClosed: 0}
+	return &jsonCodec{closed: make(chan interface{}), d: d, e: json.NewEncoder(rwc), rw: rwc}
 }
 
 // isBatch returns true when the first non-whitespace characters is '['
@@ -326,15 +327,18 @@ func (c *jsonCodec) CreateNotification(subid string, event interface{}) interfac
 
 // Write message to client
 func (c *jsonCodec) Write(res interface{}) error {
+	c.muEncoder.Lock()
+	defer c.muEncoder.Unlock()
+
 	return c.e.Encode(res)
 }
 
 // Close the underlying connection
 func (c *jsonCodec) Close() {
-	if atomic.CompareAndSwapInt32(&c.isClosed, 0, 1) {
+	c.closer.Do(func() {
 		close(c.closed)
 		c.rw.Close()
-	}
+	})
 }
 
 // Closed returns a channel which will be closed when Close is called

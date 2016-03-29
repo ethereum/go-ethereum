@@ -126,7 +126,7 @@ func newJSONHTTPHandler(srv *Server) http.HandlerFunc {
 		// a single request.
 		codec := NewJSONCodec(&httpReadWriteNopCloser{r.Body, w})
 		defer codec.Close()
-		srv.ServeSingleRequest(codec)
+		srv.ServeSingleRequest(codec, OptionMethodInvocation)
 	}
 }
 

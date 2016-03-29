@@ -45,6 +45,16 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 	return isExported(t.Name()) || t.PkgPath() == ""
 }
 
+var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+
+// isContextType returns an indication if the given t is of context.Context or *context.Context type
+func isContextType(t reflect.Type) bool {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t == contextType
+}
+
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 // Implements this type the error interface
@@ -57,6 +67,7 @@ func isErrorType(t reflect.Type) bool {
 
 var subscriptionType = reflect.TypeOf((*Subscription)(nil)).Elem()
 
+// isSubscriptionType returns an indication if the given t is of Subscription or *Subscription type
 func isSubscriptionType(t reflect.Type) bool {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
@@ -64,12 +75,17 @@ func isSubscriptionType(t reflect.Type) bool {
 	return t == subscriptionType
 }
 
-// isPubSub tests whether the given method return the pair (v2.Subscription, error)
+// isPubSub tests whether the given method has as as first argument a context.Context
+// and returns the pair (Subscription, error)
 func isPubSub(methodType reflect.Type) bool {
-	if methodType.NumOut() != 2 {
+	// numIn(0) is the receiver type
+	if methodType.NumIn() < 2 || methodType.NumOut() != 2 {
 		return false
 	}
-	return isSubscriptionType(methodType.Out(0)) && isErrorType(methodType.Out(1))
+
+	return isContextType(methodType.In(1)) &&
+		isSubscriptionType(methodType.Out(0)) &&
+		isErrorType(methodType.Out(1))
 }
 
 // formatName will convert to first character to lower case
@@ -109,8 +125,6 @@ func isBlockNumber(t reflect.Type) bool {
 
 	return t == blockNumberType
 }
-
-var contextType = reflect.TypeOf(new(context.Context)).Elem()
 
 // suitableCallbacks iterates over the methods of the given type. It will determine if a method satisfies the criteria
 // for a RPC callback or a subscription callback and adds it to the collection of callbacks or subscriptions. See server
@@ -205,7 +219,7 @@ METHODS:
 	return callbacks, subscriptions
 }
 
-func newSubscriptionId() (string, error) {
+func newSubscriptionID() (string, error) {
 	var subid [16]byte
 	n, _ := rand.Read(subid[:])
 	if n != 16 {

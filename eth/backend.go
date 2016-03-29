@@ -310,7 +310,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.Downloader()),
+			Service:   downloader.NewPublicDownloaderAPI(s.Downloader(), s.EventMux()),
 			Public:    true,
 		}, {
 			Namespace: "miner",

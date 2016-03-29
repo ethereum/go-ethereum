@@ -93,7 +93,8 @@ func NewWSServer(cors string, handler *Server) *http.Server {
 		Handler: websocket.Server{
 			Handshake: wsHandshakeValidator(strings.Split(cors, ",")),
 			Handler: func(conn *websocket.Conn) {
-				handler.ServeCodec(NewJSONCodec(&wsReaderWriterCloser{conn}))
+				handler.ServeCodec(NewJSONCodec(&wsReaderWriterCloser{conn}),
+					OptionMethodInvocation|OptionSubscriptions)
 			},
 		},
 	}

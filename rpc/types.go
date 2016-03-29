@@ -24,7 +24,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/event"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -66,10 +65,10 @@ type serverRequest struct {
 	err           RPCError
 }
 
-type serviceRegistry map[string]*service          // collection of services
-type callbacks map[string]*callback               // collection of RPC callbacks
-type subscriptions map[string]*callback           // collection of subscription callbacks
-type subscriptionRegistry map[string]Subscription // collection of subscriptions
+type serviceRegistry map[string]*service       // collection of services
+type callbacks map[string]*callback            // collection of RPC callbacks
+type subscriptions map[string]*callback        // collection of subscription callbacks
+type subscriptionRegistry map[string]*callback // collection of subscription callbacks
 
 // Server represents a RPC server
 type Server struct {
@@ -121,51 +120,6 @@ type ServerCodec interface {
 	Close()
 	// Closed when underlying connection is closed
 	Closed() <-chan interface{}
-}
-
-// SubscriptionMatcher returns true if the given value matches the criteria specified by the user
-type SubscriptionMatcher func(interface{}) bool
-
-// SubscriptionOutputFormat accepts event data and has the ability to format the data before it is send to the client
-type SubscriptionOutputFormat func(interface{}) interface{}
-
-// defaultSubscriptionOutputFormatter returns data and is used as default output format for notifications
-func defaultSubscriptionOutputFormatter(data interface{}) interface{} {
-	return data
-}
-
-// Subscription is used by the server to send notifications to the client
-type Subscription struct {
-	sub    event.Subscription
-	match  SubscriptionMatcher
-	format SubscriptionOutputFormat
-}
-
-// NewSubscription create a new RPC subscription
-func NewSubscription(sub event.Subscription) Subscription {
-	return Subscription{sub, nil, defaultSubscriptionOutputFormatter}
-}
-
-// NewSubscriptionWithOutputFormat create a new RPC subscription which a custom notification output format
-func NewSubscriptionWithOutputFormat(sub event.Subscription, formatter SubscriptionOutputFormat) Subscription {
-	return Subscription{sub, nil, formatter}
-}
-
-// NewSubscriptionFiltered will create a new subscription. For each raised event the given matcher is
-// called. If it returns true the event is send as notification to the client, otherwise it is ignored.
-func NewSubscriptionFiltered(sub event.Subscription, match SubscriptionMatcher) Subscription {
-	return Subscription{sub, match, defaultSubscriptionOutputFormatter}
-}
-
-// Chan returns the channel where new events will be published. It's up the user to call the matcher to
-// determine if the events are interesting for the client.
-func (s *Subscription) Chan() <-chan *event.Event {
-	return s.sub.Chan()
-}
-
-// Unsubscribe will end the subscription and closes the event channel
-func (s *Subscription) Unsubscribe() {
-	s.sub.Unsubscribe()
 }
 
 // HexNumber serializes a number to hex format using the "%#x" format

@@ -303,7 +303,7 @@ func (n *Node) startIPC(apis []rpc.API) error {
 				glog.V(logger.Error).Infof("IPC accept failed: %v", err)
 				continue
 			}
-			go handler.ServeCodec(rpc.NewJSONCodec(conn))
+			go handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation | rpc.OptionSubscriptions)
 		}
 	}()
 	// All listeners booted successfully

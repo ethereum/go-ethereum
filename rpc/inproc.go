@@ -39,7 +39,7 @@ func (c *inProcClient) Close() {
 // RPC server.
 func NewInProcRPCClient(handler *Server) Client {
 	p1, p2 := net.Pipe()
-	go handler.ServeCodec(NewJSONCodec(p1))
+	go handler.ServeCodec(NewJSONCodec(p1), OptionMethodInvocation|OptionSubscriptions)
 	return &inProcClient{handler, p2, json.NewEncoder(p2), json.NewDecoder(p2)}
 }
 
