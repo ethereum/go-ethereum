@@ -148,7 +148,7 @@ func (pm *ProtocolManager) syncer() {
 			// Force a sync even if not enough peers are present
 			go pm.synchronise(pm.peers.BestPeer())
 
-		case <-pm.quitSync:
+		case <-pm.noMorePeers:
 			return
 		}
 	}

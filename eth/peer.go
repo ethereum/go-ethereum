@@ -34,6 +34,7 @@ import (
 )
 
 var (
+	errClosed            = errors.New("peer set is closed")
 	errAlreadyRegistered = errors.New("peer is already registered")
 	errNotRegistered     = errors.New("peer is not registered")
 )
@@ -351,8 +352,9 @@ func (p *peer) String() string {
 // peerSet represents the collection of active peers currently participating in
 // the Ethereum sub-protocol.
 type peerSet struct {
-	peers map[string]*peer
-	lock  sync.RWMutex
+	peers  map[string]*peer
+	lock   sync.RWMutex
+	closed bool
 }
 
 // newPeerSet creates a new peer set to track the active participants.
@@ -368,6 +370,9 @@ func (ps *peerSet) Register(p *peer) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
+	if ps.closed {
+		return errClosed
+	}
 	if _, ok := ps.peers[p.id]; ok {
 		return errAlreadyRegistered
 	}
@@ -449,4 +454,16 @@ func (ps *peerSet) BestPeer() *peer {
 		}
 	}
 	return bestPeer
+}
+
+// Close disconnects all peers.
+// No new peers can be registered after Close has returned.
+func (ps *peerSet) Close() {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	for _, p := range ps.peers {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	ps.closed = true
 }
