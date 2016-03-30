@@ -83,16 +83,51 @@ func (s *BytesSuite) TestCopyBytes(c *checker.C) {
 }
 
 func (s *BytesSuite) TestIsHex(c *checker.C) {
-	data1 := "a9e67e"
-	exp1 := false
-	res1 := IsHex(data1)
-	c.Assert(res1, checker.DeepEquals, exp1)
+	tests := []struct {
+		data string
+		hex  bool
+	}{
+		// Ensure minimum length requirements pass
+		{"", false},
+		{"0", false},
+		{"00", false},
+		{"0x", false},
+		{"0x0", false},
+		{"0x00", true},
 
-	data2 := "0xa9e67e00"
-	exp2 := true
-	res2 := IsHex(data2)
-	c.Assert(res2, checker.DeepEquals, exp2)
+		// Ensure prefix is enforced
+		{"1234", false},
+		{"abcdef", false},
+		{"0_1234", false},
+		{"0_abcdef", false},
+		{"0x1234", true},
+		{"0xabcdef", true},
 
+		// Ensure even number of digits
+		{"0x333", false},
+		{"0x4444", true},
+		{"0x55555", false},
+		{"0x666666", true},
+
+		// Ensure bad digits are caught
+		{"0xhi", false},
+		{"0xhelloworld", false},
+		{"0x0x00", false},
+
+		// Ensure both lower as well as upper case are accepted
+		{"0X1234", true},
+		{"0Xabcdef", true},
+		{"0xaCcDeF", true},
+		{"0XaCcDeF", true},
+
+		// Random tests from previous suite
+		{"a9e67e", false},
+		{"0xa9e67e00", true},
+	}
+
+	for _, tt := range tests {
+		c.Assert(IsHex(tt.data), checker.DeepEquals, tt.hex)
+	}
 }
 
 func (s *BytesSuite) TestParseDataString(c *checker.C) {

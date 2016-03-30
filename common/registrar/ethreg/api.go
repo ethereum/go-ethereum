@@ -183,7 +183,7 @@ func (be *registryAPIBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
 
-	return common.ToHex(res), gas.String(), err
+	return common.NumberToHex(res), gas.String(), err
 }
 
 // StorageAt returns the data stores in the state for the given address and location.
@@ -199,7 +199,7 @@ func (be *registryAPIBackend) StorageAt(addr string, storageAddr string) string 
 // Transact forms a transaction from the given arguments and submits it to the
 // transactio pool for execution.
 func (be *registryAPIBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error) {
-	if len(toStr) > 0 && toStr != "0x" && !common.IsHexAddress(toStr) {
+	if len(toStr) > 0 && toStr != "0x" && toStr != "0X" && !common.IsHexAddress(toStr) {
 		return "", errors.New("invalid address")
 	}
 

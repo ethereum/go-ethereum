@@ -18,6 +18,7 @@ package registrar
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -68,7 +69,7 @@ const (
 )
 
 func abiSignature(s string) string {
-	return common.ToHex(crypto.Keccak256([]byte(s))[:4])
+	return common.BytesToHex(crypto.Keccak256([]byte(s))[:4])
 }
 
 var (
@@ -282,8 +283,8 @@ func (self *Registrar) SetHashToHash(address common.Address, codehash, dochash c
 	if err != nil {
 		return
 	}
-	codehex := common.Bytes2Hex(codehash[:])
-	dochex := common.Bytes2Hex(dochash[:])
+	codehex := hex.EncodeToString(codehash[:])
+	dochex := hex.EncodeToString(dochash[:])
 
 	data := registerContentHashAbi + codehex + dochex
 	glog.V(logger.Detail).Infof("SetHashToHash data: %s sent  to %v\n", data, HashRegAddr)
@@ -305,7 +306,7 @@ func (self *Registrar) SetUrlToHash(address common.Address, hash common.Hash, ur
 		return "", fmt.Errorf("UrlHint address is not set")
 	}
 
-	hashHex := common.Bytes2Hex(hash[:])
+	hashHex := hex.EncodeToString(hash[:])
 	var urlHex string
 	urlb := []byte(url)
 	var cnt byte
@@ -315,15 +316,15 @@ func (self *Registrar) SetUrlToHash(address common.Address, hash common.Hash, ur
 		if n > 32 {
 			n = 32
 		}
-		urlHex = common.Bytes2Hex(urlb[:n])
+		urlHex = hex.EncodeToString(urlb[:n])
 		urlb = urlb[n:]
 		n = len(urlb)
 		bcnt := make([]byte, 32)
 		bcnt[31] = cnt
 		data := registerUrlAbi +
 			hashHex +
-			common.Bytes2Hex(bcnt) +
-			common.Bytes2Hex(common.Hex2BytesFixed(urlHex, 32))
+			hex.EncodeToString(bcnt) +
+			hex.EncodeToString(common.Hex2BytesFixed(urlHex, 32))
 		txh, err = self.backend.Transact(
 			address.Hex(),
 			UrlHintAddr,
@@ -420,7 +421,7 @@ func storageFixedArray(addr, idx []byte) []byte {
 }
 
 func storageAddress(addr []byte) string {
-	return common.ToHex(addr)
+	return common.BytesToHex(addr)
 }
 
 func encodeAddress(address common.Address) string {
@@ -428,7 +429,7 @@ func encodeAddress(address common.Address) string {
 }
 
 func encodeName(name string, index uint8) (string, string) {
-	extra := common.Bytes2Hex([]byte(name))
+	extra := hex.EncodeToString([]byte(name))
 	if len(name) > 32 {
 		return fmt.Sprintf("%064x", index), extra
 	}

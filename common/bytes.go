@@ -23,29 +23,38 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-func ToHex(b []byte) string {
-	hex := Bytes2Hex(b)
-	// Prefer output of "0x0" instead of "0x"
-	if len(hex) == 0 {
-		hex = "0"
-	}
-	return "0x" + hex
+// BytesToHex converts a byte slice to hexadecimal notation, prefixed with 0x.
+func BytesToHex(blob []byte) string {
+	return "0x" + hex.EncodeToString(blob)
 }
 
-func FromHex(s string) []byte {
-	if len(s) > 1 {
-		if s[0:2] == "0x" {
-			s = s[2:]
-		}
-		if len(s)%2 == 1 {
-			s = "0" + s
-		}
-		return Hex2Bytes(s)
+// NumberToHex converts a byte slice to hexadecimal notation, prefixed with 0x,
+// with the added rule that the empty slice is encoded as the zero value.
+func NumberToHex(blob []byte) string {
+	if len(blob) == 0 {
+		return "0x0"
 	}
-	return nil
+	return "0x" + hex.EncodeToString(blob)
+}
+
+// FromHex parses a hex string into a byte slice.
+func FromHex(s string) []byte {
+	// Cut off and optional 0x or 0X prefix
+	if len(s) > 2 && (s[:2] == "0x" || s[:2] == "0X") {
+		s = s[2:]
+	}
+	// Pad odd length strings to even ones
+	if len(s)%2 == 1 {
+		s = "0" + s
+	}
+	return Hex2Bytes(s)
 }
 
 // Number to bytes
@@ -117,28 +126,29 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
-func HasHexPrefix(str string) bool {
-	l := len(str)
-	return l >= 2 && str[0:2] == "0x"
-}
+// isHexPattern is a regular expression to verify whether a string represents an
+// abirarilly long hex number with or without the "0x" prefix.
+var isHexPattern = regexp.MustCompile("^0(x|X)([0-9a-fA-F]{2})+$")
 
+// IsHex checks whether a string is a valid hexadecimal number, consisting of
+// only hex digits and prefixed with 0x or 0X.
 func IsHex(str string) bool {
-	l := len(str)
-	return l >= 4 && l%2 == 0 && str[0:2] == "0x"
-}
-
-func Bytes2Hex(d []byte) string {
-	return hex.EncodeToString(d)
+	return isHexPattern.MatchString(str)
 }
 
 func Hex2Bytes(str string) []byte {
-	h, _ := hex.DecodeString(str)
-
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		glog.V(logger.Error).Infof("Invalid hex string to decode: %s: %v", str, err)
+	}
 	return h
 }
 
 func Hex2BytesFixed(str string, flen int) []byte {
-	h, _ := hex.DecodeString(str)
+	h, err := hex.DecodeString(str)
+	if err != nil {
+		glog.V(logger.Error).Infof("Invalid hex string to decode: %s: %v", str, err)
+	}
 	if len(h) == flen {
 		return h
 	} else {
@@ -153,7 +163,7 @@ func Hex2BytesFixed(str string, flen int) []byte {
 }
 
 func StringToByteFunc(str string, cb func(str string) []byte) (ret []byte) {
-	if len(str) > 1 && str[0:2] == "0x" && !strings.Contains(str, "\n") {
+	if len(str) > 1 && (str[:2] == "0x" || str[:2] == "0X") && !strings.Contains(str, "\n") {
 		ret = Hex2Bytes(str[2:])
 	} else {
 		ret = cb(str)
@@ -170,12 +180,11 @@ func FormatData(data string) []byte {
 	d := new(big.Int)
 	if data[0:1] == "\"" && data[len(data)-1:] == "\"" {
 		return RightPadBytes([]byte(data[1:len(data)-1]), 32)
-	} else if len(data) > 1 && data[:2] == "0x" {
+	} else if len(data) > 1 && (data[:2] == "0x" || data[:2] == "0X") {
 		d.SetBytes(Hex2Bytes(data[2:]))
 	} else {
 		d.SetString(data, 0)
 	}
-
 	return BigToBytes(d, 256)
 }
 
@@ -225,22 +234,14 @@ func LeftPadString(str string, l int) string {
 	if l < len(str) {
 		return str
 	}
-
-	zeros := Bytes2Hex(make([]byte, (l-len(str))/2))
-
-	return zeros + str
-
+	return hex.EncodeToString(make([]byte, (l-len(str))/2)) + str
 }
 
 func RightPadString(str string, l int) string {
 	if l < len(str) {
 		return str
 	}
-
-	zeros := Bytes2Hex(make([]byte, (l-len(str))/2))
-
-	return str + zeros
-
+	return str + hex.EncodeToString(make([]byte, (l-len(str))/2))
 }
 
 func ToAddress(slice []byte) (addr []byte) {
