@@ -606,17 +606,22 @@ func MakeMinerExtra(extra []byte, ctx *cli.Context) []byte {
 	return extra
 }
 
-// MakePasswordList loads up a list of password from a file specified by the
-// command line flags.
+// MakePasswordList reads password lines from the file specified by --password.
 func MakePasswordList(ctx *cli.Context) []string {
-	if path := ctx.GlobalString(PasswordFileFlag.Name); path != "" {
-		blob, err := ioutil.ReadFile(path)
-		if err != nil {
-			Fatalf("Failed to read password file: %v", err)
-		}
-		return strings.Split(string(blob), "\n")
+	path := ctx.GlobalString(PasswordFileFlag.Name)
+	if path == "" {
+		return nil
 	}
-	return nil
+	text, err := ioutil.ReadFile(path)
+	if err != nil {
+		Fatalf("Failed to read password file: %v", err)
+	}
+	lines := strings.Split(string(text), "\n")
+	// Sanitise DOS line endings.
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	return lines
 }
 
 // MakeSystemNode sets up a local node, configures the services to launch and
