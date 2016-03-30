@@ -168,7 +168,7 @@ Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 2/3
 Passphrase: {{.InputLine "wrong2"}}
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 3/3
 Passphrase: {{.InputLine "wrong3"}}
-Fatal: Failed to unlock account: f466859ead1932d743d622cb74fc058882e8648a
+Fatal: Failed to unlock account f466859ead1932d743d622cb74fc058882e8648a (could not decrypt key with given passphrase)
 `)
 }
 
@@ -225,6 +225,6 @@ func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
 		"--password", "testdata/wrong-passwords.txt", "--unlock", "0,2")
 	defer geth.expectExit()
 	geth.expect(`
-Fatal: Failed to unlock account: 0
+Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
 `)
 }
