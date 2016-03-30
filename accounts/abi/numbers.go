@@ -117,8 +117,6 @@ func packNum(value reflect.Value, to byte) []byte {
 // checks whether the given reflect value is signed. This also works for slices with a number type
 func isSigned(v reflect.Value) bool {
 	switch v.Type() {
-	case ubig_ts, big_ts, big_t, ubig_t:
-		return true
 	case int_ts, int8_ts, int16_ts, int32_ts, int64_ts, int_t, int8_t, int16_t, int32_t, int64_t:
 		return true
 	}

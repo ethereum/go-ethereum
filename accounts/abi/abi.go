@@ -63,9 +63,8 @@ func (abi ABI) pack(method Method, args ...interface{}) ([]byte, error) {
 			return nil, fmt.Errorf("`%s` %v", method.Name, err)
 		}
 
-		// check for a string or bytes input type
-		switch input.Type.T {
-		case StringTy, BytesTy:
+		// check for a slice type (string, bytes, slice)
+		if input.Type.T == StringTy || input.Type.T == BytesTy || input.Type.IsSlice {
 			// calculate the offset
 			offset := len(method.Inputs)*32 + len(variableInput)
 			// set the offset
@@ -73,7 +72,7 @@ func (abi ABI) pack(method Method, args ...interface{}) ([]byte, error) {
 			// Append the packed output to the variable input. The variable input
 			// will be appended at the end of the input.
 			variableInput = append(variableInput, packed...)
-		default:
+		} else {
 			// append the packed value to the input
 			ret = append(ret, packed...)
 		}

@@ -49,7 +49,9 @@ const jsondata2 = `
 	{ "type" : "function", "name" : "foo", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
 	{ "type" : "function", "name" : "bar", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
 	{ "type" : "function", "name" : "slice", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
-	{ "type" : "function", "name" : "slice256", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] }
+	{ "type" : "function", "name" : "slice256", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "sliceAddress", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "sliceMultiAddress", "const" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] }
 ]`
 
 func TestType(t *testing.T) {
@@ -68,7 +70,7 @@ func TestType(t *testing.T) {
 	if typ.Kind != reflect.Slice {
 		t.Error("expected uint32[] to have type slice")
 	}
-	if typ.Type != ubig_ts {
+	if typ.Type != ubig_t {
 		t.Error("expcted uith32[] to have type uint64")
 	}
 
@@ -79,7 +81,7 @@ func TestType(t *testing.T) {
 	if typ.Kind != reflect.Slice {
 		t.Error("expected uint32[2] to have kind slice")
 	}
-	if typ.Type != ubig_ts {
+	if typ.Type != ubig_t {
 		t.Error("expcted uith32[2] to have type uint64")
 	}
 	if typ.Size != 2 {
@@ -202,35 +204,12 @@ func TestTestSlice(t *testing.T) {
 		t.FailNow()
 	}
 
-	addr := make([]byte, 20)
-	if _, err := abi.Pack("address", addr); err != nil {
-		t.Error(err)
-	}
-
-	addr = make([]byte, 21)
-	if _, err := abi.Pack("address", addr); err == nil {
-		t.Error("expected address of 21 width to throw")
-	}
-
 	slice := make([]byte, 2)
 	if _, err := abi.Pack("uint64[2]", slice); err != nil {
 		t.Error(err)
 	}
 
 	if _, err := abi.Pack("uint64[]", slice); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestTestAddress(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	addr := make([]byte, 20)
-	if _, err := abi.Pack("address", addr); err != nil {
 		t.Error(err)
 	}
 }
@@ -310,44 +289,69 @@ func TestPackSlice(t *testing.T) {
 	}
 
 	sig := crypto.Keccak256([]byte("slice(uint32[2])"))[:4]
-	sig = append(sig, make([]byte, 64)...)
-	sig[35] = 1
-	sig[67] = 2
+	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
 	packed, err := abi.Pack("slice", []uint32{1, 2})
 	if err != nil {
 		t.Error(err)
-		t.FailNow()
+	}
+
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
+	var addrA, addrB = common.Address{1}, common.Address{2}
+	sig = abi.Methods["sliceAddress"].Id()
+	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
+	sig = append(sig, common.LeftPadBytes(addrB[:], 32)...)
+
+	packed, err = abi.Pack("sliceAddress", []common.Address{addrA, addrB})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
+	var addrC, addrD = common.Address{3}, common.Address{4}
+	sig = abi.Methods["sliceMultiAddress"].Id()
+	sig = append(sig, common.LeftPadBytes([]byte{64}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{160}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
+	sig = append(sig, common.LeftPadBytes(addrB[:], 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes(addrC[:], 32)...)
+	sig = append(sig, common.LeftPadBytes(addrD[:], 32)...)
+
+	packed, err = abi.Pack("sliceMultiAddress", []common.Address{addrA, addrB}, []common.Address{addrC, addrD})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
+	sig = crypto.Keccak256([]byte("slice256(uint256[2])"))[:4]
+	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+
+	packed, err = abi.Pack("slice256", []*big.Int{big.NewInt(1), big.NewInt(2)})
+	if err != nil {
+		t.Error(err)
 	}
 
 	if !bytes.Equal(packed, sig) {
 		t.Errorf("expected %x got %x", sig, packed)
 	}
 }
-
-func TestPackSliceBig(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	sig := crypto.Keccak256([]byte("slice256(uint256[2])"))[:4]
-	sig = append(sig, make([]byte, 64)...)
-	sig[35] = 1
-	sig[67] = 2
-
-	packed, err := abi.Pack("slice256", []*big.Int{big.NewInt(1), big.NewInt(2)})
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	if !bytes.Equal(packed, sig) {
-		t.Errorf("expected %x got %x", sig, packed)
-	}
-}
-
 func ExampleJSON() {
 	const definition = `[{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"isBar","outputs":[{"name":"","type":"bool"}],"type":"function"}]`
 
@@ -370,7 +374,7 @@ func TestInputVariableInputLength(t *testing.T) {
 	{ "type" : "function", "name" : "strOne", "const" : true, "inputs" : [ { "name" : "str", "type" : "string" } ] },
 	{ "type" : "function", "name" : "bytesOne", "const" : true, "inputs" : [ { "name" : "str", "type" : "bytes" } ] },
 	{ "type" : "function", "name" : "strTwo", "const" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "str1", "type" : "string" } ] }
-]`
+	]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -490,35 +494,6 @@ func TestInputVariableInputLength(t *testing.T) {
 	str2pack = str2pack[4:]
 	if !bytes.Equal(str2pack, exp2) {
 		t.Errorf("expected %x, got %x\n", exp, str2pack)
-	}
-}
-
-func TestBytes(t *testing.T) {
-	const definition = `[
-	{ "type" : "function", "name" : "balance", "const" : true, "inputs" : [ { "name" : "address", "type" : "bytes20" } ] },
-	{ "type" : "function", "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
-]`
-
-	abi, err := JSON(strings.NewReader(definition))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ok := make([]byte, 20)
-	_, err = abi.Pack("balance", ok)
-	if err != nil {
-		t.Error(err)
-	}
-
-	toosmall := make([]byte, 19)
-	_, err = abi.Pack("balance", toosmall)
-	if err != nil {
-		t.Error(err)
-	}
-
-	toobig := make([]byte, 21)
-	_, err = abi.Pack("balance", toobig)
-	if err == nil {
-		t.Error("expected error")
 	}
 }
 

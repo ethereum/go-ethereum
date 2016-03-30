@@ -96,63 +96,57 @@ func NewType(t string) (typ Type, err error) {
 		t += "256"
 	}
 
+	switch vtype {
+	case "int":
+		typ.Kind = reflect.Ptr
+		typ.Type = big_t
+		typ.Size = 256
+		typ.T = IntTy
+	case "uint":
+		typ.Kind = reflect.Ptr
+		typ.Type = ubig_t
+		typ.Size = 256
+		typ.T = UintTy
+	case "bool":
+		typ.Kind = reflect.Bool
+		typ.T = BoolTy
+	case "real": // TODO
+		typ.Kind = reflect.Invalid
+	case "address":
+		typ.Kind = reflect.Slice
+		typ.Type = address_t
+		typ.Size = 20
+		typ.T = AddressTy
+	case "string":
+		typ.Kind = reflect.String
+		typ.Size = -1
+		typ.T = StringTy
+		if vsize > 0 {
+			typ.Size = 32
+		}
+	case "hash":
+		typ.Kind = reflect.Slice
+		typ.Size = 32
+		typ.Type = hash_t
+		typ.T = HashTy
+	case "bytes":
+		typ.Kind = reflect.Slice
+		typ.Type = byte_ts
+		typ.Size = vsize
+		if vsize == 0 {
+			typ.T = BytesTy
+		} else {
+			typ.T = FixedBytesTy
+		}
+	default:
+		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
+	}
+
+	// if the type is a slice we must set Kind to a reflect.Slice
+	// so that serialisation can be determined based on this kind.
 	if isslice {
 		typ.Kind = reflect.Slice
 		typ.Size = size
-		switch vtype {
-		case "int":
-			typ.Type = big_ts
-		case "uint":
-			typ.Type = ubig_ts
-		default:
-			return Type{}, fmt.Errorf("unsupported arg slice type: %s", t)
-		}
-	} else {
-		switch vtype {
-		case "int":
-			typ.Kind = reflect.Ptr
-			typ.Type = big_t
-			typ.Size = 256
-			typ.T = IntTy
-		case "uint":
-			typ.Kind = reflect.Ptr
-			typ.Type = ubig_t
-			typ.Size = 256
-			typ.T = UintTy
-		case "bool":
-			typ.Kind = reflect.Bool
-			typ.T = BoolTy
-		case "real": // TODO
-			typ.Kind = reflect.Invalid
-		case "address":
-			typ.Kind = reflect.Slice
-			typ.Type = address_t
-			typ.Size = 20
-			typ.T = AddressTy
-		case "string":
-			typ.Kind = reflect.String
-			typ.Size = -1
-			typ.T = StringTy
-			if vsize > 0 {
-				typ.Size = 32
-			}
-		case "hash":
-			typ.Kind = reflect.Slice
-			typ.Size = 32
-			typ.Type = hash_t
-			typ.T = HashTy
-		case "bytes":
-			typ.Kind = reflect.Slice
-			typ.Type = byte_ts
-			typ.Size = vsize
-			if vsize == 0 {
-				typ.T = BytesTy
-			} else {
-				typ.T = FixedBytesTy
-			}
-		default:
-			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
-		}
 	}
 	typ.stringKind = t
 
@@ -203,7 +197,7 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 
 		return packBytesSlice([]byte(value.String()), value.Len()), nil
 	case reflect.Slice:
-		// if the param is a bytes type, pack the slice up as a string
+		// Byte slice is a special case, it gets treated as a single value
 		if t.T == BytesTy {
 			return packBytesSlice(value.Bytes(), value.Len()), nil
 		}
@@ -212,21 +206,20 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
 		}
 
-		// Address is a special slice. The slice acts as one rather than a list of elements.
-		if t.T == AddressTy {
-			return common.LeftPadBytes(v.([]byte), 32), nil
-		}
-
 		// Signed / Unsigned check
-		if (t.T != IntTy && isSigned(value)) || (t.T == UintTy && isSigned(value)) {
+		if value.Type() == big_t && (t.T != IntTy && isSigned(value)) || (t.T == UintTy && isSigned(value)) {
 			return nil, fmt.Errorf("slice of incompatible types.")
 		}
 
 		var packed []byte
 		for i := 0; i < value.Len(); i++ {
-			packed = append(packed, packNum(value.Index(i), t.T)...)
+			val, err := t.pack(value.Index(i).Interface())
+			if err != nil {
+				return nil, err
+			}
+			packed = append(packed, val...)
 		}
-		return packed, nil
+		return packBytesSlice(packed, value.Len()), nil
 	case reflect.Bool:
 		if value.Bool() {
 			return common.LeftPadBytes(common.Big1.Bytes(), 32), nil
