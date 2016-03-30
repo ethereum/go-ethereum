@@ -440,17 +440,16 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 // UnlockAccount will unlock the account associated with the given address with
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
-func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *rpc.HexNumber) bool {
+func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *rpc.HexNumber) (bool, error) {
 	if duration == nil {
 		duration = rpc.NewHexNumber(300)
 	}
 	a := accounts.Account{Address: addr}
 	d := time.Duration(duration.Int64()) * time.Second
 	if err := s.am.TimedUnlock(a, password, d); err != nil {
-		glog.V(logger.Info).Infof("%v\n", err)
-		return false
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // LockAccount will lock the account associated with the given address when it's unlocked.
