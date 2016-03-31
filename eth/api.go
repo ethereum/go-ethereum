@@ -1531,7 +1531,7 @@ func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config vm.Config) BlockT
 	return BlockTraceResult{
 		Validated:  validated,
 		StructLogs: formatLogs(logs),
-		Error:      err.Error(),
+		Error:      formatError(err),
 	}
 }
 
@@ -1557,7 +1557,7 @@ func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config vm.Config) 
 	return BlockTraceResult{
 		Validated:  validated,
 		StructLogs: formatLogs(logs),
-		Error:      err.Error(),
+		Error:      formatError(err),
 	}
 }
 
@@ -1573,7 +1573,7 @@ func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config vm.Config)
 	return BlockTraceResult{
 		Validated:  validated,
 		StructLogs: formatLogs(logs),
-		Error:      err.Error(),
+		Error:      formatError(err),
 	}
 }
 
@@ -1666,7 +1666,7 @@ func formatLogs(structLogs []vm.StructLog) []structLogRes {
 			Gas:     trace.Gas,
 			GasCost: trace.GasCost,
 			Depth:   trace.Depth,
-			Error:   trace.Err.Error(),
+			Error:   formatError(trace.Err),
 			Stack:   make([]string, len(trace.Stack)),
 			Storage: make(map[string]string),
 		}
@@ -1684,6 +1684,15 @@ func formatLogs(structLogs []vm.StructLog) []structLogRes {
 		}
 	}
 	return formattedStructLogs
+}
+
+// formatError formats a Go error into either an empty string or the data content
+// of the error itself.
+func formatError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // TraceTransaction returns the structured logs created during the execution of EVM
