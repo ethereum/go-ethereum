@@ -113,7 +113,6 @@ func NewType(t string) (typ Type, err error) {
 	case "real": // TODO
 		typ.Kind = reflect.Invalid
 	case "address":
-		typ.Kind = reflect.Slice
 		typ.Type = address_t
 		typ.Size = 20
 		typ.T = AddressTy
@@ -125,12 +124,12 @@ func NewType(t string) (typ Type, err error) {
 			typ.Size = 32
 		}
 	case "hash":
-		typ.Kind = reflect.Slice
+		typ.Kind = reflect.Array
 		typ.Size = 32
 		typ.Type = hash_t
 		typ.T = HashTy
 	case "bytes":
-		typ.Kind = reflect.Slice
+		typ.Kind = reflect.Array
 		typ.Type = byte_ts
 		typ.Size = vsize
 		if vsize == 0 {
