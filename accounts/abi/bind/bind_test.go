@@ -247,41 +247,41 @@ func TestBindings(t *testing.T) {
 	if !strings.Contains(string(linkTestDeps), "go-ethereum") {
 		t.Skip("symlinked environment doesn't support bind (https://github.com/golang/go/issues/14845)")
 	}
-	// All is well, run the tests
-	for i, tt := range bindTests {
-		// Create a temporary workspace for this test
-		ws, err := ioutil.TempDir("", "")
-		if err != nil {
-			t.Fatalf("test %d: failed to create temporary workspace: %v", i, err)
-		}
-		defer os.RemoveAll(ws)
+	// Create a temporary workspace for the test suite
+	ws, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("failed to create temporary workspace: %v", err)
+	}
+	defer os.RemoveAll(ws)
 
-		// Generate the binding and create a Go package in the workspace
+	pkg := filepath.Join(ws, "bindtest")
+	if err = os.MkdirAll(pkg, 0700); err != nil {
+		t.Fatalf("failed to create package: %v", err)
+	}
+	// Generate the test suite for all the contracts
+	for i, tt := range bindTests {
+		// Generate the binding and create a Go source file in the workspace
 		bind, err := Bind([]string{tt.name}, []string{tt.abi}, []string{tt.bytecode}, "bindtest")
 		if err != nil {
 			t.Fatalf("test %d: failed to generate binding: %v", i, err)
 		}
-		pkg := filepath.Join(ws, "bindtest")
-		if err = os.MkdirAll(pkg, 0700); err != nil {
-			t.Fatalf("test %d: failed to create package: %v", i, err)
-		}
-		if err = ioutil.WriteFile(filepath.Join(pkg, "main.go"), []byte(bind), 0600); err != nil {
+		if err = ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+".go"), []byte(bind), 0600); err != nil {
 			t.Fatalf("test %d: failed to write binding: %v", i, err)
 		}
 		// Generate the test file with the injected test code
-		code := fmt.Sprintf("package bindtest\nimport \"testing\"\nfunc TestBinding%d(t *testing.T){\n%s\n}", i, tt.tester)
+		code := fmt.Sprintf("package bindtest\nimport \"testing\"\nfunc Test%s(t *testing.T){\n%s\n}", tt.name, tt.tester)
 		blob, err := imports.Process("", []byte(code), nil)
 		if err != nil {
 			t.Fatalf("test %d: failed to generate tests: %v", i, err)
 		}
-		if err := ioutil.WriteFile(filepath.Join(pkg, "main_test.go"), blob, 0600); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(pkg, strings.ToLower(tt.name)+"_test.go"), blob, 0600); err != nil {
 			t.Fatalf("test %d: failed to write tests: %v", i, err)
 		}
-		// Test the entire package and report any failures
-		cmd := exec.Command(gocmd, "test", "-v")
-		cmd.Dir = pkg
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("test %d: failed to run binding test: %v\n%s\n%s", i, err, out, bind)
-		}
+	}
+	// Test the entire package and report any failures
+	cmd := exec.Command(gocmd, "test", "-v")
+	cmd.Dir = pkg
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to run binding test: %v\n%s", err, out)
 	}
 }
