@@ -674,11 +674,11 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), s.config.VmConfig)
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
-	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	res, requiredGas, _, err := core.NewStateTransition(vmenv, msg, gp).TransitionDb()
 	if len(res) == 0 { // backwards compatibility
-		return "0x", gas, err
+		return "0x", requiredGas, err
 	}
-	return common.ToHex(res), gas, err
+	return common.ToHex(res), requiredGas, err
 }
 
 // Call executes the given transaction on the state for the given block number.
