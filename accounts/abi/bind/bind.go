@@ -125,8 +125,8 @@ func bindType(kind abi.Type) string {
 	case stringKind == "address":
 		return "common.Address"
 
-	case stringKind == "hash":
-		return "common.Hash"
+	case stringKind == "address[]":
+		return "[]common.Address"
 
 	case strings.HasPrefix(stringKind, "bytes"):
 		if stringKind == "bytes" {

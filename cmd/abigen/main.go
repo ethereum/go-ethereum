@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -34,6 +35,7 @@ var (
 
 	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
 	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
+	excFlag  = flag.String("exc", "", "Comma separated types to exclude from binding")
 
 	pkgFlag = flag.String("pkg", "", "Go package name to generate the binding into")
 	outFlag = flag.String("out", "", "Output file for the generated binding (default = stdout)")
@@ -61,6 +63,12 @@ func main() {
 		types []string
 	)
 	if *solFlag != "" {
+		// Generate the list of types to exclude from binding
+		exclude := make(map[string]bool)
+		for _, kind := range strings.Split(*excFlag, ",") {
+			exclude[strings.ToLower(kind)] = true
+		}
+		// Build the Solidity source into bindable components
 		solc, err := compiler.New(*solcFlag)
 		if err != nil {
 			fmt.Printf("Failed to locate Solidity compiler: %v\n", err)
@@ -76,7 +84,11 @@ func main() {
 			fmt.Printf("Failed to build Solidity contract: %v\n", err)
 			os.Exit(-1)
 		}
+		// Gather all non-excluded contract for binding
 		for name, contract := range contracts {
+			if exclude[strings.ToLower(name)] {
+				continue
+			}
 			abi, _ := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
