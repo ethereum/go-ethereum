@@ -27,11 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)
-var chainConfig = &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
+var chainConfig = &core.ChainConfig{HomesteadBlock: big.NewInt(0)}
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)

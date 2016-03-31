@@ -27,12 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
 func testChainConfig() *ChainConfig {
-	return &ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
+	return &ChainConfig{HomesteadBlock: big.NewInt(0)}
 }
 
 func proc() (Validator, *BlockChain) {

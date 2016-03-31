@@ -1025,23 +1025,21 @@ func TestReorgSideEvent(t *testing.T) {
 	evmux := &event.TypeMux{}
 	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 
-	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {
-		if i == 2 {
-			gen.OffsetTime(9)
-		}
-	})
+	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {})
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
 	replacementBlocks, _ := GenerateChain(genesis, db, 4, func(i int, gen *BlockGen) {
 		tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), nil).SignECDSA(key1)
+		if i == 2 {
+			gen.OffsetTime(-1)
+		}
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
 		}
 		gen.AddTx(tx)
 	})
-
 	subs := evmux.Subscribe(ChainSideEvent{})
 	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
