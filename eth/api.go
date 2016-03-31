@@ -98,6 +98,11 @@ func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
 	return &PublicEthereumAPI{e, NewGasPriceOracle(e)}
 }
 
+// MinGasPrice returns te currently configured minimum gas price.
+func (s *PublicEthereumAPI) MinGasPrice() *big.Int {
+	return s.gpo.MinimumPrice()
+}
+
 // GasPrice returns a suggestion for a gas price.
 func (s *PublicEthereumAPI) GasPrice() *big.Int {
 	return s.gpo.SuggestPrice()

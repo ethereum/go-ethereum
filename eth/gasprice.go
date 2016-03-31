@@ -194,6 +194,12 @@ func (self *GasPriceOracle) lowestPrice(block *types.Block) *big.Int {
 	return minPrice
 }
 
+// MinimumPrice returns the configured minimum price that the oracle will ever
+// return. This can be used as a bottom limit on UIs for fee selection sliders.
+func (self *GasPriceOracle) MinimumPrice() *big.Int {
+	return new(big.Int).Set(self.minPrice)
+}
+
 // SuggestPrice returns the recommended gas price.
 func (self *GasPriceOracle) SuggestPrice() *big.Int {
 	self.init()
