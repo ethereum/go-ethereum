@@ -1513,9 +1513,9 @@ func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
 // BlockTraceResults is the returned value when replaying a block to check for
 // consensus results and full VM trace logs for all included transactions.
 type BlockTraceResult struct {
-	Validated  bool           `json: "validated"`
+	Validated  bool           `json:"validated"`
 	StructLogs []structLogRes `json:"structLogs"`
-	Error      error          `json:"error"`
+	Error      string         `json:"error"`
 }
 
 // TraceBlock processes the given block's RLP but does not import the block in to
@@ -1524,14 +1524,14 @@ func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config vm.Config) BlockT
 	var block types.Block
 	err := rlp.Decode(bytes.NewReader(blockRlp), &block)
 	if err != nil {
-		return BlockTraceResult{Error: fmt.Errorf("could not decode block: %v", err)}
+		return BlockTraceResult{Error: fmt.Sprintf("could not decode block: %v", err)}
 	}
 
 	validated, logs, err := api.traceBlock(&block, config)
 	return BlockTraceResult{
 		Validated:  validated,
 		StructLogs: formatLogs(logs),
-		Error:      err,
+		Error:      err.Error(),
 	}
 }
 
@@ -1540,7 +1540,7 @@ func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config vm.Config) BlockT
 func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config vm.Config) BlockTraceResult {
 	blockRlp, err := ioutil.ReadFile(file)
 	if err != nil {
-		return BlockTraceResult{Error: fmt.Errorf("could not read file: %v", err)}
+		return BlockTraceResult{Error: fmt.Sprintf("could not read file: %v", err)}
 	}
 	return api.TraceBlock(blockRlp, config)
 }
@@ -1550,14 +1550,14 @@ func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config vm.Config) 
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlockByNumber(number)
 	if block == nil {
-		return BlockTraceResult{Error: fmt.Errorf("block #%d not found", number)}
+		return BlockTraceResult{Error: fmt.Sprintf("block #%d not found", number)}
 	}
 
 	validated, logs, err := api.traceBlock(block, config)
 	return BlockTraceResult{
 		Validated:  validated,
 		StructLogs: formatLogs(logs),
-		Error:      err,
+		Error:      err.Error(),
 	}
 }
 
@@ -1566,14 +1566,14 @@ func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config vm.Config)
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlock(hash)
 	if block == nil {
-		return BlockTraceResult{Error: fmt.Errorf("block #%x not found", hash)}
+		return BlockTraceResult{Error: fmt.Sprintf("block #%x not found", hash)}
 	}
 
 	validated, logs, err := api.traceBlock(block, config)
 	return BlockTraceResult{
 		Validated:  validated,
 		StructLogs: formatLogs(logs),
-		Error:      err,
+		Error:      err.Error(),
 	}
 }
 
@@ -1641,7 +1641,7 @@ type structLogRes struct {
 	Gas     *big.Int          `json:"gas"`
 	GasCost *big.Int          `json:"gasCost"`
 	Depth   int               `json:"depth"`
-	Error   error             `json:"error"`
+	Error   string            `json:"error"`
 	Stack   []string          `json:"stack"`
 	Memory  []string          `json:"memory"`
 	Storage map[string]string `json:"storage"`
@@ -1666,7 +1666,7 @@ func formatLogs(structLogs []vm.StructLog) []structLogRes {
 			Gas:     trace.Gas,
 			GasCost: trace.GasCost,
 			Depth:   trace.Depth,
-			Error:   trace.Err,
+			Error:   trace.Err.Error(),
 			Stack:   make([]string, len(trace.Stack)),
 			Storage: make(map[string]string),
 		}
