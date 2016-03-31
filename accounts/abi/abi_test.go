@@ -59,7 +59,7 @@ func TestType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if typ.Kind != reflect.Ptr {
+	if typ.Kind != reflect.Uint {
 		t.Error("expected uint32 to have kind Ptr")
 	}
 
@@ -67,8 +67,8 @@ func TestType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if typ.Kind != reflect.Slice {
-		t.Error("expected uint32[] to have type slice")
+	if !typ.IsSlice {
+		t.Error("expected uint32[] to be slice")
 	}
 	if typ.Type != ubig_t {
 		t.Error("expcted uith32[] to have type uint64")
@@ -78,13 +78,13 @@ func TestType(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if typ.Kind != reflect.Slice {
-		t.Error("expected uint32[2] to have kind slice")
+	if !typ.IsSlice {
+		t.Error("expected uint32[2] to be slice")
 	}
 	if typ.Type != ubig_t {
 		t.Error("expcted uith32[2] to have type uint64")
 	}
-	if typ.Size != 2 {
+	if typ.SliceSize != 2 {
 		t.Error("expected uint32[2] to have a size of 2")
 	}
 }
@@ -149,10 +149,6 @@ func TestTestNumbers(t *testing.T) {
 		t.Errorf("expected send( ptr ) to throw, requires *big.Int instead of *int")
 	}
 
-	if _, err := abi.Pack("send", 1000); err != nil {
-		t.Error("expected send(1000) to cast to big")
-	}
-
 	if _, err := abi.Pack("test", uint32(1000)); err != nil {
 		t.Error(err)
 	}
@@ -204,13 +200,28 @@ func TestTestSlice(t *testing.T) {
 		t.FailNow()
 	}
 
-	slice := make([]byte, 2)
+	slice := make([]uint64, 2)
 	if _, err := abi.Pack("uint64[2]", slice); err != nil {
 		t.Error(err)
 	}
 
 	if _, err := abi.Pack("uint64[]", slice); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestImplicitTypeCasts(t *testing.T) {
+	abi, err := JSON(strings.NewReader(jsondata2))
+	if err != nil {
+		t.Error(err)
+		t.FailNow()
+	}
+
+	slice := make([]uint8, 2)
+	_, err = abi.Pack("uint64[2]", slice)
+	expStr := "`uint64[2]` abi: cannot use type uint8 as type uint64"
+	if err.Error() != expStr {
+		t.Errorf("expected %v, got %v", expStr, err)
 	}
 }
 

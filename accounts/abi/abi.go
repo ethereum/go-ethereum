@@ -186,7 +186,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 // argument in T.
 func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	// we need to treat slices differently
-	if t.Type.Kind == reflect.Slice {
+	if t.Type.IsSlice {
 		return toGoSlice(i, t, output)
 	}
 
