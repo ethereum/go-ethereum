@@ -14,32 +14,135 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// WARNING: WORK IN PROGRESS & UNTESTED
-// 
-// contract tracking versions added by designated signers.
-// designed to track versions of geth (go-ethereum) recommended by the
-// go-ethereum team. geth client interfaces with contract through ABI by simply
-// reading the full state and then deciding on recommended version based on
-// some logic (e.g. version date & number of signers).
-//
-// to keep things simple, the contract does not use FSM for multisig
-// but rather allows any designated signer to add a version or vote for an
-// existing version. this avoids need to track voting-in-progress states and
-// also provides history of all past versions.
-//
 
-contract Versions {
-    struct V {
-        bytes32 v;
-        uint64 ts;
-        address[] signers;
+// ReleaseOracle is an Ethereum contract to store the current and previous
+// versions of the go-ethereum implementation. Its goal is to allow Geth to
+// check for new releases automatically without the need to consult a central
+// repository.
+//
+// The contract takes a vote based approach on both assigning authorized signers
+// as well as signing off on new Geth releases.
+contract ReleaseOracle {
+  // Votes is an internal data structure to count votes on a specific proposal
+  struct Votes {
+    address[] pass; // List of signers voting to pass a proposal
+    address[] fail; // List of signers voting to fail a proposal
+  }
+
+  // Oracle authorization details
+  mapping(address => bool) authorized; // Set of accounts allowed to vote on updating the contract
+  address[]                signers;    // List of addresses currently accepted as signers
+
+  // Various proposals being voted on
+  mapping(address => Votes) authProps; // Currently running user authorization proposals
+  address[]                 authPend;  // List of addresses being voted on (map indexes)
+
+  // isSigner is a modifier to authorize contract transactions.
+  modifier isSigner() {
+    if (authorized[msg.sender]) {
+      _
     }
+  }
 
+  // Constructor to assign the creator as the sole valid signer.
+  function ReleaseOracle() {
+    authorized[msg.sender] = true;
+    signers.push(msg.sender);
+  }
+
+  // Signers is an accessor method to retrieve all te signers (public accessor
+  // generates an indexed one, not a retreive-all version).
+  function Signers() constant returns(address[]) {
+    return signers;
+  }
+
+  // AuthProposals retrieves the list of addresses that authorization proposals
+  // are currently being voted on.
+  function AuthProposals() constant returns(address[]) {
+    return authPend;
+  }
+
+  // AuthVotes retrieves the current authorization votes for a particular user
+  // to promote him into the list of signers, or demote him from there.
+  function AuthVotes(address user) constant returns(address[] promote, address[] demote) {
+    return (authProps[user].pass, authProps[user].fail);
+  }
+
+  // Promote pitches in on a voting campaign to promote a new user to a signer
+  // position.
+  function Promote(address user) {
+    updateStatus(user, true);
+  }
+
+  // Demote pitches in on a voting campaign to demote an authorized user from
+  // its signer position.
+  function Demote(address user) {
+    updateStatus(user, false);
+  }
+
+  // updateStatus marks a vote for changing the status of an Ethereum user,
+  // either for or against the user being an authorized signer.
+  function updateStatus(address user, bool authorize) isSigner {
+    // Gather the current votes and ensure we don't double vote
+    Votes votes = authProps[user];
+    for (uint i = 0; i < votes.pass.length; i++) {
+      if (votes.pass[i] == msg.sender) {
+        return;
+      }
+    }
+    for (i = 0; i < votes.fail.length; i++) {
+      if (votes.fail[i] == msg.sender) {
+        return;
+      }
+    }
+    // If no authorization proposal is open, add the user to the index for later lookups
+    if (votes.pass.length == 0 && votes.fail.length == 0) {
+      authPend.push(user);
+    }
+    // Cast the vote and return if the proposal cannot be resolved yet
+    if (authorize) {
+      votes.pass.push(msg.sender);
+      if (votes.pass.length <= signers.length / 2) {
+        return;
+      }
+    } else {
+      votes.fail.push(msg.sender);
+      if (votes.fail.length <= signers.length / 2) {
+        return;
+      }
+    }
+    // Proposal resolved in our favor, execute whatever we voted on
+    if (authorize && !authorized[user]) {
+      authorized[user] = true;
+      signers.push(user);
+    } else if (!authorize && authorized[user]) {
+      authorized[user] = false;
+
+      for (i = 0; i < signers.length; i++) {
+        if (signers[i] == user) {
+          signers[i] = signers[signers.length - 1];
+          signers.length--;
+          break;
+        }
+      }
+    }
+    // Finally delete the resolved proposal, index and garbage collect
+    delete authProps[user];
+
+    for (i = 0; i < authPend.length; i++) {
+      if (authPend[i] == user) {
+        authPend[i] = authPend[authPend.length - 1];
+        authPend.length--;
+        break;
+      }
+    }
+  }
+/*
     address[] public parties; // owners/signers
     address[] public deleteAcks; // votes to suicide contract
     uint public deleteAcksReq; // number of votes needed
     V[] public versions;
- 
+
     modifier canAccess(address addr) {
         bool access = false;
         for (uint i = 0; i < parties.length; i++) {
@@ -53,12 +156,12 @@ contract Versions {
         }
         _
     }
-	
+
 	function Versions(address[] addrs) {
         if (addrs.length < 2) {
             throw;
         }
-        
+
         parties = addrs;
         deleteAcksReq = (addrs.length / 2) + 1;
     }
@@ -93,7 +196,7 @@ contract Versions {
                 return;
             }
         }
-     
+
         // version is new, add it
         // due to dynamic array, push it first then set values
         V memory v;
@@ -104,7 +207,7 @@ contract Versions {
         versions[versions.length - 1].signers[0] = msg.sender;
         versions[versions.length - 1].ts = uint64(block.timestamp);
     }
-    
+
      // remove vote for a version, if present
     function NackVersion(bytes32 ver)
         canAccess(msg.sender)
@@ -119,7 +222,7 @@ contract Versions {
             }
         }
     }
-    
+
     // delete-this-contract vote, suicide if enough votes
     function AckDelete()
         canAccess(msg.sender)
@@ -134,7 +237,7 @@ contract Versions {
             suicide(msg.sender);
         }
     }
-    
+
     // remove sender's delete-this-contract vote, if present
     function NackDelete()
         canAccess(msg.sender)
@@ -148,5 +251,5 @@ contract Versions {
                 deleteAcks.length -= 1;
             }
         }
-    }
+    }*/
 }

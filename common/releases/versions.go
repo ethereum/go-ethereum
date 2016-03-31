@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package versions
+package releases
 
+/*
 import (
 	"fmt"
 	"math/big"
@@ -213,3 +214,4 @@ func (m callmsg) GasPrice() *big.Int            { return m.gasPrice }
 func (m callmsg) Gas() *big.Int                 { return m.gas }
 func (m callmsg) Value() *big.Int               { return m.value }
 func (m callmsg) Data() []byte                  { return m.data }
+*/
