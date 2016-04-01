@@ -201,9 +201,9 @@ var bindTests = []struct {
 		`Tupler`,
 		`
 			contract Tupler {
-			    function tuple() returns (string a, int b, bytes32 c) {
-			        return ("Hi", 1, sha3(""));
-			    }
+				function tuple() returns (string a, int b, bytes32 c) {
+					return ("Hi", 1, sha3(""));
+				}
 			}
 		`,
 		`606060405260dc8060106000396000f3606060405260e060020a60003504633175aae28114601a575b005b600060605260c0604052600260809081527f486900000000000000000000000000000000000000000000000000000000000060a05260017fc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a47060e0829052610100819052606060c0908152600261012081905281906101409060a09080838184600060046012f1505081517fffff000000000000000000000000000000000000000000000000000000000000169091525050604051610160819003945092505050f3`,
@@ -225,6 +225,45 @@ var bindTests = []struct {
 
 			if _, err := tupler.Tuple(nil); err != nil {
 				t.Fatalf("Failed to call structure retriever: %v", err)
+			}
+		`,
+	},
+	// Tests that anonymous default methods can be correctly invoked
+	{
+		`Defaulter`,
+		`
+			contract Defaulter {
+				address public caller;
+
+				function() {
+					caller = msg.sender;
+				}
+			}
+		`,
+		`6060604052606a8060106000396000f360606040523615601d5760e060020a6000350463fc9c8d3981146040575b605e6000805473ffffffffffffffffffffffffffffffffffffffff191633179055565b606060005473ffffffffffffffffffffffffffffffffffffffff1681565b005b6060908152602090f3`,
+		`[{"constant":true,"inputs":[],"name":"caller","outputs":[{"name":"","type":"address"}],"type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key := crypto.NewKey(rand.Reader)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: key.Address, Balance: big.NewInt(10000000000)})
+
+			// Convert the tester key to an authorized transactor for ease of use
+			auth := bind.NewKeyedTransactor(key)
+
+			// Deploy a default method invoker contract and execute its default method
+			_, _, defaulter, err := DeployDefaulter(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy defaulter contract: %v", err)
+			}
+			if _, err := (&DefaulterRaw{defaulter}).Transfer(auth); err != nil {
+				t.Fatalf("Failed to invoke default method: %v", err)
+			}
+			sim.Commit()
+
+			if caller, err := defaulter.Caller(nil); err != nil {
+				t.Fatalf("Failed to call address retriever: %v", err)
+			} else if (caller != key.Address) {
+				t.Fatalf("Address mismatch: have %v, want %v", caller, key.Address)
 			}
 		`,
 	},
