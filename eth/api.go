@@ -1103,10 +1103,10 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(encodedTx string) (string,
 	return tx.Hash().Hex(), nil
 }
 
-// Sign will sign the given data string with the given address. The account corresponding with the address needs to
-// be unlocked.
-func (s *PublicTransactionPoolAPI) Sign(address common.Address, data string) (string, error) {
-	signature, error := s.am.Sign(accounts.Account{Address: address}, common.HexToHash(data).Bytes())
+// Sign signs the given hash using the key that matches the address. The key must be unlocked in order to sign the
+// hash.
+func (s *PublicTransactionPoolAPI) Sign(address common.Address, hash common.Hash) (string, error) {
+	signature, error := s.am.Sign(accounts.Account{Address: address}, hash[:])
 	return common.ToHex(signature), error
 }
 
