@@ -456,6 +456,7 @@ func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
+	config   *core.ChainConfig
 	bc       *core.BlockChain
 	chainDb  ethdb.Database
 	eventMux *event.TypeMux
@@ -464,8 +465,8 @@ type PublicBlockChainAPI struct {
 }
 
 // NewPublicBlockChainAPI creates a new Etheruem blockchain API.
-func NewPublicBlockChainAPI(bc *core.BlockChain, m *miner.Miner, chainDb ethdb.Database, eventMux *event.TypeMux, am *accounts.Manager) *PublicBlockChainAPI {
-	return &PublicBlockChainAPI{bc: bc, miner: m, chainDb: chainDb, eventMux: eventMux, am: am}
+func NewPublicBlockChainAPI(config *core.ChainConfig, bc *core.BlockChain, m *miner.Miner, chainDb ethdb.Database, eventMux *event.TypeMux, am *accounts.Manager) *PublicBlockChainAPI {
+	return &PublicBlockChainAPI{config: config, bc: bc, miner: m, chainDb: chainDb, eventMux: eventMux, am: am}
 }
 
 // BlockNumber returns the block number of the chain head.
@@ -670,14 +671,14 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header(), nil)
+	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), s.config.VmConfig)
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
-	res, gas, err := core.ApplyMessage(vmenv, msg, gp)
+	res, requiredGas, _, err := core.NewStateTransition(vmenv, msg, gp).TransitionDb()
 	if len(res) == 0 { // backwards compatibility
-		return "0x", gas, err
+		return "0x", requiredGas, err
 	}
-	return common.ToHex(res), gas, err
+	return common.ToHex(res), requiredGas, err
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -1501,13 +1502,14 @@ func (api *PublicDebugAPI) SeedHash(number uint64) (string, error) {
 // PrivateDebugAPI is the collection of Etheruem APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
-	eth *Ethereum
+	config *core.ChainConfig
+	eth    *Ethereum
 }
 
 // NewPrivateDebugAPI creates a new API definition for the private debug methods
 // of the Ethereum service.
-func NewPrivateDebugAPI(eth *Ethereum) *PrivateDebugAPI {
-	return &PrivateDebugAPI{eth: eth}
+func NewPrivateDebugAPI(config *core.ChainConfig, eth *Ethereum) *PrivateDebugAPI {
+	return &PrivateDebugAPI{config: config, eth: eth}
 }
 
 // BlockTraceResults is the returned value when replaying a block to check for
@@ -1601,7 +1603,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config vm.Config) (bo
 	config.Debug = true // make sure debug is set.
 	config.Logger.Collector = collector
 
-	if err := core.ValidateHeader(blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false); err != nil {
+	if err := core.ValidateHeader(api.config, blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false); err != nil {
 		return false, collector.traces, err
 	}
 	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), api.eth.ChainDb())
@@ -1609,7 +1611,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config vm.Config) (bo
 		return false, collector.traces, err
 	}
 
-	receipts, _, usedGas, err := processor.Process(block, statedb, &config)
+	receipts, _, usedGas, err := processor.Process(block, statedb, config)
 	if err != nil {
 		return false, collector.traces, err
 	}
@@ -1731,7 +1733,7 @@ func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger vm.LogConf
 		data:     tx.Data(),
 	}
 
-	vmenv := core.NewEnv(stateDb, s.eth.BlockChain(), msg, block.Header(), &vm.Config{
+	vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, block.Header(), vm.Config{
 		Debug:  true,
 		Logger: logger,
 	})
@@ -1788,7 +1790,9 @@ func (s *PublicBlockChainAPI) TraceCall(args CallArgs, blockNr rpc.BlockNumber) 
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.bc, msg, block.Header(), nil)
+	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), vm.Config{
+		Debug: true,
+	})
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
 	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)

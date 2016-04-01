@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -31,8 +32,17 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+var (
+	ForceJit  bool
+	EnableJit bool
+)
+
 func init() {
 	glog.SetV(0)
+	if os.Getenv("JITVM") == "true" {
+		ForceJit = true
+		EnableJit = true
+	}
 }
 
 func checkLogs(tlog []Log, logs vm.Logs) error {
@@ -129,7 +139,16 @@ type VmTest struct {
 	PostStateRoot string
 }
 
+type RuleSet struct {
+	HomesteadBlock *big.Int
+}
+
+func (r RuleSet) IsHomestead(n *big.Int) bool {
+	return n.Cmp(r.HomesteadBlock) >= 0
+}
+
 type Env struct {
+	ruleSet      RuleSet
 	depth        int
 	state        *state.StateDB
 	skipTransfer bool
@@ -152,9 +171,10 @@ type Env struct {
 	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB) *Env {
+func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
 	env := &Env{
-		state: state,
+		ruleSet: ruleSet,
+		state:   state,
 	}
 	return env
 }
@@ -167,8 +187,8 @@ func (self *Env) AddStructLog(log vm.StructLog) {
 	self.logs = append(self.logs, log)
 }
 
-func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
-	env := NewEnv(state)
+func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
+	env := NewEnv(ruleSet, state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
 	env.parent = common.HexToHash(envValues["previousHash"])
@@ -179,11 +199,15 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
 
-	env.evm = vm.New(env, nil)
+	env.evm = vm.New(env, vm.Config{
+		EnableJit: EnableJit,
+		ForceJit:  ForceJit,
+	})
 
 	return env
 }
 
+func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
 func (self *Env) Vm() vm.Vm                { return self.evm }
 func (self *Env) Origin() common.Address   { return self.origin }
 func (self *Env) BlockNumber() *big.Int    { return self.number }

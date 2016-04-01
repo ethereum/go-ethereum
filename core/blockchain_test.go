@@ -53,7 +53,7 @@ func thePow() pow.PoW {
 func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
 	WriteTestNetGenesisBlock(db)
-	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
+	blockchain, err := NewBlockChain(db, testChainConfig(), thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating blockchain:", err)
 		t.FailNow()
@@ -141,7 +141,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, nil)
+		receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, vm.Config{})
 		if err != nil {
 			reportBlock(block, err)
 			return err
@@ -435,7 +435,7 @@ func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return n
 func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
 	return nil
 }
-func (bproc) Process(block *types.Block, statedb *state.StateDB, cfg *vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
+func (bproc) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
 	return nil, nil, nil, nil
 }
 
@@ -473,13 +473,14 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
 	bc := &BlockChain{
-		chainDb: db,
+		chainDb:      db,
 		genesisBlock: genesis,
-		eventMux: &eventMux,
-		pow: FakePow{},
+		eventMux:     &eventMux,
+		pow:          FakePow{},
+		config:       testChainConfig(),
 	}
 	valFn := func() HeaderValidator { return bc.Validator() }
-	bc.hc, _ = NewHeaderChain(db, valFn, bc.getProcInterrupt)
+	bc.hc, _ = NewHeaderChain(db, testChainConfig(), valFn, bc.getProcInterrupt)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
 	bc.blockCache, _ = lru.New(100)
@@ -613,7 +614,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		defer func() { delete(BadHashes, headers[3].Hash()) }()
 	}
 	// Create a new chain manager and check it rolled back the state
-	ncm, err := NewBlockChain(db, FakePow{}, new(event.TypeMux))
+	ncm, err := NewBlockChain(db, testChainConfig(), FakePow{}, new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}
@@ -667,7 +668,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failHash = headers[failAt].Hash()
 
 			blockchain.pow = failPow{failNum}
-			blockchain.validator = NewBlockValidator(blockchain, failPow{failNum})
+			blockchain.validator = NewBlockValidator(testChainConfig(), blockchain, failPow{failNum})
 
 			failRes, err = blockchain.InsertHeaderChain(headers, 1)
 		}
@@ -733,7 +734,7 @@ func TestFastVsFullChains(t *testing.T) {
 	archiveDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
-	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
+	archive, _ := NewBlockChain(archiveDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -741,7 +742,7 @@ func TestFastVsFullChains(t *testing.T) {
 	// Fast import the chain as a non-archive node to test
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
-	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
+	fast, _ := NewBlockChain(fastDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -817,7 +818,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	archiveDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
-	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
+	archive, _ := NewBlockChain(archiveDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -829,7 +830,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Import the chain as a non-archive node and ensure all pointers are updated
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
-	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
+	fast, _ := NewBlockChain(fastDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -848,7 +849,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Import the chain as a light node and ensure all pointers are updated
 	lightDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
-	light, _ := NewBlockChain(lightDb, FakePow{}, new(event.TypeMux))
+	light, _ := NewBlockChain(lightDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
@@ -913,7 +914,7 @@ func TestChainTxReorgs(t *testing.T) {
 	})
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 	if i, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert original chain[%d]: %v", i, err)
 	}
@@ -986,7 +987,7 @@ func TestLogReorgs(t *testing.T) {
 	)
 
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 
 	subs := evmux.Subscribe(RemovedLogsEvent{})
 	chain, _ := GenerateChain(genesis, db, 2, func(i int, gen *BlockGen) {
@@ -1022,25 +1023,23 @@ func TestReorgSideEvent(t *testing.T) {
 	)
 
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 
-	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {
-		if i == 2 {
-			gen.OffsetTime(9)
-		}
-	})
+	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {})
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
 	replacementBlocks, _ := GenerateChain(genesis, db, 4, func(i int, gen *BlockGen) {
 		tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), nil).SignECDSA(key1)
+		if i == 2 {
+			gen.OffsetTime(-1)
+		}
 		if err != nil {
 			t.Fatalf("failed to create tx: %v", err)
 		}
 		gen.AddTx(tx)
 	})
-
 	subs := evmux.Subscribe(ChainSideEvent{})
 	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)

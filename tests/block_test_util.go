@@ -108,7 +108,7 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
+func RunBlockTestWithReader(homesteadBlock *big.Int, r io.Reader, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJson(r, &btjs); err != nil {
 		return err
@@ -119,13 +119,13 @@ func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
 		return err
 	}
 
-	if err := runBlockTests(bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RunBlockTest(file string, skipTests []string) error {
+func RunBlockTest(homesteadBlock *big.Int, file string, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJsonFile(file, &btjs); err != nil {
 		return err
@@ -135,13 +135,13 @@ func RunBlockTest(file string, skipTests []string) error {
 	if err != nil {
 		return err
 	}
-	if err := runBlockTests(bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
+func runBlockTests(homesteadBlock *big.Int, bt map[string]*BlockTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
@@ -153,7 +153,7 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 			continue
 		}
 		// test the block
-		if err := runBlockTest(test); err != nil {
+		if err := runBlockTest(homesteadBlock, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
 		glog.Infoln("Block test passed: ", name)
@@ -162,7 +162,7 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 	return nil
 
 }
-func runBlockTest(test *BlockTest) error {
+func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
 	am := accounts.NewManager(ks)
 	db, _ := ethdb.NewMemDatabase()
@@ -174,6 +174,7 @@ func runBlockTest(test *BlockTest) error {
 	}
 
 	cfg := &eth.Config{
+		ChainConfig:      &core.ChainConfig{HomesteadBlock: homesteadBlock},
 		TestGenesisState: db,
 		TestGenesisBlock: test.Genesis,
 		Etherbase:        common.Address{},

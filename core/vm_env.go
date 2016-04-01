@@ -41,30 +41,26 @@ func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
 }
 
 type VMEnv struct {
-	state *state.StateDB // State to use for executing
-	evm   *vm.EVM        // The Ethereum Virtual Machine
-	depth int            // Current execution depth
-	msg   Message        // Message appliod
+	chainConfig *ChainConfig   // Chain configuration
+	state       *state.StateDB // State to use for executing
+	evm         *vm.EVM        // The Ethereum Virtual Machine
+	depth       int            // Current execution depth
+	msg         Message        // Message appliod
 
 	header    *types.Header            // Header information
 	chain     *BlockChain              // Blockchain handle
 	logs      []vm.StructLog           // Logs for the custom structured logger
 	getHashFn func(uint64) common.Hash // getHashFn callback is used to retrieve block hashes
-
 }
 
-func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *types.Header, cfg *vm.Config) *VMEnv {
+func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
-		chain:     chain,
-		state:     state,
-		header:    header,
-		msg:       msg,
-		getHashFn: GetHashFn(header.ParentHash, chain),
-	}
-
-	// initialise a default config if none present
-	if cfg == nil {
-		cfg = new(vm.Config)
+		chainConfig: chainConfig,
+		chain:       chain,
+		state:       state,
+		header:      header,
+		msg:         msg,
+		getHashFn:   GetHashFn(header.ParentHash, chain),
 	}
 
 	// if no log collector is present set self as the collector
@@ -76,6 +72,7 @@ func NewEnv(state *state.StateDB, chain *BlockChain, msg Message, header *types.
 	return env
 }
 
+func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
 func (self *VMEnv) Vm() vm.Vm                { return self.evm }
 func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
 func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }

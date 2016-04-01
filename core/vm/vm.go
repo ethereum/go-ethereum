@@ -43,18 +43,13 @@ type Config struct {
 type EVM struct {
 	env       Environment
 	jumpTable vmJumpTable
-	cfg       *Config
+	cfg       Config
 
 	logger *Logger
 }
 
 // New returns a new instance of the EVM.
-func New(env Environment, cfg *Config) *EVM {
-	// initialise a default config if none is present
-	if cfg == nil {
-		cfg = new(Config)
-	}
-
+func New(env Environment, cfg Config) *EVM {
 	var logger *Logger
 	if cfg.Debug {
 		logger = newLogger(cfg.Logger, env)
@@ -62,7 +57,7 @@ func New(env Environment, cfg *Config) *EVM {
 
 	return &EVM{
 		env:       env,
-		jumpTable: newJumpTable(env.BlockNumber()),
+		jumpTable: newJumpTable(env.RuleSet(), env.BlockNumber()),
 		cfg:       cfg,
 		logger:    logger,
 	}
@@ -154,7 +149,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && evm.cfg.Debug {
-			evm.logger.captureState(pc, op, contract.Gas, cost, mem, stack, contract, err)
+			evm.logger.captureState(pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), err)
 		}
 	}()
 
@@ -196,7 +191,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 		// Add a log message
 		if evm.cfg.Debug {
-			evm.logger.captureState(pc, op, contract.Gas, cost, mem, stack, contract, nil)
+			evm.logger.captureState(pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), nil)
 		}
 
 		if opPtr := evm.jumpTable[op]; opPtr.valid {

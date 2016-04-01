@@ -32,7 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -108,7 +110,6 @@ Runs quick benchmark on first GPU found.
 The output of this command is supposed to be machine-readable.
 `,
 		},
-
 		{
 			Name:  "wallet",
 			Usage: "ethereum presale wallet",
@@ -248,6 +249,16 @@ nodes.
 			},
 		},
 		{
+			Action: initGenesis,
+			Name:   "init",
+			Usage:  "bootstraps and initialises a new genesis block (JSON)",
+			Description: `
+The init command initialises a new genesis block and definition for the network.
+This is a destructive action and changes the network in which you will be
+participating.
+`,
+		},
+		{
 			Action: console,
 			Name:   "console",
 			Usage:  `Geth Console: interactive JavaScript environment`,
@@ -255,7 +266,8 @@ nodes.
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
-`},
+`,
+		},
 		{
 			Action: attach,
 			Name:   "attach",
@@ -347,7 +359,6 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
 		utils.SetupNetwork(ctx)
-		utils.SetupVM(ctx)
 		return nil
 	}
 
@@ -415,6 +426,31 @@ func attach(ctx *cli.Context) {
 		repl.welcome()
 		repl.interactive()
 	}
+}
+
+// initGenesis will initialise the given JSON format genesis file and writes it as
+// the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
+func initGenesis(ctx *cli.Context) {
+	genesisPath := ctx.Args().First()
+	if len(genesisPath) == 0 {
+		utils.Fatalf("must supply path to genesis JSON file")
+	}
+
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MustMakeDataDir(ctx), "chaindata"), 0, 0)
+	if err != nil {
+		utils.Fatalf("could not open database: %v", err)
+	}
+
+	genesisFile, err := os.Open(genesisPath)
+	if err != nil {
+		utils.Fatalf("failed to read genesis file: %v", err)
+	}
+
+	block, err := core.WriteGenesisBlock(chainDb, genesisFile)
+	if err != nil {
+		utils.Fatalf("failed to write genesis block: %v", err)
+	}
+	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
 // console starts a new geth node, attaching a JavaScript console to it at the

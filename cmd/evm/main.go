@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -106,9 +105,6 @@ func init() {
 }
 
 func run(ctx *cli.Context) {
-	vm.ForceJit = ctx.GlobalBool(ForceJitFlag.Name)
-	vm.EnableJit = !ctx.GlobalBool(DisableJitFlag.Name)
-
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
@@ -118,8 +114,10 @@ func run(ctx *cli.Context) {
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
 
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), &vm.Config{
-		Debug: ctx.GlobalBool(DebugFlag.Name),
+	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), vm.Config{
+		Debug:     ctx.GlobalBool(DebugFlag.Name),
+		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
+		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
 	})
 
 	tstart := time.Now()
@@ -180,8 +178,7 @@ type VMEnv struct {
 	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg *vm.Config) *VMEnv {
-	params.HomesteadBlock = new(big.Int)
+func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		state:      state,
 		transactor: &transactor,
@@ -194,6 +191,12 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg
 	return env
 }
 
+// ruleSet implements vm.RuleSet and will always default to the homestead rule set.
+type ruleSet struct{}
+
+func (ruleSet) IsHomestead(*big.Int) bool { return true }
+
+func (self *VMEnv) RuleSet() vm.RuleSet        { return ruleSet{} }
 func (self *VMEnv) Vm() vm.Vm                  { return self.evm }
 func (self *VMEnv) Db() vm.Database            { return self.state }
 func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }

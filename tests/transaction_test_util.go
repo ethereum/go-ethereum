@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -91,8 +91,6 @@ func RunTransactionTests(file string, skipTests []string) error {
 }
 
 func runTransactionTests(tests map[string]TransactionTest, skipTests []string) error {
-	params.HomesteadBlock = big.NewInt(900000)
-
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
@@ -166,7 +164,8 @@ func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err e
 		decodedSender common.Address
 	)
 
-	if params.IsHomestead(common.String2Big(txTest.Blocknumber)) {
+	chainConfig := &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
+	if chainConfig.IsHomestead(common.String2Big(txTest.Blocknumber)) {
 		decodedSender, err = decodedTx.From()
 	} else {
 		decodedSender, err = decodedTx.FromFrontier()

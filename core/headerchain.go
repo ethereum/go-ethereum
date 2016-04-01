@@ -40,6 +40,8 @@ import (
 // It is not thread safe either, the encapsulating chain structures should do
 // the necessary mutex locking/unlocking.
 type HeaderChain struct {
+	config *ChainConfig
+
 	chainDb       ethdb.Database
 	genesisHeader *types.Header
 
@@ -62,7 +64,7 @@ type getHeaderValidatorFn func() HeaderValidator
 //  getValidator should return the parent's validator
 //  procInterrupt points to the parent's interrupt semaphore
 //  wg points to the parent's shutdown wait group
-func NewHeaderChain(chainDb ethdb.Database, getValidator getHeaderValidatorFn, procInterrupt func() bool) (*HeaderChain, error) {
+func NewHeaderChain(chainDb ethdb.Database, config *ChainConfig, getValidator getHeaderValidatorFn, procInterrupt func() bool) (*HeaderChain, error) {
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 
@@ -73,6 +75,7 @@ func NewHeaderChain(chainDb ethdb.Database, getValidator getHeaderValidatorFn, p
 	}
 
 	hc := &HeaderChain{
+		config:        config,
 		chainDb:       chainDb,
 		headerCache:   headerCache,
 		tdCache:       tdCache,
@@ -436,15 +439,17 @@ func (hc *HeaderChain) SetGenesis(head *types.Header) {
 //
 // headerValidator implements HeaderValidator.
 type headerValidator struct {
-	hc  *HeaderChain // Canonical header chain
-	Pow pow.PoW      // Proof of work used for validating
+	config *ChainConfig
+	hc     *HeaderChain // Canonical header chain
+	Pow    pow.PoW      // Proof of work used for validating
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewHeaderValidator(chain *HeaderChain, pow pow.PoW) HeaderValidator {
+func NewHeaderValidator(config *ChainConfig, chain *HeaderChain, pow pow.PoW) HeaderValidator {
 	return &headerValidator{
-		Pow: pow,
-		hc:  chain,
+		config: config,
+		Pow:    pow,
+		hc:     chain,
 	}
 }
 
@@ -460,5 +465,5 @@ func (v *headerValidator) ValidateHeader(header, parent *types.Header, checkPow 
 	if v.hc.HasHeader(header.Hash()) {
 		return nil
 	}
-	return ValidateHeader(v.Pow, header, parent, checkPow, false)
+	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
 }

@@ -61,6 +61,7 @@ type uint64RingBuffer struct {
 // environment is the workers current environment and holds
 // all of the current state information
 type Work struct {
+	config             *core.ChainConfig
 	state              *state.StateDB // apply state changes here
 	ancestors          *set.Set       // ancestor set (used for checking uncle parent validity)
 	family             *set.Set       // family set (used for checking uncle invalidity)
@@ -89,6 +90,8 @@ type Result struct {
 
 // worker is the main object which takes care of applying messages to the new state
 type worker struct {
+	config *core.ChainConfig
+
 	mu sync.Mutex
 
 	agents map[Agent]struct{}
@@ -122,8 +125,9 @@ type worker struct {
 	fullValidation bool
 }
 
-func newWorker(coinbase common.Address, eth core.Backend) *worker {
+func newWorker(config *core.ChainConfig, coinbase common.Address, eth core.Backend) *worker {
 	worker := &worker{
+		config:         config,
 		eth:            eth,
 		mux:            eth.EventMux(),
 		chainDb:        eth.ChainDb(),
@@ -285,7 +289,7 @@ func (self *worker) wait() {
 				}
 
 				auxValidator := self.eth.BlockChain().AuxValidator()
-				if err := core.ValidateHeader(auxValidator, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
+				if err := core.ValidateHeader(self.config, auxValidator, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
 					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 					continue
 				}
@@ -371,6 +375,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		return err
 	}
 	work := &Work{
+		config:    self.config,
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
@@ -470,7 +475,7 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time().Uint64(), parent.Number(), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(self.config, uint64(tstamp), parent.Time().Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
@@ -657,7 +662,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, transactions types.Trans
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
 	snap := env.state.Copy()
-	receipt, logs, _, err := core.ApplyTransaction(bc, gp, env.state, env.header, tx, env.header.GasUsed, nil)
+	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, env.config.VmConfig)
 	if err != nil {
 		env.state.Set(snap)
 		return err, nil
