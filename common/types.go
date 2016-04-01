@@ -19,16 +19,20 @@ package common
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strings"
 )
 
 const (
 	HashLength    = 32
 	AddressLength = 20
 )
+
+var hashJsonLengthErr = errors.New("common: unmarshalJSON failed: hash must be exactly 32 bytes")
 
 type (
 	Hash    [HashLength]byte
@@ -57,6 +61,15 @@ func (h *Hash) UnmarshalJSON(input []byte) error {
 	length := len(input)
 	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
 		input = input[1 : length-1]
+	}
+	// strip "0x" for length check
+	if len(input) > 1 && strings.ToLower(string(input[:2])) == "0x" {
+		input = input[2:]
+	}
+
+	// validate the length of the input hash
+	if len(input) != HashLength*2 {
+		return hashJsonLengthErr
 	}
 	h.SetBytes(FromHex(string(input)))
 	return nil
