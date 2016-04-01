@@ -181,9 +181,18 @@ func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i
 	for trials := 0; trials < 3; trials++ {
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
 		password := getPassPhrase(prompt, false, i, passwords)
-		if err = accman.Unlock(account, password); err == nil {
+		err = accman.Unlock(account, password)
+		if err == nil {
 			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
 			return account, password
+		}
+		if err, ok := err.(*accounts.AmbiguousAddrError); ok {
+			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
+			return ambiguousAddrRecovery(accman, err, password), password
+		}
+		if err != accounts.ErrDecrypt {
+			// No need to prompt again if the error is not decryption-related.
+			break
 		}
 	}
 	// All trials expended to unlock account, bail out
@@ -219,6 +228,32 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 		}
 	}
 	return password
+}
+
+func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrError, auth string) accounts.Account {
+	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
+	for _, a := range err.Matches {
+		fmt.Println("  ", a.File)
+	}
+	fmt.Println("Testing your passphrase against all of them...")
+	var match *accounts.Account
+	for _, a := range err.Matches {
+		if err := am.Unlock(a, auth); err == nil {
+			match = &a
+			break
+		}
+	}
+	if match == nil {
+		utils.Fatalf("None of the listed files could be unlocked.")
+	}
+	fmt.Printf("Your passphrase unlocked %s\n", match.File)
+	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
+	for _, a := range err.Matches {
+		if a != *match {
+			fmt.Println("  ", a.File)
+		}
+	}
+	return *match
 }
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.

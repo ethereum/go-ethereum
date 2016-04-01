@@ -228,3 +228,65 @@ func TestUnlockFlagPasswordFileWrongPassword(t *testing.T) {
 Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
 `)
 }
+
+func TestUnlockFlagAmbiguous(t *testing.T) {
+	store := filepath.Join("..", "..", "accounts", "testdata", "dupes")
+	geth := runGeth(t,
+		"--keystore", store, "--nat", "none", "--nodiscover", "--dev",
+		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
+		"js", "testdata/empty.js")
+	defer geth.expectExit()
+
+	// Helper for the expect template, returns absolute keystore path.
+	geth.setTemplateFunc("keypath", func(file string) string {
+		abs, _ := filepath.Abs(filepath.Join(store, file))
+		return abs
+	})
+	geth.expect(`
+Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
+!! Unsupported terminal, password will be echoed.
+Passphrase: {{.InputLine "foobar"}}
+Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
+   {{keypath "1"}}
+   {{keypath "2"}}
+Testing your passphrase against all of them...
+Your passphrase unlocked {{keypath "1"}}
+In order to avoid this warning, you need to remove the following duplicate key files:
+   {{keypath "2"}}
+`)
+	geth.expectExit()
+
+	wantMessages := []string{
+		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
+	}
+	for _, m := range wantMessages {
+		if strings.Index(geth.stderrText(), m) == -1 {
+			t.Errorf("stderr text does not contain %q", m)
+		}
+	}
+}
+
+func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
+	store := filepath.Join("..", "..", "accounts", "testdata", "dupes")
+	geth := runGeth(t,
+		"--keystore", store, "--nat", "none", "--nodiscover", "--dev",
+		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
+	defer geth.expectExit()
+
+	// Helper for the expect template, returns absolute keystore path.
+	geth.setTemplateFunc("keypath", func(file string) string {
+		abs, _ := filepath.Abs(filepath.Join(store, file))
+		return abs
+	})
+	geth.expect(`
+Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
+!! Unsupported terminal, password will be echoed.
+Passphrase: {{.InputLine "wrong"}}
+Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
+   {{keypath "1"}}
+   {{keypath "2"}}
+Testing your passphrase against all of them...
+Fatal: None of the listed files could be unlocked.
+`)
+	geth.expectExit()
+}

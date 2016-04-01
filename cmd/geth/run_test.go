@@ -45,6 +45,7 @@ type testgeth struct {
 	// template variables for expect
 	Datadir    string
 	Executable string
+	Func       template.FuncMap
 
 	removeDatadir bool
 	cmd           *exec.Cmd
@@ -114,6 +115,13 @@ func (tt *testgeth) InputLine(s string) string {
 	return ""
 }
 
+func (tt *testgeth) setTemplateFunc(name string, fn interface{}) {
+	if tt.Func == nil {
+		tt.Func = make(map[string]interface{})
+	}
+	tt.Func[name] = fn
+}
+
 // expect runs its argument as a template, then expects the
 // child process to output the result of the template within 5s.
 //
@@ -121,7 +129,7 @@ func (tt *testgeth) InputLine(s string) string {
 // before matching.
 func (tt *testgeth) expect(tplsource string) {
 	// Generate the expected output by running the template.
-	tpl := template.Must(template.New("").Parse(tplsource))
+	tpl := template.Must(template.New("").Funcs(tt.Func).Parse(tplsource))
 	wantbuf := new(bytes.Buffer)
 	if err := tpl.Execute(wantbuf, tt); err != nil {
 		panic(err)
