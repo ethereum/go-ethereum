@@ -772,23 +772,22 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 	)
 	defer db.Close()
 
-	chainConfig, err := core.GetChainConfig(db, genesis.Hash())
-	if err != nil {
-		if err != core.ChainConfigNotFoundErr {
+	if genesis != nil {
+		// Exsting genesis block, use stored config if available.
+		storedConfig, err := core.GetChainConfig(db, genesis.Hash())
+		if err == nil {
+			return storedConfig
+		} else if err != core.ChainConfigNotFoundErr {
 			Fatalf("Could not make chain configuration: %v", err)
 		}
-		var homesteadBlockNo *big.Int
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			homesteadBlockNo = params.TestNetHomesteadBlock
-		} else {
-			homesteadBlockNo = params.MainNetHomesteadBlock
-		}
-
-		chainConfig = &core.ChainConfig{
-			HomesteadBlock: homesteadBlockNo,
-		}
 	}
-	return chainConfig
+	var homesteadBlockNo *big.Int
+	if ctx.GlobalBool(TestNetFlag.Name) {
+		homesteadBlockNo = params.TestNetHomesteadBlock
+	} else {
+		homesteadBlockNo = params.MainNetHomesteadBlock
+	}
+	return &core.ChainConfig{HomesteadBlock: homesteadBlockNo}
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
