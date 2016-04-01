@@ -108,8 +108,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 	return c.abi.Unpack(result, method, output)
 }
 
-// Transact invokes the (paid) contract method with params as input values and
-// value as the fund transfer to the contract.
+// Transact invokes the (paid) contract method with params as input values.
 func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
 	// Otherwise pack up the parameters and invoke the contract
 	input, err := c.abi.Pack(method, params...)
@@ -117,6 +116,12 @@ func (c *BoundContract) Transact(opts *TransactOpts, method string, params ...in
 		return nil, err
 	}
 	return c.transact(opts, &c.address, input)
+}
+
+// Transfer initiates a plain transaction to move funds to the contract, calling
+// its default method if one is available.
+func (c *BoundContract) Transfer(opts *TransactOpts) (*types.Transaction, error) {
+	return c.transact(opts, &c.address, nil)
 }
 
 // transact executes an actual transaction invocation, first deriving any missing
