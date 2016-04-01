@@ -169,10 +169,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	// Load up any custom genesis block if requested
 	if len(config.Genesis) > 0 {
-		// Using println instead of glog to make sure it **always** displays regardless of
-		// verbosity settings.
-		common.PrintDepricationWarning("--genesis is deprecated. Switch to use 'geth init /path/to/file'")
-
 		block, err := core.WriteGenesisBlock(chainDb, strings.NewReader(config.Genesis))
 		if err != nil {
 			return nil, err

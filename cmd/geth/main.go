@@ -359,6 +359,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
 		utils.SetupNetwork(ctx)
+
+		// Deprecation warning.
+		if ctx.GlobalIsSet(utils.GenesisFileFlag.Name) {
+			common.PrintDepricationWarning("--genesis is deprecated. Switch to use 'geth init /path/to/file'")
+		}
+
 		return nil
 	}
 
