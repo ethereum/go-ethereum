@@ -30,15 +30,21 @@ import (
 
 // Vm is an EVM and implements VirtualMachine
 type Vm struct {
-	env Environment
+	env       Environment
+	jumpTable vmJumpTable
 }
 
 // New returns a new Vm
 func New(env Environment) *Vm {
-	// init the jump table. Also prepares the homestead changes
-	jumpTable.init(env.BlockNumber())
+	evm := &Vm{env: env}
 
-	return &Vm{env: env}
+	if params.IsHomestead(env.BlockNumber()) {
+		evm.jumpTable = homesteadJumpTable
+	} else {
+		evm.jumpTable = frontierJumpTable
+	}
+
+	return evm
 }
 
 // Run loops and evaluates the contract's code with the given input data
@@ -169,7 +175,7 @@ func (self *Vm) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 		// Add a log message
 		self.log(pc, op, contract.Gas, cost, mem, stack, contract, nil)
-		if opPtr := jumpTable[op]; opPtr.valid {
+		if opPtr := self.jumpTable[op]; opPtr.valid {
 			if opPtr.fn != nil {
 				opPtr.fn(instruction{}, &pc, self.env, contract, mem, stack)
 			} else {
