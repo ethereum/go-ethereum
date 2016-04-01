@@ -94,8 +94,8 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = ks.GetKey(k1.Address, account.File, "bar"); err == nil {
-		t.Fatal("no error for invalid passphrase")
+	if _, err = ks.GetKey(k1.Address, account.File, "bar"); err != ErrDecrypt {
+		t.Fatalf("wrong error for invalid passphrase\ngot %q\nwant %q", err, ErrDecrypt)
 	}
 }
 

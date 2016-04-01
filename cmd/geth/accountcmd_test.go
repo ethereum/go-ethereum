@@ -127,7 +127,7 @@ func TestWalletImportBadPassword(t *testing.T) {
 	geth.expect(`
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "wrong"}}
-Fatal: Could not create the account: Decryption failed: PKCS7Unpad failed after AES decryption
+Fatal: could not decrypt key with given passphrase
 `)
 }
 

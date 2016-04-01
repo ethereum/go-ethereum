@@ -31,7 +31,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -214,7 +213,7 @@ func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byt
 
 	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
-		return nil, nil, errors.New("Decryption failed: MAC mismatch")
+		return nil, nil, ErrDecrypt
 	}
 
 	plainText, err := aesCTRXOR(derivedKey[:16], cipherText, iv)
@@ -248,7 +247,7 @@ func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byt
 
 	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
 	if !bytes.Equal(calculatedMAC, mac) {
-		return nil, nil, errors.New("Decryption failed: MAC mismatch")
+		return nil, nil, ErrDecrypt
 	}
 
 	plainText, err := aesCBCDecrypt(crypto.Keccak256(derivedKey[:16])[:16], cipherText, iv)

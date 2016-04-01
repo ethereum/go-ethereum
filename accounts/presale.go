@@ -22,7 +22,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -106,7 +105,7 @@ func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
 	decrypter.CryptBlocks(paddedPlaintext, cipherText)
 	plaintext := pkcs7Unpad(paddedPlaintext)
 	if plaintext == nil {
-		err = errors.New("Decryption failed: PKCS7Unpad failed after AES decryption")
+		return nil, ErrDecrypt
 	}
 	return plaintext, err
 }

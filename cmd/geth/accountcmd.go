@@ -263,7 +263,7 @@ func importWallet(ctx *cli.Context) {
 
 	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
-		utils.Fatalf("Could not create the account: %v", err)
+		utils.Fatalf("%v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
 }
