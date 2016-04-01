@@ -29,3 +29,25 @@ func TestBytesConversion(t *testing.T) {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
 }
+
+func TestHashJsonValidation(t *testing.T) {
+	var h Hash
+	var tests = []struct {
+		Prefix string
+		Size   int
+		Error  error
+	}{
+		{"", 2, hashJsonLengthErr},
+		{"", 62, hashJsonLengthErr},
+		{"", 66, hashJsonLengthErr},
+		{"", 65, hashJsonLengthErr},
+		{"0X", 64, nil},
+		{"0x", 64, nil},
+		{"0x", 62, hashJsonLengthErr},
+	}
+	for i, test := range tests {
+		if err := h.UnmarshalJSON(append([]byte(test.Prefix), make([]byte, test.Size)...)); err != test.Error {
+			t.Error(i, "expected", test.Error, "got", err)
+		}
+	}
+}
