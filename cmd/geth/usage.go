@@ -94,7 +94,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.WSListenAddrFlag,
 			utils.WSPortFlag,
 			utils.WSApiFlag,
-			utils.WSAllowedDomainsFlag,
+			utils.WSAllowedOriginsFlag,
 			utils.IPCDisabledFlag,
 			utils.IPCApiFlag,
 			utils.IPCPathFlag,
