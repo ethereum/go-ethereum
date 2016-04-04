@@ -254,8 +254,7 @@ func (be *registryAPIBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasSt
 		tx = types.NewTransaction(nonce, to, value, gas, price, data)
 	}
 
-	acc := accounts.Account{Address: from}
-	signature, err := be.am.Sign(acc, tx.SigHash().Bytes())
+	signature, err := be.am.Sign(from, tx.SigHash().Bytes())
 	if err != nil {
 		return "", err
 	}

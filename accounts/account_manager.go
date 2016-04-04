@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package implements a private key management facility.
+// Package accounts implements encrypted storage of secp256k1 private keys.
 //
-// This abstracts part of a user's interaction with an account she controls.
+// Keys are stored as encrypted JSON files according to the Web3 Secret Storage specification.
+// See https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition for more information.
 package accounts
 
 import (
@@ -41,9 +42,16 @@ var (
 	ErrDecrypt = errors.New("could not decrypt key with given passphrase")
 )
 
+// Account represents a stored key.
+// When used as an argument, it selects a unique key file to act on.
 type Account struct {
-	Address common.Address
-	File    string
+	Address common.Address // Ethereum account address derived from the key
+
+	// File contains the key file name.
+	// When Acccount is used as an argument to select a key, File can be left blank to
+	// select just by address or set to the basename or absolute path of a file in the key
+	// directory. Accounts returned by Manager will always contain an absolute path.
+	File string
 }
 
 func (acc *Account) MarshalJSON() ([]byte, error) {
@@ -54,6 +62,7 @@ func (acc *Account) UnmarshalJSON(raw []byte) error {
 	return json.Unmarshal(raw, &acc.Address)
 }
 
+// Manager manages a key storage directory on disk.
 type Manager struct {
 	cache    *addrCache
 	keyStore keyStore
@@ -66,6 +75,7 @@ type unlocked struct {
 	abort chan struct{}
 }
 
+// NewManager creates a manager for the given directory.
 func NewManager(keydir string, scryptN, scryptP int) *Manager {
 	keydir, _ = filepath.Abs(keydir)
 	am := &Manager{keyStore: &keyStorePassphrase{keydir, scryptN, scryptP}}
@@ -73,6 +83,8 @@ func NewManager(keydir string, scryptN, scryptP int) *Manager {
 	return am
 }
 
+// NewPlaintextManager creates a manager for the given directory.
+// Deprecated: Use NewManager.
 func NewPlaintextManager(keydir string) *Manager {
 	keydir, _ = filepath.Abs(keydir)
 	am := &Manager{keyStore: &keyStorePlain{keydir}}
@@ -91,19 +103,23 @@ func (am *Manager) init(keydir string) {
 	})
 }
 
+// HasAddress reports whether a key with the given address is present.
 func (am *Manager) HasAddress(addr common.Address) bool {
 	return am.cache.hasAddress(addr)
 }
 
+// Accounts returns all key files present in the directory.
 func (am *Manager) Accounts() []Account {
 	return am.cache.accounts()
 }
 
-func (am *Manager) DeleteAccount(a Account, auth string) error {
+// DeleteAccount deletes the key matched by account if the passphrase is correct.
+// If a contains no filename, the address must match a unique key.
+func (am *Manager) DeleteAccount(a Account, passphrase string) error {
 	// Decrypting the key isn't really necessary, but we do
 	// it anyway to check the password and zero out the key
 	// immediately afterwards.
-	a, key, err := am.getDecryptedKey(a, auth)
+	a, key, err := am.getDecryptedKey(a, passphrase)
 	if key != nil {
 		zeroKey(key.PrivateKey)
 	}
@@ -120,15 +136,15 @@ func (am *Manager) DeleteAccount(a Account, auth string) error {
 	return err
 }
 
-func (am *Manager) Sign(a Account, toSign []byte) (signature []byte, err error) {
+// Sign signs hash with an unlocked private key matching the given address.
+func (am *Manager) Sign(addr common.Address, hash []byte) (signature []byte, err error) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
-	unlockedKey, found := am.unlocked[a.Address]
+	unlockedKey, found := am.unlocked[addr]
 	if !found {
 		return nil, ErrLocked
 	}
-	signature, err = crypto.Sign(toSign, unlockedKey.PrivateKey)
-	return signature, err
+	return crypto.Sign(hash, unlockedKey.PrivateKey)
 }
 
 // Unlock unlocks the given account indefinitely.
@@ -136,6 +152,7 @@ func (am *Manager) Unlock(a Account, keyAuth string) error {
 	return am.TimedUnlock(a, keyAuth, 0)
 }
 
+// Lock removes the private key with the given address from memory.
 func (am *Manager) Lock(addr common.Address) error {
 	am.mu.Lock()
 	if unl, found := am.unlocked[addr]; found {
@@ -147,9 +164,9 @@ func (am *Manager) Lock(addr common.Address) error {
 	return nil
 }
 
-// TimedUnlock unlocks the account with the given address. The account
+// TimedUnlock unlocks the given account with. The account
 // stays unlocked for the duration of timeout. A timeout of 0 unlocks the account
-// until the program exits.
+// until the program exits. The account must match a unique key.
 //
 // If the accout is already unlocked, TimedUnlock extends or shortens
 // the active unlock timeout.
@@ -210,8 +227,10 @@ func (am *Manager) expire(addr common.Address, u *unlocked, timeout time.Duratio
 	}
 }
 
-func (am *Manager) NewAccount(auth string) (Account, error) {
-	_, account, err := storeNewKey(am.keyStore, crand.Reader, auth)
+// NewAccount generates a new key and stores it into the key directory,
+// encrypting it with the passphrase.
+func (am *Manager) NewAccount(passphrase string) (Account, error) {
+	_, account, err := storeNewKey(am.keyStore, crand.Reader, passphrase)
 	if err != nil {
 		return Account{}, err
 	}
@@ -221,52 +240,69 @@ func (am *Manager) NewAccount(auth string) (Account, error) {
 	return account, nil
 }
 
-func (am *Manager) AccountByIndex(index int) (Account, error) {
+// AccountByIndex returns the ith account.
+func (am *Manager) AccountByIndex(i int) (Account, error) {
 	accounts := am.Accounts()
-	if index < 0 || index >= len(accounts) {
-		return Account{}, fmt.Errorf("account index %d out of range [0, %d]", index, len(accounts)-1)
+	if i < 0 || i >= len(accounts) {
+		return Account{}, fmt.Errorf("account index %d out of range [0, %d]", i, len(accounts)-1)
 	}
-	return accounts[index], nil
+	return accounts[i], nil
 }
 
-// USE WITH CAUTION = this will save an unencrypted private key on disk
-// no cli or js interface
-func (am *Manager) Export(path string, a Account, keyAuth string) error {
-	_, key, err := am.getDecryptedKey(a, keyAuth)
+// Export exports as a JSON key, encrypted with newPassphrase.
+func (am *Manager) Export(a Account, passphrase, newPassphrase string) (keyJSON []byte, err error) {
+	_, key, err := am.getDecryptedKey(a, passphrase)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return crypto.SaveECDSA(path, key.PrivateKey)
+	var N, P int
+	if store, ok := am.keyStore.(*keyStorePassphrase); ok {
+		N, P = store.scryptN, store.scryptP
+	} else {
+		N, P = StandardScryptN, StandardScryptP
+	}
+	return EncryptKey(key, newPassphrase, N, P)
 }
 
-func (am *Manager) Import(path string, keyAuth string) (Account, error) {
-	priv, err := crypto.LoadECDSA(path)
+// Import stores the given encrypted JSON key into the key directory.
+func (am *Manager) Import(keyJSON []byte, passphrase, newPassphrase string) (Account, error) {
+	key, err := DecryptKey(keyJSON, passphrase)
+	if key != nil && key.PrivateKey != nil {
+		defer zeroKey(key.PrivateKey)
+	}
 	if err != nil {
 		return Account{}, err
 	}
-	return am.ImportECDSA(priv, keyAuth)
+	return am.importKey(key, newPassphrase)
 }
 
-func (am *Manager) ImportECDSA(priv *ecdsa.PrivateKey, keyAuth string) (Account, error) {
-	key := newKeyFromECDSA(priv)
+// ImportECDSA stores the given key into the key directory, encrypting it with the passphrase.
+func (am *Manager) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (Account, error) {
+	return am.importKey(newKeyFromECDSA(priv), passphrase)
+}
+
+func (am *Manager) importKey(key *Key, passphrase string) (Account, error) {
 	a := Account{Address: key.Address, File: am.keyStore.JoinPath(keyFileName(key.Address))}
-	if err := am.keyStore.StoreKey(a.File, key, keyAuth); err != nil {
+	if err := am.keyStore.StoreKey(a.File, key, passphrase); err != nil {
 		return Account{}, err
 	}
 	am.cache.add(a)
 	return a, nil
 }
 
-func (am *Manager) Update(a Account, authFrom, authTo string) error {
-	a, key, err := am.getDecryptedKey(a, authFrom)
+// Update changes the passphrase of an existing account.
+func (am *Manager) Update(a Account, passphrase, newPassphrase string) error {
+	a, key, err := am.getDecryptedKey(a, passphrase)
 	if err != nil {
 		return err
 	}
-	return am.keyStore.StoreKey(a.File, key, authTo)
+	return am.keyStore.StoreKey(a.File, key, newPassphrase)
 }
 
-func (am *Manager) ImportPreSaleKey(keyJSON []byte, password string) (Account, error) {
-	a, _, err := importPreSaleKey(am.keyStore, keyJSON, password)
+// ImportPreSaleKey decrypts the given Ethereum presale wallet and stores
+// a key file in the key directory. The key file is encrypted with the same passphrase.
+func (am *Manager) ImportPreSaleKey(keyJSON []byte, passphrase string) (Account, error) {
+	a, _, err := importPreSaleKey(am.keyStore, keyJSON, passphrase)
 	if err != nil {
 		return a, err
 	}

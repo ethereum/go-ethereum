@@ -76,7 +76,7 @@ func TestSign(t *testing.T) {
 	if err := am.Unlock(a1, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := am.Sign(a1, testSigData); err != nil {
+	if _, err := am.Sign(a1.Address, testSigData); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -89,7 +89,7 @@ func TestTimedUnlock(t *testing.T) {
 	a1, err := am.NewAccount(pass)
 
 	// Signing without passphrase fails because account is locked
-	_, err = am.Sign(a1, testSigData)
+	_, err = am.Sign(a1.Address, testSigData)
 	if err != ErrLocked {
 		t.Fatal("Signing should've failed with ErrLocked before unlocking, got ", err)
 	}
@@ -100,14 +100,14 @@ func TestTimedUnlock(t *testing.T) {
 	}
 
 	// Signing without passphrase works because account is temp unlocked
-	_, err = am.Sign(a1, testSigData)
+	_, err = am.Sign(a1.Address, testSigData)
 	if err != nil {
 		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
 
 	// Signing fails again after automatic locking
-	time.Sleep(350 * time.Millisecond)
-	_, err = am.Sign(a1, testSigData)
+	time.Sleep(250 * time.Millisecond)
+	_, err = am.Sign(a1.Address, testSigData)
 	if err != ErrLocked {
 		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
 	}
@@ -126,7 +126,7 @@ func TestOverrideUnlock(t *testing.T) {
 	}
 
 	// Signing without passphrase works because account is temp unlocked
-	_, err = am.Sign(a1, testSigData)
+	_, err = am.Sign(a1.Address, testSigData)
 	if err != nil {
 		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
@@ -137,14 +137,14 @@ func TestOverrideUnlock(t *testing.T) {
 	}
 
 	// Signing without passphrase still works because account is temp unlocked
-	_, err = am.Sign(a1, testSigData)
+	_, err = am.Sign(a1.Address, testSigData)
 	if err != nil {
 		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
 
 	// Signing fails again after automatic locking
-	time.Sleep(150 * time.Millisecond)
-	_, err = am.Sign(a1, testSigData)
+	time.Sleep(250 * time.Millisecond)
+	_, err = am.Sign(a1.Address, testSigData)
 	if err != ErrLocked {
 		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
 	}
@@ -166,7 +166,7 @@ func TestSignRace(t *testing.T) {
 	}
 	end := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(end) {
-		if _, err := am.Sign(a1, testSigData); err == ErrLocked {
+		if _, err := am.Sign(a1.Address, testSigData); err == ErrLocked {
 			return
 		} else if err != nil {
 			t.Errorf("Sign error: %v", err)

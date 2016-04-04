@@ -1086,9 +1086,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.
-func (s *PublicTransactionPoolAPI) sign(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-	acc := accounts.Account{Address: address}
-	signature, err := s.am.Sign(acc, tx.SigHash().Bytes())
+func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	signature, err := s.am.Sign(addr, tx.SigHash().Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -1181,10 +1180,10 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(encodedTx string) (string,
 	return tx.Hash().Hex(), nil
 }
 
-// Sign signs the given hash using the key that matches the address. The key must be unlocked in order to sign the
-// hash.
-func (s *PublicTransactionPoolAPI) Sign(address common.Address, hash common.Hash) (string, error) {
-	signature, error := s.am.Sign(accounts.Account{Address: address}, hash[:])
+// Sign signs the given hash using the key that matches the address. The key must be
+// unlocked in order to sign the hash.
+func (s *PublicTransactionPoolAPI) Sign(addr common.Address, hash common.Hash) (string, error) {
+	signature, error := s.am.Sign(addr, hash[:])
 	return common.ToHex(signature), error
 }
 

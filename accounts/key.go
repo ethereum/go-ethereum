@@ -146,9 +146,9 @@ func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	return key
 }
 
-// generate key whose address fits into < 155 bits so it can fit into
-// the Direct ICAP spec. for simplicity and easier compatibility with
-// other libs, we retry until the first byte is 0.
+// NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit
+// into the Direct ICAP spec. for simplicity and easier compatibility with other libs, we
+// retry until the first byte is 0.
 func NewKeyForDirectICAP(rand io.Reader) *Key {
 	randBytes := make([]byte, 64)
 	_, err := rand.Read(randBytes)
