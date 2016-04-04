@@ -22,11 +22,13 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
@@ -659,6 +661,16 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
 
+	// initialise new random number generator
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// get enabled jit flag
+	jitEnabled := ctx.GlobalBool(VMEnableJitFlag.Name)
+	// if the jit is not enabled enable it for 10 pct of the people
+	if !jitEnabled && rand.Float64() < 0.1 {
+		jitEnabled = true
+		glog.V(logger.Info).Infoln("You're one of the lucky few that will try out the JIT VM (random). If you get a consensus failure please be so kind to report this incident with the block hash that failed. You can switch to the regular VM by setting --jitvm=false")
+	}
+
 	ethConf := &eth.Config{
 		ChainConfig:             MustMakeChainConfig(ctx),
 		Genesis:                 MakeGenesisBlock(ctx),
@@ -673,7 +685,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		ExtraData:               MakeMinerExtra(extra, ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
-		EnableJit:               ctx.GlobalBool(VMEnableJitFlag.Name),
+		EnableJit:               jitEnabled,
 		ForceJit:                ctx.GlobalBool(VMForceJitFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),

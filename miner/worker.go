@@ -662,7 +662,15 @@ func (env *Work) commitTransactions(mux *event.TypeMux, transactions types.Trans
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
 	snap := env.state.Copy()
-	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, env.config.VmConfig)
+
+	// this is a bit of a hack to force jit for the miners
+	config := env.config.VmConfig
+	if !(config.EnableJit && config.ForceJit) {
+		config.EnableJit = false
+	}
+	config.ForceJit = false // disable forcing jit
+
+	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
 	if err != nil {
 		env.state.Set(snap)
 		return err, nil
