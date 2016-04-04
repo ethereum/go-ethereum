@@ -1,6 +1,7 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
 	"GoVersion": "go1.5.2",
+	"GodepVersion": "v60",
 	"Packages": [
 		"./..."
 	],
@@ -92,6 +93,11 @@
 			"ImportPath": "github.com/mattn/go-runewidth",
 			"Comment": "travisish-44-ge882a96",
 			"Rev": "e882a96ec18dd43fa283187b66af74497c9101c0"
+		},
+		{
+			"ImportPath": "github.com/microsoft/go-winio",
+			"Comment": "v0.2.0",
+			"Rev": "9e2895e5f6c3f16473b91d37fae6e89990a4520c"
 		},
 		{
 			"ImportPath": "github.com/nsf/termbox-go",
