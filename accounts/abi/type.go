@@ -40,12 +40,20 @@ const (
 
 // Type is the reflection of the supported argument type
 type Type struct {
+	IsSlice   bool
+	SliceSize int
+
 	Kind       reflect.Kind
 	Type       reflect.Type
 	Size       int
 	T          byte   // Our own type checking
 	stringKind string // holds the unparsed string for deriving signatures
 }
+
+var (
+	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
+	typeRegex     = regexp.MustCompile("([a-zA-Z]+)([0-9]*)?")
+)
 
 // NewType returns a fully parsed Type given by the input string or an error if it  can't be parsed.
 //
@@ -61,98 +69,87 @@ type Type struct {
 //      address    int256    uint256    real[2]
 func NewType(t string) (typ Type, err error) {
 	// 1. full string 2. type 3. (opt.) is slice 4. (opt.) size
-	freg, err := regexp.Compile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
-	if err != nil {
-		return Type{}, err
-	}
-	res := freg.FindAllStringSubmatch(t, -1)[0]
-	var (
-		isslice bool
-		size    int
-	)
+	// parse the full representation of the abi-type definition; including:
+	// * full string
+	// * type
+	// 	* is slice
+	//	* slice size
+	res := fullTypeRegex.FindAllStringSubmatch(t, -1)[0]
+
+	// check if type is slice and parse type.
 	switch {
 	case res[3] != "":
 		// err is ignored. Already checked for number through the regexp
-		size, _ = strconv.Atoi(res[3])
-		isslice = true
+		typ.SliceSize, _ = strconv.Atoi(res[3])
+		typ.IsSlice = true
 	case res[2] != "":
-		isslice = true
-		size = -1
+		typ.IsSlice, typ.SliceSize = true, -1
 	case res[0] == "":
-		return Type{}, fmt.Errorf("type parse error for `%s`", t)
+		return Type{}, fmt.Errorf("abi: type parse error: %s", t)
 	}
 
-	treg, err := regexp.Compile("([a-zA-Z]+)([0-9]*)?")
-	if err != nil {
-		return Type{}, err
+	// parse the type and size of the abi-type.
+	parsedType := typeRegex.FindAllStringSubmatch(res[1], -1)[0]
+	// varSize is the size of the variable
+	var varSize int
+	if len(parsedType[2]) > 0 {
+		var err error
+		varSize, err = strconv.Atoi(parsedType[2])
+		if err != nil {
+			return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
+		}
 	}
-
-	parsedType := treg.FindAllStringSubmatch(res[1], -1)[0]
-	vsize, _ := strconv.Atoi(parsedType[2])
-	vtype := parsedType[1]
-	// substitute canonical representation
-	if vsize == 0 && (vtype == "int" || vtype == "uint") {
-		vsize = 256
+	// varType is the parsed abi type
+	varType := parsedType[1]
+	// substitute canonical integer
+	if varSize == 0 && (varType == "int" || varType == "uint") {
+		varSize = 256
 		t += "256"
 	}
 
-	if isslice {
-		typ.Kind = reflect.Slice
-		typ.Size = size
-		switch vtype {
-		case "int":
-			typ.Type = big_ts
-		case "uint":
-			typ.Type = ubig_ts
-		default:
-			return Type{}, fmt.Errorf("unsupported arg slice type: %s", t)
-		}
-	} else {
-		switch vtype {
-		case "int":
-			typ.Kind = reflect.Ptr
-			typ.Type = big_t
-			typ.Size = 256
-			typ.T = IntTy
-		case "uint":
-			typ.Kind = reflect.Ptr
-			typ.Type = ubig_t
-			typ.Size = 256
-			typ.T = UintTy
-		case "bool":
-			typ.Kind = reflect.Bool
-			typ.T = BoolTy
-		case "real": // TODO
-			typ.Kind = reflect.Invalid
-		case "address":
-			typ.Kind = reflect.Slice
-			typ.Type = address_t
-			typ.Size = 20
-			typ.T = AddressTy
-		case "string":
-			typ.Kind = reflect.String
-			typ.Size = -1
-			typ.T = StringTy
-			if vsize > 0 {
-				typ.Size = 32
-			}
-		case "hash":
-			typ.Kind = reflect.Slice
+	switch varType {
+	case "int":
+		typ.Kind = reflect.Int
+		typ.Type = big_t
+		typ.Size = varSize
+		typ.T = IntTy
+	case "uint":
+		typ.Kind = reflect.Uint
+		typ.Type = ubig_t
+		typ.Size = varSize
+		typ.T = UintTy
+	case "bool":
+		typ.Kind = reflect.Bool
+		typ.T = BoolTy
+	case "real": // TODO
+		typ.Kind = reflect.Invalid
+	case "address":
+		typ.Type = address_t
+		typ.Size = 20
+		typ.T = AddressTy
+	case "string":
+		typ.Kind = reflect.String
+		typ.Size = -1
+		typ.T = StringTy
+		if varSize > 0 {
 			typ.Size = 32
-			typ.Type = hash_t
-			typ.T = HashTy
-		case "bytes":
-			typ.Kind = reflect.Slice
-			typ.Type = byte_ts
-			typ.Size = vsize
-			if vsize == 0 {
-				typ.T = BytesTy
-			} else {
-				typ.T = FixedBytesTy
-			}
-		default:
-			return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 		}
+	case "hash":
+		typ.Kind = reflect.Array
+		typ.Size = 32
+		typ.Type = hash_t
+		typ.T = HashTy
+	case "bytes":
+		typ.Kind = reflect.Array
+		typ.Type = byte_ts
+		typ.Size = varSize
+		if varSize == 0 {
+			typ.T = BytesTy
+		} else {
+			typ.T = FixedBytesTy
+		}
+	default:
+		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
 	typ.stringKind = t
 
@@ -180,13 +177,25 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 	value := reflect.ValueOf(v)
 	switch kind := value.Kind(); kind {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		// check input is unsigned
 		if t.Type != ubig_t {
-			return nil, fmt.Errorf("type mismatch: %s for %T", t.Type, v)
+			return nil, fmt.Errorf("abi: type mismatch: %s for %T", t.Type, v)
 		}
+
+		// no implicit type casting
+		if int(value.Type().Size()*8) != t.Size {
+			return nil, fmt.Errorf("abi: cannot use type %T as type uint%d", v, t.Size)
+		}
+
 		return packNum(value, t.T), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if t.Type != ubig_t {
 			return nil, fmt.Errorf("type mismatch: %s for %T", t.Type, v)
+		}
+
+		// no implicit type casting
+		if int(value.Type().Size()*8) != t.Size {
+			return nil, fmt.Errorf("abi: cannot use type %T as type uint%d", v, t.Size)
 		}
 		return packNum(value, t.T), nil
 	case reflect.Ptr:
@@ -203,30 +212,29 @@ func (t Type) pack(v interface{}) ([]byte, error) {
 
 		return packBytesSlice([]byte(value.String()), value.Len()), nil
 	case reflect.Slice:
-		// if the param is a bytes type, pack the slice up as a string
+		// Byte slice is a special case, it gets treated as a single value
 		if t.T == BytesTy {
 			return packBytesSlice(value.Bytes(), value.Len()), nil
 		}
 
-		if t.Size > -1 && value.Len() > t.Size {
+		if t.SliceSize > -1 && value.Len() > t.SliceSize {
 			return nil, fmt.Errorf("%v out of bound. %d for %d", value.Kind(), value.Len(), t.Size)
 		}
 
-		// Address is a special slice. The slice acts as one rather than a list of elements.
-		if t.T == AddressTy {
-			return common.LeftPadBytes(v.([]byte), 32), nil
-		}
-
 		// Signed / Unsigned check
-		if (t.T != IntTy && isSigned(value)) || (t.T == UintTy && isSigned(value)) {
+		if value.Type() == big_t && (t.T != IntTy && isSigned(value)) || (t.T == UintTy && isSigned(value)) {
 			return nil, fmt.Errorf("slice of incompatible types.")
 		}
 
 		var packed []byte
 		for i := 0; i < value.Len(); i++ {
-			packed = append(packed, packNum(value.Index(i), t.T)...)
+			val, err := t.pack(value.Index(i).Interface())
+			if err != nil {
+				return nil, err
+			}
+			packed = append(packed, val...)
 		}
-		return packed, nil
+		return packBytesSlice(packed, value.Len()), nil
 	case reflect.Bool:
 		if value.Bool() {
 			return common.LeftPadBytes(common.Big1.Bytes(), 32), nil

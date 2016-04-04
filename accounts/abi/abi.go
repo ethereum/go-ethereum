@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"reflect"
 	"strings"
 
@@ -63,9 +64,8 @@ func (abi ABI) pack(method Method, args ...interface{}) ([]byte, error) {
 			return nil, fmt.Errorf("`%s` %v", method.Name, err)
 		}
 
-		// check for a string or bytes input type
-		switch input.Type.T {
-		case StringTy, BytesTy:
+		// check for a slice type (string, bytes, slice)
+		if input.Type.T == StringTy || input.Type.T == BytesTy || input.Type.IsSlice {
 			// calculate the offset
 			offset := len(method.Inputs)*32 + len(variableInput)
 			// set the offset
@@ -73,7 +73,7 @@ func (abi ABI) pack(method Method, args ...interface{}) ([]byte, error) {
 			// Append the packed output to the variable input. The variable input
 			// will be appended at the end of the input.
 			variableInput = append(variableInput, packed...)
-		default:
+		} else {
 			// append the packed value to the input
 			ret = append(ret, packed...)
 		}
@@ -117,11 +117,80 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return append(method.Id(), arguments...), nil
 }
 
+// toGoSliceType prses the input and casts it to the proper slice defined by the ABI
+// argument in T.
+func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
+	index := i * 32
+	// The slice must, at very least be large enough for the index+32 which is exactly the size required
+	// for the [offset in output, size of offset].
+	if index+32 > len(output) {
+		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), index+32)
+	}
+
+	// first we need to create a slice of the type
+	var refSlice reflect.Value
+	switch t.Type.T {
+	case IntTy, UintTy, BoolTy: // int, uint, bool can all be of type big int.
+		refSlice = reflect.ValueOf([]*big.Int(nil))
+	case AddressTy: // address must be of slice Address
+		refSlice = reflect.ValueOf([]common.Address(nil))
+	case HashTy: // hash must be of slice hash
+		refSlice = reflect.ValueOf([]common.Hash(nil))
+	default: // no other types are supported
+		return nil, fmt.Errorf("abi: unsupported slice type %v", t.Type.T)
+	}
+	// get the offset which determines the start of this array ...
+	offset := int(common.BytesToBig(output[index : index+32]).Uint64())
+	if offset+32 > len(output) {
+		return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+	}
+
+	slice := output[offset:]
+	// ... starting with the size of the array in elements ...
+	size := int(common.BytesToBig(slice[:32]).Uint64())
+	slice = slice[32:]
+	// ... and make sure that we've at the very least the amount of bytes
+	// available in the buffer.
+	if size*32 > len(slice) {
+		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
+	}
+
+	// reslice to match the required size
+	slice = slice[:(size * 32)]
+	for i := 0; i < size; i++ {
+		var (
+			inter        interface{}             // interface type
+			returnOutput = slice[i*32 : i*32+32] // the return output
+		)
+
+		// set inter to the correct type (cast)
+		switch t.Type.T {
+		case IntTy, UintTy:
+			inter = common.BytesToBig(returnOutput)
+		case BoolTy:
+			inter = common.BytesToBig(returnOutput).Uint64() > 0
+		case AddressTy:
+			inter = common.BytesToAddress(returnOutput)
+		case HashTy:
+			inter = common.BytesToHash(returnOutput)
+		}
+		// append the item to our reflect slice
+		refSlice = reflect.Append(refSlice, reflect.ValueOf(inter))
+	}
+
+	// return the interface
+	return refSlice.Interface(), nil
+}
+
 // toGoType parses the input and casts it to the proper type defined by the ABI
 // argument in T.
 func toGoType(i int, t Argument, output []byte) (interface{}, error) {
-	index := i * 32
+	// we need to treat slices differently
+	if t.Type.IsSlice {
+		return toGoSlice(i, t, output)
+	}
 
+	index := i * 32
 	if index+32 > len(output) {
 		return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), index+32)
 	}

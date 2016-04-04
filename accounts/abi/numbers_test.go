@@ -81,8 +81,4 @@ func TestSigned(t *testing.T) {
 	if !isSigned(reflect.ValueOf(int(10))) {
 		t.Error()
 	}
-
-	if !isSigned(reflect.ValueOf(big.NewInt(10))) {
-		t.Error()
-	}
 }
