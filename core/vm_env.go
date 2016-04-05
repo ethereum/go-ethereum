@@ -30,7 +30,7 @@ import (
 // to query for information.
 func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
 	return func(n uint64) common.Hash {
-		for block := chain.GetBlock(ref); block != nil; block = chain.GetBlock(block.ParentHash()) {
+		for block := chain.GetBlockByHash(ref); block != nil; block = chain.GetBlock(block.ParentHash(), block.NumberU64()-1) {
 			if block.NumberU64() == n {
 				return block.Hash()
 			}

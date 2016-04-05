@@ -91,7 +91,7 @@ func testGetBlockHashes(t *testing.T, protocol int) {
 		// Assemble the hash response we would like to receive
 		resp := make([]common.Hash, tt.result)
 		if len(resp) > 0 {
-			from := pm.blockchain.GetBlock(tt.origin).NumberU64() - 1
+			from := pm.blockchain.GetBlockByHash(tt.origin).NumberU64() - 1
 			for j := 0; j < len(resp); j++ {
 				resp[j] = pm.blockchain.GetBlockByNumber(uint64(int(from) - j)).Hash()
 			}
@@ -204,7 +204,7 @@ func testGetBlocks(t *testing.T, protocol int) {
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(blocks) < tt.expected {
-				blocks = append(blocks, pm.blockchain.GetBlock(hash))
+				blocks = append(blocks, pm.blockchain.GetBlockByHash(hash))
 			}
 		}
 		// Send the hash request and verify the response
@@ -339,7 +339,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		// Collect the headers to expect in the response
 		headers := []*types.Header{}
 		for _, hash := range tt.expect {
-			headers = append(headers, pm.blockchain.GetBlock(hash).Header())
+			headers = append(headers, pm.blockchain.GetBlockByHash(hash).Header())
 		}
 		// Send the hash request and verify the response
 		p2p.Send(peer.app, 0x03, tt.query)
@@ -420,7 +420,7 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		for j, hash := range tt.explicit {
 			hashes = append(hashes, hash)
 			if tt.available[j] && len(bodies) < tt.expected {
-				block := pm.blockchain.GetBlock(hash)
+				block := pm.blockchain.GetBlockByHash(hash)
 				bodies = append(bodies, &blockBody{Transactions: block.Transactions(), Uncles: block.Uncles()})
 			}
 		}
@@ -572,7 +572,7 @@ func testGetReceipt(t *testing.T, protocol int) {
 		block := pm.blockchain.GetBlockByNumber(i)
 
 		hashes = append(hashes, block.Hash())
-		receipts = append(receipts, core.GetBlockReceipts(pm.chaindb, block.Hash()))
+		receipts = append(receipts, core.GetBlockReceipts(pm.chaindb, block.Hash(), block.NumberU64()))
 	}
 	// Send the hash request and verify the response
 	p2p.Send(peer.app, 0x0f, hashes)

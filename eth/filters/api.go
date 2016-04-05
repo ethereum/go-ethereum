@@ -361,7 +361,7 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 		if len(raw) >= 2 && raw[0] == '0' && (raw[1] == 'x' || raw[1] == 'X') {
 			raw = raw[2:]
 		}
-		if len(raw) != 2 * common.HashLength {
+		if len(raw) != 2*common.HashLength {
 			return common.Hash{}, errors.New("invalid topic(s)")
 		}
 		if decAddr, err := hex.DecodeString(raw); err == nil {

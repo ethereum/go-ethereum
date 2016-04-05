@@ -806,7 +806,7 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 
 // MustMakeChainConfigFromDb reads the chain configuration from the given database.
 func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfig {
-	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0))
+	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0)
 
 	if genesis != nil {
 		// Existing genesis block, use stored config if available.

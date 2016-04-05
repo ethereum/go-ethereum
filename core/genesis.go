@@ -88,7 +88,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 		Root:       root,
 	}, nil, nil, nil)
 
-	if block := GetBlock(chainDb, block.Hash()); block != nil {
+	if block := GetBlock(chainDb, block.Hash(), block.NumberU64()); block != nil {
 		glog.V(logger.Info).Infoln("Genesis block already in chain. Writing canonical number")
 		err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
@@ -100,13 +100,13 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := stateBatch.Write(); err != nil {
 		return nil, fmt.Errorf("cannot write state: %v", err)
 	}
-	if err := WriteTd(chainDb, block.Hash(), difficulty); err != nil {
+	if err := WriteTd(chainDb, block.Hash(), block.NumberU64(), difficulty); err != nil {
 		return nil, err
 	}
 	if err := WriteBlock(chainDb, block); err != nil {
 		return nil, err
 	}
-	if err := WriteBlockReceipts(chainDb, block.Hash(), nil); err != nil {
+	if err := WriteBlockReceipts(chainDb, block.Hash(), block.NumberU64(), nil); err != nil {
 		return nil, err
 	}
 	if err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64()); err != nil {

@@ -72,7 +72,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 			return &KnownBlockError{block.Number(), block.Hash()}
 		}
 	}
-	parent := v.bc.GetBlock(block.ParentHash())
+	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return ParentError(block.ParentHash())
 	}
