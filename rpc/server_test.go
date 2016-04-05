@@ -65,8 +65,12 @@ func (s *Service) InvalidRets3() (string, string, error) {
 	return "", "", nil
 }
 
-func (s *Service) Subscription() (Subscription, error) {
-	return NewSubscription(nil), nil
+func (s *Service) Subscription(ctx context.Context) (Subscription, error) {
+	return nil, nil
+}
+
+func (s *Service) SubsriptionWithArgs(ctx context.Context, a, b int) (Subscription, error) {
+	return nil, nil
 }
 
 func TestServerRegisterName(t *testing.T) {
@@ -90,8 +94,8 @@ func TestServerRegisterName(t *testing.T) {
 		t.Errorf("Expected 4 callbacks for service 'calc', got %d", len(svc.callbacks))
 	}
 
-	if len(svc.subscriptions) != 1 {
-		t.Errorf("Expected 1 subscription for service 'calc', got %d", len(svc.subscriptions))
+	if len(svc.subscriptions) != 2 {
+		t.Errorf("Expected 2 subscriptions for service 'calc', got %d", len(svc.subscriptions))
 	}
 }
 
@@ -229,7 +233,7 @@ func TestServerMethodExecution(t *testing.T) {
 
 	input, _ := json.Marshal(&req)
 	codec := &ServerTestCodec{input: input, closer: make(chan interface{})}
-	go server.ServeCodec(codec)
+	go server.ServeCodec(codec, OptionMethodInvocation)
 
 	<-codec.closer
 
@@ -259,7 +263,7 @@ func TestServerMethodWithCtx(t *testing.T) {
 
 	input, _ := json.Marshal(&req)
 	codec := &ServerTestCodec{input: input, closer: make(chan interface{})}
-	go server.ServeCodec(codec)
+	go server.ServeCodec(codec, OptionMethodInvocation)
 
 	<-codec.closer
 
