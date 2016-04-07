@@ -776,16 +776,20 @@ func SetupNetwork(ctx *cli.Context) {
 	params.TargetGasLimit = common.String2Big(ctx.GlobalString(TargetGasLimitFlag.Name))
 }
 
-// MustMakeChainConfig reads the chain configuration from the given database.
+// MustMakeChainConfig reads the chain configuration from the database in ctx.Datadir.
 func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
-	var (
-		db      = MakeChainDatabase(ctx)
-		genesis = core.GetBlock(db, core.GetCanonicalHash(db, 0))
-	)
+	db := MakeChainDatabase(ctx)
 	defer db.Close()
 
+	return MustMakeChainConfigFromDb(ctx, db)
+}
+
+// MustMakeChainConfigFromDb reads the chain configuration from the given database.
+func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfig {
+	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0))
+
 	if genesis != nil {
-		// Exsting genesis block, use stored config if available.
+		// Existing genesis block, use stored config if available.
 		storedConfig, err := core.GetChainConfig(db, genesis.Hash())
 		if err == nil {
 			return storedConfig
@@ -829,7 +833,7 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 		}
 	}
 
-	chainConfig := MustMakeChainConfig(ctx)
+	chainConfig := MustMakeChainConfigFromDb(ctx, chainDb)
 
 	var eventMux event.TypeMux
 	chain, err = core.NewBlockChain(chainDb, chainConfig, ethash.New(), &eventMux)
