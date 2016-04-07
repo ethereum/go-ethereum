@@ -164,14 +164,15 @@ func (am *Manager) Lock(addr common.Address) error {
 	return nil
 }
 
-// TimedUnlock unlocks the given account with. The account
+// TimedUnlock unlocks the given account with the passphrase. The account
 // stays unlocked for the duration of timeout. A timeout of 0 unlocks the account
-// until the program exits. The account must match a unique key.
+// until the program exits. The account must match a unique key file.
 //
-// If the accout is already unlocked, TimedUnlock extends or shortens
-// the active unlock timeout.
-func (am *Manager) TimedUnlock(a Account, keyAuth string, timeout time.Duration) error {
-	_, key, err := am.getDecryptedKey(a, keyAuth)
+// If the account address is already unlocked for a duration, TimedUnlock extends or
+// shortens the active unlock timeout. If the address was previously unlocked
+// indefinitely the timeout is not altered.
+func (am *Manager) TimedUnlock(a Account, passphrase string, timeout time.Duration) error {
+	a, key, err := am.getDecryptedKey(a, passphrase)
 	if err != nil {
 		return err
 	}
@@ -180,8 +181,13 @@ func (am *Manager) TimedUnlock(a Account, keyAuth string, timeout time.Duration)
 	defer am.mu.Unlock()
 	u, found := am.unlocked[a.Address]
 	if found {
-		// terminate dropLater for this key to avoid unexpected drops.
-		if u.abort != nil {
+		if u.abort == nil {
+			// The address was unlocked indefinitely, so unlocking
+			// it with a timeout would be confusing.
+			zeroKey(key.PrivateKey)
+			return nil
+		} else {
+			// Terminate the expire goroutine and replace it below.
 			close(u.abort)
 		}
 	}

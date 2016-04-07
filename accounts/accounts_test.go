@@ -120,8 +120,8 @@ func TestOverrideUnlock(t *testing.T) {
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
 
-	// Unlock indefinitely
-	if err = am.Unlock(a1, pass); err != nil {
+	// Unlock indefinitely.
+	if err = am.TimedUnlock(a1, pass, 5*time.Minute); err != nil {
 		t.Fatal(err)
 	}
 
