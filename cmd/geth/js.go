@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/registrar"
@@ -331,6 +332,23 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	}
 }
 
+// preloadJSFiles loads JS files that the user has specified with ctx.PreLoadJSFlag into
+// the JSRE. If not all files could be loaded it will return an error describing the error.
+func (self *jsre) preloadJSFiles(ctx *cli.Context) error {
+	if ctx.GlobalString(utils.PreLoadJSFlag.Name) != "" {
+		assetPath := ctx.GlobalString(utils.JSpathFlag.Name)
+		jsFiles := strings.Split(ctx.GlobalString(utils.PreLoadJSFlag.Name), ",")
+		for _, file := range jsFiles {
+			filename := common.AbsolutePath(assetPath, strings.TrimSpace(file))
+			if err := self.re.Exec(filename); err != nil {
+				return fmt.Errorf("%s: %v", file, err)
+			}
+		}
+	}
+	return nil
+}
+
+// exec executes the JS file with the given filename and stops the JSRE
 func (self *jsre) exec(filename string) error {
 	if err := self.re.Exec(filename); err != nil {
 		self.re.Stop(false)

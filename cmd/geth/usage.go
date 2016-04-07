@@ -101,6 +101,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCCORSDomainFlag,
 			utils.JSpathFlag,
 			utils.ExecFlag,
+			utils.PreLoadJSFlag,
 		},
 	},
 	{

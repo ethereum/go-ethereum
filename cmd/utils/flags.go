@@ -296,6 +296,10 @@ var (
 		Name:  "exec",
 		Usage: "Execute JavaScript statement (only in combination with console/attach)",
 	}
+	PreLoadJSFlag = cli.StringFlag{
+		Name:  "preload",
+		Usage: "Comma separated list of JavaScript files to preload into the console",
+	}
 
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
