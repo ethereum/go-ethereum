@@ -29,6 +29,180 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// formatSilceOutput add padding to the value and adds a size
+func formatSliceOutput(v ...[]byte) []byte {
+	off := common.LeftPadBytes(big.NewInt(int64(len(v))).Bytes(), 32)
+	output := append(off, make([]byte, 0, len(v)*32)...)
+
+	for _, value := range v {
+		output = append(output, common.LeftPadBytes(value, 32)...)
+	}
+	return output
+}
+
+// quick helper padding
+func pad(input []byte, size int, left bool) []byte {
+	if left {
+		return common.LeftPadBytes(input, size)
+	}
+	return common.RightPadBytes(input, size)
+}
+
+func TestTypeCheck(t *testing.T) {
+	for i, test := range []struct {
+		typ   string
+		input interface{}
+		err   error
+	}{
+		{"uint", big.NewInt(1), nil},
+		{"int", big.NewInt(1), nil},
+		{"uint30", big.NewInt(1), nil},
+		{"uint30", uint8(1), varErr(reflect.Ptr, reflect.Uint8)},
+		{"uint16", uint16(1), nil},
+		{"uint16", uint8(1), varErr(reflect.Uint16, reflect.Uint8)},
+		{"uint16[]", []uint16{1, 2, 3}, nil},
+		{"uint16[]", [3]uint16{1, 2, 3}, nil},
+		{"uint16[]", []uint32{1, 2, 3}, typeErr(formatSliceString(reflect.Uint16, -1), formatSliceString(reflect.Uint32, -1))},
+		{"uint16[3]", [3]uint32{1, 2, 3}, typeErr(formatSliceString(reflect.Uint16, 3), formatSliceString(reflect.Uint32, 3))},
+		{"uint16[3]", [4]uint16{1, 2, 3}, typeErr(formatSliceString(reflect.Uint16, 3), formatSliceString(reflect.Uint16, 4))},
+		{"uint16[3]", []uint16{1, 2, 3}, nil},
+		{"uint16[3]", []uint16{1, 2, 3, 4}, typeErr(formatSliceString(reflect.Uint16, 3), formatSliceString(reflect.Uint16, 4))},
+		{"address[]", []common.Address{common.Address{1}}, nil},
+		{"address[1]", []common.Address{common.Address{1}}, nil},
+		{"address[1]", [1]common.Address{common.Address{1}}, nil},
+		{"address[2]", [1]common.Address{common.Address{1}}, typeErr(formatSliceString(reflect.Array, 2), formatSliceString(reflect.Array, 1))},
+		{"bytes32", [32]byte{}, nil},
+		{"bytes32", [33]byte{}, typeErr(formatSliceString(reflect.Uint8, 32), formatSliceString(reflect.Uint8, 33))},
+		{"bytes32", common.Hash{1}, nil},
+		{"bytes31", [31]byte{}, nil},
+		{"bytes31", [32]byte{}, typeErr(formatSliceString(reflect.Uint8, 31), formatSliceString(reflect.Uint8, 32))},
+		{"bytes", []byte{0, 1}, nil},
+		{"bytes", [2]byte{0, 1}, nil},
+		{"bytes", common.Hash{1}, nil},
+		{"string", "hello world", nil},
+		{"bytes32[]", [][32]byte{[32]byte{}}, nil},
+	} {
+		typ, err := NewType(test.typ)
+		if err != nil {
+			t.Fatal("unexpected parse error:", err)
+		}
+
+		err = typeCheck(typ, reflect.ValueOf(test.input))
+		if err != nil && test.err == nil {
+			t.Errorf("%d failed. Expected no err but got: %v", i, err)
+			continue
+		}
+		if err == nil && test.err != nil {
+			t.Errorf("%d failed. Expected err: %v but got none", i, test.err)
+			continue
+		}
+
+		if err != nil && test.err != nil && err.Error() != test.err.Error() {
+			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
+		}
+	}
+}
+
+func TestPack(t *testing.T) {
+	for i, test := range []struct {
+		typ string
+
+		input  interface{}
+		output []byte
+	}{
+		{"uint16", uint16(2), pad([]byte{2}, 32, true)},
+		{"uint16[]", []uint16{1, 2}, formatSliceOutput([]byte{1}, []byte{2})},
+		{"uint256[]", []*big.Int{big.NewInt(1), big.NewInt(2)}, formatSliceOutput([]byte{1}, []byte{2})},
+		{"address[]", []common.Address{common.Address{1}, common.Address{2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
+		{"bytes32[]", []common.Hash{common.Hash{1}, common.Hash{2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
+	} {
+		typ, err := NewType(test.typ)
+		if err != nil {
+			t.Fatal("unexpected parse error:", err)
+		}
+
+		output, err := typ.pack(reflect.ValueOf(test.input))
+		if err != nil {
+			t.Fatal("unexpected pack error:", err)
+		}
+
+		if !bytes.Equal(output, test.output) {
+			t.Errorf("%d failed. Expected bytes: '%x' Got: '%x'", i, test.output, output)
+		}
+	}
+}
+
+func TestMethodPack(t *testing.T) {
+	abi, err := JSON(strings.NewReader(jsondata2))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sig := abi.Methods["slice"].Id()
+	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+
+	packed, err := abi.Pack("slice", []uint32{1, 2})
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
+	var addrA, addrB = common.Address{1}, common.Address{2}
+	sig = abi.Methods["sliceAddress"].Id()
+	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
+	sig = append(sig, common.LeftPadBytes(addrB[:], 32)...)
+
+	packed, err = abi.Pack("sliceAddress", []common.Address{addrA, addrB})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
+	var addrC, addrD = common.Address{3}, common.Address{4}
+	sig = abi.Methods["sliceMultiAddress"].Id()
+	sig = append(sig, common.LeftPadBytes([]byte{64}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{160}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
+	sig = append(sig, common.LeftPadBytes(addrB[:], 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes(addrC[:], 32)...)
+	sig = append(sig, common.LeftPadBytes(addrD[:], 32)...)
+
+	packed, err = abi.Pack("sliceMultiAddress", []common.Address{addrA, addrB}, []common.Address{addrC, addrD})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+
+	sig = abi.Methods["slice256"].Id()
+	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
+	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
+
+	packed, err = abi.Pack("slice256", []*big.Int{big.NewInt(1), big.NewInt(2)})
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !bytes.Equal(packed, sig) {
+		t.Errorf("expected %x got %x", sig, packed)
+	}
+}
+
 const jsondata = `
 [
 	{ "type" : "function", "name" : "balance", "const" : true },
@@ -43,7 +217,6 @@ const jsondata2 = `
 	{ "type" : "function", "name" : "string", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
 	{ "type" : "function", "name" : "bool", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
 	{ "type" : "function", "name" : "address", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
-	{ "type" : "function", "name" : "string32", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string32" } ] },
 	{ "type" : "function", "name" : "uint64[2]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
 	{ "type" : "function", "name" : "uint64[]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
 	{ "type" : "function", "name" : "foo", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
@@ -53,41 +226,6 @@ const jsondata2 = `
 	{ "type" : "function", "name" : "sliceAddress", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
 	{ "type" : "function", "name" : "sliceMultiAddress", "const" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] }
 ]`
-
-func TestType(t *testing.T) {
-	typ, err := NewType("uint32")
-	if err != nil {
-		t.Error(err)
-	}
-	if typ.Kind != reflect.Uint {
-		t.Error("expected uint32 to have kind Ptr")
-	}
-
-	typ, err = NewType("uint32[]")
-	if err != nil {
-		t.Error(err)
-	}
-	if !typ.IsSlice {
-		t.Error("expected uint32[] to be slice")
-	}
-	if typ.Type != ubig_t {
-		t.Error("expcted uith32[] to have type uint64")
-	}
-
-	typ, err = NewType("uint32[2]")
-	if err != nil {
-		t.Error(err)
-	}
-	if !typ.IsSlice {
-		t.Error("expected uint32[2] to be slice")
-	}
-	if typ.Type != ubig_t {
-		t.Error("expcted uith32[2] to have type uint64")
-	}
-	if typ.SliceSize != 2 {
-		t.Error("expected uint32[2] to have a size of 2")
-	}
-}
 
 func TestReader(t *testing.T) {
 	Uint256, _ := NewType("uint256")
@@ -164,21 +302,6 @@ func TestTestString(t *testing.T) {
 	if _, err := abi.Pack("string", "hello world"); err != nil {
 		t.Error(err)
 	}
-
-	str10 := string(make([]byte, 10))
-	if _, err := abi.Pack("string32", str10); err != nil {
-		t.Error(err)
-	}
-
-	str32 := string(make([]byte, 32))
-	if _, err := abi.Pack("string32", str32); err != nil {
-		t.Error(err)
-	}
-
-	str33 := string(make([]byte, 33))
-	if _, err := abi.Pack("string32", str33); err == nil {
-		t.Error("expected str33 to throw out of bound error")
-	}
 }
 
 func TestTestBool(t *testing.T) {
@@ -210,26 +333,10 @@ func TestTestSlice(t *testing.T) {
 	}
 }
 
-func TestImplicitTypeCasts(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	slice := make([]uint8, 2)
-	_, err = abi.Pack("uint64[2]", slice)
-	expStr := "`uint64[2]` abi: cannot use type uint8 as type uint64"
-	if err.Error() != expStr {
-		t.Errorf("expected %v, got %v", expStr, err)
-	}
-}
-
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
-	String32, _ := NewType("string32")
-	m := Method{"foo", false, []Argument{Argument{"bar", String32, false}, Argument{"baz", String, false}}, nil}
-	exp := "foo(string32,string)"
+	m := Method{"foo", false, []Argument{Argument{"bar", String, false}, Argument{"baz", String, false}}, nil}
+	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
 	}
@@ -247,7 +354,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 }
 
-func TestPack(t *testing.T) {
+func TestOldPack(t *testing.T) {
 	abi, err := JSON(strings.NewReader(jsondata2))
 	if err != nil {
 		t.Error(err)
@@ -292,77 +399,6 @@ func TestMultiPack(t *testing.T) {
 	}
 }
 
-func TestPackSlice(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	sig := crypto.Keccak256([]byte("slice(uint32[2])"))[:4]
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-
-	packed, err := abi.Pack("slice", []uint32{1, 2})
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !bytes.Equal(packed, sig) {
-		t.Errorf("expected %x got %x", sig, packed)
-	}
-
-	var addrA, addrB = common.Address{1}, common.Address{2}
-	sig = abi.Methods["sliceAddress"].Id()
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
-	sig = append(sig, common.LeftPadBytes(addrB[:], 32)...)
-
-	packed, err = abi.Pack("sliceAddress", []common.Address{addrA, addrB})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(packed, sig) {
-		t.Errorf("expected %x got %x", sig, packed)
-	}
-
-	var addrC, addrD = common.Address{3}, common.Address{4}
-	sig = abi.Methods["sliceMultiAddress"].Id()
-	sig = append(sig, common.LeftPadBytes([]byte{64}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{160}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-	sig = append(sig, common.LeftPadBytes(addrA[:], 32)...)
-	sig = append(sig, common.LeftPadBytes(addrB[:], 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-	sig = append(sig, common.LeftPadBytes(addrC[:], 32)...)
-	sig = append(sig, common.LeftPadBytes(addrD[:], 32)...)
-
-	packed, err = abi.Pack("sliceMultiAddress", []common.Address{addrA, addrB}, []common.Address{addrC, addrD})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(packed, sig) {
-		t.Errorf("expected %x got %x", sig, packed)
-	}
-
-	sig = crypto.Keccak256([]byte("slice256(uint256[2])"))[:4]
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
-
-	packed, err = abi.Pack("slice256", []*big.Int{big.NewInt(1), big.NewInt(2)})
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !bytes.Equal(packed, sig) {
-		t.Errorf("expected %x got %x", sig, packed)
-	}
-}
 func ExampleJSON() {
 	const definition = `[{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"isBar","outputs":[{"name":"","type":"bool"}],"type":"function"}]`
 

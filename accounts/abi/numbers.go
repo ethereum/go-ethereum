@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	big_t     = reflect.TypeOf(&big.Int{})
-	ubig_t    = reflect.TypeOf(&big.Int{})
+	big_t     = reflect.TypeOf(big.Int{})
+	ubig_t    = reflect.TypeOf(big.Int{})
 	byte_t    = reflect.TypeOf(byte(0))
 	byte_ts   = reflect.TypeOf([]byte(nil))
 	uint_t    = reflect.TypeOf(uint(0))
