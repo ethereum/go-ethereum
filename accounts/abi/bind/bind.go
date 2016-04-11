@@ -23,6 +23,7 @@ package bind
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 	"text/template"
 	"unicode"
@@ -122,31 +123,37 @@ func bindType(kind abi.Type) string {
 	stringKind := kind.String()
 
 	switch {
-	case stringKind == "address":
-		return "common.Address"
-
-	case stringKind == "address[]":
-		return "[]common.Address"
+	case strings.HasPrefix(stringKind, "address"):
+		parts := regexp.MustCompile("address(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 2 {
+			return stringKind
+		}
+		return fmt.Sprintf("%scommon.Address", parts[1])
 
 	case strings.HasPrefix(stringKind, "bytes"):
-		if stringKind == "bytes" {
-			return "[]byte"
-		}
-		return fmt.Sprintf("[%s]byte", stringKind[5:])
-
-	case strings.HasPrefix(stringKind, "int"):
-		switch stringKind[:3] {
-		case "8", "16", "32", "64":
+		parts := regexp.MustCompile("bytes([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 3 {
 			return stringKind
 		}
-		return "*big.Int"
+		return fmt.Sprintf("%s[%s]byte", parts[2], parts[1])
 
-	case strings.HasPrefix(stringKind, "uint"):
-		switch stringKind[:4] {
-		case "8", "16", "32", "64":
+	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
+		parts := regexp.MustCompile("(u)?int([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 4 {
 			return stringKind
 		}
-		return "*big.Int"
+		switch parts[2] {
+		case "8", "16", "32", "64":
+			return fmt.Sprintf("%s%sint%s", parts[3], parts[1], parts[2])
+		}
+		return fmt.Sprintf("%s*big.Int", parts[3])
+
+	case strings.HasPrefix(stringKind, "bool") || strings.HasPrefix(stringKind, "string"):
+		parts := regexp.MustCompile("([a-z]+)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 3 {
+			return stringKind
+		}
+		return fmt.Sprintf("%s%s", parts[2], parts[1])
 
 	default:
 		return stringKind
