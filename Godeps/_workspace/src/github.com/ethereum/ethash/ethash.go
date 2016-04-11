@@ -105,6 +105,15 @@ func freeCache(cache *cache) {
 	cache.ptr = nil
 }
 
+func (cache *cache) compute(dagSize uint64, hash common.Hash, nonce uint64) (ok bool, mixDigest, result common.Hash) {
+	ret := C.ethash_light_compute_internal(cache.ptr, C.uint64_t(dagSize), hashToH256(hash), C.uint64_t(nonce))
+	// Make sure cache is live until after the C call.
+	// This is important because a GC might happen and execute
+	// the finalizer before the call completes.
+	_ = cache
+	return bool(ret.success), h256ToHash(ret.mix_hash), h256ToHash(ret.result)
+}
+
 // Light implements the Verify half of the proof of work. It uses a few small
 // in-memory caches to verify the nonces found by Full.
 type Light struct {
@@ -140,29 +149,23 @@ func (l *Light) Verify(block pow.Block) bool {
 
 	cache := l.getCache(blockNum)
 	dagSize := C.ethash_get_datasize(C.uint64_t(blockNum))
-
 	if l.test {
 		dagSize = dagSizeForTesting
 	}
 	// Recompute the hash using the cache.
-	hash := hashToH256(block.HashNoNonce())
-	ret := C.ethash_light_compute_internal(cache.ptr, dagSize, hash, C.uint64_t(block.Nonce()))
-	if !ret.success {
+	ok, mixDigest, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
+	if !ok {
 		return false
 	}
 
 	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
-	if block.MixDigest() != h256ToHash(ret.mix_hash) {
+	if block.MixDigest() != mixDigest {
 		return false
 	}
 
-	// Make sure cache is live until after the C call.
-	// This is important because a GC might happen and execute
-	// the finalizer before the call completes.
-	_ = cache
 	// The actual check.
 	target := new(big.Int).Div(maxUint256, difficulty)
-	return h256ToHash(ret.result).Big().Cmp(target) <= 0
+	return result.Big().Cmp(target) <= 0
 }
 
 func h256ToHash(in C.ethash_h256_t) common.Hash {

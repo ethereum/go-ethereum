@@ -138,7 +138,7 @@ func PrintDevices() {
 
 	platforms, err := cl.GetPlatforms()
 	if err != nil {
-		fmt.Println("Plaform error (check your OpenCL installation): %v", err)
+		fmt.Println("Plaform error (check your OpenCL installation):", err)
 		return
 	}
 
@@ -267,13 +267,13 @@ func initCLDevice(deviceId int, device *cl.Device, c *OpenCLMiner) error {
 
 	context, err := cl.CreateContext([]*cl.Device{device})
 	if err != nil {
-		return fmt.Errorf("failed creating context:", err)
+		return fmt.Errorf("failed creating context: %v", err)
 	}
 
 	// TODO: test running with CL_QUEUE_PROFILING_ENABLE for profiling?
 	queue, err := context.CreateCommandQueue(device, 0)
 	if err != nil {
-		return fmt.Errorf("command queue err:", err)
+		return fmt.Errorf("command queue err: %v", err)
 	}
 
 	// See [4] section 3.2 and [3] "clBuildProgram".
@@ -287,7 +287,7 @@ func initCLDevice(deviceId int, device *cl.Device, c *OpenCLMiner) error {
 
 	program, err := context.CreateProgramWithSource([]string{kernelCode})
 	if err != nil {
-		return fmt.Errorf("program err:", err)
+		return fmt.Errorf("program err: %v", err)
 	}
 
 	/* if using AMD OpenCL impl, you can set this to debug on x86 CPU device.
@@ -303,7 +303,7 @@ func initCLDevice(deviceId int, device *cl.Device, c *OpenCLMiner) error {
 	buildOpts := ""
 	err = program.BuildProgram([]*cl.Device{device}, buildOpts)
 	if err != nil {
-		return fmt.Errorf("program build err:", err)
+		return fmt.Errorf("program build err: %v", err)
 	}
 
 	var searchKernelName, hashKernelName string
@@ -313,7 +313,7 @@ func initCLDevice(deviceId int, device *cl.Device, c *OpenCLMiner) error {
 	searchKernel, err := program.CreateKernel(searchKernelName)
 	hashKernel, err := program.CreateKernel(hashKernelName)
 	if err != nil {
-		return fmt.Errorf("kernel err:", err)
+		return fmt.Errorf("kernel err: %v", err)
 	}
 
 	// TODO: when this DAG size appears, patch the Go bindings
@@ -328,28 +328,28 @@ func initCLDevice(deviceId int, device *cl.Device, c *OpenCLMiner) error {
 	dagBuf := *(new(*cl.MemObject))
 	dagBuf, err = context.CreateEmptyBuffer(cl.MemReadOnly, int(c.dagSize))
 	if err != nil {
-		return fmt.Errorf("allocating dag buf failed: ", err)
+		return fmt.Errorf("allocating dag buf failed: %v", err)
 	}
 
 	// write DAG to device mem
 	dagPtr := unsafe.Pointer(c.ethash.Full.current.ptr.data)
 	_, err = queue.EnqueueWriteBuffer(dagBuf, true, 0, int(c.dagSize), dagPtr, nil)
 	if err != nil {
-		return fmt.Errorf("writing to dag buf failed: ", err)
+		return fmt.Errorf("writing to dag buf failed: %v", err)
 	}
 
 	searchBuffers := make([]*cl.MemObject, searchBufSize)
 	for i := 0; i < searchBufSize; i++ {
 		searchBuff, err := context.CreateEmptyBuffer(cl.MemWriteOnly, (1+maxSearchResults)*SIZEOF_UINT32)
 		if err != nil {
-			return fmt.Errorf("search buffer err:", err)
+			return fmt.Errorf("search buffer err: %v", err)
 		}
 		searchBuffers[i] = searchBuff
 	}
 
 	headerBuf, err := context.CreateEmptyBuffer(cl.MemReadOnly, 32)
 	if err != nil {
-		return fmt.Errorf("header buffer err:", err)
+		return fmt.Errorf("header buffer err: %v", err)
 	}
 
 	// Unique, random nonces are crucial for mining efficieny.
@@ -556,13 +556,13 @@ func (c *OpenCLMiner) Search(block pow.Block, stop <-chan struct{}, index int) (
 				upperNonce := uint64(binary.LittleEndian.Uint32(results[lo:hi]))
 				checkNonce = p.startNonce + upperNonce
 				if checkNonce != 0 {
-					cn := C.uint64_t(checkNonce)
-					ds := C.uint64_t(c.dagSize)
 					// We verify that the nonce is indeed a solution by
 					// executing the Ethash verification function (on the CPU).
-					ret := C.ethash_light_compute_internal(c.ethash.Light.current.ptr, ds, hashToH256(headerHash), cn)
+					cache := c.ethash.Light.getCache(block.NumberU64())
+					ok, mixDigest, result := cache.compute(c.dagSize, headerHash, checkNonce)
+
 					// TODO: return result first
-					if ret.success && h256ToHash(ret.result).Big().Cmp(target256) <= 0 {
+					if ok && result.Big().Cmp(target256) <= 0 {
 						_, err = d.queue.EnqueueUnmapMemObject(d.searchBuffers[p.bufIndex], cres, nil)
 						if err != nil {
 							fmt.Println("Error in Search clEnqueueUnmapMemObject: ", err)
@@ -573,9 +573,8 @@ func (c *OpenCLMiner) Search(block pow.Block, stop <-chan struct{}, index int) (
 								fmt.Println("Error in Search WaitForEvents: ", err)
 							}
 						}
-						return checkNonce, C.GoBytes(unsafe.Pointer(&ret.mix_hash), C.int(32))
+						return checkNonce, mixDigest.Bytes()
 					}
-
 					_, err := d.queue.EnqueueWriteBuffer(d.searchBuffers[p.bufIndex], false, 0, 4, unsafe.Pointer(&zero), nil)
 					if err != nil {
 						fmt.Println("Error in Search cl: EnqueueWriteBuffer", err)

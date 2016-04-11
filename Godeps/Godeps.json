@@ -1,7 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
 	"GoVersion": "go1.5.2",
-	"GodepVersion": "v60",
 	"Packages": [
 		"./..."
 	],
@@ -21,8 +20,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-242-gbc9ba4d",
-			"Rev": "bc9ba4d6a83a0fe308fefd8c6001b8ed1607137f"
+			"Comment": "v23.1-245-g25b32de",
+			"Rev": "25b32de0c0271065c28c3719c2bfe86959d72f0c"
 		},
 		{
 			"ImportPath": "github.com/fatih/color",
@@ -145,8 +144,8 @@
 			"Rev": "53221230c215611a90762720c9042ac782ef74ee"
 		},
 		{
-		    "ImportPath": "github.com/rs/cors",
-		    "Rev": "5950cf11d77f8a61b432a25dd4d444b4ced01379"
+			"ImportPath": "github.com/rs/cors",
+			"Rev": "5950cf11d77f8a61b432a25dd4d444b4ced01379"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
