@@ -250,7 +250,15 @@ web3._extend({
 	[
 		new web3._extend.Property({
 			name: 'pendingTransactions',
-			getter: 'eth_pendingTransactions'
+			getter: 'eth_pendingTransactions',
+			outputFormatter: function(txs) {
+				var formatted = [];
+				for (var i = 0; i < txs.length; i++) {
+					formatted.push(web3._extend.formatters.outputTransactionFormatter(txs[i]));
+					formatted[i].blockHash = null;
+				}
+				return formatted;
+			}
 		})
 	]
 });
