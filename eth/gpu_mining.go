@@ -56,8 +56,7 @@ func (s *Ethereum) StartMining(threads int, gpus string) error {
 		}
 
 		// TODO: re-creating miner is a bit ugly
-		cl := ethash.NewCL(ids)
-		s.miner = miner.New(s, s.EventMux(), cl)
+		s.miner = miner.New(s, s.chainConfig, s.EventMux(), ethash.NewCL(ids))
 		go s.miner.Start(eb, len(ids))
 		return nil
 	}
