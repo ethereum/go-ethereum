@@ -19,6 +19,7 @@ package eth
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -243,6 +244,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
 	}
 
+	if config.ChainConfig == nil {
+		return nil, errors.New("missing chain config")
+	}
 	eth.chainConfig = config.ChainConfig
 	eth.chainConfig.VmConfig = vm.Config{
 		EnableJit: config.EnableJit,
