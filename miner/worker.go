@@ -388,7 +388,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		work.family.Add(ancestor.Hash())
 		work.ancestors.Add(ancestor.Hash())
 	}
-	accounts, _ := self.eth.AccountManager().Accounts()
+	accounts := self.eth.AccountManager().Accounts()
 
 	// Keep track of transactions which return errors so they can be removed
 	work.remove = set.New()

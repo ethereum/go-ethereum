@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"math/big"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/registrar"
@@ -46,30 +46,6 @@ var (
 	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
 )
 
-type prompter interface {
-	AppendHistory(string)
-	Prompt(p string) (string, error)
-	PasswordPrompt(p string) (string, error)
-}
-
-type dumbterm struct{ r *bufio.Reader }
-
-func (r dumbterm) Prompt(p string) (string, error) {
-	fmt.Print(p)
-	line, err := r.r.ReadString('\n')
-	return strings.TrimSuffix(line, "\n"), err
-}
-
-func (r dumbterm) PasswordPrompt(p string) (string, error) {
-	fmt.Println("!! Unsupported terminal, password will echo.")
-	fmt.Print(p)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
-}
-
-func (r dumbterm) AppendHistory(string) {}
-
 type jsre struct {
 	re         *re.JSRE
 	stack      *node.Node
@@ -78,7 +54,6 @@ type jsre struct {
 	atexit     func()
 	corsDomain string
 	client     rpc.Client
-	prompter
 }
 
 func makeCompleter(re *jsre) liner.WordCompleter {
@@ -106,27 +81,11 @@ func newLightweightJSRE(docRoot string, client rpc.Client, datadir string, inter
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
-
 	js.re = re.New(docRoot)
 	if err := js.apiBindings(); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
-
-	if !liner.TerminalSupported() || !interactive {
-		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
-	} else {
-		lr := liner.NewLiner()
-		js.withHistory(datadir, func(hist *os.File) { lr.ReadHistory(hist) })
-		lr.SetCtrlCAborts(true)
-		lr.SetWordCompleter(makeCompleter(js))
-		lr.SetTabCompletionStyle(liner.TabPrints)
-		js.prompter = lr
-		js.atexit = func() {
-			js.withHistory(datadir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
-			lr.Close()
-			close(js.wait)
-		}
-	}
+	js.setupInput(datadir)
 	return js
 }
 
@@ -136,28 +95,27 @@ func newJSRE(stack *node.Node, docRoot, corsDomain string, client rpc.Client, in
 	js.corsDomain = corsDomain
 	js.wait = make(chan *big.Int)
 	js.client = client
-
 	js.re = re.New(docRoot)
 	if err := js.apiBindings(); err != nil {
 		utils.Fatalf("Unable to connect - %v", err)
 	}
-
-	if !liner.TerminalSupported() || !interactive {
-		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
-	} else {
-		lr := liner.NewLiner()
-		js.withHistory(stack.DataDir(), func(hist *os.File) { lr.ReadHistory(hist) })
-		lr.SetCtrlCAborts(true)
-		lr.SetWordCompleter(makeCompleter(js))
-		lr.SetTabCompletionStyle(liner.TabPrints)
-		js.prompter = lr
-		js.atexit = func() {
-			js.withHistory(stack.DataDir(), func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
-			lr.Close()
-			close(js.wait)
-		}
-	}
+	js.setupInput(stack.DataDir())
 	return js
+}
+
+func (self *jsre) setupInput(datadir string) {
+	self.withHistory(datadir, func(hist *os.File) { utils.Stdin.ReadHistory(hist) })
+	utils.Stdin.SetCtrlCAborts(true)
+	utils.Stdin.SetWordCompleter(makeCompleter(self))
+	utils.Stdin.SetTabCompletionStyle(liner.TabPrints)
+	self.atexit = func() {
+		self.withHistory(datadir, func(hist *os.File) {
+			hist.Truncate(0)
+			utils.Stdin.WriteHistory(hist)
+		})
+		utils.Stdin.Close()
+		close(self.wait)
+	}
 }
 
 func (self *jsre) batch(statement string) {
@@ -290,7 +248,7 @@ func (js *jsre) apiBindings() error {
 }
 
 func (self *jsre) AskPassword() (string, bool) {
-	pass, err := self.PasswordPrompt("Passphrase: ")
+	pass, err := utils.Stdin.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		return "", false
 	}
@@ -315,7 +273,7 @@ func (self *jsre) ConfirmTransaction(tx string) bool {
 
 func (self *jsre) UnlockAccount(addr []byte) bool {
 	fmt.Printf("Please unlock account %x.\n", addr)
-	pass, err := self.PasswordPrompt("Passphrase: ")
+	pass, err := utils.Stdin.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		return false
 	}
@@ -324,7 +282,8 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	if err := self.stack.Service(&ethereum); err != nil {
 		return false
 	}
-	if err := ethereum.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
+	a := accounts.Account{Address: common.BytesToAddress(addr)}
+	if err := ethereum.AccountManager().Unlock(a, pass); err != nil {
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")
@@ -365,7 +324,7 @@ func (self *jsre) interactive() {
 	go func() {
 		defer close(inputln)
 		for {
-			line, err := self.Prompt(<-prompt)
+			line, err := utils.Stdin.Prompt(<-prompt)
 			if err != nil {
 				if err == liner.ErrPromptAborted { // ctrl-C
 					self.resetPrompt()
@@ -404,7 +363,7 @@ func (self *jsre) interactive() {
 			self.setIndent()
 			if indentCount <= 0 {
 				if mustLogInHistory(str) {
-					self.AppendHistory(str[:len(str)-1])
+					utils.Stdin.AppendHistory(str[:len(str)-1])
 				}
 				self.parseInput(str)
 				str = ""

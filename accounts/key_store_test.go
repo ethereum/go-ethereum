@@ -14,112 +14,114 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package crypto
+package accounts
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
+func tmpKeyStore(t *testing.T, encrypted bool) (dir string, ks keyStore) {
+	d, err := ioutil.TempDir("", "geth-keystore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if encrypted {
+		ks = &keyStorePassphrase{d, veryLightScryptN, veryLightScryptP}
+	} else {
+		ks = &keyStorePlain{d}
+	}
+	return d, ks
+}
+
 func TestKeyStorePlain(t *testing.T) {
-	ks := NewKeyStorePlain(common.DefaultDataDir())
+	dir, ks := tmpKeyStore(t, false)
+	defer os.RemoveAll(dir)
+
 	pass := "" // not used but required by API
-	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	k2 := new(Key)
-	k2, err = ks.GetKey(k1.Address, pass)
+	k2, err := ks.GetKey(k1.Address, account.File, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if !reflect.DeepEqual(k1.Address, k2.Address) {
 		t.Fatal(err)
 	}
-
 	if !reflect.DeepEqual(k1.PrivateKey, k2.PrivateKey) {
-		t.Fatal(err)
-	}
-
-	err = ks.DeleteKey(k2.Address, pass)
-	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestKeyStorePassphrase(t *testing.T) {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
+	dir, ks := tmpKeyStore(t, true)
+	defer os.RemoveAll(dir)
+
 	pass := "foo"
-	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-	k2 := new(Key)
-	k2, err = ks.GetKey(k1.Address, pass)
+	k2, err := ks.GetKey(k1.Address, account.File, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(k1.Address, k2.Address) {
 		t.Fatal(err)
 	}
-
 	if !reflect.DeepEqual(k1.PrivateKey, k2.PrivateKey) {
-		t.Fatal(err)
-	}
-
-	err = ks.DeleteKey(k2.Address, pass) // also to clean up created files
-	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
-	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
+	dir, ks := tmpKeyStore(t, true)
+	defer os.RemoveAll(dir)
+
 	pass := "foo"
-	k1, err := ks.GenerateNewKey(randentropy.Reader, pass)
+	k1, account, err := storeNewKey(ks, rand.Reader, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	_, err = ks.GetKey(k1.Address, "bar") // wrong passphrase
-	if err == nil {
-		t.Fatal(err)
-	}
-
-	err = ks.DeleteKey(k1.Address, "bar") // wrong passphrase
-	if err == nil {
-		t.Fatal(err)
-	}
-
-	err = ks.DeleteKey(k1.Address, pass) // to clean up
-	if err != nil {
-		t.Fatal(err)
+	if _, err = ks.GetKey(k1.Address, account.File, "bar"); err != ErrDecrypt {
+		t.Fatalf("wrong error for invalid passphrase\ngot %q\nwant %q", err, ErrDecrypt)
 	}
 }
 
 func TestImportPreSaleKey(t *testing.T) {
+	dir, ks := tmpKeyStore(t, true)
+	defer os.RemoveAll(dir)
+
 	// file content of a presale key file generated with:
 	// python pyethsaletool.py genwallet
 	// with password "foo"
 	fileContent := "{\"encseed\": \"26d87f5f2bf9835f9a47eefae571bc09f9107bb13d54ff12a4ec095d01f83897494cf34f7bed2ed34126ecba9db7b62de56c9d7cd136520a0427bfb11b8954ba7ac39b90d4650d3448e31185affcd74226a68f1e94b1108e6e0a4a91cdd83eba\", \"ethaddr\": \"d4584b5f6229b7be90727b0fc8c6b91bb427821f\", \"email\": \"gustav.simonsson@gmail.com\", \"btcaddr\": \"1EVknXyFC68kKNLkh6YnKzW41svSRoaAcx\"}"
-	ks := NewKeyStorePassphrase(common.DefaultDataDir(), LightScryptN, LightScryptP)
 	pass := "foo"
-	_, err := ImportPreSaleKey(ks, []byte(fileContent), pass)
+	account, _, err := importPreSaleKey(ks, []byte(fileContent), pass)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if account.Address != common.HexToAddress("d4584b5f6229b7be90727b0fc8c6b91bb427821f") {
+		t.Errorf("imported account has wrong address %x", account.Address)
+	}
+	if !strings.HasPrefix(account.File, dir) {
+		t.Errorf("imported account file not in keystore directory: %q", account.File)
 	}
 }
 
 // Test and utils for the key store tests in the Ethereum JSON tests;
-// tests/KeyStoreTests/basic_tests.json
+// testdataKeyStoreTests/basic_tests.json
 type KeyStoreTestV3 struct {
 	Json     encryptedKeyJSONV3
 	Password string
@@ -133,52 +135,57 @@ type KeyStoreTestV1 struct {
 }
 
 func TestV3_PBKDF2_1(t *testing.T) {
-	tests := loadKeyStoreTestV3("tests/v3_test_vector.json", t)
+	t.Parallel()
+	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
 	testDecryptV3(tests["wikipage_test_vector_pbkdf2"], t)
 }
 
 func TestV3_PBKDF2_2(t *testing.T) {
+	t.Parallel()
 	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["test1"], t)
 }
 
 func TestV3_PBKDF2_3(t *testing.T) {
+	t.Parallel()
 	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["python_generated_test_with_odd_iv"], t)
 }
 
 func TestV3_PBKDF2_4(t *testing.T) {
+	t.Parallel()
 	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["evilnonce"], t)
 }
 
 func TestV3_Scrypt_1(t *testing.T) {
-	tests := loadKeyStoreTestV3("tests/v3_test_vector.json", t)
+	t.Parallel()
+	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
 	testDecryptV3(tests["wikipage_test_vector_scrypt"], t)
 }
 
 func TestV3_Scrypt_2(t *testing.T) {
+	t.Parallel()
 	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["test2"], t)
 }
 
 func TestV1_1(t *testing.T) {
-	tests := loadKeyStoreTestV1("tests/v1_test_vector.json", t)
+	t.Parallel()
+	tests := loadKeyStoreTestV1("testdata/v1_test_vector.json", t)
 	testDecryptV1(tests["test1"], t)
 }
 
 func TestV1_2(t *testing.T) {
-	ks := NewKeyStorePassphrase("tests/v1", LightScryptN, LightScryptP)
+	t.Parallel()
+	ks := &keyStorePassphrase{"testdata/v1", LightScryptN, LightScryptP}
 	addr := common.HexToAddress("cb61d5a9c4896fb9658090b597ef0e7be6f7b67e")
-	k, err := ks.GetKey(addr, "g")
+	file := "testdata/v1/cb61d5a9c4896fb9658090b597ef0e7be6f7b67e/cb61d5a9c4896fb9658090b597ef0e7be6f7b67e"
+	k, err := ks.GetKey(addr, file, "g")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Address != addr {
-		t.Fatal(fmt.Errorf("Unexpected address: %v, expected %v", k.Address, addr))
-	}
-
-	privHex := hex.EncodeToString(FromECDSA(k.PrivateKey))
+	privHex := hex.EncodeToString(crypto.FromECDSA(k.PrivateKey))
 	expectedHex := "d1b1178d3529626a1a93e073f65028370d14c7eb0936eb42abef05db6f37ad7d"
 	if privHex != expectedHex {
 		t.Fatal(fmt.Errorf("Unexpected privkey: %v, expected %v", privHex, expectedHex))
@@ -226,7 +233,8 @@ func loadKeyStoreTestV1(file string, t *testing.T) map[string]KeyStoreTestV1 {
 }
 
 func TestKeyForDirectICAP(t *testing.T) {
-	key := NewKeyForDirectICAP(randentropy.Reader)
+	t.Parallel()
+	key := NewKeyForDirectICAP(rand.Reader)
 	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
 		t.Errorf("Expected first address byte to be zero, have: %s", key.Address.Hex())
 	}

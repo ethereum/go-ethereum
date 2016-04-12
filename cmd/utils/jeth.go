@@ -75,8 +75,9 @@ func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 	// if password is not given or as null value -> ask user for password
 	if call.Argument(1).IsUndefined() || call.Argument(1).IsNull() {
 		fmt.Printf("Unlock account %s\n", account)
-		if password, err := PromptPassword("Passphrase: ", true); err == nil {
-			passwd, _ = otto.ToValue(password)
+		if input, err := Stdin.PasswordPrompt("Passphrase: "); err != nil {
+			return otto.FalseValue()
+			passwd, _ = otto.ToValue(input)
 		} else {
 			throwJSExeception(err.Error())
 		}
@@ -111,11 +112,11 @@ func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	var passwd string
 	if len(call.ArgumentList) == 0 {
 		var err error
-		passwd, err = PromptPassword("Passphrase: ", true)
+		passwd, err = Stdin.PasswordPrompt("Passphrase: ")
 		if err != nil {
 			return otto.FalseValue()
 		}
-		passwd2, err := PromptPassword("Repeat passphrase: ", true)
+		passwd2, err := Stdin.PasswordPrompt("Repeat passphrase: ")
 		if err != nil {
 			return otto.FalseValue()
 		}

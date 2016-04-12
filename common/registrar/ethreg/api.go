@@ -158,8 +158,8 @@ func (be *registryAPIBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr
 
 	var from *state.StateObject
 	if len(fromStr) == 0 {
-		accounts, err := be.am.Accounts()
-		if err != nil || len(accounts) == 0 {
+		accounts := be.am.Accounts()
+		if len(accounts) == 0 {
 			from = statedb.GetOrNewStateObject(common.Address{})
 		} else {
 			from = statedb.GetOrNewStateObject(accounts[0].Address)
@@ -254,8 +254,7 @@ func (be *registryAPIBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasSt
 		tx = types.NewTransaction(nonce, to, value, gas, price, data)
 	}
 
-	acc := accounts.Account{from}
-	signature, err := be.am.Sign(acc, tx.SigHash().Bytes())
+	signature, err := be.am.Sign(from, tx.SigHash().Bytes())
 	if err != nil {
 		return "", err
 	}

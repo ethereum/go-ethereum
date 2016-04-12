@@ -1,0 +1,30 @@
+language: go
+
+go:
+ - 1.4.3
+ - 1.6
+
+os:
+ - linux
+ - osx
+
+matrix:
+  include:
+   - os: osx
+     go: 1.6
+     env:
+      - GOFLAGS="-tags kqueue"
+
+env:
+  global:
+   - GOBIN=$HOME/bin
+   - PATH=$HOME/bin:$PATH
+
+install:
+ - go get golang.org/x/tools/cmd/vet
+ - go get -t -v ./...
+
+script:
+ - go tool vet -all .
+ - go install $GOFLAGS ./...
+ - go test -v -race $GOFLAGS ./...

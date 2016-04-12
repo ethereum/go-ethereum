@@ -14,17 +14,23 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package crypto
+package accounts
 
 import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/pborman/uuid"
 )
@@ -40,6 +46,15 @@ type Key struct {
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
 	PrivateKey *ecdsa.PrivateKey
+}
+
+type keyStore interface {
+	// Loads and decrypts the key from disk.
+	GetKey(addr common.Address, filename string, auth string) (*Key, error)
+	// Writes and encrypts the key.
+	StoreKey(filename string, k *Key, auth string) error
+	// Joins filename with the key directory unless it is already absolute.
+	JoinPath(filename string) string
 }
 
 type plainKeyJSON struct {
@@ -87,7 +102,7 @@ type scryptParamsJSON struct {
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
 		hex.EncodeToString(k.Address[:]),
-		hex.EncodeToString(FromECDSA(k.PrivateKey)),
+		hex.EncodeToString(crypto.FromECDSA(k.PrivateKey)),
 		k.Id.String(),
 		version,
 	}
@@ -116,39 +131,24 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	}
 
 	k.Address = common.BytesToAddress(addr)
-	k.PrivateKey = ToECDSA(privkey)
+	k.PrivateKey = crypto.ToECDSA(privkey)
 
 	return nil
 }
 
-func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
+func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	id := uuid.NewRandom()
 	key := &Key{
 		Id:         id,
-		Address:    PubkeyToAddress(privateKeyECDSA.PublicKey),
+		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
 		PrivateKey: privateKeyECDSA,
 	}
 	return key
 }
 
-func NewKey(rand io.Reader) *Key {
-	randBytes := make([]byte, 64)
-	_, err := rand.Read(randBytes)
-	if err != nil {
-		panic("key generation: could not read from random source: " + err.Error())
-	}
-	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), reader)
-	if err != nil {
-		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
-	}
-
-	return NewKeyFromECDSA(privateKeyECDSA)
-}
-
-// generate key whose address fits into < 155 bits so it can fit into
-// the Direct ICAP spec. for simplicity and easier compatibility with
-// other libs, we retry until the first byte is 0.
+// NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit
+// into the Direct ICAP spec. for simplicity and easier compatibility with other libs, we
+// retry until the first byte is 0.
 func NewKeyForDirectICAP(rand io.Reader) *Key {
 	randBytes := make([]byte, 64)
 	_, err := rand.Read(randBytes)
@@ -160,9 +160,70 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
-	key := NewKeyFromECDSA(privateKeyECDSA)
+	key := newKeyFromECDSA(privateKeyECDSA)
 	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
 		return NewKeyForDirectICAP(rand)
 	}
 	return key
+}
+
+func newKey(rand io.Reader) (*Key, error) {
+	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand)
+	if err != nil {
+		return nil, err
+	}
+	return newKeyFromECDSA(privateKeyECDSA), nil
+}
+
+func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, Account, error) {
+	key, err := newKey(rand)
+	if err != nil {
+		return nil, Account{}, err
+	}
+	a := Account{Address: key.Address, File: ks.JoinPath(keyFileName(key.Address))}
+	if err := ks.StoreKey(a.File, key, auth); err != nil {
+		zeroKey(key.PrivateKey)
+		return nil, a, err
+	}
+	return key, a, err
+}
+
+func writeKeyFile(file string, content []byte) error {
+	// Create the keystore directory with appropriate permissions
+	// in case it is not present yet.
+	const dirPerm = 0700
+	if err := os.MkdirAll(filepath.Dir(file), dirPerm); err != nil {
+		return err
+	}
+	// Atomic write: create a temporary hidden file first
+	// then move it into place. TempFile assigns mode 0600.
+	f, err := ioutil.TempFile(filepath.Dir(file), "."+filepath.Base(file)+".tmp")
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		f.Close()
+		os.Remove(f.Name())
+		return err
+	}
+	f.Close()
+	return os.Rename(f.Name(), file)
+}
+
+// keyFileName implements the naming convention for keyfiles:
+// UTC--<created_at UTC ISO8601>-<address hex>
+func keyFileName(keyAddr common.Address) string {
+	ts := time.Now().UTC()
+	return fmt.Sprintf("UTC--%s--%s", toISO8601(ts), hex.EncodeToString(keyAddr[:]))
+}
+
+func toISO8601(t time.Time) string {
+	var tz string
+	name, offset := t.Zone()
+	if name == "UTC" {
+		tz = "Z"
+	} else {
+		tz = fmt.Sprintf("%03d00", offset/3600)
+	}
+	return fmt.Sprintf("%04d-%02d-%02dT%02d-%02d-%02d.%09d%s", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), tz)
 }

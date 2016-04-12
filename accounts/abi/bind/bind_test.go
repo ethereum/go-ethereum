@@ -167,11 +167,9 @@ var bindTests = []struct {
 		`[{"constant":true,"inputs":[],"name":"transactString","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":true,"inputs":[],"name":"deployString","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":false,"inputs":[{"name":"str","type":"string"}],"name":"transact","outputs":[],"type":"function"},{"inputs":[{"name":"str","type":"string"}],"type":"constructor"}]`,
 		`
 			// Generate a new random account and a funded simulator
-			key := crypto.NewKey(rand.Reader)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: key.Address, Balance: big.NewInt(10000000000)})
-
-			// Convert the tester key to an authorized transactor for ease of use
+			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
 
 			// Deploy an interaction tester contract and call a transaction on it
 			_, _, interactor, err := DeployInteractor(auth, sim, "Deploy string")
@@ -210,11 +208,9 @@ var bindTests = []struct {
 		`[{"constant":true,"inputs":[],"name":"tuple","outputs":[{"name":"a","type":"string"},{"name":"b","type":"int256"},{"name":"c","type":"bytes32"}],"type":"function"}]`,
 		`
 			// Generate a new random account and a funded simulator
-			key := crypto.NewKey(rand.Reader)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: key.Address, Balance: big.NewInt(10000000000)})
-
-			// Convert the tester key to an authorized transactor for ease of use
+			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, tupler, err := DeployTupler(auth, sim)
@@ -252,11 +248,9 @@ var bindTests = []struct {
 		`[{"constant":true,"inputs":[{"name":"input","type":"address[]"}],"name":"echoAddresses","outputs":[{"name":"output","type":"address[]"}],"type":"function"},{"constant":true,"inputs":[{"name":"input","type":"uint24[23]"}],"name":"echoFancyInts","outputs":[{"name":"output","type":"uint24[23]"}],"type":"function"},{"constant":true,"inputs":[{"name":"input","type":"int256[]"}],"name":"echoInts","outputs":[{"name":"output","type":"int256[]"}],"type":"function"},{"constant":true,"inputs":[{"name":"input","type":"bool[]"}],"name":"echoBools","outputs":[{"name":"output","type":"bool[]"}],"type":"function"}]`,
 		`
 			// Generate a new random account and a funded simulator
-			key := crypto.NewKey(rand.Reader)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: key.Address, Balance: big.NewInt(10000000000)})
-
-			// Convert the tester key to an authorized transactor for ease of use
+			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
 
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
@@ -265,10 +259,10 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			if out, err := slicer.EchoAddresses(nil, []common.Address{key.Address, common.Address{}}); err != nil {
+			if out, err := slicer.EchoAddresses(nil, []common.Address{auth.From, common.Address{}}); err != nil {
 					t.Fatalf("Failed to call slice echoer: %v", err)
-			} else if !reflect.DeepEqual(out, []common.Address{key.Address, common.Address{}}) {
-					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{key.Address, common.Address{}})
+			} else if !reflect.DeepEqual(out, []common.Address{auth.From, common.Address{}}) {
+					t.Fatalf("Slice return mismatch: have %v, want %v", out, []common.Address{auth.From, common.Address{}})
 			}
 		`,
 	},
@@ -288,11 +282,9 @@ var bindTests = []struct {
 		`[{"constant":true,"inputs":[],"name":"caller","outputs":[{"name":"","type":"address"}],"type":"function"}]`,
 		`
 			// Generate a new random account and a funded simulator
-			key := crypto.NewKey(rand.Reader)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: key.Address, Balance: big.NewInt(10000000000)})
-
-			// Convert the tester key to an authorized transactor for ease of use
+			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
 
 			// Deploy a default method invoker contract and execute its default method
 			_, _, defaulter, err := DeployDefaulter(auth, sim)
@@ -306,8 +298,8 @@ var bindTests = []struct {
 
 			if caller, err := defaulter.Caller(nil); err != nil {
 				t.Fatalf("Failed to call address retriever: %v", err)
-			} else if (caller != key.Address) {
-				t.Fatalf("Address mismatch: have %v, want %v", caller, key.Address)
+			} else if (caller != auth.From) {
+				t.Fatalf("Address mismatch: have %v, want %v", caller, auth.From)
 			}
 		`,
 	},

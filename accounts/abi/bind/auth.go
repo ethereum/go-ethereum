@@ -17,10 +17,12 @@
 package bind
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"io"
 	"io/ioutil"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -33,23 +35,24 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := crypto.DecryptKey(json, passphrase)
+	key, err := accounts.DecryptKey(json, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	return NewKeyedTransactor(key), nil
+	return NewKeyedTransactor(key.PrivateKey), nil
 }
 
 // NewKeyedTransactor is a utility method to easily create a transaction signer
-// from a plain go-ethereum crypto key.
-func NewKeyedTransactor(key *crypto.Key) *TransactOpts {
+// from a single private key.
+func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
+	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	return &TransactOpts{
-		From: key.Address,
+		From: keyAddr,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-			if address != key.Address {
+			if address != keyAddr {
 				return nil, errors.New("not authorized to sign this account")
 			}
-			signature, err := crypto.Sign(tx.SigHash().Bytes(), key.PrivateKey)
+			signature, err := crypto.Sign(tx.SigHash().Bytes(), key)
 			if err != nil {
 				return nil, err
 			}

@@ -29,8 +29,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -48,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"gopkg.in/fatih/set.v0"
+	"golang.org/x/net/context"
 )
 
 const defaultGas = uint64(90000)
@@ -405,7 +403,7 @@ func NewPublicAccountAPI(am *accounts.Manager) *PublicAccountAPI {
 }
 
 // Accounts returns the collection of accounts this node manages
-func (s *PublicAccountAPI) Accounts() ([]accounts.Account, error) {
+func (s *PublicAccountAPI) Accounts() []accounts.Account {
 	return s.am.Accounts()
 }
 
@@ -421,17 +419,13 @@ func NewPrivateAccountAPI(am *accounts.Manager) *PrivateAccountAPI {
 }
 
 // ListAccounts will return a list of addresses for accounts this node manages.
-func (s *PrivateAccountAPI) ListAccounts() ([]common.Address, error) {
-	accounts, err := s.am.Accounts()
-	if err != nil {
-		return nil, err
-	}
-
+func (s *PrivateAccountAPI) ListAccounts() []common.Address {
+	accounts := s.am.Accounts()
 	addresses := make([]common.Address, len(accounts))
 	for i, acc := range accounts {
 		addresses[i] = acc.Address
 	}
-	return addresses, nil
+	return addresses
 }
 
 // NewAccount will create a new account and returns the address for the new account.
@@ -446,16 +440,16 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 // UnlockAccount will unlock the account associated with the given address with
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
-func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *rpc.HexNumber) bool {
+func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *rpc.HexNumber) (bool, error) {
 	if duration == nil {
 		duration = rpc.NewHexNumber(300)
 	}
-
-	if err := s.am.TimedUnlock(addr, password, time.Duration(duration.Int())*time.Second); err != nil {
-		glog.V(logger.Info).Infof("%v\n", err)
-		return false
+	a := accounts.Account{Address: addr}
+	d := time.Duration(duration.Int64()) * time.Second
+	if err := s.am.TimedUnlock(a, password, d); err != nil {
+		return false, err
 	}
-	return true
+	return true, nil
 }
 
 // LockAccount will lock the account associated with the given address when it's unlocked.
@@ -701,8 +695,8 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	// Retrieve the account state object to interact with
 	var from *state.StateObject
 	if args.From == (common.Address{}) {
-		accounts, err := s.am.Accounts()
-		if err != nil || len(accounts) == 0 {
+		accounts := s.am.Accounts()
+		if len(accounts) == 0 {
 			from = stateDb.GetOrNewStateObject(common.Address{})
 		} else {
 			from = stateDb.GetOrNewStateObject(accounts[0].Address)
@@ -912,40 +906,17 @@ func NewPublicTransactionPoolAPI(e *Ethereum, gpo *GasPriceOracle) *PublicTransa
 // subscriptionLoop listens for events on the global event mux and creates notifications for subscriptions.
 func (s *PublicTransactionPoolAPI) subscriptionLoop() {
 	sub := s.eventMux.Subscribe(core.TxPreEvent{})
-	accountTimeout := time.NewTicker(10 * time.Second)
-
-	// only publish pending tx signed by one of the accounts in the node
-	accountSet := set.New()
-	accounts, _ := s.am.Accounts()
-	for _, acc := range accounts {
-		accountSet.Add(acc.Address)
-	}
-
-	for {
-		select {
-		case event := <-sub.Chan():
-			if event == nil {
-				continue
-			}
-			tx := event.Data.(core.TxPreEvent)
-			if from, err := tx.Tx.FromFrontier(); err == nil {
-				if accountSet.Has(from) {
-					s.muPendingTxSubs.Lock()
-					for id, sub := range s.pendingTxSubs {
-						if sub.Notify(tx.Tx.Hash()) == rpc.ErrNotificationNotFound {
-							delete(s.pendingTxSubs, id)
-						}
+	for event := range sub.Chan() {
+		tx := event.Data.(core.TxPreEvent)
+		if from, err := tx.Tx.FromFrontier(); err == nil {
+			if s.am.HasAddress(from) {
+				s.muPendingTxSubs.Lock()
+				for id, sub := range s.pendingTxSubs {
+					if sub.Notify(tx.Tx.Hash()) == rpc.ErrNotificationNotFound {
+						delete(s.pendingTxSubs, id)
 					}
-					s.muPendingTxSubs.Unlock()
 				}
-			}
-		case <-accountTimeout.C:
-			// refresh account list when accounts are added/removed from the node.
-			if accounts, err := s.am.Accounts(); err == nil {
-				accountSet.Clear()
-				for _, acc := range accounts {
-					accountSet.Add(acc.Address)
-				}
+				s.muPendingTxSubs.Unlock()
 			}
 		}
 	}
@@ -1115,9 +1086,8 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.
-func (s *PublicTransactionPoolAPI) sign(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
-	acc := accounts.Account{address}
-	signature, err := s.am.Sign(acc, tx.SigHash().Bytes())
+func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	signature, err := s.am.Sign(addr, tx.SigHash().Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -1210,10 +1180,10 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(encodedTx string) (string,
 	return tx.Hash().Hex(), nil
 }
 
-// Sign signs the given hash using the key that matches the address. The key must be unlocked in order to sign the
-// hash.
-func (s *PublicTransactionPoolAPI) Sign(address common.Address, hash common.Hash) (string, error) {
-	signature, error := s.am.Sign(accounts.Account{Address: address}, hash[:])
+// Sign signs the given hash using the key that matches the address. The key must be
+// unlocked in order to sign the hash.
+func (s *PublicTransactionPoolAPI) Sign(addr common.Address, hash common.Hash) (string, error) {
+	signature, error := s.am.Sign(addr, hash[:])
 	return common.ToHex(signature), error
 }
 
@@ -1358,26 +1328,16 @@ func (s *PublicTransactionPoolAPI) SignTransaction(args SignTransactionArgs) (*S
 
 // PendingTransactions returns the transactions that are in the transaction pool and have a from address that is one of
 // the accounts this node manages.
-func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, error) {
-	accounts, err := s.am.Accounts()
-	if err != nil {
-		return nil, err
-	}
-
-	accountSet := set.New()
-	for _, account := range accounts {
-		accountSet.Add(account.Address)
-	}
-
+func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
 	pending := s.txPool.GetTransactions()
 	transactions := make([]*RPCTransaction, 0)
 	for _, tx := range pending {
-		if from, _ := tx.FromFrontier(); accountSet.Has(from) {
+		from, _ := tx.FromFrontier()
+		if s.am.HasAddress(from) {
 			transactions = append(transactions, newRPCPendingTransaction(tx))
 		}
 	}
-
-	return transactions, nil
+	return transactions
 }
 
 // NewPendingTransaction creates a subscription that is triggered each time a transaction enters the transaction pool
@@ -1856,8 +1816,8 @@ func (s *PublicBlockChainAPI) TraceCall(args CallArgs, blockNr rpc.BlockNumber) 
 	// Retrieve the account state object to interact with
 	var from *state.StateObject
 	if args.From == (common.Address{}) {
-		accounts, err := s.am.Accounts()
-		if err != nil || len(accounts) == 0 {
+		accounts := s.am.Accounts()
+		if len(accounts) == 0 {
 			from = stateDb.GetOrNewStateObject(common.Address{})
 		} else {
 			from = stateDb.GetOrNewStateObject(accounts[0].Address)

@@ -10,6 +10,10 @@
 			"Rev": "593e01cfc4f3353585015321e01951d4a907d3ef"
 		},
 		{
+			"ImportPath": "github.com/cespare/cp",
+			"Rev": "165db2f241fd235aec29ba6d9b1ccd5f1c14637c"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-215-g0ab42fd",
 			"Rev": "0ab42fd482c27cf2c95e7794ad3bb2082c2ab2d7"
@@ -114,6 +118,10 @@
 		{
 			"ImportPath": "github.com/rcrowley/go-metrics",
 			"Rev": "51425a2415d21afadfd55cd93432c0bc69e9598d"
+		},
+		{
+			"ImportPath": "github.com/rjeczalik/notify",
+			"Rev": "5dd6205716539662f8f14ab513552b41eab69d5d"
 		},
 		{
 			"ImportPath": "github.com/robertkrimen/otto",
