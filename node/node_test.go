@@ -554,7 +554,7 @@ func TestAPIGather(t *testing.T) {
 		{"multi.v2.nested_theOneMethod", "multi.v2.nested"},
 	}
 	for i, test := range tests {
-		if err := client.Send(rpc.JSONRequest{Id: new(int64), Version: "2.0", Method: test.Method}); err != nil {
+		if err := client.Send(rpc.JSONRequest{Id: []byte("1"), Version: "2.0", Method: test.Method}); err != nil {
 			t.Fatalf("test %d: failed to send API request: %v", i, err)
 		}
 		reply := new(rpc.JSONSuccessResponse)

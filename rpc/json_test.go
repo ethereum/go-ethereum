@@ -3,7 +3,9 @@ package rpc
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -51,8 +53,16 @@ func TestJSONRequestParsing(t *testing.T) {
 		t.Fatalf("Expected method 'Add' but got '%s'", requests[0].method)
 	}
 
-	if requests[0].id != 1234 {
-		t.Fatalf("Expected id 1234 but got %d", requests[0].id)
+	if rawId, ok := requests[0].id.(*json.RawMessage); ok {
+		id, e := strconv.ParseInt(string(*rawId), 0, 64)
+		if e != nil {
+			t.Fatalf("%v", e)
+		}
+		if id != 1234 {
+			t.Fatalf("Expected id 1234 but got %s", id)
+		}
+	} else {
+		t.Fatalf("invalid request, expected *json.RawMesage got %T", requests[0].id)
 	}
 
 	var arg int
@@ -69,5 +79,84 @@ func TestJSONRequestParsing(t *testing.T) {
 
 	if v[0].Int() != 11 || v[1].Int() != 22 {
 		t.Fatalf("expected %d == 11 && %d == 22", v[0].Int(), v[1].Int())
+	}
+}
+
+func TestJSONRequestParamsParsing(t *testing.T) {
+
+	var (
+		stringT = reflect.TypeOf("")
+		intT    = reflect.TypeOf(0)
+		intPtrT = reflect.TypeOf(new(int))
+
+		stringV = reflect.ValueOf("abc")
+		i       = 1
+		intV    = reflect.ValueOf(i)
+		intPtrV = reflect.ValueOf(&i)
+	)
+
+	var validTests = []struct {
+		input    string
+		argTypes []reflect.Type
+		expected []reflect.Value
+	}{
+		{`[]`, []reflect.Type{}, []reflect.Value{}},
+		{`[]`, []reflect.Type{intPtrT}, []reflect.Value{intPtrV}},
+		{`[1]`, []reflect.Type{intT}, []reflect.Value{intV}},
+		{`[1,"abc"]`, []reflect.Type{intT, stringT}, []reflect.Value{intV, stringV}},
+		{`[null]`, []reflect.Type{intPtrT}, []reflect.Value{intPtrV}},
+		{`[null,"abc"]`, []reflect.Type{intPtrT, stringT, intPtrT}, []reflect.Value{intPtrV, stringV, intPtrV}},
+		{`[null,"abc",null]`, []reflect.Type{intPtrT, stringT, intPtrT}, []reflect.Value{intPtrV, stringV, intPtrV}},
+	}
+
+	codec := jsonCodec{}
+
+	for _, test := range validTests {
+		params := (json.RawMessage)([]byte(test.input))
+		args, err := codec.ParseRequestArguments(test.argTypes, params)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var match []interface{}
+		json.Unmarshal([]byte(test.input), &match)
+
+		if len(args) != len(test.argTypes) {
+			t.Fatalf("expected %d parsed args, got %d", len(test.argTypes), len(args))
+		}
+
+		for i, arg := range args {
+			expected := test.expected[i]
+
+			if arg.Kind() != expected.Kind() {
+				t.Errorf("expected type for param %d in %s", i, test.input)
+			}
+
+			if arg.Kind() == reflect.Int && arg.Int() != expected.Int() {
+				t.Errorf("expected int(%d), got int(%d) in %s", expected.Int(), arg.Int(), test.input)
+			}
+
+			if arg.Kind() == reflect.String && arg.String() != expected.String() {
+				t.Errorf("expected string(%s), got string(%s) in %s", expected.String(), arg.String(), test.input)
+			}
+		}
+	}
+
+	var invalidTests = []struct {
+		input    string
+		argTypes []reflect.Type
+	}{
+		{`[]`, []reflect.Type{intT}},
+		{`[null]`, []reflect.Type{intT}},
+		{`[1]`, []reflect.Type{stringT}},
+		{`[1,2]`, []reflect.Type{stringT}},
+		{`["abc", null]`, []reflect.Type{stringT, intT}},
+	}
+
+	for i, test := range invalidTests {
+		if _, err := codec.ParseRequestArguments(test.argTypes, test.input); err == nil {
+			t.Errorf("expected test %d - %s to fail", i, test.input)
+		}
 	}
 }

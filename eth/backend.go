@@ -272,11 +272,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
+	// share gas price oracle in API's
+	gpo := NewGasPriceOracle(s)
+
 	return []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
+			Service:   NewPublicEthereumAPI(s, gpo),
 			Public:    true,
 		}, {
 			Namespace: "eth",
@@ -291,12 +294,12 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicBlockChainAPI(s.chainConfig, s.BlockChain(), s.Miner(), s.ChainDb(), s.EventMux(), s.AccountManager()),
+			Service:   NewPublicBlockChainAPI(s.chainConfig, s.BlockChain(), s.Miner(), s.ChainDb(), gpo, s.EventMux(), s.AccountManager()),
 			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicTransactionPoolAPI(s),
+			Service:   NewPublicTransactionPoolAPI(s, gpo),
 			Public:    true,
 		}, {
 			Namespace: "eth",

@@ -232,7 +232,7 @@ func newSubscriptionID() (string, error) {
 // on which the given client connects.
 func SupportedModules(client Client) (map[string]string, error) {
 	req := JSONRequest{
-		Id:      new(int64),
+		Id:      []byte("1"),
 		Version: "2.0",
 		Method:  "rpc_modules",
 	}

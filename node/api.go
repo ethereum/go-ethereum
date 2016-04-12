@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -58,14 +59,33 @@ func (api *PrivateAdminAPI) AddPeer(url string) (bool, error) {
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *PrivateAdminAPI) StartRPC(host string, port int, cors string, apis string) (bool, error) {
+func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
 	if api.node.httpHandler != nil {
 		return false, fmt.Errorf("HTTP RPC already running on %s", api.node.httpEndpoint)
 	}
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", host, port), api.node.rpcAPIs, strings.Split(apis, ","), cors); err != nil {
+
+	if host == nil {
+		host = &api.node.httpHost
+	}
+	if port == nil {
+		port = rpc.NewHexNumber(api.node.httpPort)
+	}
+	if cors == nil {
+		cors = &api.node.httpCors
+	}
+
+	modules := api.node.httpWhitelist
+	if apis != nil {
+		modules = nil
+		for _, m := range strings.Split(*apis, ",") {
+			modules = append(modules, strings.TrimSpace(m))
+		}
+	}
+
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, port.Int()), api.node.rpcAPIs, modules, *cors); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -84,14 +104,33 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 }
 
 // StartWS starts the websocket RPC API server.
-func (api *PrivateAdminAPI) StartWS(host string, port int, cors string, apis string) (bool, error) {
+func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
 	if api.node.wsHandler != nil {
 		return false, fmt.Errorf("WebSocket RPC already running on %s", api.node.wsEndpoint)
 	}
-	if err := api.node.startWS(fmt.Sprintf("%s:%d", host, port), api.node.rpcAPIs, strings.Split(apis, ","), cors); err != nil {
+
+	if host == nil {
+		host = &api.node.wsHost
+	}
+	if port == nil {
+		port = rpc.NewHexNumber(api.node.wsPort)
+	}
+	if allowedOrigins == nil {
+		allowedOrigins = &api.node.wsOrigins
+	}
+
+	modules := api.node.wsWhitelist
+	if apis != nil {
+		modules = nil
+		for _, m := range strings.Split(*apis, ",") {
+			modules = append(modules, strings.TrimSpace(m))
+		}
+	}
+
+	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, port.Int()), api.node.rpcAPIs, modules, *allowedOrigins); err != nil {
 		return false, err
 	}
 	return true, nil

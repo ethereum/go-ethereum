@@ -62,15 +62,19 @@ type Node struct {
 	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
 
+	httpHost      string       // HTTP hostname
+	httpPort      int          // HTTP post
 	httpEndpoint  string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
 	httpWhitelist []string     // HTTP RPC modules to allow through this endpoint
 	httpCors      string       // HTTP RPC Cross-Origin Resource Sharing header
 	httpListener  net.Listener // HTTP RPC listener socket to server API requests
 	httpHandler   *rpc.Server  // HTTP RPC request handler to process the API requests
 
+	wsHost      string       // Websocket host
+	wsPort      int          // Websocket post
 	wsEndpoint  string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
 	wsWhitelist []string     // Websocket RPC modules to allow through this endpoint
-	wsDomains   string       // Websocket RPC allowed origin domains
+	wsOrigins   string       // Websocket RPC allowed origin domains
 	wsListener  net.Listener // Websocket RPC listener socket to server API requests
 	wsHandler   *rpc.Server  // Websocket RPC request handler to process the API requests
 
@@ -110,12 +114,16 @@ func New(conf *Config) (*Node, error) {
 		},
 		serviceFuncs:  []ServiceConstructor{},
 		ipcEndpoint:   conf.IPCEndpoint(),
+		httpHost:      conf.HTTPHost,
+		httpPort:      conf.HTTPPort,
 		httpEndpoint:  conf.HTTPEndpoint(),
 		httpWhitelist: conf.HTTPModules,
 		httpCors:      conf.HTTPCors,
+		wsHost:        conf.WSHost,
+		wsPort:        conf.WSPort,
 		wsEndpoint:    conf.WSEndpoint(),
 		wsWhitelist:   conf.WSModules,
-		wsDomains:     conf.WSDomains,
+		wsOrigins:     conf.WSOrigins,
 		eventmux:      new(event.TypeMux),
 	}, nil
 }
@@ -231,7 +239,7 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsDomains); err != nil {
+	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsOrigins); err != nil {
 		n.stopHTTP()
 		n.stopIPC()
 		n.stopInProc()
@@ -383,7 +391,7 @@ func (n *Node) stopHTTP() {
 }
 
 // startWS initializes and starts the websocket RPC endpoint.
-func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, cors string) error {
+func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins string) error {
 	// Short circuit if the WS endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -411,14 +419,14 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, cors s
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return err
 	}
-	go rpc.NewWSServer(cors, handler).Serve(listener)
+	go rpc.NewWSServer(wsOrigins, handler).Serve(listener)
 	glog.V(logger.Info).Infof("WebSocket endpoint opened: ws://%s", endpoint)
 
 	// All listeners booted successfully
 	n.wsEndpoint = endpoint
 	n.wsListener = listener
 	n.wsHandler = handler
-	n.wsDomains = cors
+	n.wsOrigins = wsOrigins
 
 	return nil
 }

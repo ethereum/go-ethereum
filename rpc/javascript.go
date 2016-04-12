@@ -19,47 +19,14 @@ package rpc
 var (
 	// Holds geth specific RPC extends which can be used to extend web3
 	WEB3Extensions = map[string]string{
-		"personal": Personal_JS,
-		"txpool":   TxPool_JS,
-		"admin":    Admin_JS,
-		"eth":      Eth_JS,
-		"miner":    Miner_JS,
-		"debug":    Debug_JS,
-		"net":      Net_JS,
+		"txpool": TxPool_JS,
+		"admin":  Admin_JS,
+		"eth":    Eth_JS,
+		"miner":  Miner_JS,
+		"debug":  Debug_JS,
+		"net":    Net_JS,
 	}
 )
-
-const Personal_JS = `
-web3._extend({
-	property: 'personal',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'newAccount',
-			call: 'personal_newAccount',
-			params: 1,
-			outputFormatter: web3._extend.utils.toAddress
-		}),
-		new web3._extend.Method({
-			name: 'unlockAccount',
-			call: 'personal_unlockAccount',
-			params: 3,
-		}),
-		new web3._extend.Method({
-			name: 'lockAccount',
-			call: 'personal_lockAccount',
-			params: 1
-		})
-	],
-	properties:
-	[
-		new web3._extend.Property({
-			name: 'listAccounts',
-			getter: 'personal_listAccounts'
-		})
-	]
-});
-`
 
 const TxPool_JS = `
 web3._extend({
@@ -124,22 +91,22 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'startRPC',
 			call: 'admin_startRPC',
-			params: 4
+			params: 4,
+			inputFormatter: [null, null, null, null]
 		}),
 		new web3._extend.Method({
 			name: 'stopRPC',
-			call: 'admin_stopRPC',
-			params: 0
+			call: 'admin_stopRPC'
 		}),
 		new web3._extend.Method({
 			name: 'startWS',
 			call: 'admin_startWS',
-			params: 4
+			params: 4,
+			inputFormatter: [null, null, null, null]
 		}),
 		new web3._extend.Method({
 			name: 'stopWS',
-			call: 'admin_stopWS',
-			params: 0
+			call: 'admin_stopWS'
 		}),
 		new web3._extend.Method({
 			name: 'setGlobalRegistrar',
@@ -219,7 +186,7 @@ web3._extend({
 			name: 'sign',
 			call: 'eth_sign',
 			params: 2,
-			inputFormatter: [web3._extend.utils.toAddress, null]
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null]
 		}),
 		new web3._extend.Method({
 			name: 'resend',
@@ -422,19 +389,18 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'start',
 			call: 'miner_start',
-			params: 1
+			params: 1,
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'stop',
-			call: 'miner_stop',
-			params: 1
+			call: 'miner_stop'
 		}),
 		new web3._extend.Method({
 			name: 'setEtherbase',
 			call: 'miner_setEtherbase',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.formatInputInt],
-			outputFormatter: web3._extend.formatters.formatOutputBool
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'setExtra',

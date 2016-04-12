@@ -326,7 +326,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.WSListenAddrFlag,
 		utils.WSPortFlag,
 		utils.WSApiFlag,
-		utils.WSAllowedDomainsFlag,
+		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
