@@ -77,9 +77,8 @@ func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		fmt.Printf("Unlock account %s\n", account)
 		if input, err := Stdin.PasswordPrompt("Passphrase: "); err != nil {
 			return otto.FalseValue()
-			passwd, _ = otto.ToValue(input)
 		} else {
-			throwJSExeception(err.Error())
+			passwd, _ = otto.ToValue(input)
 		}
 	} else {
 		if !call.Argument(1).IsString() {
