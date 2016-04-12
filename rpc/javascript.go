@@ -19,14 +19,47 @@ package rpc
 var (
 	// Holds geth specific RPC extends which can be used to extend web3
 	WEB3Extensions = map[string]string{
-		"txpool": TxPool_JS,
-		"admin":  Admin_JS,
-		"eth":    Eth_JS,
-		"miner":  Miner_JS,
-		"debug":  Debug_JS,
-		"net":    Net_JS,
+		"admin":    Admin_JS,
+		"eth":      Eth_JS,
+		"miner":    Miner_JS,
+		"debug":    Debug_JS,
+		"net":      Net_JS,
+		"personal": Personal_JS,
+		"txpool":   TxPool_JS,
 	}
 )
+
+const Personal_JS = `
+web3._extend({
+	property: 'personal',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'newAccount',
+			call: 'personal_newAccount',
+			params: 1,
+			outputFormatter: web3._extend.utils.toAddress
+		}),
+		new web3._extend.Method({
+			name: 'unlockAccount',
+			call: 'personal_unlockAccount',
+			params: 3,
+		}),
+		new web3._extend.Method({
+			name: 'lockAccount',
+			call: 'personal_lockAccount',
+			params: 1
+		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'listAccounts',
+			getter: 'personal_listAccounts'
+		})
+	]
+});
+`
 
 const TxPool_JS = `
 web3._extend({
