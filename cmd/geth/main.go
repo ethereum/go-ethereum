@@ -331,6 +331,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.ExecFlag,
+		utils.PreLoadJSFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
@@ -427,6 +428,13 @@ func attach(ctx *cli.Context) {
 		true,
 	)
 
+	// preload user defined JS files into the console
+	err = repl.preloadJSFiles(ctx)
+	if err != nil {
+		utils.Fatalf("unable to preload JS file %v", err)
+	}
+
+	// in case the exec flag holds a JS statement execute it and return
 	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
 		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
 	} else {
@@ -477,6 +485,13 @@ func console(ctx *cli.Context) {
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client, true)
 
+	// preload user defined JS files into the console
+	err = repl.preloadJSFiles(ctx)
+	if err != nil {
+		utils.Fatalf("unable to preload JS file %v", err)
+	}
+
+	// in case the exec flag holds a JS statement execute it and return
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
 		repl.batch(script)
 	} else {
