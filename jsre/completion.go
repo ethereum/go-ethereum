@@ -27,7 +27,9 @@ import (
 // evaluated, callers need to make sure that evaluating line does not have side effects.
 func (jsre *JSRE) CompleteKeywords(line string) []string {
 	var results []string
-	jsre.do(func(vm *otto.Otto) { results = getCompletions(vm, line) })
+	jsre.Do(func(vm *otto.Otto) {
+		results = getCompletions(vm, line)
+	})
 	return results
 }
 
@@ -53,9 +55,18 @@ func getCompletions(vm *otto.Otto, line string) (results []string) {
 			}
 		}
 	})
-	// e.g. web3<tab><tab> append dot since its an object
-	if obj, _ = vm.Object(line); obj != nil {
-		results = append(results, line+".")
+
+	// Append opening parenthesis (for functions) or dot (for objects)
+	// if the line itself is the only completion.
+	if len(results) == 1 && results[0] == line {
+		obj, _ := vm.Object(line)
+		if obj != nil {
+			if obj.Class() == "Function" {
+				results[0] += "("
+			} else {
+				results[0] += "."
+			}
+		}
 	}
 
 	sort.Strings(results)

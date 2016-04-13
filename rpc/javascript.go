@@ -296,6 +296,12 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'chaindbProperty',
+			call: 'debug_chaindbProperty',
+			params: 1,
+			outputFormatter: console.log
+		}),
+		new web3._extend.Method({
 			name: 'metrics',
 			call: 'debug_metrics',
 			params: 1
@@ -320,6 +326,16 @@ web3._extend({
 			call: 'debug_stacks',
 			params: 0,
 			outputFormatter: console.log
+		}),
+		new web3._extend.Method({
+			name: 'memStats',
+			call: 'debug_memStats',
+			params: 0,
+		}),
+		new web3._extend.Method({
+			name: 'gcStats',
+			call: 'debug_gcStats',
+			params: 0,
 		}),
 		new web3._extend.Method({
 			name: 'cpuProfile',

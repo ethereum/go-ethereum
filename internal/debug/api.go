@@ -27,6 +27,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"strings"
 	"sync"
@@ -67,6 +68,20 @@ func (*HandlerT) Vmodule(pattern string) error {
 // See package glog for details on pattern syntax.
 func (*HandlerT) BacktraceAt(location string) error {
 	return glog.GetTraceLocation().Set(location)
+}
+
+// MemStats returns detailed runtime memory statistics.
+func (*HandlerT) MemStats() *runtime.MemStats {
+	s := new(runtime.MemStats)
+	runtime.ReadMemStats(s)
+	return s
+}
+
+// GcStats returns GC statistics.
+func (*HandlerT) GcStats() *debug.GCStats {
+	s := new(debug.GCStats)
+	debug.ReadGCStats(s)
+	return s
 }
 
 // CpuProfile turns on CPU profiling for nsec seconds and writes

@@ -177,7 +177,7 @@ func (ctx ppctx) fields(obj *otto.Object) []string {
 		seen          = make(map[string]bool)
 	)
 	add := func(k string) {
-		if seen[k] || boringKeys[k] {
+		if seen[k] || boringKeys[k] || strings.HasPrefix(k, "_") {
 			return
 		}
 		seen[k] = true
