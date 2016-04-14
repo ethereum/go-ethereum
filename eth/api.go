@@ -1594,7 +1594,7 @@ type BlockTraceResult struct {
 
 // TraceBlock processes the given block's RLP but does not import the block in to
 // the chain.
-func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config *vm.Config) BlockTraceResult {
 	var block types.Block
 	err := rlp.Decode(bytes.NewReader(blockRlp), &block)
 	if err != nil {
@@ -1611,7 +1611,7 @@ func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config vm.Config) BlockT
 
 // TraceBlockFromFile loads the block's RLP from the given file name and attempts to
 // process it but does not import the block in to the chain.
-func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config *vm.Config) BlockTraceResult {
 	blockRlp, err := ioutil.ReadFile(file)
 	if err != nil {
 		return BlockTraceResult{Error: fmt.Sprintf("could not read file: %v", err)}
@@ -1620,7 +1620,7 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config vm.Config) Bl
 }
 
 // TraceProcessBlock processes the block by canonical block number.
-func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config *vm.Config) BlockTraceResult {
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlockByNumber(number)
 	if block == nil {
@@ -1636,7 +1636,7 @@ func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config vm.Config) 
 }
 
 // TraceBlockByHash processes the block by hash.
-func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config *vm.Config) BlockTraceResult {
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlock(hash)
 	if block == nil {
@@ -1664,7 +1664,7 @@ func (t *TraceCollector) AddStructLog(slog vm.StructLog) {
 }
 
 // traceBlock processes the given block but does not save the state.
-func (api *PrivateDebugAPI) traceBlock(block *types.Block, config vm.Config) (bool, []vm.StructLog, error) {
+func (api *PrivateDebugAPI) traceBlock(block *types.Block, config *vm.Config) (bool, []vm.StructLog, error) {
 	// Validate and reprocess the block
 	var (
 		blockchain = api.eth.BlockChain()
@@ -1672,6 +1672,9 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config vm.Config) (bo
 		processor  = blockchain.Processor()
 		collector  = &TraceCollector{}
 	)
+	if config == nil {
+		config = new(vm.Config)
+	}
 	config.Debug = true // make sure debug is set.
 	config.Logger.Collector = collector
 
@@ -1683,7 +1686,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config vm.Config) (bo
 		return false, collector.traces, err
 	}
 
-	receipts, _, usedGas, err := processor.Process(block, statedb, config)
+	receipts, _, usedGas, err := processor.Process(block, statedb, *config)
 	if err != nil {
 		return false, collector.traces, err
 	}
@@ -1771,7 +1774,10 @@ func formatError(err error) string {
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger vm.LogConfig) (*ExecutionResult, error) {
+func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ExecutionResult, error) {
+	if logger == nil {
+		logger = new(vm.LogConfig)
+	}
 	// Retrieve the tx from the chain and the containing block
 	tx, blockHash, _, txIndex := core.GetTransaction(s.eth.ChainDb(), txHash)
 	if tx == nil {
@@ -1815,7 +1821,7 @@ func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger vm.LogConf
 			continue
 		}
 		// Otherwise trace the transaction and return
-		vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, parent.Header(), vm.Config{Debug: true, Logger: logger})
+		vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, parent.Header(), vm.Config{Debug: true, Logger: *logger})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)

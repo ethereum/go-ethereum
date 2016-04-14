@@ -268,22 +268,22 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'traceBlock',
 			call: 'debug_traceBlock',
-			params: 2
+			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'traceBlockByFile',
 			call: 'debug_traceBlockByFile',
-			params: 2
+			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'traceBlockByNumber',
 			call: 'debug_traceBlockByNumber',
-			params: 2
+			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'traceBlockByHash',
 			call: 'debug_traceBlockByHash',
-			params: 2
+			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'seedHash',
@@ -390,7 +390,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'traceTransaction',
 			call: 'debug_traceTransaction',
-			params: 2
+			params: 1
 		})
 	],
 	properties: []
