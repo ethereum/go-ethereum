@@ -48,7 +48,7 @@ var (
 		"Godeps/", "tests/files/", "build/",
 		// don't relicense vendored sources
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
-		"crypto/curve.go",
+		"crypto/secp256k1/curve.go",
 		"trie/arc.go",
 	}
 
@@ -151,14 +151,24 @@ func main() {
 	writeLicenses(infoc)
 }
 
+func skipFile(path string) bool {
+	if strings.Contains(path, "/testdata/") {
+		return true
+	}
+	for _, p := range skipPrefixes {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func getFiles() []string {
 	cmd := exec.Command("git", "ls-tree", "-r", "--name-only", "HEAD")
 	var files []string
 	err := doLines(cmd, func(line string) {
-		for _, p := range skipPrefixes {
-			if strings.HasPrefix(line, p) {
-				return
-			}
+		if skipFile(line) {
+			return
 		}
 		ext := filepath.Ext(line)
 		for _, wantExt := range extensions {
@@ -283,7 +293,7 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 // fileInfo finds the lowest year in which the given file was commited.
 func fileInfo(file string) (*info, error) {
 	info := &info{file: file, Year: int64(time.Now().Year())}
-	cmd := exec.Command("git", "log", "--follow", "--find-copies", "--pretty=format:%ai", "--", file)
+	cmd := exec.Command("git", "log", "--follow", "--find-renames=80", "--find-copies=80", "--pretty=format:%ai", "--", file)
 	err := doLines(cmd, func(line string) {
 		y, err := strconv.ParseInt(line[:4], 10, 64)
 		if err != nil {
