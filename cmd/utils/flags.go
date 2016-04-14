@@ -500,6 +500,16 @@ func MakeNAT(ctx *cli.Context) nat.Interface {
 	return natif
 }
 
+// MakeRPCModules splits input separated by a comma and trims excessive white
+// space from the substrings.
+func MakeRPCModules(input string) []string {
+	result := strings.Split(input, ",")
+	for i, r := range result {
+		result[i] = strings.TrimSpace(r)
+	}
+	return result
+}
+
 // MakeHTTPRpcHost creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func MakeHTTPRpcHost(ctx *cli.Context) string {
@@ -652,11 +662,11 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		HTTPHost:        MakeHTTPRpcHost(ctx),
 		HTTPPort:        ctx.GlobalInt(RPCPortFlag.Name),
 		HTTPCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),
-		HTTPModules:     strings.Split(ctx.GlobalString(RPCApiFlag.Name), ","),
+		HTTPModules:     MakeRPCModules(ctx.GlobalString(RPCApiFlag.Name)),
 		WSHost:          MakeWSRpcHost(ctx),
 		WSPort:          ctx.GlobalInt(WSPortFlag.Name),
 		WSOrigins:       ctx.GlobalString(WSAllowedOriginsFlag.Name),
-		WSModules:       strings.Split(ctx.GlobalString(WSApiFlag.Name), ","),
+		WSModules:       MakeRPCModules(ctx.GlobalString(WSApiFlag.Name)),
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
