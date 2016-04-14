@@ -1772,55 +1772,61 @@ func formatError(err error) string {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger vm.LogConfig) (*ExecutionResult, error) {
-	// Retrieve the tx from the chain
-	tx, _, blockIndex, _ := core.GetTransaction(s.eth.ChainDb(), txHash)
-
+	// Retrieve the tx from the chain and the containing block
+	tx, blockHash, _, txIndex := core.GetTransaction(s.eth.ChainDb(), txHash)
 	if tx == nil {
-		return nil, fmt.Errorf("Transaction not found")
+		return nil, fmt.Errorf("transaction %x not found", txHash)
 	}
-
-	block := s.eth.BlockChain().GetBlockByNumber(blockIndex - 1)
+	block := s.eth.BlockChain().GetBlock(blockHash)
 	if block == nil {
-		return nil, fmt.Errorf("Unable to retrieve prior block")
+		return nil, fmt.Errorf("block %x not found", blockHash)
 	}
-
-	// Create the state database
-	stateDb, err := state.New(block.Root(), s.eth.ChainDb())
+	// Create the state database to mutate and eventually trace
+	parent := s.eth.BlockChain().GetBlock(block.ParentHash())
+	if parent == nil {
+		return nil, fmt.Errorf("block parent %x not found", block.ParentHash())
+	}
+	stateDb, err := state.New(parent.Root(), s.eth.ChainDb())
 	if err != nil {
 		return nil, err
 	}
-
-	txFrom, err := tx.FromFrontier()
-
-	if err != nil {
-		return nil, fmt.Errorf("Unable to create transaction sender")
+	// Mutate the state and trace the selected transaction
+	for idx, tx := range block.Transactions() {
+		// Assemble the transaction call message
+		from, err := tx.FromFrontier()
+		if err != nil {
+			return nil, fmt.Errorf("sender retrieval failed: %v", err)
+		}
+		msg := callmsg{
+			from:     stateDb.GetOrNewStateObject(from),
+			to:       tx.To(),
+			gas:      tx.Gas(),
+			gasPrice: tx.GasPrice(),
+			value:    tx.Value(),
+			data:     tx.Data(),
+		}
+		// Mutate the state if we haven't reached the tracing transaction yet
+		if uint64(idx) < txIndex {
+			vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, parent.Header(), vm.Config{})
+			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
+			if err != nil {
+				return nil, fmt.Errorf("mutation failed: %v", err)
+			}
+			continue
+		}
+		// Otherwise trace the transaction and return
+		vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, parent.Header(), vm.Config{Debug: true, Logger: logger})
+		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
+		if err != nil {
+			return nil, fmt.Errorf("tracing failed: %v", err)
+		}
+		return &ExecutionResult{
+			Gas:         gas,
+			ReturnValue: fmt.Sprintf("%x", ret),
+			StructLogs:  formatLogs(vmenv.StructLogs()),
+		}, nil
 	}
-	from := stateDb.GetOrNewStateObject(txFrom)
-	msg := callmsg{
-		from:     from,
-		to:       tx.To(),
-		gas:      tx.Gas(),
-		gasPrice: tx.GasPrice(),
-		value:    tx.Value(),
-		data:     tx.Data(),
-	}
-
-	vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, block.Header(), vm.Config{
-		Debug:  true,
-		Logger: logger,
-	})
-	gp := new(core.GasPool).AddGas(block.GasLimit())
-
-	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
-	if err != nil {
-		return nil, fmt.Errorf("Error executing transaction %v", err)
-	}
-
-	return &ExecutionResult{
-		Gas:         gas,
-		ReturnValue: fmt.Sprintf("%x", ret),
-		StructLogs:  formatLogs(vmenv.StructLogs()),
-	}, nil
+	return nil, errors.New("database inconsistency")
 }
 
 func (s *PublicBlockChainAPI) TraceCall(args CallArgs, blockNr rpc.BlockNumber) (*ExecutionResult, error) {
