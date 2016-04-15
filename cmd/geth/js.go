@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/internal/web3ext"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -202,7 +203,7 @@ func (js *jsre) apiBindings() error {
 			continue // manually mapped or ignore
 		}
 
-		if jsFile, ok := rpc.WEB3Extensions[apiName]; ok {
+		if jsFile, ok := web3ext.Modules[apiName]; ok {
 			if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), jsFile); err == nil {
 				shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
 			} else {
