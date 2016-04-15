@@ -36,7 +36,7 @@ func (s *NotificationTestService) Unsubscribe(subid string) {
 }
 
 func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val int) (Subscription, error) {
-	notifier, supported := ctx.Value(NotifierContextKey).(Notifier)
+	notifier, supported := NotifierFromContext(ctx)
 	if !supported {
 		return nil, ErrNotificationsUnsupported
 	}

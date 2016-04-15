@@ -234,7 +234,7 @@ func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []commo
 }
 
 func (s *PublicFilterAPI) Logs(ctx context.Context, args NewFilterArgs) (rpc.Subscription, error) {
-	notifier, supported := ctx.Value(rpc.NotifierContextKey).(rpc.Notifier)
+	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, rpc.ErrNotificationsUnsupported
 	}

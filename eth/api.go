@@ -603,7 +603,7 @@ type NewBlocksArgs struct {
 // NewBlocks triggers a new block event each time a block is appended to the chain. It accepts an argument which allows
 // the caller to specify whether the output should contain transactions and in what format.
 func (s *PublicBlockChainAPI) NewBlocks(ctx context.Context, args NewBlocksArgs) (rpc.Subscription, error) {
-	notifier, supported := ctx.Value(rpc.NotifierContextKey).(rpc.Notifier)
+	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, rpc.ErrNotificationsUnsupported
 	}
@@ -1345,7 +1345,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
 // NewPendingTransaction creates a subscription that is triggered each time a transaction enters the transaction pool
 // and is send from one of the transactions this nodes manages.
 func (s *PublicTransactionPoolAPI) NewPendingTransactions(ctx context.Context) (rpc.Subscription, error) {
-	notifier, supported := ctx.Value(rpc.NotifierContextKey).(rpc.Notifier)
+	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, rpc.ErrNotificationsUnsupported
 	}
