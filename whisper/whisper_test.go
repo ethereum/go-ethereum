@@ -179,9 +179,7 @@ func TestMessageExpiration(t *testing.T) {
 	node := startTestCluster(1)[0]
 
 	message := NewMessage([]byte("expiring message"))
-	envelope, err := message.Wrap(DefaultPoW, Options{
-		TTL: time.Second,
-	})
+	envelope, err := message.Wrap(DefaultPoW, Options{TTL: time.Second})
 	if err != nil {
 		t.Fatalf("failed to wrap message: %v", err)
 	}
@@ -197,17 +195,17 @@ func TestMessageExpiration(t *testing.T) {
 		t.Fatalf("message not found in cache")
 	}
 	// Wait for expiration and check cache again
-	time.Sleep(time.Second)     // wait for expiration
-	time.Sleep(expirationCycle) // wait for cleanup cycle
+	time.Sleep(time.Second)         // wait for expiration
+	time.Sleep(2 * expirationCycle) // wait for cleanup cycle
 
 	node.poolMu.RLock()
 	_, found = node.messages[envelope.Hash()]
 	node.poolMu.RUnlock()
-
 	if found {
 		t.Fatalf("message not expired from cache")
 	}
 
+	// Check that adding an expired envelope doesn't do anything.
 	node.add(envelope)
 	node.poolMu.RLock()
 	_, found = node.messages[envelope.Hash()]
@@ -215,5 +213,4 @@ func TestMessageExpiration(t *testing.T) {
 	if found {
 		t.Fatalf("message was added to cache")
 	}
-
 }
