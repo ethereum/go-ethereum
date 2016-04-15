@@ -678,7 +678,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				}
 			}
 			// Write all the data out into the database
-			if err := WriteBody(self.chainDb, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+			if err := WriteBody(self.chainDb, block.Hash(), block.Body()); err != nil {
 				errs[index] = fmt.Errorf("failed to write block body: %v", err)
 				atomic.AddInt32(&failed, 1)
 				glog.Fatal(errs[index])

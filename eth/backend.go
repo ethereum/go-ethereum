@@ -557,7 +557,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
 				return err
 			}
-			if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+			if err := core.WriteBody(db, block.Hash(), block.Body()); err != nil {
 				return err
 			}
 			if err := core.WriteHeader(db, block.Header()); err != nil {
@@ -573,7 +573,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
 			return err
 		}
-		if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
+		if err := core.WriteBody(db, current.Hash(), current.Body()); err != nil {
 			return err
 		}
 		if err := core.WriteHeader(db, current.Header()); err != nil {
