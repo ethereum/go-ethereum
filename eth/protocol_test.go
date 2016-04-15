@@ -78,7 +78,7 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 		select {
 		case err := <-errc:
 			if err == nil {
-				t.Errorf("test %d: protocol returned nil error, want %q", test.wantError)
+				t.Errorf("test %d: protocol returned nil error, want %q", i, test.wantError)
 			} else if err.Error() != test.wantError.Error() {
 				t.Errorf("test %d: wrong error: got %q, want %q", i, err, test.wantError)
 			}

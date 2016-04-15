@@ -108,7 +108,7 @@ func TestMessageAnonymousEncryptDecrypt(t *testing.T) {
 		t.Fatalf("failed to open encrypted message: %v", err)
 	}
 	if !bytes.Equal(out.Payload, payload) {
-		t.Error("payload mismatch: have 0x%x, want 0x%x", out.Payload, payload)
+		t.Errorf("payload mismatch: have 0x%x, want 0x%x", out.Payload, payload)
 	}
 }
 
@@ -144,7 +144,7 @@ func TestMessageFullCrypto(t *testing.T) {
 		t.Fatalf("failed to open encrypted message: %v", err)
 	}
 	if !bytes.Equal(out.Payload, payload) {
-		t.Error("payload mismatch: have 0x%x, want 0x%x", out.Payload, payload)
+		t.Errorf("payload mismatch: have 0x%x, want 0x%x", out.Payload, payload)
 	}
 
 	pubKey := out.Recover()

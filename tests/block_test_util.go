@@ -491,7 +491,7 @@ func mustConvertBytes(in string) []byte {
 	h := unfuckFuckedHex(strings.TrimPrefix(in, "0x"))
 	out, err := hex.DecodeString(h)
 	if err != nil {
-		panic(fmt.Errorf("invalid hex: %q: ", h, err))
+		panic(fmt.Errorf("invalid hex: %q", h))
 	}
 	return out
 }

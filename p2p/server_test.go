@@ -123,7 +123,7 @@ func TestServerDial(t *testing.T) {
 	// run a one-shot TCP server to handle the connection.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("could not setup listener: %v")
+		t.Fatalf("could not setup listener: %v", err)
 	}
 	defer listener.Close()
 	accepted := make(chan net.Conn)

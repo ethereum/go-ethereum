@@ -61,13 +61,13 @@ func TestCountValues(t *testing.T) {
 
 func TestSplitTypes(t *testing.T) {
 	if _, _, err := SplitString(unhex("C100")); err != ErrExpectedString {
-		t.Error("SplitString returned %q, want %q", err, ErrExpectedString)
+		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedString)
 	}
 	if _, _, err := SplitList(unhex("01")); err != ErrExpectedList {
-		t.Error("SplitString returned %q, want %q", err, ErrExpectedList)
+		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
 	}
 	if _, _, err := SplitList(unhex("81FF")); err != ErrExpectedList {
-		t.Error("SplitString returned %q, want %q", err, ErrExpectedList)
+		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
 	}
 }
 

@@ -300,7 +300,7 @@ func TestCompileModulePattern(t *testing.T) {
 	for _, test := range patternTests {
 		re, err := compileModulePattern(test.input)
 		if err != nil {
-			t.Fatalf("%s: %v", err)
+			t.Fatalf("%s: %v", test.input, err)
 		}
 		if re.String() != test.want {
 			t.Errorf("mismatch for %q: got %q, want %q", test.input, re.String(), test.want)

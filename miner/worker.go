@@ -279,7 +279,7 @@ func (self *worker) wait() {
 					glog.V(logger.Error).Infoln("mining err", err)
 					continue
 				}
-				go self.mux.Post(core.NewMinedBlockEvent{block})
+				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
 				work.state.Commit()
 				parent := self.chain.GetBlock(block.ParentHash())
@@ -322,11 +322,11 @@ func (self *worker) wait() {
 
 				// broadcast before waiting for validation
 				go func(block *types.Block, logs vm.Logs, receipts []*types.Receipt) {
-					self.mux.Post(core.NewMinedBlockEvent{block})
-					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
+					self.mux.Post(core.NewMinedBlockEvent{Block: block})
+					self.mux.Post(core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 
 					if stat == core.CanonStatTy {
-						self.mux.Post(core.ChainHeadEvent{block})
+						self.mux.Post(core.ChainHeadEvent{Block: block})
 						self.mux.Post(logs)
 					}
 					if err := core.WriteBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
@@ -411,7 +411,7 @@ func (w *worker) setGasPrice(p *big.Int) {
 	const pct = int64(90)
 	w.gasPrice = gasprice(p, pct)
 
-	w.mux.Post(core.GasPriceChanged{w.gasPrice})
+	w.mux.Post(core.GasPriceChanged{Price: w.gasPrice})
 }
 
 func (self *worker) isBlockLocallyMined(current *Work, deepBlockNum uint64) bool {

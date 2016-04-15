@@ -37,9 +37,11 @@ import (
 )
 
 var (
-	testBankKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testBankAddress = crypto.PubkeyToAddress(testBankKey.PublicKey)
-	testBankFunds   = big.NewInt(1000000)
+	testBankKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	testBank       = core.GenesisAccount{
+		Address: crypto.PubkeyToAddress(testBankKey.PublicKey),
+		Balance: big.NewInt(1000000),
+	}
 )
 
 // newTestProtocolManager creates a new protocol manager for testing purposes,
@@ -50,7 +52,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		evmux         = new(event.TypeMux)
 		pow           = new(core.FakePow)
 		db, _         = ethdb.NewMemDatabase()
-		genesis       = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{testBankAddress, testBankFunds})
+		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
 		chainConfig   = &core.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
 		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux)
 	)

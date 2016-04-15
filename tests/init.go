@@ -67,7 +67,7 @@ func init() {
 func readJson(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return fmt.Errorf("Error reading JSON file", err.Error())
+		return fmt.Errorf("error reading JSON file: %v", err)
 	}
 	if err = json.Unmarshal(data, &value); err != nil {
 		if syntaxerr, ok := err.(*json.SyntaxError); ok {

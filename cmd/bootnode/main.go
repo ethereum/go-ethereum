@@ -79,7 +79,7 @@ func main() {
 func writeKey(target string) {
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		log.Fatal("could not generate key: %v", err)
+		log.Fatalf("could not generate key: %v", err)
 	}
 	b := crypto.FromECDSA(key)
 	if target == "-" {

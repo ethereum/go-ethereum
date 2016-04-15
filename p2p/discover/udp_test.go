@@ -128,7 +128,7 @@ func newUDPTest(t *testing.T) *udpTest {
 func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
 	enc, err := encodePacket(test.remotekey, ptype, data)
 	if err != nil {
-		return test.errorf("packet (%d) encode error: %v", err)
+		return test.errorf("packet (%d) encode error: %v", ptype, err)
 	}
 	test.sent = append(test.sent, enc)
 	if err = test.udp.handlePacket(test.remoteaddr, enc); err != wantError {

@@ -892,8 +892,7 @@ func (d *Downloader) fetchBlocks61(from uint64) error {
 					// case, the internal state of the downloader and the queue is very wrong so
 					// better hard crash and note the error instead of silently accumulating into
 					// a much bigger issue.
-					panic(fmt.Sprintf("%v: fetch assignment failed, hard panic", peer))
-					d.queue.CancelBlocks(request) // noop for now
+					panic(fmt.Sprintf("%v: fetch assignment failed", peer))
 				}
 			}
 			// Make sure that we have peers available for fetching. If all peers have been tried
@@ -1525,8 +1524,7 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 					// case, the internal state of the downloader and the queue is very wrong so
 					// better hard crash and note the error instead of silently accumulating into
 					// a much bigger issue.
-					panic(fmt.Sprintf("%v: %s fetch assignment failed, hard panic", peer, strings.ToLower(kind)))
-					cancel(request) // noop for now
+					panic(fmt.Sprintf("%v: %s fetch assignment failed", peer, strings.ToLower(kind)))
 				}
 				running = true
 			}

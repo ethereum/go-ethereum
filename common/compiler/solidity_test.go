@@ -57,7 +57,7 @@ func TestCompiler(t *testing.T) {
 	}
 
 	if len(contracts) != 1 {
-		t.Errorf("one contract expected, got\n%s", len(contracts))
+		t.Errorf("one contract expected, got %d", len(contracts))
 	}
 
 	if contracts["test"].Code != code {

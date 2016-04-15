@@ -28,7 +28,7 @@ import (
 	"strings"
 )
 
-func fatal(str string, v ...interface{}) {
+func fatalf(str string, v ...interface{}) {
 	fmt.Fprintf(os.Stderr, str, v...)
 	os.Exit(1)
 }
@@ -40,12 +40,12 @@ type setting struct {
 
 func main() {
 	if len(os.Args) < 3 {
-		fatal("usage %s <input> <output>\n", os.Args[0])
+		fatalf("usage %s <input> <output>\n", os.Args[0])
 	}
 
 	content, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
-		fatal("error reading file %v\n", err)
+		fatalf("error reading file %v\n", err)
 	}
 
 	m := make(map[string]setting)
@@ -54,7 +54,7 @@ func main() {
 	filepath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "params", os.Args[2])
 	output, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		fatal("error opening file for writing %v\n", err)
+		fatalf("error opening file for writing %v\n", err)
 	}
 
 	output.WriteString(`// DO NOT EDIT!!!
@@ -76,6 +76,6 @@ var (
 
 	cmd := exec.Command("gofmt", "-w", filepath)
 	if err := cmd.Run(); err != nil {
-		fatal("gofmt failed: %v\n", err)
+		fatalf("gofmt failed: %v\n", err)
 	}
 }

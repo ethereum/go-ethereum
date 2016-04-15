@@ -76,8 +76,8 @@ func TestCallbacks(t *testing.T) {
 	mux.Post(core.ChainEvent{})
 	mux.Post(core.TxPreEvent{})
 	mux.Post(vm.Logs{&vm.Log{}})
-	mux.Post(core.RemovedLogsEvent{vm.Logs{&vm.Log{}}})
-	mux.Post(core.PendingLogsEvent{vm.Logs{&vm.Log{}}})
+	mux.Post(core.RemovedLogsEvent{Logs: vm.Logs{&vm.Log{}}})
+	mux.Post(core.PendingLogsEvent{Logs: vm.Logs{&vm.Log{}}})
 
 	const dura = 5 * time.Second
 	failTimer := time.NewTimer(dura)

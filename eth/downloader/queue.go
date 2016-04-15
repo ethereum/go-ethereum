@@ -983,7 +983,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(error, i
 			continue
 		}
 		// Inject the next state trie item into the processing queue
-		process = append(process, trie.SyncResult{hash, blob})
+		process = append(process, trie.SyncResult{Hash: hash, Data: blob})
 		accepted++
 
 		delete(request.Hashes, hash)

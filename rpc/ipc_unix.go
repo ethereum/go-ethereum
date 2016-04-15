@@ -41,5 +41,5 @@ func ipcListen(endpoint string) (net.Listener, error) {
 
 // newIPCConnection will connect to a Unix socket on the given endpoint.
 func newIPCConnection(endpoint string) (net.Conn, error) {
-	return net.DialUnix("unix", nil, &net.UnixAddr{endpoint, "unix"})
+	return net.DialUnix("unix", nil, &net.UnixAddr{Name: endpoint, Net: "unix"})
 }

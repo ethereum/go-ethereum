@@ -318,7 +318,7 @@ func WriteTd(db ethdb.Database, hash common.Hash, td *big.Int) error {
 // WriteBlock serializes a block into the database, header and body separately.
 func WriteBlock(db ethdb.Database, block *types.Block) error {
 	// Store the body first to retain database consistency
-	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+	if err := WriteBody(db, block.Hash(), block.Body()); err != nil {
 		return err
 	}
 	// Store the header too, signaling full block ownership

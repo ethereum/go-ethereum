@@ -77,7 +77,7 @@ func TestParser(t *testing.T) {
 				t.Fatal("empty output")
 			}
 			if output[0] != test.output {
-				t.Error("%v failed: expected %v but got %v", test.base+OpCode(i), output[0])
+				t.Errorf("%v failed: expected %v but got %v", test.base+OpCode(i), test.output, output[0])
 			}
 		}
 	}

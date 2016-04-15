@@ -107,7 +107,7 @@ func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
 		return nil
 	}
 	x, y := elliptic.Unmarshal(secp256k1.S256(), pub)
-	return &ecdsa.PublicKey{secp256k1.S256(), x, y}
+	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}
 }
 
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
@@ -189,7 +189,7 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	}
 
 	x, y := elliptic.Unmarshal(secp256k1.S256(), s)
-	return &ecdsa.PublicKey{secp256k1.S256(), x, y}, nil
+	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}, nil
 }
 
 func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
