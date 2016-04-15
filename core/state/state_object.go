@@ -287,7 +287,7 @@ func DecodeObject(address common.Address, db trie.Database, data []byte) (*State
 	}
 	if !bytes.Equal(ext.CodeHash, emptyCodeHash) {
 		if obj.code, err = db.Get(ext.CodeHash); err != nil {
-			return nil, fmt.Errorf("can't find code for hash %x: %v", ext.CodeHash, err)
+			return nil, fmt.Errorf("can't get code for hash %x: %v", ext.CodeHash, err)
 		}
 	}
 	obj.nonce = ext.Nonce

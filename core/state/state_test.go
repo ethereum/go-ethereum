@@ -36,7 +36,6 @@ var _ = checker.Suite(&StateSuite{})
 var toAddr = common.BytesToAddress
 
 func (s *StateSuite) TestDump(c *checker.C) {
-	return
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
@@ -48,24 +47,35 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	// write some of them to the trie
 	s.state.UpdateStateObject(obj1)
 	s.state.UpdateStateObject(obj2)
+	s.state.Commit()
 
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
 	want := `{
-    "root": "6e277ae8357d013e50f74eedb66a991f6922f93ae03714de58b3d0c5e9eee53f",
+    "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
     "accounts": {
-        "1468288056310c82aa4c01a7e12a10f8111a0560e72b700555479031b86c357d": {
+        "0000000000000000000000000000000000000001": {
             "balance": "22",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "code": "",
             "storage": {}
         },
-        "a17eacbc25cda025e81db9c5c62868822c73ce097cee2a63e33a2e41268358a1": {
+        "0000000000000000000000000000000000000002": {
+            "balance": "44",
+            "nonce": 0,
+            "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
+            "code": "",
+            "storage": {}
+        },
+        "0000000000000000000000000000000000000102": {
             "balance": "0",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
+            "code": "03030303030303",
             "storage": {}
         }
     }
