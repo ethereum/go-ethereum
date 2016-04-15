@@ -119,6 +119,9 @@ func (c *jsonCodec) ReadRequestHeaders() ([]rpcRequest, bool, RPCError) {
 
 	var incomingMsg json.RawMessage
 	if err := c.d.Decode(&incomingMsg); err != nil {
+		if err == io.EOF {
+			return nil, false, ErrConnectionClosed
+		}
 		return nil, false, &invalidRequestError{err.Error()}
 	}
 
