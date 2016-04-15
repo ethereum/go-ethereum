@@ -109,6 +109,7 @@ test: all
 	build/env.sh go test ./...
 
 travis-test-with-coverage: all
+	build/env.sh go vet ./...
 	build/env.sh build/test-global-coverage.sh
 
 xgo:
