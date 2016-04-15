@@ -89,7 +89,10 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	// Initialize and register the Ethereum protocol
 	accman := accounts.NewPlaintextManager(filepath.Join(tmp, "keystore"))
 	db, _ := ethdb.NewMemDatabase()
-	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
+	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{
+		Address: common.HexToAddress(testAddress),
+		Balance: common.String2Big(testBalance),
+	})
 	ethConf := &eth.Config{
 		ChainConfig:      &core.ChainConfig{HomesteadBlock: new(big.Int)},
 		TestGenesisState: db,

@@ -993,7 +993,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	// first reduce whoever is higher bound
 	if oldBlock.NumberU64() > newBlock.NumberU64() {
 		// reduce old chain
-		for oldBlock = oldBlock; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
+		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = self.GetBlock(oldBlock.ParentHash()) {
 			oldChain = append(oldChain, oldBlock)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 
@@ -1001,7 +1001,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	} else {
 		// reduce new chain and append new chain blocks for inserting later on
-		for newBlock = newBlock; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
+		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = self.GetBlock(newBlock.ParentHash()) {
 			newChain = append(newChain, newBlock)
 		}
 	}

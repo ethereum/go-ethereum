@@ -124,7 +124,7 @@ func BenchmarkVerifyProof(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		im := i % len(keys)
 		if _, err := VerifyProof(root, []byte(keys[im]), proofs[im]); err != nil {
-			b.Fatalf("key %x: error", keys[im], err)
+			b.Fatalf("key %x: %v", keys[im], err)
 		}
 	}
 }

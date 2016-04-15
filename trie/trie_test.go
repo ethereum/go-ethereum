@@ -65,7 +65,7 @@ func TestMissingRoot(t *testing.T) {
 		t.Error("New returned non-nil trie for invalid root")
 	}
 	if _, ok := err.(*MissingNodeError); !ok {
-		t.Error("New returned wrong error: %v", err)
+		t.Errorf("New returned wrong error: %v", err)
 	}
 }
 

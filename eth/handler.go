@@ -245,7 +245,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			return err
 		}
 	}
-	return nil
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote

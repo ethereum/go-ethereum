@@ -75,7 +75,7 @@ func TestJSONRequestParsing(t *testing.T) {
 			t.Fatalf("%v", e)
 		}
 		if id != 1234 {
-			t.Fatalf("Expected id 1234 but got %s", id)
+			t.Fatalf("Expected id 1234 but got %d", id)
 		}
 	} else {
 		t.Fatalf("invalid request, expected *json.RawMesage got %T", requests[0].id)

@@ -30,17 +30,17 @@ func TestNumberTypes(t *testing.T) {
 
 	unsigned := U256(big.NewInt(1))
 	if !bytes.Equal(unsigned, ubytes) {
-		t.Error("expected %x got %x", ubytes, unsigned)
+		t.Errorf("expected %x got %x", ubytes, unsigned)
 	}
 
 	signed := S256(big.NewInt(1))
 	if !bytes.Equal(signed, ubytes) {
-		t.Error("expected %x got %x", ubytes, unsigned)
+		t.Errorf("expected %x got %x", ubytes, unsigned)
 	}
 
 	signed = S256(big.NewInt(-1))
 	if !bytes.Equal(signed, sbytesmin) {
-		t.Error("expected %x got %x", ubytes, unsigned)
+		t.Errorf("expected %x got %x", ubytes, unsigned)
 	}
 }
 
@@ -75,10 +75,10 @@ func TestPackNumber(t *testing.T) {
 
 func TestSigned(t *testing.T) {
 	if isSigned(reflect.ValueOf(uint(10))) {
-		t.Error()
+		t.Error("signed")
 	}
 
 	if !isSigned(reflect.ValueOf(int(10))) {
-		t.Error()
+		t.Error("not signed")
 	}
 }

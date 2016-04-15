@@ -131,13 +131,11 @@ func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
 		return otto.FalseValue()
 	}
 
-	if ret, err := call.Otto.Call("jeth.newAccount", nil, passwd); err == nil {
+	ret, err := call.Otto.Call("jeth.newAccount", nil, passwd)
+	if err == nil {
 		return ret
-	} else {
-		fmt.Printf("%v\n", err)
-		return otto.FalseValue()
 	}
-
+	fmt.Println(err)
 	return otto.FalseValue()
 }
 
@@ -233,7 +231,6 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 func throwJSExeception(msg interface{}) otto.Value {
 	p, _ := otto.ToValue(msg)
 	panic(p)
-	return p
 }
 
 // Sleep will halt the console for arg[0] seconds.

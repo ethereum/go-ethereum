@@ -331,7 +331,7 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 					if decAddr, err := hex.DecodeString(strAddr); err == nil {
 						addresses = append(addresses, common.BytesToAddress(decAddr))
 					} else {
-						fmt.Errorf("invalid address given")
+						return fmt.Errorf("invalid address given")
 					}
 				} else {
 					return fmt.Errorf("invalid address on index %d", i)
@@ -344,10 +344,10 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 			if decAddr, err := hex.DecodeString(singleAddr); err == nil {
 				addresses = append(addresses, common.BytesToAddress(decAddr))
 			} else {
-				fmt.Errorf("invalid address given")
+				return fmt.Errorf("invalid address given")
 			}
 		} else {
-			errors.New("invalid address(es) given")
+			return errors.New("invalid address(es) given")
 		}
 		args.Addresses = addresses
 	}
@@ -394,7 +394,7 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 								parsedTopics[i] = []common.Hash{t}
 							}
 						} else {
-							fmt.Errorf("topic[%d][%d] not a string", i, j)
+							return fmt.Errorf("topic[%d][%d] not a string", i, j)
 						}
 					}
 				} else {

@@ -145,7 +145,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = trie.SyncResult{hash, data}
+			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
 		if index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
@@ -175,7 +175,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = trie.SyncResult{hash, data}
+			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
 		if index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
@@ -212,7 +212,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results = append(results, trie.SyncResult{hash, data})
+			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
 		if index, err := sched.Process(results); err != nil {
@@ -251,7 +251,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results = append(results, trie.SyncResult{hash, data})
+			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 
 			if len(results) >= cap(results) {
 				break
@@ -289,7 +289,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
 			}
-			results[i] = trie.SyncResult{hash, data}
+			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
 		// Process each of the state nodes
 		if index, err := sched.Process(results); err != nil {
