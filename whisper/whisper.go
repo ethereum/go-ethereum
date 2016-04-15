@@ -255,7 +255,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 	defer self.poolMu.Unlock()
 
 	// short circuit when a received envelope has already expired
-	if envelope.Expiry <= uint32(time.Now().Unix()) {
+	if envelope.Expiry < uint32(time.Now().Unix()) {
 		return nil
 	}
 
@@ -278,7 +278,6 @@ func (self *Whisper) add(envelope *Envelope) error {
 		go self.postEvent(envelope)
 	}
 	glog.V(logger.Detail).Infof("cached whisper envelope %x\n", envelope)
-
 	return nil
 }
 
