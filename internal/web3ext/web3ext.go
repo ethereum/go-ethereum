@@ -14,19 +14,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package rpc
+// package web3ext contains geth specific web3.js extensions.
+package web3ext
 
-var (
-	// Holds geth specific RPC extends which can be used to extend web3
-	WEB3Extensions = map[string]string{
-		"txpool": TxPool_JS,
-		"admin":  Admin_JS,
-		"eth":    Eth_JS,
-		"miner":  Miner_JS,
-		"debug":  Debug_JS,
-		"net":    Net_JS,
-	}
-)
+var Modules = map[string]string{
+	"txpool": TxPool_JS,
+	"admin":  Admin_JS,
+	"eth":    Eth_JS,
+	"miner":  Miner_JS,
+	"debug":  Debug_JS,
+	"net":    Net_JS,
+}
 
 const TxPool_JS = `
 web3._extend({
