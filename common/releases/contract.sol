@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-
 // ReleaseOracle is an Ethereum contract to store the current and previous
 // versions of the go-ethereum implementation. Its goal is to allow Geth to
 // check for new releases automatically without the need to consult a central
@@ -29,6 +28,17 @@ contract ReleaseOracle {
     address[] fail; // List of signers voting to fail a proposal
   }
 
+  // Version is the version details of a particular Geth release
+  struct Version {
+    uint32  major;  // Major version component of the release
+    uint32  minor;  // Minor version component of the release
+    uint32  patch;  // Patch version component of the release
+    bytes20 commit; // Git SHA1 commit hash of the release
+
+    uint64  time;  // Timestamp of the release approval
+    Votes   votes; // Votes that passed this release
+  }
+
   // Oracle authorization details
   mapping(address => bool) authorized; // Set of accounts allowed to vote on updating the contract
   address[]                signers;    // List of addresses currently accepted as signers
@@ -36,6 +46,9 @@ contract ReleaseOracle {
   // Various proposals being voted on
   mapping(address => Votes) authProps; // Currently running user authorization proposals
   address[]                 authPend;  // List of addresses being voted on (map indexes)
+
+  Version   verProp;  // Currently proposed release being voted on
+  Version[] releases; // All the positively voted releases
 
   // isSigner is a modifier to authorize contract transactions.
   modifier isSigner() {
@@ -68,21 +81,46 @@ contract ReleaseOracle {
     return (authProps[user].pass, authProps[user].fail);
   }
 
+  // CurrentVersion retrieves the semantic version, commit hash and release time
+  // of the currently votec active release.
+  function CurrentVersion() constant returns (uint32 major, uint32 minor, uint32 patch, bytes20 commit, uint time) {
+    var release = releases[releases.length - 1];
+
+    return (release.major, release.minor, release.patch, release.commit, release.time);
+  }
+
+  // ProposedVersion retrieves the semantic version, commit hash and the current
+  // votes for the next proposed release.
+  function ProposedVersion() constant returns (uint32 major, uint32 minor, uint32 patch, bytes20 commit, address[] pass, address[] fail) {
+    return (verProp.major, verProp.minor, verProp.patch, verProp.commit, verProp.votes.pass, verProp.votes.fail);
+  }
+
   // Promote pitches in on a voting campaign to promote a new user to a signer
   // position.
   function Promote(address user) {
-    updateStatus(user, true);
+    updateSigner(user, true);
   }
 
   // Demote pitches in on a voting campaign to demote an authorized user from
   // its signer position.
   function Demote(address user) {
-    updateStatus(user, false);
+    updateSigner(user, false);
   }
 
-  // updateStatus marks a vote for changing the status of an Ethereum user,
-  // either for or against the user being an authorized signer.
-  function updateStatus(address user, bool authorize) isSigner {
+  // Release votes for a particular version to be included as the next release.
+  function Release(uint32 major, uint32 minor, uint32 patch, bytes20 commit) {
+    updateRelease(major, minor, patch, commit, true);
+  }
+
+  // Nuke votes for the currently proposed version to not be included as the next
+  // release. Nuking doesn't require a specific version number for simplicity.
+  function Nuke() {
+    updateRelease(0, 0, 0, 0, false);
+  }
+
+  // updateSigner marks a vote for changing the status of an Ethereum user, either
+  // for or against the user being an authorized signer.
+  function updateSigner(address user, bool authorize) isSigner {
     // Gather the current votes and ensure we don't double vote
     Votes votes = authProps[user];
     for (uint i = 0; i < votes.pass.length; i++) {
@@ -137,119 +175,56 @@ contract ReleaseOracle {
       }
     }
   }
-/*
-    address[] public parties; // owners/signers
-    address[] public deleteAcks; // votes to suicide contract
-    uint public deleteAcksReq; // number of votes needed
-    V[] public versions;
 
-    modifier canAccess(address addr) {
-        bool access = false;
-        for (uint i = 0; i < parties.length; i++) {
-            if (parties[i] == addr) {
-                access = true;
-                break;
-            }
-        }
-        if (access == false) {
-            throw;
-        }
-        _
+  // updateRelease votes for a particular version to be included as the next release,
+  // or for the currently proposed release to be nuked out.
+  function updateRelease(uint32 major, uint32 minor, uint32 patch, bytes20 commit, bool release) isSigner {
+    // Skip nuke votes if no proposal is pending
+    if (!release && verProp.votes.pass.length == 0) {
+      return;
     }
-
-	function Versions(address[] addrs) {
-        if (addrs.length < 2) {
-            throw;
-        }
-
-        parties = addrs;
-        deleteAcksReq = (addrs.length / 2) + 1;
+    // Mark a new release if no proposal is pending
+    if (verProp.votes.pass.length == 0) {
+      verProp.major  = major;
+      verProp.minor  = minor;
+      verProp.patch  = patch;
+      verProp.commit = commit;
     }
-
-    // TODO: use dynamic array when solidity adds proper support for returning them
-    function GetVersions() returns (bytes32[10], uint64[10], uint[10]) {
-        bytes32[10] memory vs;
-        uint64[10] memory ts;
-        uint[10] memory ss;
-        for (uint i = 0; i < versions.length; i++) {
-            vs[i] = versions[i].v;
-            ts[i] = versions[i].ts;
-            ss[i] = versions[i].signers.length;
-        }
-        return (vs, ts, ss);
+    // Make sure positive votes match the current proposal
+    if (release && (verProp.major != major || verProp.minor != minor || verProp.patch != patch || verProp.commit != commit)) {
+      return;
     }
-
-    // either submit a new version or acknowledge an existing one
-    function AckVersion(bytes32 ver)
-        canAccess(msg.sender)
-    {
-        for (uint i = 0; i < versions.length; i++) {
-            if (versions[i].v == ver) {
-                for (uint j = 0; j < versions[i].signers.length; j++) {
-                    if (versions[i].signers[j] == msg.sender) {
-                        // already signed
-                        throw;
-                    }
-                }
-                // add sender as signer of existing version
-                versions[i].signers.push(msg.sender);
-                return;
-            }
-        }
-
-        // version is new, add it
-        // due to dynamic array, push it first then set values
-        V memory v;
-        versions.push(v);
-        versions[versions.length - 1].v = ver;
-        // signers is dynamic array; have to extend size manually
-        versions[versions.length - 1].signers.length++;
-        versions[versions.length - 1].signers[0] = msg.sender;
-        versions[versions.length - 1].ts = uint64(block.timestamp);
+    // Gather the current votes and ensure we don't double vote
+    Votes votes = verProp.votes;
+    for (uint i = 0; i < votes.pass.length; i++) {
+      if (votes.pass[i] == msg.sender) {
+        return;
+      }
     }
-
-     // remove vote for a version, if present
-    function NackVersion(bytes32 ver)
-        canAccess(msg.sender)
-    {
-        for (uint i = 0; i < versions.length; i++) {
-            if (versions[i].v == ver) {
-                for (uint j = 0; j < versions[i].signers.length; j++) {
-                    if (versions[i].signers[j] == msg.sender) {
-                        delete versions[i].signers[j];
-                    }
-                }
-            }
-        }
+    for (i = 0; i < votes.fail.length; i++) {
+      if (votes.fail[i] == msg.sender) {
+        return;
+      }
     }
-
-    // delete-this-contract vote, suicide if enough votes
-    function AckDelete()
-        canAccess(msg.sender)
-    {
-        for (uint i = 0; i < deleteAcks.length; i++) {
-            if (deleteAcks[i] == msg.sender) {
-                throw; // already acked delete
-            }
-        }
-        deleteAcks.push(msg.sender);
-        if (deleteAcks.length >= deleteAcksReq) {
-            suicide(msg.sender);
-        }
+    // Cast the vote and return if the proposal cannot be resolved yet
+    if (release) {
+      votes.pass.push(msg.sender);
+      if (votes.pass.length <= signers.length / 2) {
+        return;
+      }
+    } else {
+      votes.fail.push(msg.sender);
+      if (votes.fail.length <= signers.length / 2) {
+        return;
+      }
     }
-
-    // remove sender's delete-this-contract vote, if present
-    function NackDelete()
-        canAccess(msg.sender)
-    {
-        uint len = deleteAcks.length;
-        for (uint i = 0; i < len; i++) {
-            if (deleteAcks[i] == msg.sender) {
-                if (len > 1) {
-                    deleteAcks[i] = deleteAcks[len-1];
-                }
-                deleteAcks.length -= 1;
-            }
-        }
-    }*/
+    // Proposal resolved in our favor, execute whatever we voted on
+    if (release) {
+      verProp.time = uint64(now);
+      releases.push(verProp);
+      delete verProp;
+    } else {
+      delete verProp;
+    }
+  }
 }

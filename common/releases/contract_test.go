@@ -195,3 +195,60 @@ func TestSignerDemotion(t *testing.T) {
 		}
 	}
 }
+
+// Tests that new versions can be released, honouring both voting rights as well
+// as the minimum required vote count.
+func TestVersionRelease(t *testing.T) {
+	// Prefund a few accounts to authorize with and create the oracle
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+	}
+	key, oracle, sim := setupReleaseTest(t, keys...)
+
+	// Gradually push releases, always requiring more signers than previously
+	keys = append([]*ecdsa.PrivateKey{key}, keys...)
+	for i := 1; i < len(keys); i++ {
+		// Check that no votes are accepted from the not yet authed user
+		if _, err := oracle.Release(bind.NewKeyedTransactor(keys[i]), 0, 0, 0, [20]byte{0}); err != nil {
+			t.Fatalf("Iter #%d: failed invalid release attempt: %v", i, err)
+		}
+		sim.Commit()
+
+		prop, err := oracle.ProposedVersion(nil)
+		if err != nil {
+			t.Fatalf("Iter #%d: failed to retrieve active proposal: %v", i, err)
+		}
+		if len(prop.Pass) != 0 {
+			t.Fatalf("Iter #%d: proposal vote count mismatch: have %d, want 0", i, len(prop.Pass))
+		}
+		/*// Promote with half - 1 voters and check that the user's not yet authorized
+		for j := 0; j < i/2; j++ {
+			if _, err = oracle.Promote(bind.NewKeyedTransactor(keys[j]), crypto.PubkeyToAddress(keys[i].PublicKey)); err != nil {
+				t.Fatalf("Iter #%d: failed valid promotion attempt: %v", i, err)
+			}
+		}
+		sim.Commit()
+
+		signers, err := oracle.Signers(nil)
+		if err != nil {
+			t.Fatalf("Iter #%d: failed to retrieve list of signers: %v", i, err)
+		}
+		if len(signers) != i {
+			t.Fatalf("Iter #%d: signer count mismatch: have %v, want %v", i, len(signers), i)
+		}
+		// Promote with the last one needed to pass the promotion
+		if _, err = oracle.Promote(bind.NewKeyedTransactor(keys[i/2]), crypto.PubkeyToAddress(keys[i].PublicKey)); err != nil {
+			t.Fatalf("Iter #%d: failed valid promotion completion attempt: %v", i, err)
+		}
+		sim.Commit()
+
+		signers, err = oracle.Signers(nil)
+		if err != nil {
+			t.Fatalf("Iter #%d: failed to retrieve list of signers: %v", i, err)
+		}
+		if len(signers) != i+1 {
+			t.Fatalf("Iter #%d: signer count mismatch: have %v, want %v", i, len(signers), i+1)
+		}*/
+	}
+}
