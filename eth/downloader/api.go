@@ -85,7 +85,7 @@ type SyncingResult struct {
 
 // Syncing provides information when this nodes starts synchronising with the Ethereum network and when it's finished.
 func (api *PublicDownloaderAPI) Syncing(ctx context.Context) (rpc.Subscription, error) {
-	notifier, supported := ctx.Value(rpc.NotifierContextKey).(rpc.Notifier)
+	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, rpc.ErrNotificationsUnsupported
 	}

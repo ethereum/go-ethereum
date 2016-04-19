@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -60,6 +61,14 @@ type Notifier interface {
 	NewSubscription(UnsubscribeCallback) (Subscription, error)
 	// Cancel subscription
 	Unsubscribe(id string) error
+}
+
+type notifierKey struct{}
+
+// NotifierFromContext returns the Notifier value stored in ctx, if any.
+func NotifierFromContext(ctx context.Context) (Notifier, bool) {
+	n, ok := ctx.Value(notifierKey{}).(Notifier)
+	return n, ok
 }
 
 // Subscription defines the interface for objects that can notify subscribers
