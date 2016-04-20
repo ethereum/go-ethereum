@@ -59,7 +59,7 @@ func packElement(t Type, reflectValue reflect.Value) []byte {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
 
-		return common.LeftPadBytes(reflectValue.Bytes(), 32)
+		return common.RightPadBytes(reflectValue.Bytes(), 32)
 	}
 	panic("abi: fatal error")
 }

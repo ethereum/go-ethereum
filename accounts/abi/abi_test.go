@@ -18,7 +18,6 @@ package abi
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -53,35 +52,35 @@ func TestTypeCheck(t *testing.T) {
 	for i, test := range []struct {
 		typ   string
 		input interface{}
-		err   error
+		err   string
 	}{
-		{"uint", big.NewInt(1), nil},
-		{"int", big.NewInt(1), nil},
-		{"uint30", big.NewInt(1), nil},
-		{"uint30", uint8(1), varErr(reflect.Ptr, reflect.Uint8)},
-		{"uint16", uint16(1), nil},
-		{"uint16", uint8(1), varErr(reflect.Uint16, reflect.Uint8)},
-		{"uint16[]", []uint16{1, 2, 3}, nil},
-		{"uint16[]", [3]uint16{1, 2, 3}, nil},
-		{"uint16[]", []uint32{1, 2, 3}, typeErr(formatSliceString(reflect.Uint16, -1), formatSliceString(reflect.Uint32, -1))},
-		{"uint16[3]", [3]uint32{1, 2, 3}, typeErr(formatSliceString(reflect.Uint16, 3), formatSliceString(reflect.Uint32, 3))},
-		{"uint16[3]", [4]uint16{1, 2, 3}, typeErr(formatSliceString(reflect.Uint16, 3), formatSliceString(reflect.Uint16, 4))},
-		{"uint16[3]", []uint16{1, 2, 3}, nil},
-		{"uint16[3]", []uint16{1, 2, 3, 4}, typeErr(formatSliceString(reflect.Uint16, 3), formatSliceString(reflect.Uint16, 4))},
-		{"address[]", []common.Address{common.Address{1}}, nil},
-		{"address[1]", []common.Address{common.Address{1}}, nil},
-		{"address[1]", [1]common.Address{common.Address{1}}, nil},
-		{"address[2]", [1]common.Address{common.Address{1}}, typeErr(formatSliceString(reflect.Array, 2), formatSliceString(reflect.Array, 1))},
-		{"bytes32", [32]byte{}, nil},
-		{"bytes32", [33]byte{}, typeErr(formatSliceString(reflect.Uint8, 32), formatSliceString(reflect.Uint8, 33))},
-		{"bytes32", common.Hash{1}, nil},
-		{"bytes31", [31]byte{}, nil},
-		{"bytes31", [32]byte{}, typeErr(formatSliceString(reflect.Uint8, 31), formatSliceString(reflect.Uint8, 32))},
-		{"bytes", []byte{0, 1}, nil},
-		{"bytes", [2]byte{0, 1}, nil},
-		{"bytes", common.Hash{1}, nil},
-		{"string", "hello world", nil},
-		{"bytes32[]", [][32]byte{[32]byte{}}, nil},
+		{"uint", big.NewInt(1), ""},
+		{"int", big.NewInt(1), ""},
+		{"uint30", big.NewInt(1), ""},
+		{"uint30", uint8(1), "abi: cannot use uint8 as type ptr as argument"},
+		{"uint16", uint16(1), ""},
+		{"uint16", uint8(1), "abi: cannot use uint8 as type uint16 as argument"},
+		{"uint16[]", []uint16{1, 2, 3}, ""},
+		{"uint16[]", [3]uint16{1, 2, 3}, ""},
+		{"uint16[]", []uint32{1, 2, 3}, "abi: cannot use []uint32 as type []uint16 as argument"},
+		{"uint16[3]", [3]uint32{1, 2, 3}, "abi: cannot use [3]uint32 as type [3]uint16 as argument"},
+		{"uint16[3]", [4]uint16{1, 2, 3}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
+		{"uint16[3]", []uint16{1, 2, 3}, ""},
+		{"uint16[3]", []uint16{1, 2, 3, 4}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
+		{"address[]", []common.Address{common.Address{1}}, ""},
+		{"address[1]", []common.Address{common.Address{1}}, ""},
+		{"address[1]", [1]common.Address{common.Address{1}}, ""},
+		{"address[2]", [1]common.Address{common.Address{1}}, "abi: cannot use [1]array as type [2]array as argument"},
+		{"bytes32", [32]byte{}, ""},
+		{"bytes32", [33]byte{}, "abi: cannot use [33]uint8 as type [32]uint8 as argument"},
+		{"bytes32", common.Hash{1}, ""},
+		{"bytes31", [31]byte{}, ""},
+		{"bytes31", [32]byte{}, "abi: cannot use [32]uint8 as type [31]uint8 as argument"},
+		{"bytes", []byte{0, 1}, ""},
+		{"bytes", [2]byte{0, 1}, ""},
+		{"bytes", common.Hash{1}, ""},
+		{"string", "hello world", ""},
+		{"bytes32[]", [][32]byte{[32]byte{}}, ""},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
@@ -89,16 +88,16 @@ func TestTypeCheck(t *testing.T) {
 		}
 
 		err = typeCheck(typ, reflect.ValueOf(test.input))
-		if err != nil && test.err == nil {
+		if err != nil && len(test.err) == 0 {
 			t.Errorf("%d failed. Expected no err but got: %v", i, err)
 			continue
 		}
-		if err == nil && test.err != nil {
+		if err == nil && len(test.err) != 0 {
 			t.Errorf("%d failed. Expected err: %v but got none", i, test.err)
 			continue
 		}
 
-		if err != nil && test.err != nil && err.Error() != test.err.Error() {
+		if err != nil && len(test.err) != 0 && err.Error() != test.err {
 			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
 		}
 	}
@@ -110,63 +109,93 @@ func TestSimpleMethodUnpack(t *testing.T) {
 		marshalledOutput []byte      // evm return data
 		expectedOut      interface{} // the expected output
 		outVar           string      // the output variable (e.g. uint32, *big.Int, etc)
-		err              error       // nil or error if expected
+		err              string      // empty or error if expected
 	}{
 		{
 			`[ { "type": "uint32" } ]`,
 			pad([]byte{1}, 32, true),
 			uint32(1),
 			"uint32",
-			nil,
+			"",
 		},
 		{
 			`[ { "type": "uint32" } ]`,
 			pad([]byte{1}, 32, true),
 			nil,
 			"uint16",
-			errors.New("abi: cannot unmarshal uint32 in to uint16"),
+			"abi: cannot unmarshal uint32 in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
 			pad([]byte{1}, 32, true),
 			nil,
 			"uint16",
-			errors.New("abi: cannot unmarshal *big.Int in to uint16"),
+			"abi: cannot unmarshal *big.Int in to uint16",
 		},
 		{
 			`[ { "type": "uint17" } ]`,
 			pad([]byte{1}, 32, true),
 			big.NewInt(1),
 			"*big.Int",
-			nil,
+			"",
 		},
+
+		{
+			`[ { "type": "int32" } ]`,
+			pad([]byte{1}, 32, true),
+			int32(1),
+			"int32",
+			"",
+		},
+		{
+			`[ { "type": "int32" } ]`,
+			pad([]byte{1}, 32, true),
+			nil,
+			"int16",
+			"abi: cannot unmarshal int32 in to int16",
+		},
+		{
+			`[ { "type": "int17" } ]`,
+			pad([]byte{1}, 32, true),
+			nil,
+			"int16",
+			"abi: cannot unmarshal *big.Int in to int16",
+		},
+		{
+			`[ { "type": "int17" } ]`,
+			pad([]byte{1}, 32, true),
+			big.NewInt(1),
+			"*big.Int",
+			"",
+		},
+
 		{
 			`[ { "type": "address" } ]`,
 			pad(pad([]byte{1}, 20, false), 32, true),
 			common.Address{1},
 			"address",
-			nil,
+			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			pad([]byte{1}, 32, false),
 			pad([]byte{1}, 32, false),
 			"bytes",
-			nil,
+			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			pad([]byte{1}, 32, false),
 			pad([]byte{1}, 32, false),
 			"hash",
-			nil,
+			"",
 		},
 		{
 			`[ { "type": "bytes32" } ]`,
 			pad([]byte{1}, 32, false),
 			pad([]byte{1}, 32, false),
 			"interface",
-			nil,
+			"",
 		},
 	} {
 		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
@@ -194,6 +223,22 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			var v uint64
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
 			outvar = v
+		case "int8":
+			var v int8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int16":
+			var v int16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int32":
+			var v int32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "int64":
+			var v int64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
 		case "*big.Int":
 			var v *big.Int
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
@@ -217,15 +262,15 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			continue
 		}
 
-		if err != nil && test.err == nil {
+		if err != nil && len(test.err) == 0 {
 			t.Errorf("%d failed. Expected no err but got: %v", i, err)
 			continue
 		}
-		if err == nil && test.err != nil {
+		if err == nil && len(test.err) != 0 {
 			t.Errorf("%d failed. Expected err: %v but got none", i, test.err)
 			continue
 		}
-		if err != nil && test.err != nil && err.Error() != test.err.Error() {
+		if err != nil && len(test.err) != 0 && err.Error() != test.err {
 			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
 			continue
 		}
@@ -253,6 +298,7 @@ func TestPack(t *testing.T) {
 	}{
 		{"uint16", uint16(2), pad([]byte{2}, 32, true)},
 		{"uint16[]", []uint16{1, 2}, formatSliceOutput([]byte{1}, []byte{2})},
+		{"bytes20", [20]byte{1}, pad([]byte{1}, 32, false)},
 		{"uint256[]", []*big.Int{big.NewInt(1), big.NewInt(2)}, formatSliceOutput([]byte{1}, []byte{2})},
 		{"address[]", []common.Address{common.Address{1}, common.Address{2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
 		{"bytes32[]", []common.Hash{common.Hash{1}, common.Hash{2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
@@ -346,26 +392,26 @@ func TestMethodPack(t *testing.T) {
 
 const jsondata = `
 [
-	{ "type" : "function", "name" : "balance", "const" : true },
-	{ "type" : "function", "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
+	{ "type" : "function", "name" : "balance", "constant" : true },
+	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] }
 ]`
 
 const jsondata2 = `
 [
-	{ "type" : "function", "name" : "balance", "const" : true },
-	{ "type" : "function", "name" : "send", "const" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
-	{ "type" : "function", "name" : "test", "const" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "string", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
-	{ "type" : "function", "name" : "bool", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
-	{ "type" : "function", "name" : "address", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
-	{ "type" : "function", "name" : "uint64[2]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
-	{ "type" : "function", "name" : "uint64[]", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
-	{ "type" : "function", "name" : "foo", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
-	{ "type" : "function", "name" : "bar", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
-	{ "type" : "function", "name" : "slice", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
-	{ "type" : "function", "name" : "slice256", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
-	{ "type" : "function", "name" : "sliceAddress", "const" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
-	{ "type" : "function", "name" : "sliceMultiAddress", "const" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] }
+	{ "type" : "function", "name" : "balance", "constant" : true },
+	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "string", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bool", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
+	{ "type" : "function", "name" : "address", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address" } ] },
+	{ "type" : "function", "name" : "uint64[2]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[2]" } ] },
+	{ "type" : "function", "name" : "uint64[]", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint64[]" } ] },
+	{ "type" : "function", "name" : "foo", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" } ] },
+	{ "type" : "function", "name" : "bar", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32" }, { "name" : "string", "type" : "uint16" } ] },
+	{ "type" : "function", "name" : "slice", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint32[2]" } ] },
+	{ "type" : "function", "name" : "slice256", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "uint256[2]" } ] },
+	{ "type" : "function", "name" : "sliceAddress", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "address[]" } ] },
+	{ "type" : "function", "name" : "sliceMultiAddress", "constant" : false, "inputs" : [ { "name" : "a", "type" : "address[]" }, { "name" : "b", "type" : "address[]" } ] }
 ]`
 
 func TestReader(t *testing.T) {
@@ -537,9 +583,9 @@ func ExampleJSON() {
 
 func TestInputVariableInputLength(t *testing.T) {
 	const definition = `[
-	{ "type" : "function", "name" : "strOne", "const" : true, "inputs" : [ { "name" : "str", "type" : "string" } ] },
-	{ "type" : "function", "name" : "bytesOne", "const" : true, "inputs" : [ { "name" : "str", "type" : "bytes" } ] },
-	{ "type" : "function", "name" : "strTwo", "const" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "str1", "type" : "string" } ] }
+	{ "type" : "function", "name" : "strOne", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" } ] },
+	{ "type" : "function", "name" : "bytesOne", "constant" : true, "inputs" : [ { "name" : "str", "type" : "bytes" } ] },
+	{ "type" : "function", "name" : "strTwo", "constant" : true, "inputs" : [ { "name" : "str", "type" : "string" }, { "name" : "str1", "type" : "string" } ] }
 	]`
 
 	abi, err := JSON(strings.NewReader(definition))
@@ -701,7 +747,7 @@ func TestBareEvents(t *testing.T) {
 
 func TestMultiReturnWithStruct(t *testing.T) {
 	const definition = `[
-	{ "name" : "multi", "const" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -754,7 +800,7 @@ func TestMultiReturnWithStruct(t *testing.T) {
 
 func TestMultiReturnWithSlice(t *testing.T) {
 	const definition = `[
-	{ "name" : "multi", "const" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
+	{ "name" : "multi", "constant" : false, "outputs": [ { "name": "Int", "type": "uint256" }, { "name": "String", "type": "string" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
@@ -790,8 +836,8 @@ func TestMultiReturnWithSlice(t *testing.T) {
 
 func TestMarshalArrays(t *testing.T) {
 	const definition = `[
-	{ "name" : "bytes32", "const" : false, "outputs": [ { "type": "bytes32" } ] },
-	{ "name" : "bytes10", "const" : false, "outputs": [ { "type": "bytes10" } ] }
+	{ "name" : "bytes32", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
+	{ "name" : "bytes10", "constant" : false, "outputs": [ { "type": "bytes10" } ] }
 	]`
 
 	abi, err := JSON(strings.NewReader(definition))
@@ -849,14 +895,14 @@ func TestMarshalArrays(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	const definition = `[
-	{ "name" : "int", "const" : false, "outputs": [ { "type": "uint256" } ] },
-	{ "name" : "bool", "const" : false, "outputs": [ { "type": "bool" } ] },
-	{ "name" : "bytes", "const" : false, "outputs": [ { "type": "bytes" } ] },
-	{ "name" : "fixed", "const" : false, "outputs": [ { "type": "bytes32" } ] },
-	{ "name" : "multi", "const" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
-	{ "name" : "addressSliceSingle", "const" : false, "outputs": [ { "type": "address[]" } ] },
-	{ "name" : "addressSliceDouble", "const" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
-	{ "name" : "mixedBytes", "const" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
+	{ "name" : "int", "constant" : false, "outputs": [ { "type": "uint256" } ] },
+	{ "name" : "bool", "constant" : false, "outputs": [ { "type": "bool" } ] },
+	{ "name" : "bytes", "constant" : false, "outputs": [ { "type": "bytes" } ] },
+	{ "name" : "fixed", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
+	{ "name" : "multi", "constant" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
+	{ "name" : "addressSliceSingle", "constant" : false, "outputs": [ { "type": "address[]" } ] },
+	{ "name" : "addressSliceDouble", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
+	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {

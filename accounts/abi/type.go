@@ -89,6 +89,7 @@ func NewType(t string) (typ Type, err error) {
 			return Type{}, err
 		}
 		typ.Elem = &sliceType
+		typ.stringKind = sliceType.stringKind + t[len(res[1]):]
 		return typ, nil
 	}
 
@@ -110,6 +111,7 @@ func NewType(t string) (typ Type, err error) {
 		varSize = 256
 		t += "256"
 	}
+	typ.stringKind = t
 
 	switch varType {
 	case "int":
@@ -149,7 +151,6 @@ func NewType(t string) (typ Type, err error) {
 	default:
 		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
-	typ.stringKind = t
 
 	return
 }
@@ -180,4 +181,10 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 	}
 
 	return packElement(t, v), nil
+}
+
+// requireLengthPrefix returns whether the type requires any sort of length
+// prefixing.
+func (t Type) requiresLengthPrefix() bool {
+	return t.T != FixedBytesTy && (t.T == StringTy || t.T == BytesTy || t.IsSlice || t.IsArray)
 }

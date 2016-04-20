@@ -58,7 +58,7 @@ func (m Method) pack(method Method, args ...interface{}) ([]byte, error) {
 		}
 
 		// check for a slice type (string, bytes, slice)
-		if input.Type.T == StringTy || input.Type.T == BytesTy || input.Type.IsSlice || input.Type.IsArray {
+		if input.Type.requiresLengthPrefix() {
 			// calculate the offset
 			offset := len(method.Inputs)*32 + len(variableInput)
 			// set the offset
