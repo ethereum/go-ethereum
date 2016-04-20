@@ -161,6 +161,13 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			"hash",
 			nil,
 		},
+		{
+			`[ { "type": "bytes32" } ]`,
+			pad([]byte{1}, 32, false),
+			pad([]byte{1}, 32, false),
+			"interface",
+			nil,
+		},
 	} {
 		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
 		abi, err := JSON(strings.NewReader(abiDefinition))
@@ -203,6 +210,8 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			var v common.Hash
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
 			outvar = v
+		case "interface":
+			err = abi.Unpack(&outvar, "method", test.marshalledOutput)
 		default:
 			t.Errorf("unsupported type '%v' please add it to the switch statement in this test", test.outVar)
 			continue

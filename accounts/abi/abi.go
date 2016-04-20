@@ -316,6 +316,8 @@ func set(dst, src reflect.Value, output Argument) error {
 			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
 		}
 		reflect.Copy(dst, src)
+	case dstType.Kind() == reflect.Interface:
+		dst.Set(src)
 	default:
 		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
 	}
