@@ -18,6 +18,7 @@ package abi
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
@@ -99,6 +100,137 @@ func TestTypeCheck(t *testing.T) {
 
 		if err != nil && test.err != nil && err.Error() != test.err.Error() {
 			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
+		}
+	}
+}
+
+func TestSimpleMethodUnpack(t *testing.T) {
+	for i, test := range []struct {
+		def              string      // definition of the **output** ABI params
+		marshalledOutput []byte      // evm return data
+		expectedOut      interface{} // the expected output
+		outVar           string      // the output variable (e.g. uint32, *big.Int, etc)
+		err              error       // nil or error if expected
+	}{
+		{
+			`[ { "type": "uint32" } ]`,
+			pad([]byte{1}, 32, true),
+			uint32(1),
+			"uint32",
+			nil,
+		},
+		{
+			`[ { "type": "uint32" } ]`,
+			pad([]byte{1}, 32, true),
+			nil,
+			"uint16",
+			errors.New("abi: cannot unmarshal uint32 in to uint16"),
+		},
+		{
+			`[ { "type": "uint17" } ]`,
+			pad([]byte{1}, 32, true),
+			nil,
+			"uint16",
+			errors.New("abi: cannot unmarshal *big.Int in to uint16"),
+		},
+		{
+			`[ { "type": "uint17" } ]`,
+			pad([]byte{1}, 32, true),
+			big.NewInt(1),
+			"*big.Int",
+			nil,
+		},
+		{
+			`[ { "type": "address" } ]`,
+			pad(pad([]byte{1}, 20, false), 32, true),
+			common.Address{1},
+			"address",
+			nil,
+		},
+		{
+			`[ { "type": "bytes32" } ]`,
+			pad([]byte{1}, 32, false),
+			pad([]byte{1}, 32, false),
+			"bytes",
+			nil,
+		},
+		{
+			`[ { "type": "bytes32" } ]`,
+			pad([]byte{1}, 32, false),
+			pad([]byte{1}, 32, false),
+			"hash",
+			nil,
+		},
+	} {
+		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
+		abi, err := JSON(strings.NewReader(abiDefinition))
+		if err != nil {
+			t.Errorf("%d failed. %v", i, err)
+			continue
+		}
+
+		var outvar interface{}
+		switch test.outVar {
+		case "uint8":
+			var v uint8
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint16":
+			var v uint16
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint32":
+			var v uint32
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "uint64":
+			var v uint64
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "*big.Int":
+			var v *big.Int
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "address":
+			var v common.Address
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "bytes":
+			var v []byte
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "hash":
+			var v common.Hash
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		default:
+			t.Errorf("unsupported type '%v' please add it to the switch statement in this test", test.outVar)
+			continue
+		}
+
+		if err != nil && test.err == nil {
+			t.Errorf("%d failed. Expected no err but got: %v", i, err)
+			continue
+		}
+		if err == nil && test.err != nil {
+			t.Errorf("%d failed. Expected err: %v but got none", i, test.err)
+			continue
+		}
+		if err != nil && test.err != nil && err.Error() != test.err.Error() {
+			t.Errorf("%d failed. Expected err: '%v' got err: '%v'", i, test.err, err)
+			continue
+		}
+
+		if err == nil {
+			// bit of an ugly hack for hash type but I don't feel like finding a proper solution
+			if test.outVar == "hash" {
+				tmp := outvar.(common.Hash) // without assignment it's unaddressable
+				outvar = tmp[:]
+			}
+
+			if !reflect.DeepEqual(test.expectedOut, outvar) {
+				t.Errorf("%d failed. Output error: expected %v, got %v", i, test.expectedOut, outvar)
+			}
 		}
 	}
 }
@@ -351,28 +483,6 @@ func TestMethodSignature(t *testing.T) {
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
-	}
-}
-
-func TestOldPack(t *testing.T) {
-	abi, err := JSON(strings.NewReader(jsondata2))
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	sig := crypto.Keccak256([]byte("foo(uint32)"))[:4]
-	sig = append(sig, make([]byte, 32)...)
-	sig[35] = 10
-
-	packed, err := abi.Pack("foo", uint32(10))
-	if err != nil {
-		t.Error(err)
-		t.FailNow()
-	}
-
-	if !bytes.Equal(packed, sig) {
-		t.Errorf("expected %x got %x", sig, packed)
 	}
 }
 

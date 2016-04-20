@@ -180,12 +180,33 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 		returnOutput = output[index : index+32]
 	}
 
-	// cast bytes to abi return type
+	// convert the bytes to whatever is specified by the ABI.
 	switch t.Type.T {
-	case IntTy:
-		return common.BytesToBig(returnOutput), nil
-	case UintTy:
-		return common.BytesToBig(returnOutput), nil
+	case IntTy, UintTy:
+		bigNum := common.BytesToBig(returnOutput)
+
+		// If the type is a integer convert to the integer type
+		// specified by the ABI.
+		switch t.Type.Kind {
+		case reflect.Uint8:
+			return uint8(bigNum.Uint64()), nil
+		case reflect.Uint16:
+			return uint16(bigNum.Uint64()), nil
+		case reflect.Uint32:
+			return uint32(bigNum.Uint64()), nil
+		case reflect.Uint64:
+			return uint64(bigNum.Uint64()), nil
+		case reflect.Int8:
+			return uint8(bigNum.Int64()), nil
+		case reflect.Int16:
+			return uint16(bigNum.Int64()), nil
+		case reflect.Int32:
+			return uint32(bigNum.Int64()), nil
+		case reflect.Int64:
+			return uint64(bigNum.Int64()), nil
+		case reflect.Ptr:
+			return bigNum, nil
+		}
 	case BoolTy:
 		return common.BytesToBig(returnOutput).Uint64() > 0, nil
 	case AddressTy:
