@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -353,7 +354,7 @@ func console(ctx *cli.Context) {
 	// preload user defined JS files into the console
 	err = repl.preloadJSFiles(ctx)
 	if err != nil {
-		utils.Fatalf("unable to preload JS file %v", err)
+		utils.Fatalf("%v", err)
 	}
 
 	// in case the exec flag holds a JS statement execute it and return
@@ -372,6 +373,7 @@ func execScripts(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
 	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
+	defer node.Stop()
 
 	// Attach to the newly started node and execute the given scripts
 	client, err := node.Attach()
@@ -383,10 +385,24 @@ func execScripts(ctx *cli.Context) {
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client, false)
 
+	// Run all given files.
 	for _, file := range ctx.Args() {
-		repl.exec(file)
+		if err = repl.re.Exec(file); err != nil {
+			break
+		}
 	}
-	node.Stop()
+	if err != nil {
+		utils.Fatalf("JavaScript Error: %v", jsErrorString(err))
+	}
+	// JS files loaded successfully.
+	// Wait for pending callbacks, but stop for Ctrl-C.
+	abort := make(chan os.Signal, 1)
+	signal.Notify(abort, os.Interrupt)
+	go func() {
+		<-abort
+		repl.re.Stop(false)
+	}()
+	repl.re.Stop(true)
 }
 
 // startNode boots up the system node and all registered protocols, after which
