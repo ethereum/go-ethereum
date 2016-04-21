@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -227,6 +228,10 @@ var (
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
 		Usage: "Enable metrics collection and reporting",
+	}
+	FakePoWFlag = cli.BoolFlag{
+		Name:  "fakepow",
+		Usage: "Disables proof-of-work verification",
 	}
 
 	// RPC settings
@@ -842,11 +847,13 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 			glog.Fatalln(err)
 		}
 	}
-
 	chainConfig := MustMakeChainConfigFromDb(ctx, chainDb)
 
-	var eventMux event.TypeMux
-	chain, err = core.NewBlockChain(chainDb, chainConfig, ethash.New(), &eventMux)
+	pow := pow.PoW(core.FakePow{})
+	if !ctx.GlobalBool(FakePoWFlag.Name) {
+		pow = ethash.New()
+	}
+	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux))
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}

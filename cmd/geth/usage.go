@@ -150,8 +150,11 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
-		Name:  "LOGGING AND DEBUGGING",
-		Flags: append([]cli.Flag{utils.MetricsEnabledFlag}, debug.Flags...),
+		Name: "LOGGING AND DEBUGGING",
+		Flags: append([]cli.Flag{
+			utils.MetricsEnabledFlag,
+			utils.FakePoWFlag,
+		}, debug.Flags...),
 	},
 	{
 		Name: "EXPERIMENTAL",
