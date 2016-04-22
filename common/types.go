@@ -167,7 +167,7 @@ func (a Address) MarshalJSON() ([]byte, error) {
 // Parse address from raw json data
 func (a *Address) UnmarshalJSON(data []byte) error {
 	if len(data) > 2 && data[0] == '"' && data[len(data)-1] == '"' {
-		data = data[:len(data)-1][1:]
+		data = data[1 : len(data)-1]
 	}
 
 	if len(data) > 2 && data[0] == '0' && data[1] == 'x' {

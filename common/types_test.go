@@ -16,7 +16,10 @@
 
 package common
 
-import "testing"
+import (
+	"math/big"
+	"testing"
+)
 
 func TestBytesConversion(t *testing.T) {
 	bytes := []byte{5}
@@ -47,7 +50,38 @@ func TestHashJsonValidation(t *testing.T) {
 	}
 	for i, test := range tests {
 		if err := h.UnmarshalJSON(append([]byte(test.Prefix), make([]byte, test.Size)...)); err != test.Error {
-			t.Error(i, "expected", test.Error, "got", err)
+			t.Errorf("test #%d: error mismatch: have %v, want %v", i, err, test.Error)
+		}
+	}
+}
+
+func TestAddressUnmarshalJSON(t *testing.T) {
+	var a Address
+	var tests = []struct {
+		Input     string
+		ShouldErr bool
+		Output    *big.Int
+	}{
+		{"", true, nil},
+		{`""`, true, nil},
+		{`"0x"`, true, nil},
+		{`"0x00"`, true, nil},
+		{`"0xG000000000000000000000000000000000000000"`, true, nil},
+		{`"0x0000000000000000000000000000000000000000"`, false, big.NewInt(0)},
+		{`"0x0000000000000000000000000000000000000010"`, false, big.NewInt(16)},
+	}
+	for i, test := range tests {
+		err := a.UnmarshalJSON([]byte(test.Input))
+		if err != nil && !test.ShouldErr {
+			t.Errorf("test #%d: unexpected error: %v", i, err)
+		}
+		if err == nil {
+			if test.ShouldErr {
+				t.Errorf("test #%d: expected error, got none", i)
+			}
+			if a.Big().Cmp(test.Output) != 0 {
+				t.Errorf("test #%d: address mismatch: have %v, want %v", i, a.Big(), test.Output)
+			}
 		}
 	}
 }
