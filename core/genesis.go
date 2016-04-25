@@ -43,7 +43,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 
 	var genesis struct {
-		ChainConfig *ChainConfig
+		ChainConfig *ChainConfig `json:"config"`
 		Nonce       string
 		Timestamp   string
 		ParentHash  string
