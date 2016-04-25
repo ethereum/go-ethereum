@@ -30,7 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/trie"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var (
@@ -69,7 +72,137 @@ The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.
 `,
 	}
+	pruningCommand = cli.Command{
+		Action: pruneDB,
+		Name:   "prune",
+		Usage:  "Prunes database of old state information",
+	}
 )
+
+func pruneDB(ctx *cli.Context) {
+	chainDb := utils.MakeChainDatabase(ctx)
+	defer chainDb.Close()
+
+	// create a new temporary database to which we'll copy
+	// the required state information. This DB will be
+	// removed once finished.
+	const pruningDB = "data_pruning_process"
+	fresh := utils.MustOpenDatabase(ctx, pruningDB)
+	defer func() {
+		fresh.Close()
+		os.RemoveAll(filepath.Join(utils.MustMakeDataDir(ctx), pruningDB))
+	}()
+
+	/*
+		if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
+			iter := db.NewIterator()
+			for iter.Next() {
+				key := iter.Key()
+				fmt.Printf("(%-4d) %-6d %x\n", len(key), len(iter.Value()), key)
+				//db.Delete(key)
+			}
+			iter.Release()
+		}
+		return
+	*/
+
+	tbegin := time.Now()
+	glog.V(logger.Info).Infoln("Starting pruning process (this may take a while)")
+
+	// Fetch the current head block on which we'll determine the
+	// "required state information" (current - 256 blocks ago)
+	headHash := core.GetHeadBlockHash(chainDb)
+	if (headHash == common.Hash{}) {
+		utils.Fatalf("pruning: no HEAD block found")
+	}
+	headBlock := core.GetBlock(chainDb, headHash)
+
+	glog.V(logger.Info).Infoln("Copying relevant state data")
+
+	// Fetch each block and start the copying process. The copying process will use the
+	// state iterator to check whether it needs to copy over state nodes, if a node is
+	// missing it will fetch it from the database and puts it in our new fresh database.
+	for blockno := headBlock.NumberU64() - 1500; blockno <= headBlock.NumberU64(); blockno++ {
+		numhash := 0
+
+		// fetch the block for the state root, this is the start of
+		// the copying process
+		hash := core.GetCanonicalHash(chainDb, blockno)
+		if (hash == common.Hash{}) {
+			utils.Fatalf("pruning: unable to find block %d for pruning session", blockno)
+		}
+		stateRoot := core.GetBlock(chainDb, hash).Root()
+
+		// create a new sync state for the copying process
+		sync := state.NewStateSync(stateRoot, fresh)
+		// find missing nodes in batches of 256 and copy over the data.
+		for missing := sync.Missing(256); len(missing) > 0; missing = sync.Missing(256) {
+			syncRes := make([]trie.SyncResult, len(missing))
+			for i, hash := range missing {
+				node, _ := chainDb.Get(hash[:])
+
+				syncRes[i] = trie.SyncResult{Hash: hash, Data: node}
+			}
+			sync.Process(syncRes)
+			numhash += len(syncRes)
+		}
+	}
+
+	glog.V(logger.Info).Infoln("Pruning old state data")
+
+	var (
+		tmp   = fresh.(*ethdb.LDBDatabase)
+		chain = chainDb.(*ethdb.LDBDatabase)
+	)
+	// Deletion process. The deletion process will fetch the secure-keys
+	// and deletes them from the database.
+	presec := []byte("secure-key-")
+	// Unfortunately our current implementation of the DB wrapper
+	// does not allow us to create iterators whith filtering
+	// options and therefor we fetch the leveldb instance and
+	// create a iterator from there instead.
+	{
+		iter := chain.LDB().NewIterator(util.BytesPrefix(presec), nil)
+		for iter.Next() {
+			// delete each key
+			chain.Delete(iter.Key())
+		}
+		iter.Release()
+	}
+
+	// delete old state information. this process is not yet finished
+	// this process curerntly checks whether the key is 32 and **assumes**
+	// it's state information.
+	{
+		iter := chain.NewIterator()
+		for iter.Next() {
+			key := iter.Key()
+			if len(key) == 32 {
+				chain.Delete(key)
+			}
+		}
+		iter.Release()
+	}
+
+	glog.V(logger.Info).Infoln("Compacting database")
+	// Compact the database again
+	chain.LDB().CompactRange(util.Range{nil, nil})
+
+	glog.V(logger.Info).Infoln("Moving new state data to database")
+
+	// Copy the relevant state information back to the state db
+	{
+		batch := chain.NewBatch()
+		iter := tmp.NewIterator()
+		for iter.Next() {
+			batch.Put(iter.Key(), iter.Value())
+		}
+		iter.Release()
+		batch.Write()
+	}
+
+	glog.V(logger.Info).Infoln("Pruning process completed in:", time.Since(tbegin))
+}
 
 func importChain(ctx *cli.Context) {
 	if len(ctx.Args()) != 1 {
