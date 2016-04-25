@@ -19,15 +19,12 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"encoding/hex"
 	"flag"
-	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
@@ -43,50 +40,43 @@ func main() {
 		nodeKey *ecdsa.PrivateKey
 		err     error
 	)
+	flag.Var(glog.GetVerbosity(), "verbosity", "log verbosity (0-9)")
+	flag.Var(glog.GetVModule(), "vmodule", "log verbosity pattern")
+	glog.SetToStderr(true)
 	flag.Parse()
-	logger.AddLogSystem(logger.NewStdLogSystem(os.Stdout, log.LstdFlags, logger.DebugLevel))
 
 	if *genKey != "" {
-		writeKey(*genKey)
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			utils.Fatalf("could not generate key: %v", err)
+		}
+		if err := crypto.SaveECDSA(*genKey, key); err != nil {
+			utils.Fatalf("%v", err)
+		}
 		os.Exit(0)
 	}
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
-		log.Fatalf("-nat: %v", err)
+		utils.Fatalf("-nat: %v", err)
 	}
 	switch {
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
-		log.Fatal("Use -nodekey or -nodekeyhex to specify a private key")
+		utils.Fatalf("Use -nodekey or -nodekeyhex to specify a private key")
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
-		log.Fatal("Options -nodekey and -nodekeyhex are mutually exclusive")
+		utils.Fatalf("Options -nodekey and -nodekeyhex are mutually exclusive")
 	case *nodeKeyFile != "":
 		if nodeKey, err = crypto.LoadECDSA(*nodeKeyFile); err != nil {
-			log.Fatalf("-nodekey: %v", err)
+			utils.Fatalf("-nodekey: %v", err)
 		}
 	case *nodeKeyHex != "":
 		if nodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
-			log.Fatalf("-nodekeyhex: %v", err)
+			utils.Fatalf("-nodekeyhex: %v", err)
 		}
 	}
 
 	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
-		log.Fatal(err)
+		utils.Fatalf("%v", err)
 	}
 	select {}
-}
-
-func writeKey(target string) {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		log.Fatalf("could not generate key: %v", err)
-	}
-	b := crypto.FromECDSA(key)
-	if target == "-" {
-		fmt.Println(hex.EncodeToString(b))
-	} else {
-		if err := ioutil.WriteFile(target, b, 0600); err != nil {
-			log.Fatal("write error: ", err)
-		}
-	}
 }
