@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -437,6 +438,16 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 		return acc.Address, nil
 	}
 	return common.Address{}, err
+}
+
+func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
+	hexkey, err := hex.DecodeString(privkey)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	acc, err := s.am.ImportECDSA(crypto.ToECDSA(hexkey), password)
+	return acc.Address, err
 }
 
 // UnlockAccount will unlock the account associated with the given address with
