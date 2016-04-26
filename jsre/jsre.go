@@ -235,7 +235,14 @@ func (self *JSRE) Exec(file string) error {
 	if err != nil {
 		return err
 	}
-	self.Do(func(vm *otto.Otto) { _, err = vm.Run(code) })
+	var script *otto.Script
+	self.Do(func(vm *otto.Otto) {
+		script, err = vm.Compile(file, code)
+		if err != nil {
+			return
+		}
+		_, err = vm.Run(script)
+	})
 	return err
 }
 
