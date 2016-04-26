@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build ios !darwin,!freebsd,!linux,!netbsd,!solaris,!windows
+// +build ios linux,arm64 !darwin,!freebsd,!linux,!netbsd,!solaris,!windows
 
 // This is the fallback implementation of directory watching.
 // It is used on unsupported platforms.
