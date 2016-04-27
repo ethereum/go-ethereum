@@ -92,6 +92,10 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		block = b.blockchain.CurrentBlock()
 		statedb, _ = b.blockchain.State()
 	}
+	// If there's no code to interact with, respond with an appropriate error
+	if code := statedb.GetCode(contract); len(code) == 0 {
+		return nil, bind.ErrNoCode
+	}
 	// Set infinite balance to the a fake caller account
 	from := statedb.GetOrNewStateObject(common.Address{})
 	from.SetBalance(common.MaxBig)
@@ -134,7 +138,12 @@ func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *com
 		block   = b.pendingBlock
 		statedb = b.pendingState.Copy()
 	)
-
+	// If there's no code to interact with, respond with an appropriate error
+	if contract != nil {
+		if code := statedb.GetCode(*contract); len(code) == 0 {
+			return nil, bind.ErrNoCode
+		}
+	}
 	// Set infinite balance to the a fake caller account
 	from := statedb.GetOrNewStateObject(sender)
 	from.SetBalance(common.MaxBig)
