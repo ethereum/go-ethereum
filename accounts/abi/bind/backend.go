@@ -17,11 +17,21 @@
 package bind
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
+
+// ErrNoCode is returned by call and transact operations for which the requested
+// recipient contract to operate on does not exist in the state db or does not
+// have any code associated with it (i.e. suicided).
+//
+// Please note, this error string is part of the RPC API and is expected by the
+// native contract bindings to signal this particular error. Do not change this
+// as it will break all dependent code!
+var ErrNoCode = errors.New("no contract code at given address")
 
 // ContractCaller defines the methods needed to allow operating with contract on a read
 // only basis.

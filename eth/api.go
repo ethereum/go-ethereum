@@ -51,6 +51,15 @@ import (
 	"golang.org/x/net/context"
 )
 
+// ErrNoCode is returned by call and transact operations for which the requested
+// recipient contract to operate on does not exist in the state db or does not
+// have any code associated with it (i.e. suicided).
+//
+// Please note, this error string is part of the RPC API and is expected by the
+// native contract bindings to signal this particular error. Do not change this
+// as it will break all dependent code!
+var ErrNoCode = errors.New("no contract code at given address")
+
 const defaultGas = uint64(90000)
 
 // blockByNumber is a commonly used helper function which retrieves and returns
@@ -694,6 +703,12 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 	stateDb = stateDb.Copy()
 
+	// If there's no code to interact with, respond with an appropriate error
+	if args.To != nil {
+		if code := stateDb.GetCode(*args.To); len(code) == 0 {
+			return "0x", nil, ErrNoCode
+		}
+	}
 	// Retrieve the account state object to interact with
 	var from *state.StateObject
 	if args.From == (common.Address{}) {
