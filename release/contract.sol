@@ -19,7 +19,7 @@
 // check for new releases automatically without the need to consult a central
 // repository.
 //
-// The contract takes a vote based approach on both assigning authorized signers
+// The contract takes a vote based approach on both assigning authorised signers
 // as well as signing off on new Geth releases.
 //
 // Note, when a signer is demoted, the currently pending release is auto-nuked.
@@ -45,8 +45,8 @@ contract ReleaseOracle {
   }
 
   // Oracle authorization details
-  mapping(address => bool) authorized; // Set of accounts allowed to vote on updating the contract
-  address[]                signers;    // List of addresses currently accepted as signers
+  mapping(address => bool) authorised; // Set of accounts allowed to vote on updating the contract
+  address[]                voters;     // List of addresses currently accepted as signers
 
   // Various proposals being voted on
   mapping(address => Votes) authProps; // Currently running user authorization proposals
@@ -57,38 +57,47 @@ contract ReleaseOracle {
 
   // isSigner is a modifier to authorize contract transactions.
   modifier isSigner() {
-    if (authorized[msg.sender]) {
+    if (authorised[msg.sender]) {
       _
     }
   }
 
-  // Constructor to assign the creator as the sole valid signer.
-  function ReleaseOracle() {
-    authorized[msg.sender] = true;
-    signers.push(msg.sender);
+  // Constructor to assign the initial set of signers.
+  function ReleaseOracle(address[] signers) {
+    // If no signers were specified, assign the creator as the sole signer
+    if (signers.length == 0) {
+      authorised[msg.sender] = true;
+      voters.push(msg.sender);
+      return;
+    }
+    // Otherwise assign the individual signers one by one
+    for (uint i = 0; i < signers.length; i++) {
+      authorised[signers[i]] = true;
+      voters.push(signers[i]);
+    }
   }
 
-  // Signers is an accessor method to retrieve all te signers (public accessor
+  // signers is an accessor method to retrieve all te signers (public accessor
   // generates an indexed one, not a retreive-all version).
-  function Signers() constant returns(address[]) {
-    return signers;
+  function signers() constant returns(address[]) {
+    return voters;
   }
 
-  // AuthProposals retrieves the list of addresses that authorization proposals
+  // authProposals retrieves the list of addresses that authorization proposals
   // are currently being voted on.
-  function AuthProposals() constant returns(address[]) {
+  function authProposals() constant returns(address[]) {
     return authPend;
   }
 
-  // AuthVotes retrieves the current authorization votes for a particular user
+  // authVotes retrieves the current authorization votes for a particular user
   // to promote him into the list of signers, or demote him from there.
-  function AuthVotes(address user) constant returns(address[] promote, address[] demote) {
+  function authVotes(address user) constant returns(address[] promote, address[] demote) {
     return (authProps[user].pass, authProps[user].fail);
   }
 
-  // CurrentVersion retrieves the semantic version, commit hash and release time
+  // currentVersion retrieves the semantic version, commit hash and release time
   // of the currently votec active release.
-  function CurrentVersion() constant returns (uint32 major, uint32 minor, uint32 patch, bytes20 commit, uint time) {
+  function currentVersion() constant returns (uint32 major, uint32 minor, uint32 patch, bytes20 commit, uint time) {
     if (releases.length == 0) {
       return (0, 0, 0, 0, 0);
     }
@@ -97,38 +106,38 @@ contract ReleaseOracle {
     return (release.major, release.minor, release.patch, release.commit, release.time);
   }
 
-  // ProposedVersion retrieves the semantic version, commit hash and the current
+  // proposedVersion retrieves the semantic version, commit hash and the current
   // votes for the next proposed release.
-  function ProposedVersion() constant returns (uint32 major, uint32 minor, uint32 patch, bytes20 commit, address[] pass, address[] fail) {
+  function proposedVersion() constant returns (uint32 major, uint32 minor, uint32 patch, bytes20 commit, address[] pass, address[] fail) {
     return (verProp.major, verProp.minor, verProp.patch, verProp.commit, verProp.votes.pass, verProp.votes.fail);
   }
 
-  // Promote pitches in on a voting campaign to promote a new user to a signer
+  // promote pitches in on a voting campaign to promote a new user to a signer
   // position.
-  function Promote(address user) {
+  function promote(address user) {
     updateSigner(user, true);
   }
 
-  // Demote pitches in on a voting campaign to demote an authorized user from
+  // demote pitches in on a voting campaign to demote an authorised user from
   // its signer position.
-  function Demote(address user) {
+  function demote(address user) {
     updateSigner(user, false);
   }
 
-  // Release votes for a particular version to be included as the next release.
-  function Release(uint32 major, uint32 minor, uint32 patch, bytes20 commit) {
+  // release votes for a particular version to be included as the next release.
+  function release(uint32 major, uint32 minor, uint32 patch, bytes20 commit) {
     updateRelease(major, minor, patch, commit, true);
   }
 
-  // Nuke votes for the currently proposed version to not be included as the next
+  // nuke votes for the currently proposed version to not be included as the next
   // release. Nuking doesn't require a specific version number for simplicity.
-  function Nuke() {
+  function nuke() {
     updateRelease(0, 0, 0, 0, false);
   }
 
   // updateSigner marks a vote for changing the status of an Ethereum user, either
-  // for or against the user being an authorized signer.
-  function updateSigner(address user, bool authorize) isSigner {
+  // for or against the user being an authorised signer.
+  function updateSigner(address user, bool authorize) internal isSigner {
     // Gather the current votes and ensure we don't double vote
     Votes votes = authProps[user];
     for (uint i = 0; i < votes.pass.length; i++) {
@@ -148,26 +157,26 @@ contract ReleaseOracle {
     // Cast the vote and return if the proposal cannot be resolved yet
     if (authorize) {
       votes.pass.push(msg.sender);
-      if (votes.pass.length <= signers.length / 2) {
+      if (votes.pass.length <= voters.length / 2) {
         return;
       }
     } else {
       votes.fail.push(msg.sender);
-      if (votes.fail.length <= signers.length / 2) {
+      if (votes.fail.length <= voters.length / 2) {
         return;
       }
     }
     // Proposal resolved in our favor, execute whatever we voted on
-    if (authorize && !authorized[user]) {
-      authorized[user] = true;
-      signers.push(user);
-    } else if (!authorize && authorized[user]) {
-      authorized[user] = false;
+    if (authorize && !authorised[user]) {
+      authorised[user] = true;
+      voters.push(user);
+    } else if (!authorize && authorised[user]) {
+      authorised[user] = false;
 
-      for (i = 0; i < signers.length; i++) {
-        if (signers[i] == user) {
-          signers[i] = signers[signers.length - 1];
-          signers.length--;
+      for (i = 0; i < voters.length; i++) {
+        if (voters[i] == user) {
+          voters[i] = voters[voters.length - 1];
+          voters.length--;
 
           delete verProp; // Nuke any version proposal (no suprise releases!)
           break;
@@ -188,7 +197,7 @@ contract ReleaseOracle {
 
   // updateRelease votes for a particular version to be included as the next release,
   // or for the currently proposed release to be nuked out.
-  function updateRelease(uint32 major, uint32 minor, uint32 patch, bytes20 commit, bool release) isSigner {
+  function updateRelease(uint32 major, uint32 minor, uint32 patch, bytes20 commit, bool release) internal isSigner {
     // Skip nuke votes if no proposal is pending
     if (!release && verProp.votes.pass.length == 0) {
       return;
@@ -219,12 +228,12 @@ contract ReleaseOracle {
     // Cast the vote and return if the proposal cannot be resolved yet
     if (release) {
       votes.pass.push(msg.sender);
-      if (votes.pass.length <= signers.length / 2) {
+      if (votes.pass.length <= voters.length / 2) {
         return;
       }
     } else {
       votes.fail.push(msg.sender);
-      if (votes.fail.length <= signers.length / 2) {
+      if (votes.fail.length <= voters.length / 2) {
         return;
       }
     }

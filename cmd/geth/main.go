@@ -18,6 +18,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -41,31 +42,48 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	ClientIdentifier = "Geth"
-	Version          = "1.5.0-unstable"
-	VersionMajor     = 1
-	VersionMinor     = 5
-	VersionPatch     = 0
+	clientIdentifier = "Geth"     // Client identifier to advertise over the network
+	versionMajor     = 1          // Major version component of the current release
+	versionMinor     = 5          // Minor version component of the current release
+	versionPatch     = 0          // Patch version component of the current release
+	versionMeta      = "unstable" // Version metadata to append to the version string
+
+	versionOracle = "0x48a117313039b73ab02fb9f73e04a66defe123ec" // Ethereum address of the Geth release oracle
 )
 
 var (
-	gitCommit       string // set via linker flagg
-	nodeNameVersion string
-	app             *cli.App
+	gitCommit string         // Git SHA1 commit hash of the release (set via linker flags)
+	verString string         // Combined textual representation of all the version components
+	relConfig release.Config // Structured version information and release oracle config
+	app       *cli.App
 )
 
 func init() {
-	if gitCommit == "" {
-		nodeNameVersion = Version
-	} else {
-		nodeNameVersion = Version + "-" + gitCommit[:8]
+	// Construct the textual version string from the individual components
+	verString = fmt.Sprintf("%d.%d.%d", versionMajor, versionMinor, versionPatch)
+	if versionMeta != "" {
+		verString += "-" + versionMeta
 	}
+	if gitCommit != "" {
+		verString += "-" + gitCommit[:8]
+	}
+	// Construct the version release oracle configuration
+	relConfig.Oracle = common.HexToAddress(versionOracle)
 
-	app = utils.NewApp(Version, "the go-ethereum command line interface")
+	relConfig.Major = uint32(versionMajor)
+	relConfig.Minor = uint32(versionMinor)
+	relConfig.Patch = uint32(versionPatch)
+
+	commit, _ := hex.DecodeString(gitCommit)
+	copy(relConfig.Commit[:], commit)
+
+	// Initialize the CLI app and start Geth
+	app = utils.NewApp(verString, "the go-ethereum command line interface")
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -257,7 +275,7 @@ func makeDefaultExtra() []byte {
 		Name      string
 		GoVersion string
 		Os        string
-	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), ClientIdentifier, runtime.Version(), runtime.GOOS}
+	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
 	extra, err := rlp.EncodeToBytes(clientInfo)
 	if err != nil {
 		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
@@ -275,7 +293,7 @@ func makeDefaultExtra() []byte {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) {
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 	node.Wait()
 }
@@ -339,7 +357,7 @@ func initGenesis(ctx *cli.Context) {
 // same time.
 func console(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 
 	// Attach to the newly started node, and either execute script or become interactive
@@ -372,7 +390,7 @@ func console(ctx *cli.Context) {
 // of the JavaScript files specified as command arguments.
 func execScripts(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 	defer node.Stop()
 
@@ -488,11 +506,8 @@ func gpubench(ctx *cli.Context) {
 }
 
 func version(c *cli.Context) {
-	fmt.Println(ClientIdentifier)
-	fmt.Println("Version:", Version)
-	if gitCommit != "" {
-		fmt.Println("Git Commit:", gitCommit)
-	}
+	fmt.Println(clientIdentifier)
+	fmt.Println("Version:", version)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())

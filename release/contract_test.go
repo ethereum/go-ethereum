@@ -42,7 +42,7 @@ func setupReleaseTest(t *testing.T, prefund ...*ecdsa.PrivateKey) (*ecdsa.Privat
 	sim := backends.NewSimulatedBackend(accounts...)
 
 	// Deploy a version oracle contract, commit and return
-	_, _, oracle, err := DeployReleaseOracle(auth, sim)
+	_, _, oracle, err := DeployReleaseOracle(auth, sim, []common.Address{auth.From})
 	if err != nil {
 		t.Fatalf("Failed to deploy version contract: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestVersionRelease(t *testing.T) {
 
 		// Propose release with half voters and check that the release does not yet go through
 		for j := 0; j < (i+1)/2; j++ {
-			if _, err = oracle.Release(bind.NewKeyedTransactor(keys[j]), uint32(i), uint32(i+1), uint32(i+2), [20]byte{}); err != nil {
+			if _, err = oracle.Release(bind.NewKeyedTransactor(keys[j]), uint32(i), uint32(i+1), uint32(i+2), [20]byte{byte(i + 3)}); err != nil {
 				t.Fatalf("Iter #%d: failed valid release attempt: %v", i, err)
 			}
 		}
@@ -254,8 +254,8 @@ func TestVersionRelease(t *testing.T) {
 		}
 
 		// Pass the release and check that it became the next version
-		verMajor, verMinor, verPatch, verCommit = uint32(i), uint32(i+1), uint32(i+2), [20]byte{}
-		if _, err = oracle.Release(bind.NewKeyedTransactor(keys[(i+1)/2]), uint32(i), uint32(i+1), uint32(i+2), [20]byte{}); err != nil {
+		verMajor, verMinor, verPatch, verCommit = uint32(i), uint32(i+1), uint32(i+2), [20]byte{byte(i + 3)}
+		if _, err = oracle.Release(bind.NewKeyedTransactor(keys[(i+1)/2]), uint32(i), uint32(i+1), uint32(i+2), [20]byte{byte(i + 3)}); err != nil {
 			t.Fatalf("Iter #%d: failed valid release completion attempt: %v", i, err)
 		}
 		sim.Commit()
@@ -293,7 +293,7 @@ func TestVersionNuking(t *testing.T) {
 	for i := 1; i < (len(keys)+1)/2; i++ {
 		// Propose release with an initial set of signers
 		for j := 0; j < i; j++ {
-			if _, err := oracle.Release(bind.NewKeyedTransactor(keys[j]), uint32(i), uint32(i+1), uint32(i+2), [20]byte{}); err != nil {
+			if _, err := oracle.Release(bind.NewKeyedTransactor(keys[j]), uint32(i), uint32(i+1), uint32(i+2), [20]byte{byte(i + 3)}); err != nil {
 				t.Fatalf("Iter #%d: failed valid proposal attempt: %v", i, err)
 			}
 		}
@@ -344,7 +344,7 @@ func TestVersionAutoNuke(t *testing.T) {
 		sim.Commit()
 	}
 	// Make a release proposal and check it's existence
-	if _, err := oracle.Release(bind.NewKeyedTransactor(keys[0]), 1, 2, 3, [20]byte{}); err != nil {
+	if _, err := oracle.Release(bind.NewKeyedTransactor(keys[0]), 1, 2, 3, [20]byte{4}); err != nil {
 		t.Fatalf("Failed valid proposal attempt: %v", err)
 	}
 	sim.Commit()

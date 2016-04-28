@@ -47,7 +47,8 @@ type ContractCaller interface {
 // used when the user does not provide some needed values, but rather leaves it up
 // to the transactor to decide.
 type ContractTransactor interface {
-	// Nonce retrieves the current pending nonce associated with an account.
+	// PendingAccountNonce retrieves the current pending nonce associated with an
+	// account.
 	PendingAccountNonce(account common.Address) (uint64, error)
 
 	// SuggestGasPrice retrieves the currently suggested gas price to allow a timely
@@ -62,7 +63,7 @@ type ContractTransactor interface {
 	EstimateGasLimit(sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error)
 
 	// SendTransaction injects the transaction into the pending pool for execution.
-	SendTransaction(*types.Transaction) error
+	SendTransaction(tx *types.Transaction) error
 }
 
 // ContractBackend defines the methods needed to allow operating with contract
