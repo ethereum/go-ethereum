@@ -206,6 +206,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.MetricsEnabledFlag,
+		utils.FakePoWFlag,
 		utils.SolcPathFlag,
 		utils.GpoMinGasPriceFlag,
 		utils.GpoMaxGasPriceFlag,
