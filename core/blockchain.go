@@ -1213,3 +1213,6 @@ func (self *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []c
 func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 	return self.hc.GetHeaderByNumber(number)
 }
+
+// Config retrieves the blockchain's chain configuration.
+func (self *BlockChain) Config() *ChainConfig { return self.config }
