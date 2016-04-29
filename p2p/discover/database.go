@@ -58,10 +58,11 @@ var (
 	nodeDBVersionKey = []byte("version") // Version of the database to flush if changes
 	nodeDBItemPrefix = []byte("n:")      // Identifier to prefix node entries with
 
-	nodeDBDiscoverRoot      = ":discover"
-	nodeDBDiscoverPing      = nodeDBDiscoverRoot + ":lastping"
-	nodeDBDiscoverPong      = nodeDBDiscoverRoot + ":lastpong"
-	nodeDBDiscoverFindFails = nodeDBDiscoverRoot + ":findfail"
+	nodeDBDiscoverRoot          = ":discover"
+	nodeDBDiscoverPing          = nodeDBDiscoverRoot + ":lastping"
+	nodeDBDiscoverPong          = nodeDBDiscoverRoot + ":lastpong"
+	nodeDBDiscoverFindFails     = nodeDBDiscoverRoot + ":findfail"
+	nodeDBDiscoverLocalEndpoint = nodeDBDiscoverRoot + ":localendpoint"
 )
 
 // newNodeDB creates a new node database for storing and retrieving infos about
@@ -172,33 +173,42 @@ func (db *nodeDB) fetchInt64(key []byte) int64 {
 func (db *nodeDB) storeInt64(key []byte, n int64) error {
 	blob := make([]byte, binary.MaxVarintLen64)
 	blob = blob[:binary.PutVarint(blob, n)]
-
 	return db.lvl.Put(key, blob, nil)
+}
+
+func (db *nodeDB) storeRLP(key []byte, val interface{}) error {
+	blob, err := rlp.EncodeToBytes(val)
+	if err != nil {
+		return err
+	}
+	return db.lvl.Put(key, blob, nil)
+}
+
+func (db *nodeDB) fetchRLP(key []byte, val interface{}) error {
+	blob, err := db.lvl.Get(key, nil)
+	if err != nil {
+		return err
+	}
+	err = rlp.DecodeBytes(blob, val)
+	if err != nil {
+		glog.V(logger.Warn).Infof("key %x (%T) %v", key, val, err)
+	}
+	return err
 }
 
 // node retrieves a node with a given id from the database.
 func (db *nodeDB) node(id NodeID) *Node {
-	blob, err := db.lvl.Get(makeKey(id, nodeDBDiscoverRoot), nil)
-	if err != nil {
-		glog.V(logger.Detail).Infof("failed to retrieve node %v: %v", id, err)
-		return nil
-	}
-	node := new(Node)
-	if err := rlp.DecodeBytes(blob, node); err != nil {
-		glog.V(logger.Warn).Infof("failed to decode node RLP: %v", err)
+	var node Node
+	if err := db.fetchRLP(makeKey(id, nodeDBDiscoverRoot), &node); err != nil {
 		return nil
 	}
 	node.sha = crypto.Keccak256Hash(node.ID[:])
-	return node
+	return &node
 }
 
 // updateNode inserts - potentially overwriting - a node into the peer database.
 func (db *nodeDB) updateNode(node *Node) error {
-	blob, err := rlp.EncodeToBytes(node)
-	if err != nil {
-		return err
-	}
-	return db.lvl.Put(makeKey(node.ID, nodeDBDiscoverRoot), blob, nil)
+	return db.storeRLP(makeKey(node.ID, nodeDBDiscoverRoot), node)
 }
 
 // deleteNode deletes all information/keys associated with a node.
@@ -298,6 +308,20 @@ func (db *nodeDB) findFails(id NodeID) int {
 // updateFindFails updates the number of findnode failures since bonding.
 func (db *nodeDB) updateFindFails(id NodeID, fails int) error {
 	return db.storeInt64(makeKey(id, nodeDBDiscoverFindFails), int64(fails))
+}
+
+// localEndpoint returns the last local endpoint communicated to the
+// given remote node.
+func (db *nodeDB) localEndpoint(id NodeID) *rpcEndpoint {
+	var ep rpcEndpoint
+	if err := db.fetchRLP(makeKey(id, nodeDBDiscoverLocalEndpoint), &ep); err != nil {
+		return nil
+	}
+	return &ep
+}
+
+func (db *nodeDB) updateLocalEndpoint(id NodeID, ep rpcEndpoint) error {
+	return db.storeRLP(makeKey(id, nodeDBDiscoverLocalEndpoint), &ep)
 }
 
 // querySeeds retrieves random nodes to be used as potential seed nodes
