@@ -22,7 +22,7 @@ package params
 import "math/big"
 
 var (
-	MaximumExtraDataSize   = big.NewInt(32)     // Maximum size extra data may be after Genesis.
+	MaximumExtraDataSize   = big.NewInt(128)    // Maximum size extra data may be after Genesis.
 	ExpByteGas             = big.NewInt(10)     // Times ceil(log256(exponent)) for the EXP instruction.
 	SloadGas               = big.NewInt(50)     // Multiplied by the number of 32-byte words that are copied (round up) for any *COPY operation and added.
 	CallValueTransferGas   = big.NewInt(9000)   // Paid for CALL when the value transfer is non-zero.
