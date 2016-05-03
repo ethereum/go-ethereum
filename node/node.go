@@ -152,7 +152,7 @@ func (n *Node) Start() error {
 	}
 	// Otherwise copy and specialize the P2P configuration
 	running := new(p2p.Server)
-	*running = *n.serverConfig
+	reflect.ValueOf(running).Elem().Set(reflect.ValueOf(n.serverConfig).Elem()) // Fancy *running = *n.serverConfig to prevent mutex copy
 
 	services := make(map[reflect.Type]Service)
 	for _, constructor := range n.serviceFuncs {

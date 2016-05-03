@@ -103,13 +103,13 @@ evm:
 	@echo "Run \"$(GOBIN)/evm to start the evm."
 
 all:
-	build/env.sh go install -v $(shell build/flags.sh) ./...
+	build/env.sh go install -v $(shell build/flags.sh) `build/env.sh go list ./... | grep -v /vendor/`
 
 test: all
-	build/env.sh go test ./...
+	build/env.sh go test `build/env.sh go list ./... | grep -v /vendor/`
 
 travis-test-with-coverage: all
-	build/env.sh go vet ./...
+	build/env.sh go vet `build/env.sh go list ./... | grep -v /vendor/`
 	build/env.sh build/test-global-coverage.sh
 
 xgo:
