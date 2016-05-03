@@ -1,0 +1,7 @@
+[Unit]
+Description=geth daemon (socket activation)
+
+[Socket]
+ListenStream=%t/geth.ipc
+
+

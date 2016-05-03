@@ -1,0 +1,12 @@
+[Unit]
+Description=Geth Daemon
+Requires=geth.socket
+
+[Service]
+EnvironmentFile=%h/.ethereum/geth.conf
+ExecStart=/usr/bin/geth $ARGS
+
+[Install]
+WantedBy=default.target
+
+
