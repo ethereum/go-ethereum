@@ -25,6 +25,7 @@ package discover
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -457,6 +458,9 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 // If pinged is true, the remote node has just pinged us and one half
 // of the process can be skipped.
 func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16) (*Node, error) {
+	if id == tab.self.ID {
+		return nil, errors.New("is self")
+	}
 	// Retrieve a previously known node and any recent findnode failures
 	node, fails := tab.db.node(id), 0
 	if node != nil {
