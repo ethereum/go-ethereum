@@ -507,7 +507,7 @@ func gpubench(ctx *cli.Context) {
 
 func version(c *cli.Context) {
 	fmt.Println(clientIdentifier)
-	fmt.Println("Version:", version)
+	fmt.Println("Version:", verString)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
