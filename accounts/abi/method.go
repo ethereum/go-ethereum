@@ -18,6 +18,7 @@ package abi
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -36,6 +37,44 @@ type Method struct {
 	Const   bool
 	Inputs  []Argument
 	Outputs []Argument
+}
+
+func (m Method) pack(method Method, args ...interface{}) ([]byte, error) {
+	// Make sure arguments match up and pack them
+	if len(args) != len(method.Inputs) {
+		return nil, fmt.Errorf("argument count mismatch: %d for %d", len(args), len(method.Inputs))
+	}
+	// variable input is the output appended at the end of packed
+	// output. This is used for strings and bytes types input.
+	var variableInput []byte
+
+	var ret []byte
+	for i, a := range args {
+		input := method.Inputs[i]
+		// pack the input
+		packed, err := input.Type.pack(reflect.ValueOf(a))
+		if err != nil {
+			return nil, fmt.Errorf("`%s` %v", method.Name, err)
+		}
+
+		// check for a slice type (string, bytes, slice)
+		if input.Type.requiresLengthPrefix() {
+			// calculate the offset
+			offset := len(method.Inputs)*32 + len(variableInput)
+			// set the offset
+			ret = append(ret, packNum(reflect.ValueOf(offset), UintTy)...)
+			// Append the packed output to the variable input. The variable input
+			// will be appended at the end of the input.
+			variableInput = append(variableInput, packed...)
+		} else {
+			// append the packed value to the input
+			ret = append(ret, packed...)
+		}
+	}
+	// append the variable input at the end of the packed input
+	ret = append(ret, variableInput...)
+
+	return ret, nil
 }
 
 // Sig returns the methods string signature according to the ABI spec.

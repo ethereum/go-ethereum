@@ -164,7 +164,7 @@ func (fs *FilterSystem) filterLoop() {
 			fs.filterMu.RLock()
 			for _, filter := range fs.logFilters {
 				if filter.LogCallback != nil && !filter.created.After(event.Time) {
-					for _, removedLog := range ev.Logs {
+					for _, removedLog := range filter.FilterLogs(ev.Logs) {
 						filter.LogCallback(removedLog, true)
 					}
 				}

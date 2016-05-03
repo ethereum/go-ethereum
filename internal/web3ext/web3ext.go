@@ -18,12 +18,13 @@
 package web3ext
 
 var Modules = map[string]string{
-	"txpool": TxPool_JS,
-	"admin":  Admin_JS,
-	"eth":    Eth_JS,
-	"miner":  Miner_JS,
-	"debug":  Debug_JS,
-	"net":    Net_JS,
+	"txpool":   TxPool_JS,
+	"admin":    Admin_JS,
+	"personal": Personal_JS,
+	"eth":      Eth_JS,
+	"miner":    Miner_JS,
+	"debug":    Debug_JS,
+	"net":      Net_JS,
 }
 
 const TxPool_JS = `
@@ -170,6 +171,20 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'datadir',
 			getter: 'admin_datadir'
+		})
+	]
+});
+`
+
+const Personal_JS = `
+web3._extend({
+	property: 'personal',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'importRawKey',
+			call: 'personal_importRawKey',
+			params: 2
 		})
 	]
 });

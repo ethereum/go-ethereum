@@ -47,6 +47,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -227,6 +229,10 @@ var (
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
 		Usage: "Enable metrics collection and reporting",
+	}
+	FakePoWFlag = cli.BoolFlag{
+		Name:  "fakepow",
+		Usage: "Disables proof-of-work verification",
 	}
 
 	// RPC settings
@@ -636,7 +642,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 
 // MakeSystemNode sets up a local node, configures the services to launch and
 // assembles the P2P protocol stack.
-func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.Node {
+func MakeSystemNode(name, version string, relconf release.Config, extra []byte, ctx *cli.Context) *node.Node {
 	// Avoid conflicting network flags
 	networks, netFlags := 0, []cli.BoolFlag{DevModeFlag, TestNetFlag, OlympicFlag}
 	for _, flag := range netFlags {
@@ -767,7 +773,11 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 			Fatalf("Failed to register the Whisper service: %v", err)
 		}
 	}
-
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return release.NewReleaseService(ctx, relconf)
+	}); err != nil {
+		Fatalf("Failed to register the Geth release oracle service: %v", err)
+	}
 	return stack
 }
 
@@ -842,11 +852,13 @@ func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database
 			glog.Fatalln(err)
 		}
 	}
-
 	chainConfig := MustMakeChainConfigFromDb(ctx, chainDb)
 
-	var eventMux event.TypeMux
-	chain, err = core.NewBlockChain(chainDb, chainConfig, ethash.New(), &eventMux)
+	pow := pow.PoW(core.FakePow{})
+	if !ctx.GlobalBool(FakePoWFlag.Name) {
+		pow = ethash.New()
+	}
+	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux))
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}

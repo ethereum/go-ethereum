@@ -235,6 +235,56 @@ func TestServerTaskScheduling(t *testing.T) {
 	}
 }
 
+// This test checks that Server doesn't drop tasks,
+// even if newTasks returns more than the maximum number of tasks.
+func TestServerManyTasks(t *testing.T) {
+	alltasks := make([]task, 300)
+	for i := range alltasks {
+		alltasks[i] = &testTask{index: i}
+	}
+
+	var (
+		srv        = &Server{quit: make(chan struct{}), ntab: fakeTable{}, running: true}
+		done       = make(chan *testTask)
+		start, end = 0, 0
+	)
+	defer srv.Stop()
+	srv.loopWG.Add(1)
+	go srv.run(taskgen{
+		newFunc: func(running int, peers map[discover.NodeID]*Peer) []task {
+			start, end = end, end+maxActiveDialTasks+10
+			if end > len(alltasks) {
+				end = len(alltasks)
+			}
+			return alltasks[start:end]
+		},
+		doneFunc: func(tt task) {
+			done <- tt.(*testTask)
+		},
+	})
+
+	doneset := make(map[int]bool)
+	timeout := time.After(2 * time.Second)
+	for len(doneset) < len(alltasks) {
+		select {
+		case tt := <-done:
+			if doneset[tt.index] {
+				t.Errorf("task %d got done more than once", tt.index)
+			} else {
+				doneset[tt.index] = true
+			}
+		case <-timeout:
+			t.Errorf("%d of %d tasks got done within 2s", len(doneset), len(alltasks))
+			for i := 0; i < len(alltasks); i++ {
+				if !doneset[i] {
+					t.Logf("task %d not done", i)
+				}
+			}
+			return
+		}
+	}
+}
+
 type taskgen struct {
 	newFunc  func(running int, peers map[discover.NodeID]*Peer) []task
 	doneFunc func(task)

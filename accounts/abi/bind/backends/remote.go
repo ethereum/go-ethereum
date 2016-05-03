@@ -66,8 +66,14 @@ type request struct {
 type response struct {
 	JSONRPC string          `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
 	ID      int             `json:"id"`      // Auto incrementing ID number for this request
-	Error   json.RawMessage `json:"error"`   // Any error returned by the remote side
+	Error   *failure        `json:"error"`   // Any error returned by the remote side
 	Result  json.RawMessage `json:"result"`  // Whatever the remote side sends us in reply
+}
+
+// failure is a JSON RPC response error field sent back from the API server.
+type failure struct {
+	Code    int    `json:"code"`    // JSON RPC error code associated with the failure
+	Message string `json:"message"` // Specific error message of the failure
 }
 
 // request forwards an API request to the RPC server, and parses the response.
@@ -96,8 +102,11 @@ func (b *rpcBackend) request(method string, params []interface{}) (json.RawMessa
 	if err := b.client.Recv(res); err != nil {
 		return nil, err
 	}
-	if len(res.Error) > 0 {
-		return nil, fmt.Errorf("remote error: %s", string(res.Error))
+	if res.Error != nil {
+		if res.Error.Message == bind.ErrNoCode.Error() {
+			return nil, bind.ErrNoCode
+		}
+		return nil, fmt.Errorf("remote error: %s", res.Error.Message)
 	}
 	return res.Result, nil
 }

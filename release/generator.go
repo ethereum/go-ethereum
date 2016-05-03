@@ -14,15 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build ios linux,arm64 !darwin,!freebsd,!linux,!netbsd,!solaris,!windows
+//go:generate abigen --sol ./contract.sol --pkg release --out ./contract.go
 
-// This is the fallback implementation of directory watching.
-// It is used on unsupported platforms.
-
-package accounts
-
-type watcher struct{ running bool }
-
-func newWatcher(*addrCache) *watcher { return new(watcher) }
-func (*watcher) start()              {}
-func (*watcher) close()              {}
+package release

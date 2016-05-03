@@ -18,9 +18,11 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -40,31 +42,48 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
-	ClientIdentifier = "Geth"
-	Version          = "1.4.0-rc"
-	VersionMajor     = 1
-	VersionMinor     = 4
-	VersionPatch     = 0
+	clientIdentifier = "Geth" // Client identifier to advertise over the network
+	versionMajor     = 1      // Major version component of the current release
+	versionMinor     = 4      // Minor version component of the current release
+	versionPatch     = 1      // Patch version component of the current release
+	versionMeta      = "rc"   // Version metadata to append to the version string
+
+	versionOracle = "0xfa7b9770ca4cb04296cac84f37736d4041251cdf" // Ethereum address of the Geth release oracle
 )
 
 var (
-	gitCommit       string // set via linker flagg
-	nodeNameVersion string
-	app             *cli.App
+	gitCommit string         // Git SHA1 commit hash of the release (set via linker flags)
+	verString string         // Combined textual representation of all the version components
+	relConfig release.Config // Structured version information and release oracle config
+	app       *cli.App
 )
 
 func init() {
-	if gitCommit == "" {
-		nodeNameVersion = Version
-	} else {
-		nodeNameVersion = Version + "-" + gitCommit[:8]
+	// Construct the textual version string from the individual components
+	verString = fmt.Sprintf("%d.%d.%d", versionMajor, versionMinor, versionPatch)
+	if versionMeta != "" {
+		verString += "-" + versionMeta
 	}
+	if gitCommit != "" {
+		verString += "-" + gitCommit[:8]
+	}
+	// Construct the version release oracle configuration
+	relConfig.Oracle = common.HexToAddress(versionOracle)
 
-	app = utils.NewApp(Version, "the go-ethereum command line interface")
+	relConfig.Major = uint32(versionMajor)
+	relConfig.Minor = uint32(versionMinor)
+	relConfig.Patch = uint32(versionPatch)
+
+	commit, _ := hex.DecodeString(gitCommit)
+	copy(relConfig.Commit[:], commit)
+
+	// Initialize the CLI app and start Geth
+	app = utils.NewApp(verString, "the go-ethereum command line interface")
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -205,6 +224,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.MetricsEnabledFlag,
+		utils.FakePoWFlag,
 		utils.SolcPathFlag,
 		utils.GpoMinGasPriceFlag,
 		utils.GpoMaxGasPriceFlag,
@@ -255,7 +275,7 @@ func makeDefaultExtra() []byte {
 		Name      string
 		GoVersion string
 		Os        string
-	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), ClientIdentifier, runtime.Version(), runtime.GOOS}
+	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
 	extra, err := rlp.EncodeToBytes(clientInfo)
 	if err != nil {
 		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
@@ -273,7 +293,7 @@ func makeDefaultExtra() []byte {
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) {
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 	node.Wait()
 }
@@ -337,7 +357,7 @@ func initGenesis(ctx *cli.Context) {
 // same time.
 func console(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 
 	// Attach to the newly started node, and either execute script or become interactive
@@ -353,7 +373,7 @@ func console(ctx *cli.Context) {
 	// preload user defined JS files into the console
 	err = repl.preloadJSFiles(ctx)
 	if err != nil {
-		utils.Fatalf("unable to preload JS file %v", err)
+		utils.Fatalf("%v", err)
 	}
 
 	// in case the exec flag holds a JS statement execute it and return
@@ -370,8 +390,9 @@ func console(ctx *cli.Context) {
 // of the JavaScript files specified as command arguments.
 func execScripts(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
+	defer node.Stop()
 
 	// Attach to the newly started node and execute the given scripts
 	client, err := node.Attach()
@@ -383,10 +404,24 @@ func execScripts(ctx *cli.Context) {
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
 		client, false)
 
+	// Run all given files.
 	for _, file := range ctx.Args() {
-		repl.exec(file)
+		if err = repl.re.Exec(file); err != nil {
+			break
+		}
 	}
-	node.Stop()
+	if err != nil {
+		utils.Fatalf("JavaScript Error: %v", jsErrorString(err))
+	}
+	// JS files loaded successfully.
+	// Wait for pending callbacks, but stop for Ctrl-C.
+	abort := make(chan os.Signal, 1)
+	signal.Notify(abort, os.Interrupt)
+	go func() {
+		<-abort
+		repl.re.Stop(false)
+	}()
+	repl.re.Stop(true)
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -471,11 +506,8 @@ func gpubench(ctx *cli.Context) {
 }
 
 func version(c *cli.Context) {
-	fmt.Println(ClientIdentifier)
-	fmt.Println("Version:", Version)
-	if gitCommit != "" {
-		fmt.Println("Git Commit:", gitCommit)
-	}
+	fmt.Println(clientIdentifier)
+	fmt.Println("Version:", version)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())

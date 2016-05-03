@@ -284,7 +284,12 @@ func (am *Manager) Import(keyJSON []byte, passphrase, newPassphrase string) (Acc
 
 // ImportECDSA stores the given key into the key directory, encrypting it with the passphrase.
 func (am *Manager) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (Account, error) {
-	return am.importKey(newKeyFromECDSA(priv), passphrase)
+	key := newKeyFromECDSA(priv)
+	if am.cache.hasAddress(key.Address) {
+		return Account{}, fmt.Errorf("account already exists")
+	}
+
+	return am.importKey(key, passphrase)
 }
 
 func (am *Manager) importKey(key *Key, passphrase string) (Account, error) {

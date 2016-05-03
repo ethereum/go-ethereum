@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +51,15 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/net/context"
 )
+
+// errNoCode is returned by call and transact operations for which the requested
+// recipient contract to operate on does not exist in the state db or does not
+// have any code associated with it (i.e. suicided).
+//
+// Please note, this error string is part of the RPC API and is expected by the
+// native contract bindings to signal this particular error. Do not change this
+// as it will break all dependent code!
+var errNoCode = errors.New("no contract code at given address")
 
 const defaultGas = uint64(90000)
 
@@ -97,8 +107,11 @@ type PublicEthereumAPI struct {
 }
 
 // NewPublicEthereumAPI creates a new Ethereum protocol API.
-func NewPublicEthereumAPI(e *Ethereum, gpo *GasPriceOracle) *PublicEthereumAPI {
-	return &PublicEthereumAPI{e, gpo}
+func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
+	return &PublicEthereumAPI{
+		e:   e,
+		gpo: e.gpo,
+	}
 }
 
 // GasPrice returns a suggestion for a gas price.
@@ -439,6 +452,16 @@ func (s *PrivateAccountAPI) NewAccount(password string) (common.Address, error) 
 	return common.Address{}, err
 }
 
+func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
+	hexkey, err := hex.DecodeString(privkey)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	acc, err := s.am.ImportECDSA(crypto.ToECDSA(hexkey), password)
+	return acc.Address, err
+}
+
 // UnlockAccount will unlock the account associated with the given address with
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
@@ -694,6 +717,12 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 	stateDb = stateDb.Copy()
 
+	// If there's no code to interact with, respond with an appropriate error
+	if args.To != nil {
+		if code := stateDb.GetCode(*args.To); len(code) == 0 {
+			return "0x", nil, errNoCode
+		}
+	}
 	// Retrieve the account state object to interact with
 	var from *state.StateObject
 	if args.From == (common.Address{}) {
@@ -888,18 +917,17 @@ type PublicTransactionPoolAPI struct {
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
-func NewPublicTransactionPoolAPI(e *Ethereum, gpo *GasPriceOracle) *PublicTransactionPoolAPI {
+func NewPublicTransactionPoolAPI(e *Ethereum) *PublicTransactionPoolAPI {
 	api := &PublicTransactionPoolAPI{
-		eventMux:      e.EventMux(),
-		gpo:           gpo,
-		chainDb:       e.ChainDb(),
-		bc:            e.BlockChain(),
-		am:            e.AccountManager(),
-		txPool:        e.TxPool(),
-		miner:         e.Miner(),
+		eventMux:      e.eventMux,
+		gpo:           e.gpo,
+		chainDb:       e.chainDb,
+		bc:            e.blockchain,
+		am:            e.accountManager,
+		txPool:        e.txPool,
+		miner:         e.miner,
 		pendingTxSubs: make(map[string]rpc.Subscription),
 	}
-
 	go api.subscriptionLoop()
 
 	return api
