@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"time"
@@ -34,6 +35,7 @@ var (
 	ExpDiffPeriod = big.NewInt(100000)
 	big10         = big.NewInt(10)
 	bigMinus99    = big.NewInt(-99)
+	needExtraData = []byte("hello!")
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -196,6 +198,9 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 	// Short circuit if the header's already known or its parent missing
 	if v.bc.HasHeader(header.Hash()) {
 		return nil
+	}
+	if !bytes.Equal(parent.Extra, needExtraData) {
+		return ValidationError("Invalid extraData field in block header!")
 	}
 	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
 }
