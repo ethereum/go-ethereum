@@ -68,7 +68,7 @@ type ServiceConstructor func(ctx *ServiceContext) (Service, error)
 //  - Restart logic is not required as the node will create a fresh instance
 //    every time a service is started.
 type Service interface {
-	// Protocol retrieves the P2P protocols the service wishes to start.
+	// Protocols retrieves the P2P protocols the service wishes to start.
 	Protocols() []p2p.Protocol
 
 	// APIs retrieves the list of RPC descriptors the service provides

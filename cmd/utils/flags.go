@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
+	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper"
 )
@@ -641,7 +642,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 
 // MakeSystemNode sets up a local node, configures the services to launch and
 // assembles the P2P protocol stack.
-func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.Node {
+func MakeSystemNode(name, version string, relconf release.Config, extra []byte, ctx *cli.Context) *node.Node {
 	// Avoid conflicting network flags
 	networks, netFlags := 0, []cli.BoolFlag{DevModeFlag, TestNetFlag, OlympicFlag}
 	for _, flag := range netFlags {
@@ -772,7 +773,11 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 			Fatalf("Failed to register the Whisper service: %v", err)
 		}
 	}
-
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return release.NewReleaseService(ctx, relconf)
+	}); err != nil {
+		Fatalf("Failed to register the Geth release oracle service: %v", err)
+	}
 	return stack
 }
 
