@@ -18,6 +18,7 @@ package jsre
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,10 +33,10 @@ const (
 )
 
 var (
-	functionColor = color.New(color.FgMagenta)
-	specialColor  = color.New(color.Bold)
-	numberColor   = color.New(color.FgRed)
-	stringColor   = color.New(color.FgGreen)
+	FunctionColor = color.New(color.FgMagenta).SprintfFunc()
+	SpecialColor  = color.New(color.Bold).SprintfFunc()
+	NumberColor   = color.New(color.FgRed).SprintfFunc()
+	StringColor   = color.New(color.FgGreen).SprintfFunc()
 )
 
 // these fields are hidden when printing objects.
@@ -50,19 +51,22 @@ var boringKeys = map[string]bool{
 }
 
 // prettyPrint writes value to standard output.
-func prettyPrint(vm *otto.Otto, value otto.Value) {
-	ppctx{vm}.printValue(value, 0, false)
+func prettyPrint(vm *otto.Otto, value otto.Value, w io.Writer) {
+	ppctx{vm: vm, w: w}.printValue(value, 0, false)
 }
 
-func prettyPrintJS(call otto.FunctionCall) otto.Value {
+func prettyPrintJS(call otto.FunctionCall, w io.Writer) otto.Value {
 	for _, v := range call.ArgumentList {
-		prettyPrint(call.Otto, v)
-		fmt.Println()
+		prettyPrint(call.Otto, v, w)
+		fmt.Fprintln(w)
 	}
 	return otto.UndefinedValue()
 }
 
-type ppctx struct{ vm *otto.Otto }
+type ppctx struct {
+	vm *otto.Otto
+	w  io.Writer
+}
 
 func (ctx ppctx) indent(level int) string {
 	return strings.Repeat(indentString, level)
@@ -73,22 +77,22 @@ func (ctx ppctx) printValue(v otto.Value, level int, inArray bool) {
 	case v.IsObject():
 		ctx.printObject(v.Object(), level, inArray)
 	case v.IsNull():
-		specialColor.Print("null")
+		fmt.Fprint(ctx.w, SpecialColor("null"))
 	case v.IsUndefined():
-		specialColor.Print("undefined")
+		fmt.Fprint(ctx.w, SpecialColor("undefined"))
 	case v.IsString():
 		s, _ := v.ToString()
-		stringColor.Printf("%q", s)
+		fmt.Fprint(ctx.w, StringColor("%q", s))
 	case v.IsBoolean():
 		b, _ := v.ToBoolean()
-		specialColor.Printf("%t", b)
+		fmt.Fprint(ctx.w, SpecialColor("%t", b))
 	case v.IsNaN():
-		numberColor.Printf("NaN")
+		fmt.Fprint(ctx.w, NumberColor("NaN"))
 	case v.IsNumber():
 		s, _ := v.ToString()
-		numberColor.Printf("%s", s)
+		fmt.Fprint(ctx.w, NumberColor("%s", s))
 	default:
-		fmt.Printf("<unprintable>")
+		fmt.Fprint(ctx.w, "<unprintable>")
 	}
 }
 
@@ -98,75 +102,75 @@ func (ctx ppctx) printObject(obj *otto.Object, level int, inArray bool) {
 		lv, _ := obj.Get("length")
 		len, _ := lv.ToInteger()
 		if len == 0 {
-			fmt.Printf("[]")
+			fmt.Fprintf(ctx.w, "[]")
 			return
 		}
 		if level > maxPrettyPrintLevel {
-			fmt.Print("[...]")
+			fmt.Fprint(ctx.w, "[...]")
 			return
 		}
-		fmt.Print("[")
+		fmt.Fprint(ctx.w, "[")
 		for i := int64(0); i < len; i++ {
 			el, err := obj.Get(strconv.FormatInt(i, 10))
 			if err == nil {
 				ctx.printValue(el, level+1, true)
 			}
 			if i < len-1 {
-				fmt.Printf(", ")
+				fmt.Fprintf(ctx.w, ", ")
 			}
 		}
-		fmt.Print("]")
+		fmt.Fprint(ctx.w, "]")
 
 	case "Object":
 		// Print values from bignumber.js as regular numbers.
 		if ctx.isBigNumber(obj) {
-			numberColor.Print(toString(obj))
+			fmt.Fprint(ctx.w, NumberColor("%s", toString(obj)))
 			return
 		}
 		// Otherwise, print all fields indented, but stop if we're too deep.
 		keys := ctx.fields(obj)
 		if len(keys) == 0 {
-			fmt.Print("{}")
+			fmt.Fprint(ctx.w, "{}")
 			return
 		}
 		if level > maxPrettyPrintLevel {
-			fmt.Print("{...}")
+			fmt.Fprint(ctx.w, "{...}")
 			return
 		}
-		fmt.Println("{")
+		fmt.Fprintln(ctx.w, "{")
 		for i, k := range keys {
 			v, _ := obj.Get(k)
-			fmt.Printf("%s%s: ", ctx.indent(level+1), k)
+			fmt.Fprintf(ctx.w, "%s%s: ", ctx.indent(level+1), k)
 			ctx.printValue(v, level+1, false)
 			if i < len(keys)-1 {
-				fmt.Printf(",")
+				fmt.Fprintf(ctx.w, ",")
 			}
-			fmt.Println()
+			fmt.Fprintln(ctx.w)
 		}
 		if inArray {
 			level--
 		}
-		fmt.Printf("%s}", ctx.indent(level))
+		fmt.Fprintf(ctx.w, "%s}", ctx.indent(level))
 
 	case "Function":
 		// Use toString() to display the argument list if possible.
 		if robj, err := obj.Call("toString"); err != nil {
-			functionColor.Print("function()")
+			fmt.Fprint(ctx.w, FunctionColor("function()"))
 		} else {
 			desc := strings.Trim(strings.Split(robj.String(), "{")[0], " \t\n")
 			desc = strings.Replace(desc, " (", "(", 1)
-			functionColor.Print(desc)
+			fmt.Fprint(ctx.w, FunctionColor("%s", desc))
 		}
 
 	case "RegExp":
-		stringColor.Print(toString(obj))
+		fmt.Fprint(ctx.w, StringColor("%s", toString(obj)))
 
 	default:
 		if v, _ := obj.Get("toString"); v.IsFunction() && level <= maxPrettyPrintLevel {
 			s, _ := obj.Call("toString")
-			fmt.Printf("<%s %s>", obj.Class(), s.String())
+			fmt.Fprintf(ctx.w, "<%s %s>", obj.Class(), s.String())
 		} else {
-			fmt.Printf("<%s>", obj.Class())
+			fmt.Fprintf(ctx.w, "<%s>", obj.Class())
 		}
 	}
 }

@@ -17,12 +17,13 @@
 package jsre
 
 import (
+	"os"
 	"reflect"
 	"testing"
 )
 
 func TestCompleteKeywords(t *testing.T) {
-	re := New("")
+	re := New("", os.Stdout)
 	re.Run(`
 		function theClass() {
 			this.foo = 3;
