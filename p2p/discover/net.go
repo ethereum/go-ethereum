@@ -63,6 +63,14 @@ type Network struct {
 	nursery       []*Node
 	nodes         map[NodeID]*Node // tracks active nodes with state != known
 	timeoutTimers map[timeoutEvent]*time.Timer
+
+	// Revalidation queues.
+	// Nodes put on these queues will be pinged eventually.
+	slowRevalidateQueue []*Node
+	fastRevalidateQueue []*Node
+
+	// Buffers for state transition.
+	sendBuf []*ingressPacket
 }
 
 // transport is implemented by the UDP transport.
@@ -73,6 +81,7 @@ type transport interface {
 	sendPong(remote *Node, pingHash []byte)
 	sendFindnode(remote *Node, target NodeID)
 	sendNeighbours(remote *Node, nodes []*Node)
+
 	localAddr() *net.UDPAddr
 	Close()
 }
@@ -272,15 +281,15 @@ loop:
 
 		// Ingress packet handling.
 		case pkt := <-net.read:
-			node := net.getNode(pkt.remoteID, nil)
-			prestate := node.state
+			n := net.internNode(&pkt)
+			prestate := n.state
 			status := "ok"
-			if err := net.handle(node, pkt.ev, &pkt); err != nil {
+			if err := net.handle(n, pkt.ev, &pkt); err != nil {
 				status = err.Error()
 			}
 			if glog.V(logger.Detail) {
 				glog.Infof("<<< (%d) %v from %x@%v: %v -> %v (%v)",
-					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, node.state, status)
+					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
 			}
 
 			// TODO: persist state if n.state goes >= known, delete if it goes <= known
@@ -354,37 +363,6 @@ loop:
 // Everything below runs on the Network.loop goroutine
 // and can modify Node, Table and Network at any time without locking.
 
-func (net *Network) getNode(id NodeID, fromDB *Node) *Node {
-	if n := net.nodes[id]; n != nil {
-		return n
-	}
-	if fromDB == nil {
-		fromDB = &Node{ID: id}
-	}
-	if fromDB.state == nil {
-		fromDB.state = unknown
-	}
-	net.nodes[id] = fromDB
-	return net.nodes[id]
-}
-
-func (net *Network) nodeFromRPC(rn rpcNode) (n *Node, err error) {
-	n = net.nodes[rn.ID]
-	if n == nil {
-		// We haven't seen this node before.
-		n, err = nodeFromRPC(rn)
-		n.state = unknown
-		if err == nil {
-			net.nodes[n.ID] = n
-		}
-		return n, err
-	}
-	if !bytes.Equal(n.IP, rn.IP) || n.UDP != rn.UDP || n.TCP != rn.TCP {
-		err = fmt.Errorf("metadata mismatch: got %v, want %v", rn, n)
-	}
-	return n, err
-}
-
 func (net *Network) refresh(done chan<- struct{}) {
 	seeds := net.db.querySeeds(seedCount, seedMaxAge)
 	if len(seeds) == 0 {
@@ -400,7 +378,7 @@ func (net *Network) refresh(done chan<- struct{}) {
 			age := time.Since(net.db.lastPong(n.ID))
 			glog.Infof("seed node (age %v): %v", age, n)
 		}
-		n = net.getNode(n.ID, n)
+		n = net.internNodeFromDB(n)
 		if n.state == unknown {
 			net.transition(n, verifyinit)
 		}
@@ -413,6 +391,48 @@ func (net *Network) refresh(done chan<- struct{}) {
 		net.Lookup(net.tab.self.ID)
 		close(done)
 	}()
+}
+
+// Node Interning.
+
+func (net *Network) internNode(pkt *ingressPacket) *Node {
+	if n := net.nodes[pkt.remoteID]; n != nil {
+		return n
+	}
+	n := NewNode(pkt.remoteID, pkt.remoteAddr.IP, uint16(pkt.remoteAddr.Port), uint16(pkt.remoteAddr.Port))
+	n.state = unknown
+	net.nodes[pkt.remoteID] = n
+	return n
+}
+
+func (net *Network) internNodeFromDB(dbn *Node) *Node {
+	if n := net.nodes[dbn.ID]; n != nil {
+		return n
+	}
+	n := NewNode(dbn.ID, dbn.IP, dbn.UDP, dbn.TCP)
+	n.state = unknown
+	net.nodes[n.ID] = n
+	return n
+}
+
+func (net *Network) internNodeFromNeighbours(rn rpcNode) (n *Node, err error) {
+	if rn.ID == net.tab.self.ID {
+		return nil, errors.New("is self")
+	}
+	n = net.nodes[rn.ID]
+	if n == nil {
+		// We haven't seen this node before.
+		n, err = nodeFromRPC(rn)
+		n.state = unknown
+		if err == nil {
+			net.nodes[n.ID] = n
+		}
+		return n, err
+	}
+	if !bytes.Equal(n.IP, rn.IP) || n.UDP != rn.UDP || n.TCP != rn.TCP {
+		err = fmt.Errorf("metadata mismatch: got %v, want %v", rn, n)
+	}
+	return n, err
 }
 
 // nodeNetGuts is embedded in Node and contains fields.
@@ -430,6 +450,7 @@ type nodeNetGuts struct {
 	pingEcho          []byte           // hash of last ping sent by us
 	deferredQueries   []*findnodeQuery // queries that can't be sent yet
 	pendingNeighbours *findnodeQuery   // current query, waiting for reply
+	queryTimeouts     int
 }
 
 func (n *nodeNetGuts) deferQuery(q *findnodeQuery) {
@@ -475,7 +496,7 @@ type nodeEvent uint
 //go:generate stringer -type=nodeEvent
 
 const (
-	invalidEvent nodeEvent = iota // zero is 'reserved'
+	invalidEvent nodeEvent = iota // zero is reserved
 
 	// Packet type events.
 	// These correspond to packet types in the UDP protocol.
@@ -530,13 +551,14 @@ func init() {
 				n.pendingNeighbours.reply <- nil
 				n.pendingNeighbours = nil
 			}
+			n.queryTimeouts = 0
 		},
 		handle: func(net *Network, n *Node, ev nodeEvent, pkt *ingressPacket) (*nodeState, error) {
 			switch ev {
 			case pingPacket:
-				net.conn.sendPong(n, pkt.hash)
+				net.handlePing(n, pkt)
 				net.ping(n, pkt.remoteAddr)
-				return remoteverifywait, nil
+				return verifywait, nil
 			default:
 				return unknown, errInvalidEvent
 			}
@@ -551,7 +573,7 @@ func init() {
 		handle: func(net *Network, n *Node, ev nodeEvent, pkt *ingressPacket) (*nodeState, error) {
 			switch ev {
 			case pingPacket:
-				net.conn.sendPong(n, pkt.hash)
+				net.handlePing(n, pkt)
 				return verifywait, nil
 			case pongPacket:
 				net.abortTimedEvent(n, pongTimeout)
@@ -559,7 +581,7 @@ func init() {
 			case pongTimeout:
 				return unknown, nil
 			default:
-				return unknown, errInvalidEvent
+				return verifyinit, errInvalidEvent
 			}
 		},
 	}
@@ -574,7 +596,7 @@ func init() {
 			case pongTimeout:
 				return unknown, nil
 			default:
-				return unknown, errInvalidEvent
+				return verifywait, errInvalidEvent
 			}
 		},
 	}
@@ -601,6 +623,7 @@ func init() {
 		name:     "known",
 		canQuery: true,
 		enter: func(net *Network, n *Node) {
+			n.queryTimeouts = 0
 			n.startNextQuery(net)
 			// Insert into the table and start revalidation of the last node
 			// in the bucket if it is full.
@@ -613,13 +636,10 @@ func init() {
 		handle: func(net *Network, n *Node, ev nodeEvent, pkt *ingressPacket) (*nodeState, error) {
 			switch ev {
 			case pingPacket:
-				net.conn.sendPong(n, pkt.hash)
-				return known, nil
-			case pingTimeout:
+				net.handlePing(n, pkt)
 				return known, nil
 			case findnodePacket, neighborsPacket, neighboursTimeout:
-				err := net.handleQueryEvent(n, ev, pkt)
-				return known, err
+				return net.handleQueryEvent(n, ev, pkt)
 			default:
 				return known, errInvalidEvent
 			}
@@ -639,13 +659,12 @@ func init() {
 				return known, nil
 			case pongTimeout:
 				net.tab.deleteReplace(n)
-				return known, nil
+				return unresponsive, nil
 			case pingPacket:
-				net.conn.sendPong(n, pkt.hash)
+				net.handlePing(n, pkt)
 				return contested, nil
 			case findnodePacket, neighborsPacket, neighboursTimeout:
-				err := net.handleQueryEvent(n, ev, pkt)
-				return contested, err
+				return net.handleQueryEvent(n, ev, pkt)
 			default:
 				return contested, errInvalidEvent
 			}
@@ -658,11 +677,10 @@ func init() {
 		handle: func(net *Network, n *Node, ev nodeEvent, pkt *ingressPacket) (*nodeState, error) {
 			switch ev {
 			case pingPacket:
-				net.conn.sendPong(n, pkt.hash)
+				net.handlePing(n, pkt)
 				return known, nil
 			case findnodePacket, neighborsPacket, neighboursTimeout:
-				err := net.handleQueryEvent(n, ev, pkt)
-				return unresponsive, err
+				return net.handleQueryEvent(n, ev, pkt)
 			default:
 				return unresponsive, errInvalidEvent
 			}
@@ -743,21 +761,31 @@ func (net *Network) ping(n *Node, addr *net.UDPAddr) {
 	net.timedEvent(respTimeout, n, pongTimeout)
 }
 
-func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) error {
+func (net *Network) handlePing(n *Node, pkt *ingressPacket) {
+	n.TCP = pkt.data.(*ping).From.TCP
+	net.conn.sendPong(n, pkt.hash)
+}
+
+func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) (*nodeState, error) {
 	switch ev {
 	case findnodePacket:
 		target := crypto.Keccak256Hash(pkt.data.(*findnode).Target[:])
 		results := net.tab.closest(target, bucketSize).entries
 		net.conn.sendNeighbours(n, results)
-		return nil
+		return n.state, nil
 	case neighborsPacket:
-		return net.handleNeighboursPacket(n, pkt.data.(*neighbors))
+		err := net.handleNeighboursPacket(n, pkt.data.(*neighbors))
+		return n.state, err
 	case neighboursTimeout:
 		if n.pendingNeighbours != nil {
 			n.pendingNeighbours.reply <- nil
 			n.pendingNeighbours = nil
 		}
-		return nil
+		n.queryTimeouts++
+		if n.queryTimeouts > maxFindnodeFailures && n.state == known {
+			return contested, errors.New("too many timeouts")
+		}
+		return n.state, nil
 	default:
 		panic("oops")
 	}
@@ -771,7 +799,7 @@ func (net *Network) handleNeighboursPacket(n *Node, req *neighbors) error {
 
 	nodes := make([]*Node, len(req.Nodes))
 	for i, rn := range req.Nodes {
-		nn, err := net.nodeFromRPC(rn)
+		nn, err := net.internNodeFromNeighbours(rn)
 		if err != nil {
 			glog.V(logger.Debug).Infof("invalid neighbour from %x: %v", n.ID[:8], err)
 			continue

@@ -217,6 +217,34 @@ func MustParseNode(rawurl string) *Node {
 	return n
 }
 
+// type nodeQueue []*Node
+//
+// // pushNew adds n to the end if it is not present.
+// func (nl *nodeList) appendNew(n *Node) {
+// 	for _, entry := range n {
+// 		if entry == n {
+// 			return
+// 		}
+// 	}
+// 	*nq = append(*nq, n)
+// }
+//
+// // popRandom removes a random node. Nodes closer to
+// // to the head of the beginning of the have a slightly higher probability.
+// func (nl *nodeList) popRandom() *Node {
+// 	ix := rand.Intn(len(*nq))
+// 	//TODO: probability as mentioned above.
+// 	nl.removeIndex(ix)
+// }
+//
+// func (nl *nodeList) removeIndex(i int) *Node {
+// 	slice = *nl
+// 	if len(*slice) <= i {
+// 		return nil
+// 	}
+// 	*nl = append(slice[:i], slice[i+1:]...)
+// }
+
 const nodeIDBits = 512
 
 // NodeID is a unique identifier for each node.
