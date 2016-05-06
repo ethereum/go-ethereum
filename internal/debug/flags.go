@@ -89,7 +89,7 @@ func Setup(ctx *cli.Context) error {
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
 	Handler.SetBlockProfileRate(ctx.GlobalInt(blockprofilerateFlag.Name))
 	if traceFile := ctx.GlobalString(traceFlag.Name); traceFile != "" {
-		if err := Handler.StartTrace(traceFile); err != nil {
+		if err := Handler.StartGoTrace(traceFile); err != nil {
 			return err
 		}
 	}
@@ -114,5 +114,5 @@ func Setup(ctx *cli.Context) error {
 // respective file.
 func Exit() {
 	Handler.StopCPUProfile()
-	Handler.StopTrace()
+	Handler.StopGoTrace()
 }

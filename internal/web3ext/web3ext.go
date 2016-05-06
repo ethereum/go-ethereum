@@ -371,13 +371,13 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
-			name: 'startTrace',
-			call: 'debug_startTrace',
+			name: 'startGoTrace',
+			call: 'debug_startGoTrace',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'stopTrace',
-			call: 'debug_stopTrace',
+			name: 'stopGoTrace',
+			call: 'debug_stopGoTrace',
 			params: 0
 		}),
 		new web3._extend.Method({
