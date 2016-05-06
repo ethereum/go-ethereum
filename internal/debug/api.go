@@ -131,9 +131,9 @@ func (h *HandlerT) StopCPUProfile() error {
 	return nil
 }
 
-// Trace turns on tracing for nsec seconds and writes
+// GoTrace turns on tracing for nsec seconds and writes
 // trace data to file.
-func (h *HandlerT) Trace(file string, nsec uint) error {
+func (h *HandlerT) GoTrace(file string, nsec uint) error {
 	if err := h.StartTrace(file); err != nil {
 		return err
 	}

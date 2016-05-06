@@ -366,8 +366,8 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'trace',
-			call: 'debug_trace',
+			name: 'goTrace',
+			call: 'debug_goTrace',
 			params: 2
 		}),
 		new web3._extend.Method({
