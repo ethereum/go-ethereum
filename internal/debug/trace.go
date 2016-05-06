@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// StartTrace turns on tracing, writing to the given file.
-func (h *HandlerT) StartTrace(file string) error {
+// StartGoTrace turns on tracing, writing to the given file.
+func (h *HandlerT) StartGoTrace(file string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.traceW != nil {
@@ -49,7 +49,7 @@ func (h *HandlerT) StartTrace(file string) error {
 }
 
 // StopTrace stops an ongoing trace.
-func (h *HandlerT) StopTrace() error {
+func (h *HandlerT) StopGoTrace() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	trace.Stop()

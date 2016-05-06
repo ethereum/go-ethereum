@@ -73,15 +73,13 @@ func StartNode(stack *node.Node) {
 		<-sigc
 		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
 		go stack.Stop()
-		logger.Flush()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				glog.V(logger.Info).Infoln("Already shutting down, please be patient.")
-				glog.V(logger.Info).Infoln("Interrupt", i-1, "more times to induce panic.")
+				glog.V(logger.Info).Infof("Already shutting down, interrupt %d more times for panic.", i-1)
 			}
 		}
-		glog.V(logger.Error).Infof("Force quitting: this might not end so well.")
+		debug.Exit() // ensure trace and CPU profile data is flushed.
 		debug.LoudPanic("boom")
 	}()
 }

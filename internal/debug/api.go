@@ -51,7 +51,7 @@ type HandlerT struct {
 	traceFile string
 }
 
-// Verbosity sets the glog verbosity floor.
+// Verbosity sets the glog verbosity ceiling.
 // The verbosity of individual packages and source files
 // can be raised using Vmodule.
 func (*HandlerT) Verbosity(level int) {
@@ -134,11 +134,11 @@ func (h *HandlerT) StopCPUProfile() error {
 // GoTrace turns on tracing for nsec seconds and writes
 // trace data to file.
 func (h *HandlerT) GoTrace(file string, nsec uint) error {
-	if err := h.StartTrace(file); err != nil {
+	if err := h.StartGoTrace(file); err != nil {
 		return err
 	}
 	time.Sleep(time.Duration(nsec) * time.Second)
-	h.StopTrace()
+	h.StopGoTrace()
 	return nil
 }
 
