@@ -20,9 +20,11 @@ fi
 
 # Set up the environment to use the workspace.
 # Also add Godeps workspace so we build using canned dependencies.
-GOPATH="$ethdir/go-ethereum/Godeps/_workspace:$workspace"
+GOPATH="$workspace"
 GOBIN="$PWD/build/bin"
-export GOPATH GOBIN
+GO15VENDOREXPERIMENT=1
+
+export GOPATH GOBIN GO15VENDOREXPERIMENT
 
 # Run the command inside the workspace.
 cd "$ethdir/go-ethereum"

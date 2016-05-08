@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
-	"GoVersion": "go1.5.2",
+	"GoVersion": "go1.6.2",
 	"Packages": [
 		"./..."
 	],
