@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// +build linux darwin netbsd openbsd solaris
+// +build freebsd
 
 package utils
 
 import "syscall"
+
+// This file is largely identical to fdlimit_unix.go,
+// but Rlimit fields have type int64 on FreeBSD so it needs
+// an extra conversion.
 
 // raiseFdLimit tries to maximize the file descriptor allowance of this process
 // to the maximum hard-limit allowed by the OS.
@@ -30,8 +34,8 @@ func raiseFdLimit(max uint64) error {
 	}
 	// Try to update the limit to the max allowance
 	limit.Cur = limit.Max
-	if limit.Cur > max {
-		limit.Cur = max
+	if limit.Cur > int64(max) {
+		limit.Cur = int64(max)
 	}
 	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, &limit); err != nil {
 		return err
