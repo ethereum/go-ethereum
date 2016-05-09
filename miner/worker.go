@@ -220,6 +220,9 @@ func (self *worker) update() {
 	eventSub := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
 	defer eventSub.Unsubscribe()
 
+	if !eventSub.LoopStarted() {
+		return
+	}
 	eventCh := eventSub.Chan()
 	for {
 		select {
@@ -227,6 +230,7 @@ func (self *worker) update() {
 			if !ok {
 				// Event subscription closed, set the channel to nil to stop spinning
 				eventCh = nil
+				eventSub.LoopStopped()
 				continue
 			}
 			// A real event arrived, process interesting content

@@ -131,6 +131,10 @@ func (fs *FilterSystem) Get(id int) *Filter {
 // filterLoop waits for specific events from ethereum and fires their handlers
 // when the filter matches the requirements.
 func (fs *FilterSystem) filterLoop() {
+	if !fs.sub.LoopStarted() {
+		return
+	}
+	defer fs.sub.LoopStopped()
 	for event := range fs.sub.Chan() {
 		switch ev := event.Data.(type) {
 		case core.ChainEvent:

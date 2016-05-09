@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Event is a time-tagged notification pushed to subscribers.
@@ -42,6 +44,8 @@ type Subscription interface {
 	// The event channel is closed.
 	// Unsubscribe can be called more than once.
 	Unsubscribe()
+	LoopStarted() bool
+	LoopStopped()
 }
 
 // A TypeMux dispatches events to registered receivers. Receivers can be
@@ -53,6 +57,7 @@ type TypeMux struct {
 	mutex   sync.RWMutex
 	subm    map[reflect.Type][]*muxsub
 	stopped bool
+	sm 		*common.ShutdownManager
 }
 
 // ErrMuxClosed is returned when Posting on a closed TypeMux.
@@ -68,6 +73,9 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 	if mux.stopped {
 		close(sub.postC)
 	} else {
+		if mux.sm == nil {
+			mux.sm = common.NewShutdownManager()
+		}
 		if mux.subm == nil {
 			mux.subm = make(map[reflect.Type][]*muxsub)
 		}
@@ -119,7 +127,11 @@ func (mux *TypeMux) Stop() {
 	}
 	mux.subm = nil
 	mux.stopped = true
+	sm := mux.sm
 	mux.mutex.Unlock()
+	if sm != nil {
+		sm.Shutdown()
+	}
 }
 
 func (mux *TypeMux) del(s *muxsub) {
@@ -185,6 +197,14 @@ func (s *muxsub) Chan() <-chan *Event {
 func (s *muxsub) Unsubscribe() {
 	s.mux.del(s)
 	s.closewait()
+}
+
+func (s *muxsub) LoopStarted() bool {
+	return s.mux.sm.Enter()
+}
+
+func (s *muxsub) LoopStopped() {
+	s.mux.sm.Exit()
 }
 
 func (s *muxsub) closewait() {

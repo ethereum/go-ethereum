@@ -82,6 +82,7 @@ type ProtocolManager struct {
 	// and processing
 	wg   sync.WaitGroup
 	quit bool
+	sm   *common.ShutdownManager
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -104,6 +105,7 @@ func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, 
 		newPeerCh:  make(chan *peer, 1),
 		txsyncCh:   make(chan *txsync),
 		quitSync:   make(chan struct{}),
+		sm:			common.NewShutdownManager(),
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
@@ -119,9 +121,17 @@ func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, 
 			Version: version,
 			Length:  ProtocolLengths[i],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+				if !manager.sm.Enter() {
+					return nil
+				}
+				defer manager.sm.Exit()
 				peer := manager.newPeer(int(version), p, rw)
-				manager.newPeerCh <- peer
-				return manager.handle(peer)
+				select {
+				case manager.newPeerCh <- peer:
+					return manager.handle(peer)
+				case <-manager.sm.StopChannel():
+					return nil
+				}
 			},
 			NodeInfo: func() interface{} {
 				return manager.NodeInfo()
@@ -196,8 +206,25 @@ func (pm *ProtocolManager) Stop() {
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 	close(pm.quitSync)             // quits syncer, fetcher, txsyncLoop
 
+	stopped := make(chan struct{})
+	go func() {
+		for {
+			// drop all peers
+			for _, id := range pm.peers.AllPeerIDs() {
+				pm.removePeer(id)
+			}
+			select {
+				case <-stopped:
+					return
+				case <-time.After(time.Millisecond * 100):
+			}
+		}
+	}()
+
 	// Wait for any process action
+	pm.sm.Shutdown()
 	pm.wg.Wait()
+	close(stopped)
 
 	glog.V(logger.Info).Infoln("Ethereum protocol handler stopped")
 }
@@ -239,7 +266,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	pm.syncTransactions(p)
 
 	// main loop. handle incoming messages.
-	for {
+	for !pm.sm.Stopped() {
 		if err := pm.handleMsg(p); err != nil {
 			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
 			return err
@@ -254,6 +281,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
+	}
+	if pm.sm.Stopped() {
+		return nil
 	}
 	if msg.Size > ProtocolMaxMsgSize {
 		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
@@ -733,6 +763,10 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 // Mined broadcast loop
 func (self *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
+	if !self.minedBlockSub.LoopStarted() {
+		return
+	}
+	defer self.minedBlockSub.LoopStopped()
 	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.Data.(type) {
 		case core.NewMinedBlockEvent:
@@ -744,6 +778,10 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 
 func (self *ProtocolManager) txBroadcastLoop() {
 	// automatically stops if unsubscribe
+	if !self.txSub.LoopStarted() {
+		return
+	}
+	defer self.txSub.LoopStopped()
 	for obj := range self.txSub.Chan() {
 		event := obj.Data.(core.TxPreEvent)
 		self.BroadcastTx(event.Tx.Hash(), event.Tx)
