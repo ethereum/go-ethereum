@@ -1841,7 +1841,7 @@ func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogCon
 		}
 		// Mutate the state if we haven't reached the tracing transaction yet
 		if uint64(idx) < txIndex {
-			vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, parent.Header(), vm.Config{})
+			vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, block.Header(), vm.Config{})
 			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				return nil, fmt.Errorf("mutation failed: %v", err)
@@ -1849,7 +1849,7 @@ func (s *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogCon
 			continue
 		}
 		// Otherwise trace the transaction and return
-		vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, parent.Header(), vm.Config{Debug: true, Logger: *logger})
+		vmenv := core.NewEnv(stateDb, s.config, s.eth.BlockChain(), msg, block.Header(), vm.Config{Debug: true, Logger: *logger})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)
