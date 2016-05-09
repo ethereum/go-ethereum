@@ -13,7 +13,7 @@ GOBIN = build/bin
 GO ?= latest
 
 geth:
-	build/env.sh go install -v $(shell build/flags.sh) ./cmd/geth
+	build/env.sh go build -i -v $(shell build/flags.sh) -o $(GOBIN)/geth ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
 
@@ -103,7 +103,9 @@ evm:
 	@echo "Run \"$(GOBIN)/evm to start the evm."
 
 all:
-	build/env.sh go install -v $(shell build/flags.sh) ./...
+	for cmd in `ls ./cmd/`; do \
+		 build/env.sh go build -i -v $(shell build/flags.sh) -o $(GOBIN)/$$cmd ./cmd/$$cmd; \
+	done
 
 test: all
 	build/env.sh go test ./...
