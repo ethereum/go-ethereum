@@ -3911,7 +3911,12 @@ var outputSyncingFormatter = function(result) {
     result.startingBlock = utils.toDecimal(result.startingBlock);
     result.currentBlock = utils.toDecimal(result.currentBlock);
     result.highestBlock = utils.toDecimal(result.highestBlock);
-
+    if (result.knownStates !== undefined) {
+      result.knownStates = utils.toDecimal(result.knownStates);
+    }
+    if (result.pulledStates !== undefined) {
+      result.pulledStates = utils.toDecimal(result.pulledStates);
+    }
     return result;
 };
 
