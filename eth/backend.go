@@ -416,6 +416,7 @@ func (s *Ethereum) Stop() error {
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()
+	s.miner.Stop()
 	s.eventMux.Stop()
 
 	s.StopAutoDAG()

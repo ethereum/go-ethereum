@@ -60,8 +60,7 @@ type stateFn func() (*state.StateDB, error)
 // two states over time as they are received and processed.
 type TxPool struct {
 	config       *ChainConfig
-	quit         chan bool // Quitting channel
-	currentState stateFn   // The state function which will allow us to do some pre checks
+	currentState stateFn // The state function which will allow us to do some pre checks
 	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
 	minGasPrice  *big.Int
@@ -72,6 +71,8 @@ type TxPool struct {
 	pending      map[common.Hash]*types.Transaction // processable transactions
 	queue        map[common.Address]map[common.Hash]*types.Transaction
 
+	wg sync.WaitGroup // for shutdown sync
+
 	homestead bool
 }
 
@@ -80,7 +81,6 @@ func NewTxPool(config *ChainConfig, eventMux *event.TypeMux, currentStateFn stat
 		config:       config,
 		pending:      make(map[common.Hash]*types.Transaction),
 		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
-		quit:         make(chan bool),
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
@@ -90,12 +90,15 @@ func NewTxPool(config *ChainConfig, eventMux *event.TypeMux, currentStateFn stat
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
 
+	pool.wg.Add(1)
 	go pool.eventLoop()
 
 	return pool
 }
 
 func (pool *TxPool) eventLoop() {
+	defer pool.wg.Done()
+
 	// Track chain events. When a chain events occurs (new chain canon block)
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
@@ -155,8 +158,8 @@ func (pool *TxPool) resetState() {
 }
 
 func (pool *TxPool) Stop() {
-	close(pool.quit)
 	pool.events.Unsubscribe()
+	pool.wg.Wait()
 	glog.V(logger.Info).Infoln("Transaction pool stopped")
 }
 

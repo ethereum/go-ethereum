@@ -68,7 +68,11 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *st
 	}
 
 	if host == nil {
-		host = &api.node.httpHost
+		h := common.DefaultHTTPHost
+		if api.node.httpHost != "" {
+			h = api.node.httpHost
+		}
+		host = &h
 	}
 	if port == nil {
 		port = rpc.NewHexNumber(api.node.httpPort)
@@ -113,7 +117,11 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOr
 	}
 
 	if host == nil {
-		host = &api.node.wsHost
+		h := common.DefaultWSHost
+		if api.node.wsHost != "" {
+			h = api.node.wsHost
+		}
+		host = &h
 	}
 	if port == nil {
 		port = rpc.NewHexNumber(api.node.wsPort)

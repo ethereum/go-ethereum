@@ -140,14 +140,14 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 	// Start the peer on a new thread
 	errc := make(chan error, 1)
 	go func() {
-		pm.newPeerCh <- peer
-		errc <- pm.handle(peer)
+		select {
+		case pm.newPeerCh <- peer:
+			errc <- pm.handle(peer)
+		case <-pm.quitSync:
+			errc <- p2p.DiscQuitting
+		}
 	}()
-	tp := &testPeer{
-		app:  app,
-		net:  net,
-		peer: peer,
-	}
+	tp := &testPeer{app: app, net: net, peer: peer}
 	// Execute any implicitly requested handshakes and return
 	if shake {
 		td, head, genesis := pm.blockchain.Status()
