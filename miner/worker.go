@@ -94,10 +94,13 @@ type worker struct {
 
 	mu sync.Mutex
 
+	// update loop
+	mux    *event.TypeMux
+	events event.Subscription
+	wg     sync.WaitGroup
+
 	agents map[Agent]struct{}
 	recv   chan *Result
-	mux    *event.TypeMux
-	quit   chan struct{}
 	pow    pow.PoW
 
 	eth     core.Backend
@@ -138,13 +141,14 @@ func newWorker(config *core.ChainConfig, coinbase common.Address, eth core.Backe
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
-		quit:           make(chan struct{}),
 		agents:         make(map[Agent]struct{}),
 		fullValidation: false,
 	}
+	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
+	worker.wg.Add(1)
 	go worker.update()
-	go worker.wait()
 
+	go worker.wait()
 	worker.commitNewWork()
 
 	return worker
@@ -184,9 +188,12 @@ func (self *worker) start() {
 }
 
 func (self *worker) stop() {
+	// Quit update.
+	self.events.Unsubscribe()
+	self.wg.Wait()
+
 	self.mu.Lock()
 	defer self.mu.Unlock()
-
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// Stop all agents.
 		for agent := range self.agents {
@@ -217,36 +224,23 @@ func (self *worker) unregister(agent Agent) {
 }
 
 func (self *worker) update() {
-	eventSub := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
-	defer eventSub.Unsubscribe()
-
-	eventCh := eventSub.Chan()
-	for {
-		select {
-		case event, ok := <-eventCh:
-			if !ok {
-				// Event subscription closed, set the channel to nil to stop spinning
-				eventCh = nil
-				continue
+	defer self.wg.Done()
+	for event := range self.events.Chan() {
+		// A real event arrived, process interesting content
+		switch ev := event.Data.(type) {
+		case core.ChainHeadEvent:
+			self.commitNewWork()
+		case core.ChainSideEvent:
+			self.uncleMu.Lock()
+			self.possibleUncles[ev.Block.Hash()] = ev.Block
+			self.uncleMu.Unlock()
+		case core.TxPreEvent:
+			// Apply transaction to the pending state if we're not mining
+			if atomic.LoadInt32(&self.mining) == 0 {
+				self.currentMu.Lock()
+				self.current.commitTransactions(self.mux, types.Transactions{ev.Tx}, self.gasPrice, self.chain)
+				self.currentMu.Unlock()
 			}
-			// A real event arrived, process interesting content
-			switch ev := event.Data.(type) {
-			case core.ChainHeadEvent:
-				self.commitNewWork()
-			case core.ChainSideEvent:
-				self.uncleMu.Lock()
-				self.possibleUncles[ev.Block.Hash()] = ev.Block
-				self.uncleMu.Unlock()
-			case core.TxPreEvent:
-				// Apply transaction to the pending state if we're not mining
-				if atomic.LoadInt32(&self.mining) == 0 {
-					self.currentMu.Lock()
-					self.current.commitTransactions(self.mux, types.Transactions{ev.Tx}, self.gasPrice, self.chain)
-					self.currentMu.Unlock()
-				}
-			}
-		case <-self.quit:
-			return
 		}
 	}
 }
