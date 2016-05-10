@@ -127,13 +127,13 @@ const AuthorizationHTML = `
 			<p id="infomessage">Please wait...</p>
 		</div>
 		
-		<div id="form" class="wrapper">
+		<form id="form" class="wrapper">
 			<br/>
 			<p id="message" class="message"></p>
 			<p id="passwordField"><label>Password Required:</label><input id="password" type="password" /></p>
-			<button id="cancel-button" autofocus>Cancel</button>
-			<button id="confirm-button" >Confirm</button>
-		</div>
+			<button id="cancel-button" type="button" autofocus>Cancel</button>
+			<button id="confirm-button" type="button" >Confirm</button>
+		</form>
 	
 		<div id="modal-dialog" class="wrapper">
 			<h3 id="modal-dialog-title" class="title">Title</h3>
@@ -142,6 +142,8 @@ const AuthorizationHTML = `
 		</div>
 			
 		<script>
+		var noMessageReceivedYet = true;
+		var closedByCode = false;
 		var pleaseWait = document.getElementById("pleasewait");
 		var form = document.getElementById("form");
 		var cancelButton = document.getElementById("cancel-button");
@@ -164,6 +166,12 @@ const AuthorizationHTML = `
 		}else if(window.parent != window){
 			source = window.parent;
 		}else{
+			console.log("closing");
+			window.close();
+		}
+		
+		function closeWindow(){
+			closedByCode = true;
 			window.close();
 		}
 		
@@ -199,6 +207,11 @@ const AuthorizationHTML = `
 					callback();
 				}
 			}
+		}
+		
+		function hideMessage(){
+			modalDialog.style.display = "none";
+			modalDialogButton.onclick = null;
 		}
 			
 		function sendAsync(url,payload, callback) {
@@ -275,14 +288,14 @@ const AuthorizationHTML = `
 			
 			cancelButton.onclick = function(){
 				sourceWindow.postMessage({id:data.id,result:null,error:{message:"Not Authorized"},type:"cancel"},sourceWindow.location.href);
-				window.close();
+				closeWindow();
 			}
 			
-			confirmButton.onclick = function(){
+			var submitFunc = function(){
 				if(requireUnlock){
 					if(password.value == ""){
 						password.style.border = "2px solid red";
-						return;
+						return false;
 					}
 					password.style.border = "none";
 					var params = [transactionInfo.from,password.value,3];
@@ -293,7 +306,7 @@ const AuthorizationHTML = `
 						}else{
 							sendAsync(data.url,data.payload,function(error,result){
 								sourceWindow.postMessage({id:data.id,result:result,error:error},sourceWindow.location.href);
-								window.close();
+								closeWindow();
 							});
 							showWaiting();
 						}
@@ -304,13 +317,18 @@ const AuthorizationHTML = `
 							processMessage(data,sourceWindow);
 						}else{
 							sourceWindow.postMessage({id:data.id,result:result,error:error},sourceWindow.location.href);
-							window.close();
+							closeWindow();
 						}
 					});
 					showWaiting();
 				}
 				
+				return false;
+				
 			}
+			
+			form.onsubmit = submitFunc;
+			confirmButton.onclick = submitFunc;
 			
 		}
 		
@@ -338,8 +356,18 @@ const AuthorizationHTML = `
 			}else{
 				firstUrl = event.origin;
 			}
+			hideMessage();
+			noMessageReceivedYet = false;
 			var data = event.data;
-			processMessage(data,event.source);
+			try{
+				processMessage(data,event.source);
+			}catch(e){
+				event.source.postMessage({id:data.id,result:null,error:{message:"Could not process message data"},type:"notValid"},event.source.location.href);
+				showMessage("Error","The application has sent invalid data", function(){
+					closeWindow();
+				});
+			}
+			
 		}
 		
 		function processMessage(data, sourceWindow){
@@ -377,7 +405,7 @@ const AuthorizationHTML = `
 						});
 					}else{
 						sourceWindow.postMessage({id:data.id,result:null,error:{message:"Need to specify from , to,  gas and gasPrice"},type:"notValid"},sourceWindow.location.href);
-						window.close();
+						closeWindow();
 					}
 				}
 			}else{
@@ -387,6 +415,20 @@ const AuthorizationHTML = `
 			}
 		}
 		
+		window.onbeforeunload = function (event) {
+			if(!closedByCode){
+				source.postMessage({id:data.id,result:null,error:{message:"Not Authorized",type:"cancel"}},source.location.href);
+			}
+		};
+		
+		function checkMessageNotReceived(){
+			if(noMessageReceivedYet){
+				showMessage("Error","No transaction received. Please make sure popup are not blocked.", function(){
+					closeWindow();
+				});
+			}
+		}
+		setTimeout(checkMessageNotReceived,1000);
 		
 		window.addEventListener("message", receiveMessage);
 		if(source){
