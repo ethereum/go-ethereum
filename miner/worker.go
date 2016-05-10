@@ -145,7 +145,6 @@ func newWorker(config *core.ChainConfig, coinbase common.Address, eth core.Backe
 		fullValidation: false,
 	}
 	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
-	worker.wg.Add(1)
 	go worker.update()
 
 	go worker.wait()
@@ -188,8 +187,6 @@ func (self *worker) start() {
 }
 
 func (self *worker) stop() {
-	// Quit update.
-	self.events.Unsubscribe()
 	self.wg.Wait()
 
 	self.mu.Lock()
@@ -224,7 +221,6 @@ func (self *worker) unregister(agent Agent) {
 }
 
 func (self *worker) update() {
-	defer self.wg.Done()
 	for event := range self.events.Chan() {
 		// A real event arrived, process interesting content
 		switch ev := event.Data.(type) {
