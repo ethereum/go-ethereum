@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -57,6 +58,7 @@ func NewServer() *Server {
 		subscriptions: make(subscriptionRegistry),
 		codecs:        set.New(),
 		run:           1,
+		pending:       make(serverPendingRequests),
 	}
 
 	// register a default service which will provide meta information about the RPC service such as the services and
@@ -80,6 +82,91 @@ func (s *RPCService) Modules() map[string]string {
 		modules[name] = "1.0"
 	}
 	return modules
+}
+
+var (
+	// ErrPendingUnsupported is returned when the connection doesn't support access to pending requests
+	ErrPendingUnsupported = errors.New("access to pending requests not supported")
+
+	// ErrPendingNotFound is returned when no pending request with the given id is found
+	ErrPendingNotFound = errors.New("pending request not found")
+)
+
+type (
+	codecKey struct{}
+	idKey    struct{}
+)
+
+// Cancel cancels a pending request initiated through the same codec as this one.
+// If id == nil, all such requests are canceled.
+func (s *RPCService) Cancel(ctx context.Context, id interface{}) error {
+	_, fl := id.(float64)
+	_, st := id.(string)
+	if !fl && !st {
+		return ErrPendingNotFound
+	}
+
+	s.server.pendingMu.Lock()
+	defer s.server.pendingMu.Unlock()
+
+	codec, _ := ctx.Value(codecKey{}).(ServerCodec)
+	if codec == nil {
+		return ErrPendingUnsupported
+	}
+	codecPending := s.server.pending[codec]
+	if codecPending == nil {
+		return ErrPendingUnsupported
+	}
+
+	if id == "" {
+		for _, req := range codecPending {
+			if !req.canceled {
+				req.cancelFn()
+				req.canceled = true
+			}
+		}
+		return nil
+	}
+
+	if req, ok := codecPending[id]; ok {
+		if !req.canceled {
+			req.cancelFn()
+			req.canceled = true
+		}
+		return nil
+	}
+	return ErrPendingNotFound
+}
+
+// Pending returns the status of all pending requests initiated through the same
+// codec as this one. The status is either "running" or "canceled".
+func (s *RPCService) Pending(ctx context.Context) ([]jsonPendingStatus, error) {
+	s.server.pendingMu.Lock()
+	defer s.server.pendingMu.Unlock()
+
+	codec, _ := ctx.Value(codecKey{}).(ServerCodec)
+	if codec == nil {
+		return nil, ErrPendingUnsupported
+	}
+	codecPending := s.server.pending[codec]
+	if codecPending == nil {
+		return nil, ErrPendingUnsupported
+	}
+
+	selfId := ctx.Value(idKey{})
+	var res []jsonPendingStatus
+	for id, req := range codecPending {
+		if id != selfId {
+			s := jsonPendingStatus{Id: id}
+			if req.canceled {
+				s.Status = "canceled"
+			} else {
+				s.Status = "running"
+			}
+			res = append(res, s)
+		}
+	}
+	return res, nil
 }
 
 // RegisterName will create an service for the given rcvr type under the given name. When no methods on the given rcvr
@@ -162,7 +249,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 		return
 	}()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), codecKey{}, codec))
 	defer cancel()
 
 	// if the codec supports notification include a notifier that callbacks can use
@@ -224,7 +311,16 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 // response back using the given codec. It will block until the codec is closed or the server is
 // stopped. In either case the codec is closed.
 func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
-	defer codec.Close()
+	defer func() {
+		s.pendingMu.Lock()
+		delete(s.pending, codec)
+		s.pendingMu.Unlock()
+		codec.Close()
+	}()
+
+	s.pendingMu.Lock()
+	s.pending[codec] = make(codecPendingRequests)
+	s.pendingMu.Unlock()
 	s.serveRequest(codec, false, options)
 }
 
@@ -337,12 +433,35 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 
 // exec executes the given request and writes the result back using the codec.
 func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest) {
+	lctx := ctx
+	s.pendingMu.Lock()
+	codecPending := s.pending[codec]
+	var preq *pendingRequest
+	if codecPending != nil {
+		var cancelFn func()
+		lctx, cancelFn = context.WithCancel(context.WithValue(ctx, idKey{}, req.id))
+		preq = &pendingRequest{cancelFn, false}
+		codecPending[req.id] = preq
+	}
+	s.pendingMu.Unlock()
+
+	if codecPending != nil {
+		defer func() {
+			s.pendingMu.Lock()
+			if !preq.canceled {
+				preq.cancelFn() // always cancel contexts in order to avoid leaks
+			}
+			delete(codecPending, req.id)
+			s.pendingMu.Unlock()
+		}()
+	}
+
 	var response interface{}
 	var callback func()
 	if req.err != nil {
 		response = codec.CreateErrorResponse(&req.id, req.err)
 	} else {
-		response, callback = s.handle(ctx, codec, req)
+		response, callback = s.handle(lctx, codec, req)
 	}
 
 	if err := codec.Write(response); err != nil {
@@ -359,6 +478,33 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 // execBatch executes the given requests and writes the result back using the codec.
 // It will only write the response back when the last request is processed.
 func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*serverRequest) {
+	lctx := ctx
+	s.pendingMu.Lock()
+	codecPending := s.pending[codec]
+	var preq *pendingRequest
+	if codecPending != nil {
+		var cancelFn func()
+		lctx, cancelFn = context.WithCancel(ctx)
+		preq = &pendingRequest{cancelFn, false}
+		for _, req := range requests {
+			codecPending[req.id] = preq
+		}
+	}
+	s.pendingMu.Unlock()
+
+	if codecPending != nil {
+		defer func() {
+			s.pendingMu.Lock()
+			if !preq.canceled {
+				preq.cancelFn() // always cancel contexts in order to avoid leaks
+			}
+			for _, req := range requests {
+				delete(codecPending, req.id)
+			}
+			s.pendingMu.Unlock()
+		}()
+	}
+
 	responses := make([]interface{}, len(requests))
 	var callbacks []func()
 	for i, req := range requests {
@@ -366,7 +512,8 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 			responses[i] = codec.CreateErrorResponse(&req.id, req.err)
 		} else {
 			var callback func()
-			if responses[i], callback = s.handle(ctx, codec, req); callback != nil {
+			cctx := context.WithValue(lctx, idKey{}, req.id)
+			if responses[i], callback = s.handle(cctx, codec, req); callback != nil {
 				callbacks = append(callbacks, callback)
 			}
 		}

@@ -70,6 +70,19 @@ type callbacks map[string]*callback            // collection of RPC callbacks
 type subscriptions map[string]*callback        // collection of subscription callbacks
 type subscriptionRegistry map[string]*callback // collection of subscription callbacks
 
+// pendingRequest contains status and cancel info about currently running requests
+type pendingRequest struct {
+	cancelFn func()
+	canceled bool
+}
+
+// codecPendingRequests stores all pending requests initiated from the same codec
+// keys are request IDs (either float64 or string)
+type codecPendingRequests map[interface{}]*pendingRequest
+
+// serverPendingRequests stores all pending requests handled by a server
+type serverPendingRequests map[ServerCodec]codecPendingRequests
+
 // Server represents a RPC server
 type Server struct {
 	services       serviceRegistry
@@ -79,6 +92,9 @@ type Server struct {
 	run      int32
 	codecsMu sync.Mutex
 	codecs   *set.Set
+
+	pending   serverPendingRequests
+	pendingMu sync.Mutex
 }
 
 // rpcRequest represents a raw incoming RPC request
