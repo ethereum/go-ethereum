@@ -61,22 +61,22 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 			allowAllOrigins = true
 		}
 		if origin != "" {
-			origins.Add(origin)
+			origins.Add(strings.ToLower(origin))
 		}
 	}
 
-	// allow localhost if no allowedOrigins are specified
+	// allow localhost if no allowedOrigins are specified.
 	if len(origins.List()) == 0 {
 		origins.Add("http://localhost")
 		if hostname, err := os.Hostname(); err == nil {
-			origins.Add("http://" + hostname)
+			origins.Add("http://" + strings.ToLower(hostname))
 		}
 	}
 
 	glog.V(logger.Debug).Infof("Allowed origin(s) for WS RPC interface %v\n", origins.List())
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
-		origin := req.Header.Get("Origin")
+		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Has(origin) {
 			return nil
 		}
