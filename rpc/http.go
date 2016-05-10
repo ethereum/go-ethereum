@@ -25,6 +25,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	
+	"github.com/ethereum/go-ethereum/embed"
 
 	"github.com/rs/cors"
 )
@@ -104,6 +106,15 @@ func (t *httpReadWriteNopCloser) Close() error {
 // send the request to the given API provider and sends the response back to the caller.
 func newJSONHTTPHandler(srv *Server) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		
+		if r.URL.Path == "/authorization.html"{
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			if _, err := w.Write([]byte(embed.AuthorizationHTML)); err != nil { 
+				fmt.Fprintf(w, "%s", err)
+			}
+			return
+		}
+		
 		if r.ContentLength > maxHTTPRequestContentLength {
 			http.Error(w,
 				fmt.Sprintf("content length too large (%d>%d)", r.ContentLength, maxHTTPRequestContentLength),
