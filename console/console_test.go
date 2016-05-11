@@ -281,3 +281,15 @@ func TestPrettyPrint(t *testing.T) {
 		t.Fatalf("pretty print mismatch: have %s, want %s", output, want)
 	}
 }
+
+// Tests that the JavaScript exceptions are properly formatted and colored.
+func TestPrettyError(t *testing.T) {
+	tester := newTester(t, nil)
+	defer tester.Close(t)
+	tester.console.Evaluate("throw 'hello'")
+
+	want := jsre.ErrorColor("hello") + "\n"
+	if output := string(tester.output.Bytes()); output != want {
+		t.Fatalf("pretty error mismatch: have %s, want %s", output, want)
+	}
+}

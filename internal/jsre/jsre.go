@@ -303,11 +303,11 @@ func (self *JSRE) Evaluate(code string, w io.Writer) error {
 	self.Do(func(vm *otto.Otto) {
 		val, err := vm.Run(code)
 		if err != nil {
-			fail = err
+			prettyError(vm, err, w)
 		} else {
 			prettyPrint(vm, val, w)
-			fmt.Fprintln(w)
 		}
+		fmt.Fprintln(w)
 	})
 	return fail
 }
