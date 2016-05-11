@@ -238,8 +238,16 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
 
-	value := reflect.ValueOf(v).Elem()
-	typ := value.Type()
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	var (
+		value = valueOf.Elem()
+		typ   = value.Type()
+	)
 
 	if len(method.Outputs) > 1 {
 		switch value.Kind() {
@@ -268,6 +276,25 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 				return fmt.Errorf("abi: cannot marshal tuple in to slice %T (only []interface{} is supported)", v)
 			}
 
+			// if the slice already contains values, set those instead of the interface slice itself.
+			if value.Len() > 0 {
+				if len(method.Outputs) > value.Len() {
+					return fmt.Errorf("abi: cannot marshal in to slices of unequal size (require: %v, got: %v)", len(method.Outputs), value.Len())
+				}
+
+				for i := 0; i < len(method.Outputs); i++ {
+					marshalledValue, err := toGoType(i, method.Outputs[i], output)
+					if err != nil {
+						return err
+					}
+					reflectValue := reflect.ValueOf(marshalledValue)
+					if err := set(value.Index(i).Elem(), reflectValue, method.Outputs[i]); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+
 			// create a new slice and start appending the unmarshalled
 			// values to the new interface slice.
 			z := reflect.MakeSlice(typ, 0, len(method.Outputs))
@@ -293,34 +320,6 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		}
 	}
 
-	return nil
-}
-
-// set attempts to assign src to dst by either setting, copying or otherwise.
-//
-// set is a bit more lenient when it comes to assignment and doesn't force an as
-// strict ruleset as bare `reflect` does.
-func set(dst, src reflect.Value, output Argument) error {
-	dstType := dst.Type()
-	srcType := src.Type()
-
-	switch {
-	case dstType.AssignableTo(src.Type()):
-		dst.Set(src)
-	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
-		if !dstType.Elem().AssignableTo(r_byte) {
-			return fmt.Errorf("abi: cannot unmarshal %v in to array of elem %v", src.Type(), dstType.Elem())
-		}
-
-		if dst.Len() < output.Type.SliceSize {
-			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
-		}
-		reflect.Copy(dst, src)
-	case dstType.Kind() == reflect.Interface:
-		dst.Set(src)
-	default:
-		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
-	}
 	return nil
 }
 
