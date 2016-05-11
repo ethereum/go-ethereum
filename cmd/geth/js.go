@@ -199,7 +199,7 @@ func (js *jsre) apiBindings() error {
 	// load only supported API's in javascript runtime
 	shortcuts := "var eth = web3.eth; var personal = web3.personal; "
 	for _, apiName := range apiNames {
-		if apiName == "web3" || apiName == "rpc" {
+		if apiName == "web3" {
 			continue // manually mapped or ignore
 		}
 
