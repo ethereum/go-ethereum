@@ -16,7 +16,10 @@
 
 package abi
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+)
 
 // indirect recursively dereferences the value until it either gets the value
 // or finds a big.Int
@@ -61,4 +64,34 @@ func mustArrayToByteSlice(value reflect.Value) reflect.Value {
 	slice := reflect.MakeSlice(reflect.TypeOf([]byte{}), value.Len(), value.Len())
 	reflect.Copy(slice, value)
 	return slice
+}
+
+// set attempts to assign src to dst by either setting, copying or otherwise.
+//
+// set is a bit more lenient when it comes to assignment and doesn't force an as
+// strict ruleset as bare `reflect` does.
+func set(dst, src reflect.Value, output Argument) error {
+	dstType := dst.Type()
+	srcType := src.Type()
+
+	switch {
+	case dstType.AssignableTo(src.Type()):
+		dst.Set(src)
+	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
+		if !dstType.Elem().AssignableTo(r_byte) {
+			return fmt.Errorf("abi: cannot unmarshal %v in to array of elem %v", src.Type(), dstType.Elem())
+		}
+
+		if dst.Len() < output.Type.SliceSize {
+			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
+		}
+		reflect.Copy(dst, src)
+	case dstType.Kind() == reflect.Interface:
+		dst.Set(src)
+	case dstType.Kind() == reflect.Ptr:
+		return set(dst.Elem(), src, output)
+	default:
+		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
+	}
+	return nil
 }
