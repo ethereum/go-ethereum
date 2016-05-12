@@ -305,10 +305,10 @@ func TestUnpackSetInterfaceSlice(t *testing.T) {
 		t.Fatal(err)
 	}
 	if *var1 != 1 {
-		t.Errorf("expected var1 to be 1, got", *var1)
+		t.Error("expected var1 to be 1, got", *var1)
 	}
 	if *var2 != 2 {
-		t.Errorf("expected var2 to be 2, got", *var2)
+		t.Error("expected var2 to be 2, got", *var2)
 	}
 
 	out = []interface{}{var1}
