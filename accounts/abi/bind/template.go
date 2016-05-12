@@ -211,7 +211,7 @@ package {{.Package}}
 				{{range $i, $_ := .Normalized.Outputs}}ret{{$i}} = new({{bindtype .Type}})
 				{{end}}
 			){{end}}
-			out := {{if .Structured}}ret{{else}}{{if eq (len .Normalized.Outputs) 1}}ret0{{else}}[]interface{}{
+			out := {{if .Structured}}ret{{else}}{{if eq (len .Normalized.Outputs) 1}}ret0{{else}}&[]interface{}{
 				{{range $i, $_ := .Normalized.Outputs}}ret{{$i}},
 				{{end}}
 			}{{end}}{{end}}
