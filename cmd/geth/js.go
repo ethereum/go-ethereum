@@ -41,8 +41,8 @@ import (
 )
 
 var (
-	passwordRegexp = regexp.MustCompile("personal.[nu]")
 	leadingSpace   = regexp.MustCompile("^ ")
+	passwordRegexp = regexp.MustCompile("personal.[nus]")
 	onlyws         = regexp.MustCompile("^\\s*$")
 	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
 )
