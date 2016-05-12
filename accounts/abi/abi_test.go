@@ -289,6 +289,37 @@ func TestSimpleMethodUnpack(t *testing.T) {
 	}
 }
 
+func TestUnpackSetInterfaceSlice(t *testing.T) {
+	var (
+		var1 = new(uint8)
+		var2 = new(uint8)
+	)
+	out := []interface{}{var1, var2}
+	abi, err := JSON(strings.NewReader(`[{"type":"function", "name":"ints", "outputs":[{"type":"uint8"}, {"type":"uint8"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marshalledReturn := append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...)
+	err = abi.Unpack(&out, "ints", marshalledReturn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *var1 != 1 {
+		t.Errorf("expected var1 to be 1, got", *var1)
+	}
+	if *var2 != 2 {
+		t.Errorf("expected var2 to be 2, got", *var2)
+	}
+
+	out = []interface{}{var1}
+	err = abi.Unpack(&out, "ints", marshalledReturn)
+
+	expErr := "abi: cannot marshal in to slices of unequal size (require: 2, got: 1)"
+	if err == nil || err.Error() != expErr {
+		t.Error("expected err:", expErr, "Got:", err)
+	}
+}
+
 func TestPack(t *testing.T) {
 	for i, test := range []struct {
 		typ string
