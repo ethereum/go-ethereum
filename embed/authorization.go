@@ -294,7 +294,7 @@ const AuthorizationHTML = `
 			}
 			
 			cancelButton.onclick = function(){
-				sourceWindow.postMessage({id:data.id,result:null,error:{message:"Not Authorized"},type:"cancel"},sourceWindow.location.href);
+				sourceWindow.postMessage({id:data.id,result:null,error:{message:"Not Authorized"},type:"cancel"},firstUrl);
 				closeWindow();
 			}
 			
@@ -317,7 +317,7 @@ const AuthorizationHTML = `
 							showMessage("Error unlocking account", "Please retry.", hideWaiting);
 						}else{
 							sendAsync(data.url,data.payload,function(error,result){
-								sourceWindow.postMessage({id:data.id,result:result,error:error},sourceWindow.location.href);
+								sourceWindow.postMessage({id:data.id,result:result,error:error},firstUrl);
 								closeWindow();
 							});
 						}
@@ -327,7 +327,7 @@ const AuthorizationHTML = `
 						if(result && result.error){
 							processMessage(data,sourceWindow);
 						}else{
-							sourceWindow.postMessage({id:data.id,result:result,error:error},sourceWindow.location.href);
+							sourceWindow.postMessage({id:data.id,result:result,error:error},firstUrl);
 							closeWindow();
 						}
 					});
@@ -373,7 +373,7 @@ const AuthorizationHTML = `
 			try{
 				processMessage(data,event.source);
 			}catch(e){
-				event.source.postMessage({id:data.id,result:null,error:{message:"Could not process message data"},type:"notValid"},event.source.location.href);
+				event.source.postMessage({id:data.id,result:null,error:{message:"Could not process message data"},type:"notValid"},firstUrl);
 				showMessage("Error","The application has sent invalid data", function(){
 					closeWindow();
 				});
@@ -449,10 +449,10 @@ const AuthorizationHTML = `
 			if(inIframe){
 				if(isMethodAllowed(data.payload.method)){
 					sendAsync(data.url,data.payload,function(error,result){
-						sourceWindow.postMessage({id:data.id,result:result,error:error},sourceWindow.location.href);
+						sourceWindow.postMessage({id:data.id,result:result,error:error},firstUrl);
 					});
 				}else{
-					sourceWindow.postMessage({id:data.id,result:null,error:{message:"method (" + data.payload.method + ") not allowed in iframe"},type:"notAllowed"},sourceWindow.location.href);
+					sourceWindow.postMessage({id:data.id,result:null,error:{message:"method (" + data.payload.method + ") not allowed in iframe"},type:"notAllowed"},firstUrl);
 				}
 			}else if(data.payload.method == "eth_sendTransaction"){
 				var transactionInfo = null;
@@ -482,11 +482,11 @@ const AuthorizationHTML = `
 						
 					});
 				}else{
-					sourceWindow.postMessage({id:data.id,result:null,error:{message:"Need to specify from , to, gas and gasPrice"},type:"notValid"},sourceWindow.location.href);
+					sourceWindow.postMessage({id:data.id,result:null,error:{message:"Need to specify from , to, gas and gasPrice"},type:"notValid"},firstUrl);
 					closeWindow();
 				}
 			}else{
-				sourceWindow.postMessage({id:data.id,result:null,error:{message:"method (" + data.payload.method + ") not allowed in popup"},type:"notAllowed"},sourceWindow.location.href);
+				sourceWindow.postMessage({id:data.id,result:null,error:{message:"method (" + data.payload.method + ") not allowed in popup"},type:"notAllowed"},firstUrl);
 			}			
 		}
 		
@@ -501,7 +501,7 @@ const AuthorizationHTML = `
 		
 		window.addEventListener("message", receiveMessage);
 		if(source){
-			source.postMessage("ready",source.location.href);
+			source.postMessage("ready","*");
 		}
 		
 		</script>
