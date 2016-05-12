@@ -34,7 +34,8 @@ const (
 
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
-	DefaultIPCApis  = "admin,eth,debug,miner,net,shh,txpool,personal,web3"
+	MetadataApi     = "rpc"
+	DefaultIPCApis  = "admin,debug,eth,miner,net,personal,shh,txpool,web3"
 	DefaultHTTPApis = "eth,net,web3"
 )
 
@@ -61,7 +62,7 @@ func NewServer() *Server {
 	// register a default service which will provide meta information about the RPC service such as the services and
 	// methods it offers.
 	rpcService := &RPCService{server}
-	server.RegisterName("rpc", rpcService)
+	server.RegisterName(MetadataApi, rpcService)
 
 	return server
 }

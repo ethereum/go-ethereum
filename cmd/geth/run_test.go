@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"regexp"
 	"sync"
 	"testing"
+	"text/template"
 	"time"
 )
 

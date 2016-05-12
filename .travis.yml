@@ -1,10 +1,12 @@
 language: go
 go:
   - 1.4.2
+  - 1.5.4
+  - 1.6.2
 install:
   # - go get code.google.com/p/go.tools/cmd/goimports
   # - go get github.com/golang/lint/golint
-  # - go get golang.org/x/tools/cmd/vet 
+  # - go get golang.org/x/tools/cmd/vet
   - go get golang.org/x/tools/cmd/cover
 before_script:
   # - gofmt -l -w .
@@ -24,6 +26,6 @@ notifications:
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/e09ccdce1048c5e03445
-    on_success: change 
+    on_success: change
     on_failure: always
-    on_start: false 
+    on_start: false

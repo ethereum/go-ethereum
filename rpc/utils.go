@@ -234,7 +234,7 @@ func SupportedModules(client Client) (map[string]string, error) {
 	req := JSONRequest{
 		Id:      []byte("1"),
 		Version: "2.0",
-		Method:  "rpc_modules",
+		Method:  MetadataApi + "_modules",
 	}
 	if err := client.Send(req); err != nil {
 		return nil, err
