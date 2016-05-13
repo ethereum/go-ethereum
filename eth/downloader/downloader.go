@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -44,6 +45,8 @@ var (
 	MaxBodyFetch    = 128 // Amount of block bodies to be fetched per retrieval request
 	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
 	MaxStateFetch   = 384 // Amount of node state values to allow fetching per request
+
+	MaxForkAncestry = 3 * params.EpochDuration.Uint64() // Maximum chain reorganisation
 
 	hashTTL        = 3 * time.Second     // [eth/61] Time it takes for a hash request to time out
 	blockTargetRTT = 3 * time.Second / 2 // [eth/61] Target time for completing a block retrieval request
@@ -79,6 +82,7 @@ var (
 	errEmptyHeaderSet     = errors.New("empty header set by peer")
 	errPeersUnavailable   = errors.New("no peers available or all tried for download")
 	errAlreadyInPool      = errors.New("hash already in pool")
+	errInvalidAncestor    = errors.New("retrieved ancestor is invalid")
 	errInvalidChain       = errors.New("retrieved hash chain is invalid")
 	errInvalidBlock       = errors.New("retrieved block is invalid")
 	errInvalidBody        = errors.New("retrieved block body is invalid")
@@ -266,7 +270,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	case errBusy:
 		glog.V(logger.Detail).Infof("Synchronisation already in progress")
 
-	case errTimeout, errBadPeer, errStallingPeer, errEmptyHashSet, errEmptyHeaderSet, errPeersUnavailable, errInvalidChain:
+	case errTimeout, errBadPeer, errStallingPeer, errEmptyHashSet, errEmptyHeaderSet, errPeersUnavailable, errInvalidAncestor, errInvalidChain:
 		glog.V(logger.Debug).Infof("Removing peer %v: %v", id, err)
 		d.dropPeer(id)
 
@@ -353,7 +357,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		if err != nil {
 			return err
 		}
-		origin, err := d.findAncestor61(p)
+		origin, err := d.findAncestor61(p, latest)
 		if err != nil {
 			return err
 		}
@@ -380,7 +384,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		if err != nil {
 			return err
 		}
-		origin, err := d.findAncestor(p)
+		origin, err := d.findAncestor(p, latest)
 		if err != nil {
 			return err
 		}
@@ -536,11 +540,19 @@ func (d *Downloader) fetchHeight61(p *peer) (uint64, error) {
 // on the correct chain, checking the top N blocks should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head blocks match), we do a binary search to find the common ancestor.
-func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
+func (d *Downloader) findAncestor61(p *peer, height uint64) (uint64, error) {
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
 
-	// Request out head blocks to short circuit ancestor location
-	head := d.headBlock().NumberU64()
+	// Figure out the valid ancestor range to prevent rewrite attacks
+	floor, ceil := int64(-1), d.headBlock().NumberU64()
+	if ceil >= MaxForkAncestry {
+		floor = int64(ceil - MaxForkAncestry)
+	}
+	// Request the topmost blocks to short circuit binary ancestor lookup
+	head := ceil
+	if head > height {
+		head = height
+	}
 	from := int64(head) - int64(MaxHashFetch) + 1
 	if from < 0 {
 		from = 0
@@ -600,11 +612,18 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 	}
 	// If the head fetch already found an ancestor, return
 	if !common.EmptyHash(hash) {
+		if int64(number) <= floor {
+			glog.V(logger.Warn).Infof("%v: potential rewrite attack: #%d [%x…] <= #%d limit", p, number, hash[:4], floor)
+			return 0, errInvalidAncestor
+		}
 		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x…]", p, number, hash[:4])
 		return number, nil
 	}
 	// Ancestor not found, we need to binary search over our chain
 	start, end := uint64(0), head
+	if floor > 0 {
+		start = uint64(floor)
+	}
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
@@ -660,6 +679,12 @@ func (d *Downloader) findAncestor61(p *peer) (uint64, error) {
 			}
 		}
 	}
+	// Ensure valid ancestry and return
+	if int64(start) <= floor {
+		glog.V(logger.Warn).Infof("%v: potential rewrite attack: #%d [%x…] <= #%d limit", p, start, hash[:4], floor)
+		return 0, errInvalidAncestor
+	}
+	glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x…]", p, start, hash[:4])
 	return start, nil
 }
 
@@ -961,15 +986,23 @@ func (d *Downloader) fetchHeight(p *peer) (uint64, error) {
 // on the correct chain, checking the top N links should already get us a match.
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
-func (d *Downloader) findAncestor(p *peer) (uint64, error) {
+func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
 
-	// Request our head headers to short circuit ancestor location
-	head := d.headHeader().Number.Uint64()
+	// Figure out the valid ancestor range to prevent rewrite attacks
+	floor, ceil := int64(-1), d.headHeader().Number.Uint64()
 	if d.mode == FullSync {
-		head = d.headBlock().NumberU64()
+		ceil = d.headBlock().NumberU64()
 	} else if d.mode == FastSync {
-		head = d.headFastBlock().NumberU64()
+		ceil = d.headFastBlock().NumberU64()
+	}
+	if ceil >= MaxForkAncestry {
+		floor = int64(ceil - MaxForkAncestry)
+	}
+	// Request the topmost blocks to short circuit binary ancestor lookup
+	head := ceil
+	if head > height {
+		head = height
 	}
 	from := int64(head) - int64(MaxHeaderFetch) + 1
 	if from < 0 {
@@ -1040,11 +1073,18 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 	}
 	// If the head fetch already found an ancestor, return
 	if !common.EmptyHash(hash) {
+		if int64(number) <= floor {
+			glog.V(logger.Warn).Infof("%v: potential rewrite attack: #%d [%x…] <= #%d limit", p, number, hash[:4], floor)
+			return 0, errInvalidAncestor
+		}
 		glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x…]", p, number, hash[:4])
 		return number, nil
 	}
 	// Ancestor not found, we need to binary search over our chain
 	start, end := uint64(0), head
+	if floor > 0 {
+		start = uint64(floor)
+	}
 	for start+1 < end {
 		// Split our chain interval in two, and request the hash to cross check
 		check := (start + end) / 2
@@ -1100,6 +1140,12 @@ func (d *Downloader) findAncestor(p *peer) (uint64, error) {
 			}
 		}
 	}
+	// Ensure valid ancestry and return
+	if int64(start) <= floor {
+		glog.V(logger.Warn).Infof("%v: potential rewrite attack: #%d [%x…] <= #%d limit", p, start, hash[:4], floor)
+		return 0, errInvalidAncestor
+	}
+	glog.V(logger.Debug).Infof("%v: common ancestor: #%d [%x…]", p, start, hash[:4])
 	return start, nil
 }
 
