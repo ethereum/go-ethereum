@@ -177,7 +177,9 @@ func pruneDB(ctx *cli.Context) {
 		iter := chain.NewIterator()
 		for iter.Next() {
 			key := iter.Key()
-			if len(key) == 32 {
+
+			has, _ := chain.LDB().Has(append(key, 0x01), nil)
+			if len(key) == 32 && !has {
 				chain.Delete(key)
 			}
 		}
