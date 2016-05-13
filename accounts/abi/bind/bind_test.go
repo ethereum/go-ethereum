@@ -194,12 +194,44 @@ var bindTests = []struct {
 			}
 		`,
 	},
+	// Tests that plain values can be properly returned and deserialized
+	{
+		`Getter`,
+		`
+			contract Getter {
+				function getter() constant returns (string, int, bytes32) {
+					return ("Hi", 1, sha3(""));
+				}
+			}
+		`,
+		`606060405260dc8060106000396000f3606060405260e060020a6000350463993a04b78114601a575b005b600060605260c0604052600260809081527f486900000000000000000000000000000000000000000000000000000000000060a05260017fc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a47060e0829052610100819052606060c0908152600261012081905281906101409060a09080838184600060046012f1505081517fffff000000000000000000000000000000000000000000000000000000000000169091525050604051610160819003945092505050f3`,
+		`[{"constant":true,"inputs":[],"name":"getter","outputs":[{"name":"","type":"string"},{"name":"","type":"int256"},{"name":"","type":"bytes32"}],"type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+
+			// Deploy a tuple tester contract and execute a structured call on it
+			_, _, getter, err := DeployGetter(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy getter contract: %v", err)
+			}
+			sim.Commit()
+
+			if str, num, _, err := getter.Getter(nil); err != nil {
+				t.Fatalf("Failed to call anonymous field retriever: %v", err)
+			} else if str != "Hi" || num.Cmp(big.NewInt(1)) != 0 {
+				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", str, num, "Hi", 1)
+			}
+		`,
+	},
 	// Tests that tuples can be properly returned and deserialized
 	{
 		`Tupler`,
 		`
 			contract Tupler {
-				function tuple() returns (string a, int b, bytes32 c) {
+				function tuple() constant returns (string a, int b, bytes32 c) {
 					return ("Hi", 1, sha3(""));
 				}
 			}
@@ -219,8 +251,10 @@ var bindTests = []struct {
 			}
 			sim.Commit()
 
-			if _, err := tupler.Tuple(nil); err != nil {
+			if res, err := tupler.Tuple(nil); err != nil {
 				t.Fatalf("Failed to call structure retriever: %v", err)
+			} else if res.A != "Hi" || res.B.Cmp(big.NewInt(1)) != 0 {
+				t.Fatalf("Retrieved value mismatch: have %v/%v, want %v/%v", res.A, res.B, "Hi", 1)
 			}
 		`,
 	},
