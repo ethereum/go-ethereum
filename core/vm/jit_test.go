@@ -30,10 +30,7 @@ const maxRun = 1000
 
 func TestSegmenting(t *testing.T) {
 	prog := NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, 0x0})
-	err := CompileProgram(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
+	CompileProgram(prog)
 
 	if instr, ok := prog.instructions[0].(pushSeg); ok {
 		if len(instr.data) != 2 {
@@ -44,20 +41,16 @@ func TestSegmenting(t *testing.T) {
 	}
 
 	prog = NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(JUMP)})
-	err = CompileProgram(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
+	CompileProgram(prog)
+
 	if _, ok := prog.instructions[1].(jumpSeg); ok {
 	} else {
 		t.Errorf("expected instr[1] to be jumpSeg, got %T", prog.instructions[1])
 	}
 
 	prog = NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(JUMP)})
-	err = CompileProgram(prog)
-	if err != nil {
-		t.Fatal(err)
-	}
+	CompileProgram(prog)
+
 	if instr, ok := prog.instructions[0].(pushSeg); ok {
 		if len(instr.data) != 2 {
 			t.Error("expected 2 element width pushSegment, got", len(instr.data))
@@ -73,10 +66,7 @@ func TestSegmenting(t *testing.T) {
 
 func TestCompiling(t *testing.T) {
 	prog := NewProgram([]byte{0x60, 0x10})
-	err := CompileProgram(prog)
-	if err != nil {
-		t.Error("didn't expect compile error")
-	}
+	CompileProgram(prog)
 
 	if len(prog.instructions) != 1 {
 		t.Error("expected 1 compiled instruction, got", len(prog.instructions))
@@ -86,8 +76,8 @@ func TestCompiling(t *testing.T) {
 func TestResetInput(t *testing.T) {
 	var sender account
 
-	env := NewEnv(&Config{EnableJit: true, ForceJit: true})
-	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000), big.NewInt(0))
+	env := NewEnv(true, true)
+	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000))
 	contract.CodeAddr = &common.Address{}
 
 	program := NewProgram([]byte{})
@@ -135,7 +125,7 @@ func (account) SetBalance(*big.Int)                                 {}
 func (account) SetNonce(uint64)                                     {}
 func (account) Balance() *big.Int                                   { return nil }
 func (account) Address() common.Address                             { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int)                        {}
+func (account) ReturnGas(uint64)                                    {}
 func (account) SetCode(common.Hash, []byte)                         {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
@@ -150,7 +140,7 @@ func runVmBench(test vmBench, b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		context := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000), big.NewInt(0))
+		context := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000))
 		context.Code = test.code
 		context.CodeAddr = &common.Address{}
 		_, err := env.Vm().Run(context, test.input)
@@ -177,6 +167,7 @@ func (self *Env) ChainConfig() *params.ChainConfig {
 	return &params.ChainConfig{new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int)}
 }
 func (self *Env) Vm() Vm                 { return self.evm }
+func (self *Env) GasPrice() *big.Int     { return new(big.Int) }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 
@@ -200,15 +191,15 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 	return true
 }
 func (self *Env) Transfer(from, to Account, amount *big.Int) {}
-func (self *Env) Call(caller ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) Call(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	return nil, nil
 }
-func (self *Env) CallCode(caller ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) CallCode(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	return nil, nil
 }
-func (self *Env) Create(caller ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
+func (self *Env) Create(caller ContractRef, data []byte, gas, price *big.Int) ([]byte, common.Address, error) {
 	return nil, common.Address{}, nil
 }
-func (self *Env) DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+func (self *Env) DelegateCall(me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
 	return nil, nil
 }

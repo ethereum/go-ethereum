@@ -146,7 +146,8 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), err)
+			gas := new(big.Int).SetUint64(contract.gas64)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, gas, cost, mem, stack, contract, evm.env.Depth(), err)
 		}
 	}()
 
@@ -154,22 +155,11 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		glog.Infof("running byte VM %x\n", codehash[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("byte VM %x done. time: %v instrc: %v\n", codehash[:4], time.Since(tstart), instrCount)
+			glog.Infof("VM %x done. time: %v instrc: %v\n", codehash[:4], time.Since(tstart), instrCount)
 		}()
 	}
 
 	for ; ; instrCount++ {
-		/*
-			if EnableJit && it%100 == 0 {
-				if program != nil && progStatus(atomic.LoadInt32(&program.status)) == progReady {
-					// move execution
-					fmt.Println("moved", it)
-					glog.V(logger.Info).Infoln("Moved execution to JIT")
-					return runProgram(program, pc, mem, stack, evm.env, contract, input)
-				}
-			}
-		*/
-
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
 		//fmt.Printf("OP %d %v\n", op, op)
@@ -181,7 +171,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 		// Use the calculated gas. When insufficient gas is present, use all gas and return an
 		// Out Of Gas error
-		if !contract.UseGas(cost) {
+		if !contract.UseGas(cost.Uint64()) {
 			return nil, OutOfGasError
 		}
 
@@ -189,7 +179,8 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 		// Add a log message
 		if evm.cfg.Debug {
-			err = evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), nil)
+			gas := new(big.Int).SetUint64(contract.gas64)
+			err = evm.cfg.Tracer.CaptureState(evm.env, pc, op, gas, cost, mem, stack, contract, evm.env.Depth(), nil)
 			if err != nil {
 				return nil, err
 			}
@@ -427,7 +418,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 
 		quadMemGas(mem, newMemSize, gas)
 
-		cg := callGas(gasTable, contract.Gas, gas, stack.data[stack.len()-1])
+		cg := new(big.Int).SetUint64(callGas(gasTable, contract.gas64, gas.Uint64(), stack.data[stack.len()-1].Uint64()))
 		// Replace the stack item with the new gas calculation. This means that
 		// either the original item is left on the stack or the item is replaced by:
 		// (availableGas - gas) * 63 / 64
@@ -447,7 +438,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 
 		quadMemGas(mem, newMemSize, gas)
 
-		cg := callGas(gasTable, contract.Gas, gas, stack.data[stack.len()-1])
+		cg := new(big.Int).SetUint64(callGas(gasTable, contract.gas64, gas.Uint64(), stack.data[stack.len()-1].Uint64()))
 		// Replace the stack item with the new gas calculation. This means that
 		// either the original item is left on the stack or the item is replaced by:
 		// (availableGas - gas) * 63 / 64
@@ -464,7 +455,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
 func (evm *EVM) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
 	gas := p.Gas(len(input))
-	if contract.UseGas(gas) {
+	if contract.UseGas(gas.Uint64()) {
 		ret = p.Call(input)
 
 		return ret, nil

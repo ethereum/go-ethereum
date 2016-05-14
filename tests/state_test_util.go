@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -150,6 +151,10 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 		// err  error
 		logs vm.Logs
 	)
+	if common.Big(test.Transaction["gasLimit"]).Cmp(new(big.Int).SetUint64(math.MaxUint64)) > 0 {
+		fmt.Println("skipping a test because of unsupported high gas")
+		return nil
+	}
 
 	ret, logs, _, _ = RunState(chainConfig, statedb, env, test.Transaction)
 

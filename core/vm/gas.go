@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -43,6 +44,21 @@ var (
 //
 // The cost of gas was changed during the homestead price change HF. To allow for EIP150
 // to be implemented. The returned gas is gas - base * 63 / 64.
+func callGas(gasTable params.GasTable, availableGas, base, callCost uint64) uint64 {
+	if gasTable.CreateBySuicide != nil {
+		gas := availableGas - (availableGas-base)/64
+		if gas < callCost {
+			return gas
+		}
+	}
+	return callCost
+}
+
+/*
+// calcGas returns the actual gas cost of the call.
+//
+// The cost of gas was changed during the homestead price change HF. To allow for EIP150
+// to be implemented. The returned gas is gas - base * 63 / 64.
 func callGas(gasTable params.GasTable, availableGas, base, callCost *big.Int) *big.Int {
 	if gasTable.CreateBySuicide != nil {
 		availableGas = new(big.Int).Sub(availableGas, base)
@@ -55,6 +71,7 @@ func callGas(gasTable params.GasTable, availableGas, base, callCost *big.Int) *b
 	}
 	return callCost
 }
+*/
 
 // baseCheck checks for any stack error underflows
 func baseCheck(op OpCode, stack *Stack, gas *big.Int) error {
@@ -89,6 +106,41 @@ func toWordSize(size *big.Int) *big.Int {
 	tmp.Add(size, u256(31))
 	tmp.Div(tmp, u256(32))
 	return tmp
+}
+
+// calculates the memory size required for a step
+func calcMemSize(off, l *big.Int) *big.Int {
+	if l.Cmp(common.Big0) == 0 {
+		return common.Big0
+	}
+
+	return new(big.Int).Add(off, l)
+}
+
+// calculates the quadratic gas
+func quadMemGas(mem *Memory, newMemSize, gas *big.Int) {
+	if newMemSize.Cmp(common.Big0) > 0 {
+		newMemSizeWords := toWordSize(newMemSize)
+		newMemSize.Mul(newMemSizeWords, u256(32))
+
+		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+			// be careful reusing variables here when changing.
+			// The order has been optimised to reduce allocation
+			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
+			linCoef := oldSize.Mul(oldSize, params.MemoryGas)
+			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
+			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			pow.Exp(newMemSizeWords, common.Big2, Zero)
+			linCoef = linCoef.Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = quadCoef.Div(pow, params.QuadCoeffDiv)
+			newTotalFee := linCoef.Add(linCoef, quadCoef)
+
+			fee := newTotalFee.Sub(newTotalFee, oldTotalFee)
+			gas.Add(gas, fee)
+		}
+	}
 }
 
 type req struct {

@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 // Type is the VM type accepted by **NewVm**
@@ -44,41 +43,6 @@ var (
 
 	max = big.NewInt(math.MaxInt64) // Maximum 64 bit integer
 )
-
-// calculates the memory size required for a step
-func calcMemSize(off, l *big.Int) *big.Int {
-	if l.Cmp(common.Big0) == 0 {
-		return common.Big0
-	}
-
-	return new(big.Int).Add(off, l)
-}
-
-// calculates the quadratic gas
-func quadMemGas(mem *Memory, newMemSize, gas *big.Int) {
-	if newMemSize.Cmp(common.Big0) > 0 {
-		newMemSizeWords := toWordSize(newMemSize)
-		newMemSize.Mul(newMemSizeWords, u256(32))
-
-		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
-			// be careful reusing variables here when changing.
-			// The order has been optimised to reduce allocation
-			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
-			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
-			linCoef := oldSize.Mul(oldSize, params.MemoryGas)
-			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
-			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
-
-			pow.Exp(newMemSizeWords, common.Big2, Zero)
-			linCoef = linCoef.Mul(newMemSizeWords, params.MemoryGas)
-			quadCoef = quadCoef.Div(pow, params.QuadCoeffDiv)
-			newTotalFee := linCoef.Add(linCoef, quadCoef)
-
-			fee := newTotalFee.Sub(newTotalFee, oldTotalFee)
-			gas.Add(gas, fee)
-		}
-	}
-}
 
 // Simple helper
 func u256(n int64) *big.Int {

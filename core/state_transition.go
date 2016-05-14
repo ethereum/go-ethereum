@@ -244,7 +244,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	vmenv := self.env
 	//var addr common.Address
 	if contractCreation {
-		ret, _, err = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
+		ret, _, err = vmenv.Create(sender, self.data, self.gas, self.value)
 		if homestead && err == vm.CodeStoreOutOfGasError {
 			self.gas = Big0
 		}
@@ -256,7 +256,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.gasPrice, self.value)
+		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
 		if err != nil {
 			glog.V(logger.Core).Infoln("VM call err:", err)
 		}

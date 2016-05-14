@@ -115,7 +115,6 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		receiver.Address(),
 		input,
 		cfg.GasLimit,
-		cfg.GasPrice,
 		cfg.Value,
 	)
 
@@ -139,7 +138,6 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 		address,
 		input,
 		cfg.GasLimit,
-		cfg.GasPrice,
 		cfg.Value,
 	)
 
