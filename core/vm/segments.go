@@ -21,7 +21,7 @@ import "math/big"
 type jumpSeg struct {
 	pos uint64
 	err error
-	gas *big.Int
+	gas uint64
 }
 
 func (j jumpSeg) do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -39,7 +39,7 @@ func (s jumpSeg) Op() OpCode  { return 0 }
 
 type pushSeg struct {
 	data []*big.Int
-	gas  *big.Int
+	gas  uint64
 }
 
 func (s pushSeg) do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {

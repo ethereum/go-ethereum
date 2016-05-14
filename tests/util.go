@@ -158,12 +158,12 @@ func (r RuleSet) IsHomestead(n *big.Int) bool {
 }
 
 type Env struct {
-	ruleSet      RuleSet
-	depth        int
-	state        *state.StateDB
-	skipTransfer bool
-	initial      bool
-	Gas          *big.Int
+	ruleSet       RuleSet
+	depth         int
+	state         *state.StateDB
+	skipTransfer  bool
+	initial       bool
+	Gas, gasPrice *big.Int
 
 	origin   common.Address
 	parent   common.Hash
@@ -198,6 +198,7 @@ func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]s
 	env.difficulty = common.Big(envValues["currentDifficulty"])
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
+	env.gasPrice = common.Big(exeValues["gasPrice"])
 
 	env.evm = vm.New(env, vm.Config{
 		EnableJit: EnableJit,
@@ -216,6 +217,7 @@ func (self *Env) Time() *big.Int           { return self.time }
 func (self *Env) Difficulty() *big.Int     { return self.difficulty }
 func (self *Env) Db() vm.Database          { return self.state }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
+func (self *Env) GasPrice() *big.Int       { return self.gasPrice }
 func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
@@ -249,46 +251,46 @@ func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
 	core.Transfer(from, to, amount)
 }
 
-func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas, price)
+		caller.ReturnGas(gas.Uint64())
 
 		return nil, nil
 	}
-	ret, err := core.Call(self, caller, addr, data, gas, price, value)
+	ret, err := core.Call(self, caller, addr, data, gas, value)
 	self.Gas = gas
 
 	return ret, err
 
 }
-func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas, price)
+		caller.ReturnGas(gas.Uint64())
 
 		return nil, nil
 	}
-	return core.CallCode(self, caller, addr, data, gas, price, value)
+	return core.CallCode(self, caller, addr, data, gas, value)
 }
 
-func (self *Env) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+func (self *Env) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
 	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas, price)
+		caller.ReturnGas(gas.Uint64())
 
 		return nil, nil
 	}
-	return core.DelegateCall(self, caller, addr, data, gas, price)
+	return core.DelegateCall(self, caller, addr, data, gas)
 }
 
-func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
+func (self *Env) Create(caller vm.ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
 	if self.vmTest {
-		caller.ReturnGas(gas, price)
+		caller.ReturnGas(gas.Uint64())
 
 		nonce := self.state.GetNonce(caller.Address())
 		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
 
 		return nil, obj.Address(), nil
 	} else {
-		return core.Create(self, caller, data, gas, price, value)
+		return core.Create(self, caller, data, gas, value)
 	}
 }
 

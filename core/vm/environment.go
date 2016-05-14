@@ -53,6 +53,8 @@ type Environment interface {
 	Difficulty() *big.Int
 	// The gas limit of the block
 	GasLimit() *big.Int
+	// The gas price of the current call
+	GasPrice() *big.Int
 	// Determines whether it's possible to transact
 	CanTransfer(from common.Address, balance *big.Int) bool
 	// Transfers amount from one account to the other
@@ -66,13 +68,13 @@ type Environment interface {
 	// Set the current calling depth
 	SetDepth(i int)
 	// Call another contract
-	Call(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	Call(me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context
-	CallCode(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
+	CallCode(me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Same as CallCode except sender and value is propagated from parent to child scope
-	DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error)
+	DelegateCall(me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
 	// Create a new contract
-	Create(me ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error)
+	Create(me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
 }
 
 // Vm is the basic interface for an implementation of the EVM.
@@ -121,7 +123,7 @@ type Account interface {
 	SetNonce(uint64)
 	Balance() *big.Int
 	Address() common.Address
-	ReturnGas(*big.Int, *big.Int)
+	ReturnGas(uint64)
 	SetCode(common.Hash, []byte)
 	ForEachStorage(cb func(key, value common.Hash) bool)
 	Value() *big.Int
