@@ -120,8 +120,7 @@ func run(ctx *cli.Context) error {
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 
 	logger := vm.NewStructLogger(nil)
-
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), vm.Config{
+	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), common.Big(ctx.GlobalString(PriceFlag.Name)), vm.Config{
 		Debug:     ctx.GlobalBool(DebugFlag.Name),
 		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
 		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
@@ -141,7 +140,6 @@ func run(ctx *cli.Context) error {
 			sender,
 			input,
 			common.Big(ctx.GlobalString(GasFlag.Name)),
-			common.Big(ctx.GlobalString(PriceFlag.Name)),
 			common.Big(ctx.GlobalString(ValueFlag.Name)),
 		)
 	} else {
@@ -152,7 +150,6 @@ func run(ctx *cli.Context) error {
 			receiver.Address(),
 			common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
 			common.Big(ctx.GlobalString(GasFlag.Name)),
-			common.Big(ctx.GlobalString(PriceFlag.Name)),
 			common.Big(ctx.GlobalString(ValueFlag.Name)),
 		)
 	}
@@ -199,19 +196,20 @@ type VMEnv struct {
 	transactor *common.Address
 	value      *big.Int
 
-	depth int
-	Gas   *big.Int
-	time  *big.Int
-	logs  []vm.StructLog
+	depth      int
+	Gas, price *big.Int
+	time       *big.Int
+	logs       []vm.StructLog
 
 	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg vm.Config) *VMEnv {
+func NewEnv(state *state.StateDB, transactor common.Address, value, price *big.Int, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		state:      state,
 		transactor: &transactor,
 		value:      value,
+		price:      price,
 		time:       big.NewInt(time.Now().Unix()),
 	}
 
@@ -237,6 +235,7 @@ func (self *VMEnv) Difficulty() *big.Int       { return common.Big1 }
 func (self *VMEnv) BlockHash() []byte          { return make([]byte, 32) }
 func (self *VMEnv) Value() *big.Int            { return self.value }
 func (self *VMEnv) GasLimit() *big.Int         { return big.NewInt(1000000000) }
+func (self *VMEnv) GasPrice() *big.Int         { return big.NewInt(1000000000) }
 func (self *VMEnv) VmType() vm.Type            { return vm.StdVmTy }
 func (self *VMEnv) Depth() int                 { return 0 }
 func (self *VMEnv) SetDepth(i int)             { self.depth = i }
@@ -256,19 +255,19 @@ func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {
 	core.Transfer(from, to, amount)
 }
 
-func (self *VMEnv) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *VMEnv) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	self.Gas = gas
-	return core.Call(self, caller, addr, data, gas, price, value)
+	return core.Call(self, caller, addr, data, gas, value)
 }
 
-func (self *VMEnv) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	return core.CallCode(self, caller, addr, data, gas, price, value)
+func (self *VMEnv) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
+	return core.CallCode(self, caller, addr, data, gas, value)
 }
 
-func (self *VMEnv) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
-	return core.DelegateCall(self, caller, addr, data, gas, price)
+func (self *VMEnv) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
+	return core.DelegateCall(self, caller, addr, data, gas)
 }
 
-func (self *VMEnv) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
-	return core.Create(self, caller, data, gas, price, value)
+func (self *VMEnv) Create(caller vm.ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
+	return core.Create(self, caller, data, gas, value)
 }

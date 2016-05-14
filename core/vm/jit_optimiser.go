@@ -30,15 +30,16 @@ func optimiseProgram(program *Program) {
 	var load []instruction
 
 	var (
-		statsJump = 0
-		statsPush = 0
+		statsJump    = 0
+		statsOldPush = 0
+		statsNewPush = 0
 	)
 
 	if glog.V(logger.Debug) {
 		glog.Infof("optimising %x\n", program.Id[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("optimised %x done in %v with JMP: %d PSH: %d\n", program.Id[:4], time.Since(tstart), statsJump, statsPush)
+			glog.Infof("optimised %x done in %v with JMP: %d PSH: %d/%d\n", program.Id[:4], time.Since(tstart), statsJump, statsNewPush, statsOldPush)
 		}()
 	}
 
@@ -65,6 +66,7 @@ func optimiseProgram(program *Program) {
 		switch {
 		case instr.op.IsPush():
 			load = append(load, instr)
+			statsOldPush++
 		case instr.op.IsStaticJump():
 			if len(load) == 0 {
 				continue
@@ -74,7 +76,7 @@ func optimiseProgram(program *Program) {
 			if len(load) > 2 {
 				seg, size := makePushSeg(load[:len(load)-1])
 				program.instructions[i-size-1] = seg
-				statsPush++
+				statsNewPush++
 			}
 			// create a segment consisting of a pre determined
 			// jump, destination and validity.
@@ -88,7 +90,7 @@ func optimiseProgram(program *Program) {
 			if len(load) > 1 {
 				seg, size := makePushSeg(load)
 				program.instructions[i-size] = seg
-				statsPush++
+				statsNewPush++
 			}
 			load = nil
 		}
@@ -99,12 +101,12 @@ func optimiseProgram(program *Program) {
 func makePushSeg(instrs []instruction) (pushSeg, int) {
 	var (
 		data []*big.Int
-		gas  = new(big.Int)
+		gas  uint64
 	)
 
 	for _, instr := range instrs {
 		data = append(data, instr.data)
-		gas.Add(gas, instr.gas)
+		gas += instr.gas
 	}
 
 	return pushSeg{data, gas}, len(instrs)
@@ -113,9 +115,7 @@ func makePushSeg(instrs []instruction) (pushSeg, int) {
 // makeStaticJumpSeg creates a new static jump segment from a predefined
 // destination (PUSH, JUMP).
 func makeStaticJumpSeg(to *big.Int, program *Program) jumpSeg {
-	gas := new(big.Int)
-	gas.Add(gas, _baseCheck[PUSH1].gas)
-	gas.Add(gas, _baseCheck[JUMP].gas)
+	gas := _baseCheck64[PUSH1].gas + _baseCheck64[JUMP].gas
 
 	contract := &Contract{Code: program.code}
 	pos, err := jump(program.mapping, program.destinations, contract, to)

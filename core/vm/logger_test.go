@@ -27,10 +27,10 @@ type dummyContractRef struct {
 	calledForEach bool
 }
 
-func (dummyContractRef) ReturnGas(*big.Int, *big.Int) {}
-func (dummyContractRef) Address() common.Address      { return common.Address{} }
-func (dummyContractRef) Value() *big.Int              { return new(big.Int) }
-func (dummyContractRef) SetCode([]byte)               {}
+func (dummyContractRef) ReturnGas(uint64)        {}
+func (dummyContractRef) Address() common.Address { return common.Address{} }
+func (dummyContractRef) Value() *big.Int         { return new(big.Int) }
+func (dummyContractRef) SetCode([]byte)          {}
 func (d *dummyContractRef) ForEachStorage(callback func(key, value common.Hash) bool) {
 	d.calledForEach = true
 }
@@ -61,7 +61,7 @@ func TestStoreCapture(t *testing.T) {
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
-		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), new(big.Int), new(big.Int))
+		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), new(big.Int))
 	)
 	stack.push(big.NewInt(1))
 	stack.push(big.NewInt(0))
@@ -83,7 +83,7 @@ func TestStorageCapture(t *testing.T) {
 	t.Skip("implementing this function is difficult. it requires all sort of interfaces to be implemented which isn't trivial. The value (the actual test) isn't worth it")
 	var (
 		ref      = &dummyContractRef{}
-		contract = NewContract(ref, ref, new(big.Int), new(big.Int), new(big.Int))
+		contract = NewContract(ref, ref, new(big.Int), new(big.Int))
 		env      = newDummyEnv(ref)
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()

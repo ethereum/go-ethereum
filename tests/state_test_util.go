@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"strconv"
 	"testing"
@@ -115,7 +116,7 @@ func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string)
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "callcodecallcode_11" */ {
+		if skipTest[name] /*|| name != "TestInputLimitsLight"*/ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -162,6 +163,10 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 		// err  error
 		logs vm.Logs
 	)
+	if common.Big(test.Transaction["gasLimit"]).Cmp(new(big.Int).SetUint64(math.MaxUint64)) > 0 {
+		fmt.Println("skipping a test because of unsupported high gas")
+		return nil
+	}
 
 	ret, logs, _, _ = RunState(ruleSet, statedb, env, test.Transaction)
 
