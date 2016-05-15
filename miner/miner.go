@@ -49,6 +49,8 @@ type Miner struct {
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
+
+    sub event.Subscription
 }
 
 func New(eth core.Backend, config *core.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
@@ -100,31 +102,55 @@ func (m *Miner) SetGasPrice(price *big.Int) {
 }
 
 func (self *Miner) Start(coinbase common.Address, threads int) {
-	atomic.StoreInt32(&self.shouldStart, 1)
-	self.threads = threads
-	self.worker.coinbase = coinbase
-	self.coinbase = coinbase
+	self.sub = self.mux.Subscribe(core.TxPreEvent{}, core.NewBlockEvent{}, core.NewMinedBlockEvent{})
+    go self.filterLoop(coinbase, threads)
+}
 
-	if atomic.LoadInt32(&self.canStart) == 0 {
-		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
-		return
-	}
+func (self *Miner) filterLoop(coinbase common.Address, threads int) {
+    for event := range self.sub.Chan() {
+        switch event.Data.(type) {
+            case core.TxPreEvent:
+                glog.V(logger.Info).Infoln("New pending tranny yo, start mining!")
+                self.actuallyStart(coinbase, threads)
+            case core.NewBlockEvent:
+                glog.V(logger.Info).Infoln("New block event")
+                self.Stop()
+                self.Start(coinbase, threads)
+            case core.NewMinedBlockEvent:
+                glog.V(logger.Info).Infoln("New MINED block event")
+                self.Stop()
+                self.Start(coinbase, threads)
+        }
+    }
+}
 
-	atomic.StoreInt32(&self.mining, 1)
+func (self *Miner) actuallyStart(coinbase common.Address, threads int) {
+    atomic.StoreInt32(&self.shouldStart, 1)
+    self.threads = threads
+    self.worker.coinbase = coinbase
+    self.coinbase = coinbase
 
-	for i := 0; i < threads; i++ {
-		self.worker.register(NewCpuAgent(i, self.pow))
-	}
+    if atomic.LoadInt32(&self.canStart) == 0 {
+        glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
+        return
+    }
 
-	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+    atomic.StoreInt32(&self.mining, 1)
 
-	self.worker.start()
+    for i := 0; i < threads; i++ {
+        self.worker.register(NewCpuAgent(i, self.pow))
+    }
 
-	self.worker.commitNewWork()
+    glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+
+    self.worker.start()
+
+    self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
-	self.worker.stop()
+	self.sub.Unsubscribe();
+    self.worker.stop()
 	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
