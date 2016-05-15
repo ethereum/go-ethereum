@@ -35,7 +35,7 @@ import (
 
 // MakeChainConfig returns a new ChainConfig with the ethereum default chain settings.
 func MakeChainConfig() *ChainConfig {
-	return &ChainConfig{HomesteadBlock: big.NewInt(0)}
+   return &ChainConfig{HomesteadBlock: big.NewInt(0), FixedDifficulty: -1}
 }
 
 // FakePow is a non-validating proof of work implementation.

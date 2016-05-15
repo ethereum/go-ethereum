@@ -100,6 +100,8 @@ type Config struct {
 
 	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
+
+    FixedDifficulty int
 }
 
 type Ethereum struct {
@@ -142,6 +144,8 @@ type Ethereum struct {
 	etherbase     common.Address
 	netVersionId  int
 	netRPCService *PublicNetAPI
+
+    fixedDifficulty int
 }
 
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {

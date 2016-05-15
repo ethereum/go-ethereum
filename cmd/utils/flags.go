@@ -392,6 +392,11 @@ var (
 		Usage: "Suggested gas price base correction factor (%)",
 		Value: 110,
 	}
+    FixedDifficultyFlag = cli.IntFlag{
+        Name:  "difficulty",
+        Usage: "Specify a fixed difficulty.",
+        Value: -1,
+    }
 )
 
 // MustMakeDataDir retrieves the currently requested data directory, terminating
@@ -801,7 +806,9 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 	db := MakeChainDatabase(ctx)
 	defer db.Close()
 
-	return MustMakeChainConfigFromDb(ctx, db)
+	config := MustMakeChainConfigFromDb(ctx, db)
+    config.FixedDifficulty = ctx.GlobalInt(FixedDifficultyFlag.Name)
+    return config
 }
 
 // MustMakeChainConfigFromDb reads the chain configuration from the given database.

@@ -149,7 +149,9 @@ func (self *Miner) actuallyStart(coinbase common.Address, threads int) {
 }
 
 func (self *Miner) Stop() {
-	self.sub.Unsubscribe();
+	if(self.sub != nil) {
+        self.sub.Unsubscribe();
+    }
     self.worker.stop()
 	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)

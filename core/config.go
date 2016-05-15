@@ -34,6 +34,8 @@ type ChainConfig struct {
 	HomesteadBlock *big.Int // homestead switch block
 
 	VmConfig vm.Config `json:"-"`
+
+    FixedDifficulty int
 }
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
