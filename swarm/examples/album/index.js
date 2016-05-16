@@ -264,15 +264,6 @@ function centerThumb(duration)
   fscr = new Fx.Scroll(elist, { duration: duration }).start(x, y);
 }
 
-function sendImgs(xhr, uri) {
-  // set up request
-  xhr.open("PUT", uri + "data.json", true);
-  xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
-
-  // send the collected data as JSON
-  xhr.send(JSON.stringify(imgs));
-}
-
 function imageToUrl(img, w, h) {
   var can = document.createElement('canvas');
   can.width = w;
@@ -280,70 +271,6 @@ function imageToUrl(img, w, h) {
   var cntxt = can.getContext("2d");
   cntxt.drawImage(img, 0, 0, w, h);
   return can.toDataURL();
-}
-
-function uploadFile(files, nr, uri) {
-  if(files.length <= nr) {
-    if(uri != "") {
-      var xhr = new XMLHttpRequest();
-      xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
-        var i = xhr.responseText;
-        window.location.replace("/bzz:/" + i + "/");
-      }};
-      sendImgs(xhr, uri);
-    }
-    return;
-  }
-  var imageType = /^image\//;
-  var file = files[nr];
-  if(!imageType.test(file.type)) {
-    uploadFile(files, nr + 1, uri);
-    return;
-  }
-
-  var xhr = new XMLHttpRequest();
-  xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
-    var i = xhr.responseText;
-
-    // insert image into index
-    var img = new Image();
-    img.onload = function() {
-      var blur = imageToUrl(img, 5, 5);
-      var thumbData = [];
-      var thumbSize = 200;
-      if(img.naturalWidth > img.naturalHeight) {
-        // landscape thumbnail
-        var h = img.naturalHeight * thumbSize / img.naturalWidth;
-        thumbData[0] = imageToUrl(img, thumbSize, h);
-        thumbData[1] = [thumbSize, h];
-      } else {
-        // portrait thumbnail
-        var w = img.naturalWidth * thumbSize / img.naturalHeight;
-        thumbData[0] = imageToUrl(img, w, thumbsize);
-        thumbData[1] = [w, thumbSize];
-      }
-      // update index
-      var imgData = [];
-      imgData[0] = "imgs/" + file.name;
-      imgData[1] = [img.naturalWidth, img.naturalHeight];
-      imgs.data.splice(eidx, 0, {img: imgData, thumb: thumbData, blur: blur});
-      uploadFile(files, nr + 1, "/bzz:/" + i + "/");
-    }
-    img.src = "/bzz:/" + i + "/imgs/" + file.name;
-    return;
-  }};
-  xhr.open("PUT", uri + "imgs/" + file.name, true);
-  xhr.setRequestHeader('Content-Type', file.type);
-
-  var reader = new FileReader();
-  reader.onload = function(evt) {
-    xhr.send(evt.target.result);
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function handleFiles(files) {
-  uploadFile(files, 0, "");
 }
 
 function deleteImg()
@@ -367,7 +294,7 @@ function deleteImg()
     xhrd.send();
   }};
 
-  sendImgs(xhr, "");
+  sendImages(xhr, "");
 }
 
 function moveUpDown(off)
@@ -380,7 +307,7 @@ function moveUpDown(off)
     var i = xhr.responseText;
     window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
   }};
-  sendImgs(xhr, "");
+  sendImages(xhr, "");
 }
 
 function moveUp()
@@ -435,16 +362,6 @@ function onMainReady()
   ehdr.set('html', dsc.join(' '));
   ehdr.setStyle('display', (dsc.length? 'block': 'none'));
 
-  // setup upload file selector
-  var fileSelect = document.getElementById("fileSelect"),
-      fileElem = document.getElementById("fileElem");
-  fileSelect.addEventListener("click", function (e) {
-    if (fileElem) {
-      fileElem.click();
-    }
-    e.preventDefault(); // prevent navigation to "#"
-  }, false);
-
   // complete thumbnails
   var d = duration;
   if(first !== false)
@@ -494,6 +411,8 @@ function onMainReady()
     var data = imgs.data[eidx + 1];
     Asset.images([data.img[0], data.blur]);
   }
+
+  jqueryInit();
 }
 
 function showThrobber()
