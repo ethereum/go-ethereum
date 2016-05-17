@@ -30,11 +30,11 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/internal/debug"
 	"github.com/expanse-project/go-expanse/logger"
@@ -52,7 +52,7 @@ const (
 	versionMinor     = 4        // Minor version component of the current release
 	versionPatch     = 4        // Patch version component of the current release
 	versionMeta      = "stable" // Version metadata to append to the version string
-	versionOracle = "0xfa7b9770ca4cb04296cac84f37736d4041251cdf" // Expanse address of the Gexp release oracle
+	versionOracle = "0x926d69cc3bbf81d52cba6886d788df007a15a3cd" // Expanse address of the Gexp release oracle
 )
 
 var (

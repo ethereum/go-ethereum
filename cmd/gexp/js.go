@@ -32,7 +32,7 @@ import (
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/registrar"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/internal/web3ext"
 	re "github.com/expanse-project/go-expanse/jsre"
 	"github.com/expanse-project/go-expanse/node"
@@ -174,8 +174,8 @@ func (js *jsre) apiBindings() error {
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
 
-	jethObj.Set("send", jexp.Send)
-	jethObj.Set("sendAsync", jexp.Send)
+	jethObj.Set("send", jeth.Send)
+	jethObj.Set("sendAsync", jeth.Send)
 
 	err = js.re.Compile("bignumber.js", re.BigNumber_JS)
 	if err != nil {
@@ -228,21 +228,21 @@ func (js *jsre) apiBindings() error {
 	}
 
 	// Override the unlockAccount and newAccount methods on the personal object since these require user interaction.
-	// Assign the jexp.unlockAccount and jexp.newAccount in the jsre the original web3 callbacks. These will be called
-	// by the jexp.* methods after they got the password from the user and send the original web3 request to the backend.
+	// Assign the jeth.unlockAccount and jeth.newAccount in the jsre the original web3 callbacks. These will be called
+	// by the jeth.* methods after they got the password from the user and send the original web3 request to the backend.
 	if persObj := p.Object(); persObj != nil { // make sure the personal api is enabled over the interface
-		js.re.Run(`jexp.unlockAccount = personal.unlockAccount;`)
-		persObj.Set("unlockAccount", jexp.UnlockAccount)
-		js.re.Run(`jexp.newAccount = personal.newAccount;`)
-		persObj.Set("newAccount", jexp.NewAccount)
+		js.re.Run(`jeth.unlockAccount = personal.unlockAccount;`)
+		persObj.Set("unlockAccount", jeth.UnlockAccount)
+		js.re.Run(`jeth.newAccount = personal.newAccount;`)
+		persObj.Set("newAccount", jeth.NewAccount)
 	}
 
 	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
 	// Bind these if the admin module is available.
 	if a, err := js.re.Get("admin"); err == nil {
 		if adminObj := a.Object(); adminObj != nil {
-			adminObj.Set("sleepBlocks", jexp.SleepBlocks)
-			adminObj.Set("sleep", jexp.Sleep)
+			adminObj.Set("sleepBlocks", jeth.SleepBlocks)
+			adminObj.Set("sleep", jeth.Sleep)
 		}
 	}
 

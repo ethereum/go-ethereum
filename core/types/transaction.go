@@ -168,7 +168,7 @@ func (tx *Transaction) Size() common.StorageSize {
 // Frontier / Homestead. however, the first time called it runs
 // signature validations, so we need two versions. This makes it
 // easier to ensure backwards compatibility of things like package rpc
-// where eth_getblockbynumber uses tx.From() and needs to work for
+// where exp_getblockbynumber uses tx.From() and needs to work for
 // both txs before and after the first homestead block. Signatures
 // valid in homestead are a subset of valid ones in Frontier)
 func (tx *Transaction) From() (common.Address, error) {
@@ -186,7 +186,7 @@ func (tx *Transaction) From() (common.Address, error) {
 // Frontier / Homestead. however, the first time called it runs
 // signature validations, so we need two versions. This makes it
 // easier to ensure backwards compatibility of things like package rpc
-// where eth_getblockbynumber uses tx.From() and needs to work for
+// where exp_getblockbynumber uses tx.From() and needs to work for
 // both txs before and after the first homestead block. Signatures
 // valid in homestead are a subset of valid ones in Frontier)
 func (tx *Transaction) FromFrontier() (common.Address, error) {

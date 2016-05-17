@@ -16,11 +16,7 @@
 
 package vm
 
-import (
-	"math/big"
-
-	"github.com/expanse-project/go-expanse/params"
-)
+import "math/big"
 
 type jumpPtr struct {
 	fn    instrFn

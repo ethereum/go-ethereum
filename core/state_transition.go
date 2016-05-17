@@ -32,10 +32,6 @@ var (
 	Big0 = big.NewInt(0)
 )
 
-var (
-	Big0 = big.NewInt(0)
-)
-
 /*
 The State Transitioning Model
 

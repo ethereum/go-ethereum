@@ -34,8 +34,8 @@ const (
 
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
-	DefaultIPCApis  = "admin,eth,debug,miner,net,shh,txpool,personal,web3"
-	DefaultHTTPApis = "eth,net,web3"
+	DefaultIPCApis  = "admin,exp,eth,debug,miner,net,shh,txpool,personal,web3"
+	DefaultHTTPApis = "exp,eth,net,web3"
 )
 
 // CodecOption specifies which type of messages this codec supports
