@@ -233,6 +233,7 @@ func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []commo
 	return id, nil
 }
 
+// Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *PublicFilterAPI) Logs(ctx context.Context, args NewFilterArgs) (rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -291,12 +292,13 @@ type NewFilterArgs struct {
 	Topics    [][]common.Hash
 }
 
+// UnmarshalJSON sets *args fields with given data.
 func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 	type input struct {
 		From      *rpc.BlockNumber `json:"fromBlock"`
 		ToBlock   *rpc.BlockNumber `json:"toBlock"`
 		Addresses interface{}      `json:"address"`
-		Topics    interface{}      `json:"topics"`
+		Topics    []interface{}    `json:"topics"`
 	}
 
 	var raw input
@@ -321,7 +323,6 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 	if raw.Addresses != nil {
 		// raw.Address can contain a single address or an array of addresses
 		var addresses []common.Address
-
 		if strAddrs, ok := raw.Addresses.([]interface{}); ok {
 			for i, addr := range strAddrs {
 				if strAddr, ok := addr.(string); ok {
@@ -352,56 +353,53 @@ func (args *NewFilterArgs) UnmarshalJSON(data []byte) error {
 		args.Addresses = addresses
 	}
 
+	// helper function which parses a string to a topic hash
 	topicConverter := func(raw string) (common.Hash, error) {
 		if len(raw) == 0 {
 			return common.Hash{}, nil
 		}
-
 		if len(raw) >= 2 && raw[0] == '0' && (raw[1] == 'x' || raw[1] == 'X') {
 			raw = raw[2:]
 		}
-
+		if len(raw) != 2 * common.HashLength {
+			return common.Hash{}, errors.New("invalid topic(s)")
+		}
 		if decAddr, err := hex.DecodeString(raw); err == nil {
 			return common.BytesToHash(decAddr), nil
 		}
-
-		return common.Hash{}, errors.New("invalid topic given")
+		return common.Hash{}, errors.New("invalid topic(s)")
 	}
 
-	// topics is an array consisting of strings or arrays of strings
-	if raw.Topics != nil {
-		topics, ok := raw.Topics.([]interface{})
-		if ok {
-			parsedTopics := make([][]common.Hash, len(topics))
-			for i, topic := range topics {
-				if topic == nil {
-					parsedTopics[i] = []common.Hash{common.StringToHash("")}
-				} else if strTopic, ok := topic.(string); ok {
-					if t, err := topicConverter(strTopic); err != nil {
-						return fmt.Errorf("invalid topic on index %d", i)
-					} else {
-						parsedTopics[i] = []common.Hash{t}
-					}
-				} else if arrTopic, ok := topic.([]interface{}); ok {
-					parsedTopics[i] = make([]common.Hash, len(arrTopic))
-					for j := 0; j < len(parsedTopics[i]); i++ {
-						if arrTopic[j] == nil {
-							parsedTopics[i][j] = common.StringToHash("")
-						} else if str, ok := arrTopic[j].(string); ok {
-							if t, err := topicConverter(str); err != nil {
-								return fmt.Errorf("invalid topic on index %d", i)
-							} else {
-								parsedTopics[i] = []common.Hash{t}
-							}
-						} else {
-							return fmt.Errorf("topic[%d][%d] not a string", i, j)
-						}
-					}
-				} else {
-					return fmt.Errorf("topic[%d] invalid", i)
+	// topics is an array consisting of strings and/or arrays of strings.
+	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
+	if len(raw.Topics) > 0 {
+		args.Topics = make([][]common.Hash, len(raw.Topics))
+		for i, t := range raw.Topics {
+			if t == nil { // ignore topic when matching logs
+				args.Topics[i] = []common.Hash{common.Hash{}}
+			} else if topic, ok := t.(string); ok { // match specific topic
+				top, err := topicConverter(topic)
+				if err != nil {
+					return err
 				}
+				args.Topics[i] = []common.Hash{top}
+			} else if topics, ok := t.([]interface{}); ok { // or case e.g. [null, "topic0", "topic1"]
+				for _, rawTopic := range topics {
+					if rawTopic == nil {
+						args.Topics[i] = append(args.Topics[i], common.Hash{})
+					} else if topic, ok := rawTopic.(string); ok {
+						parsed, err := topicConverter(topic)
+						if err != nil {
+							return err
+						}
+						args.Topics[i] = append(args.Topics[i], parsed)
+					} else {
+						return fmt.Errorf("invalid topic(s)")
+					}
+				}
+			} else {
+				return fmt.Errorf("invalid topic(s)")
 			}
-			args.Topics = parsedTopics
 		}
 	}
 
