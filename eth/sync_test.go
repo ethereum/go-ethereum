@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,12 +30,12 @@ import (
 func TestFastSyncDisabling(t *testing.T) {
 	// Create a pristine protocol manager, check that fast sync is left enabled
 	pmEmpty := newTestProtocolManagerMust(t, true, 0, nil, nil)
-	if !pmEmpty.fastSync {
+	if atomic.LoadUint32(&pmEmpty.fastSync) == 0 {
 		t.Fatalf("fast sync disabled on pristine blockchain")
 	}
 	// Create a full protocol manager, check that fast sync gets disabled
 	pmFull := newTestProtocolManagerMust(t, true, 1024, nil, nil)
-	if pmFull.fastSync {
+	if atomic.LoadUint32(&pmFull.fastSync) == 1 {
 		t.Fatalf("fast sync not disabled on non-empty blockchain")
 	}
 	// Sync up the two peers
@@ -47,7 +48,7 @@ func TestFastSyncDisabling(t *testing.T) {
 	pmEmpty.synchronise(pmEmpty.peers.BestPeer())
 
 	// Check that fast sync was disabled
-	if pmEmpty.fastSync {
+	if atomic.LoadUint32(&pmEmpty.fastSync) == 1 {
 		t.Fatalf("fast sync not disabled after successful synchronisation")
 	}
 }
