@@ -18,6 +18,7 @@ package eth
 
 import (
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -167,18 +168,18 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	}
 	// Otherwise try to sync with the downloader
 	mode := downloader.FullSync
-	if pm.fastSync {
+	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		mode = downloader.FastSync
 	}
 	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode); err != nil {
 		return
 	}
 	// If fast sync was enabled, and we synced up, disable it
-	if pm.fastSync {
+	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		// Disable fast sync if we indeed have something in our chain
 		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
 			glog.V(logger.Info).Infof("fast sync complete, auto disabling")
-			pm.fastSync = false
+			atomic.StoreUint32(&pm.fastSync, 0)
 		}
 	}
 }
