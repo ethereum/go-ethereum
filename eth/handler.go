@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,7 +59,7 @@ type blockFetcherFn func([]common.Hash) error
 type ProtocolManager struct {
 	networkId int
 
-	fastSync   bool
+	fastSync   uint32
 	txpool     txPool
 	blockchain *core.BlockChain
 	chaindb    ethdb.Database
@@ -87,15 +88,9 @@ type ProtocolManager struct {
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
 func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
-	// Figure out whether to allow fast sync or not
-	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
-		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
-		fastSync = false
-	}
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:   networkId,
-		fastSync:    fastSync,
 		eventMux:    mux,
 		txpool:      txpool,
 		blockchain:  blockchain,
@@ -105,6 +100,14 @@ func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, 
 		noMorePeers: make(chan struct{}),
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
+	}
+	// Figure out whether to allow fast sync or not
+	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
+		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
+		fastSync = false
+	}
+	if fastSync {
+		manager.fastSync = uint32(1)
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
@@ -678,7 +681,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == TxMsg:
-		// Transactions arrived, parse all of them and deliver to the pool
+		// Transactions arrived, make sure we have a valid chain to handle them
+		if atomic.LoadUint32(&pm.fastSync) == 1 {
+			break
+		}
+		// Transactions can be processed, parse all of them and deliver to the pool
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
