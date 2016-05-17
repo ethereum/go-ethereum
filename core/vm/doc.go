@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -15,12 +15,12 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-Package vm implements the Ethereum Virtual Machine.
+Package vm implements the Expanse Virtual Machine.
 
 The vm package implements two EVMs, a byte code VM and a JIT VM. The BC
 (Byte Code) VM loops over a set of bytes and executes them according to the set
-of rules defined in the Ethereum yellow paper. When the BC VM is invoked it
-invokes the JIT VM in a seperate goroutine and compiles the byte code in JIT
+of rules defined in the Expanse yellow paper. When the BC VM is invoked it
+invokes the JIT VM in a separate goroutine and compiles the byte code in JIT
 instructions.
 
 The JIT VM, when invoked, loops around a set of pre-defined instructions until

@@ -25,8 +25,9 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+	"time"
 
-	"github.com/expanse-project/ethash"
+	"github.com/expanse-org/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
@@ -51,8 +52,8 @@ func thePow() pow.PoW {
 
 func theBlockChain(db ethdb.Database, t *testing.T) *BlockChain {
 	var eventMux event.TypeMux
-	WriteTestNetGenesisBlock(db, 0)
-	blockchain, err := NewBlockChain(db, thePow(), &eventMux)
+	WriteTestNetGenesisBlock(db)
+	blockchain, err := NewBlockChain(db, testChainConfig(), thePow(), &eventMux)
 	if err != nil {
 		t.Error("failed creating blockchain:", err)
 		t.FailNow()
@@ -140,7 +141,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		if err != nil {
 			return err
 		}
-		receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb)
+		receipts, _, usedGas, err := blockchain.Processor().Process(block, statedb, vm.Config{})
 		if err != nil {
 			reportBlock(block, err)
 			return err
@@ -167,7 +168,7 @@ func testHeaderChainImport(chain []*types.Header, blockchain *BlockChain) error 
 		if err := blockchain.Validator().ValidateHeader(header, blockchain.GetHeader(header.ParentHash), false); err != nil {
 			return err
 		}
-		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
+		// Manually insert the header into the database, but don't reorganise (allows subsequent testing)
 		blockchain.mu.Lock()
 		WriteTd(blockchain.chainDb, header.Hash(), new(big.Int).Add(header.Difficulty, blockchain.GetTd(header.ParentHash)))
 		WriteHeader(blockchain.chainDb, header)
@@ -434,7 +435,7 @@ func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return n
 func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
 	return nil
 }
-func (bproc) Process(block *types.Block, statedb *state.StateDB) (types.Receipts, vm.Logs, *big.Int, error) {
+func (bproc) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
 	return nil, nil, nil, nil
 }
 
@@ -471,11 +472,17 @@ func makeBlockChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.B
 
 func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	var eventMux event.TypeMux
-	bc := &BlockChain{chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: FakePow{}, rand: rand.New(rand.NewSource(0))}
-	bc.headerCache, _ = lru.New(100)
+	bc := &BlockChain{
+		chainDb:      db,
+		genesisBlock: genesis,
+		eventMux:     &eventMux,
+		pow:          FakePow{},
+		config:       testChainConfig(),
+	}
+	valFn := func() HeaderValidator { return bc.Validator() }
+	bc.hc, _ = NewHeaderChain(db, testChainConfig(), valFn, bc.getProcInterrupt)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
-	bc.tdCache, _ = lru.New(100)
 	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
 	bc.SetValidator(bproc{})
@@ -485,7 +492,7 @@ func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	return bc
 }
 
-// Tests that reorganizing a long difficult chain after a short easy one
+// Tests that reorganising a long difficult chain after a short easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgLongHeaders(t *testing.T) { testReorgLong(t, false) }
 func TestReorgLongBlocks(t *testing.T)  { testReorgLong(t, true) }
@@ -494,7 +501,7 @@ func testReorgLong(t *testing.T, full bool) {
 	testReorg(t, []int{1, 2, 4}, []int{1, 2, 3, 4}, 10, full)
 }
 
-// Tests that reorganizing a short difficult chain after a long easy one
+// Tests that reorganising a short difficult chain after a long easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgShortHeaders(t *testing.T) { testReorgShort(t, false) }
 func TestReorgShortBlocks(t *testing.T)  { testReorgShort(t, true) }
@@ -506,7 +513,7 @@ func testReorgShort(t *testing.T, full bool) {
 func testReorg(t *testing.T, first, second []int, td int64, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Insert an easy and a difficult chain afterwards
@@ -553,7 +560,7 @@ func TestBadBlockHashes(t *testing.T)  { testBadHashes(t, true) }
 func testBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
 	// Create a chain, ban a hash and try to import
@@ -572,7 +579,7 @@ func testBadHashes(t *testing.T, full bool) {
 	}
 }
 
-// Tests that bad hashes are detected on boot, and the chan rolled back to a
+// Tests that bad hashes are detected on boot, and the chain rolled back to a
 // good state prior to the bad hash.
 func TestReorgBadHeaderHashes(t *testing.T) { testReorgBadHashes(t, false) }
 func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
@@ -580,10 +587,10 @@ func TestReorgBadBlockHashes(t *testing.T)  { testReorgBadHashes(t, true) }
 func testReorgBadHashes(t *testing.T, full bool) {
 	// Create a pristine block chain
 	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 	bc := chm(genesis, db)
 
-	// Create a chain, import and ban aferwards
+	// Create a chain, import and ban afterwards
 	headers := makeHeaderChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
 	blocks := makeBlockChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
 
@@ -607,7 +614,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		defer func() { delete(BadHashes, headers[3].Hash()) }()
 	}
 	// Create a new chain manager and check it rolled back the state
-	ncm, err := NewBlockChain(db, FakePow{}, new(event.TypeMux))
+	ncm, err := NewBlockChain(db, testChainConfig(), FakePow{}, new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}
@@ -661,7 +668,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 			failHash = headers[failAt].Hash()
 
 			blockchain.pow = failPow{failNum}
-			blockchain.validator = NewBlockValidator(blockchain, failPow{failNum})
+			blockchain.validator = NewBlockValidator(testChainConfig(), blockchain, failPow{failNum})
 
 			failRes, err = blockchain.InsertHeaderChain(headers, 1)
 		}
@@ -727,7 +734,7 @@ func TestFastVsFullChains(t *testing.T) {
 	archiveDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
-	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
+	archive, _ := NewBlockChain(archiveDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -735,7 +742,7 @@ func TestFastVsFullChains(t *testing.T) {
 	// Fast import the chain as a non-archive node to test
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
-	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
+	fast, _ := NewBlockChain(fastDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -811,7 +818,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	archiveDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(archiveDb, GenesisAccount{address, funds})
 
-	archive, _ := NewBlockChain(archiveDb, FakePow{}, new(event.TypeMux))
+	archive, _ := NewBlockChain(archiveDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	if n, err := archive.InsertChain(blocks); err != nil {
 		t.Fatalf("failed to process block %d: %v", n, err)
@@ -823,7 +830,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Import the chain as a non-archive node and ensure all pointers are updated
 	fastDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(fastDb, GenesisAccount{address, funds})
-	fast, _ := NewBlockChain(fastDb, FakePow{}, new(event.TypeMux))
+	fast, _ := NewBlockChain(fastDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -842,7 +849,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Import the chain as a light node and ensure all pointers are updated
 	lightDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(lightDb, GenesisAccount{address, funds})
-	light, _ := NewBlockChain(lightDb, FakePow{}, new(event.TypeMux))
+	light, _ := NewBlockChain(lightDb, testChainConfig(), FakePow{}, new(event.TypeMux))
 
 	if n, err := light.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to insert header %d: %v", n, err)
@@ -852,7 +859,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	assert(t, "light", light, height/2, 0, 0)
 }
 
-// Tests that chain reorganizations handle transaction removals and reinsertions.
+// Tests that chain reorganisations handle transaction removals and reinsertions.
 func TestChainTxReorgs(t *testing.T) {
 	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
 	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
@@ -883,7 +890,7 @@ func TestChainTxReorgs(t *testing.T) {
 	var pastDrop, freshDrop *types.Transaction
 
 	// Create three transactions that will be added in the forked chain:
-	//  - pastAdd:   transaction added before the reorganiztion is detected
+	//  - pastAdd:   transaction added before the reorganization is detected
 	//  - freshAdd:  transaction added at the exact block the reorg is detected
 	//  - futureAdd: transaction added after the reorg has already finished
 	var pastAdd, freshAdd, futureAdd *types.Transaction
@@ -907,7 +914,7 @@ func TestChainTxReorgs(t *testing.T) {
 	})
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 	if i, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert original chain[%d]: %v", i, err)
 	}
@@ -962,4 +969,124 @@ func TestChainTxReorgs(t *testing.T) {
 			t.Errorf("share %d: expected receipt to be found", i)
 		}
 	}
+}
+
+func TestLogReorgs(t *testing.T) {
+	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
+	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
+
+	var (
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		db, _   = ethdb.NewMemDatabase()
+		// this code generates a log
+		code = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	genesis := WriteGenesisBlockForTesting(db,
+		GenesisAccount{addr1, big.NewInt(10000000000000)},
+	)
+
+	evmux := &event.TypeMux{}
+	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
+
+	subs := evmux.Subscribe(RemovedLogsEvent{})
+	chain, _ := GenerateChain(genesis, db, 2, func(i int, gen *BlockGen) {
+		if i == 1 {
+			tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), code).SignECDSA(key1)
+			if err != nil {
+				t.Fatalf("failed to create tx: %v", err)
+			}
+			gen.AddTx(tx)
+		}
+	})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	chain, _ = GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert forked chain: %v", err)
+	}
+
+	ev := <-subs.Chan()
+	if len(ev.Data.(RemovedLogsEvent).Logs) == 0 {
+		t.Error("expected logs")
+	}
+}
+
+func TestReorgSideEvent(t *testing.T) {
+	var (
+		db, _   = ethdb.NewMemDatabase()
+		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
+		genesis = WriteGenesisBlockForTesting(db, GenesisAccount{addr1, big.NewInt(10000000000000)})
+	)
+
+	evmux := &event.TypeMux{}
+	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
+
+	chain, _ := GenerateChain(genesis, db, 3, func(i int, gen *BlockGen) {})
+	if _, err := blockchain.InsertChain(chain); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	replacementBlocks, _ := GenerateChain(genesis, db, 4, func(i int, gen *BlockGen) {
+		tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), nil).SignECDSA(key1)
+		if i == 2 {
+			gen.OffsetTime(-1)
+		}
+		if err != nil {
+			t.Fatalf("failed to create tx: %v", err)
+		}
+		gen.AddTx(tx)
+	})
+	subs := evmux.Subscribe(ChainSideEvent{})
+	if _, err := blockchain.InsertChain(replacementBlocks); err != nil {
+		t.Fatalf("failed to insert chain: %v", err)
+	}
+
+	// first two block of the secondary chain are for a brief moment considered
+	// side chains because up to that point the first one is considered the
+	// heavier chain.
+	expectedSideHashes := map[common.Hash]bool{
+		replacementBlocks[0].Hash(): true,
+		replacementBlocks[1].Hash(): true,
+		chain[0].Hash():             true,
+		chain[1].Hash():             true,
+		chain[2].Hash():             true,
+	}
+
+	i := 0
+
+	const timeoutDura = 10 * time.Second
+	timeout := time.NewTimer(timeoutDura)
+done:
+	for {
+		select {
+		case ev := <-subs.Chan():
+			block := ev.Data.(ChainSideEvent).Block
+			if _, ok := expectedSideHashes[block.Hash()]; !ok {
+				t.Errorf("%d: didn't expect %x to be in side chain", i, block.Hash())
+			}
+			i++
+
+			if i == len(expectedSideHashes) {
+				timeout.Stop()
+
+				break done
+			}
+			timeout.Reset(timeoutDura)
+
+		case <-timeout.C:
+			t.Fatal("Timeout. Possibly not all blocks were triggered for sideevent")
+		}
+	}
+
+	// make sure no more events are fired
+	select {
+	case e := <-subs.Chan():
+		t.Errorf("unexpected event fired: %v", e)
+	case <-time.After(250 * time.Millisecond):
+	}
+
 }

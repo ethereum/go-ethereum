@@ -26,7 +26,7 @@ import (
 	"github.com/expanse-project/go-expanse/params"
 )
 
-// PrecompiledAccount represents a native ethereum contract
+// PrecompiledAccount represents a native expanse contract
 type PrecompiledAccount struct {
 	Gas func(l int) *big.Int
 	fn  func(in []byte) []byte
@@ -37,11 +37,11 @@ func (self PrecompiledAccount) Call(in []byte) []byte {
 	return self.fn(in)
 }
 
-// Precompiled contains the default set of ethereum contracts
+// Precompiled contains the default set of expanse contracts
 var Precompiled = PrecompiledContracts()
 
 // PrecompiledContracts returns the default set of precompiled ethereum
-// contracts defined by the ethereum yellow paper.
+// contracts defined by the expanse yellow paper.
 func PrecompiledContracts() map[string]*PrecompiledAccount {
 	return map[string]*PrecompiledAccount{
 		// ECRECOVER
@@ -111,7 +111,7 @@ func ecrecoverFunc(in []byte) []byte {
 	}
 
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(crypto.Sha3(pubKey[1:])[12:], 32)
+	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32)
 }
 
 func memCpy(in []byte) []byte {

@@ -79,14 +79,14 @@ type adminhandler func(*adminApi, *shared.Request) (interface{}, error)
 
 // admin api provider
 type adminApi struct {
-	xeth     *xeth.XEth
+	xeth     *xexp.XEth
 	expanse *exp.Expanse
 	codec    codec.Codec
 	coder    codec.ApiCoder
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, expanse *exp.Expanse, codec codec.Codec) *adminApi {
+func NewAdminApi(xeth *xexp.XEth, expanse *exp.Expanse, codec codec.Codec) *adminApi {
 	return &adminApi{
 		xeth:     xeth,
 		expanse: expanse,
@@ -234,7 +234,7 @@ func (self *adminApi) SetSolc(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	solc, err := self.xeth.SetSolc(args.Path)
+	solc, err := self.xexp.SetSolc(args.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +282,8 @@ func (self *adminApi) SleepBlocks(req *shared.Request) (interface{}, error) {
 		timer = time.NewTimer(time.Duration(args.Timeout) * time.Second).C
 	}
 
-	height = new(big.Int).Add(self.xeth.CurrentBlock().Number(), big.NewInt(args.N))
-	height, err = sleepBlocks(self.xeth.UpdateState(), height, timer)
+	height = new(big.Int).Add(self.xexp.CurrentBlock().Number(), big.NewInt(args.N))
+	height, err = sleepBlocks(self.xexp.UpdateState(), height, timer)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +389,7 @@ func (self *adminApi) Register(req *shared.Request) (interface{}, error) {
 
 	sender := common.HexToAddress(args.Sender)
 	// sender and contract address are passed as hex strings
-	codeb := self.xeth.CodeAtBytes(args.Address)
+	codeb := self.xexp.CodeAtBytes(args.Address)
 	codeHash := common.BytesToHash(crypto.Sha3(codeb))
 	contentHash := common.HexToHash(args.ContentHashHex)
 	registry := registrar.New(self.xeth)
@@ -463,7 +463,7 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) EnableUserAgent(req *shared.Request) (interface{}, error) {
-	if fe, ok := self.xeth.Frontend().(*useragent.RemoteFrontend); ok {
+	if fe, ok := self.xexp.Frontend().(*useragent.RemoteFrontend); ok {
 		fe.Enable()
 	}
 	return true, nil

@@ -1,5 +1,7 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
+// This file is part of the go-ethereum library.
+>>>>>>> ethereum/master
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -67,7 +69,7 @@ func init() {
 func readJson(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return fmt.Errorf("Error reading JSON file", err.Error())
+		return fmt.Errorf("error reading JSON file: %v", err)
 	}
 	if err = json.Unmarshal(data, &value); err != nil {
 		if syntaxerr, ok := err.(*json.SyntaxError); ok {

@@ -75,6 +75,7 @@ func defaultDir() string {
 // and automatic memory management.
 type cache struct {
 	epoch uint64
+	used  time.Time
 	test  bool
 
 	gen sync.Once // ensures cache is only generated once.
@@ -104,14 +105,25 @@ func freeCache(cache *cache) {
 	cache.ptr = nil
 }
 
-// Light implements the Verify half of the proof of work.
-// It uses a small in-memory cache to verify the nonces
-// found by Full.
+func (cache *cache) compute(dagSize uint64, hash common.Hash, nonce uint64) (ok bool, mixDigest, result common.Hash) {
+	ret := C.ethash_light_compute_internal(cache.ptr, C.uint64_t(dagSize), hashToH256(hash), C.uint64_t(nonce))
+	// Make sure cache is live until after the C call.
+	// This is important because a GC might happen and execute
+	// the finalizer before the call completes.
+	_ = cache
+	return bool(ret.success), h256ToHash(ret.mix_hash), h256ToHash(ret.result)
+}
+
+// Light implements the Verify half of the proof of work. It uses a few small
+// in-memory caches to verify the nonces found by Full.
 type Light struct {
-	test    bool       // if set use a smaller cache size
-	mu      sync.Mutex // protects current
-	current *cache     // last cache which was generated.
-	// TODO: keep multiple caches.
+	test bool // If set, use a smaller cache size
+
+	mu     sync.Mutex        // Protects the per-epoch map of verification caches
+	caches map[uint64]*cache // Currently maintained verification caches
+	future *cache            // Pre-generated cache for the estimated future DAG
+
+	NumCaches int // Maximum number of caches to keep before eviction (only init, don't modify)
 }
 
 // Verify checks whether the block's nonce is valid.
@@ -137,29 +149,23 @@ func (l *Light) Verify(block pow.Block) bool {
 
 	cache := l.getCache(blockNum)
 	dagSize := C.ethash_get_datasize(C.uint64_t(blockNum))
-
 	if l.test {
 		dagSize = dagSizeForTesting
 	}
 	// Recompute the hash using the cache.
-	hash := hashToH256(block.HashNoNonce())
-	ret := C.ethash_light_compute_internal(cache.ptr, dagSize, hash, C.uint64_t(block.Nonce()))
-	if !ret.success {
+	ok, mixDigest, result := cache.compute(uint64(dagSize), block.HashNoNonce(), block.Nonce())
+	if !ok {
 		return false
 	}
 
 	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
-	if block.MixDigest() != h256ToHash(ret.mix_hash) {
+	if block.MixDigest() != mixDigest {
 		return false
 	}
 
-	// Make sure cache is live until after the C call.
-	// This is important because a GC might happen and execute
-	// the finalizer before the call completes.
-	_ = cache
 	// The actual check.
 	target := new(big.Int).Div(maxUint256, difficulty)
-	return h256ToHash(ret.result).Big().Cmp(target) <= 0
+	return result.Big().Cmp(target) <= 0
 }
 
 func h256ToHash(in C.ethash_h256_t) common.Hash {
@@ -173,16 +179,49 @@ func hashToH256(in common.Hash) C.ethash_h256_t {
 func (l *Light) getCache(blockNum uint64) *cache {
 	var c *cache
 	epoch := blockNum / epochLength
-	// Update or reuse the last cache.
+
+	// If we have a PoW for that epoch, use that
 	l.mu.Lock()
-	if l.current != nil && l.current.epoch == epoch {
-		c = l.current
-	} else {
-		c = &cache{epoch: epoch, test: l.test}
-		l.current = c
+	if l.caches == nil {
+		l.caches = make(map[uint64]*cache)
 	}
+	if l.NumCaches == 0 {
+		l.NumCaches = 3
+	}
+	c = l.caches[epoch]
+	if c == nil {
+		// No cached DAG, evict the oldest if the cache limit was reached
+		if len(l.caches) >= l.NumCaches {
+			var evict *cache
+			for _, cache := range l.caches {
+				if evict == nil || evict.used.After(cache.used) {
+					evict = cache
+				}
+			}
+			glog.V(logger.Debug).Infof("Evicting DAG for epoch %d in favour of epoch %d", evict.epoch, epoch)
+			delete(l.caches, evict.epoch)
+		}
+		// If we have the new DAG pre-generated, use that, otherwise create a new one
+		if l.future != nil && l.future.epoch == epoch {
+			glog.V(logger.Debug).Infof("Using pre-generated DAG for epoch %d", epoch)
+			c, l.future = l.future, nil
+		} else {
+			glog.V(logger.Debug).Infof("No pre-generated DAG available, creating new for epoch %d", epoch)
+			c = &cache{epoch: epoch, test: l.test}
+		}
+		l.caches[epoch] = c
+
+		// If we just used up the future cache, or need a refresh, regenerate
+		if l.future == nil || l.future.epoch <= epoch {
+			glog.V(logger.Debug).Infof("Pre-generating DAG for epoch %d", epoch+1)
+			l.future = &cache{epoch: epoch + 1, test: l.test}
+			go l.future.generate()
+		}
+	}
+	c.used = time.Now()
 	l.mu.Unlock()
-	// Wait for the cache to finish generating.
+
+	// Wait for generation finish and return the cache
 	c.generate()
 	return c
 }
@@ -362,9 +401,13 @@ type Ethash struct {
 }
 
 // New creates an instance of the proof of work.
-// A single instance of Light is shared across all instances
-// created with New.
 func New() *Ethash {
+	return &Ethash{new(Light), &Full{turbo: true}}
+}
+
+// NewShared creates an instance of the proof of work., where a single instance
+// of the Light cache is shared across all instances created with NewShared.
+func NewShared() *Ethash {
 	return &Ethash{sharedLight, &Full{turbo: true}}
 }
 

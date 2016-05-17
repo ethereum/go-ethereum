@@ -20,12 +20,12 @@ func (self *_runtime) toValueArray(arguments ...interface{}) []Value {
 		if valueArray, ok := arguments[0].([]Value); ok {
 			return valueArray
 		}
-		return []Value{toValue(arguments[0])}
+		return []Value{self.toValue(arguments[0])}
 	}
 
 	valueArray := make([]Value, length)
 	for index, value := range arguments {
-		valueArray[index] = toValue(value)
+		valueArray[index] = self.toValue(value)
 	}
 
 	return valueArray

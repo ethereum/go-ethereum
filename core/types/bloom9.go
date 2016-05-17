@@ -69,6 +69,10 @@ func (b Bloom) TestBytes(test []byte) bool {
 	return b.Test(common.BytesToBig(test))
 }
 
+func (b Bloom) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%#x"`, b.Bytes())), nil
+}
+
 func CreateBloom(receipts Receipts) Bloom {
 	bin := new(big.Int)
 	for _, receipt := range receipts {
@@ -97,7 +101,7 @@ func LogsBloom(logs vm.Logs) *big.Int {
 }
 
 func bloom9(b []byte) *big.Int {
-	b = crypto.Sha3(b[:])
+	b = crypto.Keccak256(b[:])
 
 	r := new(big.Int)
 

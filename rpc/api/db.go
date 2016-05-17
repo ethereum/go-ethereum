@@ -42,14 +42,14 @@ type dbhandler func(*dbApi, *shared.Request) (interface{}, error)
 
 // db api provider
 type dbApi struct {
-	xeth     *xeth.XEth
+	xeth     *xexp.XEth
 	expanse *exp.Expanse
 	methods  map[string]dbhandler
 	codec    codec.ApiCoder
 }
 
 // create a new db api instance
-func NewDbApi(xeth *xeth.XEth, expanse *exp.Expanse, coder codec.Codec) *dbApi {
+func NewDbApi(xeth *xexp.XEth, expanse *exp.Expanse, coder codec.Codec) *dbApi {
 	return &dbApi{
 		xeth:     xeth,
 		expanse: expanse,
@@ -96,7 +96,7 @@ func (self *dbApi) GetString(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	ret, err := self.xeth.DbGet([]byte(args.Database + args.Key))
+	ret, err := self.xexp.DbGet([]byte(args.Database + args.Key))
 	return string(ret), err
 }
 
@@ -110,7 +110,7 @@ func (self *dbApi) PutString(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	return self.xeth.DbPut([]byte(args.Database+args.Key), args.Value), nil
+	return self.xexp.DbPut([]byte(args.Database+args.Key), args.Value), nil
 }
 
 func (self *dbApi) GetHex(req *shared.Request) (interface{}, error) {
@@ -123,7 +123,7 @@ func (self *dbApi) GetHex(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	if res, err := self.xeth.DbGet([]byte(args.Database + args.Key)); err == nil {
+	if res, err := self.xexp.DbGet([]byte(args.Database + args.Key)); err == nil {
 		return newHexData(res), nil
 	} else {
 		return nil, err
@@ -140,5 +140,5 @@ func (self *dbApi) PutHex(req *shared.Request) (interface{}, error) {
 		return nil, err
 	}
 
-	return self.xeth.DbPut([]byte(args.Database+args.Key), args.Value), nil
+	return self.xexp.DbPut([]byte(args.Database+args.Key), args.Value), nil
 }

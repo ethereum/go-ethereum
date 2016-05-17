@@ -26,8 +26,8 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
-	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/params"
 	"github.com/expanse-project/go-expanse/tests"
 )
 
@@ -74,9 +74,10 @@ func runTestWithReader(test string, r io.Reader) error {
 	var err error
 	switch strings.ToLower(test) {
 	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
-		err = tests.RunBlockTestWithReader(r, skipTests)
+		err = tests.RunBlockTestWithReader(params.MainNetHomesteadBlock, r, skipTests)
 	case "st", "state", "statetest", "statetests":
-		err = tests.RunStateTestWithReader(r, skipTests)
+		rs := tests.RuleSet{HomesteadBlock: params.MainNetHomesteadBlock}
+		err = tests.RunStateTestWithReader(rs, r, skipTests)
 	case "tx", "transactiontest", "transactiontests":
 		err = tests.RunTransactionTestsWithReader(r, skipTests)
 	case "vm", "vmtest", "vmtests":
@@ -188,7 +189,6 @@ func setupApp(c *cli.Context) {
 	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
 	useStdIn := c.GlobalBool(ReadStdInFlag.Name)
 	skipTests = strings.Split(c.GlobalString(SkipTestsFlag.Name), " ")
-	vm.Debug = c.GlobalBool(TraceFlag.Name)
 
 	if !useStdIn {
 		runSuite(flagTest, flagFile)

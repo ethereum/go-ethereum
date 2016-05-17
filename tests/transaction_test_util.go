@@ -25,6 +25,7 @@ import (
 	"runtime"
 
 	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/params"
@@ -166,7 +167,8 @@ func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err e
 		decodedSender common.Address
 	)
 
-	if params.IsHomestead(common.String2Big(txTest.Blocknumber)) {
+	chainConfig := &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
+	if chainConfig.IsHomestead(common.String2Big(txTest.Blocknumber)) {
 		decodedSender, err = decodedTx.From()
 	} else {
 		decodedSender, err = decodedTx.FromFrontier()

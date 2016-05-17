@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of the go-expanse library.
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
@@ -77,14 +78,14 @@ func TestCompiling(t *testing.T) {
 	}
 
 	if len(prog.instructions) != 1 {
-		t.Error("exected 1 compiled instruction, got", len(prog.instructions))
+		t.Error("expected 1 compiled instruction, got", len(prog.instructions))
 	}
 }
 
 func TestResetInput(t *testing.T) {
 	var sender account
 
-	env := NewEnv()
+	env := NewEnv(false, true)
 	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000), big.NewInt(0))
 	contract.CodeAddr = &common.Address{}
 
@@ -125,17 +126,17 @@ type vmBench struct {
 
 type account struct{}
 
-func (account) SubBalance(amount *big.Int)             {}
-func (account) AddBalance(amount *big.Int)             {}
-func (account) SetAddress(common.Address)              {}
-func (account) Value() *big.Int                        { return nil }
-func (account) SetBalance(*big.Int)                    {}
-func (account) SetNonce(uint64)                        {}
-func (account) Balance() *big.Int                      { return nil }
-func (account) Address() common.Address                { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int)           {}
-func (account) SetCode([]byte)                         {}
-func (account) EachStorage(cb func(key, value []byte)) {}
+func (account) SubBalance(amount *big.Int)                          {}
+func (account) AddBalance(amount *big.Int)                          {}
+func (account) SetAddress(common.Address)                           {}
+func (account) Value() *big.Int                                     { return nil }
+func (account) SetBalance(*big.Int)                                 {}
+func (account) SetNonce(uint64)                                     {}
+func (account) Balance() *big.Int                                   { return nil }
+func (account) Address() common.Address                             { return common.Address{} }
+func (account) ReturnGas(*big.Int, *big.Int)                        {}
+func (account) SetCode([]byte)                                      {}
+func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
 func runVmBench(test vmBench, b *testing.B) {
 	var sender account
@@ -143,10 +144,7 @@ func runVmBench(test vmBench, b *testing.B) {
 	if test.precompile && !test.forcejit {
 		NewProgram(test.code)
 	}
-	env := NewEnv()
-
-	EnableJit = !test.nojit
-	ForceJit = test.forcejit
+	env := NewEnv(test.nojit, test.forcejit)
 
 	b.ResetTimer()
 
@@ -154,7 +152,7 @@ func runVmBench(test vmBench, b *testing.B) {
 		context := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000), big.NewInt(0))
 		context.Code = test.code
 		context.CodeAddr = &common.Address{}
-		_, err := New(env).Run(context, test.input)
+		_, err := env.Vm().Run(context, test.input)
 		if err != nil {
 			b.Error(err)
 			b.FailNow()
@@ -165,12 +163,20 @@ func runVmBench(test vmBench, b *testing.B) {
 type Env struct {
 	gasLimit *big.Int
 	depth    int
+	evm      *EVM
 }
 
-func NewEnv() *Env {
-	return &Env{big.NewInt(10000), 0}
+func NewEnv(noJit, forceJit bool) *Env {
+	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
+	env.evm = New(env, Config{
+		EnableJit: !noJit,
+		ForceJit:  forceJit,
+	})
+	return env
 }
 
+func (self *Env) RuleSet() RuleSet       { return ruleSet{new(big.Int)} }
+func (self *Env) Vm() Vm                 { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 func (self *Env) AddStructLog(log StructLog) {
@@ -189,7 +195,7 @@ func (self *Env) Db() Database             { return nil }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
 func (self *Env) VmType() Type             { return StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
+	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }
 func (self *Env) AddLog(log *Log) {
 }

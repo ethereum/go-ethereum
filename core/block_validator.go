@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -41,15 +41,17 @@ var (
 //
 // BlockValidator implements Validator.
 type BlockValidator struct {
-	bc  *BlockChain // Canonical block chain
-	Pow pow.PoW     // Proof of work used for validating
+	config *ChainConfig // Chain configuration options
+	bc     *BlockChain  // Canonical block chain
+	Pow    pow.PoW      // Proof of work used for validating
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(blockchain *BlockChain, pow pow.PoW) *BlockValidator {
+func NewBlockValidator(config *ChainConfig, blockchain *BlockChain, pow pow.PoW) *BlockValidator {
 	validator := &BlockValidator{
-		Pow: pow,
-		bc:  blockchain,
+		config: config,
+		Pow:    pow,
+		bc:     blockchain,
 	}
 	return validator
 }
@@ -58,7 +60,7 @@ func NewBlockValidator(blockchain *BlockChain, pow pow.PoW) *BlockValidator {
 // the block header's transaction and uncle roots.
 //
 // ValidateBlock does not validate the header's pow. The pow work validated
-// seperately so we can process them in paralel.
+// separately so we can process them in parallel.
 //
 // ValidateBlock also validates and makes sure that any previous state (or present)
 // state that might or might not be present is checked to make sure that fast
@@ -80,7 +82,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 
 	header := block.Header()
 	// validate the block header
-	if err := ValidateHeader(v.Pow, header, parent.Header(), false, false); err != nil {
+	if err := ValidateHeader(v.config, v.Pow, header, parent.Header(), false, false); err != nil {
 		return err
 	}
 	// verify the uncles are correctly rewarded
@@ -106,7 +108,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 
 // ValidateState validates the various changes that happen after a state
 // transition, such as amount of used gas, the receipt roots and the state root
-// itself. ValidateState returns a database batch if the validation was a succes
+// itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
 	header := block.Header()
@@ -175,7 +177,7 @@ func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
 			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
 		}
 
-		if err := ValidateHeader(v.Pow, uncle, ancestors[uncle.ParentHash].Header(), true, true); err != nil {
+		if err := ValidateHeader(v.config, v.Pow, uncle, ancestors[uncle.ParentHash].Header(), true, true); err != nil {
 			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
 		}
 	}
@@ -195,13 +197,13 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 	if v.bc.HasHeader(header.Hash()) {
 		return nil
 	}
-	return ValidateHeader(v.Pow, header, parent, checkPow, false)
+	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
 }
 
 // Validates a header. Returns an error if the header is invalid.
 //
 // See YP section 4.3.4. "Block Header Validity"
-func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
+func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
 	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
@@ -219,7 +221,7 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 		return BlockEqualTSErr
 	}
 
-	expd := CalcDifficulty(header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
+	expd := CalcDifficulty(config, header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
 	if expd.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for header %v, %v", header.Difficulty, expd)
 	}
@@ -251,8 +253,8 @@ func ValidateHeader(pow pow.PoW, header *types.Header, parent *types.Header, che
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	if params.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
+func CalcDifficulty(config *ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+	if config.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
 		return calcDifficultyHomestead(time, parentTime, parentNumber, parentDiff)
 	} else {
 		return calcDifficultyFrontier(time, parentTime, parentNumber, parentDiff)
@@ -290,7 +292,9 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 
 	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x = params.MinimumDifficulty
+		x.Set(params.MinimumDifficulty)
+	}
+
 	}
 
 	return x
@@ -318,7 +322,7 @@ func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *b
 		diff.Sub(parentDiff, adjust)
 	}
 	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff = params.MinimumDifficulty
+		diff.Set(params.MinimumDifficulty)
 	}
 
 	periodCount := new(big.Int).Add(parentNumber, common.Big1)
@@ -358,11 +362,11 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	gl = gl.Add(gl, contrib)
 	gl.Set(common.BigMax(gl, params.MinGasLimit))
 
-	// however, if we're now below the target (GenesisGasLimit) we increase the
+	// however, if we're now below the target (TargetGasLimit) we increase the
 	// limit as much as we can (parentGasLimit / 1024 -1)
-	if gl.Cmp(params.GenesisGasLimit) < 0 {
+	if gl.Cmp(params.TargetGasLimit) < 0 {
 		gl.Add(parent.GasLimit(), decay)
-		gl.Set(common.BigMin(gl, params.GenesisGasLimit))
+		gl.Set(common.BigMin(gl, params.TargetGasLimit))
 	}
 	return gl
 }

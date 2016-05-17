@@ -680,15 +680,36 @@ func (self Value) export() interface{} {
 			result := make([]interface{}, 0)
 			lengthValue := object.get("length")
 			length := lengthValue.value.(uint32)
+			kind := reflect.Invalid
+			state := 0
+			var t reflect.Type
 			for index := uint32(0); index < length; index += 1 {
 				name := strconv.FormatInt(int64(index), 10)
 				if !object.hasProperty(name) {
 					continue
 				}
-				value := object.get(name)
-				result = append(result, value.export())
+				value := object.get(name).export()
+				t = reflect.TypeOf(value)
+				if state == 0 {
+					kind = t.Kind()
+					state = 1
+				} else if state == 1 && kind != t.Kind() {
+					state = 2
+				}
+				result = append(result, value)
 			}
-			return result
+
+			if state != 1 || kind == reflect.Interface {
+				// No common type
+				return result
+			}
+
+			// Convert to the common type
+			val := reflect.MakeSlice(reflect.SliceOf(t), len(result), len(result))
+			for i, v := range result {
+				val.Index(i).Set(reflect.ValueOf(v))
+			}
+			return val.Interface()
 		} else {
 			result := make(map[string]interface{})
 			// TODO Should we export everything? Or just what is enumerable?
@@ -770,6 +791,21 @@ func (self Value) exportNative() interface{} {
 // Make a best effort to return a reflect.Value corresponding to reflect.Kind, but
 // fallback to just returning the Go value we have handy.
 func (value Value) toReflectValue(kind reflect.Kind) (reflect.Value, error) {
+	if kind != reflect.Float32 && kind != reflect.Float64 && kind != reflect.Interface {
+		switch value := value.value.(type) {
+		case float32:
+			_, frac := math.Modf(float64(value))
+			if frac > 0 {
+				return reflect.Value{}, fmt.Errorf("RangeError: %v to reflect.Kind: %v", value, kind)
+			}
+		case float64:
+			_, frac := math.Modf(value)
+			if frac > 0 {
+				return reflect.Value{}, fmt.Errorf("RangeError: %v to reflect.Kind: %v", value, kind)
+			}
+		}
+	}
+
 	switch kind {
 	case reflect.Bool: // Bool
 		return reflect.ValueOf(value.bool()), nil
@@ -857,7 +893,7 @@ func (value Value) toReflectValue(kind reflect.Kind) (reflect.Value, error) {
 		if 0 > tmp1 {
 			tmp1 = -tmp1
 		}
-		if tmp1 < math.SmallestNonzeroFloat32 || tmp1 > math.MaxFloat32 {
+		if tmp1 > 0 && (tmp1 < math.SmallestNonzeroFloat32 || tmp1 > math.MaxFloat32) {
 			return reflect.Value{}, fmt.Errorf("RangeError: %f (%v) to float32", tmp, value)
 		} else {
 			return reflect.ValueOf(float32(tmp)), nil

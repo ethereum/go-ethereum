@@ -2,6 +2,7 @@ package natpmp
 
 import (
 	"fmt"
+	"github.com/jackpal/gateway"
 	"log"
 	"net"
 	"time"
@@ -34,6 +35,17 @@ type Client struct {
 // Create a NAT-PMP client for the NAT-PMP server at the gateway.
 func NewClient(gateway net.IP) (nat *Client) {
 	return &Client{gateway}
+}
+
+// Create a NAT-PMP client for the NAT-PMP server at the default gateway.
+func NewClientForDefaultGateway() (nat *Client, err error) {
+	var g net.IP
+	g, err = gateway.DiscoverGateway()
+	if err != nil {
+		return
+	}
+	nat = NewClient(g)
+	return
 }
 
 // Results of the NAT-PMP GetExternalAddress operation

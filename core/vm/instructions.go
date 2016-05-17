@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of the go-expanse library.
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
@@ -317,7 +318,7 @@ func opMulmod(instr instruction, pc *uint64, env Environment, contract *Contract
 
 func opSha3(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
 	offset, size := stack.pop(), stack.pop()
-	hash := crypto.Sha3(memory.Get(offset.Int64(), size.Int64()))
+	hash := crypto.Keccak256(memory.Get(offset.Int64(), size.Int64()))
 
 	stack.push(common.BytesToBig(hash))
 }
@@ -521,7 +522,7 @@ func opCreate(instr instruction, pc *uint64, env Environment, contract *Contract
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if params.IsHomestead(env.BlockNumber()) && suberr == CodeStoreOutOfGasError {
+	if env.RuleSet().IsHomestead(env.BlockNumber()) && suberr == CodeStoreOutOfGasError {
 		stack.push(new(big.Int))
 	} else if suberr != nil && suberr != CodeStoreOutOfGasError {
 		stack.push(new(big.Int))
@@ -598,7 +599,6 @@ func opDelegateCall(instr instruction, pc *uint64, env Environment, contract *Co
 	toAddr := common.BigToAddress(to)
 	args := memory.Get(inOffset.Int64(), inSize.Int64())
 	ret, err := env.DelegateCall(contract, toAddr, args, gas, contract.Price)
-
 	if err != nil {
 		stack.push(new(big.Int))
 	} else {

@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of the go-expanse library.
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
@@ -31,27 +32,24 @@ import (
 	"github.com/hashicorp/golang-lru"
 )
 
+// progStatus is the type for the JIT program status.
 type progStatus int32
 
 const (
-	progUnknown progStatus = iota
-	progCompile
-	progReady
-	progError
+	progUnknown progStatus = iota // unknown status
+	progCompile                   // compile status
+	progReady                     // ready for use status
+	progError                     // error status (usually caused during compilation)
 
-	defaultJitMaxCache int = 64
+	defaultJitMaxCache int = 64 // maximum amount of jit cached programs
 )
 
-var (
-	EnableJit   bool // Enables the JIT VM
-	ForceJit    bool // Force the JIT, skip byte VM
-	MaxProgSize int  // Max cache size for JIT Programs
-)
+var MaxProgSize int // Max cache size for JIT programs
 
-var programs *lru.Cache
+var programs *lru.Cache // lru cache for the JIT programs.
 
 func init() {
-	programs, _ = lru.New(defaultJitMaxCache)
+	SetJITCacheSize(defaultJitMaxCache)
 }
 
 // SetJITCacheSize recreates the program cache with the max given size. Setting
@@ -97,7 +95,7 @@ type Program struct {
 // NewProgram returns a new JIT program
 func NewProgram(code []byte) *Program {
 	program := &Program{
-		Id:           crypto.Sha3Hash(code),
+		Id:           crypto.Keccak256Hash(code),
 		mapping:      make(map[uint64]uint64),
 		destinations: make(map[uint64]struct{}),
 		code:         code,
@@ -301,7 +299,7 @@ func CompileProgram(program *Program) (err error) {
 	return nil
 }
 
-// RunProgram runs the program given the enviroment and contract and returns an
+// RunProgram runs the program given the environment and contract and returns an
 // error if the execution failed (non-consensus)
 func RunProgram(program *Program, env Environment, contract *Contract, input []byte) ([]byte, error) {
 	return runProgram(program, 0, NewMemory(), newstack(), env, contract, input)
@@ -323,7 +321,7 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 		}()
 	}
 
-	homestead := params.IsHomestead(env.BlockNumber())
+	homestead := env.RuleSet().IsHomestead(env.BlockNumber())
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
@@ -347,7 +345,7 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env
 	return nil, nil
 }
 
-// validDest checks if the given distination is a valid one given the
+// validDest checks if the given destination is a valid one given the
 // destination table of the program
 func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 	// PC cannot go beyond len(code) and certainly can't be bigger than 64bits.
@@ -417,7 +415,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		// This checks for 3 scenario's and calculates gas accordingly
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
 		// 2. From a non-zero value address to a zero-value address (DELETE)
-		// 3. From a nen-zero to a non-zero                         (CHANGE)
+		// 3. From a non-zero to a non-zero                         (CHANGE)
 		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
 			g = params.SstoreSetGas
 		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {

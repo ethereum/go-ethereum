@@ -35,7 +35,7 @@ func TestSum(t *testing.T) {
 	summer := summer{numbers: []*big.Int{big.NewInt(1), big.NewInt(2), big.NewInt(3)}}
 	sum := Sum(summer)
 	if sum.Cmp(big.NewInt(6)) != 0 {
-		t.Errorf("not 6", sum)
+		t.Errorf("got sum = %d, want 6", sum)
 	}
 }
 

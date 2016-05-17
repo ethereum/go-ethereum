@@ -21,8 +21,8 @@ Ctrl-A, Home | Move cursor to beginning of line
 Ctrl-E, End  | Move cursor to end of line
 Ctrl-B, Left | Move cursor one character left
 Ctrl-F, Right| Move cursor one character right
-Ctrl-Left    | Move cursor to previous word
-Ctrl-Right   | Move cursor to next word
+Ctrl-Left, Alt-B    | Move cursor to previous word
+Ctrl-Right, Alt-F   | Move cursor to next word
 Ctrl-D, Del  | (if line is *not* empty) Delete character under cursor
 Ctrl-D       | (if line *is* empty) End of File - usually quits application
 Ctrl-C       | Reset input (create new empty prompt)
@@ -48,19 +48,22 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/peterh/liner"
 )
 
 var (
-	history_fn = "/tmp/.liner_history"
+	history_fn = filepath.Join(os.TempDir(), ".liner_example_history")
 	names      = []string{"john", "james", "mary", "nancy"}
 )
 
 func main() {
 	line := liner.NewLiner()
 	defer line.Close()
+
+	line.SetCtrlCAborts(true)
 
 	line.SetCompleter(func(line string) (c []string) {
 		for _, n := range names {
@@ -76,11 +79,13 @@ func main() {
 		f.Close()
 	}
 
-	if name, err := line.Prompt("What is your name? "); err != nil {
-		log.Print("Error reading line: ", err)
-	} else {
+	if name, err := line.Prompt("What is your name? "); err == nil {
 		log.Print("Got: ", name)
 		line.AppendHistory(name)
+	} else if err == liner.ErrPromptAborted {
+		log.Print("Aborted")
+	} else {
+		log.Print("Error reading line: ", err)
 	}
 
 	if f, err := os.Create(history_fn); err != nil {

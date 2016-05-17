@@ -94,7 +94,7 @@ func runBlockTest(ctx *cli.Context) {
 
 	if rpc {
 		fmt.Println("Block Test post state validated, starting RPC interface.")
-		startEth(ctx, expanse)
+		startExp(ctx, expanse)
 		utils.StartRPC(expanse, ctx)
 		expanse.WaitForShutdown()
 	}

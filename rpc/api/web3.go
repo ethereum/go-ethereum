@@ -41,13 +41,13 @@ type web3handler func(*web3Api, *shared.Request) (interface{}, error)
 
 // web3 api provider
 type web3Api struct {
-	xeth    *xeth.XEth
+	xeth    *xexp.XEth
 	methods map[string]web3handler
 	codec   codec.ApiCoder
 }
 
 // create a new web3 api instance
-func NewWeb3Api(xeth *xeth.XEth, coder codec.Codec) *web3Api {
+func NewWeb3Api(xeth *xexp.XEth, coder codec.Codec) *web3Api {
 	return &web3Api{
 		xeth:    xeth,
 		methods: Web3Mapping,
@@ -95,5 +95,5 @@ func (self *web3Api) Sha3(req *shared.Request) (interface{}, error) {
 
 // returns the xeth client vrsion
 func (self *web3Api) ClientVersion(req *shared.Request) (interface{}, error) {
-	return self.xeth.ClientVersion(), nil
+	return self.xexp.ClientVersion(), nil
 }

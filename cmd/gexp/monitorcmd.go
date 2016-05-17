@@ -21,23 +21,22 @@ import (
 	"math"
 	"reflect"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
+	"sort"
+
 	"github.com/codegangsta/cli"
 	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/node"
 	"github.com/expanse-project/go-expanse/rpc"
-	"github.com/expanse-project/go-expanse/rpc/codec"
-	"github.com/expanse-project/go-expanse/rpc/comms"
 	"github.com/gizak/termui"
 )
 
 var (
 	monitorCommandAttachFlag = cli.StringFlag{
 		Name:  "attach",
-		Value: "ipc:" + common.DefaultIpcPath(),
+		Value: "ipc:" + node.DefaultIPCEndpoint(),
 		Usage: "API endpoint to attach to",
 	}
 	monitorCommandRowsFlag = cli.IntFlag{
@@ -70,20 +69,18 @@ to display multiple metrics simultaneously.
 // monitor starts a terminal UI based monitoring tool for the requested metrics.
 func monitor(ctx *cli.Context) {
 	var (
-		client comms.ExpanseClient
+		client rpc.Client
 		err    error
 	)
 	// Attach to an Expanse node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
-	if client, err = comms.ClientFromEndpoint(endpoint, codec.JSON); err != nil {
+	if client, err = utils.NewRemoteRPCClientFromString(endpoint); err != nil {
 		utils.Fatalf("Unable to attach to gexp node: %v", err)
 	}
 	defer client.Close()
 
-	xeth := rpc.NewXeth(client)
-
 	// Retrieve all the available metrics and resolve the user pattens
-	metrics, err := retrieveMetrics(xeth)
+	metrics, err := retrieveMetrics(client)
 	if err != nil {
 		utils.Fatalf("Failed to retrieve system metrics: %v", err)
 	}
@@ -108,8 +105,6 @@ func monitor(ctx *cli.Context) {
 	}
 	defer termui.Close()
 
-	termui.UseTheme("helloworld")
-
 	rows := len(monitored)
 	if max := ctx.Int(monitorCommandRowsFlag.Name); rows > max {
 		rows = max
@@ -120,7 +115,7 @@ func monitor(ctx *cli.Context) {
 	}
 	// Create each individual data chart
 	footer := termui.NewPar("")
-	footer.HasBorder = true
+	footer.Block.Border = true
 	footer.Height = 3
 
 	charts := make([]*termui.LineChart, len(monitored))
@@ -133,39 +128,60 @@ func monitor(ctx *cli.Context) {
 	}
 	termui.Body.AddRows(termui.NewRow(termui.NewCol(12, 0, footer)))
 
-	refreshCharts(xeth, monitored, data, units, charts, ctx, footer)
+	refreshCharts(client, monitored, data, units, charts, ctx, footer)
 	termui.Body.Align()
 	termui.Render(termui.Body)
 
 	// Watch for various system events, and periodically refresh the charts
-	refresh := time.Tick(time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second)
-	for {
-		select {
-		case event := <-termui.EventCh():
-			if event.Type == termui.EventKey && event.Key == termui.KeyCtrlC {
-				return
-			}
-			if event.Type == termui.EventResize {
-				termui.Body.Width = termui.TermWidth()
-				for _, chart := range charts {
-					chart.Height = (termui.TermHeight() - footer.Height) / rows
-				}
-				termui.Body.Align()
-				termui.Render(termui.Body)
-			}
-		case <-refresh:
-			if refreshCharts(xeth, monitored, data, units, charts, ctx, footer) {
+	termui.Handle("/sys/kbd/C-c", func(termui.Event) {
+		termui.StopLoop()
+	})
+	termui.Handle("/sys/wnd/resize", func(termui.Event) {
+		termui.Body.Width = termui.TermWidth()
+		for _, chart := range charts {
+			chart.Height = (termui.TermHeight() - footer.Height) / rows
+		}
+		termui.Body.Align()
+		termui.Render(termui.Body)
+	})
+	go func() {
+		tick := time.NewTicker(time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second)
+		for range tick.C {
+			if refreshCharts(client, monitored, data, units, charts, ctx, footer) {
 				termui.Body.Align()
 			}
 			termui.Render(termui.Body)
 		}
-	}
+	}()
+	termui.Loop()
 }
 
 // retrieveMetrics contacts the attached gexp node and retrieves the entire set
 // of collected system metrics.
-func retrieveMetrics(xeth *rpc.Xeth) (map[string]interface{}, error) {
-	return xeth.Call("debug_metrics", []interface{}{true})
+func retrieveMetrics(client rpc.Client) (map[string]interface{}, error) {
+	req := map[string]interface{}{
+		"id":      new(int64),
+		"method":  "debug_metrics",
+		"jsonrpc": "2.0",
+		"params":  []interface{}{true},
+	}
+
+	if err := client.Send(req); err != nil {
+		return nil, err
+	}
+
+	var res rpc.JSONSuccessResponse
+	if err := client.Recv(&res); err != nil {
+		return nil, err
+	}
+
+	if res.Result != nil {
+		if mets, ok := res.Result.(map[string]interface{}); ok {
+			return mets, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unable to retrieve metrics")
 }
 
 // resolveMetrics takes a list of input metric patterns, and resolves each to one
@@ -253,8 +269,8 @@ func fetchMetric(metrics map[string]interface{}, metric string) float64 {
 
 // refreshCharts retrieves a next batch of metrics, and inserts all the new
 // values into the active datasets and charts
-func refreshCharts(xeth *rpc.Xeth, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
-	values, err := retrieveMetrics(xeth)
+func refreshCharts(client rpc.Client, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
+	values, err := retrieveMetrics(client)
 	for i, metric := range metrics {
 		if len(data) < 512 {
 			data[i] = append([]float64{fetchMetric(values, metric)}, data[i]...)
@@ -309,9 +325,9 @@ func updateChart(metric string, data []float64, base *int, chart *termui.LineCha
 	if strings.Contains(metric, "/Percentiles/") || strings.Contains(metric, "/pauses/") || strings.Contains(metric, "/time/") {
 		units = timeUnits
 	}
-	chart.Border.Label = metric
+	chart.BorderLabel = metric
 	if len(units[unit]) > 0 {
-		chart.Border.Label += " [" + units[unit] + "]"
+		chart.BorderLabel += " [" + units[unit] + "]"
 	}
 	chart.LineColor = colors[unit] | termui.AttrBold
 	if err != nil {
@@ -331,8 +347,8 @@ func createChart(height int) *termui.LineChart {
 	chart.AxesColor = termui.ColorWhite
 	chart.PaddingBottom = -2
 
-	chart.Border.LabelFgColor = chart.Border.FgColor | termui.AttrBold
-	chart.Border.FgColor = chart.Border.BgColor
+	chart.BorderLabelFg = chart.BorderFg | termui.AttrBold
+	chart.BorderFg = chart.BorderBg
 
 	return chart
 }
@@ -342,7 +358,7 @@ func updateFooter(ctx *cli.Context, err error, footer *termui.Par) {
 	// Generate the basic footer
 	refresh := time.Duration(ctx.Int(monitorCommandRefreshFlag.Name)) * time.Second
 	footer.Text = fmt.Sprintf("Press Ctrl+C to quit. Refresh interval: %v.", refresh)
-	footer.TextFgColor = termui.Theme().ParTextFg | termui.AttrBold
+	footer.TextFgColor = termui.ThemeAttr("par.fg") | termui.AttrBold
 
 	// Append any encountered errors
 	if err != nil {

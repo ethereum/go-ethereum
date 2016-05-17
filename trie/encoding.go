@@ -69,6 +69,27 @@ func compactHexDecode(str []byte) []byte {
 	return nibbles
 }
 
+// compactHexEncode encodes a series of nibbles into a byte array
+func compactHexEncode(nibbles []byte) []byte {
+	nl := len(nibbles)
+	if nl == 0 {
+		return nil
+	}
+	if nibbles[nl-1] == 16 {
+		nl--
+	}
+	l := (nl + 1) / 2
+	var str = make([]byte, l)
+	for i, _ := range str {
+		b := nibbles[i*2] * 16
+		if nl > i*2 {
+			b += nibbles[i*2+1]
+		}
+		str[i] = b
+	}
+	return str
+}
+
 func decodeCompact(key []byte) []byte {
 	l := len(key) / 2
 	var res = make([]byte, l)

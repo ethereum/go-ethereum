@@ -91,8 +91,6 @@ empty:
 			time.Sleep(20 * time.Microsecond)
 		}
 	}
-
-	return 0, nil
 }
 
 func (pow *EasyPow) Verify(block pow.Block) bool {

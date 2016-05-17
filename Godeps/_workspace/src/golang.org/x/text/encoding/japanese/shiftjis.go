@@ -152,7 +152,8 @@ loop:
 					goto write2
 				}
 			}
-			r = encoding.ASCIISub
+			err = internal.ErrASCIIReplacement
+			break
 		}
 
 	write1:

@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package vm
 
 import (
@@ -13,19 +29,15 @@ type jumpPtr struct {
 
 type vmJumpTable [256]jumpPtr
 
-func (jt vmJumpTable) init(blockNumber *big.Int) {
+func newJumpTable(ruleset RuleSet, blockNumber *big.Int) vmJumpTable {
+	var jumpTable vmJumpTable
+
 	// when initialising a new VM execution we must first check the homestead
 	// changes.
-	if params.IsHomestead(blockNumber) {
+	if ruleset.IsHomestead(blockNumber) {
 		jumpTable[DELEGATECALL] = jumpPtr{opDelegateCall, true}
-	} else {
-		jumpTable[DELEGATECALL] = jumpPtr{nil, false}
 	}
-}
 
-var jumpTable vmJumpTable
-
-func init() {
 	jumpTable[ADD] = jumpPtr{opAdd, true}
 	jumpTable[SUB] = jumpPtr{opSub, true}
 	jumpTable[MUL] = jumpPtr{opMul, true}
@@ -156,4 +168,6 @@ func init() {
 	jumpTable[JUMP] = jumpPtr{nil, true}
 	jumpTable[JUMPI] = jumpPtr{nil, true}
 	jumpTable[STOP] = jumpPtr{nil, true}
+
+	return jumpTable
 }

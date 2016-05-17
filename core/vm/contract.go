@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of the go-expanse library.
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
@@ -28,9 +29,10 @@ type ContractRef interface {
 	Address() common.Address
 	Value() *big.Int
 	SetCode([]byte)
+	ForEachStorage(callback func(key, value common.Hash) bool)
 }
 
-// Contract represents an ethereum contract in the state database. It contains
+// Contract represents an expanse contract in the state database. It contains
 // the the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
 	// CallerAddress is the result of the caller which initialised this
@@ -151,4 +153,10 @@ func (self *Contract) SetCode(code []byte) {
 func (self *Contract) SetCallCode(addr *common.Address, code []byte) {
 	self.Code = code
 	self.CodeAddr = addr
+}
+
+// EachStorage iterates the contract's storage and calls a method for every key
+// value pair.
+func (self *Contract) ForEachStorage(cb func(key, value common.Hash) bool) {
+	self.caller.ForEachStorage(cb)
 }

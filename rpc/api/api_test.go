@@ -93,7 +93,7 @@ func TestCompileSolidity(t *testing.T) {
 	expSource := source
 
 	exp := &exp.Expanse{}
-	xeth := xeth.NewTest(exp, nil)
+	xeth := xexp.NewTest(exp, nil)
 	api := NewEthApi(xeth, exp, codec.JSON)
 
 	var rpcRequest shared.Request

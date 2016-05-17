@@ -407,7 +407,7 @@ hash32_t compute_hash(
 	// Compute one init hash per work item.
 	hash64_t init = init_hash(g_header, nonce, isolate);
 
-	// Threads work together in this phase in groups of 8.
+	// Threads work togexper in this phase in groups of 8.
 	uint const thread_id = gid % THREADS_PER_HASH;
 	uint const hash_id = (gid % GROUP_SIZE) / THREADS_PER_HASH;
 
@@ -454,7 +454,7 @@ hash32_t compute_hash_chunks(
 	// Compute one init hash per work item.
 	hash64_t init = init_hash(g_header, nonce, isolate);
 
-	// Threads work together in this phase in groups of 8.
+	// Threads work togexper in this phase in groups of 8.
 	uint const thread_id = gid % THREADS_PER_HASH;
 	uint const hash_id = (gid % GROUP_SIZE) / THREADS_PER_HASH;
 

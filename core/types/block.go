@@ -34,7 +34,7 @@ import (
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
-// mix-hash) that a suffcient amount of computation has been carried
+// mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
 type BlockNonce [8]byte
 
@@ -46,6 +46,10 @@ func EncodeNonce(i uint64) BlockNonce {
 
 func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
+}
+
+func (n BlockNonce) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"0x%x"`, n)), nil
 }
 
 type Header struct {
@@ -118,7 +122,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
-// a block's data contents (transactions and uncles) together.
+// a block's data contents (transactions and uncles) togexper.
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
@@ -325,6 +329,9 @@ func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
 func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
+
+// Body returns the non-header content of the block.
+func (b *Block) Body() *Body { return &Body{b.transactions, b.uncles} }
 
 func (b *Block) HashNoNonce() common.Hash {
 	return b.header.HashNoNonce()

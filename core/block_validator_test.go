@@ -30,12 +30,16 @@ import (
 	"github.com/expanse-project/go-expanse/pow/ezp"
 )
 
+func testChainConfig() *ChainConfig {
+	return &ChainConfig{HomesteadBlock: big.NewInt(0)}
+}
+
 func proc() (Validator, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
-	WriteTestNetGenesisBlock(db, 0)
-	blockchain, err := NewBlockChain(db, thePow(), &mux)
+	WriteTestNetGenesisBlock(db)
+	blockchain, err := NewBlockChain(db, testChainConfig(), thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -49,14 +53,14 @@ func TestNumber(t *testing.T) {
 	statedb, _ := state.New(chain.Genesis().Root(), chain.chainDb)
 	header := makeHeader(chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
-	err := ValidateHeader(pow, header, chain.Genesis().Header(), false, false)
+	cfg := testChainConfig()
+	err := ValidateHeader(cfg, pow, header, chain.Genesis().Header(), false, false)
 	if err != BlockNumberErr {
 		t.Errorf("expected block number error, got %q", err)
 	}
 
 	header = makeHeader(chain.Genesis(), statedb)
-
-	err = ValidateHeader(pow, header, chain.Genesis().Header(), false, false)
+	err = ValidateHeader(cfg, pow, header, chain.Genesis().Header(), false, false)
 	if err == BlockNumberErr {
 		t.Errorf("didn't expect block number error")
 	}

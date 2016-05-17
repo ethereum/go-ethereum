@@ -8,7 +8,7 @@ import (
 
 // MarshalJSON returns a byte slice containing a JSON representation of all
 // the metrics in the Registry.
-func (r StandardRegistry) MarshalJSON() ([]byte, error) {
+func (r *StandardRegistry) MarshalJSON() ([]byte, error) {
 	data := make(map[string]map[string]interface{})
 	r.Each(func(name string, i interface{}) {
 		values := make(map[string]interface{})

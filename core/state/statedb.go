@@ -18,6 +18,7 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/expanse-project/go-expanse/common"
@@ -25,6 +26,7 @@ import (
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rlp"
 	"github.com/expanse-project/go-expanse/trie"
 )
 
@@ -32,7 +34,7 @@ import (
 // created.
 var StartingNonce uint64
 
-// StateDBs within the ethereum protocol are used to store anything
+// StateDBs within the expanse protocol are used to store anything
 
 // within the merkle trie. StateDBs take care of caching and storing
 // nested states. It's the general query interface to retrieve:
@@ -205,13 +207,12 @@ func (self *StateDB) Delete(addr common.Address) bool {
 
 // Update the given state object and apply it to state trie
 func (self *StateDB) UpdateStateObject(stateObject *StateObject) {
-	//addr := stateObject.Address()
-
-	if len(stateObject.CodeHash()) > 0 {
-		self.db.Put(stateObject.CodeHash(), stateObject.code)
-	}
 	addr := stateObject.Address()
-	self.trie.Update(addr[:], stateObject.RlpEncode())
+	data, err := rlp.EncodeToBytes(stateObject)
+	if err != nil {
+		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
+	}
+	self.trie.Update(addr[:], data)
 }
 
 // Delete the given state object and delete it from the state trie
@@ -238,10 +239,12 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 	if len(data) == 0 {
 		return nil
 	}
-
-	stateObject = NewStateObjectFromBytes(addr, []byte(data), self.db)
+	stateObject, err := DecodeObject(addr, self.db, data)
+	if err != nil {
+		glog.Errorf("can't decode object at %x: %v", addr[:], err)
+		return nil
+	}
 	self.SetStateObject(stateObject)
-
 	return stateObject
 }
 
@@ -348,7 +351,8 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 
 // Commit commits all state changes to the database.
 func (s *StateDB) Commit() (root common.Hash, err error) {
-	return s.commit(s.db)
+	root, batch := s.CommitBatch()
+	return root, batch.Write()
 }
 
 // CommitBatch commits all state changes to a write batch but does not
@@ -369,8 +373,15 @@ func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
 			// and just mark it for deletion in the trie.
 			s.DeleteStateObject(stateObject)
 		} else {
+			// Write any contract code associated with the state object
+			if len(stateObject.code) > 0 {
+				if err := db.Put(stateObject.codeHash, stateObject.code); err != nil {
+					return common.Hash{}, err
+				}
+			}
 			// Write any storage changes in the state object to its trie.
 			stateObject.Update()
+
 			// Commit the trie of the object to the batch.
 			// This updates the trie root internally, so
 			// getting the root hash of the storage trie

@@ -158,7 +158,7 @@ func (tx *Transaction) Size() common.StorageSize {
 }
 
 // From returns the address derived from the signature (V, R, S) using secp256k1
-// eliptic curve and an error if it failed deriving or upon an incorrect
+// elliptic curve and an error if it failed deriving or upon an incorrect
 // signature.
 //
 // From Uses the homestead consensus rules to determine whether the signature is
@@ -176,7 +176,7 @@ func (tx *Transaction) From() (common.Address, error) {
 }
 
 // FromFrontier returns the address derived from the signature (V, R, S) using
-// secp256k1 eliptic curve and an error if it failed deriving or upon an
+// secp256k1 elliptic curve and an error if it failed deriving or upon an
 // incorrect signature.
 //
 // FromFrantier uses the frontier consensus rules to determine whether the
@@ -202,7 +202,7 @@ func doFrom(tx *Transaction, homestead bool) (common.Address, error) {
 		return common.Address{}, err
 	}
 	var addr common.Address
-	copy(addr[:], crypto.Sha3(pubkey[1:])[12:])
+	copy(addr[:], crypto.Keccak256(pubkey[1:])[12:])
 	tx.from.Store(addr)
 	return addr, nil
 }
@@ -379,7 +379,7 @@ func (s *TxByPrice) Pop() interface{} {
 //
 // This method first sorts the separates the list of transactions into individual
 // sender accounts and sorts them by nonce. After the account nonce ordering is
-// satisfied, the results are merged back together by price, always comparing only
+// satisfied, the results are merged back togexper by price, always comparing only
 // the head transaction from each account. This is done via a heap to keep it fast.
 func SortByPriceAndNonce(txs []*Transaction) {
 	// Separate the transactions by account and sort by nonce

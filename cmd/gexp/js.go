@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2015 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of go-expanse.
 //
 // go-expanse is free software: you can redistribute it and/or modify
@@ -17,29 +18,25 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"math/big"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
-	"sort"
-
+	"github.com/codegangsta/cli"
+	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/common/natspec"
 	"github.com/expanse-project/go-expanse/common/registrar"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/internal/web3ext"
 	re "github.com/expanse-project/go-expanse/jsre"
+	"github.com/expanse-project/go-expanse/node"
 	"github.com/expanse-project/go-expanse/rpc"
-	"github.com/expanse-project/go-expanse/rpc/api"
-	"github.com/expanse-project/go-expanse/rpc/codec"
-	"github.com/expanse-project/go-expanse/rpc/comms"
-	"github.com/expanse-project/go-expanse/rpc/shared"
-	"github.com/expanse-project/go-expanse/xeth"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )
@@ -51,184 +48,75 @@ var (
 	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
 )
 
-type prompter interface {
-	AppendHistory(string)
-	Prompt(p string) (string, error)
-	PasswordPrompt(p string) (string, error)
-}
-
-type dumbterm struct{ r *bufio.Reader }
-
-func (r dumbterm) Prompt(p string) (string, error) {
-	fmt.Print(p)
-	line, err := r.r.ReadString('\n')
-	return strings.TrimSuffix(line, "\n"), err
-}
-
-func (r dumbterm) PasswordPrompt(p string) (string, error) {
-	fmt.Println("!! Unsupported terminal, password will echo.")
-	fmt.Print(p)
-	input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	fmt.Println()
-	return input, err
-}
-
-func (r dumbterm) AppendHistory(string) {}
-
 type jsre struct {
 	re         *re.JSRE
-	expanse   *exp.Expanse
-	xeth       *xeth.XEth
+	stack      *node.Node
 	wait       chan *big.Int
 	ps1        string
 	atexit     func()
 	corsDomain string
-	client     comms.ExpanseClient
-	prompter
+	client     rpc.Client
 }
 
-var (
-	loadedModulesMethods map[string][]string
-)
-
-func keywordCompleter(line string) []string {
-	results := make([]string, 0)
-
-	if strings.Contains(line, ".") {
-		elements := strings.Split(line, ".")
-		if len(elements) == 2 {
-			module := elements[0]
-			partialMethod := elements[1]
-			if methods, found := loadedModulesMethods[module]; found {
-				for _, method := range methods {
-					if strings.HasPrefix(method, partialMethod) { // e.g. debug.se
-						results = append(results, module+"."+method)
-					}
-				}
+func makeCompleter(re *jsre) liner.WordCompleter {
+	return func(line string, pos int) (head string, completions []string, tail string) {
+		if len(line) == 0 || pos == 0 {
+			return "", nil, ""
+		}
+		// chuck data to relevant part for autocompletion, e.g. in case of nested lines exp.getBalance(exp.coinb<tab><tab>
+		i := 0
+		for i = pos - 1; i > 0; i-- {
+			if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
+				continue
 			}
-		}
-	} else {
-		for module, methods := range loadedModulesMethods {
-			if line == module { // user typed in full module name, show all methods
-				for _, method := range methods {
-					results = append(results, module+"."+method)
-				}
-			} else if strings.HasPrefix(module, line) { // partial method name, e.g. admi
-				results = append(results, module)
+			if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
+				continue
 			}
+			i += 1
+			break
 		}
+		return line[:i], re.re.CompleteKeywords(line[i:pos]), line[pos:]
 	}
-	return results
 }
 
-func apiWordCompleter(line string, pos int) (head string, completions []string, tail string) {
-	if len(line) == 0 || pos == 0 {
-		return "", nil, ""
-	}
-
-	i := 0
-	for i = pos - 1; i > 0; i-- {
-		if line[i] == '.' || (line[i] >= 'a' && line[i] <= 'z') || (line[i] >= 'A' && line[i] <= 'Z') {
-			continue
-		}
-		if i >= 3 && line[i] == '3' && line[i-3] == 'w' && line[i-2] == 'e' && line[i-1] == 'b' {
-			continue
-		}
-		i += 1
-		break
-	}
-
-	begin := line[:i]
-	keyword := line[i:pos]
-	end := line[pos:]
-
-	completionWords := keywordCompleter(keyword)
-	return begin, completionWords, end
-}
-
-
-func newLightweightJSRE(docRoot string, client comms.ExpanseClient, datadir string, interactive bool) *jsre {
-
+func newLightweightJSRE(docRoot string, client rpc.Client, datadir string, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
-
-	// update state in separare forever blocks
 	js.re = re.New(docRoot)
-	if err := js.apiBindings(js); err != nil {
+	if err := js.apiBindings(); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
-
-	if !liner.TerminalSupported() || !interactive {
-		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
-	} else {
-		lr := liner.NewLiner()
-		js.withHistory(datadir, func(hist *os.File) { lr.ReadHistory(hist) })
-		lr.SetCtrlCAborts(true)
-		js.loadAutoCompletion()
-		lr.SetWordCompleter(apiWordCompleter)
-		lr.SetTabCompletionStyle(liner.TabPrints)
-		js.prompter = lr
-		js.atexit = func() {
-			js.withHistory(datadir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
-			lr.Close()
-			close(js.wait)
-		}
-	}
+	js.setupInput(datadir)
 	return js
 }
 
-
-func newJSRE(expanse *exp.Expanse, docRoot, corsDomain string, client comms.ExpanseClient, interactive bool, f xeth.Frontend) *jsre {
-	js := &jsre{expanse: expanse, ps1: "> "}
-
+func newJSRE(stack *node.Node, docRoot, corsDomain string, client rpc.Client, interactive bool) *jsre {
+	js := &jsre{stack: stack, ps1: "> "}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
-	if f == nil {
-		f = js
-	}
-
-	js.xeth = xeth.New(expanse, f)
-
-	js.wait = js.xeth.UpdateState()
+	js.wait = make(chan *big.Int)
 	js.client = client
-	if clt, ok := js.client.(*comms.InProcClient); ok {
-		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, expanse); err == nil {
-			clt.Initialize(api.Merge(offeredApis...))
-		}
-	}
-
-	// update state in separare forever blocks
 	js.re = re.New(docRoot)
-	if err := js.apiBindings(f); err != nil {
+	if err := js.apiBindings(); err != nil {
 		utils.Fatalf("Unable to connect - %v", err)
 	}
-
-	if !liner.TerminalSupported() || !interactive {
-		js.prompter = dumbterm{bufio.NewReader(os.Stdin)}
-	} else {
-		lr := liner.NewLiner()
-		js.withHistory(expanse.DataDir, func(hist *os.File) { lr.ReadHistory(hist) })
-		lr.SetCtrlCAborts(true)
-		js.loadAutoCompletion()
-		lr.SetWordCompleter(apiWordCompleter)
-		lr.SetTabCompletionStyle(liner.TabPrints)
-		js.prompter = lr
-		js.atexit = func() {
-			js.withHistory(expanse.DataDir, func(hist *os.File) { hist.Truncate(0); lr.WriteHistory(hist) })
-			lr.Close()
-			close(js.wait)
-		}
-	}
+	js.setupInput(stack.DataDir())
 	return js
 }
 
-func (self *jsre) loadAutoCompletion() {
-	if modules, err := self.supportedApis(); err == nil {
-		loadedModulesMethods = make(map[string][]string)
-		for module, _ := range modules {
-			loadedModulesMethods[module] = api.AutoCompletion[module]
-		}
+func (self *jsre) setupInput(datadir string) {
+	self.withHistory(datadir, func(hist *os.File) { utils.Stdin.ReadHistory(hist) })
+	utils.Stdin.SetCtrlCAborts(true)
+	utils.Stdin.SetWordCompleter(makeCompleter(self))
+	utils.Stdin.SetTabCompletionStyle(liner.TabPrints)
+	self.atexit = func() {
+		self.withHistory(datadir, func(hist *os.File) {
+			hist.Truncate(0)
+			utils.Stdin.WriteHistory(hist)
+		})
+		utils.Stdin.Close()
+		close(self.wait)
 	}
 }
 
@@ -236,7 +124,7 @@ func (self *jsre) batch(statement string) {
 	err := self.re.EvalAndPrettyPrint(statement)
 
 	if err != nil {
-		fmt.Printf("error: %v", err)
+		fmt.Printf("%v", jsErrorString(err))
 	}
 
 	if self.atexit != nil {
@@ -249,23 +137,20 @@ func (self *jsre) batch(statement string) {
 // show summary of current gexp instance
 func (self *jsre) welcome() {
 	self.re.Run(`
-
-		(function () {
-			console.log('instance: ' + web3.version.client);
-			console.log(' datadir: ' + admin.datadir);
-			console.log("coinbase: " + exp.coinbase);
-			var ts = 1000 * exp.getBlock(exp.blockNumber).timestamp;
-			console.log("at block: " + exp.blockNumber + " (" + new Date(ts) + ")");
-		})();
-	`)
-
+    (function () {
+      console.log('instance: ' + web3.version.node);
+      console.log("coinbase: " + exp.coinbase);
+      var ts = 1000 * exp.getBlock(exp.blockNumber).timestamp;
+      console.log("at block: " + exp.blockNumber + " (" + new Date(ts) + ")");
+      console.log(' datadir: ' + admin.datadir);
+    })();
+  `)
 	if modules, err := self.supportedApis(); err == nil {
 		loadedModules := make([]string, 0)
 		for api, version := range modules {
 			loadedModules = append(loadedModules, fmt.Sprintf("%s:%s", api, version))
 		}
 		sort.Strings(loadedModules)
-		fmt.Println("modules:", strings.Join(loadedModules, " "))
 	}
 }
 
@@ -273,7 +158,7 @@ func (self *jsre) supportedApis() (map[string]string, error) {
 	return self.client.SupportedModules()
 }
 
-func (js *jsre) apiBindings(f xeth.Frontend) error {
+func (js *jsre) apiBindings() error {
 	apis, err := js.supportedApis()
 	if err != nil {
 		return err
@@ -284,67 +169,88 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		apiNames = append(apiNames, a)
 	}
 
-	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.expanse)
-	if err != nil {
-		utils.Fatalf("Unable to determine supported api's: %v", err)
-	}
-
-	jeth := rpc.NewJeth(api.Merge(apiImpl...), js.re, js.client, f)
+	jeth := utils.NewJeth(js.re, js.client)
 	js.re.Set("jeth", struct{}{})
 	t, _ := js.re.Get("jeth")
 	jethObj := t.Object()
 
-	jethObj.Set("send", jeth.Send)
-	jethObj.Set("sendAsync", jeth.Send)
+	jethObj.Set("send", jexp.Send)
+	jethObj.Set("sendAsync", jexp.Send)
 
 	err = js.re.Compile("bignumber.js", re.BigNumber_JS)
 	if err != nil {
 		utils.Fatalf("Error loading bignumber.js: %v", err)
 	}
 
-	err = js.re.Compile("expanse.js", re.Web3_JS)
+	err = js.re.Compile("web3.js", re.Web3_JS)
 	if err != nil {
 		utils.Fatalf("Error loading web3.js: %v", err)
 	}
 
-	_, err = js.re.Run("var web3 = require('web3');")
+	_, err = js.re.Run("var Web3 = require('web3');")
 	if err != nil {
 		utils.Fatalf("Error requiring web3: %v", err)
 	}
 
-	_, err = js.re.Run("web3.setProvider(jeth)")
+	_, err = js.re.Run("var web3 = new Web3(jeth);")
 	if err != nil {
 		utils.Fatalf("Error setting web3 provider: %v", err)
 	}
 
 	// load only supported API's in javascript runtime
-	shortcuts := "var exp = web3.exp; "
+	shortcuts := "var exp = web3.exp; var personal = web3.personal; "
 	for _, apiName := range apiNames {
-		if apiName == shared.Web3ApiName {
-			continue // manually mapped
+		if apiName == "web3" || apiName == "rpc" {
+			continue // manually mapped or ignore
 		}
 
-		if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), api.Javascript(apiName)); err == nil {
-			shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
-		} else {
-			utils.Fatalf("Error loading %s.js: %v", apiName, err)
+		if jsFile, ok := web3ext.Modules[apiName]; ok {
+			if err = js.re.Compile(fmt.Sprintf("%s.js", apiName), jsFile); err == nil {
+				shortcuts += fmt.Sprintf("var %s = web3.%s; ", apiName, apiName)
+			} else {
+				utils.Fatalf("Error loading %s.js: %v", apiName, err)
+			}
 		}
 	}
 
 	_, err = js.re.Run(shortcuts)
-
 	if err != nil {
 		utils.Fatalf("Error setting namespaces: %v", err)
 	}
 
+	js.re.Run(`var GlobalRegistrar = exp.contract(` + registrar.GlobalRegistrarAbi + `);   registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
 
-	js.re.Run(`var GlobalRegistrar = exp.contract(` + registrar.GlobalRegistrarAbi + `);	 registrar = GlobalRegistrar.at("` + registrar.GlobalRegistrarAddr + `");`)
+	// overrule some of the methods that require password as input and ask for it interactively
+	p, err := js.re.Get("personal")
+	if err != nil {
+		fmt.Println("Unable to overrule sensitive methods in personal module")
+		return nil
+	}
+
+	// Override the unlockAccount and newAccount methods on the personal object since these require user interaction.
+	// Assign the jexp.unlockAccount and jexp.newAccount in the jsre the original web3 callbacks. These will be called
+	// by the jexp.* methods after they got the password from the user and send the original web3 request to the backend.
+	if persObj := p.Object(); persObj != nil { // make sure the personal api is enabled over the interface
+		js.re.Run(`jexp.unlockAccount = personal.unlockAccount;`)
+		persObj.Set("unlockAccount", jexp.UnlockAccount)
+		js.re.Run(`jexp.newAccount = personal.newAccount;`)
+		persObj.Set("newAccount", jexp.NewAccount)
+	}
+
+	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
+	// Bind these if the admin module is available.
+	if a, err := js.re.Get("admin"); err == nil {
+		if adminObj := a.Object(); adminObj != nil {
+			adminObj.Set("sleepBlocks", jexp.SleepBlocks)
+			adminObj.Set("sleep", jexp.Sleep)
+		}
+	}
 
 	return nil
 }
 
 func (self *jsre) AskPassword() (string, bool) {
-	pass, err := self.PasswordPrompt("Passphrase: ")
+	pass, err := utils.Stdin.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		return "", false
 	}
@@ -352,25 +258,34 @@ func (self *jsre) AskPassword() (string, bool) {
 }
 
 func (self *jsre) ConfirmTransaction(tx string) bool {
-
-	if self.expanse.NatSpec {
-		notice := natspec.GetNotice(self.xeth, tx, self.expanse.HTTPClient())
-		fmt.Println(notice)
-		answer, _ := self.Prompt("Confirm Transaction [y/n]")
-		return strings.HasPrefix(strings.Trim(answer, " "), "y")
-	} else {
-		return true
+	// Retrieve the Expanse instance from the node
+	var expanse *exp.Expanse
+	if err := self.stack.Service(&expanse); err != nil {
+		return false
 	}
+	// If natspec is enabled, ask for permission
+	if expanse.NatSpec && false /* disabled for now */ {
+		//		notice := natspec.GetNotice(self.xeth, tx, expanse.HTTPClient())
+		//		fmt.Println(notice)
+		//		answer, _ := self.Prompt("Confirm Transaction [y/n]")
+		//		return strings.HasPrefix(strings.Trim(answer, " "), "y")
+	}
+	return true
 }
 
 func (self *jsre) UnlockAccount(addr []byte) bool {
 	fmt.Printf("Please unlock account %x.\n", addr)
-	pass, err := self.PasswordPrompt("Passphrase: ")
+	pass, err := utils.Stdin.PasswordPrompt("Passphrase: ")
 	if err != nil {
 		return false
 	}
 	// TODO: allow retry
-	if err := self.expanse.AccountManager().Unlock(common.BytesToAddress(addr), pass); err != nil {
+	var expanse *exp.Expanse
+	if err := self.stack.Service(&expanse); err != nil {
+		return false
+	}
+	a := accounts.Account{Address: common.BytesToAddress(addr)}
+	if err := expanse.AccountManager().Unlock(a, pass); err != nil {
 		return false
 	} else {
 		fmt.Println("Account is now unlocked for this session.")
@@ -378,13 +293,28 @@ func (self *jsre) UnlockAccount(addr []byte) bool {
 	}
 }
 
-func (self *jsre) exec(filename string) error {
-	if err := self.re.Exec(filename); err != nil {
-		self.re.Stop(false)
-		return fmt.Errorf("Javascript Error: %v", err)
+// preloadJSFiles loads JS files that the user has specified with ctx.PreLoadJSFlag into
+// the JSRE. If not all files could be loaded it will return an error describing the error.
+func (self *jsre) preloadJSFiles(ctx *cli.Context) error {
+	if ctx.GlobalString(utils.PreLoadJSFlag.Name) != "" {
+		assetPath := ctx.GlobalString(utils.JSpathFlag.Name)
+		jsFiles := strings.Split(ctx.GlobalString(utils.PreLoadJSFlag.Name), ",")
+		for _, file := range jsFiles {
+			filename := common.AbsolutePath(assetPath, strings.TrimSpace(file))
+			if err := self.re.Exec(filename); err != nil {
+				return fmt.Errorf("%s: %v", file, jsErrorString(err))
+			}
+		}
 	}
-	self.re.Stop(true)
 	return nil
+}
+
+// jsErrorString adds a backtrace to errors generated by otto.
+func jsErrorString(err error) string {
+	if ottoErr, ok := err.(*otto.Error); ok {
+		return ottoErr.String()
+	}
+	return err.Error()
 }
 
 func (self *jsre) interactive() {
@@ -394,7 +324,7 @@ func (self *jsre) interactive() {
 	go func() {
 		defer close(inputln)
 		for {
-			line, err := self.Prompt(<-prompt)
+			line, err := utils.Stdin.Prompt(<-prompt)
 			if err != nil {
 				if err == liner.ErrPromptAborted { // ctrl-C
 					self.resetPrompt()
@@ -433,7 +363,7 @@ func (self *jsre) interactive() {
 			self.setIndent()
 			if indentCount <= 0 {
 				if mustLogInHistory(str) {
-					self.AppendHistory(str[:len(str)-1])
+					utils.Stdin.AppendHistory(str[:len(str)-1])
 				}
 				self.parseInput(str)
 				str = ""

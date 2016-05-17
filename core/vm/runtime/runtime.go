@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,9 +27,15 @@ import (
 	"github.com/expanse-project/go-expanse/ethdb"
 )
 
-// Config is a basic type specifing certain configuration flags for running
+// The default, always homestead, rule set for the vm env
+type ruleSet struct{}
+
+func (ruleSet) IsHomestead(*big.Int) bool { return true }
+
+// Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
+	RuleSet     vm.RuleSet
 	Difficulty  *big.Int
 	Origin      common.Address
 	Coinbase    common.Address
@@ -41,11 +47,16 @@ type Config struct {
 	DisableJit  bool // "disable" so it's enabled by default
 	Debug       bool
 
+	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
 }
 
 // sets defaults on the config
 func setDefaults(cfg *Config) {
+	if cfg.RuleSet == nil {
+		cfg.RuleSet = ruleSet{}
+	}
+
 	if cfg.Difficulty == nil {
 		cfg.Difficulty = new(big.Int)
 	}
@@ -66,7 +77,7 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.GetHashFn == nil {
 		cfg.GetHashFn = func(n uint64) common.Hash {
-			return common.BytesToHash(crypto.Sha3([]byte(new(big.Int).SetUint64(n).String())))
+			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
 		}
 	}
 }
@@ -83,23 +94,14 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	}
 	setDefaults(cfg)
 
-	// defer the call to setting back the original values
-	defer func(debug, forceJit, enableJit bool) {
-		vm.Debug = debug
-		vm.ForceJit = forceJit
-		vm.EnableJit = enableJit
-	}(vm.Debug, vm.ForceJit, vm.EnableJit)
-
-	vm.ForceJit = !cfg.DisableJit
-	vm.EnableJit = !cfg.DisableJit
-	vm.Debug = cfg.Debug
-
+	if cfg.State == nil {
+		db, _ := ethdb.NewMemDatabase()
+		cfg.State, _ = state.New(common.Hash{}, db)
+	}
 	var (
-		db, _      = ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, db)
-		vmenv      = NewEnv(cfg, statedb)
-		sender     = statedb.CreateAccount(cfg.Origin)
-		receiver   = statedb.CreateAccount(common.StringToAddress("contract"))
+		vmenv    = NewEnv(cfg, cfg.State)
+		sender   = cfg.State.CreateAccount(cfg.Origin)
+		receiver = cfg.State.CreateAccount(common.StringToAddress("contract"))
 	)
 	// set the receiver's (the executing contract) code for execution.
 	receiver.SetCode(code)
@@ -114,8 +116,29 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		cfg.Value,
 	)
 
-	if cfg.Debug {
-		vm.StdErrFormat(vmenv.StructLogs())
-	}
-	return ret, statedb, err
+	return ret, cfg.State, err
+}
+
+// Call executes the code given by the contract's address. It will return the
+// EVM's return value or an error if it failed.
+//
+// Call, unlike Execute, requires a config and also requires the State field to
+// be set.
+func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
+	setDefaults(cfg)
+
+	vmenv := NewEnv(cfg, cfg.State)
+
+	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
+	// Call the code with the given configuration.
+	ret, err := vmenv.Call(
+		sender,
+		address,
+		input,
+		cfg.GasLimit,
+		cfg.GasPrice,
+		cfg.Value,
+	)
+
+	return ret, err
 }

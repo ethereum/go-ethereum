@@ -251,8 +251,8 @@ func (p *peer) setIdle(started time.Time, delivered int, throughput *float64, id
 	// Irrelevant of the scaling, make sure the peer ends up idle
 	defer atomic.StoreInt32(idle, 0)
 
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	// If nothing was delivered (hard timeout / unavailable data), reduce throughput to minimum
 	if delivered == 0 {

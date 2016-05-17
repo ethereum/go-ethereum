@@ -39,14 +39,14 @@ type txpoolhandler func(*txPoolApi, *shared.Request) (interface{}, error)
 
 // txpool api provider
 type txPoolApi struct {
-	xeth     *xeth.XEth
+	xeth     *xexp.XEth
 	expanse *exp.Expanse
 	methods  map[string]txpoolhandler
 	codec    codec.ApiCoder
 }
 
 // create a new txpool api instance
-func NewTxPoolApi(xeth *xeth.XEth, exp *exp.Expanse, coder codec.Codec) *txPoolApi {
+func NewTxPoolApi(xeth *xexp.XEth, exp *exp.Expanse, coder codec.Codec) *txPoolApi {
 	return &txPoolApi{
 		xeth:     xeth,
 		expanse: exp,

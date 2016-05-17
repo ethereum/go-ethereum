@@ -184,7 +184,7 @@ static bool ethash_hash(
 		return false;
 	}
 
-	// pack hash and nonce together into first 40 bytes of s_mix
+	// pack hash and nonce togexper into first 40 bytes of s_mix
 	assert(sizeof(node) * 8 == 512);
 	node s_mix[MIX_NODES + 1];
 	memcpy(s_mix[0].bytes, &header_hash, 32);

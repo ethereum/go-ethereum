@@ -107,15 +107,15 @@ func New(expanse *exp.Expanse, frontend Frontend) *XEth {
 		gpo:              exp.NewGasPriceOracle(expanse),
 	}
 	if expanse.Whisper() != nil {
-		xeth.whisper = NewWhisper(expanse.Whisper())
+		xexp.whisper = NewWhisper(expanse.Whisper())
 	}
-	expanse.Miner().Register(xeth.agent)
+	expanse.Miner().Register(xexp.agent)
 	if frontend == nil {
-		xeth.frontend = dummyFrontend{}
+		xexp.frontend = dummyFrontend{}
 	}
-	state, _ := xeth.backend.BlockChain().State()
-	xeth.state = NewState(xeth, state)
-	go xeth.start()
+	state, _ := xexp.backend.BlockChain().State()
+	xexp.state = NewState(xeth, state)
+	go xexp.start()
 	return xeth
 }
 
@@ -232,7 +232,7 @@ func (self *XEth) WithState(statedb *state.StateDB) *XEth {
 		gpo:      self.gpo,
 	}
 
-	xeth.state = NewState(xeth, statedb)
+	xexp.state = NewState(xeth, statedb)
 	return xeth
 }
 

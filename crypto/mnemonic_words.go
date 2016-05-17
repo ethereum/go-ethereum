@@ -161,7 +161,7 @@ var MnemonicWords []string = []string{
 	"door",
 	"put",
 	"black",
-	"together",
+	"togexper",
 	"upon",
 	"happy",
 	"such",

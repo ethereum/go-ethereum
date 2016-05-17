@@ -18,8 +18,11 @@
 package jsre
 
 import (
+	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -70,6 +73,18 @@ func New(assetPath string) *JSRE {
 	return re
 }
 
+// randomSource returns a pseudo random value generator.
+func randomSource() *rand.Rand {
+	bytes := make([]byte, 8)
+	seed := time.Now().UnixNano()
+	if _, err := crand.Read(bytes); err == nil {
+		seed = int64(binary.LittleEndian.Uint64(bytes))
+	}
+
+	src := rand.NewSource(seed)
+	return rand.New(src)
+}
+
 // This function runs the main event loop from a goroutine that is started
 // when JSRE is created. Use Stop() before exiting to properly stop it.
 // The event loop processes vm access requests from the evalQueue in a
@@ -81,11 +96,13 @@ func New(assetPath string) *JSRE {
 // called from JS through an RPC call.
 func (self *JSRE) runEventLoop() {
 	vm := otto.New()
+	r := randomSource()
+	vm.SetRandomSource(r.Float64)
+
 	registry := map[*jsTimer]*jsTimer{}
 	ready := make(chan *jsTimer)
 
 	newTimer := func(call otto.FunctionCall, interval bool) (*jsTimer, otto.Value) {
-
 		delay, _ := call.Argument(1).ToInteger()
 		if 0 >= delay {
 			delay = 1
@@ -105,7 +122,6 @@ func (self *JSRE) runEventLoop() {
 		if err != nil {
 			panic(err)
 		}
-
 		return timer, value
 	}
 
@@ -127,8 +143,20 @@ func (self *JSRE) runEventLoop() {
 		}
 		return otto.UndefinedValue()
 	}
-	vm.Set("setTimeout", setTimeout)
-	vm.Set("setInterval", setInterval)
+	vm.Set("_setTimeout", setTimeout)
+	vm.Set("_setInterval", setInterval)
+	vm.Run(`var setTimeout = function(args) {
+		if (arguments.length < 1) {
+			throw TypeError("Failed to execute 'setTimeout': 1 argument required, but only 0 present.");
+		}
+		return _setTimeout.apply(this, arguments);
+	}`)
+	vm.Run(`var setInterval = function(args) {
+		if (arguments.length < 1) {
+			throw TypeError("Failed to execute 'setInterval': 1 argument required, but only 0 present.");
+		}
+		return _setInterval.apply(this, arguments);
+	}`)
 	vm.Set("clearTimeout", clearTimeout)
 	vm.Set("clearInterval", clearTimeout)
 
@@ -154,7 +182,7 @@ loop:
 			if err != nil {
 				fmt.Println("js error:", err, arguments)
 			}
-		
+
 			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
 			if timer.interval && inreg {
 				timer.timer.Reset(timer.duration)
@@ -186,8 +214,8 @@ loop:
 	self.loopWg.Done()
 }
 
-// do schedules the given function on the event loop.
-func (self *JSRE) do(fn func(*otto.Otto)) {
+// Do executes the given function on the JS event loop.
+func (self *JSRE) Do(fn func(*otto.Otto)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
 	self.evalQueue <- req
@@ -207,7 +235,14 @@ func (self *JSRE) Exec(file string) error {
 	if err != nil {
 		return err
 	}
-	self.do(func(vm *otto.Otto) { _, err = vm.Run(code) })
+	var script *otto.Script
+	self.Do(func(vm *otto.Otto) {
+		script, err = vm.Compile(file, code)
+		if err != nil {
+			return
+		}
+		_, err = vm.Run(script)
+	})
 	return err
 }
 
@@ -219,19 +254,19 @@ func (self *JSRE) Bind(name string, v interface{}) error {
 
 // Run runs a piece of JS code.
 func (self *JSRE) Run(code string) (v otto.Value, err error) {
-	self.do(func(vm *otto.Otto) { v, err = vm.Run(code) })
+	self.Do(func(vm *otto.Otto) { v, err = vm.Run(code) })
 	return v, err
 }
 
 // Get returns the value of a variable in the JS environment.
 func (self *JSRE) Get(ns string) (v otto.Value, err error) {
-	self.do(func(vm *otto.Otto) { v, err = vm.Get(ns) })
+	self.Do(func(vm *otto.Otto) { v, err = vm.Get(ns) })
 	return v, err
 }
 
 // Set assigns value v to a variable in the JS environment.
 func (self *JSRE) Set(ns string, v interface{}) (err error) {
-	self.do(func(vm *otto.Otto) { err = vm.Set(ns, v) })
+	self.Do(func(vm *otto.Otto) { err = vm.Set(ns, v) })
 	return err
 }
 
@@ -260,7 +295,7 @@ func (self *JSRE) loadScript(call otto.FunctionCall) otto.Value {
 // EvalAndPrettyPrint evaluates code and pretty prints the result to
 // standard output.
 func (self *JSRE) EvalAndPrettyPrint(code string) (err error) {
-	self.do(func(vm *otto.Otto) {
+	self.Do(func(vm *otto.Otto) {
 		var val otto.Value
 		val, err = vm.Run(code)
 		if err != nil {
@@ -274,7 +309,7 @@ func (self *JSRE) EvalAndPrettyPrint(code string) (err error) {
 
 // Compile compiles and then runs a piece of JS code.
 func (self *JSRE) Compile(filename string, src interface{}) (err error) {
-	self.do(func(vm *otto.Otto) { _, err = compileAndRun(vm, filename, src) })
+	self.Do(func(vm *otto.Otto) { _, err = compileAndRun(vm, filename, src) })
 	return err
 }
 

@@ -154,7 +154,7 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, exp *exp.Expanse) ([]shared.ExpanseApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xexp.XEth, exp *exp.Expanse) ([]shared.ExpanseApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}

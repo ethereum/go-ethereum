@@ -32,32 +32,28 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/compiler"
 	"github.com/expanse-project/go-expanse/common/httpclient"
-	"github.com/expanse-project/go-expanse/common/natspec"
-	"github.com/expanse-project/go-expanse/common/registrar"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/rpc/codec"
-	"github.com/expanse-project/go-expanse/rpc/comms"
+	"github.com/expanse-project/go-expanse/node"
 
 )
 
 const (
 	testSolcPath = ""
 	solcVersion  = "0.9.23"
-
-	testKey     = "e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674"
-	testAddress = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-	testBalance = "10000000000000000000"
+	testAddress  = "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
+	testBalance  = "10000000000000000000"
 	// of empty string
 	testHash = "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
 )
 
 var (
-	versionRE   = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
-	testNodeKey = crypto.ToECDSA(common.Hex2Bytes("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f"))
-	testGenesis = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
+	versionRE      = regexp.MustCompile(strconv.Quote(`"compilerVersion":"` + solcVersion + `"`))
+	testNodeKey, _ = crypto.HexToECDSA("4b50fa71f5c3eeb8fdc452224b2395af2fcc3d125e06c32c82e048c0559db03f")
+	testAccount, _ = crypto.HexToECDSA("e6fab74a43941f82d89cb7faa408e227cdad3153c4720e540e855c19b15e6674")
+	testGenesis    = `{"` + testAddress[2:] + `": {"balance": "` + testBalance + `"}}`
 )
 
 type testjethre struct {
@@ -66,85 +62,86 @@ type testjethre struct {
 	client      *httpclient.HTTPClient
 }
 
-func (self *testjethre) UnlockAccount(acc []byte) bool {
-	err := self.expanse.AccountManager().Unlock(common.BytesToAddress(acc), "")
-	if err != nil {
-		panic("unable to unlock")
-	}
-	return true
-}
+// Temporary disabled while natspec hasn't been migrated
+//func (self *testjethre) ConfirmTransaction(tx string) bool {
+//	var expanse *exp.Expanse
+//	self.stack.Service(&expanse)
+//
+//	if expanse.NatSpec {
+//		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
+//	}
+//	return true
+//}
 
-func (self *testjethre) ConfirmTransaction(tx string) bool {
-	if self.expanse.NatSpec {
-		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
-	}
-	return true
-}
-
-func testJEthRE(t *testing.T) (string, *testjethre, *exp.Expanse) {
+func testJEthRE(t *testing.T) (string, *testjethre, *node.Node) {
 	return testREPL(t, nil)
 }
 
-func testREPL(t *testing.T, config func(*exp.Config)) (string, *testjethre, *exp.Expanse) {
+func testREPL(t *testing.T, config func(*exp.Config)) (string, *testjethre, *node.Node) {
 	tmp, err := ioutil.TempDir("", "gexp-test")
+
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	// Create a networkless protocol stack
+	stack, err := node.New(&node.Config{DataDir: tmp, PrivateKey: testNodeKey, Name: "test", NoDiscovery: true})
+	if err != nil {
+		t.Fatalf("failed to create node: %v", err)
+	}
+	// Initialize and register the Expanse protocol
+	accman := accounts.NewPlaintextManager(filepath.Join(tmp, "keystore"))
 	db, _ := ethdb.NewMemDatabase()
+	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{
+		Address: common.HexToAddress(testAddress),
+		Balance: common.String2Big(testBalance),
+	})
+	ethConf := &exp.Config{
+		ChainConfig:      &core.ChainConfig{HomesteadBlock: new(big.Int)},
+		TestGenesisState: db,
+		AccountManager:   accman,
+		DocRoot:          "/",
+		SolcPath:         testSolcPath,
+		PowTest:          true,
 
-	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
-	ks := crypto.NewKeyStorePlain(filepath.Join(tmp, "keystore"))
-	am := accounts.NewManager(ks)
-	conf := &exp.Config{
-		NodeKey:        testNodeKey,
-		DataDir:        tmp,
-		AccountManager: am,
-		MaxPeers:       0,
-		Name:           "test",
-		DocRoot:        "/",
-		SolcPath:       testSolcPath,
-		PowTest:        true,
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
 	}
 	if config != nil {
-		config(conf)
-	}
-	expanse, err := exp.New(conf)
-	if err != nil {
-		t.Fatal("%v", err)
+		config(ethConf)
 	}
 
-	keyb, err := crypto.HexToECDSA(testKey)
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return exp.New(ctx, ethConf)
+	}); err != nil {
+		t.Fatalf("failed to register expanse protocol: %v", err)
+	}
+	// Initialize all the keys for testing
+	a, err := accman.ImportECDSA(testAccount, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := crypto.NewKeyFromECDSA(keyb)
-	err = ks.StoreKey(key, "")
-	if err != nil {
+	if err := accman.Unlock(a, ""); err != nil {
 		t.Fatal(err)
 	}
-
-	err = am.Unlock(key.Address, "")
-	if err != nil {
-		t.Fatal(err)
+	// Start the node and assemble the REPL tester
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start test stack: %v", err)
 	}
+	var expanse *exp.Expanse
+	stack.Service(&expanse)
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "expanse", "go-expanse", "cmd", "mist", "assets", "ext")
-	client := comms.NewInProcClient(codec.JSON)
-
+	client, err := stack.Attach()
+	if err != nil {
+		t.Fatalf("failed to attach to node: %v", err)
+	}
 	tf := &testjethre{client: expanse.HTTPClient()}
-	repl := newJSRE(expanse, assetPath, "", client, false, tf)
+	repl := newJSRE(stack, assetPath, "", client, false)
 	tf.jsre = repl
-	return tmp, tf, expanse
+	return tmp, tf, stack
 }
 
 func TestNodeInfo(t *testing.T) {
 	t.Skip("broken after p2p update")
 	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Fatalf("error starting expanse: %v", err)
-	}
 	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
@@ -153,16 +150,13 @@ func TestNodeInfo(t *testing.T) {
 }
 
 func TestAccounts(t *testing.T) {
-	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Fatalf("error starting expanse: %v", err)
-	}
-	defer expanse.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `exp.accounts`, `["`+testAddress+`"]`)
 	checkEvalJSON(t, repl, `exp.coinbase`, `"`+testAddress+`"`)
-	val, err := repl.re.Run(`personal.newAccount("password")`)
+	val, err := repl.re.Run(`jexp.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -176,11 +170,8 @@ func TestAccounts(t *testing.T) {
 }
 
 func TestBlockChain(t *testing.T) {
-	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Fatalf("error starting expanse: %v", err)
-	}
-	defer expanse.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 	// get current block dump before export/import.
 	val, err := repl.re.Run("JSON.stringify(debug.dumpBlock(exp.blockNumber))")
@@ -198,6 +189,8 @@ func TestBlockChain(t *testing.T) {
 	tmpfile := filepath.Join(extmp, "export.chain")
 	tmpfileq := strconv.Quote(tmpfile)
 
+	var expanse *exp.Expanse
+	node.Service(&expanse)
 	expanse.BlockChain().Reset()
 
 	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
@@ -211,22 +204,15 @@ func TestBlockChain(t *testing.T) {
 }
 
 func TestMining(t *testing.T) {
-	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Fatalf("error starting expanse: %v", err)
-	}
-	defer expanse.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 	checkEvalJSON(t, repl, `exp.mining`, `false`)
 }
 
 func TestRPC(t *testing.T) {
-	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Errorf("error starting expanse: %v", err)
-		return
-	}
-	defer expanse.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004, "*", "web3,exp,net")`, `true`)
@@ -236,12 +222,8 @@ func TestCheckTestAccountBalance(t *testing.T) {
 	t.Skip() // i don't think it tests the correct behaviour here. it's actually testing
 	// internals which shouldn't be tested. This now fails because of a change in the core
 	// and i have no means to fix this, sorry - @obscuren
-	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Errorf("error starting expanse: %v", err)
-		return
-	}
-	defer expanse.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	repl.re.Run(`primary = "` + testAddress + `"`)
@@ -249,12 +231,8 @@ func TestCheckTestAccountBalance(t *testing.T) {
 }
 
 func TestSignature(t *testing.T) {
-	tmp, repl, expanse := testJEthRE(t)
-	if err := expanse.Start(); err != nil {
-		t.Errorf("error starting expanse: %v", err)
-		return
-	}
-	defer expanse.Stop()
+	tmp, repl, node := testJEthRE(t)
+	defer node.Stop()
 	defer os.RemoveAll(tmp)
 
 	val, err := repl.re.Run(`exp.sign("` + testAddress + `", "` + testHash + `")`)
@@ -288,19 +266,20 @@ func TestContract(t *testing.T) {
 	defer expanse.Stop()
 	defer os.RemoveAll(tmp)
 
-	reg := registrar.New(repl.xeth)
-	_, err := reg.SetGlobalRegistrar("", coinbase)
-	if err != nil {
-		t.Errorf("error setting HashReg: %v", err)
-	}
-	_, err = reg.SetHashReg("", coinbase)
-	if err != nil {
-		t.Errorf("error setting HashReg: %v", err)
-	}
-	_, err = reg.SetUrlHint("", coinbase)
-	if err != nil {
-		t.Errorf("error setting HashReg: %v", err)
-	}
+	// Temporary disabled while registrar isn't migrated
+	//reg := registrar.New(repl.xeth)
+	//_, err := reg.SetGlobalRegistrar("", coinbase)
+	//if err != nil {
+	//	t.Errorf("error setting HashReg: %v", err)
+	//}
+	//_, err = reg.SetHashReg("", coinbase)
+	//if err != nil {
+	//	t.Errorf("error setting HashReg: %v", err)
+	//}
+	//_, err = reg.SetUrlHint("", coinbase)
+	//if err != nil {
+	//	t.Errorf("error setting HashReg: %v", err)
+	//}
 	/* TODO:
 	* lookup receipt and contract addresses by tx hash
 	* name registration for HashReg and UrlHint addresses
@@ -406,7 +385,7 @@ multiply7 = Multiply7.at(contractaddress);
 	if sol != nil && solcVersion != sol.Version() {
 		modContractInfo := versionRE.ReplaceAll(contractInfo, []byte(`"compilerVersion":"`+sol.Version()+`"`))
 		fmt.Printf("modified contractinfo:\n%s\n", modContractInfo)
-		contentHash = `"` + common.ToHex(crypto.Sha3([]byte(modContractInfo))) + `"`
+		contentHash = `"` + common.ToHex(crypto.Keccak256([]byte(modContractInfo))) + `"`
 	}
 	if checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`) != nil {
 		return
@@ -445,7 +424,10 @@ multiply7 = Multiply7.at(contractaddress);
 }
 
 func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
-	txs := repl.expanse.TxPool().GetTransactions()
+	var expanse *exp.Expanse
+	repl.stack.Service(&expanse)
+
+	txs := expanse.TxPool().GetTransactions()
 	return int64(len(txs)), nil
 }
 
@@ -470,16 +452,19 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
 		return false
 	}
+	var expanse *exp.Expanse
+	repl.stack.Service(&expanse)
 
-	err = repl.expanse.StartMining(runtime.NumCPU(), "")
+	err = expanse.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false
 	}
-	defer repl.expanse.StopMining()
+	defer expanse.StopMining()
 
 	timer := time.NewTimer(100 * time.Second)
-	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	blockNr := expanse.BlockChain().CurrentBlock().Number()
+	height := new(big.Int).Add(blockNr, big.NewInt(1))
 	repl.wait <- height
 	select {
 	case <-timer.C:

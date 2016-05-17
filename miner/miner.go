@@ -51,8 +51,8 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(exp core.Backend, mux *event.TypeMux, pow pow.PoW) *Miner {
-	miner := &Miner{exp: exp, mux: mux, pow: pow, worker: newWorker(common.Address{}, exp), canStart: 1}
+func New(exp core.Backend, config *core.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
+	miner := &Miner{exp: exp, mux: mux, pow: pow, worker: newWorker(config, common.Address{}, exp), canStart: 1}
 	go miner.update()
 
 	return miner
@@ -164,12 +164,9 @@ func (self *Miner) SetExtra(extra []byte) error {
 	return nil
 }
 
-func (self *Miner) PendingState() *state.StateDB {
-	return self.worker.pendingState()
-}
-
-func (self *Miner) PendingBlock() *types.Block {
-	return self.worker.pendingBlock()
+// Pending returns the currently pending block and associated state.
+func (self *Miner) Pending() (*types.Block, *state.StateDB) {
+	return self.worker.pending()
 }
 
 func (self *Miner) SetEtherbase(addr common.Address) {

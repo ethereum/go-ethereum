@@ -28,7 +28,7 @@ import (
 	"github.com/expanse-project/go-expanse/rpc/shared"
 )
 
-// remoteFrontend implements xeth.Frontend and will communicate with an external
+// remoteFrontend implements xexp.Frontend and will communicate with an external
 // user agent over a connection
 type RemoteFrontend struct {
 	enabled bool

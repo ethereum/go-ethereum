@@ -41,14 +41,14 @@ type nethandler func(*netApi, *shared.Request) (interface{}, error)
 
 // net api provider
 type netApi struct {
-	xeth     *xeth.XEth
+	xeth     *xexp.XEth
 	expanse *exp.Expanse
 	methods  map[string]nethandler
 	codec    codec.ApiCoder
 }
 
 // create a new net api instance
-func NewNetApi(xeth *xeth.XEth, exp *exp.Expanse, coder codec.Codec) *netApi {
+func NewNetApi(xeth *xexp.XEth, exp *exp.Expanse, coder codec.Codec) *netApi {
 	return &netApi{
 		xeth:     xeth,
 		expanse: exp,
@@ -87,13 +87,13 @@ func (self *netApi) ApiVersion() string {
 
 // Number of connected peers
 func (self *netApi) PeerCount(req *shared.Request) (interface{}, error) {
-	return newHexNum(self.xeth.PeerCount()), nil
+	return newHexNum(self.xexp.PeerCount()), nil
 }
 
 func (self *netApi) IsListening(req *shared.Request) (interface{}, error) {
-	return self.xeth.IsListening(), nil
+	return self.xexp.IsListening(), nil
 }
 
 func (self *netApi) Version(req *shared.Request) (interface{}, error) {
-	return self.xeth.NetworkVersion(), nil
+	return self.xexp.NetworkVersion(), nil
 }

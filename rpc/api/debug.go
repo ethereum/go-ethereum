@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expanse-project/ethash"
+	"github.com/expanse-org/ethash"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/vm"
@@ -55,14 +55,14 @@ type debughandler func(*debugApi, *shared.Request) (interface{}, error)
 
 // admin api provider
 type debugApi struct {
-	xeth     *xeth.XEth
+	xeth     *xexp.XEth
 	expanse *exp.Expanse
 	methods  map[string]debughandler
 	codec    codec.ApiCoder
 }
 
 // create a new debug api instance
-func NewDebugApi(xeth *xeth.XEth, expanse *exp.Expanse, coder codec.Codec) *debugApi {
+func NewDebugApi(xeth *xexp.XEth, expanse *exp.Expanse, coder codec.Codec) *debugApi {
 	return &debugApi{
 		xeth:     xeth,
 		expanse: expanse,
@@ -105,7 +105,7 @@ func (self *debugApi) PrintBlock(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	block := self.xeth.EthBlockByNumber(args.BlockNumber)
+	block := self.xexp.EthBlockByNumber(args.BlockNumber)
 	return fmt.Sprintf("%s", block), nil
 }
 
@@ -115,7 +115,7 @@ func (self *debugApi) DumpBlock(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	block := self.xeth.EthBlockByNumber(args.BlockNumber)
+	block := self.xexp.EthBlockByNumber(args.BlockNumber)
 	if block == nil {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
@@ -134,7 +134,7 @@ func (self *debugApi) GetBlockRlp(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	block := self.xeth.EthBlockByNumber(args.BlockNumber)
+	block := self.xexp.EthBlockByNumber(args.BlockNumber)
 	if block == nil {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}
@@ -158,7 +158,7 @@ func (self *debugApi) ProcessBlock(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	block := self.xeth.EthBlockByNumber(args.BlockNumber)
+	block := self.xexp.EthBlockByNumber(args.BlockNumber)
 	if block == nil {
 		return nil, fmt.Errorf("block #%d not found", args.BlockNumber)
 	}

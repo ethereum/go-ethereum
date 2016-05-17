@@ -42,9 +42,9 @@ var (
 	EcrecoverGas           = big.NewInt(3000)   //
 	Sha256WordGas          = big.NewInt(12)     //
 
-	MinGasLimit     = big.NewInt(5000)    // Minimum the gas limit may ever be.
-
-	GenesisGasLimit = big.NewInt(31415926) // Gas limit of the Genesis block.
+	MinGasLimit     = big.NewInt(5000)                  // Minimum the gas limit may ever be.
+	GenesisGasLimit = big.NewInt(4712388)               // Gas limit of the Genesis block.
+	TargetGasLimit  = new(big.Int).Set(GenesisGasLimit) // The artificial target
 
 	Sha3Gas              = big.NewInt(30)     // Once per SHA3 operation.
 	Sha256Gas            = big.NewInt(60)     //

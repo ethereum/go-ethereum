@@ -45,14 +45,14 @@ type personalhandler func(*personalApi, *shared.Request) (interface{}, error)
 
 // net api provider
 type personalApi struct {
-	xeth     *xeth.XEth
+	xeth     *xexp.XEth
 	expanse *exp.Expanse
 	methods  map[string]personalhandler
 	codec    codec.ApiCoder
 }
 
 // create a new net api instance
-func NewPersonalApi(xeth *xeth.XEth, exp *exp.Expanse, coder codec.Codec) *personalApi {
+func NewPersonalApi(xeth *xexp.XEth, exp *exp.Expanse, coder codec.Codec) *personalApi {
 	return &personalApi{
 		xeth:     xeth,
 		expanse: exp,
@@ -90,7 +90,7 @@ func (self *personalApi) ApiVersion() string {
 }
 
 func (self *personalApi) ListAccounts(req *shared.Request) (interface{}, error) {
-	return self.xeth.Accounts(), nil
+	return self.xexp.Accounts(), nil
 }
 
 func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
@@ -100,7 +100,7 @@ func (self *personalApi) NewAccount(req *shared.Request) (interface{}, error) {
 	}
 	var passwd string
 	if args.Passphrase == nil {
-		fe := self.xeth.Frontend()
+		fe := self.xexp.Frontend()
 		if fe == nil {
 			return false, fmt.Errorf("unable to create account: unable to interact with user")
 		}
@@ -124,7 +124,7 @@ func (self *personalApi) UnlockAccount(req *shared.Request) (interface{}, error)
 	}
 
 	if args.Passphrase == nil {
-		fe := self.xeth.Frontend()
+		fe := self.xexp.Frontend()
 		if fe == nil {
 			return false, fmt.Errorf("No password provided")
 		}

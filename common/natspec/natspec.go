@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
+// +build ignore
+
 package natspec
 
 import (
@@ -44,7 +46,7 @@ type NatSpec struct {
 // the implementation is frontend friendly in that it always gives back
 // a notice that is safe to display
 // :FIXME: the second return value is an error, which can be used to fine-tune bahaviour
-func GetNotice(xeth *xeth.XEth, tx string, http *httpclient.HTTPClient) (notice string) {
+func GetNotice(xeth *xexp.XEth, tx string, http *httpclient.HTTPClient) (notice string) {
 	ns, err := New(xeth, tx, http)
 	if err != nil {
 		if ns == nil {
@@ -84,7 +86,7 @@ type contractInfo struct {
 	DeveloperDoc  json.RawMessage `json:"developerDoc"`
 }
 
-func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *NatSpec, err error) {
+func New(xeth *xexp.XEth, jsontx string, http *httpclient.HTTPClient) (self *NatSpec, err error) {
 
 	// extract contract address from tx
 	var tx jsonTx
@@ -105,16 +107,16 @@ func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *Nat
 }
 
 // also called by admin.contractInfo.get
-func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpclient.HTTPClient) (content []byte, err error) {
+func FetchDocsForContract(contractAddress string, xeth *xexp.XEth, client *httpclient.HTTPClient) (content []byte, err error) {
 	// retrieve contract hash from state
-	codehex := xeth.CodeAt(contractAddress)
-	codeb := xeth.CodeAtBytes(contractAddress)
+	codehex := xexp.CodeAt(contractAddress)
+	codeb := xexp.CodeAtBytes(contractAddress)
 
 	if codehex == "0x" {
 		err = fmt.Errorf("contract (%v) not found", contractAddress)
 		return
 	}
-	codehash := common.BytesToHash(crypto.Sha3(codeb))
+	codehash := common.BytesToHash(crypto.Keccak256(codeb))
 	// set up nameresolver with natspecreg + urlhint contract addresses
 	reg := registrar.New(xeth)
 
@@ -196,12 +198,12 @@ type userDoc struct {
 func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
 	for signature, m := range self.userDoc.Methods {
 		name := strings.Split(signature, "(")[0]
-		hash := []byte(common.Bytes2Hex(crypto.Sha3([]byte(signature))))
+		hash := []byte(common.Bytes2Hex(crypto.Keccak256([]byte(signature))))
 		var key [8]byte
 		copy(key[:], hash[:8])
 		if bytes.Equal(key[:], abiKey[:]) {
 			meth = m
-			meth.name = name
+			mexp.name = name
 			return
 		}
 	}
@@ -221,7 +223,7 @@ func (self *NatSpec) Notice() (notice string, err error) {
 		err = fmt.Errorf("abi key does not match any method")
 		return
 	}
-	notice, err = self.noticeForMethod(self.tx, meth.name, meth.Notice)
+	notice, err = self.noticeForMethod(self.tx, mexp.name, mexp.Notice)
 	return
 }
 

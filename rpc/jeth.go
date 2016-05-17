@@ -36,11 +36,11 @@ type Jeth struct {
 	ethApi shared.ExpanseApi
 	re     *jsre.JSRE
 	client comms.ExpanseClient
-	fe     xeth.Frontend
+	fe     xexp.Frontend
 }
 
 
-func NewJeth(ethApi shared.ExpanseApi, re *jsre.JSRE, client comms.ExpanseClient, fe xeth.Frontend) *Jeth {
+func NewJeth(ethApi shared.ExpanseApi, re *jsre.JSRE, client comms.ExpanseClient, fe xexp.Frontend) *Jeth {
 	return &Jeth{ethApi, re, client, fe}
 }
 
@@ -133,7 +133,7 @@ func (self *Jeth) Send(call otto.FunctionCall) (response otto.Value) {
 }
 
 // handleRequest will handle user agent requests by interacting with the user and sending
-// the user response back to the geth service
+// the user response back to the gexp service
 func (self *Jeth) handleRequest(req *shared.Request) bool {
 	var err error
 	var args []interface{}

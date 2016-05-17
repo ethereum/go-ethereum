@@ -22,6 +22,7 @@ import (
 	"math"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/expanse-project/go-expanse/common"
@@ -58,7 +59,7 @@ type blockFetcherFn func([]common.Hash) error
 type ProtocolManager struct {
 	networkId int
 
-	fastSync   bool
+	fastSync   uint32
 	txpool     txPool
 	blockchain *core.BlockChain
 	chaindb    ethdb.Database
@@ -74,36 +75,39 @@ type ProtocolManager struct {
 	minedBlockSub event.Subscription
 
 	// channels for fetcher, syncer, txsyncLoop
-	newPeerCh chan *peer
-	txsyncCh  chan *txsync
-	quitSync  chan struct{}
+	newPeerCh   chan *peer
+	txsyncCh    chan *txsync
+	quitSync    chan struct{}
+	noMorePeers chan struct{}
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
-	wg   sync.WaitGroup
-	quit bool
+	wg sync.WaitGroup
 }
 
-// NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
-// with the ethereum network.
-func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+// NewProtocolManager returns a new expanse sub protocol manager. The Expanse sub protocol manages peers capable
+// with the expanse network.
+func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+	// Create the protocol manager with the base fields
+	manager := &ProtocolManager{
+		networkId:   networkId,
+		eventMux:    mux,
+		txpool:      txpool,
+		blockchain:  blockchain,
+		chaindb:     chaindb,
+		peers:       newPeerSet(),
+		newPeerCh:   make(chan *peer),
+		noMorePeers: make(chan struct{}),
+		txsyncCh:    make(chan *txsync),
+		quitSync:    make(chan struct{}),
+	}
 	// Figure out whether to allow fast sync or not
 	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
 		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
 		fastSync = false
 	}
-	// Create the protocol manager with the base fields
-	manager := &ProtocolManager{
-		networkId:  networkId,
-		fastSync:   fastSync,
-		eventMux:   mux,
-		txpool:     txpool,
-		blockchain: blockchain,
-		chaindb:    chaindb,
-		peers:      newPeerSet(),
-		newPeerCh:  make(chan *peer, 1),
-		txsyncCh:   make(chan *txsync),
-		quitSync:   make(chan struct{}),
+	if fastSync {
+		manager.fastSync = uint32(1)
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 
@@ -122,8 +126,14 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 			Length:  ProtocolLengths[i],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 				peer := manager.newPeer(int(version), p, rw)
-				manager.newPeerCh <- peer
-				return manager.handle(peer)
+				select {
+				case manager.newPeerCh <- peer:
+					manager.wg.Add(1)
+					defer manager.wg.Done()
+					return manager.handle(peer)
+				case <-manager.quitSync:
+					return p2p.DiscQuitting
+				}
 			},
 			NodeInfo: func() interface{} {
 				return manager.NodeInfo()
@@ -146,7 +156,7 @@ func NewProtocolManager(fastSync bool, networkId int, mux *event.TypeMux, txpool
 		manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
-		return core.ValidateHeader(pow, block.Header(), parent.Header(), true, false)
+		return core.ValidateHeader(config, pow, block.Header(), parent.Header(), true, false)
 	}
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
@@ -189,16 +199,25 @@ func (pm *ProtocolManager) Start() {
 }
 
 func (pm *ProtocolManager) Stop() {
-	// Showing a log message. During download / process this could actually
-	// take between 5 to 10 seconds and therefor feedback is required.
 	glog.V(logger.Info).Infoln("Stopping expanse protocol handler...")
 
-	pm.quit = true
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
-	close(pm.quitSync)             // quits syncer, fetcher, txsyncLoop
 
-	// Wait for any process action
+	// Quit the sync loop.
+	// After this send has completed, no new peers will be accepted.
+	pm.noMorePeers <- struct{}{}
+
+	// Quit fetcher, txsyncLoop.
+	close(pm.quitSync)
+
+	// Disconnect existing sessions.
+	// This also closes the gate for any new registrations on the peer set.
+	// sessions which are already established but not added to pm.peers yet
+	// will exit when they try to register.
+	pm.peers.Close()
+
+	// Wait for all peer handler goroutines and the loops to come down.
 	pm.wg.Wait()
 
 	glog.V(logger.Info).Infoln("Expanse protocol handler stopped")
@@ -247,7 +266,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			return err
 		}
 	}
-	return nil
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote
@@ -375,6 +393,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&query); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
+		hashMode := query.Origin.Hash != (common.Hash{})
+
 		// Gather headers until the fetch or network limits is reached
 		var (
 			bytes   common.StorageSize
@@ -384,7 +404,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		for !unknown && len(headers) < int(query.Amount) && bytes < softResponseLimit && len(headers) < downloader.MaxHeaderFetch {
 			// Retrieve the next header satisfying the query
 			var origin *types.Header
-			if query.Origin.Hash != (common.Hash{}) {
+			if hashMode {
 				origin = pm.blockchain.GetHeader(query.Origin.Hash)
 			} else {
 				origin = pm.blockchain.GetHeaderByNumber(query.Origin.Number)
@@ -590,7 +610,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == NewBlockHashesMsg:
-		// Retrieve and deseralize the remote new block hashes notification
+		// Retrieve and deserialize the remote new block hashes notification
 		type announce struct {
 			Hash   common.Hash
 			Number uint64
@@ -663,7 +683,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == TxMsg:
-		// Transactions arrived, parse all of them and deliver to the pool
+		// Transactions arrived, make sure we have a valid chain to handle them
+		if atomic.LoadUint32(&pm.fastSync) == 1 {
+			break
+		}
+		// Transactions can be processed, parse all of them and deliver to the pool
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -751,13 +775,13 @@ func (self *ProtocolManager) txBroadcastLoop() {
 	}
 }
 
-// EthNodeInfo represents a short summary of the Ethereum sub-protocol metadata known
+// EthNodeInfo represents a short summary of the Expanse sub-protocol metadata known
 // about the host peer.
 type EthNodeInfo struct {
-	Network    int      `json:"network"`    // Ethereum network ID (0=Olympic, 1=Frontier, 2=Morden)
-	Difficulty *big.Int `json:"difficulty"` // Total difficulty of the host's blockchain
-	Genesis    string   `json:"genesis"`    // SHA3 hash of the host's genesis block
-	Head       string   `json:"head"`       // SHA3 hash of the host's best owned block
+	Network    int         `json:"network"`    // Expanse network ID (0=Olympic, 1=Frontier, 2=Morden)
+	Difficulty *big.Int    `json:"difficulty"` // Total difficulty of the host's blockchain
+	Genesis    common.Hash `json:"genesis"`    // SHA3 hash of the host's genesis block
+	Head       common.Hash `json:"head"`       // SHA3 hash of the host's best owned block
 }
 
 // NodeInfo retrieves some protocol metadata about the running host node.
@@ -765,7 +789,7 @@ func (self *ProtocolManager) NodeInfo() *EthNodeInfo {
 	return &EthNodeInfo{
 		Network:    self.networkId,
 		Difficulty: self.blockchain.GetTd(self.blockchain.CurrentBlock().Hash()),
-		Genesis:    fmt.Sprintf("%x", self.blockchain.Genesis().Hash()),
-		Head:       fmt.Sprintf("%x", self.blockchain.CurrentBlock().Hash()),
+		Genesis:    self.blockchain.Genesis().Hash(),
+		Head:       self.blockchain.CurrentBlock().Hash(),
 	}
 }

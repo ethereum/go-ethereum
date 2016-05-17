@@ -120,7 +120,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		remotekey:  newkey(),
 		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 42786},
 	}
-	test.table, test.udp = newUDP(test.localkey, test.pipe, nil, "")
+	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
 	return test
 }
 
@@ -128,7 +128,7 @@ func newUDPTest(t *testing.T) *udpTest {
 func (test *udpTest) packetIn(wantError error, ptype byte, data packet) error {
 	enc, err := encodePacket(test.remotekey, ptype, data)
 	if err != nil {
-		return test.errorf("packet (%d) encode error: %v", err)
+		return test.errorf("packet (%d) encode error: %v", ptype, err)
 	}
 	test.sent = append(test.sent, enc)
 	if err = test.udp.handlePacket(test.remoteaddr, enc); err != wantError {
@@ -218,16 +218,17 @@ func TestUDP_responseTimeouts(t *testing.T) {
 		binary.BigEndian.PutUint64(p.from[:], uint64(i))
 		if p.ptype <= 128 {
 			p.errc = timeoutErr
+			test.udp.addpending <- p
 			nTimeouts++
 		} else {
 			p.errc = nilErr
+			test.udp.addpending <- p
 			time.AfterFunc(randomDuration(60*time.Millisecond), func() {
 				if !test.udp.handleReply(p.from, p.ptype, nil) {
 					t.Logf("not matched: %v", p)
 				}
 			})
 		}
-		test.udp.addpending <- p
 		time.Sleep(randomDuration(30 * time.Millisecond))
 	}
 
@@ -285,7 +286,7 @@ func TestUDP_findnode(t *testing.T) {
 	// put a few nodes into the table. their exact
 	// distribution shouldn't matter much, altough we need to
 	// take care not to overflow any bucket.
-	targetHash := crypto.Sha3Hash(testTarget[:])
+	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}
 	for i := 0; i < bucketSize; i++ {
 		nodes.push(nodeAtDistance(test.table.self.sha, i+2), bucketSize)
@@ -294,7 +295,7 @@ func TestUDP_findnode(t *testing.T) {
 
 	// ensure there's a bond with the test node,
 	// findnode won't be accepted otherwise.
-	test.table.db.updateNode(newNode(
+	test.table.db.updateNode(NewNode(
 		PubkeyID(&test.remotekey.PublicKey),
 		test.remoteaddr.IP,
 		uint16(test.remoteaddr.Port),

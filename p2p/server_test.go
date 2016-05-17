@@ -123,7 +123,7 @@ func TestServerDial(t *testing.T) {
 	// run a one-shot TCP server to handle the connection.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("could not setup listener: %v")
+		t.Fatalf("could not setup listener: %v", err)
 	}
 	defer listener.Close()
 	accepted := make(chan net.Conn)
@@ -232,6 +232,56 @@ func TestServerTaskScheduling(t *testing.T) {
 	case <-returned:
 	case <-time.After(500 * time.Millisecond):
 		t.Error("Server.run did not return within 500ms")
+	}
+}
+
+// This test checks that Server doesn't drop tasks,
+// even if newTasks returns more than the maximum number of tasks.
+func TestServerManyTasks(t *testing.T) {
+	alltasks := make([]task, 300)
+	for i := range alltasks {
+		alltasks[i] = &testTask{index: i}
+	}
+
+	var (
+		srv        = &Server{quit: make(chan struct{}), ntab: fakeTable{}, running: true}
+		done       = make(chan *testTask)
+		start, end = 0, 0
+	)
+	defer srv.Stop()
+	srv.loopWG.Add(1)
+	go srv.run(taskgen{
+		newFunc: func(running int, peers map[discover.NodeID]*Peer) []task {
+			start, end = end, end+maxActiveDialTasks+10
+			if end > len(alltasks) {
+				end = len(alltasks)
+			}
+			return alltasks[start:end]
+		},
+		doneFunc: func(tt task) {
+			done <- tt.(*testTask)
+		},
+	})
+
+	doneset := make(map[int]bool)
+	timeout := time.After(2 * time.Second)
+	for len(doneset) < len(alltasks) {
+		select {
+		case tt := <-done:
+			if doneset[tt.index] {
+				t.Errorf("task %d got done more than once", tt.index)
+			} else {
+				doneset[tt.index] = true
+			}
+		case <-timeout:
+			t.Errorf("%d of %d tasks got done within 2s", len(doneset), len(alltasks))
+			for i := 0; i < len(alltasks); i++ {
+				if !doneset[i] {
+					t.Logf("task %d not done", i)
+				}
+			}
+			return
+		}
 	}
 }
 

@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package trie
 
 import (
@@ -7,6 +23,8 @@ import (
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/crypto/sha3"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rlp"
 )
 
@@ -15,31 +33,39 @@ import (
 // also included in the last node and can be retrieved by verifying
 // the proof.
 //
-// The returned proof is nil if the trie does not contain a value for key.
-// For existing keys, the proof will have at least one element.
+// If the trie does not contain a value for key, the returned proof
+// contains all nodes of the longest existing prefix of the key
+// (at least the root node), ending with the node that proves the
+// absence of the key.
 func (t *Trie) Prove(key []byte) []rlp.RawValue {
 	// Collect all nodes on the path to key.
 	key = compactHexDecode(key)
 	nodes := []node{}
 	tn := t.root
-	for len(key) > 0 {
+	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
 		case shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
-				return nil
+				tn = nil
+			} else {
+				tn = n.Val
+				key = key[len(n.Key):]
 			}
-			tn = n.Val
-			key = key[len(n.Key):]
 			nodes = append(nodes, n)
 		case fullNode:
 			tn = n[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
-		case nil:
-			return nil
 		case hashNode:
-			tn = t.resolveHash(n)
+			var err error
+			tn, err = t.resolveHash(n, nil, nil)
+			if err != nil {
+				if glog.V(logger.Error) {
+					glog.Errorf("Unhandled trie error: %v", err)
+				}
+				return nil
+			}
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
@@ -84,7 +110,12 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 		keyrest, cld := get(n, key)
 		switch cld := cld.(type) {
 		case nil:
-			return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			if i != len(proof)-1 {
+				return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			} else {
+				// The trie doesn't contain the key.
+				return nil, nil
+			}
 		case hashNode:
 			key = keyrest
 			wantHash = cld

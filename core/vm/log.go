@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -61,6 +62,21 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 
 func (l *Log) String() string {
 	return fmt.Sprintf(`log: %x %x %x %x %d %x %d`, l.Address, l.Topics, l.Data, l.TxHash, l.TxIndex, l.BlockHash, l.Index)
+}
+
+func (r *Log) MarshalJSON() ([]byte, error) {
+	fields := map[string]interface{}{
+		"address":          r.Address,
+		"data":             fmt.Sprintf("%#x", r.Data),
+		"blockNumber":      fmt.Sprintf("%#x", r.BlockNumber),
+		"logIndex":         fmt.Sprintf("%#x", r.Index),
+		"blockHash":        r.BlockHash,
+		"transactionHash":  r.TxHash,
+		"transactionIndex": fmt.Sprintf("%#x", r.TxIndex),
+		"topics":           r.Topics,
+	}
+
+	return json.Marshal(fields)
 }
 
 type Logs []*Log

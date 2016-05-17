@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
+// +build ignore
+
 package natspec
 
 import (
@@ -25,15 +27,17 @@ import (
 	"runtime"
 	"testing"
 	"time"
-	
+
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/httpclient"
 	"github.com/expanse-project/go-expanse/common/registrar"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/node"
 	xe "github.com/expanse-project/go-expanse/xeth"
 )
 
@@ -119,7 +123,7 @@ func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	return true
 }
 
-func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
+func testExp(t *testing.T) (expanse *exp.Expanse, err error) {
 
 	tmp, err := ioutil.TempDir("", "natspec-test")
 	if err != nil {
@@ -147,13 +151,11 @@ func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
 	}
 
 	// only use minimalistic stack with no networking
-	return exp.New(&exp.Config{
-		DataDir:                 tmp,
+	return exp.New(&node.ServiceContext{EventMux: new(event.TypeMux)}, &exp.Config{
 		AccountManager:          am,
 		Etherbase:               common.HexToAddress(testAddress),
-		MaxPeers:                0,
 		PowTest:                 true,
-		NewDB:                   func(path string) (ethdb.Database, error) { return db, nil },
+		TestGenesisState:        db,
 		GpoMinGasPrice:          common.Big1,
 		GpobaseCorrectionFactor: 1,
 		GpoMaxGasPrice:          common.Big1,
@@ -162,20 +164,20 @@ func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
 
 func testInit(t *testing.T) (self *testFrontend) {
 	// initialise and start minimal expanse stack
-	expanse, err := testEth(t)
+	expanse, err := testExp(t)
 	if err != nil {
 		t.Errorf("error creating expanse: %v", err)
 		return
 	}
-	err = expanse.Start()
+	err = expanse.Start(nil)
 	if err != nil {
 		t.Errorf("error starting expanse: %v", err)
 		return
 	}
 
 	// mock frontend
-	self = &testFrontend{t: t, expanse: expanse}
-	self.xeth = xe.New(expanse, self)
+	self = &testFrontend{t: t, ethereum: ethereum}
+	self.xeth = xe.New(nil, self)
 	self.wait = self.xexp.UpdateState()
 	addr, _ := self.expanse.Etherbase()
 
@@ -237,11 +239,11 @@ func TestNatspecE2E(t *testing.T) {
 	// create a contractInfo file (mock cloud-deployed contract metadocs)
 	// incidentally this is the info for the HashReg contract itself
 	ioutil.WriteFile("/tmp/"+testFileName, []byte(testContractInfo), os.ModePerm)
-	dochash := crypto.Sha3Hash([]byte(testContractInfo))
+	dochash := crypto.Keccak256Hash([]byte(testContractInfo))
 
 	// take the codehash for the contract we wanna test
 	codeb := tf.xexp.CodeAtBytes(registrar.HashRegAddr)
-	codehash := crypto.Sha3Hash(codeb)
+	codehash := crypto.Keccak256Hash(codeb)
 
 	reg := registrar.New(tf.xeth)
 	_, err := reg.SetHashToHash(addr, codehash, dochash)

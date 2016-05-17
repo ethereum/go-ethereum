@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -41,7 +41,7 @@ func Parse(code []byte) (opcodes []OpCode) {
 
 // MatchFn searcher for match in the given input and calls matcheFn if it finds
 // an appropriate match. matcherFn yields the starting position in the input.
-// MatchFn will continue to search for a match until it reacher the end of the
+// MatchFn will continue to search for a match until it reaches the end of the
 // buffer or if matcherFn return false.
 func MatchFn(input, match []OpCode, matcherFn func(int) bool) {
 	// short circuit if either input or match is empty or if the match is

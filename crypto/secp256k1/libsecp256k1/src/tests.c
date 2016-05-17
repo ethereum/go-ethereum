@@ -425,7 +425,7 @@ void scalar_test(void) {
 
 #ifndef USE_NUM_NONE
     {
-        /* Test that adding the scalars together is equal to adding their numbers together modulo the order. */
+        /* Test that adding the scalars togexper is equal to adding their numbers togexper modulo the order. */
         secp256k1_num rnum;
         secp256k1_num r2num;
         secp256k1_scalar r;
@@ -1144,7 +1144,7 @@ void test_ge(void) {
         }
     }
 
-    /* Test adding all points together in random order equals infinity. */
+    /* Test adding all points togexper in random order equals infinity. */
     {
         secp256k1_gej sum = SECP256K1_GEJ_CONST_INFINITY;
         secp256k1_gej *gej_shuffled = (secp256k1_gej *)malloc((4 * runs + 1) * sizeof(secp256k1_gej));

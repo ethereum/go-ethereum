@@ -125,17 +125,14 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 // Receipts is a wrapper around a Receipt array to implement types.DerivableList.
 type Receipts []*Receipt
 
-// RlpEncode implements common.RlpEncode required for SHA3 derivation.
-func (r Receipts) RlpEncode() []byte {
-	bytes, err := rlp.EncodeToBytes(r)
+// Len returns the number of receipts in this list.
+func (r Receipts) Len() int { return len(r) }
+
+// GetRlp returns the RLP encoding of one receipt from the list.
+func (r Receipts) GetRlp(i int) []byte {
+	bytes, err := rlp.EncodeToBytes(r[i])
 	if err != nil {
 		panic(err)
 	}
 	return bytes
 }
-
-// Len returns the number of receipts in this list.
-func (r Receipts) Len() int { return len(r) }
-
-// GetRlp returns the RLP encoding of one receipt from the list.
-func (r Receipts) GetRlp(i int) []byte { return common.Rlp(r[i]) }
