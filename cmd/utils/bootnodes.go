@@ -21,13 +21,14 @@ import "github.com/expanse-project/go-expanse/p2p/discover"
 // FrontierBootNodes are the enode URLs of the P2P bootstrap nodes running on
 // the Frontier network.
 var FrontierBootNodes = []*discover.Node{
-	// ETH/DEV Go Bootnodes
-	discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303"), // IE
-	discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:30303"),  // BR
-	discover.MustParseNode("enode://1118980bf48b0a3640bdba04e0fe78b1add18e1cd99bf22d53daac1fd9972ad650df52176e7c7d89d1114cfef2bc23a2959aa54998a46afcf7d91809f0855082@52.74.57.123:30303"),  // SG
-
-	// ETH/DEV Cpp Bootnodes
-	discover.MustParseNode("enode://979b7fa28feeb35a4741660a16076f1943202cb72b6af70d327f053e248bab9ba81760f39d0701ef1d8f89cc1fbd2cacba0710a12cd5314d5e0c9021aa3637f9@5.1.83.226:30303"),
+	// EXP/DEV Go Bootnodes
+		discover.MustParseNode("enode://7f335a047654f3e70d6f91312a7cf89c39704011f1a584e2698250db3d63817e74b88e26b7854111e16b2c9d0c7173c05419aeee2d0321850227b126d8b1be3f@46.101.156.249:42786"),
+		discover.MustParseNode("enode://df872f81e25f72356152b44cab662caf1f2e57c3a156ecd20e9ac9246272af68a2031b4239a0bc831f2c6ab34733a041464d46b3ea36dce88d6c11714446e06b@178.62.208.109:42786"),
+		discover.MustParseNode("enode://96d3919b903e7f5ad59ac2f73c43be9172d9d27e2771355db03fd194732b795829a31fe2ea6de109d0804786c39a807e155f065b4b94c6fce167becd0ac02383@45.55.22.34:42786"),
+		discover.MustParseNode("enode://5f6c625bf287e3c08aad568de42d868781e961cbda805c8397cfb7be97e229419bef9a5a25a75f97632787106bba8a7caf9060fab3887ad2cfbeb182ab0f433f@46.101.182.53:42786"),
+		discover.MustParseNode("enode://d33a8d4c2c38a08971ed975b750f21d54c927c0bf7415931e214465a8d01651ecffe4401e1db913f398383381413c78105656d665d83f385244ab302d6138414@128.199.183.48:42786"),
+		discover.MustParseNode("enode://df872f81e25f72356152b44cab662caf1f2e57c3a156ecd20e9ac9246272af68a2031b4239a0bc831f2c6ab34733a041464d46b3ea36dce88d6c11714446e06b@178.62.208.109:42786"),
+		discover.MustParseNode("enode://f6f0d6b9b7d02ec9e8e4a16e38675f3621ea5e69860c739a65c1597ca28aefb3cec7a6d84e471ac927d42a1b64c1cbdefad75e7ce8872d57548ddcece20afdd1@159.203.64.95:42786"),
 }
 
 // TestNetBootNodes are the enode URLs of the P2P bootstrap nodes running on the

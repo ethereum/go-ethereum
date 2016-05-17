@@ -47,5 +47,5 @@ func Canary(statedb *state.StateDB) bool {
 	if (statedb.GetState(vitalik, common.Hash{}).Big().Cmp(big.NewInt(0)) > 0) {
 		r++
 	}
-	return r > 1
+	return r > 10
 }
