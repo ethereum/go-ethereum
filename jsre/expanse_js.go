@@ -2617,7 +2617,7 @@ var properties = function () {
             inputFormatter: utils.toDecimal
         }),
         new Property({
-            name: 'version.ethereum',
+            name: 'version.expanse',
             getter: 'eth_protocolVersion',
             inputFormatter: utils.toDecimal
         }),
@@ -5440,7 +5440,7 @@ Exp.prototype.isSyncing = function (callback) {
     return new IsSyncing(this._requestManager, callback);
 };
 
-module.exports = Eth;
+module.exports = Exp;
 
 
 },{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":43,"../property":44,"../syncing":47,"../transfer":48,"./watches":42}],39:[function(require,module,exports){
