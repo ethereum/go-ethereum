@@ -2,7 +2,8 @@
 // Copyright(c) 2003-2014 by wave++ "Yuri D'Elia" <wavexx@thregr.org>
 // Distributed under GPL2 (see COPYING) WITHOUT ANY WARRANTY.
 var datafile = 'data.json';
-var padding = 22;
+var padding = 100;
+var marginTop = 50;
 var duration = 500;
 var thrdelay = 1500;
 var hidedelay = 3000;
@@ -41,6 +42,7 @@ var eback;	// background
 var enoise;	// additive noise
 var eflash;	// flashing object
 var ehdr;	// header
+var progress;	// progress
 var elist;	// thumbnail list
 var fscr;	// thumbnail list scroll fx
 var econt;	// picture container
@@ -231,7 +233,7 @@ function resizeMainImg(img)
   img.setStyles(
   {
     'position': 'absolute',
-    'top': contSize.y / 2 - img.height / 2,
+    'top': (contSize.y / 2 - img.height / 2) + marginTop,
     'left': contSize.x / 2 - img.width / 2
   });
 }
@@ -361,6 +363,9 @@ function onMainReady()
     dsc.push("<b>Date</b>: " + imgs.data[eidx].date);
   ehdr.set('html', dsc.join(' '));
   ehdr.setStyle('display', (dsc.length? 'block': 'none'));
+
+  progress.set('html', '<img id="currentPreview">');
+  progress.set('style', 'text-align: center; padding-top: 20px');
 
   // complete thumbnails
   var d = duration;
@@ -595,6 +600,9 @@ function initGallery(data)
 
   ehdr = new Element('div', { id: 'header' });
   ehdr.inject(econt);
+
+  progress = new Element('div', { id: 'progress' });
+  progress.inject(econt);
 
   elist = new Element('div', { id: 'list' });
   elist.inject(emain);

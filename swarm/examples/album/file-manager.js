@@ -18,16 +18,18 @@ function uploadFile(files, nr, uri) {
     xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
             var newHash = xhr.responseText;
+            console.log("New hash - " + newHash);
             if (newHash.length != 64) {
                 // something wrong
                 console.log("Something wrong on uploading");
-                console.log(newHash);
+                alert('Oh, error on PUT file to BZZ. See log for more information.');
 
                 return;
             }
 
-            console.log("new hash - " + newHash);
-            insertImage(files, nr, newHash, currentFile.name);
+            insertImage(files, nr, newHash, currentFile.name, function () {
+                uploadFile(files, nr + 1, "/bzz:/" + newHash + "/");
+            });
         }
     };
     xhr.open("PUT", uri + "imgs/" + currentFile.name, true);
@@ -48,7 +50,7 @@ function readFile(file, onComplete) {
     reader.readAsArrayBuffer(file);
 }
 
-function insertImage(files, nr, newHash, fileName) {
+function insertImage(files, nr, newHash, fileName, onComplete) {
     // insert image into index
     var img = new Image();
     img.onload = function () {
@@ -68,16 +70,24 @@ function insertImage(files, nr, newHash, fileName) {
         } else {
             // square
             thumbData[0] = imageToUrl(img, thumbSize, thumbSize);
-            thumbData[1] = [w, thumbSize];
+            thumbData[1] = [thumbSize, thumbSize];
         }
 
+        jQuery('#currentPreview').attr('src', thumbData[0]);
         // update index
         var imgData = [];
         imgData[0] = "imgs/" + fileName;
         imgData[1] = [img.naturalWidth, img.naturalHeight];
         imgs.data.splice(eidx, 0, {img: imgData, thumb: thumbData, blur: blur});
-        console.log("this one");
-        uploadFile(files, nr + 1, "/bzz:/" + newHash + "/");
+        if (onComplete) {
+            onComplete();
+        }
+    };
+
+    img.onerror = function () {
+        if (onComplete) {
+            onComplete();
+        }
     };
 
     img.src = "/bzz:/" + newHash + "/imgs/" + fileName;
