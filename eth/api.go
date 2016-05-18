@@ -1353,7 +1353,7 @@ func (s *PublicTransactionPoolAPI) SignTransaction(args SignTransactionArgs) (*S
 		return nil, err
 	}
 
-	return &SignTransactionResult{"0x" + common.Bytes2Hex(data), newTx(tx)}, nil
+	return &SignTransactionResult{"0x" + common.Bytes2Hex(data), newTx(signedTx)}, nil
 }
 
 // PendingTransactions returns the transactions that are in the transaction pool and have a from address that is one of
