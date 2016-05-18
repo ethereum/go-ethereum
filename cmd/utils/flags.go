@@ -746,10 +746,10 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		if !ctx.GlobalIsSet(ListenPortFlag.Name) {
 			stackConf.ListenAddr = ":0"
 		}
-		// Override the Ethereum protocol configs
-		if !ctx.GlobalIsSet(GenesisFileFlag.Name) {
-			ethConf.Genesis = core.OlympicGenesisBlock()
-		}
+		//// Override the Ethereum protocol configs
+		//if !ctx.GlobalIsSet(GenesisFileFlag.Name) {
+		//	ethConf.Genesis = core.OlympicGenesisBlock()
+		//}
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
 			ethConf.GasPrice = new(big.Int)
 		}
