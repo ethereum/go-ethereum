@@ -5177,7 +5177,7 @@ function Exp(web3) {
     this.sendIBANTransaction = transfer.bind(null, this);
 }
 
-Object.defineProperty(Eth.prototype, 'defaultBlock', {
+Object.defineProperty(Exp.prototype, 'defaultBlock', {
     get: function () {
         return c.defaultBlock;
     },
@@ -5187,7 +5187,7 @@ Object.defineProperty(Eth.prototype, 'defaultBlock', {
     }
 });
 
-Object.defineProperty(Eth.prototype, 'defaultAccount', {
+Object.defineProperty(Exp.prototype, 'defaultAccount', {
     get: function () {
         return c.defaultAccount;
     },
@@ -5419,24 +5419,24 @@ var properties = function () {
     ];
 };
 
-Eth.prototype.contract = function (abi) {
+Exp.prototype.contract = function (abi) {
     var factory = new Contract(this, abi);
     return factory;
 };
 
-Eth.prototype.filter = function (fil, callback) {
+Exp.prototype.filter = function (fil, callback) {
     return new Filter(this._requestManager, fil, watches.exp(), formatters.outputLogFormatter, callback);
 };
 
-Eth.prototype.namereg = function () {
+Exp.prototype.namereg = function () {
     return this.contract(namereg.global.abi).at(namereg.global.address);
 };
 
-Eth.prototype.icapNamereg = function () {
+Exp.prototype.icapNamereg = function () {
     return this.contract(namereg.icap.abi).at(namereg.icap.address);
 };
 
-Eth.prototype.isSyncing = function (callback) {
+Exp.prototype.isSyncing = function (callback) {
     return new IsSyncing(this._requestManager, callback);
 };
 
