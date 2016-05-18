@@ -24,7 +24,7 @@ import (
 
 	"github.com/expanse-project/go-expanse/accounts/abi/bind"
 	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/node"
@@ -62,7 +62,7 @@ func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, e
 		return nil, err
 	}
 	// Construct the release service
-	contract, err := NewReleaseOracle(config.Oracle, exp.NewContractBackend(ethereum))
+	contract, err := NewReleaseOracle(config.Oracle, exp.NewContractBackend(expanse))
 	if err != nil {
 		return nil, err
 	}

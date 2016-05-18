@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/compiler"
@@ -37,8 +37,8 @@ import (
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/eth/downloader"
-	"github.com/expanse-project/go-expanse/eth/filters"
+	"github.com/expanse-project/go-expanse/exp/downloader"
+	"github.com/expanse-project/go-expanse/exp/filters"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
@@ -151,7 +151,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Expanse, error) {
 		return nil, err
 	}
 	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/chaindata/")
+		db.Meter("exp/db/chaindata/")
 	}
 	if err := upgradeChainDatabase(chainDb); err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Expanse, error) {
 		return nil, err
 	}
 	if db, ok := dappDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/dapp/")
+		db.Meter("exp/db/dapp/")
 	}
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
 
@@ -261,7 +261,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Expanse, error) {
 		}
 		return nil, err
 	}
-	exp.gpo = NewGasPriceOracle(eth)
+	exp.gpo = NewGasPriceOracle(exp)
 
 	newPool := core.NewTxPool(exp.chainConfig, exp.EventMux(), exp.blockchain.State, exp.blockchain.GasLimit)
 	exp.txPool = newPool
@@ -269,7 +269,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Expanse, error) {
 	if exp.protocolManager, err = NewProtocolManager(exp.chainConfig, config.FastSync, config.NetworkId, exp.eventMux, exp.txPool, exp.pow, exp.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	exp.miner = miner.New(eth, exp.chainConfig, exp.EventMux(), exp.pow)
+	exp.miner = miner.New(exp, exp.chainConfig, exp.EventMux(), exp.pow)
 	exp.miner.SetGasPrice(config.GasPrice)
 	exp.miner.SetExtra(config.ExtraData)
 
@@ -354,7 +354,6 @@ func (s *Expanse) APIs() []rpc.API {
 			Service:   ethreg.NewPrivateRegistarAPI(s.chainConfig, s.blockchain, s.chainDb, s.txPool, s.accountManager),
 		},
 	}
->>>>>>> ethereum/master:eth/backend.go
 }
 
 func (s *Expanse) ResetWithGenesisBlock(gb *types.Block) {

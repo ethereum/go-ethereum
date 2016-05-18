@@ -295,8 +295,6 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 		x.Set(params.MinimumDifficulty)
 	}
 
-	}
-
 	return x
 }
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package exp
 
 import (
 	"bytes"
@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/common/compiler"
@@ -1437,7 +1437,7 @@ func (s *PublicTransactionPoolAPI) Resend(tx Tx, gasPrice, gasLimit *rpc.HexNumb
 // PrivateAdminAPI is the collection of Etheruem APIs exposed over the private
 // admin endpoint.
 type PrivateAdminAPI struct {
-	eth *Expanse
+	exp *Expanse
 }
 
 // NewPrivateAdminAPI creates a new API definition for the private admin methods
@@ -1526,7 +1526,7 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 // PublicDebugAPI is the collection of Etheruem APIs exposed over the public
 // debugging endpoint.
 type PublicDebugAPI struct {
-	eth *Expanse
+	exp *Expanse
 }
 
 // NewPublicDebugAPI creates a new API definition for the public debug methods
@@ -1587,12 +1587,12 @@ func (api *PublicDebugAPI) SeedHash(number uint64) (string, error) {
 // debugging endpoint.
 type PrivateDebugAPI struct {
 	config *core.ChainConfig
-	eth    *Expanse
+	exp    *Expanse
 }
 
 // NewPrivateDebugAPI creates a new API definition for the private debug methods
 // of the Expanse service.
-func NewPrivateDebugAPI(config *core.ChainConfig, eth *Expanse) *PrivateDebugAPI {
+func NewPrivateDebugAPI(config *core.ChainConfig, exp *Expanse) *PrivateDebugAPI {
 	return &PrivateDebugAPI{config: config, exp: exp}
 }
 

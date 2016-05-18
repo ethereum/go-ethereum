@@ -128,7 +128,7 @@ type worker struct {
 	fullValidation bool
 }
 
-func newWorker(config *core.ChainConfig, coinbase common.Address, eth core.Backend) *worker {
+func newWorker(config *core.ChainConfig, coinbase common.Address, exp core.Backend) *worker {
 	worker := &worker{
 		config:         config,
 		exp:            exp,

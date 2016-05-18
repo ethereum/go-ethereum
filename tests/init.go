@@ -1,7 +1,6 @@
 // Copyright 2014 The go-ethereum Authors
 // Copyright 2015 go-expanse Authors
 // This file is part of the go-ethereum library.
->>>>>>> ethereum/master
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by

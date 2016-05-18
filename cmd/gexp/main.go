@@ -30,11 +30,11 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/expanse-org/ethash"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/internal/debug"
 	"github.com/expanse-project/go-expanse/logger"

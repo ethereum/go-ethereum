@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package eth
+package exp
 
 import (
 	"math/big"
@@ -43,9 +43,9 @@ type ContractBackend struct {
 // Etheruem object.
 func NewContractBackend(exp *Expanse) *ContractBackend {
 	return &ContractBackend{
-		eapi:  NewPublicEthereumAPI(eth),
+		eapi:  NewPublicEthereumAPI(exp),
 		bcapi: NewPublicBlockChainAPI(exp.chainConfig, exp.blockchain, exp.miner, exp.chainDb, exp.gpo, exp.eventMux, exp.accountManager),
-		txapi: NewPublicTransactionPoolAPI(eth),
+		txapi: NewPublicTransactionPoolAPI(exp),
 	}
 }
 

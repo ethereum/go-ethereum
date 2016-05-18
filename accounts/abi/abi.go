@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/ethereum/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common"
 
 )
 
