@@ -2544,6 +2544,7 @@ function Web3 (provider) {
     this._requestManager = new RequestManager(provider);
     this.currentProvider = provider;
     this.exp = new Exp(this);
+    this.eth = this.exp;
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
