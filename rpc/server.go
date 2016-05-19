@@ -183,8 +183,10 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 	for atomic.LoadInt32(&s.run) == 1 {
 		reqs, batch, err := s.readRequest(codec)
 		if err != nil {
-			glog.V(logger.Debug).Infof("%v\n", err)
-			codec.Write(codec.CreateErrorResponse(nil, err))
+			if err != ErrConnectionClosed {
+				glog.V(logger.Error).Infof("%v\n", err)
+				codec.Write(codec.CreateErrorResponse(nil, err))
+			}
 			return nil
 		}
 

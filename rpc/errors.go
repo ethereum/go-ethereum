@@ -18,6 +18,11 @@ package rpc
 
 import "fmt"
 
+var (
+	// ErrConnectionClosed is thrown when the connection is closed
+	ErrConnectionClosed = new(connectionClosedError)
+)
+
 // request is for an unknown service
 type methodNotFoundError struct {
 	service string
@@ -94,4 +99,16 @@ func (e *shutdownError) Code() int {
 
 func (e *shutdownError) Error() string {
 	return "server is shutting down"
+}
+
+// connectionClosedError is thrown when the connection is closed
+type connectionClosedError struct {
+}
+
+func (e *connectionClosedError) Code() int {
+	return 0
+}
+
+func (e *connectionClosedError) Error() string {
+	return "connection closed"
 }
