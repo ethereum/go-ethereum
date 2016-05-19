@@ -819,6 +819,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		tstart        = time.Now()
 
 		nonceChecked = make([]bool, len(chain))
+		statedb      *state.StateDB
 	)
 
 	// Start the parallel nonce verifier.
@@ -885,7 +886,11 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
-		statedb, err := state.New(self.GetBlock(block.ParentHash()).Root(), self.chainDb)
+		if statedb == nil {
+			statedb, err = state.New(self.GetBlock(block.ParentHash()).Root(), self.chainDb)
+		} else {
+			err = statedb.Reset(chain[i-1].Root())
+		}
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
