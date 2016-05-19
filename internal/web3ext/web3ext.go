@@ -22,6 +22,7 @@ var Modules = map[string]string{
 	"admin":    Admin_JS,
 	"personal": Personal_JS,
 	"exp":      Eth_JS,
+	"eth":      Eth_JS,
 	"miner":    Miner_JS,
 	"debug":    Debug_JS,
 	"net":      Net_JS,
@@ -192,7 +193,7 @@ web3._extend({
 
 const Eth_JS = `
 web3._extend({
-	property: 'eth',
+	property: 'exp',
 	methods:
 	[
 		new web3._extend.Method({
