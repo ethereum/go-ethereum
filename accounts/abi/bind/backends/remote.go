@@ -127,7 +127,7 @@ func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending 
 	if pending {
 		block = "pending"
 	}
-	res, err := b.request("eth_call", []interface{}{args, block})
+	res, err := b.request("exp_call", []interface{}{args, block})
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending 
 // PendingAccountNonce implements ContractTransactor.PendingAccountNonce, delegating
 // the current account nonce retrieval to the remote node.
 func (b *rpcBackend) PendingAccountNonce(account common.Address) (uint64, error) {
-	res, err := b.request("eth_getTransactionCount", []interface{}{account.Hex(), "pending"})
+	res, err := b.request("exp_getTransactionCount", []interface{}{account.Hex(), "pending"})
 	if err != nil {
 		return 0, err
 	}
@@ -160,7 +160,7 @@ func (b *rpcBackend) PendingAccountNonce(account common.Address) (uint64, error)
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice, delegating the
 // gas price oracle request to the remote node.
 func (b *rpcBackend) SuggestGasPrice() (*big.Int, error) {
-	res, err := b.request("eth_gasPrice", nil)
+	res, err := b.request("exp_gasPrice", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (b *rpcBackend) EstimateGasLimit(sender common.Address, contract *common.Ad
 		Value: rpc.NewHexNumber(value),
 	}
 	// Execute the RPC call and retrieve the response
-	res, err := b.request("eth_estimateGas", []interface{}{args})
+	res, err := b.request("exp_estimateGas", []interface{}{args})
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (b *rpcBackend) SendTransaction(tx *types.Transaction) error {
 	if err != nil {
 		return err
 	}
-	res, err := b.request("eth_sendRawTransaction", []interface{}{common.ToHex(data)})
+	res, err := b.request("exp_sendRawTransaction", []interface{}{common.ToHex(data)})
 	if err != nil {
 		return err
 	}
