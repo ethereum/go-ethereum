@@ -295,7 +295,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals2 {
 		updateString(trie2, val.k, val.v)
 	}
-	if trie2.Hash() != exp {
+	if hash := trie2.Hash(); hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
 }
