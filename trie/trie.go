@@ -169,13 +169,13 @@ func (t *Trie) Update(key, value []byte) {
 func (t *Trie) TryUpdate(key, value []byte) error {
 	k := compactHexDecode(key)
 	if len(value) != 0 {
-		n, err := t.insert(t.root, nil, k, valueNode(value))
+		_, n, err := t.insert(t.root, nil, k, valueNode(value))
 		if err != nil {
 			return err
 		}
 		t.root = n
 	} else {
-		n, err := t.delete(t.root, nil, k)
+		_, n, err := t.delete(t.root, nil, k)
 		if err != nil {
 			return err
 		}
@@ -184,9 +184,13 @@ func (t *Trie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
-func (t *Trie) insert(n node, prefix, key []byte, value node) (node, error) {
+func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error) {
 	if len(key) == 0 {
-		return value, nil
+		if v, ok := n.(valueNode); ok {
+			vv := value.(valueNode)
+			return len(v) != len(vv) || bytes.Compare(v, vv) != 0, value, nil
+		}
+		return true, value, nil
 	}
 	switch n := n.(type) {
 	case shortNode:
@@ -194,53 +198,63 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (node, error) {
 		// If the whole key matches, keep this short node as is
 		// and only update the value.
 		if matchlen == len(n.Key) {
-			nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
+			changed, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
 			if err != nil {
-				return nil, err
+				return false, nil, err
 			}
-			return shortNode{n.Key, nn}, nil
+			if !changed {
+				return false, n, nil
+			}
+			return true, shortNode{n.Key, nn}, nil
 		}
 		// Otherwise branch out at the index where they differ.
 		var branch fullNode
 		var err error
-		branch[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
+		_, branch[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
 		if err != nil {
-			return nil, err
+			return false, nil, err
 		}
-		branch[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
+		_, branch[key[matchlen]], err = t.insert(nil, append(prefix, key[:matchlen+1]...), key[matchlen+1:], value)
 		if err != nil {
-			return nil, err
+			return false, nil, err
 		}
 		// Replace this shortNode with the branch if it occurs at index 0.
 		if matchlen == 0 {
-			return branch, nil
+			return true, branch, nil
 		}
 		// Otherwise, replace it with a short node leading up to the branch.
-		return shortNode{key[:matchlen], branch}, nil
+		return true, shortNode{key[:matchlen], branch}, nil
 
 	case fullNode:
-		nn, err := t.insert(n[key[0]], append(prefix, key[0]), key[1:], value)
+		changed, nn, err := t.insert(n[key[0]], append(prefix, key[0]), key[1:], value)
 		if err != nil {
-			return nil, err
+			return false, nil, err
+		}
+		if !changed {
+			return false, n, nil
 		}
 		n[key[0]] = nn
-		return n, nil
+		return true, n, nil
 
 	case nil:
-		return shortNode{key, value}, nil
+		return true, shortNode{key, value}, nil
 
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and insert into it. This leaves all child nodes on
 		// the path to the value in the trie.
-		//
-		// TODO: track whether insertion changed the value and keep
-		// n as a hash node if it didn't.
 		rn, err := t.resolveHash(n, prefix, key)
 		if err != nil {
-			return nil, err
+			return false, nil, err
 		}
-		return t.insert(rn, prefix, key, value)
+		changed, nn, err := t.insert(rn, prefix, key, value)
+		if err != nil {
+			return false, nil, err
+		}
+		if !changed {
+			return false, n, nil
+		}
+		return true, nn, nil
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -258,7 +272,7 @@ func (t *Trie) Delete(key []byte) {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryDelete(key []byte) error {
 	k := compactHexDecode(key)
-	n, err := t.delete(t.root, nil, k)
+	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
 		return err
 	}
@@ -269,23 +283,26 @@ func (t *Trie) TryDelete(key []byte) error {
 // delete returns the new root of the trie with key deleted.
 // It reduces the trie to minimal form by simplifying
 // nodes on the way up after deleting recursively.
-func (t *Trie) delete(n node, prefix, key []byte) (node, error) {
+func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	switch n := n.(type) {
 	case shortNode:
 		matchlen := prefixLen(key, n.Key)
 		if matchlen < len(n.Key) {
-			return n, nil // don't replace n on mismatch
+			return false, n, nil // don't replace n on mismatch
 		}
 		if matchlen == len(key) {
-			return nil, nil // remove n entirely for whole matches
+			return true, nil, nil // remove n entirely for whole matches
 		}
 		// The key is longer than n.Key. Remove the remaining suffix
 		// from the subtrie. Child can never be nil here since the
 		// subtrie must contain at least two other values with keys
 		// longer than n.Key.
-		child, err := t.delete(n.Val, append(prefix, key[:len(n.Key)]...), key[len(n.Key):])
+		change, child, err := t.delete(n.Val, append(prefix, key[:len(n.Key)]...), key[len(n.Key):])
 		if err != nil {
-			return nil, err
+			return false, nil, err
+		}
+		if !change {
+			return false, n, nil
 		}
 		switch child := child.(type) {
 		case shortNode:
@@ -295,15 +312,18 @@ func (t *Trie) delete(n node, prefix, key []byte) (node, error) {
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			return shortNode{concat(n.Key, child.Key...), child.Val}, nil
+			return true, shortNode{concat(n.Key, child.Key...), child.Val}, nil
 		default:
-			return shortNode{n.Key, child}, nil
+			return true, shortNode{n.Key, child}, nil
 		}
 
 	case fullNode:
-		nn, err := t.delete(n[key[0]], append(prefix, key[0]), key[1:])
+		change, nn, err := t.delete(n[key[0]], append(prefix, key[0]), key[1:])
 		if err != nil {
-			return nil, err
+			return false, nil, err
+		}
+		if !change {
+			return false, n, nil
 		}
 		n[key[0]] = nn
 		// Check how many non-nil entries are left after deleting and
@@ -336,22 +356,22 @@ func (t *Trie) delete(n node, prefix, key []byte) (node, error) {
 				// check.
 				cnode, err := t.resolve(n[pos], prefix, []byte{byte(pos)})
 				if err != nil {
-					return nil, err
+					return false, nil, err
 				}
 				if cnode, ok := cnode.(shortNode); ok {
 					k := append([]byte{byte(pos)}, cnode.Key...)
-					return shortNode{k, cnode.Val}, nil
+					return true, shortNode{k, cnode.Val}, nil
 				}
 			}
 			// Otherwise, n is replaced by a one-nibble short node
 			// containing the child.
-			return shortNode{[]byte{byte(pos)}, n[pos]}, nil
+			return true, shortNode{[]byte{byte(pos)}, n[pos]}, nil
 		}
 		// n still contains at least two values and cannot be reduced.
-		return n, nil
+		return true, n, nil
 
 	case nil:
-		return nil, nil
+		return false, nil, nil
 
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
@@ -362,9 +382,16 @@ func (t *Trie) delete(n node, prefix, key []byte) (node, error) {
 		// n as a hash node if it didn't.
 		rn, err := t.resolveHash(n, prefix, key)
 		if err != nil {
-			return nil, err
+			return false, nil, err
 		}
-		return t.delete(rn, prefix, key)
+		change, nn, err := t.delete(rn, prefix, key)
+		if err != nil {
+			return false, nil, err
+		}
+		if !change {
+			return false, n, nil
+		}
+		return true, nn, nil
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
