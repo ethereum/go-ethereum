@@ -2857,7 +2857,7 @@ var addFunctionsToContract = function (contract) {
     contract.abi.filter(function (json) {
         return json.type === 'function';
     }).map(function (json) {
-        return new SolidityFunction(contract._eth, json, contract.address);
+        return new SolidityFunction(contract._exp, json, contract.address);
     }).forEach(function (f) {
         f.attachToContract(contract);
     });
