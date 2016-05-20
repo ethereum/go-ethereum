@@ -111,6 +111,26 @@ func (b *rpcBackend) request(method string, params []interface{}) (json.RawMessa
 	return res.Result, nil
 }
 
+// HasCode implements ContractVerifier.HasCode by retrieving any code associated
+// with the contract from the remote node, and checking its size.
+func (b *rpcBackend) HasCode(contract common.Address, pending bool) (bool, error) {
+	// Execute the RPC code retrieval
+	block := "latest"
+	if pending {
+		block = "pending"
+	}
+	res, err := b.request("eth_getCode", []interface{}{contract.Hex(), block})
+	if err != nil {
+		return false, err
+	}
+	var hex string
+	if err := json.Unmarshal(res, &hex); err != nil {
+		return false, err
+	}
+	// Convert the response back to a Go byte slice and return
+	return len(common.FromHex(hex)) > 0, nil
+}
+
 // ContractCall implements ContractCaller.ContractCall, delegating the execution of
 // a contract call to the remote node, returning the reply to for local processing.
 func (b *rpcBackend) ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error) {

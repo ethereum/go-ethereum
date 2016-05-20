@@ -78,6 +78,16 @@ func (b *SimulatedBackend) Rollback() {
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 }
 
+// HasCode implements ContractVerifier.HasCode, checking whether there is any
+// code associated with a certain account in the blockchain.
+func (b *SimulatedBackend) HasCode(contract common.Address, pending bool) (bool, error) {
+	if pending {
+		return len(b.pendingState.GetCode(contract)) > 0, nil
+	}
+	statedb, _ := b.blockchain.State()
+	return len(statedb.GetCode(contract)) > 0, nil
+}
+
 // ContractCall implements ContractCaller.ContractCall, executing the specified
 // contract with the given input data.
 func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error) {

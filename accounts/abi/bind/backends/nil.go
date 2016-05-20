@@ -38,6 +38,7 @@ func (*nilBackend) ContractCall(common.Address, []byte, bool) ([]byte, error) {
 func (*nilBackend) EstimateGasLimit(common.Address, *common.Address, *big.Int, []byte) (*big.Int, error) {
 	panic("not implemented")
 }
+func (*nilBackend) HasCode(common.Address, bool) (bool, error)         { panic("not implemented") }
 func (*nilBackend) SuggestGasPrice() (*big.Int, error)                 { panic("not implemented") }
 func (*nilBackend) PendingAccountNonce(common.Address) (uint64, error) { panic("not implemented") }
 func (*nilBackend) SendTransaction(*types.Transaction) error           { panic("not implemented") }
