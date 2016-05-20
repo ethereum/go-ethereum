@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -56,6 +57,9 @@ type BoundContract struct {
 	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
 	caller     ContractCaller     // Read interface to interact with the blockchain
 	transactor ContractTransactor // Write interface to interact with the blockchain
+
+	latestHasCode  uint32 // Cached verification that the latest state contains code for this contract
+	pendingHasCode uint32 // Cached verification that the pending state contains code for this contract
 }
 
 // NewBoundContract creates a low level contract interface through which calls
@@ -95,6 +99,19 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 	// Don't crash on a lazy user
 	if opts == nil {
 		opts = new(CallOpts)
+	}
+	// Make sure we have a contract to operate on, and bail out otherwise
+	if (opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0) || (!opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0) {
+		if code, err := c.caller.HasCode(c.address, opts.Pending); err != nil {
+			return err
+		} else if !code {
+			return ErrNoCode
+		}
+		if opts.Pending {
+			atomic.StoreUint32(&c.pendingHasCode, 1)
+		} else {
+			atomic.StoreUint32(&c.latestHasCode, 1)
+		}
 	}
 	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
@@ -153,6 +170,16 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	gasLimit := opts.GasLimit
 	if gasLimit == nil {
+		// Gas estimation cannot succeed without code for method invocations
+		if contract != nil && atomic.LoadUint32(&c.pendingHasCode) == 0 {
+			if code, err := c.transactor.HasCode(c.address, true); err != nil {
+				return nil, err
+			} else if !code {
+				return nil, ErrNoCode
+			}
+			atomic.StoreUint32(&c.pendingHasCode, 1)
+		}
+		// If the contract surely has code (or code is not needed), estimate the transaction
 		gasLimit, err = c.transactor.EstimateGasLimit(opts.From, contract, value, input)
 		if err != nil {
 			return nil, fmt.Errorf("failed to exstimate gas needed: %v", err)
