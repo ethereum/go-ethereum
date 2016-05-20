@@ -560,8 +560,8 @@ func (dl *downloadTester) peerGetAbsHeadersFn(id string, delay time.Duration) fu
 		hashes := dl.peerHashes[id]
 		headers := dl.peerHeaders[id]
 		result := make([]*types.Header, 0, amount)
-		for i := 0; i < amount && len(hashes)-int(origin)-1-i >= 0; i++ {
-			if header, ok := headers[hashes[len(hashes)-int(origin)-1-i]]; ok {
+		for i := 0; i < amount && len(hashes)-int(origin)-1-i*(skip+1) >= 0; i++ {
+			if header, ok := headers[hashes[len(hashes)-int(origin)-1-i*(skip+1)]]; ok {
 				result = append(result, header)
 			}
 		}
@@ -1258,6 +1258,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	// rolled back, and also the pivot point being reverted to a non-block status.
 	tester.newPeer("block-attack", protocol, hashes, headers, blocks, receipts)
 	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
+	delete(tester.peerHeaders["fast-attack"], hashes[len(hashes)-missing]) // Make sure the fast-attacker doesn't fill in
 	delete(tester.peerHeaders["block-attack"], hashes[len(hashes)-missing])
 
 	if err := tester.sync("block-attack", nil, mode); err == nil {
@@ -1348,27 +1349,28 @@ func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
 		result error
 		drop   bool
 	}{
-		{nil, false},                   // Sync succeeded, all is well
-		{errBusy, false},               // Sync is already in progress, no problem
-		{errUnknownPeer, false},        // Peer is unknown, was already dropped, don't double drop
-		{errBadPeer, true},             // Peer was deemed bad for some reason, drop it
-		{errStallingPeer, true},        // Peer was detected to be stalling, drop it
-		{errNoPeers, false},            // No peers to download from, soft race, no issue
-		{errTimeout, true},             // No hashes received in due time, drop the peer
-		{errEmptyHashSet, true},        // No hashes were returned as a response, drop as it's a dead end
-		{errEmptyHeaderSet, true},      // No headers were returned as a response, drop as it's a dead end
-		{errPeersUnavailable, true},    // Nobody had the advertised blocks, drop the advertiser
-		{errInvalidAncestor, true},     // Agreed upon ancestor is not acceptable, drop the chain rewriter
-		{errInvalidChain, true},        // Hash chain was detected as invalid, definitely drop
-		{errInvalidBlock, false},       // A bad peer was detected, but not the sync origin
-		{errInvalidBody, false},        // A bad peer was detected, but not the sync origin
-		{errInvalidReceipt, false},     // A bad peer was detected, but not the sync origin
-		{errCancelHashFetch, false},    // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBlockFetch, false},   // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelHeaderFetch, false},  // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelBodyFetch, false},    // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelReceiptFetch, false}, // Synchronisation was canceled, origin may be innocent, don't drop
-		{errCancelProcessing, false},   // Synchronisation was canceled, origin may be innocent, don't drop
+		{nil, false},                        // Sync succeeded, all is well
+		{errBusy, false},                    // Sync is already in progress, no problem
+		{errUnknownPeer, false},             // Peer is unknown, was already dropped, don't double drop
+		{errBadPeer, true},                  // Peer was deemed bad for some reason, drop it
+		{errStallingPeer, true},             // Peer was detected to be stalling, drop it
+		{errNoPeers, false},                 // No peers to download from, soft race, no issue
+		{errTimeout, true},                  // No hashes received in due time, drop the peer
+		{errEmptyHashSet, true},             // No hashes were returned as a response, drop as it's a dead end
+		{errEmptyHeaderSet, true},           // No headers were returned as a response, drop as it's a dead end
+		{errPeersUnavailable, true},         // Nobody had the advertised blocks, drop the advertiser
+		{errInvalidAncestor, true},          // Agreed upon ancestor is not acceptable, drop the chain rewriter
+		{errInvalidChain, true},             // Hash chain was detected as invalid, definitely drop
+		{errInvalidBlock, false},            // A bad peer was detected, but not the sync origin
+		{errInvalidBody, false},             // A bad peer was detected, but not the sync origin
+		{errInvalidReceipt, false},          // A bad peer was detected, but not the sync origin
+		{errCancelHashFetch, false},         // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBlockFetch, false},        // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelHeaderFetch, false},       // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelBodyFetch, false},         // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelReceiptFetch, false},      // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelHeaderProcessing, false},  // Synchronisation was canceled, origin may be innocent, don't drop
+		{errCancelContentProcessing, false}, // Synchronisation was canceled, origin may be innocent, don't drop
 	}
 	// Run the tests and check disconnection status
 	tester := newTester()
