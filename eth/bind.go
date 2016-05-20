@@ -19,7 +19,6 @@ package eth
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -49,6 +48,17 @@ func NewContractBackend(eth *Ethereum) *ContractBackend {
 	}
 }
 
+// HasCode implements bind.ContractVerifier.HasCode by retrieving any code associated
+// with the contract from the local API, and checking its size.
+func (b *ContractBackend) HasCode(contract common.Address, pending bool) (bool, error) {
+	block := rpc.LatestBlockNumber
+	if pending {
+		block = rpc.PendingBlockNumber
+	}
+	out, err := b.bcapi.GetCode(contract, block)
+	return len(common.FromHex(out)) > 0, err
+}
+
 // ContractCall implements bind.ContractCaller executing an Ethereum contract
 // call with the specified data as the input. The pending flag requests execution
 // against the pending block, not the stable head of the chain.
@@ -64,9 +74,6 @@ func (b *ContractBackend) ContractCall(contract common.Address, data []byte, pen
 	}
 	// Execute the call and convert the output back to Go types
 	out, err := b.bcapi.Call(args, block)
-	if err == errNoCode {
-		err = bind.ErrNoCode
-	}
 	return common.FromHex(out), err
 }
 
@@ -95,9 +102,6 @@ func (b *ContractBackend) EstimateGasLimit(sender common.Address, contract *comm
 		Value: *rpc.NewHexNumber(value),
 		Data:  common.ToHex(data),
 	})
-	if err == errNoCode {
-		err = bind.ErrNoCode
-	}
 	return out.BigInt(), err
 }
 
