@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
@@ -20,6 +20,8 @@ import (
 	"math/big"
 	"path/filepath"
 	"testing"
+
+	"github.com/expanse-project/go-expanse/params"
 )
 
 func TestBcValidBlockTests(t *testing.T) {
@@ -42,6 +44,7 @@ func TestBcUncleTests(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 
 func TestBcForkUncleTests(t *testing.T) {
 	err := RunBlockTest(big.NewInt(1000000), filepath.Join(blockTestDir, "bcForkUncle.json"), BlockSkipTests)
@@ -207,6 +210,95 @@ func TestHomesteadBcMultiChain(t *testing.T) {
 
 func TestHomesteadBcState(t *testing.T) {
 	err := RunBlockTest(big.NewInt(0), filepath.Join(blockTestDir, "Homestead", "bcStateTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Homestead tests
+func TestHomesteadBcValidBlockTests(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcValidBlockTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcUncleHeaderValidityTests(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcUncleHeaderValiditiy.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcUncleTests(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcUncleTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcInvalidHeaderTests(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcInvalidHeaderTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcRPCAPITests(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcRPC_API_Test.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcForkStress(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcForkStressTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcTotalDifficulty(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcTotalDifficultyTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcWallet(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcWalletTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcGasPricer(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcGasPricerTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcMultiChain(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcMultiChainTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHomesteadBcState(t *testing.T) {
+	params.HomesteadBlock = big.NewInt(0)
+	err := RunBlockTest(filepath.Join(blockTestDir, "Homestead", "bcStateTest.json"), BlockSkipTests)
 	if err != nil {
 		t.Fatal(err)
 	}

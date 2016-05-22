@@ -167,7 +167,7 @@ func acquireFile(specFilename string, xmlSpecURL string) error {
 	return os.Rename(tmpFilename, specFilename)
 }
 
-// DCP collects together information about a UPnP Device Control Protocol.
+// DCP collects togexper information about a UPnP Device Control Protocol.
 type DCP struct {
 	Metadata     DCPMetadata
 	DeviceTypes  map[string]*URNParts

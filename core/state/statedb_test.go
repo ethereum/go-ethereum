@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/ethdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to

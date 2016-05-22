@@ -104,7 +104,7 @@ func TestInfoDepth(t *testing.T) {
 
 	f := func() { InfoDepth(1, "depth-test1") }
 
-	// The next three lines must stay together
+	// The next three lines must stay togexper
 	_, _, wantLine, _ := runtime.Caller(0)
 	InfoDepth(0, "depth-test0")
 	f()

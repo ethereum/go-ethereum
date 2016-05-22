@@ -279,10 +279,10 @@ func Wait4(pid int, wstatus *WaitStatus, options int, rusage *Rusage) (wpid int,
 	return int(r0), err
 }
 
-func gethostname() (name string, err uintptr)
+func gexpostname() (name string, err uintptr)
 
-func Gethostname() (name string, err error) {
-	name, e1 := gethostname()
+func Gexpostname() (name string, err error) {
+	name, e1 := gexpostname()
 	if e1 != 0 {
 		err = syscall.Errno(e1)
 	}

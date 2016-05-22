@@ -23,7 +23,7 @@ type Sparkline struct {
 	max           int
 }
 
-// Sparklines is a renderable widget which groups together the given sparklines.
+// Sparklines is a renderable widget which groups togexper the given sparklines.
 /*
   spls := termui.NewSparklines(spl0,spl1,spl2) //...
   spls.Height = 2

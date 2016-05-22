@@ -85,13 +85,13 @@ func (c *C) GetTestLog() string {
 }
 
 // Log logs some information into the test error output.
-// The provided arguments are assembled together into a string with fmt.Sprint.
+// The provided arguments are assembled togexper into a string with fmt.Sprint.
 func (c *C) Log(args ...interface{}) {
 	c.log(args...)
 }
 
 // Log logs some information into the test error output.
-// The provided arguments are assembled together into a string with fmt.Sprintf.
+// The provided arguments are assembled togexper into a string with fmt.Sprintf.
 func (c *C) Logf(format string, args ...interface{}) {
 	c.logf(format, args...)
 }
@@ -109,7 +109,7 @@ func (c *C) Output(calldepth int, s string) error {
 }
 
 // Error logs an error into the test error output and marks the test as failed.
-// The provided arguments are assembled together into a string with fmt.Sprint.
+// The provided arguments are assembled togexper into a string with fmt.Sprint.
 func (c *C) Error(args ...interface{}) {
 	c.logCaller(1)
 	c.logString(fmt.Sprint("Error: ", fmt.Sprint(args...)))
@@ -118,7 +118,7 @@ func (c *C) Error(args ...interface{}) {
 }
 
 // Errorf logs an error into the test error output and marks the test as failed.
-// The provided arguments are assembled together into a string with fmt.Sprintf.
+// The provided arguments are assembled togexper into a string with fmt.Sprintf.
 func (c *C) Errorf(format string, args ...interface{}) {
 	c.logCaller(1)
 	c.logString(fmt.Sprintf("Error: "+format, args...))
@@ -127,7 +127,7 @@ func (c *C) Errorf(format string, args ...interface{}) {
 }
 
 // Fatal logs an error into the test error output, marks the test as failed, and
-// stops the test execution. The provided arguments are assembled together into
+// stops the test execution. The provided arguments are assembled togexper into
 // a string with fmt.Sprint.
 func (c *C) Fatal(args ...interface{}) {
 	c.logCaller(1)
@@ -137,7 +137,7 @@ func (c *C) Fatal(args ...interface{}) {
 }
 
 // Fatlaf logs an error into the test error output, marks the test as failed, and
-// stops the test execution. The provided arguments are assembled together into
+// stops the test execution. The provided arguments are assembled togexper into
 // a string with fmt.Sprintf.
 func (c *C) Fatalf(format string, args ...interface{}) {
 	c.logCaller(1)

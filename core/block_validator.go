@@ -21,18 +21,18 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-project/go-expanse/pow"
 	"gopkg.in/fatih/set.v0"
 )
 
 var (
 	ExpDiffPeriod = big.NewInt(100000)
-	big10         = big.NewInt(10)
+	big60         = big.NewInt(60)
 	bigMinus99    = big.NewInt(-99)
 )
 
@@ -277,7 +277,7 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 
 	// 1 - (block_timestamp -parent_timestamp) // 10
 	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
+	x.Div(x, big60)
 	x.Sub(common.Big1, x)
 
 	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
@@ -285,8 +285,8 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 		x.Set(bigMinus99)
 	}
 
-	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDiff, params.DifficultyBoundDivisor)
+	// (parent_diff + parent_diff // 512 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	y.Div(parentDiff, params.DifficultyBoundDivisor2)
 	x.Mul(y, x)
 	x.Add(parentDiff, x)
 
@@ -295,24 +295,19 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 		x.Set(params.MinimumDifficulty)
 	}
 
-	// for the exponential factor
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-
-	// the exponential factor, commonly referred to as "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(common.Big1) > 0 {
-		y.Sub(periodCount, common.Big2)
-		y.Exp(common.Big2, y, nil)
-		x.Add(x, y)
-	}
-
 	return x
 }
 
 func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
-	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+	adjust := new(big.Int)
+
+	if parentNumber.Cmp(params.HardFork1) < 0 {
+		adjust = new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+	} else {
+		adjust = new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor2)
+	}
+
 	bigTime := new(big.Int)
 	bigParentTime := new(big.Int)
 

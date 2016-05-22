@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package registrar
 
@@ -22,15 +22,15 @@ import (
 	"math/big"
 	"regexp"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
 /*
-Registrar implements the Ethereum name registrar services mapping
-- arbitrary strings to ethereum addresses
+Registrar implements the Expanse name registrar services mapping
+- arbitrary strings to expanse addresses
 - hashes to hashes
 - hashes to arbitrary strings
 (likely will provide lookup service for all three)
@@ -54,10 +54,10 @@ This is done for frontier by default, otherwise the caller needs to make sure
 the relevant environment initialised the desired contracts
 */
 var (
-	// GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b" // olympic
-	GlobalRegistrarAddr = "0x33990122638b9132ca29c723bdf037f1a891a70c" // frontier
-	HashRegAddr         = "0x23bf622b5a65f6060d855fca401133ded3520620" // frontier
-	UrlHintAddr         = "0x73ed5ef6c010727dfd2671dbb70faac19ec18626" // frontier
+	//these arnt the right ones for gexp
+	GlobalRegistrarAddr = "0x6c221ca53705f3497ec90ca7b84c59ae7382fc21" // frontier
+	HashRegAddr         = "0x10774b55f37302de0075fdc131f63d303ae5dd9e" // frontier
+	UrlHintAddr         = "0x8dad0847dedb1253b6dfe616c6d2841da291dc1f" // frontier
 
 	zero = regexp.MustCompile("^(0x)?0*$")
 )

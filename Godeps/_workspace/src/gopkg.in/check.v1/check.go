@@ -727,7 +727,7 @@ func (runner *suiteRunner) runFixture(method *methodType, testName string, logb 
 
 // Run the fixture method with runFixture(), but panic with a fixturePanic{}
 // in case the fixture method panics.  This makes it easier to track the
-// fixture panic together with other call panics within forkTest().
+// fixture panic togexper with other call panics within forkTest().
 func (runner *suiteRunner) runFixtureWithPanic(method *methodType, testName string, logb *logger, skipped *bool) *C {
 	if skipped != nil && *skipped {
 		return nil
@@ -747,7 +747,7 @@ type fixturePanic struct {
 	method *methodType
 }
 
-// Run the suite test method, together with the test-specific fixture,
+// Run the suite test method, togexper with the test-specific fixture,
 // asynchronously.
 func (runner *suiteRunner) forkTest(method *methodType) *C {
 	testName := method.String()

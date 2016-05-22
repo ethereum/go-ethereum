@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package types
 
@@ -26,11 +26,11 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/rlp"
 )
 
 var ErrInvalidSig = errors.New("invalid v, r, s values")
@@ -168,7 +168,7 @@ func (tx *Transaction) Size() common.StorageSize {
 // Frontier / Homestead. however, the first time called it runs
 // signature validations, so we need two versions. This makes it
 // easier to ensure backwards compatibility of things like package rpc
-// where eth_getblockbynumber uses tx.From() and needs to work for
+// where exp_getblockbynumber uses tx.From() and needs to work for
 // both txs before and after the first homestead block. Signatures
 // valid in homestead are a subset of valid ones in Frontier)
 func (tx *Transaction) From() (common.Address, error) {
@@ -186,7 +186,7 @@ func (tx *Transaction) From() (common.Address, error) {
 // Frontier / Homestead. however, the first time called it runs
 // signature validations, so we need two versions. This makes it
 // easier to ensure backwards compatibility of things like package rpc
-// where eth_getblockbynumber uses tx.From() and needs to work for
+// where exp_getblockbynumber uses tx.From() and needs to work for
 // both txs before and after the first homestead block. Signatures
 // valid in homestead are a subset of valid ones in Frontier)
 func (tx *Transaction) FromFrontier() (common.Address, error) {
@@ -379,7 +379,7 @@ func (s *TxByPrice) Pop() interface{} {
 //
 // This method first sorts the separates the list of transactions into individual
 // sender accounts and sorts them by nonce. After the account nonce ordering is
-// satisfied, the results are merged back together by price, always comparing only
+// satisfied, the results are merged back togexper by price, always comparing only
 // the head transaction from each account. This is done via a heap to keep it fast.
 func SortByPriceAndNonce(txs []*Transaction) {
 	// Separate the transactions by account and sort by nonce

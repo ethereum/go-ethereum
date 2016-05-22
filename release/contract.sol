@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// ReleaseOracle is an Ethereum contract to store the current and previous
-// versions of the go-ethereum implementation. Its goal is to allow Geth to
+// ReleaseOracle is an Expanse contract to store the current and previous
+// versions of the go-ethereum implementation. Its goal is to allow Gexp to
 // check for new releases automatically without the need to consult a central
 // repository.
 //
 // The contract takes a vote based approach on both assigning authorised signers
-// as well as signing off on new Geth releases.
+// as well as signing off on new Gexp releases.
 //
 // Note, when a signer is demoted, the currently pending release is auto-nuked.
 // The reason is to prevent suprises where a demotion actually tilts the votes
@@ -33,7 +33,7 @@ contract ReleaseOracle {
     address[] fail; // List of signers voting to fail a proposal
   }
 
-  // Version is the version details of a particular Geth release
+  // Version is the version details of a particular Gexp release
   struct Version {
     uint32  major;  // Major version component of the release
     uint32  minor;  // Minor version component of the release
@@ -135,7 +135,7 @@ contract ReleaseOracle {
     updateRelease(0, 0, 0, 0, false);
   }
 
-  // updateSigner marks a vote for changing the status of an Ethereum user, either
+  // updateSigner marks a vote for changing the status of an Expanse user, either
   // for or against the user being an authorised signer.
   function updateSigner(address user, bool authorize) internal isSigner {
     // Gather the current votes and ensure we don't double vote

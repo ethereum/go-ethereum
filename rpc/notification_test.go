@@ -64,7 +64,7 @@ func TestNotifications(t *testing.T) {
 	server := NewServer()
 	service := &NotificationTestService{}
 
-	if err := server.RegisterName("eth", service); err != nil {
+	if err := server.RegisterName("exp", service); err != nil {
 		t.Fatalf("unable to register test service %v", err)
 	}
 

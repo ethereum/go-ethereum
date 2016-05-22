@@ -7,7 +7,7 @@
 // Package identifier defines the contract between implementations of Encoding
 // and Index by defining identifiers that uniquely identify standardized coded
 // character sets (CCS) and character encoding schemes (CES), which we will
-// together refer to as encodings, for which Encoding implementations provide
+// togexper refer to as encodings, for which Encoding implementations provide
 // converters to and from UTF-8. This package is typically only of concern to
 // implementers of Indexes and Encodings.
 //

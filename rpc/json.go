@@ -25,16 +25,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
 const (
 	jsonRPCVersion         = "2.0"
 	serviceMethodSeparator = "_"
-	subscribeMethod        = "eth_subscribe"
-	unsubscribeMethod      = "eth_unsubscribe"
-	notificationMethod     = "eth_subscription"
+	subscribeMethod        = "exp_subscribe"
+	unsubscribeMethod      = "exp_unsubscribe"
+	notificationMethod     = "exp_subscription"
 )
 
 // JSON-RPC request
@@ -170,7 +170,7 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCError) {
 			}
 
 			// all subscriptions are made on the eth service
-			reqs[0].service, reqs[0].method = "eth", subscribeMethod[0]
+			reqs[0].service, reqs[0].method = "exp", subscribeMethod[0]
 			reqs[0].params = in.Payload
 			return reqs, false, nil
 		}
@@ -223,7 +223,7 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCErro
 				}
 
 				// all subscriptions are made on the eth service
-				requests[i].service, requests[i].method = "eth", subscribeMethod[0]
+				requests[i].service, requests[i].method = "exp", subscribeMethod[0]
 				requests[i].params = r.Payload
 				continue
 			}

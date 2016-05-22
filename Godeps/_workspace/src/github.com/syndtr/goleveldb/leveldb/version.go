@@ -248,7 +248,7 @@ func (v *version) getIterators(slice *util.Range, ro *opt.ReadOptions) (its []it
 	strict := opt.GetStrict(v.s.o.Options, ro, opt.StrictReader)
 	for level, tables := range v.levels {
 		if level == 0 {
-			// Merge all level zero files together since they may overlap.
+			// Merge all level zero files togexper since they may overlap.
 			for _, t := range tables {
 				its = append(its, v.s.tops.newIterator(t, slice, ro))
 			}

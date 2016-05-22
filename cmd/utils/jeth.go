@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/jsre"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/expanse-project/go-expanse/jsre"
+	"github.com/expanse-project/go-expanse/rpc"
 
 	"github.com/robertkrimen/otto"
 )
@@ -57,7 +57,7 @@ func (self *Jeth) err(call otto.FunctionCall, code int, msg string, id interface
 	return res
 }
 
-// UnlockAccount asks the user for the password and than executes the jeth.UnlockAccount callback in the jsre.
+// UnlockAccount asks the user for the password and than executes the jexp.UnlockAccount callback in the jsre.
 // It will need the public address for the account to unlock as first argument.
 // The second argument is an optional string with the password. If not given the user is prompted for the password.
 // The third argument is an optional integer which specifies for how long the account will be unlocked (in seconds).
@@ -96,8 +96,8 @@ func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 		duration = call.Argument(2)
 	}
 
-	// jeth.unlockAccount will send the request to the backend.
-	if val, err := call.Otto.Call("jeth.unlockAccount", nil, account, passwd, duration); err == nil {
+	// jexp.unlockAccount will send the request to the backend.
+	if val, err := call.Otto.Call("jexp.unlockAccount", nil, account, passwd, duration); err == nil {
 		return val
 	} else {
 		throwJSExeception(err.Error())
@@ -106,7 +106,7 @@ func (self *Jeth) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 	return otto.FalseValue()
 }
 
-// NewAccount asks the user for the password and than executes the jeth.newAccount callback in the jsre
+// NewAccount asks the user for the password and than executes the jexp.newAccount callback in the jsre
 func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	var passwd string
 	if len(call.ArgumentList) == 0 {
@@ -131,7 +131,7 @@ func (self *Jeth) NewAccount(call otto.FunctionCall) (response otto.Value) {
 		return otto.FalseValue()
 	}
 
-	ret, err := call.Otto.Call("jeth.newAccount", nil, passwd)
+	ret, err := call.Otto.Call("jexp.newAccount", nil, passwd)
 	if err == nil {
 		return ret
 	}
@@ -276,7 +276,7 @@ func (self *Jeth) SleepBlocks(call otto.FunctionCall) (response otto.Value) {
 	// go through the console, this will allow web3 to call the appropriate
 	// callbacks if a delayed response or notification is received.
 	currentBlockNr := func() int64 {
-		result, err := call.Otto.Run("eth.blockNumber")
+		result, err := call.Otto.Run("exp.blockNumber")
 		if err != nil {
 			throwJSExeception(err.Error())
 		}

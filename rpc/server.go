@@ -23,8 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 	"golang.org/x/net/context"
 	"gopkg.in/fatih/set.v0"
 )
@@ -34,8 +34,8 @@ const (
 
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
-	DefaultIPCApis  = "admin,eth,debug,miner,net,shh,txpool,personal,web3"
-	DefaultHTTPApis = "eth,net,web3"
+	DefaultIPCApis  = "admin,exp,eth,debug,miner,net,shh,txpool,personal,web3"
+	DefaultHTTPApis = "exp,eth,net,web3"
 )
 
 // CodecOption specifies which type of messages this codec supports

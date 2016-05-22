@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // +build ignore
 
@@ -28,17 +28,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/node"
-	xe "github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/httpclient"
+	"github.com/expanse-project/go-expanse/common/registrar"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/node"
+	xe "github.com/expanse-project/go-expanse/xeth"
 )
 
 const (
@@ -99,7 +99,7 @@ const (
 
 type testFrontend struct {
 	t           *testing.T
-	ethereum    *eth.Ethereum
+	expanse    *exp.Expanse
 	xeth        *xe.XEth
 	wait        chan *big.Int
 	lastConfirm string
@@ -111,7 +111,7 @@ func (self *testFrontend) AskPassword() (string, bool) {
 }
 
 func (self *testFrontend) UnlockAccount(acc []byte) bool {
-	self.ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "password")
+	self.expanse.AccountManager().Unlock(common.BytesToAddress(acc), "password")
 	return true
 }
 
@@ -123,12 +123,13 @@ func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	return true
 }
 
-func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
+func testExp(t *testing.T) (expanse *exp.Expanse, err error) {
 
 	tmp, err := ioutil.TempDir("", "natspec-test")
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	db, _ := ethdb.NewMemDatabase()
 	addr := common.HexToAddress(testAddress)
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{addr, common.String2Big(testBalance)})
@@ -150,7 +151,7 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 	}
 
 	// only use minimalistic stack with no networking
-	return eth.New(&node.ServiceContext{EventMux: new(event.TypeMux)}, &eth.Config{
+	return exp.New(&node.ServiceContext{EventMux: new(event.TypeMux)}, &exp.Config{
 		AccountManager:          am,
 		Etherbase:               common.HexToAddress(testAddress),
 		PowTest:                 true,
@@ -162,23 +163,23 @@ func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 }
 
 func testInit(t *testing.T) (self *testFrontend) {
-	// initialise and start minimal ethereum stack
-	ethereum, err := testEth(t)
+	// initialise and start minimal expanse stack
+	expanse, err := testExp(t)
 	if err != nil {
-		t.Errorf("error creating ethereum: %v", err)
+		t.Errorf("error creating expanse: %v", err)
 		return
 	}
-	err = ethereum.Start(nil)
+	err = expanse.Start(nil)
 	if err != nil {
-		t.Errorf("error starting ethereum: %v", err)
+		t.Errorf("error starting expanse: %v", err)
 		return
 	}
 
 	// mock frontend
 	self = &testFrontend{t: t, ethereum: ethereum}
 	self.xeth = xe.New(nil, self)
-	self.wait = self.xeth.UpdateState()
-	addr, _ := self.ethereum.Etherbase()
+	self.wait = self.xexp.UpdateState()
+	addr, _ := self.expanse.Etherbase()
 
 	// initialise the registry contracts
 	reg := registrar.New(self.xeth)
@@ -192,7 +193,7 @@ func testInit(t *testing.T) (self *testFrontend) {
 	if !processTxs(self, t, 1) {
 		t.Fatalf("error mining txs")
 	}
-	recG := self.xeth.GetTxReceipt(common.HexToHash(txG))
+	recG := self.xexp.GetTxReceipt(common.HexToHash(txG))
 	if recG == nil {
 		t.Fatalf("blockchain error creating GlobalRegistrar")
 	}
@@ -205,7 +206,7 @@ func testInit(t *testing.T) (self *testFrontend) {
 	if !processTxs(self, t, 1) {
 		t.Errorf("error mining txs")
 	}
-	recH := self.xeth.GetTxReceipt(common.HexToHash(txH))
+	recH := self.xexp.GetTxReceipt(common.HexToHash(txH))
 	if recH == nil {
 		t.Fatalf("blockchain error creating HashReg")
 	}
@@ -218,7 +219,7 @@ func testInit(t *testing.T) (self *testFrontend) {
 	if !processTxs(self, t, 1) {
 		t.Errorf("error mining txs")
 	}
-	recU := self.xeth.GetTxReceipt(common.HexToHash(txU))
+	recU := self.xexp.GetTxReceipt(common.HexToHash(txU))
 	if recU == nil {
 		t.Fatalf("blockchain error creating UrlHint")
 	}
@@ -232,8 +233,8 @@ func TestNatspecE2E(t *testing.T) {
 	t.Skip()
 
 	tf := testInit(t)
-	defer tf.ethereum.Stop()
-	addr, _ := tf.ethereum.Etherbase()
+	defer tf.expanse.Stop()
+	addr, _ := tf.expanse.Etherbase()
 
 	// create a contractInfo file (mock cloud-deployed contract metadocs)
 	// incidentally this is the info for the HashReg contract itself
@@ -241,7 +242,7 @@ func TestNatspecE2E(t *testing.T) {
 	dochash := crypto.Keccak256Hash([]byte(testContractInfo))
 
 	// take the codehash for the contract we wanna test
-	codeb := tf.xeth.CodeAtBytes(registrar.HashRegAddr)
+	codeb := tf.xexp.CodeAtBytes(registrar.HashRegAddr)
 	codehash := crypto.Keccak256Hash(codeb)
 
 	reg := registrar.New(tf.xeth)
@@ -297,7 +298,7 @@ func TestNatspecE2E(t *testing.T) {
 }
 
 func pendingTransactions(repl *testFrontend, t *testing.T) (txc int64, err error) {
-	txs := repl.ethereum.TxPool().GetTransactions()
+	txs := repl.expanse.TxPool().GetTransactions()
 	return int64(len(txs)), nil
 }
 
@@ -323,15 +324,16 @@ func processTxs(repl *testFrontend, t *testing.T, expTxc int) bool {
 		return false
 	}
 
-	err = repl.ethereum.StartMining(runtime.NumCPU(), "")
+
+	err = repl.expanse.StartMining(runtime.NumCPU(), "")
 	if err != nil {
 		t.Errorf("unexpected error mining: %v", err)
 		return false
 	}
-	defer repl.ethereum.StopMining()
+	defer repl.expanse.StopMining()
 
 	timer := time.NewTimer(100 * time.Second)
-	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	height := new(big.Int).Add(repl.xexp.CurrentBlock().Number(), big.NewInt(1))
 	repl.wait <- height
 	select {
 	case <-timer.C:

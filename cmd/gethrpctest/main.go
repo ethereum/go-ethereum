@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// gethrpctest is a command to run the external RPC tests.
+// gexprpctest is a command to run the external RPC tests.
 package main
 
 import (
@@ -24,17 +24,17 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/tests"
-	"github.com/ethereum/go-ethereum/whisper"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/node"
+	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-project/go-expanse/tests"
+	"github.com/expanse-project/go-expanse/whisper"
 )
 
 const defaultTestKey = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
@@ -98,10 +98,10 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 		IPCPath:     node.DefaultIPCEndpoint(),
 		HTTPHost:    common.DefaultHTTPHost,
 		HTTPPort:    common.DefaultHTTPPort,
-		HTTPModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		HTTPModules: []string{"admin", "db", "exp", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
 		WSHost:      common.DefaultWSHost,
 		WSPort:      common.DefaultWSPort,
-		WSModules:   []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		WSModules:   []string{"admin", "db", "exp", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
 		NoDiscovery: true,
 	})
 	if err != nil {
@@ -122,18 +122,18 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 			return nil, err
 		}
 	}
-	// Initialize and register the Ethereum protocol
+	// Initialize and register the Expanse protocol
 	db, _ := ethdb.NewMemDatabase()
 	if _, err := test.InsertPreState(db); err != nil {
 		return nil, err
 	}
-	ethConf := &eth.Config{
+	ethConf := &exp.Config{
 		TestGenesisState: db,
 		TestGenesisBlock: test.Genesis,
 		ChainConfig:      &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock},
 		AccountManager:   accman,
 	}
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return exp.New(ctx, ethConf) }); err != nil {
 		return nil, err
 	}
 	// Initialize and register the Whisper protocol
@@ -146,9 +146,9 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 // RunTest executes the specified test against an already pre-configured protocol
 // stack to ensure basic checks pass before running RPC tests.
 func RunTest(stack *node.Node, test *tests.BlockTest) error {
-	var ethereum *eth.Ethereum
-	stack.Service(&ethereum)
-	blockchain := ethereum.BlockChain()
+	var expanse *exp.Expanse
+	stack.Service(&expanse)
+	blockchain := expanse.BlockChain()
 
 	// Process the blocks and verify the imported headers
 	blocks, err := test.TryBlocksInsert(blockchain)

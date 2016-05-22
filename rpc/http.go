@@ -33,14 +33,14 @@ const (
 	maxHTTPRequestContentLength = 1024 * 128
 )
 
-// httpClient connects to a geth RPC server over HTTP.
+// httpClient connects to a gexp RPC server over HTTP.
 type httpClient struct {
 	endpoint   *url.URL    // HTTP-RPC server endpoint
 	httpClient http.Client // reuse connection
 	lastRes    []byte      // HTTP requests are synchronous, store last response
 }
 
-// NewHTTPClient create a new RPC clients that connection to a geth RPC server
+// NewHTTPClient create a new RPC clients that connection to a gexp RPC server
 // over HTTP.
 func NewHTTPClient(endpoint string) (Client, error) {
 	url, err := url.Parse(endpoint)

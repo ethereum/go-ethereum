@@ -22,14 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/expanse-project/go-expanse/accounts/abi/bind"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/node"
+	"github.com/expanse-project/go-expanse/p2p"
+	"github.com/expanse-project/go-expanse/rpc"
 )
 
 // Interval to check for new releases
@@ -37,7 +37,7 @@ const releaseRecheckInterval = time.Hour
 
 // Config contains the configurations of the release service.
 type Config struct {
-	Oracle common.Address // Ethereum address of the release oracle
+	Oracle common.Address // Expanse address of the release oracle
 	Major  uint32         // Major version component of the release
 	Minor  uint32         // Minor version component of the release
 	Patch  uint32         // Patch version component of the release
@@ -56,13 +56,13 @@ type ReleaseService struct {
 // NewReleaseService creates a new service to periodically check for new client
 // releases and notify the user of such.
 func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, error) {
-	// Retrieve the Ethereum service dependency to access the blockchain
-	var ethereum *eth.Ethereum
-	if err := ctx.Service(&ethereum); err != nil {
+	// Retrieve the Expanse service dependency to access the blockchain
+	var expanse *exp.Expanse
+	if err := ctx.Service(&expanse); err != nil {
 		return nil, err
 	}
 	// Construct the release service
-	contract, err := NewReleaseOracle(config.Oracle, eth.NewContractBackend(ethereum))
+	contract, err := NewReleaseOracle(config.Oracle, exp.NewContractBackend(expanse))
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (r *ReleaseService) checker() {
 
 				warning := fmt.Sprintf("Client v%d.%d.%d-%x seems older than the latest upstream release v%d.%d.%d-%x",
 					r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4])
-				howtofix := fmt.Sprintf("Please check https://github.com/ethereum/go-ethereum/releases for new releases")
+				howtofix := fmt.Sprintf("Please check https://github.com/expanse-project/go-expanse/releases for new releases")
 				separator := strings.Repeat("-", len(warning))
 
 				glog.V(logger.Warn).Info(separator)

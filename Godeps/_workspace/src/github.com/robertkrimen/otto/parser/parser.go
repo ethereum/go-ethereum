@@ -283,7 +283,7 @@ func (self *_parser) position(idx file.Idx) file.Position {
 }
 
 // findComments finds the following comments.
-// Comments on the same line will be grouped together and returned.
+// Comments on the same line will be grouped togexper and returned.
 // After the first line break, comments will be added as statement comments.
 func (self *_parser) findComments(ignoreLineBreak bool) []*ast.Comment {
 	if self.mode&StoreComments == 0 {

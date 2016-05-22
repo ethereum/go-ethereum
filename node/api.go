@@ -21,11 +21,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/p2p"
+	"github.com/expanse-project/go-expanse/p2p/discover"
+	"github.com/expanse-project/go-expanse/rpc"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -313,7 +313,7 @@ func (s *PublicWeb3API) ClientVersion() string {
 	return s.stack.Server().Name
 }
 
-// Sha3 applies the ethereum sha3 implementation on the input.
+// Sha3 applies the expanse sha3 implementation on the input.
 // It assumes the input is hex encoded.
 func (s *PublicWeb3API) Sha3(input string) string {
 	return common.ToHex(crypto.Keccak256(common.FromHex(input)))

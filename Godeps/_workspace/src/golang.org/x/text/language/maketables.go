@@ -1098,7 +1098,7 @@ func find(list []string, s string) int {
 // In other words, we cannot guarantee the same order of variants for the
 // future using the same algorithm or for non-compliant combinations of
 // variants. For this reason, consider using simple alphabetic sorting
-// of variants and ignore Prefix restrictions altogether.
+// of variants and ignore Prefix restrictions altogexper.
 func (b *builder) writeVariant() {
 	generalized := stringSet{}
 	specialized := stringSet{}

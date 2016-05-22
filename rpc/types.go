@@ -274,7 +274,7 @@ func (bn *BlockNumber) Int64() int64 {
 	return (int64)(*bn)
 }
 
-// Client defines the interface for go client that wants to connect to a geth RPC endpoint
+// Client defines the interface for go client that wants to connect to a gexp RPC endpoint
 type Client interface {
 	// SupportedModules returns the collection of API's the server offers
 	SupportedModules() (map[string]string, error)

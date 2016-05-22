@@ -56,7 +56,7 @@ const keyTypeSeek = keyTypeVal
 
 const (
 	// Maximum value possible for sequence number; the 8-bits are
-	// used by value type, so its can packed together in single
+	// used by value type, so its can packed togexper in single
 	// 64-bit integer.
 	keyMaxSeq = (uint64(1) << 56) - 1
 	// Maximum value possible for packed sequence number and type.

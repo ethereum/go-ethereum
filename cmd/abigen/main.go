@@ -24,16 +24,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/expanse-project/go-expanse/accounts/abi/bind"
+	"github.com/expanse-project/go-expanse/common/compiler"
 )
 
 var (
-	abiFlag = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
-	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
+	abiFlag = flag.String("abi", "", "Path to the Expanse contract ABI json to bind")
+	binFlag = flag.String("bin", "", "Path to the Expanse contract bytecode (generate deploy method)")
 	typFlag = flag.String("type", "", "Go struct name for the binding (default = package name)")
 
-	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
+	solFlag  = flag.String("sol", "", "Path to the Expanse contract Solidity source to build and bind")
 	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
 	excFlag  = flag.String("exc", "", "Comma separated types to exclude from binding")
 

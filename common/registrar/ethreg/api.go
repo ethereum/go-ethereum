@@ -20,21 +20,21 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/compiler"
+	"github.com/expanse-project/go-expanse/common/registrar"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
-// registryAPIBackend is a backend for an Ethereum Registry.
+// registryAPIBackend is a backend for an Expanse Registry.
 type registryAPIBackend struct {
 	config  *core.ChainConfig
 	bc      *core.BlockChain
@@ -43,7 +43,7 @@ type registryAPIBackend struct {
 	am      *accounts.Manager
 }
 
-// PrivateRegistarAPI offers various functions to access the Ethereum registry.
+// PrivateRegistarAPI offers various functions to access the Expanse registry.
 type PrivateRegistarAPI struct {
 	config *core.ChainConfig
 	be     *registryAPIBackend

@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2015 The go-expanse Authors
+// This file is part of the go-expanse library.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
+// The go-expanse library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// The go-expanse library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // +build ignore
 
@@ -24,11 +24,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/xeth"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/common/httpclient"
+	"github.com/expanse-project/go-expanse/common/registrar"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/xeth"
+
 	"github.com/robertkrimen/otto"
 )
 
@@ -45,7 +46,7 @@ type NatSpec struct {
 // the implementation is frontend friendly in that it always gives back
 // a notice that is safe to display
 // :FIXME: the second return value is an error, which can be used to fine-tune bahaviour
-func GetNotice(xeth *xeth.XEth, tx string, http *httpclient.HTTPClient) (notice string) {
+func GetNotice(xeth *xexp.XEth, tx string, http *httpclient.HTTPClient) (notice string) {
 	ns, err := New(xeth, tx, http)
 	if err != nil {
 		if ns == nil {
@@ -85,7 +86,7 @@ type contractInfo struct {
 	DeveloperDoc  json.RawMessage `json:"developerDoc"`
 }
 
-func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *NatSpec, err error) {
+func New(xeth *xexp.XEth, jsontx string, http *httpclient.HTTPClient) (self *NatSpec, err error) {
 
 	// extract contract address from tx
 	var tx jsonTx
@@ -106,10 +107,10 @@ func New(xeth *xeth.XEth, jsontx string, http *httpclient.HTTPClient) (self *Nat
 }
 
 // also called by admin.contractInfo.get
-func FetchDocsForContract(contractAddress string, xeth *xeth.XEth, client *httpclient.HTTPClient) (content []byte, err error) {
+func FetchDocsForContract(contractAddress string, xeth *xexp.XEth, client *httpclient.HTTPClient) (content []byte, err error) {
 	// retrieve contract hash from state
-	codehex := xeth.CodeAt(contractAddress)
-	codeb := xeth.CodeAtBytes(contractAddress)
+	codehex := xexp.CodeAt(contractAddress)
+	codeb := xexp.CodeAtBytes(contractAddress)
 
 	if codehex == "0x" {
 		err = fmt.Errorf("contract (%v) not found", contractAddress)
@@ -202,7 +203,7 @@ func (self *NatSpec) makeAbi2method(abiKey [8]byte) (meth *method) {
 		copy(key[:], hash[:8])
 		if bytes.Equal(key[:], abiKey[:]) {
 			meth = m
-			meth.name = name
+			mexp.name = name
 			return
 		}
 	}
@@ -222,7 +223,7 @@ func (self *NatSpec) Notice() (notice string, err error) {
 		err = fmt.Errorf("abi key does not match any method")
 		return
 	}
-	notice, err = self.noticeForMethod(self.tx, meth.name, meth.Notice)
+	notice, err = self.noticeForMethod(self.tx, mexp.name, mexp.Notice)
 	return
 }
 

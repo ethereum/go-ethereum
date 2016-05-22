@@ -1,3 +1,4 @@
+// Copyright 2015 The go-expanse Authors
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
@@ -6,13 +7,14 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
+// The go-expanse library is distributed in the hope that it will be useful,
 // The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -21,12 +23,12 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
 )
 
 func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
@@ -72,7 +74,6 @@ func TestInvalidTransactions(t *testing.T) {
 	if err := pool.Add(tx); err != ErrNonce {
 		t.Error("expected", ErrNonce)
 	}
-
 	tx = transaction(1, big.NewInt(100000), key)
 	pool.minGasPrice = big.NewInt(1000)
 	if err := pool.Add(tx); err != ErrCheap {
@@ -331,7 +332,7 @@ func TestTransactionDropping(t *testing.T) {
 
 // Tests that if a transaction is dropped from the current pending pool (e.g. out
 // of fund), all consecutive (still valid, but not executable) transactions are
-// postponed back into the future queue to prevent broadcasting them.
+// postponed back into the future queue to prevent broadcating them.
 func TestTransactionPostponing(t *testing.T) {
 	// Create a test account and fund it
 	pool, key := setupTxPool()
@@ -366,7 +367,7 @@ func TestTransactionPostponing(t *testing.T) {
 	if len(pool.queue[account]) != 0 {
 		t.Errorf("queued transaction mismatch: have %d, want %d", len(pool.queue), 0)
 	}
-	// Reduce the balance of the account, and check that transactions are reorganised
+	// Reduce the balance of the account, and check that transactions are reorganized
 	state.AddBalance(account, big.NewInt(-750))
 	pool.resetState()
 

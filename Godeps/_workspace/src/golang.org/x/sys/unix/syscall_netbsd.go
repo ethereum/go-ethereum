@@ -350,8 +350,8 @@ func sendfile(outfd int, infd int, offset *int64, count int) (written int, err e
 // compat_43_oftruncate
 // compat_43_ogetdirentries
 // compat_43_ogetdtablesize
-// compat_43_ogethostid
-// compat_43_ogethostname
+// compat_43_ogexpostid
+// compat_43_ogexpostname
 // compat_43_ogetkerninfo
 // compat_43_ogetpagesize
 // compat_43_ogetpeername

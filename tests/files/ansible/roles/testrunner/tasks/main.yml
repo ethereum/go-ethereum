@@ -2,7 +2,7 @@
 - name: update C++ client
   docker_image:
       path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-cppjit
-      name: ethereum/cppjit-testrunner
+      name: expanse/cppjit-testrunner
       state: build
   async: 1200
   poll: 5
@@ -10,7 +10,7 @@
 - name: update Go client
   docker_image:
       path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-go
-      name: ethereum/go-testrunner
+      name: expanse/go-testrunner
       state: build
   async: 1200
   poll: 5
@@ -18,7 +18,7 @@
 - name: update Python client
   docker_image:
       path: /home/{{ ansible_ssh_user }}/git/ansible/test-files/docker-python
-      name: ethereum/python-testrunner
+      name: expanse/python-testrunner
       state: build
   async: 1200
   poll: 5

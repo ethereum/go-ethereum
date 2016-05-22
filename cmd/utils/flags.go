@@ -1,18 +1,18 @@
-// Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-expanse Authors
+// This file is part of go-expanse.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// go-expanse is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// go-expanse is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
 
 package utils
 
@@ -31,26 +31,26 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
-	"github.com/ethereum/go-ethereum/release"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/whisper"
+	"github.com/expanse-project/ethash"
+	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core"
+	"github.com/expanse-project/go-expanse/core/state"
+	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-project/go-expanse/node"
+	"github.com/expanse-project/go-expanse/p2p/discover"
+	"github.com/expanse-project/go-expanse/p2p/nat"
+	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-project/go-expanse/release"
+	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-project/go-expanse/whisper"
 )
 
 func init() {
@@ -112,7 +112,7 @@ var (
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 0=Olympic, 1=Frontier, 2=Morden)",
-		Value: eth.NetworkId,
+		Value: exp.NetworkId,
 	}
 	OlympicFlag = cli.BoolFlag{
 		Name:  "olympic",
@@ -248,7 +248,7 @@ var (
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
-		Value: common.DefaultHTTPPort,
+		Value: 9656,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -321,7 +321,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 30303,
+		Value: 42786,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -549,7 +549,7 @@ func MakeGenesisBlock(ctx *cli.Context) string {
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
-// for Geth and returns half of the allowance to assign to the database.
+// for Gexp and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
 	if err := raiseFdLimit(2048); err != nil {
 		Fatalf("Failed to raise file descriptor allowance: %v", err)
@@ -674,7 +674,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		WSOrigins:       ctx.GlobalString(WSAllowedOriginsFlag.Name),
 		WSModules:       MakeRPCModules(ctx.GlobalString(WSApiFlag.Name)),
 	}
-	// Configure the Ethereum service
+	// Configure the Expanse service
 	accman := MakeAccountManager(ctx)
 
 	// initialise new random number generator
@@ -687,7 +687,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		glog.V(logger.Info).Infoln("You're one of the lucky few that will try out the JIT VM (random). If you get a consensus failure please be so kind to report this incident with the block hash that failed. You can switch to the regular VM by setting --jitvm=false")
 	}
 
-	ethConf := &eth.Config{
+	ethConf := &exp.Config{
 		ChainConfig:             MustMakeChainConfig(ctx),
 		Genesis:                 MakeGenesisBlock(ctx),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
@@ -738,7 +738,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	case ctx.GlobalBool(DevModeFlag.Name):
 		// Override the base network stack configs
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
-			stackConf.DataDir = filepath.Join(os.TempDir(), "/ethereum_dev_mode")
+			stackConf.DataDir = filepath.Join(os.TempDir(), "/expanse_dev_mode")
 		}
 		if !ctx.GlobalIsSet(MaxPeersFlag.Name) {
 			stackConf.MaxPeers = 0
@@ -746,7 +746,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		if !ctx.GlobalIsSet(ListenPortFlag.Name) {
 			stackConf.ListenAddr = ":0"
 		}
-		// Override the Ethereum protocol configs
+		// Override the Expanse protocol configs
 		if !ctx.GlobalIsSet(GenesisFileFlag.Name) {
 			ethConf.Genesis = core.OlympicGenesisBlock()
 		}
@@ -764,9 +764,9 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return eth.New(ctx, ethConf)
+		return exp.New(ctx, ethConf)
 	}); err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		Fatalf("Failed to register the Expanse service: %v", err)
 	}
 	if shhEnable {
 		if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
@@ -776,7 +776,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return release.NewReleaseService(ctx, relconf)
 	}); err != nil {
-		Fatalf("Failed to register the Geth release oracle service: %v", err)
+		Fatalf("Failed to register the Gexp release oracle service: %v", err)
 	}
 	return stack
 }

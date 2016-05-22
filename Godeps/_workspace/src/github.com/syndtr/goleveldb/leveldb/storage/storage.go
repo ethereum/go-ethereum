@@ -149,7 +149,7 @@ type Storage interface {
 	GetMeta() (FileDesc, error)
 
 	// List returns fds that match the given file types.
-	// The file types may be OR'ed together.
+	// The file types may be OR'ed togexper.
 	List(ft FileType) ([]FileDesc, error)
 
 	// Open opens file with the given fd read-only.

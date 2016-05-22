@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/core/types"
 )
 
 // ErrNoCode is returned by call and transact operations for which the requested
@@ -36,7 +36,7 @@ var ErrNoCode = errors.New("no contract code at given address")
 // ContractCaller defines the methods needed to allow operating with contract on a read
 // only basis.
 type ContractCaller interface {
-	// ContractCall executes an Ethereum contract call with the specified data as
+	// ContractCall executes an Expanse contract call with the specified data as
 	// the input. The pending flag requests execution against the pending block, not
 	// the stable head of the chain.
 	ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error)
