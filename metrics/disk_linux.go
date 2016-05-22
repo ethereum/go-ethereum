@@ -68,5 +68,4 @@ func ReadDiskStats(stats *DiskStats) error {
 			stats.WriteBytes = value
 		}
 	}
-	return nil
 }

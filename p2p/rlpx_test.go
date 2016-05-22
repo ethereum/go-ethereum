@@ -94,6 +94,7 @@ func testEncHandshake(token []byte) error {
 	go func() {
 		r := result{side: "initiator"}
 		defer func() { output <- r }()
+		defer fd0.Close()
 
 		dest := &discover.Node{ID: discover.PubkeyID(&prv1.PublicKey)}
 		r.id, r.err = c0.doEncHandshake(prv0, dest)
@@ -108,6 +109,7 @@ func testEncHandshake(token []byte) error {
 	go func() {
 		r := result{side: "receiver"}
 		defer func() { output <- r }()
+		defer fd1.Close()
 
 		r.id, r.err = c1.doEncHandshake(prv1, nil)
 		if r.err != nil {
@@ -265,8 +267,8 @@ func TestRLPXFrameFake(t *testing.T) {
 	buf := new(bytes.Buffer)
 	hash := fakeHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
 	rw := newRLPXFrameRW(buf, secrets{
-		AES:        crypto.Sha3(),
-		MAC:        crypto.Sha3(),
+		AES:        crypto.Keccak256(),
+		MAC:        crypto.Keccak256(),
 		IngressMAC: hash,
 		EgressMAC:  hash,
 	})

@@ -16,7 +16,12 @@
 
 package trie
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/ethdb"
+)
 
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
@@ -44,6 +49,31 @@ func TestIterator(t *testing.T) {
 	for k, found := range v {
 		if !found {
 			t.Error("iterator didn't find", k)
+		}
+	}
+}
+
+// Tests that the node iterator indeed walks over the entire database contents.
+func TestNodeIteratorCoverage(t *testing.T) {
+	// Create some arbitrary test trie to iterate
+	db, trie, _ := makeTestTrie()
+
+	// Gather all the node hashes found by the iterator
+	hashes := make(map[common.Hash]struct{})
+	for it := NewNodeIterator(trie); it.Next(); {
+		if it.Hash != (common.Hash{}) {
+			hashes[it.Hash] = struct{}{}
+		}
+	}
+	// Cross check the hashes and the database itself
+	for hash, _ := range hashes {
+		if _, err := db.Get(hash.Bytes()); err != nil {
+			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
+		}
+	}
+	for _, key := range db.(*ethdb.MemDatabase).Keys() {
+		if _, ok := hashes[common.BytesToHash(key)]; !ok {
+			t.Errorf("state entry not reported %x", key)
 		}
 	}
 }

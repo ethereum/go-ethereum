@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of the go-expanse library.
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
@@ -20,7 +21,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
-
+	"os"
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
@@ -29,7 +30,21 @@ import (
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/crypto"
 	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/logger/glog"
 )
+
+var (
+	ForceJit  bool
+	EnableJit bool
+)
+
+func init() {
+	glog.SetV(0)
+	if os.Getenv("JITVM") == "true" {
+		ForceJit = true
+		EnableJit = true
+	}
+}
 
 func checkLogs(tlog []Log, logs vm.Logs) error {
 
@@ -125,7 +140,16 @@ type VmTest struct {
 	PostStateRoot string
 }
 
+type RuleSet struct {
+	HomesteadBlock *big.Int
+}
+
+func (r RuleSet) IsHomestead(n *big.Int) bool {
+	return n.Cmp(r.HomesteadBlock) >= 0
+}
+
 type Env struct {
+	ruleSet      RuleSet
 	depth        int
 	state        *state.StateDB
 	skipTransfer bool
@@ -144,12 +168,16 @@ type Env struct {
 	logs []vm.StructLog
 
 	vmTest bool
+
+	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB) *Env {
-	return &Env{
-		state: state,
+func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
+	env := &Env{
+		ruleSet: ruleSet,
+		state:   state,
 	}
+	return env
 }
 
 func (self *Env) StructLogs() []vm.StructLog {
@@ -160,8 +188,8 @@ func (self *Env) AddStructLog(log vm.StructLog) {
 	self.logs = append(self.logs, log)
 }
 
-func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
-	env := NewEnv(state)
+func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
+	env := NewEnv(ruleSet, state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
 	env.parent = common.HexToHash(envValues["previousHash"])
@@ -172,9 +200,16 @@ func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues 
 	env.gasLimit = common.Big(envValues["currentGasLimit"])
 	env.Gas = new(big.Int)
 
+	env.evm = vm.New(env, vm.Config{
+		EnableJit: EnableJit,
+		ForceJit:  ForceJit,
+	})
+
 	return env
 }
 
+func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
+func (self *Env) Vm() vm.Vm                { return self.evm }
 func (self *Env) Origin() common.Address   { return self.origin }
 func (self *Env) BlockNumber() *big.Int    { return self.number }
 func (self *Env) Coinbase() common.Address { return self.coinbase }
@@ -184,7 +219,7 @@ func (self *Env) Db() vm.Database          { return self.state }
 func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
 func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
+	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }
 func (self *Env) AddLog(log *vm.Log) {
 	self.state.AddLog(log)

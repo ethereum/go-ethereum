@@ -27,26 +27,6 @@ type BytesSuite struct{}
 
 var _ = checker.Suite(&BytesSuite{})
 
-func (s *BytesSuite) TestByteString(c *checker.C) {
-	var data Bytes
-	data = []byte{102, 111, 111}
-	exp := "foo"
-	res := data.String()
-
-	c.Assert(res, checker.Equals, exp)
-}
-
-/*
-func (s *BytesSuite) TestDeleteFromByteSlice(c *checker.C) {
-	data := []byte{1, 2, 3, 4}
-	slice := []byte{1, 2, 3, 4}
-	exp := []byte{1, 4}
-	res := DeleteFromByteSlice(data, slice)
-
-	c.Assert(res, checker.DeepEquals, exp)
-}
-
-*/
 func (s *BytesSuite) TestNumberToBytes(c *checker.C) {
 	// data1 := int(1)
 	// res1 := NumberToBytes(data1, 16)

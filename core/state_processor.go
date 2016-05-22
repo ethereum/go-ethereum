@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -16,22 +32,31 @@ var (
 	big32 = big.NewInt(32)
 )
 
+// StateProcessor is a basic Processor, which takes care of transitioning
+// state from one point to another.
+//
+// StateProcessor implements Processor.
 type StateProcessor struct {
-	bc *BlockChain
+	config *ChainConfig
+	bc     *BlockChain
 }
 
-func NewStateProcessor(bc *BlockChain) *StateProcessor {
-	return &StateProcessor{bc}
+// NewStateProcessor initialises a new StateProcessor.
+func NewStateProcessor(config *ChainConfig, bc *BlockChain) *StateProcessor {
+	return &StateProcessor{
+		config: config,
+		bc:     bc,
+	}
 }
 
-// Process processes the state changes according to the Ethereum rules by running
+// Process processes the state changes according to the Expanse rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
 //
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (types.Receipts, vm.Logs, *big.Int, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
 	var (
 		receipts     types.Receipts
 		totalUsedGas = big.NewInt(0)
@@ -43,7 +68,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 
 	for i, tx := range block.Transactions() {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-		receipt, logs, _, err := ApplyTransaction(p.bc, gp, statedb, header, tx, totalUsedGas)
+		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
 			return nil, nil, totalUsedGas, err
 		}
@@ -55,13 +80,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB) (ty
 	return receipts, allLogs, totalUsedGas, err
 }
 
-// ApplyTransaction attemps to apply a transaction to the given state database
+// ApplyTransaction attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment.
 //
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
-func ApplyTransaction(bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int) (*types.Receipt, vm.Logs, *big.Int, error) {
-	_, gas, err := ApplyMessage(NewEnv(statedb, bc, tx, header), tx, gp)
+func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
+	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, tx, header, cfg), tx, gp)
 	if err != nil {
 		return nil, nil, nil, err
 	}

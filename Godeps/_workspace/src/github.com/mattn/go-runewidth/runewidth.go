@@ -352,22 +352,70 @@ func (c *Condition) StringWidth(s string) (width int) {
 }
 
 func (c *Condition) Truncate(s string, w int, tail string) string {
+	if c.StringWidth(s) <= w {
+		return s
+	}
 	r := []rune(s)
-	tw := StringWidth(tail)
+	tw := c.StringWidth(tail)
 	w -= tw
 	width := 0
 	i := 0
 	for ; i < len(r); i++ {
-		cw := RuneWidth(r[i])
+		cw := c.RuneWidth(r[i])
 		if width+cw > w {
 			break
 		}
 		width += cw
 	}
-	if i == len(r) {
-		return string(r[0:i])
-	}
 	return string(r[0:i]) + tail
+}
+
+func (c *Condition) Wrap(s string, w int) string {
+	width := 0
+	out := ""
+	for _, r := range []rune(s) {
+		cw := RuneWidth(r)
+		if r == '\n' {
+			out += string(r)
+			width = 0
+			continue
+		} else if width+cw > w {
+			out += "\n"
+			width = 0
+			out += string(r)
+			width += cw
+			continue
+		}
+		out += string(r)
+		width += cw
+	}
+	return out
+}
+
+func (c *Condition) FillLeft(s string, w int) string {
+	width := c.StringWidth(s)
+	count := w - width
+	if count > 0 {
+		b := make([]byte, count)
+		for i := range b {
+			b[i] = ' '
+		}
+		return string(b) + s
+	}
+	return s
+}
+
+func (c *Condition) FillRight(s string, w int) string {
+	width := c.StringWidth(s)
+	count := w - width
+	if count > 0 {
+		b := make([]byte, count)
+		for i := range b {
+			b[i] = ' '
+		}
+		return s + string(b)
+	}
+	return s
 }
 
 // RuneWidth returns the number of cells in r.
@@ -401,4 +449,16 @@ func StringWidth(s string) (width int) {
 
 func Truncate(s string, w int, tail string) string {
 	return DefaultCondition.Truncate(s, w, tail)
+}
+
+func Wrap(s string, w int) string {
+	return DefaultCondition.Wrap(s, w)
+}
+
+func FillLeft(s string, w int) string {
+	return DefaultCondition.FillLeft(s, w)
+}
+
+func FillRight(s string, w int) string {
+	return DefaultCondition.FillRight(s, w)
 }

@@ -34,9 +34,9 @@ import (
 func TestTable_pingReplace(t *testing.T) {
 	doit := func(newNodeIsResponding, lastInBucketIsResponding bool) {
 		transport := newPingRecorder()
-		tab := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
+		tab, _ := newTable(transport, NodeID{}, &net.UDPAddr{}, "")
 		defer tab.Close()
-		pingSender := newNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
+		pingSender := NewNode(MustHexID("a502af0f59b2aab7746995408c79e9ca312d2793cc997e44fc55eda62f0150bbb8c59a6f9269ba3a081518b62699ee807c7c19c20125ddfccca872608af9e370"), net.IP{}, 99, 99)
 
 		// fill up the sender's bucket.
 		last := fillBucket(tab, 253)
@@ -177,7 +177,7 @@ func TestTable_closest(t *testing.T) {
 
 	test := func(test *closeTest) bool {
 		// for any node table, Target and N
-		tab := newTable(nil, test.Self, &net.UDPAddr{}, "")
+		tab, _ := newTable(nil, test.Self, &net.UDPAddr{}, "")
 		defer tab.Close()
 		tab.stuff(test.All)
 
@@ -236,7 +236,7 @@ func TestTable_ReadRandomNodesGetAll(t *testing.T) {
 		},
 	}
 	test := func(buf []*Node) bool {
-		tab := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
+		tab, _ := newTable(nil, NodeID{}, &net.UDPAddr{}, "")
 		defer tab.Close()
 		for i := 0; i < len(buf); i++ {
 			ld := cfg.Rand.Intn(len(tab.buckets))
@@ -279,7 +279,7 @@ func (*closeTest) Generate(rand *rand.Rand, size int) reflect.Value {
 
 func TestTable_Lookup(t *testing.T) {
 	self := nodeAtDistance(common.Hash{}, 0)
-	tab := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "")
+	tab, _ := newTable(lookupTestnet, self.ID, &net.UDPAddr{}, "")
 	defer tab.Close()
 
 	// lookup on empty table returns no nodes
@@ -287,7 +287,7 @@ func TestTable_Lookup(t *testing.T) {
 		t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	}
 	// seed table with initial node (otherwise lookup will terminate immediately)
-	seed := newNode(lookupTestnet.dists[256][0], net.IP{}, 256, 0)
+	seed := NewNode(lookupTestnet.dists[256][0], net.IP{}, 256, 0)
 	tab.stuff([]*Node{seed})
 
 	results := tab.Lookup(lookupTestnet.target)
@@ -517,7 +517,7 @@ func (tn *preminedTestnet) findnode(toid NodeID, toaddr *net.UDPAddr, target Nod
 	next := uint16(toaddr.Port) - 1
 	var result []*Node
 	for i, id := range tn.dists[toaddr.Port] {
-		result = append(result, newNode(id, net.ParseIP("127.0.0.1"), next, uint16(i)))
+		result = append(result, NewNode(id, net.ParseIP("127.0.0.1"), next, uint16(i)))
 	}
 	return result, nil
 }
@@ -530,12 +530,12 @@ func (*preminedTestnet) ping(toid NodeID, toaddr *net.UDPAddr) error { return ni
 // various distances to the given target.
 func (n *preminedTestnet) mine(target NodeID) {
 	n.target = target
-	n.targetSha = crypto.Sha3Hash(n.target[:])
+	n.targetSha = crypto.Keccak256Hash(n.target[:])
 	found := 0
 	for found < bucketSize*10 {
 		k := newkey()
 		id := PubkeyID(&k.PublicKey)
-		sha := crypto.Sha3Hash(id[:])
+		sha := crypto.Keccak256Hash(id[:])
 		ld := logdist(n.targetSha, sha)
 		if len(n.dists[ld]) < bucketSize {
 			n.dists[ld] = append(n.dists[ld], id)

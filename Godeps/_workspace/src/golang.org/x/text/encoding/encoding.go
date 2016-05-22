@@ -5,12 +5,6 @@
 // Package encoding defines an interface for character encodings, such as Shift
 // JIS and Windows 1252, that can convert to and from UTF-8.
 //
-// To convert the bytes of an io.Reader r from the encoding e to UTF-8:
-//	rInUTF8 := transform.NewReader(r, e.NewDecoder())
-// and to convert from UTF-8 to the encoding e:
-//	wInUTF8 := transform.NewWriter(w, e.NewEncoder())
-// In both cases, import "golang.org/x/text/transform".
-//
 // Encoding implementations are provided in other packages, such as
 // golang.org/x/text/encoding/charmap and
 // golang.org/x/text/encoding/japanese.
@@ -18,31 +12,115 @@ package encoding
 
 import (
 	"errors"
+	"io"
+	"strconv"
 	"unicode/utf8"
 
+	"golang.org/x/text/encoding/internal/identifier"
 	"golang.org/x/text/transform"
 )
+
+// TODO:
+// - There seems to be some inconsistency in when decoders return errors
+//   and when not. Also documentation seems to suggest they shouldn't return
+//   errors at all (except for UTF-16).
+// - Encoders seem to rely on or at least benefit from the input being in NFC
+//   normal form. Perhaps add an example how users could prepare their output.
 
 // Encoding is a character set encoding that can be transformed to and from
 // UTF-8.
 type Encoding interface {
-	// NewDecoder returns a transformer that converts to UTF-8.
-	//
-	// Transforming source bytes that are not of that encoding will not
-	// result in an error per se. Each byte that cannot be transcoded will
-	// be represented in the output by the UTF-8 encoding of '\uFFFD', the
-	// replacement rune.
-	NewDecoder() transform.Transformer
+	// NewDecoder returns a Decoder.
+	NewDecoder() *Decoder
 
-	// NewEncoder returns a transformer that converts from UTF-8.
-	//
-	// Transforming source bytes that are not valid UTF-8 will not result in
-	// an error per se. Each rune that cannot be transcoded will be
-	// represented in the output by an encoding-specific replacement such as
-	// "\x1a" (the ASCII substitute character) or "\xff\xfd". To return
-	// early with error instead, use transform.Chain to preprocess the data
-	// with a UTF8Validator.
-	NewEncoder() transform.Transformer
+	// NewEncoder returns an Encoder.
+	NewEncoder() *Encoder
+}
+
+// A Decoder converts bytes to UTF-8. It implements transform.Transformer.
+//
+// Transforming source bytes that are not of that encoding will not result in an
+// error per se. Each byte that cannot be transcoded will be represented in the
+// output by the UTF-8 encoding of '\uFFFD', the replacement rune.
+type Decoder struct {
+	transform.Transformer
+
+	// This forces external creators of Decoders to use names in struct
+	// initializers, allowing for future extendibility without having to break
+	// code.
+	_ struct{}
+}
+
+// Bytes converts the given encoded bytes to UTF-8. It returns the converted
+// bytes or 0, err if any error occurred.
+func (d *Decoder) Bytes(b []byte) ([]byte, error) {
+	b, _, err := transform.Bytes(d, b)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// String converts the given encoded string to UTF-8. It returns the converted
+// string or 0, err if any error occurred.
+func (d *Decoder) String(s string) (string, error) {
+	s, _, err := transform.String(d, s)
+	if err != nil {
+		return "", err
+	}
+	return s, nil
+}
+
+// Reader wraps another Reader to decode its bytes.
+//
+// The Decoder may not be used for any other operation as long as the returned
+// Reader is in use.
+func (d *Decoder) Reader(r io.Reader) io.Reader {
+	return transform.NewReader(r, d)
+}
+
+// An Encoder converts bytes from UTF-8. It implements transform.Transformer.
+//
+// Each rune that cannot be transcoded will result in an error. In this case,
+// the transform will consume all source byte up to, not including the offending
+// rune. Transforming source bytes that are not valid UTF-8 will be replaced by
+// `\uFFFD`. To return early with an error instead, use transform.Chain to
+// preprocess the data with a UTF8Validator.
+type Encoder struct {
+	transform.Transformer
+
+	// This forces external creators of Encoders to use names in struct
+	// initializers, allowing for future extendibility without having to break
+	// code.
+	_ struct{}
+}
+
+// Bytes converts bytes from UTF-8. It returns the converted bytes or 0, err if
+// any error occurred.
+func (e *Encoder) Bytes(b []byte) ([]byte, error) {
+	b, _, err := transform.Bytes(e, b)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// String converts a string from UTF-8. It returns the converted string or
+// 0, err if any error occurred.
+func (e *Encoder) String(s string) (string, error) {
+	s, _, err := transform.String(e, s)
+	if err != nil {
+		return "", err
+	}
+	return s, nil
+}
+
+// Writer wraps another Writer to encode its UTF-8 output.
+//
+// The Encoder may not be used for any other operation as long as the returned
+// Writer is in use.
+func (e *Encoder) Writer(w io.Writer) io.Writer {
+	return transform.NewWriter(w, e)
 }
 
 // ASCIISub is the ASCII substitute character, as recommended by
@@ -55,12 +133,11 @@ var Nop Encoding = nop{}
 
 type nop struct{}
 
-func (nop) NewDecoder() transform.Transformer {
-	return transform.Nop
+func (nop) NewDecoder() *Decoder {
+	return &Decoder{Transformer: transform.Nop}
 }
-
-func (nop) NewEncoder() transform.Transformer {
-	return transform.Nop
+func (nop) NewEncoder() *Encoder {
+	return &Encoder{Transformer: transform.Nop}
 }
 
 // Replacement is the replacement encoding. Decoding from the replacement
@@ -73,12 +150,16 @@ var Replacement Encoding = replacement{}
 
 type replacement struct{}
 
-func (replacement) NewDecoder() transform.Transformer {
-	return replacementDecoder{}
+func (replacement) NewDecoder() *Decoder {
+	return &Decoder{Transformer: replacementDecoder{}}
 }
 
-func (replacement) NewEncoder() transform.Transformer {
-	return replacementEncoder{}
+func (replacement) NewEncoder() *Encoder {
+	return &Encoder{Transformer: replacementEncoder{}}
+}
+
+func (replacement) ID() (mib identifier.MIB, other string) {
+	return identifier.Replacement, ""
 }
 
 type replacementDecoder struct{ transform.NopResetter }
@@ -131,6 +212,81 @@ func (replacementEncoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int
 		nDst += utf8.EncodeRune(dst[nDst:], r)
 	}
 	return nDst, nSrc, err
+}
+
+// HTMLEscapeUnsupported wraps encoders to replace source runes outside the
+// repertoire of the destination encoding with HTML escape sequences.
+//
+// This wrapper exists to comply to URL and HTML forms requiring a
+// non-terminating legacy encoder. The produced sequences may lead to data
+// loss as they are indistinguishable from legitimate input. To avoid this
+// issue, use UTF-8 encodings whenever possible.
+func HTMLEscapeUnsupported(e *Encoder) *Encoder {
+	return &Encoder{Transformer: &errorHandler{e, errorToHTML}}
+}
+
+// ReplaceUnsupported wraps encoders to replace source runes outside the
+// repertoire of the destination encoding with an encoding-specific
+// replacement.
+//
+// This wrapper is only provided for backwards compatibility and legacy
+// handling. Its use is strongly discouraged. Use UTF-8 whenever possible.
+func ReplaceUnsupported(e *Encoder) *Encoder {
+	return &Encoder{Transformer: &errorHandler{e, errorToReplacement}}
+}
+
+type errorHandler struct {
+	*Encoder
+	handler func(dst []byte, r rune, err repertoireError) (n int, ok bool)
+}
+
+// TODO: consider making this error public in some form.
+type repertoireError interface {
+	Replacement() byte
+}
+
+func (h errorHandler) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	nDst, nSrc, err = h.Transformer.Transform(dst, src, atEOF)
+	for err != nil {
+		rerr, ok := err.(repertoireError)
+		if !ok {
+			return nDst, nSrc, err
+		}
+		r, sz := utf8.DecodeRune(src[nSrc:])
+		n, ok := h.handler(dst[nDst:], r, rerr)
+		if !ok {
+			return nDst, nSrc, transform.ErrShortDst
+		}
+		err = nil
+		nDst += n
+		if nSrc += sz; nSrc < len(src) {
+			var dn, sn int
+			dn, sn, err = h.Transformer.Transform(dst[nDst:], src[nSrc:], atEOF)
+			nDst += dn
+			nSrc += sn
+		}
+	}
+	return nDst, nSrc, err
+}
+
+func errorToHTML(dst []byte, r rune, err repertoireError) (n int, ok bool) {
+	buf := [8]byte{}
+	b := strconv.AppendUint(buf[:0], uint64(r), 10)
+	if n = len(b) + len("&#;"); n >= len(dst) {
+		return 0, false
+	}
+	dst[0] = '&'
+	dst[1] = '#'
+	dst[copy(dst[2:], b)+2] = ';'
+	return n, true
+}
+
+func errorToReplacement(dst []byte, r rune, err repertoireError) (n int, ok bool) {
+	if len(dst) == 0 {
+		return 0, false
+	}
+	dst[0] = err.Replacement()
+	return 1, true
 }
 
 // ErrInvalidUTF8 means that a transformer encountered invalid UTF-8.

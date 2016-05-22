@@ -1,4 +1,5 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
+// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 go-expanse Authors
 // This file is part of the go-expanse library.
 //
 // The go-expanse library is free software: you can redistribute it and/or modify
@@ -34,26 +35,26 @@ import (
 	"github.com/expanse-project/go-expanse/logger/glog"
 )
 
-func RunStateTestWithReader(r io.Reader, skipTests []string) error {
+func RunStateTestWithReader(ruleSet RuleSet, r io.Reader, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	if err := readJson(r, &tests); err != nil {
 		return err
 	}
 
-	if err := runStateTests(tests, skipTests); err != nil {
+	if err := runStateTests(ruleSet, tests, skipTests); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func RunStateTest(p string, skipTests []string) error {
+func RunStateTest(ruleSet RuleSet, p string, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	if err := readJsonFile(p, &tests); err != nil {
 		return err
 	}
 
-	if err := runStateTests(tests, skipTests); err != nil {
+	if err := runStateTests(ruleSet, tests, skipTests); err != nil {
 		return err
 	}
 
@@ -61,7 +62,7 @@ func RunStateTest(p string, skipTests []string) error {
 
 }
 
-func BenchStateTest(p string, conf bconf, b *testing.B) error {
+func BenchStateTest(ruleSet RuleSet, p string, conf bconf, b *testing.B) error {
 	tests := make(map[string]VmTest)
 	if err := readJsonFile(p, &tests); err != nil {
 		return err
@@ -70,11 +71,6 @@ func BenchStateTest(p string, conf bconf, b *testing.B) error {
 	if !ok {
 		return fmt.Errorf("test not found: %s", conf.name)
 	}
-
-	pJit := vm.EnableJit
-	vm.EnableJit = conf.jit
-	pForceJit := vm.ForceJit
-	vm.ForceJit = conf.precomp
 
 	// XXX Yeah, yeah...
 	env := make(map[string]string)
@@ -91,16 +87,13 @@ func BenchStateTest(p string, conf bconf, b *testing.B) error {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchStateTest(test, env, b)
+		benchStateTest(ruleSet, test, env, b)
 	}
-
-	vm.EnableJit = pJit
-	vm.ForceJit = pForceJit
 
 	return nil
 }
 
-func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
+func benchStateTest(ruleSet RuleSet, test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, db)
@@ -113,10 +106,10 @@ func benchStateTest(test VmTest, env map[string]string, b *testing.B) {
 	}
 	b.StartTimer()
 
-	RunState(statedb, env, test.Exec)
+	RunState(ruleSet, statedb, env, test.Exec)
 }
 
-func runStateTests(tests map[string]VmTest, skipTests []string) error {
+func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
@@ -129,7 +122,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 		}
 
 		//fmt.Println("StateTest:", name)
-		if err := runStateTest(test); err != nil {
+		if err := runStateTest(ruleSet, test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
@@ -140,7 +133,7 @@ func runStateTests(tests map[string]VmTest, skipTests []string) error {
 
 }
 
-func runStateTest(test VmTest) error {
+func runStateTest(ruleSet RuleSet, test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
@@ -171,7 +164,7 @@ func runStateTest(test VmTest) error {
 		logs vm.Logs
 	)
 
-	ret, logs, _, _ = RunState(statedb, env, test.Transaction)
+	ret, logs, _, _ = RunState(ruleSet, statedb, env, test.Transaction)
 
 	// Compare expected and actual return
 	rexp := common.FromHex(test.Out)
@@ -219,7 +212,7 @@ func runStateTest(test VmTest) error {
 	return nil
 }
 
-func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
@@ -235,14 +228,13 @@ func RunState(statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Log
 	}
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
-	vm.Debug = false
 	snapshot := statedb.Copy()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(statedb, env, tx)
+	vmenv := NewEnvFromMap(ruleSet, statedb, env, tx)
 	vmenv.origin = addr
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {

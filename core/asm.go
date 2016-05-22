@@ -61,6 +61,4 @@ func Disassemble(script []byte) (asm []string) {
 
 		pc.Add(pc, common.Big1)
 	}
-
-	return asm
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package filters
 
 import (
 	"math"
+	"time"
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
@@ -32,6 +33,8 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
+	created time.Time
+
 	db         ethdb.Database
 	begin, end int64
 	addresses  []common.Address
@@ -39,7 +42,7 @@ type Filter struct {
 
 	BlockCallback       func(*types.Block, vm.Logs)
 	TransactionCallback func(*types.Transaction)
-	LogsCallback        func(vm.Logs)
+	LogCallback         func(*vm.Log, bool)
 }
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block

@@ -66,7 +66,7 @@ func (self *Envelope) Seal(pow time.Duration) {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint32(d[60:], nonce)
 
-			firstBit := common.FirstBitSet(common.BigD(crypto.Sha3(d)))
+			firstBit := common.FirstBitSet(common.BigD(crypto.Keccak256(d)))
 			if firstBit > bestBit {
 				self.Nonce, bestBit = nonce, firstBit
 			}
@@ -123,7 +123,7 @@ func (self *Envelope) Open(key *ecdsa.PrivateKey) (msg *Message, err error) {
 func (self *Envelope) Hash() common.Hash {
 	if (self.hash == common.Hash{}) {
 		enc, _ := rlp.EncodeToBytes(self)
-		self.hash = crypto.Sha3Hash(enc)
+		self.hash = crypto.Keccak256Hash(enc)
 	}
 	return self.hash
 }
@@ -142,6 +142,6 @@ func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	if err := rlp.DecodeBytes(raw, (*rlpenv)(self)); err != nil {
 		return err
 	}
-	self.hash = crypto.Sha3Hash(raw)
+	self.hash = crypto.Keccak256Hash(raw)
 	return nil
 }

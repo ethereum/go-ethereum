@@ -1,142 +1,240 @@
-// Copyright 2015 Zack Guo <gizak@icloud.com>. All rights reserved.
+// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
 package termui
 
+import "image"
+
+// Hline is a horizontal line.
+type Hline struct {
+	X   int
+	Y   int
+	Len int
+	Fg  Attribute
+	Bg  Attribute
+}
+
+// Vline is a vertical line.
+type Vline struct {
+	X   int
+	Y   int
+	Len int
+	Fg  Attribute
+	Bg  Attribute
+}
+
+// Buffer draws a horizontal line.
+func (l Hline) Buffer() Buffer {
+	if l.Len <= 0 {
+		return NewBuffer()
+	}
+	return NewFilledBuffer(l.X, l.Y, l.X+l.Len, l.Y+1, HORIZONTAL_LINE, l.Fg, l.Bg)
+}
+
+// Buffer draws a vertical line.
+func (l Vline) Buffer() Buffer {
+	if l.Len <= 0 {
+		return NewBuffer()
+	}
+	return NewFilledBuffer(l.X, l.Y, l.X+1, l.Y+l.Len, VERTICAL_LINE, l.Fg, l.Bg)
+}
+
+// Buffer draws a box border.
+func (b Block) drawBorder(buf Buffer) {
+	if !b.Border {
+		return
+	}
+
+	min := b.area.Min
+	max := b.area.Max
+
+	x0 := min.X
+	y0 := min.Y
+	x1 := max.X - 1
+	y1 := max.Y - 1
+
+	// draw lines
+	if b.BorderTop {
+		buf.Merge(Hline{x0, y0, x1 - x0, b.BorderFg, b.BorderBg}.Buffer())
+	}
+	if b.BorderBottom {
+		buf.Merge(Hline{x0, y1, x1 - x0, b.BorderFg, b.BorderBg}.Buffer())
+	}
+	if b.BorderLeft {
+		buf.Merge(Vline{x0, y0, y1 - y0, b.BorderFg, b.BorderBg}.Buffer())
+	}
+	if b.BorderRight {
+		buf.Merge(Vline{x1, y0, y1 - y0, b.BorderFg, b.BorderBg}.Buffer())
+	}
+
+	// draw corners
+	if b.BorderTop && b.BorderLeft && b.area.Dx() > 0 && b.area.Dy() > 0 {
+		buf.Set(x0, y0, Cell{TOP_LEFT, b.BorderFg, b.BorderBg})
+	}
+	if b.BorderTop && b.BorderRight && b.area.Dx() > 1 && b.area.Dy() > 0 {
+		buf.Set(x1, y0, Cell{TOP_RIGHT, b.BorderFg, b.BorderBg})
+	}
+	if b.BorderBottom && b.BorderLeft && b.area.Dx() > 0 && b.area.Dy() > 1 {
+		buf.Set(x0, y1, Cell{BOTTOM_LEFT, b.BorderFg, b.BorderBg})
+	}
+	if b.BorderBottom && b.BorderRight && b.area.Dx() > 1 && b.area.Dy() > 1 {
+		buf.Set(x1, y1, Cell{BOTTOM_RIGHT, b.BorderFg, b.BorderBg})
+	}
+}
+
+func (b Block) drawBorderLabel(buf Buffer) {
+	maxTxtW := b.area.Dx() - 2
+	tx := DTrimTxCls(DefaultTxBuilder.Build(b.BorderLabel, b.BorderLabelFg, b.BorderLabelBg), maxTxtW)
+
+	for i, w := 0, 0; i < len(tx); i++ {
+		buf.Set(b.area.Min.X+1+w, b.area.Min.Y, tx[i])
+		w += tx[i].Width()
+	}
+}
+
 // Block is a base struct for all other upper level widgets,
 // consider it as css: display:block.
 // Normally you do not need to create it manually.
 type Block struct {
+	area          image.Rectangle
+	innerArea     image.Rectangle
 	X             int
 	Y             int
-	Border        labeledBorder
-	IsDisplay     bool
-	HasBorder     bool
-	BgColor       Attribute
+	Border        bool
+	BorderFg      Attribute
+	BorderBg      Attribute
+	BorderLeft    bool
+	BorderRight   bool
+	BorderTop     bool
+	BorderBottom  bool
+	BorderLabel   string
+	BorderLabelFg Attribute
+	BorderLabelBg Attribute
+	Display       bool
+	Bg            Attribute
 	Width         int
 	Height        int
-	innerWidth    int
-	innerHeight   int
-	innerX        int
-	innerY        int
 	PaddingTop    int
 	PaddingBottom int
 	PaddingLeft   int
 	PaddingRight  int
+	id            string
+	Float         Align
 }
 
 // NewBlock returns a *Block which inherits styles from current theme.
 func NewBlock() *Block {
-	d := Block{}
-	d.IsDisplay = true
-	d.HasBorder = theme.HasBorder
-	d.Border.BgColor = theme.BorderBg
-	d.Border.FgColor = theme.BorderFg
-	d.Border.LabelBgColor = theme.BorderLabelTextBg
-	d.Border.LabelFgColor = theme.BorderLabelTextFg
-	d.BgColor = theme.BlockBg
-	d.Width = 2
-	d.Height = 2
-	return &d
+	b := Block{}
+	b.Display = true
+	b.Border = true
+	b.BorderLeft = true
+	b.BorderRight = true
+	b.BorderTop = true
+	b.BorderBottom = true
+	b.BorderBg = ThemeAttr("border.bg")
+	b.BorderFg = ThemeAttr("border.fg")
+	b.BorderLabelBg = ThemeAttr("label.bg")
+	b.BorderLabelFg = ThemeAttr("label.fg")
+	b.Bg = ThemeAttr("block.bg")
+	b.Width = 2
+	b.Height = 2
+	b.id = GenId()
+	b.Float = AlignNone
+	return &b
 }
 
-// compute box model
-func (d *Block) align() {
-	d.innerWidth = d.Width - d.PaddingLeft - d.PaddingRight
-	d.innerHeight = d.Height - d.PaddingTop - d.PaddingBottom
-	d.innerX = d.X + d.PaddingLeft
-	d.innerY = d.Y + d.PaddingTop
+func (b Block) Id() string {
+	return b.id
+}
 
-	if d.HasBorder {
-		d.innerHeight -= 2
-		d.innerWidth -= 2
-		d.Border.X = d.X
-		d.Border.Y = d.Y
-		d.Border.Width = d.Width
-		d.Border.Height = d.Height
-		d.innerX++
-		d.innerY++
-	}
+// Align computes box model
+func (b *Block) Align() {
+	// outer
+	b.area.Min.X = 0
+	b.area.Min.Y = 0
+	b.area.Max.X = b.Width
+	b.area.Max.Y = b.Height
 
-	if d.innerHeight < 0 {
-		d.innerHeight = 0
-	}
-	if d.innerWidth < 0 {
-		d.innerWidth = 0
-	}
+	// float
+	b.area = AlignArea(TermRect(), b.area, b.Float)
+	b.area = MoveArea(b.area, b.X, b.Y)
 
+	// inner
+	b.innerArea.Min.X = b.area.Min.X + b.PaddingLeft
+	b.innerArea.Min.Y = b.area.Min.Y + b.PaddingTop
+	b.innerArea.Max.X = b.area.Max.X - b.PaddingRight
+	b.innerArea.Max.Y = b.area.Max.Y - b.PaddingBottom
+
+	if b.Border {
+		if b.BorderLeft {
+			b.innerArea.Min.X++
+		}
+		if b.BorderRight {
+			b.innerArea.Max.X--
+		}
+		if b.BorderTop {
+			b.innerArea.Min.Y++
+		}
+		if b.BorderBottom {
+			b.innerArea.Max.Y--
+		}
+	}
 }
 
 // InnerBounds returns the internal bounds of the block after aligning and
 // calculating the padding and border, if any.
-func (d *Block) InnerBounds() (x, y, width, height int) {
-	d.align()
-	return d.innerX, d.innerY, d.innerWidth, d.innerHeight
+func (b *Block) InnerBounds() image.Rectangle {
+	b.Align()
+	return b.innerArea
 }
 
 // Buffer implements Bufferer interface.
 // Draw background and border (if any).
-func (d *Block) Buffer() []Point {
-	d.align()
+func (b *Block) Buffer() Buffer {
+	b.Align()
 
-	ps := []Point{}
-	if !d.IsDisplay {
-		return ps
-	}
+	buf := NewBuffer()
+	buf.SetArea(b.area)
+	buf.Fill(' ', ColorDefault, b.Bg)
 
-	if d.HasBorder {
-		ps = d.Border.Buffer()
-	}
+	b.drawBorder(buf)
+	b.drawBorderLabel(buf)
 
-	for i := 0; i < d.innerWidth; i++ {
-		for j := 0; j < d.innerHeight; j++ {
-			p := Point{}
-			p.X = d.X + 1 + i
-			p.Y = d.Y + 1 + j
-			p.Ch = ' '
-			p.Bg = d.BgColor
-			ps = append(ps, p)
-		}
-	}
-	return ps
+	return buf
 }
 
 // GetHeight implements GridBufferer.
 // It returns current height of the block.
-func (d Block) GetHeight() int {
-	return d.Height
+func (b Block) GetHeight() int {
+	return b.Height
 }
 
 // SetX implements GridBufferer interface, which sets block's x position.
-func (d *Block) SetX(x int) {
-	d.X = x
+func (b *Block) SetX(x int) {
+	b.X = x
 }
 
 // SetY implements GridBufferer interface, it sets y position for block.
-func (d *Block) SetY(y int) {
-	d.Y = y
+func (b *Block) SetY(y int) {
+	b.Y = y
 }
 
 // SetWidth implements GridBuffer interface, it sets block's width.
-func (d *Block) SetWidth(w int) {
-	d.Width = w
+func (b *Block) SetWidth(w int) {
+	b.Width = w
 }
 
-// chop the overflow parts
-func (d *Block) chopOverflow(ps []Point) []Point {
-	nps := make([]Point, 0, len(ps))
-	x := d.X
-	y := d.Y
-	w := d.Width
-	h := d.Height
-	for _, v := range ps {
-		if v.X >= x &&
-			v.X < x+w &&
-			v.Y >= y &&
-			v.Y < y+h {
-			nps = append(nps, v)
-		}
-	}
-	return nps
+func (b Block) InnerWidth() int {
+	return b.innerArea.Dx()
 }
+
+func (b Block) InnerHeight() int {
+	return b.innerArea.Dy()
+}
+
+func (b Block) InnerX() int {
+	return b.innerArea.Min.X
+}
+
+func (b Block) InnerY() int { return b.innerArea.Min.Y }

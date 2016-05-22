@@ -1,12 +1,14 @@
 // Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
@@ -40,7 +42,7 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 
 	var m event.TypeMux
 	key, _ := crypto.GenerateKey()
-	newPool := NewTxPool(&m, func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	newPool := NewTxPool(testChainConfig(), &m, func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	newPool.resetState()
 	return newPool, key
 }
@@ -71,6 +73,16 @@ func TestInvalidTransactions(t *testing.T) {
 	tx = transaction(0, big.NewInt(100000), key)
 	if err := pool.Add(tx); err != ErrNonce {
 		t.Error("expected", ErrNonce)
+	}
+	tx = transaction(1, big.NewInt(100000), key)
+	pool.minGasPrice = big.NewInt(1000)
+	if err := pool.Add(tx); err != ErrCheap {
+		t.Error("expected", ErrCheap, "got", err)
+	}
+
+	pool.SetLocal(tx)
+	if err := pool.Add(tx); err != nil {
+		t.Error("expected", nil, "got", err)
 	}
 }
 

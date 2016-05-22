@@ -66,6 +66,9 @@ func (mux *TypeMux) Subscribe(types ...interface{}) Subscription {
 	mux.mutex.Lock()
 	defer mux.mutex.Unlock()
 	if mux.stopped {
+		// set the status to closed so that calling Unsubscribe after this
+		// call will short curuit
+		sub.closed = true
 		close(sub.postC)
 	} else {
 		if mux.subm == nil {

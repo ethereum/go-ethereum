@@ -39,7 +39,7 @@ static void secp256k1_scalar_set_int(secp256k1_scalar *r, unsigned int v);
 /** Convert a scalar to a byte array. */
 static void secp256k1_scalar_get_b32(unsigned char *bin, const secp256k1_scalar* a);
 
-/** Add two scalars together (modulo the group order). Returns whether it overflowed. */
+/** Add two scalars togexper (modulo the group order). Returns whether it overflowed. */
 static int secp256k1_scalar_add(secp256k1_scalar *r, const secp256k1_scalar *a, const secp256k1_scalar *b);
 
 /** Conditionally add a power of two to a scalar. The result is not allowed to overflow. */

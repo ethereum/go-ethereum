@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expanse-project/ethash"
+	"github.com/expanse-org/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/logger"
@@ -56,8 +56,7 @@ func (s *Expanse) StartMining(threads int, gpus string) error {
 		}
 
 		// TODO: re-creating miner is a bit ugly
-		cl := ethash.NewCL(ids)
-		s.miner = miner.New(s, s.EventMux(), cl)
+		s.miner = miner.New(s, s.chainConfig, s.EventMux(), ethash.NewCL(ids))
 		go s.miner.Start(eb, len(ids))
 		return nil
 	}

@@ -1,7 +1,20 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 package exp
-
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -301,6 +314,15 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 				pm.blockchain.GetBlockByNumber(1).Hash(),
 			},
 		},
+		// Check a corner case where requesting more can iterate past the endpoints
+		{
+			&getBlockHeadersData{Origin: hashOrNumber{Number: 2}, Amount: 5, Reverse: true},
+			[]common.Hash{
+				pm.blockchain.GetBlockByNumber(2).Hash(),
+				pm.blockchain.GetBlockByNumber(1).Hash(),
+				pm.blockchain.GetBlockByNumber(0).Hash(),
+			},
+		},
 		// Check that non existing headers aren't returned
 		{
 			&getBlockHeadersData{Origin: hashOrNumber{Hash: unknown}, Amount: 1},
@@ -321,6 +343,17 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 		p2p.Send(peer.app, 0x03, tt.query)
 		if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
 			t.Errorf("test %d: headers mismatch: %v", i, err)
+		}
+		// If the test used number origins, repeat with hashes as the too
+		if tt.query.Origin.Hash == (common.Hash{}) {
+			if origin := pm.blockchain.GetBlockByNumber(tt.query.Origin.Number); origin != nil {
+				tt.query.Origin.Hash, tt.query.Origin.Number = origin.Hash(), 0
+
+				p2p.Send(peer.app, 0x03, tt.query)
+				if err := p2p.ExpectMsg(peer.app, 0x04, headers); err != nil {
+					t.Errorf("test %d: headers mismatch: %v", i, err)
+				}
+			}
 		}
 	}
 }
@@ -407,17 +440,17 @@ func testGetNodeData(t *testing.T, protocol int) {
 	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
 	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
 
-	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_makerts_test)
+	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_markets_test)
 	generator := func(i int, block *core.BlockGen) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+			tx, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+			tx1, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
 			tx2, _ := types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
@@ -461,15 +494,15 @@ func testGetNodeData(t *testing.T, protocol int) {
 	}
 	// Verify that all hashes correspond to the requested data, and reconstruct a state tree
 	for i, want := range hashes {
-		if hash := crypto.Sha3Hash(data[i]); hash != want {
-			fmt.Errorf("data hash mismatch: have %x, want %x", hash, want)
+		if hash := crypto.Keccak256Hash(data[i]); hash != want {
+			t.Errorf("data hash mismatch: have %x, want %x", hash, want)
 		}
 	}
 	statedb, _ := ethdb.NewMemDatabase()
 	for i := 0; i < len(data); i++ {
 		statedb.Put(hashes[i].Bytes(), data[i])
 	}
-	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr}
+	accounts := []common.Address{testBank.Address, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
 		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), statedb)
 
@@ -498,17 +531,17 @@ func testGetReceipt(t *testing.T, protocol int) {
 	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
 	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
 
-	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_makerts_test)
+	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_markets_test)
 	generator := func(i int, block *core.BlockGen) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+			tx, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+			tx1, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
 			tx2, _ := types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)

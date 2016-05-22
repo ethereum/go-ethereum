@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -38,12 +38,20 @@ import (
 // ValidateHeader validates the given header and parent and returns an error
 // if it failed to do so.
 //
-// ValidateStack validates the given statedb and optionally the receipts and
-// gas used. The implementor should decide what to do with the given input.
+// ValidateState validates the given statedb and optionally the receipts and
+// gas used. The implementer should decide what to do with the given input.
 type Validator interface {
+	HeaderValidator
 	ValidateBlock(block *types.Block) error
-	ValidateHeader(header, parent *types.Header, checkPow bool) error
 	ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error
+}
+
+// HeaderValidator is an interface for validating headers only
+//
+// ValidateHeader validates the given header and parent and returns an error
+// if it failed to do so.
+type HeaderValidator interface {
+	ValidateHeader(header, parent *types.Header, checkPow bool) error
 }
 
 // Processor is an interface for processing blocks using a given initial state.
@@ -53,11 +61,11 @@ type Validator interface {
 // of gas used in the process and return an error if any of the internal rules
 // failed.
 type Processor interface {
-	Process(block *types.Block, statedb *state.StateDB) (types.Receipts, vm.Logs, *big.Int, error)
+	Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error)
 }
 
 // Backend is an interface defining the basic functionality for an operable node
-// with all the functionality to be a functional, valid Ethereum operator.
+// with all the functionality to be a functional, valid Expanse operator.
 //
 // TODO Remove this
 type Backend interface {

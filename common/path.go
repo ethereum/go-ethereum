@@ -34,7 +34,7 @@ func MakeName(name, version string) string {
 
 func ExpandHomePath(p string) (path string) {
 	path = p
-	sep := fmt.Sprintf("%s", os.PathSeparator)
+	sep := string(os.PathSeparator)
 
 	// Check in case of paths like "/something/~/something/"
 	if len(p) > 1 && p[:1+len(sep)] == "~"+sep {
@@ -63,34 +63,12 @@ func AbsolutePath(Datadir string, filename string) string {
 	return filepath.Join(Datadir, filename)
 }
 
-func HomeDir() (home string) {
+func HomeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
 	if usr, err := user.Current(); err == nil {
-		home = usr.HomeDir
-	} else {
-		home = os.Getenv("HOME")
+		return usr.HomeDir
 	}
-	return
-}
-
-func DefaultDataDir() string {
-	// Try to place the data folder in the user's home dir
-	home := HomeDir()
-	if home != "" {
-		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "Expanse")
-		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Expanse")
-		} else {
-			return filepath.Join(home, ".expanse")
-		}
-	}
-	// As we cannot guess a stable location, return empty and handle later
 	return ""
-}
-
-func DefaultIpcPath() string {
-	if runtime.GOOS == "windows" {
-		return `\\.\pipe\gexp.ipc`
-	}
-	return filepath.Join(DefaultDataDir(), "gexp.ipc")
 }

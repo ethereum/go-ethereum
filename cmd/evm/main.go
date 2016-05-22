@@ -105,10 +105,6 @@ func init() {
 }
 
 func run(ctx *cli.Context) {
-	vm.Debug = ctx.GlobalBool(DebugFlag.Name)
-	vm.ForceJit = ctx.GlobalBool(ForceJitFlag.Name)
-	vm.EnableJit = !ctx.GlobalBool(DisableJitFlag.Name)
-
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
@@ -118,7 +114,11 @@ func run(ctx *cli.Context) {
 	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
 
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)))
+	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), vm.Config{
+		Debug:     ctx.GlobalBool(DebugFlag.Name),
+		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
+		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
+	})
 
 	tstart := time.Now()
 	ret, e := vmenv.Call(
@@ -174,17 +174,30 @@ type VMEnv struct {
 	Gas   *big.Int
 	time  *big.Int
 	logs  []vm.StructLog
+
+	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int) *VMEnv {
-	return &VMEnv{
+func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg vm.Config) *VMEnv {
+	env := &VMEnv{
 		state:      state,
 		transactor: &transactor,
 		value:      value,
 		time:       big.NewInt(time.Now().Unix()),
 	}
+	cfg.Logger.Collector = env
+
+	env.evm = vm.New(env, cfg)
+	return env
 }
 
+// ruleSet implements vm.RuleSet and will always default to the homestead rule set.
+type ruleSet struct{}
+
+func (ruleSet) IsHomestead(*big.Int) bool { return true }
+
+func (self *VMEnv) RuleSet() vm.RuleSet        { return ruleSet{} }
+func (self *VMEnv) Vm() vm.Vm                  { return self.evm }
 func (self *VMEnv) Db() vm.Database            { return self.state }
 func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }
 func (self *VMEnv) SetSnapshot(db vm.Database) { self.state.Set(db.(*state.StateDB)) }

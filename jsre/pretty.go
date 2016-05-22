@@ -177,7 +177,7 @@ func (ctx ppctx) fields(obj *otto.Object) []string {
 		seen          = make(map[string]bool)
 	)
 	add := func(k string) {
-		if seen[k] || boringKeys[k] {
+		if seen[k] || boringKeys[k] || strings.HasPrefix(k, "_") {
 			return
 		}
 		seen[k] = true
@@ -187,33 +187,60 @@ func (ctx ppctx) fields(obj *otto.Object) []string {
 			vals = append(vals, k)
 		}
 	}
-	// add own properties
-	ctx.doOwnProperties(obj.Value(), add)
-	// add properties of the constructor
-	if cp := constructorPrototype(obj); cp != nil {
-		ctx.doOwnProperties(cp.Value(), add)
-	}
+	iterOwnAndConstructorKeys(ctx.vm, obj, add)
 	sort.Strings(vals)
 	sort.Strings(methods)
 	return append(vals, methods...)
 }
 
-func (ctx ppctx) doOwnProperties(v otto.Value, f func(string)) {
-	Object, _ := ctx.vm.Object("Object")
-	rv, _ := Object.Call("getOwnPropertyNames", v)
+func iterOwnAndConstructorKeys(vm *otto.Otto, obj *otto.Object, f func(string)) {
+	seen := make(map[string]bool)
+	iterOwnKeys(vm, obj, func(prop string) {
+		seen[prop] = true
+		f(prop)
+	})
+	if cp := constructorPrototype(obj); cp != nil {
+		iterOwnKeys(vm, cp, func(prop string) {
+			if !seen[prop] {
+				f(prop)
+			}
+		})
+	}
+}
+
+func iterOwnKeys(vm *otto.Otto, obj *otto.Object, f func(string)) {
+	Object, _ := vm.Object("Object")
+	rv, _ := Object.Call("getOwnPropertyNames", obj.Value())
 	gv, _ := rv.Export()
-	for _, v := range gv.([]interface{}) {
-		f(v.(string))
+	switch gv := gv.(type) {
+	case []interface{}:
+		for _, v := range gv {
+			f(v.(string))
+		}
+	case []string:
+		for _, v := range gv {
+			f(v)
+		}
+	default:
+		panic(fmt.Errorf("Object.getOwnPropertyNames returned unexpected type %T", gv))
 	}
 }
 
 func (ctx ppctx) isBigNumber(v *otto.Object) bool {
-	BigNumber, err := ctx.vm.Run("BigNumber.prototype")
-	if err != nil {
-		panic(err)
+	// Handle numbers with custom constructor.
+	if v, _ := v.Get("constructor"); v.Object() != nil {
+		if strings.HasPrefix(toString(v.Object()), "function BigNumber") {
+			return true
+		}
 	}
-	cp := constructorPrototype(v)
-	return cp != nil && cp.Value() == BigNumber
+	// Handle default constructor.
+	BigNumber, _ := ctx.vm.Object("BigNumber.prototype")
+	if BigNumber == nil {
+		return false
+	}
+	bv, _ := BigNumber.Call("isPrototypeOf", v)
+	b, _ := bv.ToBoolean()
+	return b
 }
 
 func toString(obj *otto.Object) string {

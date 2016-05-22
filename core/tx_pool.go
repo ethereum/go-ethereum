@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
@@ -29,7 +30,6 @@ import (
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/params"
 )
 
 var (
@@ -59,39 +59,46 @@ type stateFn func() (*state.StateDB, error)
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	quit         chan bool // Quiting channel
-	currentState stateFn   // The state function which will allow us to do some pre checkes
+	config       *ChainConfig
+	currentState stateFn // The state function which will allow us to do some pre checks
 	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
 	minGasPrice  *big.Int
 	eventMux     *event.TypeMux
 	events       event.Subscription
+	localTx      *txSet
 	mu           sync.RWMutex
 	pending      map[common.Hash]*types.Transaction // processable transactions
 	queue        map[common.Address]map[common.Hash]*types.Transaction
 
+	wg sync.WaitGroup // for shutdown sync
+
 	homestead bool
 }
 
-func NewTxPool(eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+func NewTxPool(config *ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	pool := &TxPool{
+		config:       config,
 		pending:      make(map[common.Hash]*types.Transaction),
 		queue:        make(map[common.Address]map[common.Hash]*types.Transaction),
-		quit:         make(chan bool),
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
 		minGasPrice:  new(big.Int),
 		pendingState: nil,
+		localTx:      newTxSet(),
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 	}
 
+	pool.wg.Add(1)
 	go pool.eventLoop()
 
 	return pool
 }
 
 func (pool *TxPool) eventLoop() {
+	defer pool.wg.Done()
+
 	// Track chain events. When a chain events occurs (new chain canon block)
 	// we need to know the new state. The new state will help us determine
 	// the nonces in the managed state
@@ -99,7 +106,7 @@ func (pool *TxPool) eventLoop() {
 		switch ev := ev.Data.(type) {
 		case ChainHeadEvent:
 			pool.mu.Lock()
-			if ev.Block != nil && params.IsHomestead(ev.Block.Number()) {
+			if ev.Block != nil && pool.config.IsHomestead(ev.Block.Number()) {
 				pool.homestead = true
 			}
 
@@ -151,8 +158,8 @@ func (pool *TxPool) resetState() {
 }
 
 func (pool *TxPool) Stop() {
-	close(pool.quit)
 	pool.events.Unsubscribe()
+	pool.wg.Wait()
 	glog.V(logger.Info).Infoln("Transaction pool stopped")
 }
 
@@ -174,11 +181,50 @@ func (pool *TxPool) Stats() (pending int, queued int) {
 	return
 }
 
+// Content retrieves the data content of the transaction pool, returning all the
+// pending as well as queued transactions, grouped by account and nonce.
+func (pool *TxPool) Content() (map[common.Address]map[uint64][]*types.Transaction, map[common.Address]map[uint64][]*types.Transaction) {
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
+
+	// Retrieve all the pending transactions and sort by account and by nonce
+	pending := make(map[common.Address]map[uint64][]*types.Transaction)
+	for _, tx := range pool.pending {
+		account, _ := tx.From()
+
+		owned, ok := pending[account]
+		if !ok {
+			owned = make(map[uint64][]*types.Transaction)
+			pending[account] = owned
+		}
+		owned[tx.Nonce()] = append(owned[tx.Nonce()], tx)
+	}
+	// Retrieve all the queued transactions and sort by account and by nonce
+	queued := make(map[common.Address]map[uint64][]*types.Transaction)
+	for account, txs := range pool.queue {
+		owned := make(map[uint64][]*types.Transaction)
+		for _, tx := range txs {
+			owned[tx.Nonce()] = append(owned[tx.Nonce()], tx)
+		}
+		queued[account] = owned
+	}
+	return pending, queued
+}
+
+// SetLocal marks a transaction as local, skipping gas price
+//  check against local miner minimum in the future
+func (pool *TxPool) SetLocal(tx *types.Transaction) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.localTx.add(tx.Hash())
+}
+
 // validateTx checks whether a transaction is valid according
 // to the consensus rules.
 func (pool *TxPool) validateTx(tx *types.Transaction) error {
+	local := pool.localTx.contains(tx.Hash())
 	// Drop transactions under our own minimal accepted gas price
-	if pool.minGasPrice.Cmp(tx.GasPrice()) > 0 {
+	if !local && pool.minGasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrCheap
 	}
 
@@ -315,7 +361,7 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 		}
 	}
 
-	// check and validate the queueue
+	// check and validate the queue
 	self.checkQueue()
 }
 
@@ -527,3 +573,49 @@ type txQueueEntry struct {
 func (q txQueue) Len() int           { return len(q) }
 func (q txQueue) Swap(i, j int)      { q[i], q[j] = q[j], q[i] }
 func (q txQueue) Less(i, j int) bool { return q[i].Nonce() < q[j].Nonce() }
+
+// txSet represents a set of transaction hashes in which entries
+//  are automatically dropped after txSetDuration time
+type txSet struct {
+	txMap          map[common.Hash]struct{}
+	txOrd          map[uint64]txOrdType
+	addPtr, delPtr uint64
+}
+
+const txSetDuration = time.Hour * 2
+
+// txOrdType represents an entry in the time-ordered list of transaction hashes
+type txOrdType struct {
+	hash common.Hash
+	time time.Time
+}
+
+// newTxSet creates a new transaction set
+func newTxSet() *txSet {
+	return &txSet{
+		txMap: make(map[common.Hash]struct{}),
+		txOrd: make(map[uint64]txOrdType),
+	}
+}
+
+// contains returns true if the set contains the given transaction hash
+// (not thread safe, should be called from a locked environment)
+func (self *txSet) contains(hash common.Hash) bool {
+	_, ok := self.txMap[hash]
+	return ok
+}
+
+// add adds a transaction hash to the set, then removes entries older than txSetDuration
+// (not thread safe, should be called from a locked environment)
+func (self *txSet) add(hash common.Hash) {
+	self.txMap[hash] = struct{}{}
+	now := time.Now()
+	self.txOrd[self.addPtr] = txOrdType{hash: hash, time: now}
+	self.addPtr++
+	delBefore := now.Add(-txSetDuration)
+	for self.delPtr < self.addPtr && self.txOrd[self.delPtr].time.Before(delBefore) {
+		delete(self.txMap, self.txOrd[self.delPtr].hash)
+		delete(self.txOrd, self.delPtr)
+		self.delPtr++
+	}
+}

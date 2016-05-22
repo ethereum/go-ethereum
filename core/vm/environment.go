@@ -23,21 +23,26 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 )
 
-// Environment is is required by the virtual machine to get information from
-// it's own isolated environment.
+// RuleSet is an interface that defines the current rule set during the
+// execution of the EVM instructions (e.g. whether it's homestead)
+type RuleSet interface {
+	IsHomestead(*big.Int) bool
+}
 
 // Environment is an EVM requirement and helper which allows access to outside
 // information such as states.
 type Environment interface {
+	// The current ruleset
+	RuleSet() RuleSet
 	// The state database
 	Db() Database
 	// Creates a restorable snapshot
 	MakeSnapshot() Database
 	// Set database to previous snapshot
 	SetSnapshot(Database)
-	// Address of the original invoker (first occurance of the VM invoker)
+	// Address of the original invoker (first occurrence of the VM invoker)
 	Origin() common.Address
-	// The block number this VM is invoken on
+	// The block number this VM is invoked on
 	BlockNumber() *big.Int
 	// The n'th hash ago from this block number
 	GetHash(uint64) common.Hash
@@ -55,18 +60,12 @@ type Environment interface {
 	Transfer(from, to Account, amount *big.Int)
 	// Adds a LOG to the state
 	AddLog(*Log)
-	// Adds a structured log to the env
-	AddStructLog(StructLog)
-	// Returns all coalesced structured logs
-	StructLogs() []StructLog
-
 	// Type of the VM
-	VmType() Type
-
-	// Current calling depth
+	Vm() Vm
+	// Get the curret calling depth
 	Depth() int
+	// Set the current calling depth
 	SetDepth(i int)
-
 	// Call another contract
 	Call(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context
@@ -77,7 +76,15 @@ type Environment interface {
 	Create(me ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error)
 }
 
-// Database is a EVM database for full state querying
+// Vm is the basic interface for an implementation of the EVM.
+type Vm interface {
+	// Run should execute the given contract with the input given in in
+	// and return the contract execution return bytes or an error if it
+	// failed.
+	Run(c *Contract, in []byte) ([]byte, error)
+}
+
+// Database is a EVM database for full state querying.
 type Database interface {
 	GetAccount(common.Address) Account
 	CreateAccount(common.Address) Account
@@ -102,19 +109,7 @@ type Database interface {
 	IsDeleted(common.Address) bool
 }
 
-// StructLog is emited to the Environment each cycle and lists information about the curent internal state
-// prior to the execution of the statement.
-type StructLog struct {
-	Pc      uint64
-	Op      OpCode
-	Gas     *big.Int
-	GasCost *big.Int
-	Memory  []byte
-	Stack   []*big.Int
-	Storage map[common.Hash][]byte
-	Err     error
-}
-
+// Account represents a contract or basic expanse account.
 type Account interface {
 	SubBalance(amount *big.Int)
 	AddBalance(amount *big.Int)
@@ -124,6 +119,6 @@ type Account interface {
 	Address() common.Address
 	ReturnGas(*big.Int, *big.Int)
 	SetCode([]byte)
-	EachStorage(cb func(key, value []byte))
+	ForEachStorage(cb func(key, value common.Hash) bool)
 	Value() *big.Int
 }

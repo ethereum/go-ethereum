@@ -20,14 +20,23 @@ import (
 	"fmt"
 	"math/big"
 
-
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/pow"
 )
+
+/*
+ * TODO: move this to another package.
+ */
+
+// MakeChainConfig returns a new ChainConfig with the expanse default chain settings.
+func MakeChainConfig() *ChainConfig {
+	return &ChainConfig{HomesteadBlock: big.NewInt(0)}
+}
 
 // FakePow is a non-validating proof of work implementation.
 // It returns true from Verify for any block.
@@ -91,25 +100,25 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	_, gas, err := ApplyMessage(NewEnv(b.statedb, nil, tx, b.header), tx, b.gasPool)
+	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
+	receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
-	root := b.statedb.IntermediateRoot()
-	b.header.GasUsed.Add(b.header.GasUsed, gas)
-	receipt := types.NewReceipt(root.Bytes(), b.header.GasUsed)
-	logs := b.statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
+}
+
+// Number returns the block number of the block being generated.
+func (b *BlockGen) Number() *big.Int {
+	return new(big.Int).Set(b.header.Number)
 }
 
 // AddUncheckedReceipts forcefully adds a receipts to the block without a
 // backing transaction.
 //
 // AddUncheckedReceipts will cause consensus failures when used during real
-// chain processing. This is best used in conjuction with raw block insertion.
+// chain processing. This is best used in conjunction with raw block insertion.
 func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 	b.receipts = append(b.receipts, receipt)
 }
@@ -149,7 +158,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
 		panic("block time out of range")
 	}
-	b.header.Difficulty = CalcDifficulty(b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
+	b.header.Difficulty = CalcDifficulty(MakeChainConfig(), b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -165,12 +174,8 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
-	statedb, err := state.New(parent.Root(), db)
-	if err != nil {
-		panic(err)
-	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	genblock := func(i int, h *types.Header) (*types.Block, types.Receipts) {
+	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
 		if gen != nil {
 			gen(i, b)
@@ -184,8 +189,12 @@ func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, 
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
+		statedb, err := state.New(parent.Root(), db)
+		if err != nil {
+			panic(err)
+		}
 		header := makeHeader(parent, statedb)
-		block, receipt := genblock(i, header)
+		block, receipt := genblock(i, header, statedb)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
@@ -204,7 +213,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		Root:       state.IntermediateRoot(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: CalcDifficulty(time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
+		Difficulty: CalcDifficulty(MakeChainConfig(), time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
@@ -216,14 +225,14 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
-	// Create te new chain database
+	// Create the new chain database
 	db, _ := ethdb.NewMemDatabase()
 	evmux := &event.TypeMux{}
 
 	// Initialize a fresh chain with only a genesis block
-	genesis, _ := WriteTestNetGenesisBlock(db, 0)
+	genesis, _ := WriteTestNetGenesisBlock(db)
 
-	blockchain, _ := NewBlockChain(db, FakePow{}, evmux)
+	blockchain, _ := NewBlockChain(db, MakeChainConfig(), FakePow{}, evmux)
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil

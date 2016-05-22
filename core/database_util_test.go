@@ -196,7 +196,7 @@ func TestBlockStorage(t *testing.T) {
 	if entry := GetBody(db, block.Hash()); entry == nil {
 		t.Fatalf("Stored body not found")
 	} else if types.DeriveSha(types.Transactions(entry.Transactions)) != types.DeriveSha(block.Transactions()) || types.CalcUncleHash(entry.Uncles) != types.CalcUncleHash(block.Uncles()) {
-		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, &types.Body{block.Transactions(), block.Uncles()})
+		t.Fatalf("Retrieved body mismatch: have %v, want %v", entry, block.Body())
 	}
 	// Delete the block and verify the execution
 	DeleteBlock(db, block.Hash())
@@ -230,7 +230,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	DeleteHeader(db, block.Hash())
 
 	// Store a body and check that it's not recognized as a block
-	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+	if err := WriteBody(db, block.Hash(), block.Body()); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
 	if entry := GetBlock(db, block.Hash()); entry != nil {
@@ -242,7 +242,7 @@ func TestPartialBlockStorage(t *testing.T) {
 	if err := WriteHeader(db, block.Header()); err != nil {
 		t.Fatalf("Failed to write header into database: %v", err)
 	}
-	if err := WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+	if err := WriteBody(db, block.Hash(), block.Body()); err != nil {
 		t.Fatalf("Failed to write body into database: %v", err)
 	}
 	if entry := GetBlock(db, block.Hash()); entry == nil {
@@ -551,7 +551,7 @@ func TestMipmapChain(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	var (
-		db, _   = ethdb.NewLDBDatabase(dir, 16)
+		db, _   = ethdb.NewLDBDatabase(dir, 0, 0)
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = common.BytesToAddress([]byte("jeff"))

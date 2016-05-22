@@ -22,20 +22,17 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/expanse-project/go-expanse/accounts"
+	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger/glog"
 	"github.com/expanse-project/go-expanse/rlp"
 )
@@ -106,7 +103,7 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
+func RunBlockTestWithReader(homesteadBlock *big.Int, r io.Reader, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJson(r, &btjs); err != nil {
 		return err
@@ -117,13 +114,13 @@ func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
 		return err
 	}
 
-	if err := runBlockTests(bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RunBlockTest(file string, skipTests []string) error {
+func RunBlockTest(homesteadBlock *big.Int, file string, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJsonFile(file, &btjs); err != nil {
 		return err
@@ -133,13 +130,13 @@ func RunBlockTest(file string, skipTests []string) error {
 	if err != nil {
 		return err
 	}
-	if err := runBlockTests(bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
+func runBlockTests(homesteadBlock *big.Int, bt map[string]*BlockTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
@@ -151,60 +148,46 @@ func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
 			continue
 		}
 		// test the block
-		if err := runBlockTest(test); err != nil {
+		if err := runBlockTest(homesteadBlock, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
 		glog.Infoln("Block test passed: ", name)
 
 	}
 	return nil
-
 }
-func runBlockTest(test *BlockTest) error {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"), crypto.StandardScryptN, crypto.StandardScryptP)
-	am := accounts.NewManager(ks)
-	db, _ := ethdb.NewMemDatabase()
-	cfg := &exp.Config{
-		DataDir:        common.DefaultDataDir(),
-		Verbosity:      5,
-		Etherbase:      common.Address{},
-		AccountManager: am,
-		NewDB:          func(path string) (ethdb.Database, error) { return db, nil },
-	}
 
-	cfg.GenesisBlock = test.Genesis
-
+func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
 	// import pre accounts & construct test genesis block & state root
-	_, err := test.InsertPreState(db, am)
-	if err != nil {
+	db, _ := ethdb.NewMemDatabase()
+	if _, err := test.InsertPreState(db); err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-
-	expanse, err := exp.New(cfg)
+	core.WriteTd(db, test.Genesis.Hash(), test.Genesis.Difficulty())
+	core.WriteBlock(db, test.Genesis)
+	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
+	core.WriteHeadBlockHash(db, test.Genesis.Hash())
+	evmux := new(event.TypeMux)
+	config := &core.ChainConfig{HomesteadBlock: homesteadBlock}
+	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux)
 	if err != nil {
 		return err
 	}
 
-	err = expanse.Start()
-	if err != nil {
-		return err
-	}
-
-	cm := expanse.BlockChain()
 	//vm.Debug = true
-	validBlocks, err := test.TryBlocksInsert(cm)
+	validBlocks, err := test.TryBlocksInsert(chain)
 	if err != nil {
 		return err
 	}
 
 	lastblockhash := common.HexToHash(test.lastblockhash)
-	cmlast := cm.LastBlockHash()
+	cmlast := chain.LastBlockHash()
 	if lastblockhash != cmlast {
 		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
 	}
 
-	newDB, err := cm.State()
+	newDB, err := chain.State()
 	if err != nil {
 		return err
 	}
@@ -212,22 +195,18 @@ func runBlockTest(test *BlockTest) error {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
 
-	return test.ValidateImportedHeaders(cm, validBlocks)
+	return test.ValidateImportedHeaders(chain, validBlocks)
 }
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*state.StateDB, error) {
+func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 	statedb, err := state.New(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 
 	for addrString, acct := range t.preAccounts {
-		addr, err := hex.DecodeString(addrString)
-		if err != nil {
-			return nil, err
-		}
 		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
 		if err != nil {
 			return nil, err
@@ -240,16 +219,6 @@ func (t *BlockTest) InsertPreState(db ethdb.Database, am *accounts.Manager) (*st
 		if err != nil {
 			return nil, err
 		}
-
-		if acct.PrivateKey != "" {
-			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
-			err = crypto.ImportBlockTestKey(privkey)
-			err = am.TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
-			if err != nil {
-				return nil, err
-			}
-		}
-
 		obj := statedb.CreateAccount(common.HexToAddress(addrString))
 		obj.SetCode(code)
 		obj.SetBalance(balance)
@@ -524,7 +493,7 @@ func mustConvertBytes(in string) []byte {
 	h := unfuckFuckedHex(strings.TrimPrefix(in, "0x"))
 	out, err := hex.DecodeString(h)
 	if err != nil {
-		panic(fmt.Errorf("invalid hex: %q: ", h, err))
+		panic(fmt.Errorf("invalid hex: %q", h))
 	}
 	return out
 }

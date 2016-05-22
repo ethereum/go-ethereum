@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -77,7 +77,7 @@ func TestParser(t *testing.T) {
 				t.Fatal("empty output")
 			}
 			if output[0] != test.output {
-				t.Error("%v failed: expected %v but got %v", test.base+OpCode(i), output[0])
+				t.Errorf("%v failed: expected %v but got %v", test.base+OpCode(i), test.output, output[0])
 			}
 		}
 	}

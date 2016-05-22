@@ -96,7 +96,7 @@ func (self *testFrontend) ConfirmTransaction(tx string) bool {
   return true
 }
 
-func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
+func testExp(t *testing.T) (expanse *exp.Expanse, err error) {
 
   os.RemoveAll("/tmp/exp-natspec/")
 
@@ -135,7 +135,7 @@ func testEth(t *testing.T) (expanse *exp.Expanse, err error) {
 
 func testInit(t *testing.T) (self *testFrontend) {
   // initialise and start minimal expanse stack
-  expanse, err := testEth(t)
+  expanse, err := testExp(t)
   if err != nil {
     t.Errorf("error creating expanse: %v", err)
     return
@@ -176,7 +176,7 @@ func testInit(t *testing.T) (self *testFrontend) {
 // and does process leaking since xeth loops cannot quit safely
 // should be replaced by proper mining with testDAG for easy full integration tests
 func (self *testFrontend) applyTxs() {
-  self.txc, self.xeth = self.xeth.ApplyTestTxs(self.stateDb, self.coinbase, self.txc)
+  self.txc, self.xeth = self.xexp.ApplyTestTxs(self.stateDb, self.coinbase, self.txc)
   return
 }
 
@@ -193,8 +193,8 @@ func TestNatspecE2E(t *testing.T) {
   dochash := common.BytesToHash(crypto.Sha3([]byte(testContractInfo)))
 
   // take the codehash for the contract we wanna test
-  // codehex := tf.xeth.CodeAt(registar.HashRegAddr)
-  codeb := tf.xeth.CodeAtBytes(registrar.HashRegAddr)
+  // codehex := tf.xexp.CodeAt(registar.HashRegAddr)
+  codeb := tf.xexp.CodeAtBytes(registrar.HashRegAddr)
   codehash := common.BytesToHash(crypto.Sha3(codeb))
 
   // use resolver to register codehash->dochash->url
