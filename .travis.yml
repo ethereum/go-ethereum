@@ -21,9 +21,3 @@ env:
     - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
 sudo: false
 notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/e09ccdce1048c5e03445
-    on_success: change 
-    on_failure: always
-    on_start: false 
