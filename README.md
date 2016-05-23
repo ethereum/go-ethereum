@@ -36,6 +36,10 @@ Once the dependencies are installed, run
 
     make geth
 
+To install all utilities, including geth, run
+
+    make all
+
 ## Executables
 
 The go-ethereum project comes with several wrappers/executables found in the `cmd` directory.
