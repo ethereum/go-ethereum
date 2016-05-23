@@ -41,7 +41,7 @@ import (
 )
 
 var (
-	passwordRegexp = regexp.MustCompile("personal.[nu]")
+	passwordRegexp = regexp.MustCompile("personal.[nus]")
 	onlyws         = regexp.MustCompile("^\\s*$")
 	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
 )

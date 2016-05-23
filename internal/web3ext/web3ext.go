@@ -431,6 +431,12 @@ web3._extend({
 			name: 'importRawKey',
 			call: 'personal_importRawKey',
 			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'signAndSendTransaction',
+			call: 'personal_signAndSendTransaction',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		})
 	]
 });
