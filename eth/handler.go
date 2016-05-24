@@ -83,6 +83,8 @@ type ProtocolManager struct {
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
+
+	badBlockReportingEnabled bool
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -150,7 +152,7 @@ func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, 
 	// Construct the different synchronisation mechanisms
 	manager.downloader = downloader.New(chaindb, manager.eventMux, blockchain.HasHeader, blockchain.HasBlockAndState, blockchain.GetHeader,
 		blockchain.GetBlock, blockchain.CurrentHeader, blockchain.CurrentBlock, blockchain.CurrentFastBlock, blockchain.FastSyncCommitHead,
-		blockchain.GetTd, blockchain.InsertHeaderChain, blockchain.InsertChain, blockchain.InsertReceiptChain, blockchain.Rollback,
+		blockchain.GetTd, blockchain.InsertHeaderChain, manager.insertChain, blockchain.InsertReceiptChain, blockchain.Rollback,
 		manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
@@ -159,9 +161,22 @@ func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, 
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlock, validator, manager.BroadcastBlock, heighter, blockchain.InsertChain, manager.removePeer)
+	manager.fetcher = fetcher.New(blockchain.GetBlock, validator, manager.BroadcastBlock, heighter, manager.insertChain, manager.removePeer)
+
+	if blockchain.Genesis().Hash().Hex() == defaultGenesisHash && networkId == 1 {
+		glog.V(logger.Debug).Infoln("Bad Block Reporting is enabled")
+		manager.badBlockReportingEnabled = true
+	}
 
 	return manager, nil
+}
+
+func (pm *ProtocolManager) insertChain(blocks types.Blocks) (i int, err error) {
+	i, err = pm.blockchain.InsertChain(blocks)
+	if pm.badBlockReportingEnabled && core.IsValidationErr(err) && i < len(blocks) {
+		go sendBadBlockReport(blocks[i], err)
+	}
+	return i, err
 }
 
 func (pm *ProtocolManager) removePeer(id string) {
@@ -378,6 +393,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Update the receive timestamp of each block
 		for _, block := range blocks {
 			block.ReceivedAt = msg.ReceivedAt
+			block.ReceivedFrom = p
 		}
 		// Filter out any explicitly requested blocks, deliver the rest to the downloader
 		if blocks := pm.fetcher.FilterBlocks(blocks); len(blocks) > 0 {
@@ -664,6 +680,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
 		request.Block.ReceivedAt = msg.ReceivedAt
+		request.Block.ReceivedFrom = p
 
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
