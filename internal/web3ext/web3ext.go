@@ -176,20 +176,6 @@ web3._extend({
 });
 `
 
-const Personal_JS = `
-web3._extend({
-	property: 'personal',
-	methods:
-	[
-		new web3._extend.Method({
-			name: 'importRawKey',
-			call: 'personal_importRawKey',
-			params: 2
-		})
-	]
-});
-`
-
 const Eth_JS = `
 web3._extend({
 	property: 'eth',
@@ -239,20 +225,6 @@ web3._extend({
 				}
 				return formatted;
 			}
-		})
-	]
-});
-`
-
-const Net_JS = `
-web3._extend({
-	property: 'net',
-	methods: [],
-	properties:
-	[
-		new web3._extend.Property({
-			name: 'version',
-			getter: 'net_version'
 		})
 	]
 });
@@ -460,6 +432,54 @@ web3._extend({
 		})
 	],
 	properties: []
+});
+`
+
+const Net_JS = `
+web3._extend({
+	property: 'net',
+	methods: [],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'version',
+			getter: 'net_version'
+		})
+	]
+});
+`
+
+const Personal_JS = `
+web3._extend({
+	property: 'personal',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'importRawKey',
+			call: 'personal_importRawKey',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'signAndSendTransaction',
+			call: 'personal_signAndSendTransaction',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
+		})
+	]
+});
+`
+
+const RPC_JS = `
+web3._extend({
+	property: 'rpc',
+	methods: [],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'modules',
+			getter: 'rpc_modules'
+		})
+	]
 });
 `
 

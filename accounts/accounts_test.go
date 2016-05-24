@@ -81,6 +81,34 @@ func TestSign(t *testing.T) {
 	}
 }
 
+func TestSignWithPassphrase(t *testing.T) {
+	dir, am := tmpManager(t, true)
+	defer os.RemoveAll(dir)
+
+	pass := "passwd"
+	acc, err := am.NewAccount(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, unlocked := am.unlocked[acc.Address]; unlocked {
+		t.Fatal("expected account to be locked")
+	}
+
+	_, err = am.SignWithPassphrase(acc.Address, pass, testSigData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, unlocked := am.unlocked[acc.Address]; unlocked {
+		t.Fatal("expected account to be locked")
+	}
+
+	if _, err = am.SignWithPassphrase(acc.Address, "invalid passwd", testSigData); err == nil {
+		t.Fatal("expected SignHash to fail with invalid password")
+	}
+}
+
 func TestTimedUnlock(t *testing.T) {
 	dir, am := tmpManager(t, true)
 	defer os.RemoveAll(dir)
