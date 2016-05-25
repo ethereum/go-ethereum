@@ -19,6 +19,7 @@ package core
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -91,7 +92,7 @@ type ChainFork struct {
 	tx     ethdb.Transaction // current operating transaction
 	reader BlockReader       // block reader utility interface
 
-	origin       common.Hash  // origin notes the start of the fork
+	origin       *types.Block // origin notes the start of the fork
 	currentBlock *types.Block // the current block within this transaction
 
 	changes []Changes // changes
@@ -103,7 +104,6 @@ func Fork(blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
 	fork := &ChainFork{
 		db:     blockReader.Db(),
 		reader: blockReader,
-		origin: origin,
 	}
 	// open a new leveldb transaction
 	tx, err := fork.db.OpenTransaction()
@@ -113,10 +113,7 @@ func Fork(blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
 	fork.tx = tx
 
 	// get the origin block from which this fork originates
-	if block := blockReader.GetBlock(origin); block != nil {
-		// Block found, set as the current head
-		fork.currentBlock = block
-	} else {
+	if fork.origin = blockReader.GetBlock(origin); fork.origin == nil {
 		return nil, fmt.Errorf("core/fork: no block found with hash: %x", origin)
 	}
 
@@ -201,4 +198,36 @@ func (fork *ChainFork) CommitToDb() error {
 // any chain reorganisations.
 func (fork *ChainFork) ApplyTo(resolver ChainResolver) error {
 	return resolver.Resolve(fork.tx, fork.changes)
+}
+
+// NewUnsealedBlock creates a new unsealed block using the last block in the fork
+// as its parent.
+func (fork *ChainFork) NewUnsealedBlock(coinbase common.Address, extra []byte) *UnsealedBlock {
+	var (
+		parent        types.Header
+		unsealedBlock = new(UnsealedBlock)
+	)
+
+	if len(fork.changes) == 0 {
+		parent = *fork.origin.Header()
+	} else {
+		parent = fork.changes[len(fork.changes)-1].header
+	}
+
+	tstamp := time.Now().Unix()
+	if parent.Time.Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
+		tstamp = parent.Time.Int64() + 1
+	}
+
+	unsealedBlock.header = types.Header{
+		ParentHash: parent.Hash(),
+		Number:     new(big.Int).Add(parent.Number, common.Big1),
+		Difficulty: CalcDifficulty(nil, uint64(tstamp), parent.Time.Uint64(), parent.Number, parent.Difficulty),
+		GasLimit:   CalcGasLimit(types.NewBlockWithHeader(&parent)),
+		GasUsed:    new(big.Int),
+		Coinbase:   coinbase,
+		Extra:      extra,
+		Time:       big.NewInt(tstamp),
+	}
+	return unsealedBlock
 }
