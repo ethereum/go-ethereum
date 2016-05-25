@@ -1117,15 +1117,12 @@ func (self *BlockChain) update() {
 	}
 }
 
-// reportBlock reports the given block and error using the canonical block
-// reporting tool. Reporting the block to the service is handled in a separate
-// goroutine.
+// reportBlock logs a bad block error.
 func reportBlock(block *types.Block, err error) {
 	if glog.V(logger.Error) {
 		glog.Errorf("Bad block #%v (%s)\n", block.Number(), block.Hash().Hex())
 		glog.Errorf("    %v", err)
 	}
-	go ReportBlock(block, err)
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local
