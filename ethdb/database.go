@@ -285,6 +285,36 @@ func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
 
+func (db *LDBDatabase) OpenTransaction() (Transaction, error) {
+	tx, err := db.db.OpenTransaction()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ldbTransaction{db: db.db, tx: tx}, nil
+}
+
+type ldbTransaction struct {
+	db *leveldb.DB
+	tx *leveldb.Transaction
+}
+
+func (t *ldbTransaction) Put(key, value []byte) error {
+	return t.tx.Put(key, value, nil)
+}
+
+func (t *ldbTransaction) Delete(key []byte) error {
+	return t.tx.Delete(key, nil)
+}
+
+func (t *ldbTransaction) Get(key []byte) ([]byte, error) {
+	return t.tx.Get(key, nil)
+}
+
+func (t *ldbTransaction) Commit() error {
+	return t.tx.Commit()
+}
+
 type ldbBatch struct {
 	db *leveldb.DB
 	b  *leveldb.Batch
