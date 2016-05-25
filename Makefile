@@ -2,7 +2,7 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth geth-cross evm all test travis-test-with-coverage xgo clean
+.PHONY: geth geth-cross evm all test xgo clean
 .PHONY: geth-linux geth-linux-386 geth-linux-amd64
 .PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
@@ -13,9 +13,28 @@ GOBIN = build/bin
 GO ?= latest
 
 geth:
-	build/env.sh go build -i -v $(shell build/flags.sh) -o $(GOBIN)/geth ./cmd/geth
+	build/env.sh go run build/ci.go install ./cmd/geth
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/geth\" to launch geth."
+
+evm:
+	build/env.sh go run build/ci.go install ./cmd/evm
+	@echo "Done building."
+	@echo "Run \"$(GOBIN)/evm to start the evm."
+
+all:
+	build/env.sh go run build/ci.go install
+
+test: all
+	build/env.sh go run build/ci.go test
+
+clean:
+	rm -fr build/_workspace/pkg/ Godeps/_workspace/pkg $(GOBIN)/*
+
+# Cross Compilation Targets (xgo)
+
+xgo:
+	build/env.sh go get github.com/karalabe/xgo
 
 geth-cross: geth-linux geth-darwin geth-windows geth-android geth-ios
 	@echo "Full cross compilation done:"
@@ -96,26 +115,3 @@ geth-ios: xgo
 	build/env.sh $(GOBIN)/xgo --go=$(GO) --dest=$(GOBIN) --targets=ios-7.0/framework -v $(shell build/flags.sh) ./cmd/geth
 	@echo "iOS framework cross compilation done:"
 	@ls -ld $(GOBIN)/geth-ios-*
-
-evm:
-	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/evm to start the evm."
-
-all:
-	for cmd in `ls ./cmd/`; do \
-		 build/env.sh go build -i -v $(shell build/flags.sh) -o $(GOBIN)/$$cmd ./cmd/$$cmd; \
-	done
-
-test: all
-	build/env.sh go test ./...
-
-travis-test-with-coverage: all
-	build/env.sh go vet ./...
-	build/env.sh build/test-global-coverage.sh
-
-xgo:
-	build/env.sh go get github.com/karalabe/xgo
-
-clean:
-	rm -fr build/_workspace/pkg/ Godeps/_workspace/pkg $(GOBIN)/*

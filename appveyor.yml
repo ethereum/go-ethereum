@@ -1,0 +1,31 @@
+os: Visual Studio 2015
+
+# Clone directly into GOPATH.
+clone_folder: c:\gopath\src\github.com\ethereum\go-ethereum
+clone_depth: 5
+version: "{branch}.{build}"
+environment:
+  global:
+    GOPATH: c:\gopath
+
+# cache choco package files so we don't hit sourceforge all
+# the time.
+cache:
+  - c:\cache
+
+install:
+  - cmd: choco install --cache c:\cache golang mingw | find /v "Extracting  "
+  - refreshenv
+  - cd c:\gopath\src\github.com\ethereum\go-ethereum
+
+build_script:
+  - go run build\ci.go install
+
+test_script:
+  - go run build\ci.go test -vet -coverage
+
+after_build:
+  - go run build\ci.go archive -type zip
+
+artifacts:
+  - path: geth-*.zip
