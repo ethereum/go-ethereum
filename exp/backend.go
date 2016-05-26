@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/expanse-project/ethash"
@@ -113,6 +114,7 @@ type Expanse struct {
 
 	// Handlers
 	txPool          *core.TxPool
+	txMu            sync.Mutex
 	blockchain      *core.BlockChain
 	accountManager  *accounts.Manager
 	pow             *ethash.Ethash
@@ -293,7 +295,7 @@ func (s *Expanse) APIs() []rpc.API {
 		}, {
 			Namespace: "personal",
 			Version:   "1.0",
-			Service:   NewPrivateAccountAPI(s.accountManager),
+			Service:   NewPrivateAccountAPI(s),
 			Public:    false,
 		}, {
 			Namespace: "exp",
