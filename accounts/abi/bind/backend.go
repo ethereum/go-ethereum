@@ -38,7 +38,7 @@ type ContractCaller interface {
 	HasCode(contract common.Address, pending bool) (bool, error)
 
 	// ContractCall executes an Expanse contract call with the specified data as
-\	// the input. The pending flag requests execution against the pending block, not
+	// the input. The pending flag requests execution against the pending block, not
 	// the stable head of the chain.
 	ContractCall(contract common.Address, data []byte, pending bool) ([]byte, error)
 }
