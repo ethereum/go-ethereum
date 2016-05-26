@@ -42,8 +42,7 @@ import (
 )
 
 var (
-	passwordRegexp = regexp.MustCompile("personal.[nu]")
-	leadingSpace   = regexp.MustCompile("^ ")
+	passwordRegexp = regexp.MustCompile("personal.[nus]")
 	onlyws         = regexp.MustCompile("^\\s*$")
 	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
 )
@@ -362,7 +361,7 @@ func (self *jsre) interactive() {
 			str += input + "\n"
 			self.setIndent()
 			if indentCount <= 0 {
-				if mustLogInHistory(str) {
+				if !excludeFromHistory(str) {
 					utils.Stdin.AppendHistory(str[:len(str)-1])
 				}
 				self.parseInput(str)
@@ -372,10 +371,8 @@ func (self *jsre) interactive() {
 	}
 }
 
-func mustLogInHistory(input string) bool {
-	return len(input) == 0 ||
-		passwordRegexp.MatchString(input) ||
-		!leadingSpace.MatchString(input)
+func excludeFromHistory(input string) bool {
+	return len(input) == 0 || input[0] == ' ' || passwordRegexp.MatchString(input)
 }
 
 
