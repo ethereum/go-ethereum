@@ -4,7 +4,7 @@ echo " two nodes that sync (no swap and do not have any funds)"
 echo " can be in sync content with each other"
 
 dir=`dirname $0`
-source $dir/../../cmd/swarm/tesst.sh
+source $dir/../../cmd/swarm/test.sh
 
 mkdir -p /tmp/swarm-test-files
 FILE_00=/tmp/swarm-test-files/00

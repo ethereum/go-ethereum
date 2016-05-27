@@ -113,7 +113,6 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 							mimeType = "text/css"
 						}
 						list[i].ContentType = mimeType
-						//fmt.Printf("%v %v %v\n", entry.Path, mimeType, filepath.Ext(entry.Path))
 					}
 				}
 				f.Close()
@@ -177,7 +176,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 
 	trie, err := loadManifest(self.api.dpa, key)
 	if err != nil {
-		glog.V(logger.Debug).Infof("[BZZ] fs.Download: loadManifestTrie error: %v", err)
+		glog.V(logger.Warn).Infof("[BZZ] fs.Download: loadManifestTrie error: %v", err)
 		return err
 	}
 

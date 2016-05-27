@@ -1,12 +1,5 @@
 package api
 
-import (
-	// "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	// "github.com/ethereum/go-ethereum/swarm/storage"
-)
-
 type Response struct {
 	MimeType string
 	Status   int
@@ -47,7 +40,6 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	if int64(size) == expsize {
 		err = nil
 	}
-	glog.V(logger.Detail).Infof("body: %s", body[:size])
 	return &Response{mimeType, status, expsize, string(body[:size])}, err
 }
 

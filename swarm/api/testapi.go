@@ -1,8 +1,6 @@
 package api
 
 import (
-	// "fmt"
-
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -25,4 +23,8 @@ func (self *Control) SyncEnabled(on bool) {
 
 func (self *Control) SwapEnabled(on bool) {
 	self.hive.SwapEnabled(on)
+}
+
+func (self *Control) Hive() string {
+	return self.hive.String()
 }
