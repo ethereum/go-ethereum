@@ -110,6 +110,9 @@ function onUploadingComplete(uri) {
 }
 
 function handleFiles(files) {
+    jQuery('#preview-modal').modal({
+        fadeDuration: 250
+    });
     uploadFile(files, 0, "");
 }
 
