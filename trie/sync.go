@@ -17,12 +17,17 @@
 package trie
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
+
+// ErrNotRequested is returned by the trie sync when it's requested to process a
+// node it did not request.
+var ErrNotRequested = errors.New("not requested")
 
 // request represents a scheduled or already in-flight state retrieval request.
 type request struct {
@@ -143,7 +148,7 @@ func (s *TrieSync) Process(results []SyncResult) (int, error) {
 		// If the item was not requested, bail out
 		request := s.requests[item.Hash]
 		if request == nil {
-			return i, fmt.Errorf("not requested: %x", item.Hash)
+			return i, ErrNotRequested
 		}
 		// If the item is a raw entry request, commit directly
 		if request.object == nil {
