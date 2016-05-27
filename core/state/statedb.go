@@ -127,7 +127,7 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 		return stateObject.nonce
 	}
 
-	return 0
+	return StartingNonce
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
