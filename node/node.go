@@ -43,6 +43,17 @@ var (
 	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
 )
 
+type ipcService struct {
+	endpoint string       // endpoints to listen at (empty = IPC disabled)
+	listener net.Listener // RPC listener sockets to serve API requests
+	handler  *rpc.Server  // RPC request handlers to process the API requests
+}
+
+func (s *ipcService) stop() {
+	s.listener.Close()
+	s.handler.Stop()
+}
+
 // Node represents a P2P node into which arbitrary (uniquely typed) services might
 // be registered.
 type Node struct {
@@ -58,9 +69,7 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
-	ipcEndpoint string       // IPC endpoint to listen at (empty = IPC disabled)
-	ipcListener net.Listener // IPC RPC listener socket to serve API requests
-	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
+	ipcServices []*ipcService // IPC services
 
 	httpHost      string       // HTTP hostname
 	httpPort      int          // HTTP post
@@ -95,6 +104,12 @@ func New(conf *Config) (*Node, error) {
 	if conf.DataDir != "" {
 		nodeDbPath = filepath.Join(conf.DataDir, datadirNodeDatabase)
 	}
+
+	ipcServices := make([]*ipcService, len(conf.IPCEndpoints()))
+	for i, endpoint := range conf.IPCEndpoints() {
+		ipcServices[i] = &ipcService{endpoint: endpoint}
+	}
+
 	return &Node{
 		datadir: conf.DataDir,
 		serverConfig: p2p.Config{
@@ -113,7 +128,7 @@ func New(conf *Config) (*Node, error) {
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
 		serviceFuncs:  []ServiceConstructor{},
-		ipcEndpoint:   conf.IPCEndpoint(),
+		ipcServices:   ipcServices,
 		httpHost:      conf.HTTPHost,
 		httpPort:      conf.HTTPPort,
 		httpEndpoint:  conf.HTTPEndpoint(),
@@ -272,64 +287,65 @@ func (n *Node) stopInProc() {
 
 // startIPC initializes and starts the IPC RPC endpoint.
 func (n *Node) startIPC(apis []rpc.API) error {
-	// Short circuit if the IPC endpoint isn't being exposed
-	if n.ipcEndpoint == "" {
-		return nil
-	}
-	// Register all the APIs exposed by the services
-	handler := rpc.NewServer()
-	for _, api := range apis {
-		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+	for i, _ := range n.ipcServices {
+		service := n.ipcServices[i]
+
+		// Register all the APIs exposed by the services
+		handler := rpc.NewServer()
+
+		for _, api := range apis {
+			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+				return err
+			}
+			glog.V(logger.Debug).Infof("IPC registered %T under '%s' on '%s'", api.Service, api.Namespace, service.endpoint)
+		}
+
+		// All APIs registered, start the IPC listener
+		var (
+			listener net.Listener
+			err      error
+		)
+
+		if listener, err = rpc.CreateIPCListener(service.endpoint); err != nil {
 			return err
 		}
-		glog.V(logger.Debug).Infof("IPC registered %T under '%s'", api.Service, api.Namespace)
-	}
-	// All APIs registered, start the IPC listener
-	var (
-		listener net.Listener
-		err      error
-	)
-	if listener, err = rpc.CreateIPCListener(n.ipcEndpoint); err != nil {
-		return err
-	}
-	go func() {
-		glog.V(logger.Info).Infof("IPC endpoint opened: %s", n.ipcEndpoint)
 
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				// Terminate if the listener was closed
-				n.lock.RLock()
-				closed := n.ipcListener == nil
-				n.lock.RUnlock()
-				if closed {
-					return
+		go func() {
+			glog.V(logger.Info).Infof("IPC endpoint opened: %s", service.endpoint)
+
+			for {
+				conn, err := listener.Accept()
+				if err != nil {
+					// Terminate if the listener was closed
+					n.lock.RLock()
+					closed := service.listener == nil
+					n.lock.RUnlock()
+					if closed {
+						return
+					}
+					// Not closed, just some error; report and continue
+					glog.V(logger.Error).Infof("IPC accept failed: %v", err)
+					continue
 				}
-				// Not closed, just some error; report and continue
-				glog.V(logger.Error).Infof("IPC accept failed: %v", err)
-				continue
+				go handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
 			}
-			go handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
-		}
-	}()
-	// All listeners booted successfully
-	n.ipcListener = listener
-	n.ipcHandler = handler
+		}()
+
+		service.listener = listener
+		service.handler = handler
+	}
 
 	return nil
 }
 
 // stopIPC terminates the IPC RPC endpoint.
 func (n *Node) stopIPC() {
-	if n.ipcListener != nil {
-		n.ipcListener.Close()
-		n.ipcListener = nil
-
-		glog.V(logger.Info).Infof("IPC endpoint closed: %s", n.ipcEndpoint)
-	}
-	if n.ipcHandler != nil {
-		n.ipcHandler.Stop()
-		n.ipcHandler = nil
+	for _, service := range n.ipcServices {
+		service.listener.Close()
+		service.listener = nil
+		service.handler.Stop()
+		service.handler = nil
+		glog.V(logger.Info).Infof("IPC endpoint closed: %s", service.endpoint)
 	}
 }
 
@@ -550,9 +566,12 @@ func (n *Node) DataDir() string {
 	return n.datadir
 }
 
-// IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
-func (n *Node) IPCEndpoint() string {
-	return n.ipcEndpoint
+// IPCEndpoint retrieves the current IPC endpoints used by the protocol stack.
+func (n *Node) IPCEndpoint() (endpoints []string) {
+	for _, service := range n.ipcServices {
+		endpoints = append(endpoints, service.endpoint)
+	}
+	return
 }
 
 // HTTPEndpoint retrieves the current HTTP endpoint used by the protocol stack.
