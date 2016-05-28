@@ -95,6 +95,7 @@ func init() {
 		monitorCommand,
 		accountCommand,
 		walletCommand,
+		pruningCommand,
 		{
 			Action: makedag,
 			Name:   "makedag",

@@ -841,6 +841,20 @@ func MakeChainDatabase(ctx *cli.Context) ethdb.Database {
 	return chainDb
 }
 
+func MustOpenDatabase(ctx *cli.Context, name string) ethdb.Database {
+	var (
+		datadir = MustMakeDataDir(ctx)
+		cache   = ctx.GlobalInt(CacheFlag.Name)
+		handles = MakeDatabaseHandles()
+	)
+
+	db, err := ethdb.NewLDBDatabase(filepath.Join(datadir, name), cache, handles)
+	if err != nil {
+		Fatalf("Could not open database '%s': %v", name, err)
+	}
+	return db
+}
+
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
