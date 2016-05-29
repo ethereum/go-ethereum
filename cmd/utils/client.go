@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -33,7 +32,7 @@ func NewRemoteRPCClient(ctx *cli.Context) (rpc.Client, error) {
 		return NewRemoteRPCClientFromString(endpoint)
 	}
 	// use IPC by default
-	return rpc.NewIPCClient(node.DefaultIPCEndpoint())
+	return rpc.NewIPCClient(MakeIPCPath(ctx))
 }
 
 // NewRemoteRPCClientFromString returns a RPC client which connects to the given
