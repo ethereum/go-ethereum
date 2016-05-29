@@ -353,7 +353,7 @@ func WriteBlockReceipts(db ethdb.ReadWriter, hash common.Hash, receipts types.Re
 // into the given database. Beside writing the transaction, the function also
 // stores a metadata entry along with the transaction, detailing the position
 // of this within the blockchain.
-func WriteBlockTransactions(db ethdb.ReadWriter, header types.Header, transactions types.Transactions) error {
+func WriteBlockTransactions(db ethdb.ReadWriter, header *types.Header, transactions types.Transactions) error {
 	// Iterate over each transaction and encode it with its metadata
 	for i, tx := range transactions {
 		// Encode and queue up the transaction for storage

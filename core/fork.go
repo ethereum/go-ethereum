@@ -17,11 +17,13 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
@@ -34,10 +36,9 @@ type ChainResolver interface {
 
 // Changes are changes that have previously been applied to the forked blockchain.
 type Changes struct {
-	td       *big.Int           // total difficulty of the block
-	header   types.Header       // block's header
-	txs      types.Transactions // block's transactions
-	receipts types.Receipts     // block's receipts after processing transactions
+	td       *big.Int       // total difficulty of the block
+	block    *types.Block   // the block
+	receipts types.Receipts // block's receipts after processing transactions
 }
 
 // BlockReader is the basic chain reader interface for reading blocks of the blockchain
@@ -88,10 +89,11 @@ type receipt struct {
 //	fork.CommitBlock(block)
 //
 type ChainFork struct {
-	db     ethdb.Database    // backing database
-	tx     ethdb.Transaction // current operating transaction
-	reader BlockReader       // block reader utility interface
+	db     ethdb.Database // backing database
+	reader BlockReader    // block reader utility interface
+	state  *state.StateDB // the current state database
 
+	originN      uint64       // the origin block number
 	origin       *types.Block // origin notes the start of the fork
 	currentBlock *types.Block // the current block within this transaction
 
@@ -105,72 +107,82 @@ func Fork(blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
 		db:     blockReader.Db(),
 		reader: blockReader,
 	}
-	// open a new leveldb transaction
-	tx, err := fork.db.OpenTransaction()
-	if err != nil {
-		return nil, err
-	}
-	fork.tx = tx
 
 	// get the origin block from which this fork originates
 	if fork.origin = blockReader.GetBlock(origin); fork.origin == nil {
 		return nil, fmt.Errorf("core/fork: no block found with hash: %x", origin)
 	}
+	fork.originN = fork.origin.NumberU64()
+
+	statedb, err := state.New(fork.origin.Root(), fork.db)
+	if err != nil {
+		return nil, fmt.Errorf("core/fork: enable to create state: %v", err)
+	}
+	fork.state = statedb
 
 	return fork, nil
 }
 
-// CommitChanges commits the changes to the fork and takes care of the writing
-// to the tx (e.g. blocks, block receipts, transactions, etc.).
-func (fork *ChainFork) CommitChanges(td *big.Int, header types.Header, transactions types.Transactions, receipts types.Receipts) error {
-	hash := header.Hash()
+// GetNumHash returns the hash of the block that corresponds to the block number
+// in our current fork
+func (fork *ChainFork) GetNumHash(n uint64) common.Hash {
+	// Short circuit if the number is larger than our chain.
+	if n > uint64(len(fork.changes))+fork.originN {
+		return common.Hash{}
+	}
+
+	// check if we should have it cached
+	if n > fork.originN {
+		return fork.changes[n-fork.originN].block.Hash()
+	}
+
+	// otherwise search in the database
+	for block := fork.reader.GetBlock(fork.origin.Hash()); block != nil; block = fork.reader.GetBlock(block.ParentHash()) {
+		if block.NumberU64() == n {
+			return block.Hash()
+		}
+	}
+	return common.Hash{}
+}
+
+func (fork *ChainFork) State() *state.StateDB {
+	return fork.state
+}
+
+var errUnboundedParent = errors.New("core/fork: parent hash does not match last block")
+
+// CommitBlock commits a new block to the fork. The block that's being commited their parent hash must
+// match the previously committed block or the origin if the fork is empty.
+func (fork *ChainFork) CommitBlock(td *big.Int, block *types.Block, receipts types.Receipts) error {
+	// Check and make sure that the block being applied is valid and can be applied
+	// on the last block.
+	if len(fork.changes) == 0 && block.ParentHash() != fork.origin.Hash() {
+		return errUnboundedParent
+	} else if len(fork.changes) > 0 && block.ParentHash() != fork.changes[len(fork.changes)-1].block.Hash() {
+		return errUnboundedParent
+	}
 
 	fork.changes = append(fork.changes, Changes{
 		td:       td,
-		header:   header,
-		txs:      transactions,
+		block:    block,
 		receipts: receipts,
 	})
-
-	if err := WriteHeader(fork.tx, &header); err != nil {
-		return err
-	}
-	if err := WriteTd(fork.tx, hash, td); err != nil {
-		return err
-	}
-	if len(receipts) > 0 {
-		if err := WriteBlockReceipts(fork.tx, hash, receipts); err != nil {
-			return err
-		}
-	}
-
-	if len(transactions) > 0 {
-		if err := WriteBlockTransactions(fork.tx, header, transactions); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// WriteBlockBody writes the gives block to the database transaction.
-func (fork *ChainFork) WriteBlockBody(hash common.Hash, body types.Body) error {
-	// Store the body first to retain database consistency
-	if err := WriteBody(fork.tx, hash, &body); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // CommitTo commits the current changes to the database
 func (fork *ChainFork) CommitToDb() error {
+	tx, err := fork.db.OpenTransaction()
+	if err != nil {
+		return fmt.Errorf("core/fork: unable to create db transaction: %v", err)
+	}
+
 	// write mips to the datatabase transaction
 	cachedMips := make(map[string]types.Bloom)
-	for _, level := range MIPMapLevels {
-		for _, change := range fork.changes {
+	for _, change := range fork.changes {
+		for _, level := range MIPMapLevels {
 			var (
-				key    = mipmapKey(change.header.Number.Uint64(), level)
+				key    = mipmapKey(change.block.NumberU64(), level)
 				mipmap types.Bloom
 				ok     bool
 			)
@@ -186,32 +198,58 @@ func (fork *ChainFork) CommitToDb() error {
 			}
 			cachedMips[string(key)] = mipmap
 		}
+
+		hash := change.block.Hash()
+		if err := WriteHeader(tx, change.block.Header()); err != nil {
+			return err
+		}
+		if err := WriteTd(tx, hash, change.td); err != nil {
+			return err
+		}
+
+		if len(change.receipts) > 0 {
+			if err := WriteBlockReceipts(tx, hash, change.receipts); err != nil {
+				return err
+			}
+		}
+
+		txs := change.block.Transactions()
+		if len(txs) > 0 {
+			if err := WriteBlockTransactions(tx, change.block.Header(), txs); err != nil {
+				return err
+			}
+		}
 	}
+
 	// write out mip maps
 	for key, mipmap := range cachedMips {
-		fork.tx.Put([]byte(key), mipmap.Bytes())
+		tx.Put([]byte(key), mipmap.Bytes())
 	}
-	return fork.tx.Commit()
+	return tx.Commit()
 }
 
 // ApplyTo applies the fork to chain and uses the resolver to write and resolve
 // any chain reorganisations.
 func (fork *ChainFork) ApplyTo(resolver ChainResolver) error {
-	return resolver.Resolve(fork.tx, fork.changes)
+	tx, err := fork.db.OpenTransaction()
+	if err != nil {
+		return err
+	}
+	return resolver.Resolve(tx, fork.changes)
 }
 
 // NewUnsealedBlock creates a new unsealed block using the last block in the fork
 // as its parent.
 func (fork *ChainFork) NewUnsealedBlock(coinbase common.Address, extra []byte) *UnsealedBlock {
 	var (
-		parent        types.Header
+		parent        *types.Header
 		unsealedBlock = new(UnsealedBlock)
 	)
 
 	if len(fork.changes) == 0 {
-		parent = *fork.origin.Header()
+		parent = fork.origin.Header()
 	} else {
-		parent = fork.changes[len(fork.changes)-1].header
+		parent = fork.changes[len(fork.changes)-1].block.Header()
 	}
 
 	tstamp := time.Now().Unix()
@@ -220,14 +258,16 @@ func (fork *ChainFork) NewUnsealedBlock(coinbase common.Address, extra []byte) *
 	}
 
 	unsealedBlock.header = types.Header{
+		Root:       fork.state.IntermediateRoot(),
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
 		Difficulty: CalcDifficulty(nil, uint64(tstamp), parent.Time.Uint64(), parent.Number, parent.Difficulty),
-		GasLimit:   CalcGasLimit(types.NewBlockWithHeader(&parent)),
+		GasLimit:   CalcGasLimit(types.NewBlockWithHeader(parent)),
 		GasUsed:    new(big.Int),
 		Coinbase:   coinbase,
 		Extra:      extra,
 		Time:       big.NewInt(tstamp),
 	}
+
 	return unsealedBlock
 }
