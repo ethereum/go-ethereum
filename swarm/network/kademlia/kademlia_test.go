@@ -2,6 +2,7 @@ package kademlia
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -11,8 +12,8 @@ import (
 
 var (
 	quickrand           = rand.New(rand.NewSource(time.Now().Unix()))
-	quickcfgFindClosest = &quick.Config{MaxCount: 5000, Rand: quickrand}
-	quickcfgBootStrap   = &quick.Config{MaxCount: 1000, Rand: quickrand}
+	quickcfgFindClosest = &quick.Config{MaxCount: 50, Rand: quickrand}
+	quickcfgBootStrap   = &quick.Config{MaxCount: 100, Rand: quickrand}
 )
 
 type testNode struct {
@@ -60,43 +61,36 @@ func TestBootstrap(t *testing.T) {
 		kad := New(test.Self, params)
 		var err error
 
-		addr := RandomAddress()
-		prox := proximity(addr, test.Self)
-
-		for p := 0; p <= prox; p++ {
+		for p := 0; p < 9; p++ {
 			var nrs []*NodeRecord
-			for i := 0; i < 3; i++ {
+			n := math.Pow(float64(2), float64(7-p))
+			for i := 0; i < int(n); i++ {
+				addr := RandomAddressAt(test.Self, p)
 				nrs = append(nrs, &NodeRecord{
-					Addr: RandomAddressAt(test.Self, p),
+					Addr: addr,
 				})
 			}
 			kad.Add(nrs)
 		}
 
-		node := &testNode{addr}
+		node := &testNode{test.Self}
 
 		n := 0
 		for n < 100 {
 			err = kad.On(node, nil)
 			if err != nil {
-				t.Errorf("backend not accepting node")
-				return false
+				t.Fatalf("backend not accepting node: %v", err)
 			}
-			var nrs []*NodeRecord
-			prox := proximity(test.Self, node.addr)
-			for i := 0; i < 13; i++ {
-				nrs = append(nrs, &NodeRecord{
-					Addr: RandomAddressAt(test.Self, prox+1),
-				})
-			}
-			kad.Add(nrs)
 
-			record, _ := kad.FindBest()
-			if record == nil {
+			record, need, _ := kad.Suggest()
+			if !need {
 				break
 			}
-			node = &testNode{record.Addr}
 			n++
+			if record == nil {
+				continue
+			}
+			node = &testNode{record.Addr}
 		}
 		exp := test.BucketSize * (test.MaxProx + 1)
 		if kad.Count() != exp {
@@ -116,15 +110,13 @@ func TestFindClosest(t *testing.T) {
 	test := func(test *FindClosestTest) bool {
 		// for any node kad.le, Target and N
 		params := NewKadParams()
-		params.MaxProx = 10
+		params.MaxProx = 7
 		kad := New(test.Self, params)
 		var err error
-		// t.Logf("FindClosestTest %v: %v\n", len(test.All), test)
 		for _, node := range test.All {
 			err = kad.On(node, nil)
-			if err != nil {
-				t.Errorf("backend not accepting node")
-				return false
+			if err != nil && err.Error() != "bucket full" {
+				t.Fatalf("backend not accepting node: %v", err)
 			}
 		}
 
@@ -157,17 +149,13 @@ func TestFindClosest(t *testing.T) {
 		// check that the result nodes have minimum distance to target.
 		farthestResult := nodes[len(nodes)-1].Addr()
 		for i, b := range kad.buckets {
-			for j, n := range b.nodes {
+			for j, n := range b {
 				if contains(nodes, n.Addr()) {
 					continue // don't run the check below for nodes in result
 				}
 				if test.Target.ProxCmp(n.Addr(), farthestResult) < 0 {
 					_ = i * j
 					t.Errorf("kad.le contains node that is closer to target but it's not in result")
-					// t.Logf("bucket %v, item %v\n", i, j)
-					// t.Logf("  Target:          %x", test.Target)
-					// t.Logf("  Farthest Result: %x", farthestResult)
-					// t.Logf("  ID:              %x (%d)", n.Addr(), kad.proximityBin(n.Addr()))
 					return false
 				}
 			}
@@ -193,7 +181,7 @@ func TestProxAdjust(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
 	params := NewKadParams()
-	params.MaxProx = 10
+	params.MaxProx = 7
 	kad := New(self, params)
 
 	var err error
@@ -201,15 +189,13 @@ func TestProxAdjust(t *testing.T) {
 		a := gen(Address{}, r).(Address)
 		addresses = append(addresses, a)
 		err = kad.On(&testNode{addr: a}, nil)
-		if err != nil {
-			t.Errorf("backend not accepting node")
-			return
+		if err != nil && err.Error() != "bucket full" {
+			t.Fatalf("backend not accepting node: %v", err)
 		}
 		if !kad.proxCheck(t) {
 			return
 		}
 	}
-
 	test := func(test *proxTest) bool {
 		node := &testNode{test.addr}
 		if test.add {
@@ -229,35 +215,33 @@ func TestSaveLoad(t *testing.T) {
 	addresses := gen([]Address{}, r).([]Address)
 	self := RandomAddress()
 	params := NewKadParams()
-	params.MaxProx = 10
+	params.MaxProx = 7
 	kad := New(self, params)
 
 	var err error
 
 	for _, a := range addresses {
 		err = kad.On(&testNode{addr: a}, nil)
-		if err != nil {
-			t.Errorf("backend not accepting node")
-			return
+		if err != nil && err.Error() != "bucket full" {
+			t.Fatalf("backend not accepting node: %v", err)
 		}
 	}
 	nodes := kad.FindClosest(self, 100)
 	path := "/tmp/bzz.peers"
 	err = kad.Save(path, nil)
-	if err != nil {
+	if err != nil && err.Error() != "bucket full" {
 		t.Fatalf("unepected error saving kaddb: %v", err)
 	}
 	kad = New(self, params)
 	err = kad.Load(path, nil)
-	if err != nil {
+	if err != nil && err.Error() != "bucket full" {
 		t.Fatalf("unepected error loading kaddb: %v", err)
 	}
 	for _, b := range kad.db.Nodes {
 		for _, node := range b {
 			err = kad.On(&testNode{node.Addr}, nil)
-			if err != nil {
-				t.Errorf("backend not accepting node")
-				return
+			if err != nil && err.Error() != "bucket full" {
+				t.Fatalf("backend not accepting node: %v", err)
 			}
 		}
 	}
@@ -270,30 +254,30 @@ func TestSaveLoad(t *testing.T) {
 }
 
 func (self *Kademlia) proxCheck(t *testing.T) bool {
-	var sum, i int
-	var b *bucket
-	for i, b = range self.buckets {
-		l := len(b.nodes)
+	var sum int
+	for i, b := range self.buckets {
+		l := len(b)
 		// if we are in the high prox multibucket
 		if i >= self.proxLimit {
 			sum += l
 		} else if l == 0 {
-			t.Errorf("bucket %d empty, yet proxLimit is %d\n%v", len(b.nodes), self.proxLimit, self)
+			t.Errorf("bucket %d empty, yet proxLimit is %d\n%v", len(b), self.proxLimit, self)
 			return false
 		}
 	}
 	// check if merged high prox bucket does not exceed size
 	if sum > 0 {
-		// if sum > self.ProxBinSize {
-		// 	t.Errorf("bucket %d is empty, yet proxSize is %d\n%v", i, self.proxSize, self)
-		// 	return false
-		// }
 		if sum != self.proxSize {
 			t.Errorf("proxSize incorrect, expected %v, got %v", sum, self.proxSize)
 			return false
 		}
-		if self.proxLimit > 0 && sum+len(self.buckets[self.proxLimit-1].nodes) < self.ProxBinSize {
-			t.Errorf("proxBinSize incorrect, expected %v got %v", sum, self.proxSize)
+		last := len(self.buckets[self.proxLimit])
+		if last > 0 && sum >= self.ProxBinSize+last {
+			t.Errorf("proxLimit %v incorrect, redundant non-empty bucket %d added to proxBin with %v (target %v)\n%v", self.proxLimit, last, sum-last, self.ProxBinSize, self)
+			return false
+		}
+		if self.proxLimit > 0 && sum < self.ProxBinSize {
+			t.Errorf("proxLimit %v incorrect. proxSize %v is less than target %v, yet there is more peers", self.proxLimit, sum, self.ProxBinSize)
 			return false
 		}
 	}
@@ -309,7 +293,7 @@ type bootstrapTest struct {
 func (*bootstrapTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := &bootstrapTest{
 		Self:       gen(Address{}, rand).(Address),
-		MaxProx:    10 + rand.Intn(3),
+		MaxProx:    5 + rand.Intn(2),
 		BucketSize: rand.Intn(3) + 1,
 	}
 	return reflect.ValueOf(t)

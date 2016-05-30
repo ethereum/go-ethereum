@@ -10,18 +10,19 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func manifest(paths ...string) (manifestReader storage.SectionReader) {
+func manifest(paths ...string) (manifestReader storage.LazySectionReader) {
 	var entries []string
 	for _, path := range paths {
 		entry := fmt.Sprintf(`{"path":"%s"}`, path)
 		entries = append(entries, entry)
 	}
 	manifest := fmt.Sprintf(`{"entries":[%s]}`, strings.Join(entries, ","))
-	return io.NewSectionReader(strings.NewReader(manifest), 0, int64(len(manifest)))
+	return &storage.LazyTestSectionReader{io.NewSectionReader(strings.NewReader(manifest), 0, int64(len(manifest)))}
 }
 
 func testGetEntry(t *testing.T, path, match string, paths ...string) *manifestTrie {
-	trie, err := readManifest(manifest(paths...), nil, nil)
+	quitC := make(chan bool)
+	trie, err := readManifest(manifest(paths...), nil, nil, quitC)
 	if err != nil {
 		t.Errorf("unexpected error making manifest: %v", err)
 	}

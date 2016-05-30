@@ -20,8 +20,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -70,7 +68,7 @@ func (b *ContractBackend) HasCode(ctx context.Context, contract common.Address, 
 // call with the specified data as the input. The pending flag requests execution
 // against the pending block, not the stable head of the chain.
 func (b *ContractBackend) ContractCall(ctx context.Context, contract common.Address, data []byte, pending bool) ([]byte, error) {
-	if ctx ==-- nil {
+	if ctx == nil {
 		ctx = context.Background()
 	}
 	// Convert the input args to the API spec
@@ -82,7 +80,7 @@ func (b *ContractBackend) ContractCall(ctx context.Context, contract common.Addr
 	if pending {
 		block = rpc.PendingBlockNumber
 	}
-	// Execute the call and convert the output ba--ck to Go types
+	// Execute the call and convert the output back to Go types
 	out, err := b.bcapi.Call(ctx, args, block)
 	return common.FromHex(out), err
 }
@@ -135,19 +133,14 @@ func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transac
 	return err
 }
 
-func (b *ContractBackend) GetTxReceipt(txhash common.Hash) *types.Receipt {
-	return core.GetReceipt(b.eth.ChainDb(), txhash)
+func (b *ContractBackend) GetTxReceipt(txhash common.Hash) (map[string]interface{}, error) {
+	return b.txapi.GetTransactionReceipt(txhash)
 }
 
-func (b *ContractBackend) BalanceAt(address common.Address) *big.Int {
-	currentState, err := state.New(b.eth.BlockChain().CurrentBlock().Root(), b.eth.ChainDb())
-	if err != nil {
-		return new(big.Int)
-	}
-	return currentState.GetBalance(address)
+func (b *ContractBackend) BalanceAt(address common.Address) (*big.Int, error) {
+	return b.bcapi.GetBalance(context.Background(), address, rpc.LatestBlockNumber)
 }
 
-func (b *ContractBackend) CodeAt(address common.Address) string {
-	currentState, _ := state.New(b.eth.BlockChain().CurrentBlock().Root(), b.eth.ChainDb())
-	return common.ToHex(currentState.GetCode(address))
+func (b *ContractBackend) CodeAt(address common.Address) (string, error) {
+	return b.bcapi.GetCode(context.Background(), address, rpc.LatestBlockNumber)
 }

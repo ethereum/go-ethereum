@@ -10,6 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/httpclient"
 )
 
+const port = "3222"
+
 func TestRoundTripper(t *testing.T) {
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -20,9 +22,9 @@ func TestRoundTripper(t *testing.T) {
 			http.Error(w, "Method "+r.Method+" is not supported.", http.StatusMethodNotAllowed)
 		}
 	})
-	go http.ListenAndServe(":8600", serveMux)
+	go http.ListenAndServe(":"+port, serveMux)
 
-	rt := &RoundTripper{Port: "8600"}
+	rt := &RoundTripper{Port: port}
 	client := httpclient.New("/")
 	client.RegisterProtocol("bzz", rt)
 

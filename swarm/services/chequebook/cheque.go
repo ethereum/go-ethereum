@@ -131,8 +131,10 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 }
 
 func (self *Chequebook) setBalanceFromBlockChain() {
-	balance := self.backend.BalanceAt(self.contractAddr)
-	self.balance.Set(balance)
+	balance, err := self.backend.BalanceAt(self.contractAddr)
+	if err != nil {
+		self.balance.Set(balance)
+	}
 }
 
 // LoadChequebook(path, prvKey, backend) loads a chequebook from disk (file path)

@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
+	// "github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
@@ -319,18 +319,18 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	var accman *accounts.Manager
-	if err := stack.Service(&accman); err != nil {
-		utils.Fatalf("ethereum service not running: %v", err)
-	}
-	passwords := utils.MakePasswordList(ctx)
+	// var accman *accounts.Manager
+	// if err := stack.Service(&accman); err != nil {
+	// 	utils.Fatalf("ethereum service not running: %v", err)
+	// }
+	// passwords := utils.MakePasswordList(ctx)
 
-	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range accounts {
-		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, accman, trimmed, i, passwords)
-		}
-	}
+	// accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	// for i, account := range accounts {
+	// 	if trimmed := strings.TrimSpace(account); trimmed != "" {
+	// 		unlockAccount(ctx, accman, trimmed, i, passwords)
+	// 	}
+	// }
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		var ethereum *eth.Ethereum

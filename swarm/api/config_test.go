@@ -19,16 +19,15 @@ var (
     "CacheCapacity": 5000,
     "Radius": 0,
     "Branches": 128,
-    "Hash": "SHA256",
-    "JoinTimeout": 120,
-    "SplitTimeout": 120,
-    "CallInterval": 10000000000,
+    "Hash": "SHA3",
+    "CallInterval": 3000000000,
     "KadDbPath": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e", "bzz-peers.json") + `",
-    "MaxProx": 10,
-    "ProxBinSize": 8,
-    "BucketSize": 3,
+    "MaxProx": 8,
+    "ProxBinSize": 2,
+    "BucketSize": 4,
     "PurgeInterval": 151200000000000,
-    "InitialRetryInterval": 4200000000,
+    "InitialRetryInterval": 42000000,
+    "MaxIdleInterval": 4200000000,
     "ConnRetryExp": 2,
     "Swap": {
         "BuyAt": 20000000000,
@@ -67,7 +66,8 @@ var (
     "Path": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e") + `",
     "Port": "8500",
     "PublicKey": "0x045f5cfd26692e48d0017d380349bcf50982488bc11b5145f3ddf88b24924299048450542d43527fbe29a5cb32f38d62755393ac002e6bfdd71b8d7ba725ecd7a3",
-    "BzzKey": "0xe861964402c0b78e2d44098329b8545726f215afa737d803714a4338552fcb81"
+    "BzzKey": "0xe861964402c0b78e2d44098329b8545726f215afa737d803714a4338552fcb81",
+    "EnsRoot": "0x0000000000000000000000000000000000000000"
 }`
 )
 

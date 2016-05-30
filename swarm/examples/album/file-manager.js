@@ -103,13 +103,14 @@ function onUploadingComplete(uri) {
     xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
             var i = xhr.responseText;
-            window.location.replace("/bzz:/" + i + "/");
+            window.location = "/bzz:/" + i + "/" + window.location.hash;
         }
     };
     sendImages(xhr, uri);
 }
 
 function handleFiles(files) {
+    showModal('Uploading photos..');
     uploadFile(files, 0, "");
 }
 

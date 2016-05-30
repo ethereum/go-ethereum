@@ -4,7 +4,7 @@ echo " two nodes that sync (no swap and do not have any funds)"
 echo " can be in sync content with each other"
 
 dir=`dirname $0`
-source $dir/../../cmd/swarm/test.sh
+source $dir/../test.sh
 
 mkdir -p /tmp/swarm-test-files
 FILE_00=/tmp/swarm-test-files/00
@@ -28,7 +28,6 @@ swarm needs 00 $key $FILE_00
 swarm needs 01 $key $FILE_00
 swarm stop 01
 
-# exit 1;
 
 swarm up 00 $FILE_01|tail -n1 > $key
 swarm needs 00 $key $FILE_01
@@ -46,7 +45,8 @@ swarm needs 00 $key $FILE_03
 swarm stop 00
 swarm up 01 $FILE_04|tail -n1 > $key
 swarm needs 01 $key $FILE_04
-swarm start 00 #--bzznoswap
+swarm start 00
+sleep $wait
 swarm needs 00 $key $FILE_04
 
 swarm stop all

@@ -49,6 +49,7 @@ const (
 	ErrExtraStatusMsg
 	ErrSwap
 	ErrSync
+	ErrUnwanted
 )
 
 var errorToString = map[int]string{
@@ -61,6 +62,7 @@ var errorToString = map[int]string{
 	ErrExtraStatusMsg:    "Extra status message",
 	ErrSwap:              "SWAP error",
 	ErrSync:              "Sync error",
+	ErrUnwanted:          "Unwanted peer",
 }
 
 // bzz represents the swarm wire protocol
@@ -179,7 +181,8 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend bind.Backe
 	// the main forever loop that handles incoming requests
 	for {
 		if self.hive.blockRead {
-			time.Sleep(1 * time.Second)
+			glog.V(logger.Warn).Infof("[BZZ] Cannot read network")
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		err = self.handle()
@@ -223,7 +226,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] incoming store request: %s", req.String())
+		glog.V(logger.Detail).Infof("[BZZ] incoming store request: %s", req.String())
 		// swap accounting is done within forwarding
 		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})
 
@@ -254,7 +257,7 @@ func (self *bzz) handle() error {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 		req.from = &peer{bzz: self}
-		glog.V(logger.Debug).Infof("[BZZ] <- peer addresses: %v", req)
+		glog.V(logger.Detail).Infof("[BZZ] <- peer addresses: %v", req)
 		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
 
 	case syncRequestMsg:
@@ -366,7 +369,10 @@ func (self *bzz) handleStatus() (err error) {
 	}
 
 	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
-	self.hive.addPeer(&peer{bzz: self})
+	err = self.hive.addPeer(&peer{bzz: self})
+	if err != nil {
+		return self.protoError(ErrUnwanted, "%v", err)
+	}
 
 	// hive sets syncstate so sync should start after node added
 	glog.V(logger.Info).Infof("[BZZ] syncronisation request sent with %v", self.syncState)
@@ -516,7 +522,6 @@ func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
 		return fmt.Errorf("network write blocked")
 	}
-	// self.messages = append(self.messages, "")
 	glog.V(logger.Detail).Infof("[BZZ] -> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {

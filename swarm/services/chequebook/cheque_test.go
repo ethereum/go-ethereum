@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/services/chequebook/contract"
 )
@@ -42,16 +41,16 @@ func newTestBackend() *testBackend {
 	return &testBackend{SimulatedBackend: backends.NewSimulatedBackend(accs...)}
 }
 
-func (b *testBackend) GetTxReceipt(txhash common.Hash) *types.Receipt {
-	return nil
+func (b *testBackend) GetTxReceipt(txhash common.Hash) (map[string]interface{}, error) {
+	return nil, nil
 }
 
-func (b *testBackend) CodeAt(address common.Address) string {
-	return ""
+func (b *testBackend) CodeAt(address common.Address) (string, error) {
+	return "", nil
 }
 
-func (b *testBackend) BalanceAt(address common.Address) *big.Int {
-	return big.NewInt(0)
+func (b *testBackend) BalanceAt(address common.Address) (*big.Int, error) {
+	return big.NewInt(0), nil
 }
 
 func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {

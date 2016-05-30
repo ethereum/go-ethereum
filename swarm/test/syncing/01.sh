@@ -4,7 +4,7 @@ echo " two nodes that do not have any funds"
 echo " can still sync content with each other"
 
 dir=`dirname $0`
-source $dir/../../cmd/swarm/test.sh
+source $dir/../test.sh
 key=/tmp/key
 
 long=/tmp/10M

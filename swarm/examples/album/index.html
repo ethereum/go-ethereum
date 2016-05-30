@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <link rel="shortcut icon" href="images/favicon.ico"/>
     <script src="jquery.js"></script>
+    <script src="jquery.modal.js" type="text/javascript" charset="utf-8"></script>
     <script>
         $.noConflict();
     </script>
@@ -16,8 +17,15 @@
     <script src="index.js" type="text/javascript"></script>
 
     <link href="index.css" rel="stylesheet" type="text/css"/>
+    <link rel="stylesheet" href="jquery.modal.css" type="text/css" media="screen"/>
 </head>
 <body>
+
+<div id="preview-modal" style="display:none; text-align: center">
+    <p id="action-text"></p>
+    <img style="text-align: center; padding-top: 20px" src="throbber.gif" id="currentPreview">
+</div>
+
 <noscript>
     <h2>Frak! JavaScript required :'(</h2>
 </noscript>
