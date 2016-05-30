@@ -130,7 +130,9 @@ func (self *KadDb) add(nrs []*NodeRecord, proximityBin func(Address) int) {
 			n++
 		}
 	}
-	glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records, added %d new", len(nrs), n)
+	if n > 0 {
+		glog.V(logger.Debug).Infof("[KΛÐ]: %d/%d node records (new/known)", n, len(nrs))
+	}
 }
 
 /*
@@ -145,7 +147,8 @@ We check for missing online nodes in the buckets for 1 upto Max BucketSize round
 On each round we proceed from the low to high proximity order buckets.
 If the number of active nodes (=connected peers) is < rounds, then start looking
 for a known candidate. To determine if there is a candidate to recommend the
-node record database row corresponding to the bucket is checked.a
+node record database row corresponding to the bucket is checked.
+
 If the row cursor is on position i, the ith element in the row is chosen.
 If the record is scheduled not to be retried before NOW, the next element is taken.
 If the record is scheduled can be retried, it is set as checked, scheduled for

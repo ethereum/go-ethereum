@@ -112,13 +112,13 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	// setting the node on the record, set it checked (for connectivity)
 	record.node = node
 
-	glog.V(logger.Info).Infof("[KΛÐ]: add node record %v with node %v", record, node)
 	if cb != nil {
 		err = cb(record, node)
-		glog.V(logger.Info).Infof("[KΛÐ]: cb(%v, %v) ->%v", record, node, err)
+		glog.V(logger.Detail).Infof("[KΛÐ]: cb(%v, %v) ->%v", record, node, err)
 		if err != nil {
-			return fmt.Errorf("node %v not added: %v", node.Addr(), err)
+			return fmt.Errorf("unable to add node %v, callback error: %v", node.Addr(), err)
 		}
+		glog.V(logger.Info).Infof("[KΛÐ]: add node record %v with node %v", record, node)
 	}
 	record.connected = true
 
@@ -127,7 +127,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	// if bucket is full insertion replaces the worst node
 	// TODO: give priority to peers with active traffic
 	if worst, pos := bucket.insert(node); worst != nil {
-		glog.V(logger.Info).Infof("[KΛÐ]: replace node %v (%d) with node %v\n%v", worst, pos, node, self)
+		glog.V(logger.Info).Infof("[KΛÐ]: replace node %v (%d) with node %v", worst, pos, node)
 		return
 		// no prox adjustment needed
 		// do not change count
@@ -412,6 +412,7 @@ func (self *Kademlia) String() string {
 
 	var rows []string
 	rows = append(rows, "=========================================================================")
+	rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.Count(), self.DBCount()))
 	rows = append(rows, fmt.Sprintf("%v : MaxProx: %d, ProxBinSize: %d, BucketSize: %d, proxLimit: %d, proxSize: %d", time.Now(), self.MaxProx, self.ProxBinSize, self.BucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {

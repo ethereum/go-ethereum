@@ -56,7 +56,7 @@ type ErrResolve error
 // DNS Resolver
 func (self *Api) Resolve(hostPort string, nameresolver bool) (contentHash storage.Key, err error) {
 	if hashMatcher.MatchString(hostPort) || self.dns == nil {
-		glog.V(logger.Debug).Infof("[BZZ] host is a contentHash: '%v'", hostPort)
+		glog.V(logger.Detail).Infof("[BZZ] host is a contentHash: '%v'", hostPort)
 		return storage.Key(common.Hex2Bytes(hostPort)), nil
 	}
 	if !nameresolver {
@@ -66,9 +66,9 @@ func (self *Api) Resolve(hostPort string, nameresolver bool) (contentHash storag
 	contentHash, err = self.dns.Resolve(hostPort)
 	if err != nil {
 		err = ErrResolve(err)
-		glog.V(logger.Debug).Infof("[BZZ] DNS error : %v", err)
+		glog.V(logger.Warn).Infof("[BZZ] DNS error : %v", err)
 	}
-	glog.V(logger.Debug).Infof("[BZZ] host lookup: %v -> %v", err)
+	glog.V(logger.Detail).Infof("[BZZ] host lookup: %v -> %v", err)
 	return
 }
 
@@ -130,21 +130,21 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.SectionReade
 
 	trie, err := loadManifest(self.dpa, key)
 	if err != nil {
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: loadManifestTrie error: %v", err)
+		glog.V(logger.Warn).Infof("[BZZ] Swarm: loadManifestTrie error: %v", err)
 		return
 	}
 
-	glog.V(logger.Debug).Infof("[BZZ] Swarm: getEntry(%s)", path)
+	glog.V(logger.Detail).Infof("[BZZ] Swarm: getEntry(%s)", path)
 	entry, _ := trie.getEntry(path)
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		mimeType = entry.ContentType
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: content lookup key: '%v' (%v)", key, mimeType)
+		glog.V(logger.Detail).Infof("[BZZ] Swarm: content lookup key: '%v' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)
+		glog.V(logger.Warn).Infof("[BZZ] Swarm: %v", err)
 	}
 	return
 }

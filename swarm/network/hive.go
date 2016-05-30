@@ -209,14 +209,14 @@ func (self *Hive) addPeer(p *peer) {
 
 // called after peer disconnected
 func (self *Hive) removePeer(p *peer) {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v gone offline", p)
+	glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v removed", p)
 	self.kad.Off(p, saveSync)
 	select {
 	case self.more <- true:
 	default:
 	}
 	if self.kad.Count() == 0 {
-		glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone", p)
+		glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone")
 	}
 }
 
@@ -232,7 +232,7 @@ func (self *Hive) getPeers(target storage.Key, max int) (peers []*peer) {
 
 // disconnects all the peers
 func (self *Hive) DropAll() {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: dropping all bees")
+	glog.V(logger.Info).Infof("[BZZ] KΛÐΞMLIΛ hive: dropping all bees")
 	for _, node := range self.kad.FindClosest(kademlia.Address{}, 0) {
 		node.Drop()
 	}
@@ -284,21 +284,22 @@ func (self *peer) LastActive() time.Time {
 // reads the serialised form of sync state persisted as the 'Meta' attribute
 // and sets the decoded syncState on the online node
 func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
-	if p, ok := node.(*peer); ok {
-		if record.Meta == nil {
-			glog.V(logger.Debug).Infof("no sync state for node record %v setting default", record)
-			p.syncState = &syncState{DbSyncState: &storage.DbSyncState{}}
-			return nil
-		}
-		state, err := decodeSync(record.Meta)
-		if err != nil {
-			return fmt.Errorf("error decoding kddb record meta info into a sync state: %v", err)
-		}
-		glog.V(logger.Debug).Infof("sync state for node record %v: %s -> %v", record, string(*(record.Meta)), state)
-		p.syncState = state
-		return err
+	p, ok := node.(*peer)
+	if !ok {
+		return fmt.Errorf("invalid type")
 	}
-	return fmt.Errorf("invalid type")
+	if record.Meta == nil {
+		glog.V(logger.Debug).Infof("no sync state for node record %v setting default", record)
+		p.syncState = &syncState{DbSyncState: &storage.DbSyncState{}}
+		return nil
+	}
+	state, err := decodeSync(record.Meta)
+	if err != nil {
+		return fmt.Errorf("error decoding kddb record meta info into a sync state: %v", err)
+	}
+	glog.V(logger.Detail).Infof("sync state for node record %v read from Meta: %s", record, string(*(record.Meta)))
+	p.syncState = state
+	return err
 }
 
 // callback when saving a sync state
@@ -309,8 +310,7 @@ func saveSync(record *kademlia.NodeRecord, node kademlia.Node) {
 			glog.V(logger.Warn).Infof("error saving sync state for %v: %v", node, err)
 			return
 		}
-		glog.V(logger.Warn).Infof("saving sync state for %v: %s", node, string(*meta))
-
+		glog.V(logger.Detail).Infof("saved sync state for %v: %s", node, string(*meta))
 		record.Meta = meta
 	}
 }
@@ -347,4 +347,8 @@ func (self *Hive) peers(req *retrieveRequestMsgData) {
 			req.from.peers(peersData)
 		}
 	}
+}
+
+func (self *Hive) String() string {
+	return self.kad.String()
 }

@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -75,6 +76,7 @@ type bzz struct {
 	peer       *p2p.Peer            // the p2p peer object
 	rw         p2p.MsgReadWriter    // messageReadWriter to send messages to
 	errors     *errs.Errors         // errors table
+	backend    bind.Backend
 
 	swap        *swap.Swap          // swap instance for the peer connection
 	swapParams  *bzzswap.SwapParams // swap settings both local and remote
@@ -106,7 +108,7 @@ on each peer connection
 The Run function of the Bzz protocol class creates a bzz instance
 which will represent the peer for the swarm hive and all peer-aware components
 */
-func Bzz(cloud StorageHandler, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams) (p2p.Protocol, error) {
+func Bzz(cloud StorageHandler, backend bind.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams) (p2p.Protocol, error) {
 
 	// a single global request db is created for all peer connections
 	// this is to persist delivery backlog and aid syncronisation
@@ -120,7 +122,7 @@ func Bzz(cloud StorageHandler, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapP
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return run(requestDb, cloud, hive, dbaccess, sp, sy, p, rw)
+			return run(requestDb, cloud, backend, hive, dbaccess, sp, sy, p, rw)
 		},
 	}, nil
 }
@@ -137,10 +139,11 @@ the main protocol loop that
  * whenever the loop terminates, the peer will disconnect with Subprotocol error
  * whenever handlers return an error the loop terminates
 */
-func run(requestDb *storage.LDBDatabase, depo StorageHandler, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend bind.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzz{
 		storage:   depo,
+		backend:   backend,
 		hive:      hive,
 		dbAccess:  dbaccess,
 		requestDb: requestDb,
@@ -218,7 +221,7 @@ func (self *bzz) handle() error {
 		// store requests are dispatched to netStore
 		var req storeRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 		glog.V(logger.Debug).Infof("[BZZ] incoming store request: %s", req.String())
 		// swap accounting is done within forwarding
@@ -228,7 +231,7 @@ func (self *bzz) handle() error {
 		// retrieve Requests are dispatched to netStore
 		var req retrieveRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 		req.from = &peer{bzz: self}
 		// if request is lookup and not to be delivered
@@ -248,30 +251,30 @@ func (self *bzz) handle() error {
 		// dispatches new peer data to the hive that adds them to KADDB
 		var req peersMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 		req.from = &peer{bzz: self}
-		glog.V(logger.Debug).Infof("[BZZ] incoming peer addresses: %v", req)
+		glog.V(logger.Debug).Infof("[BZZ] <- peer addresses: %v", req)
 		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
 
 	case syncRequestMsg:
 		var req syncRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] sync request received: %v", req)
+		glog.V(logger.Debug).Infof("[BZZ] <- sync request: %v", req)
 		self.sync(req.SyncState)
 
 	case unsyncedKeysMsg:
 		// coming from parent node offering
 		var req unsyncedKeysMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] incoming unsynced keys msg: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] <- unsynced keys : %s", req.String())
 		err := self.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: self})
 		if err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 
 	case deliveryRequestMsg:
@@ -279,12 +282,12 @@ func (self *bzz) handle() error {
 		// also relays the last synced state to the source
 		var req deliveryRequestMsgData
 		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<-msg %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] incoming delivery request: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] <- delivery request: %s", req.String())
 		err := self.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: self})
 		if err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 
 	case paymentMsg:
@@ -292,9 +295,9 @@ func (self *bzz) handle() error {
 		if self.swapEnabled {
 			var req paymentMsgData
 			if err := msg.Decode(&req); err != nil {
-				return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+				return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 			}
-			glog.V(logger.Debug).Infof("[BZZ] incoming payment: %s", req.String())
+			glog.V(logger.Debug).Infof("[BZZ] <- payment: %s", req.String())
 			self.swap.Receive(int(req.Units), req.Promise)
 		}
 
@@ -340,7 +343,7 @@ func (self *bzz) handleStatus() (err error) {
 
 	var status statusMsgData
 	if err := msg.Decode(&status); err != nil {
-		return self.protoError(ErrDecode, "msg %v: %v", msg, err)
+		return self.protoError(ErrDecode, " %v: %v", msg, err)
 	}
 
 	if status.NetworkId != NetworkId {
@@ -356,7 +359,7 @@ func (self *bzz) handleStatus() (err error) {
 
 	if self.swapEnabled {
 		// set remote profile for accounting
-		self.swap, err = bzzswap.NewSwap(self.swapParams, status.Swap, self)
+		self.swap, err = bzzswap.NewSwap(self.swapParams, status.Swap, self.backend, self)
 		if err != nil {
 			return self.protoError(ErrSwap, "%v", err)
 		}
@@ -385,7 +388,7 @@ func (self *bzz) sync(state *syncState) error {
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
 		self.syncEnabled = false
-		glog.V(logger.Info).Infof("[BZZ] syncronisation disabled for peer %v", self)
+		glog.V(logger.Warn).Infof("[BZZ] syncronisation disabled for peer %v", self)
 		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
@@ -394,7 +397,7 @@ func (self *bzz) sync(state *syncState) error {
 			state.Start = storage.Key(start[:])
 			state.Stop = storage.Key(stop[:])
 		}
-		glog.V(logger.Detail).Infof("[BZZ] syncronisation requested by peer %v at state %v", self, state)
+		glog.V(logger.Debug).Infof("[BZZ] syncronisation requested by peer %v at state %v", self, state)
 	}
 	var err error
 	self.syncer, err = newSyncer(
@@ -454,11 +457,11 @@ func (self *bzz) store(req *storeRequestMsgData) error {
 func (self *bzz) syncRequest() error {
 	req := &syncRequestMsgData{}
 	if self.hive.syncEnabled {
-		glog.V(logger.Detail).Infof("[BZZ] syncronisation request to peer %v at state %v", self, self.syncState)
+		glog.V(logger.Debug).Infof("[BZZ] syncronisation request to peer %v at state %v", self, self.syncState)
 		req.SyncState = self.syncState
 	}
 	if self.syncState == nil {
-		glog.V(logger.Detail).Infof("[BZZ] syncronisation disabled for peer %v at state %v", self, self.syncState)
+		glog.V(logger.Warn).Infof("[BZZ] syncronisation disabled for peer %v at state %v", self, self.syncState)
 	}
 	return self.send(syncRequestMsg, req)
 }
@@ -513,7 +516,8 @@ func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
 		return fmt.Errorf("network write blocked")
 	}
-	glog.V(logger.Debug).Infof("[BZZ] -> %v: %v (%T) to %v", msg, data, data, self)
+	// self.messages = append(self.messages, "")
+	glog.V(logger.Detail).Infof("[BZZ] -> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {
 		self.Drop()

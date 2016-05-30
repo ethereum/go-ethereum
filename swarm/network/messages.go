@@ -77,7 +77,11 @@ func (self storeRequestMsgData) String() string {
 	} else {
 		from = self.from.Addr().String()
 	}
-	return fmt.Sprintf("from: %v, Key: %v; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", from, self.Key, self.Id, self.requestTimeout, self.storageTimeout, self.SData[:10])
+	end := len(self.SData)
+	if len(self.SData) > 10 {
+		end = 10
+	}
+	return fmt.Sprintf("from: %v, Key: %v; ID: %v, requestTimeout: %v, storageTimeout: %v, SData %x", from, self.Key, self.Id, self.requestTimeout, self.storageTimeout, self.SData[:end])
 }
 
 /*

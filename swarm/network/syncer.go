@@ -316,7 +316,7 @@ func (self *syncer) syncState(state *syncState) {
 // stop quits both request processor and saves the request cache to disk
 func (self *syncer) stop() {
 	close(self.quit)
-	glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: save sync request db backlog", self.key.Log())
+	glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: stopand save sync request db backlog", self.key.Log())
 	for _, db := range self.queues {
 		db.stop()
 	}

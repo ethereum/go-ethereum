@@ -35,20 +35,20 @@ var ENSContractAddr = common.HexToAddress("0x504cdf3992d8f81a4182bd7b24e270d3a28
 
 // the swarm stack
 type Swarm struct {
-	ethereum        *eth.Ethereum
-	config          *api.Config            // swarm configuration
-	api             *api.Api               // high level api layer (fs/manifest)
-	dns             api.Resolver           // DNS registrar
-	dbAccess        *network.DbAccess      // access to local chunk db iterator and storage counter
-	storage         storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
-	dpa             *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	depo            network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud           storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
-	hive            *network.Hive          // the logistic manager
-	client          *httpclient.HTTPClient // bzz capable light http client
-	contractBackend bind.ContractBackend   // abigen contract Backend
-	backend         bind.Backend           // simple blockchain Backend
-	swapEnabled     bool
+	ethereum    *eth.Ethereum
+	config      *api.Config            // swarm configuration
+	api         *api.Api               // high level api layer (fs/manifest)
+	dns         api.Resolver           // DNS registrar
+	dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
+	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
+	dpa         *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
+	cloud       storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
+	hive        *network.Hive          // the logistic manager
+	client      *httpclient.HTTPClient // bzz capable light http client
+	backend     bind.Backend           // simple blockchain Backend
+	privateKey  *ecdsa.PrivateKey
+	swapEnabled bool
 }
 
 type SwarmAPI struct {
@@ -60,8 +60,8 @@ type SwarmAPI struct {
 func (self *Swarm) API() *SwarmAPI {
 	return &SwarmAPI{
 		Api:     self.api,
-		Backend: self.config.Swap.Backend(),
-		PrvKey:  self.config.Swap.PrivateKey(),
+		Backend: self.backend,
+		PrvKey:  self.privateKey,
 	}
 }
 
@@ -90,6 +90,7 @@ func NewSwarm(ctx *node.ServiceContext, config *api.Config, swapEnabled, syncEna
 		ethereum:    ethereum,
 		swapEnabled: swapEnabled,
 		client:      ethereum.HTTPClient(),
+		privateKey:  config.Swap.PrivateKey(),
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Setting up Swarm service components")
 
@@ -138,7 +139,7 @@ func NewSwarm(ctx *node.ServiceContext, config *api.Config, swapEnabled, syncEna
 	self.backend = eth.NewContractBackend(ethereum)
 
 	// set up high level api
-	transactOpts := bind.NewKeyedTransactor(self.config.Swap.PrivateKey())
+	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	// backend := ethereum.ContractBackend()
 	self.dns = ens.NewENS(transactOpts, ENSContractAddr, self.backend)
 	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar")
@@ -226,7 +227,7 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() []p2p.Protocol {
-	proto, err := network.Bzz(self.depo, self.hive, self.dbAccess, self.config.Swap, self.config.SyncParams)
+	proto, err := network.Bzz(self.depo, self.backend, self.hive, self.dbAccess, self.config.Swap, self.config.SyncParams)
 	if err != nil {
 		return nil
 	}

@@ -57,8 +57,8 @@ type PayProfile struct {
 	publicKey   *ecdsa.PublicKey
 	owner       common.Address
 	chbook      *chequebook.Chequebook
-	backend     bind.Backend
-	lock        sync.RWMutex
+	// backend     bind.Backend
+	lock sync.RWMutex
 }
 
 func DefaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *SwapParams {
@@ -99,18 +99,18 @@ func DefaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *SwapP
 // n < 0  called when receiving chunks = receiving delivery responses
 //                 OR receiving cheques.
 
-func NewSwap(local *SwapParams, remote *SwapProfile, proto swap.Protocol) (self *swap.Swap, err error) {
+func NewSwap(local *SwapParams, remote *SwapProfile, backend bind.Backend, proto swap.Protocol) (self *swap.Swap, err error) {
 
 	// check if remote chequebook is valid
 	// insolvent chequebooks suicide so will signal as invalid
 	// TODO: monitoring a chequebooks events
 	var in *chequebook.Inbox
-	err = bind.Validate(remote.Contract, contract.ContractDeployedCode, local.backend)
+	err = bind.Validate(remote.Contract, contract.ContractDeployedCode, backend)
 	if err != nil {
 		glog.V(logger.Info).Infof("[BZZ] SWAP invalid contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err)
 	} else {
 		// remote contract valid, create inbox
-		in, err = chequebook.NewInbox(local.privateKey, remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), local.backend)
+		in, err = chequebook.NewInbox(local.privateKey, remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), backend)
 		if err != nil {
 			glog.V(logger.Warn).Infof("[BZZ] SWAP unable to set up inbox for chequebook contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err)
 		}
@@ -118,7 +118,7 @@ func NewSwap(local *SwapParams, remote *SwapProfile, proto swap.Protocol) (self 
 
 	// cheque if local chequebook contract is valid
 	var out *chequebook.Outbox
-	err = bind.Validate(local.Contract, contract.ContractDeployedCode, local.backend)
+	err = bind.Validate(local.Contract, contract.ContractDeployedCode, backend)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] SWAP unable to set up outbox for peer %v:  chequebook contract (owner: %v): %v)", proto, local.owner.Hex(), err)
 	} else {
@@ -159,17 +159,18 @@ func (self *SwapParams) Chequebook() *chequebook.Chequebook {
 	return self.chbook
 }
 
-func (self *SwapParams) Backend() bind.Backend {
-	return self.backend
-}
+// func (self *SwapParams) Backend() bind.Backend {
+// 	return self.backend
+// }
 
 func (self *SwapParams) PrivateKey() *ecdsa.PrivateKey {
 	return self.privateKey
 }
 
-func (self *SwapParams) PublicKey() *ecdsa.PublicKey {
-	return self.publicKey
-}
+// func (self *SwapParams) PublicKey() *ecdsa.PublicKey {
+// 	return self.publicKey
+// }
+
 func (self *SwapParams) SetKey(prvkey *ecdsa.PrivateKey) {
 	self.privateKey = prvkey
 	self.publicKey = &prvkey.PublicKey
@@ -182,10 +183,9 @@ func (self *SwapParams) SetChequebook(path string, backend bind.Backend) (done c
 	self.lock.Lock()
 	var valid bool
 	done = make(chan bool)
-	self.backend = backend
 	err = bind.Validate(self.Contract, contract.ContractDeployedCode, backend)
 	if err != nil {
-		go self.deployChequebook(path, done)
+		go self.deployChequebook(path, backend, done)
 	} else {
 		valid = true
 		go func() {
@@ -210,14 +210,14 @@ func deploy(deployTransactor *bind.TransactOpts, backend bind.ContractBackend) (
 
 // prvKey *ecdsa.PrivateKey, amount *big.Int,
 
-func (self *SwapParams) deployChequebook(path string, done chan bool) {
+func (self *SwapParams) deployChequebook(path string, backend bind.Backend, done chan bool) {
 	owner := crypto.PubkeyToAddress(*(self.publicKey))
 	glog.V(logger.Info).Infof("[BZZ] SWAP Deploying new chequebook (owner: %v)", owner.Hex())
 	var valid bool
 
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	transactOpts.Value = self.AutoDepositBuffer
-	contract, err := bind.Deploy(deploy, contract.ContractDeployedCode, transactOpts, bind.DefaultDeployOptions(), self.backend)
+	contract, err := bind.Deploy(deploy, contract.ContractDeployedCode, transactOpts, bind.DefaultDeployOptions(), backend)
 	if err != nil {
 		glog.V(logger.Error).Infof("[BZZ] SWAP unable to deploy new chequebook: %v", err)
 		return
@@ -226,7 +226,7 @@ func (self *SwapParams) deployChequebook(path string, done chan bool) {
 	// need to save config at this point
 	self.lock.Lock()
 	self.Contract = contract
-	err = self.newChequebookFromContract(path, self.backend)
+	err = self.newChequebookFromContract(path, backend)
 	self.lock.Unlock()
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] SWAP error initialising cheque book (owner: %v): %v", owner.Hex(), err)
