@@ -273,41 +273,45 @@ function imageToUrl(img, w, h) {
   return can.toDataURL();
 }
 
-function deleteImg()
-{
-  if(imgs.data.length < 2) return; // empty albums not allowed
-  var fname = imgs.data[eidx].img[0];
-  imgs.data.splice(eidx,1);
+function deleteImg() {
+    if (imgs.data.length < 2) return; // empty albums not allowed
+    var fname = imgs.data[eidx].img[0];
+    imgs.data.splice(eidx, 1);
 
-  // construct an HTTP request
-  var xhr = new XMLHttpRequest();
+    // construct an HTTP request
+    var xhr = new XMLHttpRequest();
 
-  // set response handler
-  xhr.onreadystatechange = function () { if (xhr.readyState === 4) {
-    var i = xhr.responseText;
-    var xhrd = new XMLHttpRequest();
-    xhrd.onreadystatechange = function () {  if (xhrd.readyState === 4) {
-      var j = xhrd.responseText;
-      window.location.replace("/bzz:/" + j + "/");
-    }};
-    xhrd.open("DELETE", "/bzz%3A/" + i + "/" + fname, true);
-    xhrd.send();
-  }};
+    // set response handler
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+            var i = xhr.responseText;
+            var xhrd = new XMLHttpRequest();
+            xhrd.onreadystatechange = function () {
+                if (xhrd.readyState === 4) {
+                    var j = xhrd.responseText;
+                    window.location = "/bzz:/" + j + "/" + window.location.hash;
+                }
+            };
+            xhrd.open("DELETE", "/bzz%3A/" + i + "/" + fname, true);
+            xhrd.send();
+        }
+    };
 
-  sendImages(xhr, "");
+    sendImages(xhr, "");
 }
 
-function moveUpDown(off)
-{
-  var me = imgs.data[eidx];
-  imgs.data[eidx] = imgs.data[eidx + off];
-  imgs.data[eidx + off] = me;
-  var xhr = new XMLHttpRequest();
-  xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
-    var i = xhr.responseText;
-    window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
-  }};
-  sendImages(xhr, "");
+function moveUpDown(off) {
+    var me = imgs.data[eidx];
+    imgs.data[eidx] = imgs.data[eidx + off];
+    imgs.data[eidx + off] = me;
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+            var i = xhr.responseText;
+            window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
+        }
+    };
+    sendImages(xhr, "");
 }
 
 function moveUp()
