@@ -20,8 +20,7 @@ shift
 datetag=`date "+%c%y%m%d-%H%M%S"|cut -d ' ' -f 5`
 datadir=$root/data/$id        # /tmp/eth/04
 log=$root/log/$id.$datetag.log     # /tmp/eth/04.09.log
-linklog=$root/log/$id.current.log     # /tmp/eth/04.09.log
-stablelog=$root/log/$id.log     # /tmp/eth/04.09.log
+linklog=$root/log/$id.log     # /tmp/eth/04.09.log
 password=$id            # 04
 port=303$id              # 34504
 bzzport=322$id              # 32204
@@ -31,7 +30,6 @@ mkdir -p $root/data
 mkdir -p $root/enodes
 mkdir -p $root/pids
 mkdir -p $root/log
-ln -sf "$log" "$linklog"
 # if we do not have an account, create one
 # will not prompt for password, we use the double digit instance id as passwd
 # NEVER EVER USE THESE ACCOUNTS FOR INTERACTING WITH A LIVE CHAIN
@@ -109,10 +107,6 @@ if [ ! -f $root/pids/$id.pid ]; then
   #   2>&1 | tee "$stablelog" > "$log" &  # comment out if you pipe it to a tty etc.
   # " >&2
 
-  if [ -f $log ] && [ -f $root/stablelog ]; then
-    cp $stablelog `cat $root/prevlog`
-  fi
-  echo $log > $root/prevlog
 
   $GETH --datadir=$datadir \
     --identity=$id \
@@ -121,7 +115,9 @@ if [ ! -f $root/pids/$id.pid ]; then
     --unlock=$BZZKEY \
     --password=<(echo -n $id) \
     --rpc --rpcport=$rpcport --rpccorsdomain='*' $* \
-     > "$stablelog" 2>&1 &  # comment out if you pipe it to a tty etc.
+     > "$log" 2>&1 &  # comment out if you pipe it to a tty etc.
+
+  ln -sf "$log" "$linklog"
 
      # wait until ready
   # pid=`ps auxwww|grep geth|grep "ty=$id"|grep -v grep|awk '{print $2}'`
