@@ -236,7 +236,7 @@ participating.
 	app.After = func(ctx *cli.Context) error {
 		logger.Flush()
 		debug.Exit()
-		console.TerminalPrompter.Close() // Resets terminal mode.
+		console.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }

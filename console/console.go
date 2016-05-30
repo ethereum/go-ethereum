@@ -74,7 +74,7 @@ type Console struct {
 func New(config Config) (*Console, error) {
 	// Handle unset config values gracefully
 	if config.Prompter == nil {
-		config.Prompter = TerminalPrompter
+		config.Prompter = Stdin
 	}
 	if config.Prompt == "" {
 		config.Prompt = DefaultPrompt
@@ -192,9 +192,10 @@ func (c *Console) init(preload []string) error {
 	// Configure the console's input prompter for scrollback and tab completion
 	if c.prompter != nil {
 		if content, err := ioutil.ReadFile(c.histPath); err != nil {
-			c.prompter.SetScrollHistory(nil)
+			c.prompter.SetHistory(nil)
 		} else {
-			c.prompter.SetScrollHistory(strings.Split(string(content), "\n"))
+			c.history = strings.Split(string(content), "\n")
+			c.prompter.SetHistory(c.history)
 		}
 		c.prompter.SetWordCompleter(c.AutoCompleteInput)
 	}
@@ -322,7 +323,7 @@ func (c *Console) Interactive() {
 
 		case line, ok := <-scheduler:
 			// User input was returned by the prompter, handle special cases
-			if !ok || (indents <= 0 && exit.MatchString(input)) {
+			if !ok || (indents <= 0 && exit.MatchString(line)) {
 				return
 			}
 			if onlyWhitespace.MatchString(line) {
@@ -339,8 +340,13 @@ func (c *Console) Interactive() {
 			}
 			// If all the needed lines are present, save the command and run
 			if indents <= 0 {
-				if len(input) != 0 && input[0] != ' ' && !passwordRegexp.MatchString(input) {
-					c.history = append(c.history, input[:len(input)-1])
+				if len(input) > 0 && input[0] != ' ' && !passwordRegexp.MatchString(input) {
+					if command := strings.TrimSpace(input); len(c.history) == 0 || command != c.history[len(c.history)-1] {
+						c.history = append(c.history, command)
+						if c.prompter != nil {
+							c.prompter.AppendHistory(command)
+						}
+					}
 				}
 				c.Evaluate(input)
 				input = ""
@@ -356,7 +362,10 @@ func (c *Console) Execute(path string) error {
 
 // Stop cleans up the console and terminates the runtime envorinment.
 func (c *Console) Stop(graceful bool) error {
-	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), os.ModePerm); err != nil {
+	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
+		return err
+	}
+	if err := os.Chmod(c.histPath, 0600); err != nil { // Force 0600, even if it was different previously
 		return err
 	}
 	c.jsre.Stop(graceful)
