@@ -203,7 +203,7 @@ func (self *Kademlia) setProxLimit(r int, off bool) {
 			self.proxSize += len(self.buckets[self.proxLimit].nodes)
 			glog.V(logger.Detail).Infof("[KΛÐ]: proxbin expansion (size: %v, limit: %v, bin: %v, off: %v)", self.proxSize, self.proxLimit, r, off)
 		}
-		glog.V(logger.Detail).Infof("%v", self)
+		// glog.V(logger.Detail).Infof("%v", self)
 		return
 	}
 	self.proxSize++
@@ -215,7 +215,7 @@ func (self *Kademlia) setProxLimit(r int, off bool) {
 		self.proxLimit++
 		glog.V(logger.Detail).Infof("[KΛÐ]: proxbin contraction (size: %v, limit: %v, bin: %v, off: %v)", self.proxSize, self.proxLimit, r, off)
 	}
-	glog.V(logger.Detail).Infof("%v", self)
+	// glog.V(logger.Detail).Infof("%v", self)
 
 }
 
