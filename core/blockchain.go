@@ -826,6 +826,10 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		nonceChecked = make([]bool, len(chain))
 		statedb      *state.StateDB
 	)
+	fork, err := Fork(self.chainDb, self.Config(), self, chain[0].ParentHash(), len(chain))
+	if err != nil {
+		return 0, err
+	}
 
 	// Start the parallel nonce verifier.
 	nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
@@ -838,7 +842,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			break
 		}
 
-		bstart := time.Now()
+		//bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
 		for !nonceChecked[i] {
@@ -857,7 +861,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 		// Stage 1 validation of the block using the chain's validator
 		// interface.
-		err := self.Validator().ValidateBlock(block)
+		err := self.Validator().ValidateBlock(fork, block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				stats.ignored++
@@ -892,6 +896,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
 		if statedb == nil {
+			//statedb = fork.State()
 			statedb, err = state.New(self.GetBlock(block.ParentHash()).Root(), self.chainDb)
 		} else {
 			err = statedb.Reset(chain[i-1].Root())
@@ -901,13 +906,13 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(GetHashFn(block.ParentHash(), self), block, statedb, self.config.VmConfig)
+		receipts, _, usedGas, err := self.processor.Process(fork.GetNumHash, block, statedb, self.config.VmConfig)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
 		}
 		// Validate the state using the default validator
-		err = self.Validator().ValidateState(block, self.GetBlock(block.ParentHash()), statedb, receipts, usedGas)
+		err = self.Validator().ValidateState(block, fork.GetBlock(block.ParentHash()), statedb, receipts, usedGas)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
@@ -918,50 +923,61 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 
-		// coalesce logs for later processing
-		coalescedLogs = append(coalescedLogs, logs...)
-
-		if err := WriteBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
-			return i, err
-		}
-
-		txcount += len(block.Transactions())
-		// write the block to the chain and get the status
-		status, err := self.WriteBlock(block)
+		err = fork.CommitBlock(new(big.Int).Add(fork.GetTd(block.ParentHash()), block.Difficulty()), block, receipts)
 		if err != nil {
 			return i, err
 		}
 
-		switch status {
-		case CanonStatTy:
-			if glog.V(logger.Debug) {
-				glog.Infof("[%v] inserted block #%d (%d TXs %v G %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), block.GasUsed(), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
-			}
-			events = append(events, ChainEvent{block, block.Hash(), logs})
+		/*
+			// coalesce logs for later processing
+			coalescedLogs = append(coalescedLogs, logs...)
 
-			// This puts transactions in a extra db for rpc
-			if err := WriteTransactions(self.chainDb, block); err != nil {
+			if err := WriteBlockReceipts(self.chainDb, block.Hash(), receipts); err != nil {
 				return i, err
 			}
-			// store the receipts
-			if err := WriteReceipts(self.chainDb, receipts); err != nil {
-				return i, err
-			}
-			// Write map map bloom filters
-			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
-				return i, err
-			}
-		case SideStatTy:
-			if glog.V(logger.Detail) {
-				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
-			}
-			events = append(events, ChainSideEvent{block, logs})
 
-		case SplitStatTy:
-			events = append(events, ChainSplitEvent{block, logs})
-		}
+			txcount += len(block.Transactions())
+			// write the block to the chain and get the status
+			status, err := self.WriteBlock(block)
+			if err != nil {
+				return i, err
+			}
+
+			switch status {
+			case CanonStatTy:
+				if glog.V(logger.Debug) {
+					glog.Infof("[%v] inserted block #%d (%d TXs %v G %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), block.GasUsed(), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
+				}
+				events = append(events, ChainEvent{block, block.Hash(), logs})
+
+				// This puts transactions in a extra db for rpc
+				if err := WriteTransactions(self.chainDb, block); err != nil {
+					return i, err
+				}
+				// store the receipts
+				if err := WriteReceipts(self.chainDb, receipts); err != nil {
+					return i, err
+				}
+				// Write map map bloom filters
+				if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
+					return i, err
+				}
+			case SideStatTy:
+				if glog.V(logger.Detail) {
+					glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
+				}
+				events = append(events, ChainSideEvent{block, logs})
+
+			case SplitStatTy:
+				events = append(events, ChainSplitEvent{block, logs})
+			}
+		*/
 		stats.processed++
 	}
+	if err := fork.CommitToDb(); err != nil {
+		return 0, err
+	}
+	fork.ApplyTo(self)
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
 		tend := time.Since(tstart)
@@ -971,6 +987,21 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	go self.postChainEvents(events, coalescedLogs)
 
 	return 0, nil
+}
+
+func (bc *BlockChain) Resolve(writer ethdb.Writer, changes []Changes) error {
+	for _, change := range changes {
+		block := change.block
+		// Add the block to the canonical chain number scheme and mark as the head
+		if err := WriteCanonicalHash(writer, block.Hash(), block.NumberU64()); err != nil {
+			return fmt.Errorf("failed to insert block number: %v", err)
+		}
+	}
+	if err := WriteHeadBlockHash(writer, changes[len(changes)-1].block.Hash()); err != nil {
+		return fmt.Errorf("failed to insert head block hash: %v", err)
+	}
+
+	return nil
 }
 
 // reorgs takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them

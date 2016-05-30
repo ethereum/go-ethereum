@@ -42,7 +42,7 @@ import (
 // gas used. The implementer should decide what to do with the given input.
 type Validator interface {
 	HeaderValidator
-	ValidateBlock(block *types.Block) error
+	ValidateBlock(reader BlockReader, block *types.Block) error
 	ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error
 }
 

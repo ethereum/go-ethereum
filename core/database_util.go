@@ -233,7 +233,7 @@ func GetReceipt(db ethdb.ReadWriter, txHash common.Hash) *types.Receipt {
 }
 
 // WriteCanonicalHash stores the canonical hash for the given block number.
-func WriteCanonicalHash(db ethdb.ReadWriter, hash common.Hash, number uint64) error {
+func WriteCanonicalHash(db ethdb.Writer, hash common.Hash, number uint64) error {
 	key := append(blockNumPrefix, big.NewInt(int64(number)).Bytes()...)
 	if err := db.Put(key, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store number to hash mapping into database: %v", err)
@@ -252,7 +252,7 @@ func WriteHeadHeaderHash(db ethdb.ReadWriter, hash common.Hash) error {
 }
 
 // WriteHeadBlockHash stores the head block's hash.
-func WriteHeadBlockHash(db ethdb.ReadWriter, hash common.Hash) error {
+func WriteHeadBlockHash(db ethdb.Writer, hash common.Hash) error {
 	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
 		glog.Fatalf("failed to store last block's hash into database: %v", err)
 		return err

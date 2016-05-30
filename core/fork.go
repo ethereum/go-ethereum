@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -33,7 +34,7 @@ var errUnboundedParent = errors.New("core/fork: parent hash does not match last 
 // ChainResolver should implement chain resolving and should be capable
 // handling reorganisations.
 type ChainResolver interface {
-	Resolve(ethdb.ReadWriter, []Changes) error
+	Resolve(ethdb.Writer, []Changes) error
 }
 
 // Changes are changes that have previously been applied to the forked blockchain.
@@ -46,7 +47,8 @@ type Changes struct {
 // BlockReader is the basic chain reader interface for reading blocks of the blockchain
 type BlockReader interface {
 	GetBlock(common.Hash) *types.Block // GetBlock returns the block that corresponds to the given hash
-	Db() ethdb.Database                // XXX this doesn't really belong here.
+	GetBlocksFromHash(common.Hash, int) []*types.Block
+	GetTd(common.Hash) *big.Int
 }
 
 // receipt keeps a log of changes for a specific block number which can
@@ -75,12 +77,13 @@ type ChainFork struct {
 
 // Fork returns a new blockchain with the given database as backing layer
 // for the localised blockchain transaction.
-func Fork(config *ChainConfig, blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
+func Fork(db ethdb.Database, config *ChainConfig, blockReader BlockReader, origin common.Hash, size int) (*ChainFork, error) {
 	fork := &ChainFork{
-		db:        blockReader.Db(),
+		db:        db,
 		reader:    blockReader,
 		config:    config,
 		hashToIdx: make(map[common.Hash]int),
+		changes:   make([]Changes, 0, size),
 	}
 
 	// get the origin block from which this fork originates
@@ -143,6 +146,43 @@ func (fork *ChainFork) GetBlock(hash common.Hash) *types.Block {
 		return fork.changes[idx].block
 	}
 	return nil
+}
+
+func (fork *ChainFork) GetBlocksFromHash(hash common.Hash, size int) []*types.Block {
+	blocks := make([]*types.Block, 0, size)
+
+	max := int(math.Min(float64(size), float64(len(fork.changes))))
+	for i := 0; i < max; i++ {
+		blocks = append(blocks, fork.changes[len(fork.changes)-(i+1)].block)
+	}
+	// fetch the rest from the blockchain
+	if max < size {
+		blocks = append(blocks, fork.origin)
+		hash := fork.origin.ParentHash()
+		for i := max + 1; i < size; i++ {
+			block := GetBlock(fork.db, hash)
+			if block == nil {
+				break
+			}
+			blocks = append(blocks, block)
+			hash = block.ParentHash()
+		}
+	}
+	return blocks
+}
+
+func (fork *ChainFork) GetTd(hash common.Hash) *big.Int {
+	if len(fork.changes) == 0 {
+		if fork.origin.Hash() == hash {
+			return fork.reader.GetTd(hash)
+		}
+		return new(big.Int)
+	}
+
+	if idx, ok := fork.hashToIdx[hash]; ok {
+		return fork.changes[idx].td
+	}
+	return new(big.Int)
 
 }
 
@@ -196,7 +236,7 @@ func (fork *ChainFork) CommitToDb() error {
 		}
 
 		hash := change.block.Hash()
-		if err := WriteHeader(tx, change.block.Header()); err != nil {
+		if err := WriteBlock(tx, change.block); err != nil {
 			return err
 		}
 		if err := WriteTd(tx, hash, change.td); err != nil {
@@ -231,7 +271,11 @@ func (fork *ChainFork) ApplyTo(resolver ChainResolver) error {
 	if err != nil {
 		return err
 	}
-	return resolver.Resolve(tx, fork.changes)
+	err = resolver.Resolve(tx, fork.changes)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // NewUnsealedBlock creates a new unsealed block using the last block in the fork

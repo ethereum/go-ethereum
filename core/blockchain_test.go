@@ -130,7 +130,7 @@ func printChain(bc *BlockChain) {
 func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 	for _, block := range chain {
 		// Try and process the block
-		err := blockchain.Validator().ValidateBlock(block)
+		err := blockchain.Validator().ValidateBlock(blockchain, block)
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				continue
@@ -430,7 +430,7 @@ func TestChainMultipleInsertions(t *testing.T) {
 
 type bproc struct{}
 
-func (bproc) ValidateBlock(*types.Block) error                        { return nil }
+func (bproc) ValidateBlock(BlockReader, *types.Block) error           { return nil }
 func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return nil }
 func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
 	return nil

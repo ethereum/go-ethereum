@@ -66,19 +66,23 @@ func NewBlockValidator(config *ChainConfig, blockchain *BlockChain, pow pow.PoW)
 // state that might or might not be present is checked to make sure that fast
 // sync has done it's job proper. This prevents the block validator form accepting
 // false positives where a header is present but the state is not.
-func (v *BlockValidator) ValidateBlock(block *types.Block) error {
-	if v.bc.HasBlock(block.Hash()) {
-		if _, err := state.New(block.Root(), v.bc.chainDb); err == nil {
+func (v *BlockValidator) ValidateBlock(reader BlockReader, block *types.Block) error {
+	/* wtf?
+	if reader.GetBlock(block.Hash()) != nil {
+		if _, err := state.New(block.Root(), v.chainDb); err == nil {
 			return &KnownBlockError{block.Number(), block.Hash()}
 		}
 	}
-	parent := v.bc.GetBlock(block.ParentHash())
+	*/
+	parent := reader.GetBlock(block.ParentHash())
 	if parent == nil {
 		return ParentError(block.ParentHash())
 	}
+	/* wtf?
 	if _, err := state.New(parent.Root(), v.bc.chainDb); err != nil {
 		return ParentError(block.ParentHash())
 	}
+	*/
 
 	header := block.Header()
 	// validate the block header
@@ -86,7 +90,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 		return err
 	}
 	// verify the uncles are correctly rewarded
-	if err := v.VerifyUncles(block, parent); err != nil {
+	if err := v.VerifyUncles(reader, block, parent); err != nil {
 		return err
 	}
 
@@ -138,15 +142,20 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 // consensus rules to the various block headers included; it will return an
 // error if any of the included uncle headers were invalid. It returns an error
 // if the validation failed.
-func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
+func (v *BlockValidator) VerifyUncles(reader BlockReader, block, parent *types.Block) error {
+	usize := len(block.Uncles())
+	if usize == 0 {
+		return nil
+	}
+
 	// validate that there at most 2 uncles included in this block
-	if len(block.Uncles()) > 2 {
+	if usize > 2 {
 		return ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(block.Uncles()))
 	}
 
 	uncles := set.New()
 	ancestors := make(map[common.Hash]*types.Block)
-	for _, ancestor := range v.bc.GetBlocksFromHash(block.ParentHash(), 7) {
+	for _, ancestor := range reader.GetBlocksFromHash(block.ParentHash(), 7) {
 		ancestors[ancestor.Hash()] = ancestor
 		// Include ancestors uncles in the uncle set. Uncles must be unique.
 		for _, uncle := range ancestor.Uncles() {
@@ -193,10 +202,12 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 	if parent == nil {
 		return ParentError(header.ParentHash)
 	}
+	/* XXX i really don't like this here
 	// Short circuit if the header's already known or its parent missing
 	if v.bc.HasHeader(header.Hash()) {
 		return nil
 	}
+	*/
 	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
 }
 

@@ -20,8 +20,12 @@ func newFakeChain() fakeChain {
 	}
 }
 
-func (c fakeChain) Db() ethdb.Database {
-	return c.db
+func (c fakeChain) GetTd(common.Hash) *big.Int {
+	return new(big.Int)
+}
+
+func (c fakeChain) GetBlocksFromHash(common.Hash, int) []*types.Block {
+	return nil
 }
 
 func (c fakeChain) GetBlock(hash common.Hash) *types.Block {
@@ -33,7 +37,7 @@ func TestGetNumHash(t *testing.T) {
 	genesis := WriteGenesisBlockForTesting(chain.db)
 	config := &ChainConfig{HomesteadBlock: new(big.Int)}
 
-	fork, err := Fork(config, chain, genesis.Hash())
+	fork, err := Fork(chain.db, config, chain, genesis.Hash(), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
