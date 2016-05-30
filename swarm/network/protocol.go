@@ -190,7 +190,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend bind.Backe
 	return
 }
 
-// may need to implement protocol drop only? don't want to kick off the peer
+// TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
 func (self *bzz) Drop() {
 	self.peer.Disconnect(p2p.DiscSubprotocolError)

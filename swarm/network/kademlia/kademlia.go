@@ -21,6 +21,7 @@ const (
 var (
 	purgeInterval        = 42 * time.Hour
 	initialRetryInterval = 42 * 100 * time.Millisecond
+	maxIdleInterval      = 42 * 10 * time.Second
 )
 
 type KadParams struct {
@@ -126,12 +127,18 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	bucket := self.buckets[index]
 	// if bucket is full insertion replaces the worst node
 	// TODO: give priority to peers with active traffic
-	if worst, pos := bucket.insert(node); worst != nil {
-		glog.V(logger.Info).Infof("[KΛÐ]: replace node %v (%d) with node %v", worst, pos, node)
-		return
+	replaced, err := bucket.insert(node)
+	if err != nil {
+		glog.V(logger.Debug).Infof("[KΛÐ]: node %v not needed: %v", node, err)
+		return err
 		// no prox adjustment needed
 		// do not change count
 	}
+	if replaced != nil {
+		glog.V(logger.Debug).Infof("[KΛÐ]: node %v replaced by %v ", replaced, node)
+		return
+	}
+	// new node added
 	glog.V(logger.Info).Infof("[KΛÐ]: add node %v to table", node)
 	self.count++
 	self.setProxLimit(index, false)
@@ -327,17 +334,13 @@ func (h *nodesByDistance) push(node Node, max int) {
 // insert adds a peer to a bucket either by appending to existing items if
 // bucket length does not exceed bucketSize, or by replacing the worst
 // Node in the bucket
-func (self *bucket) insert(node Node) (dropped Node, pos int) {
+func (self *bucket) insert(node Node) (replaced Node, err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if len(self.nodes) >= self.size { // >= allows us to add peers beyond the bucketsize limitation
-		dropped, pos = self.worstNode()
-		if dropped != nil {
-			self.nodes[pos] = node
-			glog.V(logger.Info).Infof("[KΛÐ] dropping node %v (%d)", dropped, pos)
-			dropped.Drop()
-			return
-		}
+		// dev p2p kicks out nodes idle for > 30 s, so here we never replace nodes if
+		// bucket is full
+		return nil, fmt.Errorf("bucket full")
 	}
 	self.nodes = append(self.nodes, node)
 	return
@@ -347,20 +350,6 @@ func (self *bucket) length(node Node) int {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	return len(self.nodes)
-}
-
-// worst expunges the single worst node in a row, where worst entry is the node
-// that has been inactive for the longests time
-func (self *bucket) worstNode() (node Node, pos int) {
-	var oldest time.Time
-	for p, n := range self.nodes {
-		if (oldest == time.Time{}) || !oldest.Before(n.LastActive()) {
-			oldest = n.LastActive()
-			node = n
-			pos = p
-		}
-	}
-	return
 }
 
 /*
