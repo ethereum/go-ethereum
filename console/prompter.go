@@ -23,10 +23,9 @@ import (
 	"github.com/peterh/liner"
 )
 
-// TerminalPrompter holds the stdin line reader (also using stdout for printing
-// prompts). Only this reader may be used for input because it keeps an internal
-// buffer.
-var TerminalPrompter = newTerminalPrompter()
+// Stdin holds the stdin line reader (also using stdout for printing prompts).
+// Only this reader may be used for input because it keeps an internal buffer.
+var Stdin = newTerminalPrompter()
 
 // UserPrompter defines the methods needed by the console to promt the user for
 // various types of inputs.
@@ -44,9 +43,13 @@ type UserPrompter interface {
 	// choice to be made, returning that choice.
 	PromptConfirm(prompt string) (bool, error)
 
-	// SetScrollHistory sets the the input scrollback history that the prompter will
-	// allow the user to scoll back to.
-	SetScrollHistory(history []string)
+	// SetHistory sets the the input scrollback history that the prompter will allow
+	// the user to scoll back to.
+	SetHistory(history []string)
+
+	// AppendHistory appends an entry to the scrollback history. It should be called
+	// if and only if the prompt to append was a valid command.
+	AppendHistory(command string)
 
 	// SetWordCompleter sets the completion function that the prompter will call to
 	// fetch completion candidates when the user presses tab.
@@ -74,34 +77,34 @@ type terminalPrompter struct {
 // newTerminalPrompter creates a liner based user input prompter working off the
 // standard input and output streams.
 func newTerminalPrompter() *terminalPrompter {
-	r := new(terminalPrompter)
+	p := new(terminalPrompter)
 	// Get the original mode before calling NewLiner.
 	// This is usually regular "cooked" mode where characters echo.
 	normalMode, _ := liner.TerminalMode()
 	// Turn on liner. It switches to raw mode.
-	r.State = liner.NewLiner()
+	p.State = liner.NewLiner()
 	rawMode, err := liner.TerminalMode()
 	if err != nil || !liner.TerminalSupported() {
-		r.supported = false
+		p.supported = false
 	} else {
-		r.supported = true
-		r.normalMode = normalMode
-		r.rawMode = rawMode
+		p.supported = true
+		p.normalMode = normalMode
+		p.rawMode = rawMode
 		// Switch back to normal mode while we're not prompting.
 		normalMode.ApplyMode()
 	}
-	r.SetCtrlCAborts(true)
-	r.SetTabCompletionStyle(liner.TabPrints)
+	p.SetCtrlCAborts(true)
+	p.SetTabCompletionStyle(liner.TabPrints)
 
-	return r
+	return p
 }
 
 // PromptInput displays the given prompt to the user and requests some textual
 // data to be entered, returning the input of the user.
-func (r *terminalPrompter) PromptInput(prompt string) (string, error) {
-	if r.supported {
-		r.rawMode.ApplyMode()
-		defer r.normalMode.ApplyMode()
+func (p *terminalPrompter) PromptInput(prompt string) (string, error) {
+	if p.supported {
+		p.rawMode.ApplyMode()
+		defer p.normalMode.ApplyMode()
 	} else {
 		// liner tries to be smart about printing the prompt
 		// and doesn't print anything if input is redirected.
@@ -110,47 +113,53 @@ func (r *terminalPrompter) PromptInput(prompt string) (string, error) {
 		prompt = ""
 		defer fmt.Println()
 	}
-	return r.State.Prompt(prompt)
+	return p.State.Prompt(prompt)
 }
 
 // PromptPassword displays the given prompt to the user and requests some textual
 // data to be entered, but one which must not be echoed out into the terminal.
 // The method returns the input provided by the user.
-func (r *terminalPrompter) PromptPassword(prompt string) (passwd string, err error) {
-	if r.supported {
-		r.rawMode.ApplyMode()
-		defer r.normalMode.ApplyMode()
-		return r.State.PasswordPrompt(prompt)
+func (p *terminalPrompter) PromptPassword(prompt string) (passwd string, err error) {
+	if p.supported {
+		p.rawMode.ApplyMode()
+		defer p.normalMode.ApplyMode()
+		return p.State.PasswordPrompt(prompt)
 	}
-	if !r.warned {
+	if !p.warned {
 		fmt.Println("!! Unsupported terminal, password will be echoed.")
-		r.warned = true
+		p.warned = true
 	}
 	// Just as in Prompt, handle printing the prompt here instead of relying on liner.
 	fmt.Print(prompt)
-	passwd, err = r.State.Prompt("")
+	passwd, err = p.State.Prompt("")
 	fmt.Println()
 	return passwd, err
 }
 
 // PromptConfirm displays the given prompt to the user and requests a boolean
 // choice to be made, returning that choice.
-func (r *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
-	input, err := r.Prompt(prompt + " [y/N] ")
+func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
+	input, err := p.Prompt(prompt + " [y/N] ")
 	if len(input) > 0 && strings.ToUpper(input[:1]) == "Y" {
 		return true, nil
 	}
 	return false, err
 }
 
-// SetScrollHistory sets the the input scrollback history that the prompter will
-// allow the user to scoll back to.
-func (r *terminalPrompter) SetScrollHistory(history []string) {
-	r.State.ReadHistory(strings.NewReader(strings.Join(history, "\n")))
+// SetHistory sets the the input scrollback history that the prompter will allow
+// the user to scoll back to.
+func (p *terminalPrompter) SetHistory(history []string) {
+	p.State.ReadHistory(strings.NewReader(strings.Join(history, "\n")))
+}
+
+// AppendHistory appends an entry to the scrollback history. It should be called
+// if and only if the prompt to append was a valid command.
+func (p *terminalPrompter) AppendHistory(command string) {
+	p.State.AppendHistory(command)
 }
 
 // SetWordCompleter sets the completion function that the prompter will call to
 // fetch completion candidates when the user presses tab.
-func (r *terminalPrompter) SetWordCompleter(completer WordCompleter) {
-	r.State.SetWordCompleter(liner.WordCompleter(completer))
+func (p *terminalPrompter) SetWordCompleter(completer WordCompleter) {
+	p.State.SetWordCompleter(liner.WordCompleter(completer))
 }

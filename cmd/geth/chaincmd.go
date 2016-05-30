@@ -117,7 +117,7 @@ func exportChain(ctx *cli.Context) {
 }
 
 func removeDB(ctx *cli.Context) {
-	confirm, err := console.TerminalPrompter.PromptConfirm("Remove local database?")
+	confirm, err := console.Stdin.PromptConfirm("Remove local database?")
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
