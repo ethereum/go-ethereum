@@ -341,7 +341,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s.ChainConfig(), s),
+			Service:   NewPrivateDebugAPI(s.chainConfig, s),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
@@ -379,8 +379,6 @@ func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) GPO() *GasPriceOracle               { return s.gpo }
-func (s *Ethereum) ChainConfig() *core.ChainConfig     { return s.chainConfig }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Pow() *ethash.Ethash                { return s.pow }

@@ -31,8 +31,6 @@ const (
 	Version   = "0.1" // versioning reflect POC and release versions
 )
 
-var ENSContractAddr = common.HexToAddress("0x504cdf3992d8f81a4182bd7b24e270d3a28711e3")
-
 // the swarm stack
 type Swarm struct {
 	ethereum    *eth.Ethereum
@@ -141,8 +139,8 @@ func NewSwarm(ctx *node.ServiceContext, config *api.Config, swapEnabled, syncEna
 	// set up high level api
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	// backend := ethereum.ContractBackend()
-	self.dns = ens.NewENS(transactOpts, ENSContractAddr, self.backend)
-	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar")
+	self.dns = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
+	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar @ address %v", config.EnsRoot)
 
 	self.api = api.NewApi(self.dpa, self.dns)
 	// Manifests for Smart Hosting

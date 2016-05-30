@@ -32,6 +32,7 @@ type Config struct {
 	Port      string
 	PublicKey string
 	BzzKey    string
+	EnsRoot   common.Address
 }
 
 // config is agnostic to where private key is coming from

@@ -2,8 +2,7 @@
 // Copyright(c) 2003-2014 by wave++ "Yuri D'Elia" <wavexx@thregr.org>
 // Distributed under GPL2 (see COPYING) WITHOUT ANY WARRANTY.
 var datafile = 'data.json';
-var padding = 100;
-var marginTop = 50;
+var padding = 20;
 var duration = 500;
 var thrdelay = 1500;
 var hidedelay = 3000;
@@ -42,7 +41,6 @@ var eback;	// background
 var enoise;	// additive noise
 var eflash;	// flashing object
 var ehdr;	// header
-var progress;	// progress
 var elist;	// thumbnail list
 var fscr;	// thumbnail list scroll fx
 var econt;	// picture container
@@ -60,6 +58,18 @@ var first;	// first image
 var idle;	// idle timer
 var clayout;	// current layout
 var csr;	// current scaling ratio
+
+function showModal(text, previewImageUrl) {
+  if (!previewImageUrl) {
+    previewImageUrl = 'throbber.gif';
+  }
+
+  jQuery('#currentPreview').attr('src', previewImageUrl);
+  jQuery('#action-text').text(text);
+  jQuery('#preview-modal').modal({
+    fadeDuration: 250
+  });
+}
 
 function resize()
 {
@@ -233,7 +243,7 @@ function resizeMainImg(img)
   img.setStyles(
   {
     'position': 'absolute',
-    'top': (contSize.y / 2 - img.height / 2) + marginTop,
+    'top': contSize.y / 2 - img.height / 2,
     'left': contSize.x / 2 - img.width / 2
   });
 }
@@ -275,41 +285,53 @@ function imageToUrl(img, w, h) {
   return can.toDataURL();
 }
 
-function deleteImg()
-{
-  if(imgs.data.length < 2) return; // empty albums not allowed
-  var fname = imgs.data[eidx].img[0];
-  imgs.data.splice(eidx,1);
+function deleteImg() {
+    if (imgs.data.length < 2) return; // empty albums not allowed
+    var fname = imgs.data[eidx].img[0];
+    imgs.data.splice(eidx, 1);
 
-  // construct an HTTP request
-  var xhr = new XMLHttpRequest();
+    showModal('Deleting photo..', fname);
+    // construct an HTTP request
+    var xhr = new XMLHttpRequest();
 
-  // set response handler
-  xhr.onreadystatechange = function () { if (xhr.readyState === 4) {
-    var i = xhr.responseText;
-    var xhrd = new XMLHttpRequest();
-    xhrd.onreadystatechange = function () {  if (xhrd.readyState === 4) {
-      var j = xhrd.responseText;
-      window.location.replace("/bzz:/" + j + "/");
-    }};
-    xhrd.open("DELETE", "/bzz%3A/" + i + "/" + fname, true);
-    xhrd.send();
-  }};
+    // set response handler
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+            var i = xhr.responseText;
+            var xhrd = new XMLHttpRequest();
+            xhrd.onreadystatechange = function () {
+                if (xhrd.readyState === 4) {
+                    var j = xhrd.responseText;
+                    window.location = "/bzz:/" + j + "/" + window.location.hash;
+                }
+            };
+            xhrd.open("DELETE", "/bzz%3A/" + i + "/" + fname, true);
+            xhrd.send();
+        }
+    };
 
-  sendImages(xhr, "");
+    sendImages(xhr, "");
 }
 
-function moveUpDown(off)
-{
-  var me = imgs.data[eidx];
-  imgs.data[eidx] = imgs.data[eidx + off];
-  imgs.data[eidx + off] = me;
-  var xhr = new XMLHttpRequest();
-  xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
-    var i = xhr.responseText;
-    window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
-  }};
-  sendImages(xhr, "");
+function moveUpDown(off) {
+    var me = imgs.data[eidx];
+    console.log(me.thumb[0]);
+    var moveText = 'Moving up..';
+    if (off > 0) {
+        moveText = 'Moving down..';
+    }
+
+    showModal(moveText, me.thumb[0]);
+    imgs.data[eidx] = imgs.data[eidx + off];
+    imgs.data[eidx + off] = me;
+    var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+            var i = xhr.responseText;
+            window.location.replace("/bzz:/" + i + "/#" + (eidx + off));
+        }
+    };
+    sendImages(xhr, "");
 }
 
 function moveUp()
@@ -363,9 +385,6 @@ function onMainReady()
     dsc.push("<b>Date</b>: " + imgs.data[eidx].date);
   ehdr.set('html', dsc.join(' '));
   ehdr.setStyle('display', (dsc.length? 'block': 'none'));
-
-  progress.set('html', '<img id="currentPreview">');
-  progress.set('style', 'text-align: center; padding-top: 20px');
 
   // complete thumbnails
   var d = duration;
@@ -600,9 +619,6 @@ function initGallery(data)
 
   ehdr = new Element('div', { id: 'header' });
   ehdr.inject(econt);
-
-  progress = new Element('div', { id: 'progress' });
-  progress.inject(econt);
 
   elist = new Element('div', { id: 'list' });
   elist.inject(emain);

@@ -39,7 +39,7 @@ func (self *DirectoryString) String() string {
 }
 
 func (self *DirectoryString) Set(value string) error {
-	self.Value = ExpandPath(value)
+	self.Value = expandPath(value)
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (self *DirectoryFlag) Set(value string) {
 // 2. expands embedded environment variables
 // 3. cleans the path, e.g. /a/b/../c -> /a/c
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
-func ExpandPath(p string) string {
+func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
 		if user, err := user.Current(); err == nil {
 			p = user.HomeDir + p[1:]

@@ -63,7 +63,7 @@ import a private key into a new account.
 It supports interactive mode, when you are prompted for password as well as
 non-interactive mode where passwords are supplied via a given password file.
 Non-interactive mode is only meant for scripted use on test networks or known
-safe environ>>>ments.
+safe environments.
 
 Make sure you remember the password you gave when creating a new account (with
 either new or import). Without it you are not able to unlock your account.
@@ -119,7 +119,7 @@ password to file or expose in any other way.
 				Description: `
 
     ethereum account update <address>
->>>>>>>>>>>>
+
 Update an existing account.
 
 The account is saved in the newest version in encrypted format, you are prompted
@@ -175,7 +175,7 @@ func accountList(ctx *cli.Context) error {
 	return nil
 }
 
-// tries unlocking the specifiedqqa few times.
+// tries unlocking the specified account a few times.
 func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(accman, address)
 	if err != nil {
@@ -203,7 +203,7 @@ func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i
 	return accounts.Account{}, ""
 }
 
-// getPassPhrase retrieves the password associated with an account, either fetched
+// getPassPhrase retrieves the passwor associated with an account, either fetched
 // from a list of preloaded passphrases, or requested interactively from the user.
 func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) string {
 	// If a list of passwords was supplied, retrieve from them
@@ -262,7 +262,7 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
 	accman := utils.MakeAccountManager(ctx)
-	password := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	account, err := accman.NewAccount(password)
 	if err != nil {
@@ -280,8 +280,8 @@ func accountUpdate(ctx *cli.Context) error {
 	}
 	accman := utils.MakeAccountManager(ctx)
 
-	account, oldPassword := utils.UnlockAccount(accman, ctx.Args().First(), 0, nil)
-	newPassword := utils.GetPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
+	account, oldPassword := unlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
+	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
 	if err := accman.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
@@ -299,7 +299,7 @@ func importWallet(ctx *cli.Context) error {
 	}
 
 	accman := utils.MakeAccountManager(ctx)
-	passphrase := utils.GetPassPhrase("", false, 0, utils.MakePasswordList(ctx))
+	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
 	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -319,7 +319,7 @@ func accountImport(ctx *cli.Context) error {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
 	accman := utils.MakeAccountManager(ctx)
-	passphrase := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
+	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 	acct, err := accman.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

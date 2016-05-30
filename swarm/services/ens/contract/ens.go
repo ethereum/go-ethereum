@@ -12,108 +12,108 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-// ENSABI is the input ABI used to generate the binding from.
-const ENSABI = `[{"constant":true,"inputs":[{"name":"","type":"bytes32"}],"name":"Owners","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":false,"inputs":[],"name":"kill","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"","type":"bytes32"}],"name":"Registry","outputs":[{"name":"","type":"bytes32"}],"type":"function"},{"constant":false,"inputs":[{"name":"host","type":"bytes32"},{"name":"content","type":"bytes32"}],"name":"Set","outputs":[],"type":"function"}]`
+// ResolverABI is the input ABI used to generate the binding from.
+const ResolverABI = `[{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"bytes32[]"}],"name":"deletePrivateRR","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"isPersonalResolver","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":false,"inputs":[{"name":"label","type":"bytes32"},{"name":"newOwner","type":"address"}],"name":"setOwner","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"id","type":"bytes32"}],"name":"getExtended","outputs":[{"name":"data","type":"bytes"}],"type":"function"},{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"string"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"name":"setRR","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"bytes32[]"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"name":"setPrivateRR","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"nodeId","type":"bytes12"},{"name":"qtype","type":"bytes32"},{"name":"index","type":"uint16"}],"name":"resolve","outputs":[{"name":"rcode","type":"uint16"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"type":"function"},{"constant":false,"inputs":[{"name":"label","type":"bytes32"},{"name":"resolver","type":"address"},{"name":"nodeId","type":"bytes12"}],"name":"register","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"label","type":"bytes32"},{"name":"resolver","type":"address"},{"name":"nodeId","type":"bytes12"}],"name":"setResolver","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"string"}],"name":"deleteRR","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"label","type":"bytes32"}],"name":"getOwner","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":true,"inputs":[{"name":"nodeId","type":"bytes12"},{"name":"label","type":"bytes32"}],"name":"findResolver","outputs":[{"name":"rcode","type":"uint16"},{"name":"ttl","type":"uint32"},{"name":"rnode","type":"bytes12"},{"name":"raddress","type":"address"}],"type":"function"}]`
 
-// ENSBin is the compiled bytecode used for deploying new contracts.
-const ENSBin = `0x606060405260008054600160a060020a03191633179055610148806100246000396000f3606060405260e060020a60003504633d14b257811461003c57806341c0e1b51461005d578063a0d03d3614610085578063be36e6761461009d575b005b61013c600435600260205260009081526040902054600160a060020a031681565b61003a60005433600160a060020a039081169116141561014657600054600160a060020a0316ff5b61013c60043560016020526000908152604090205481565b61003a600435602435600082815260026020526040812054600160a060020a031614156100e7576040600020805473ffffffffffffffffffffffffffffffffffffffff1916321790555b32600160a060020a03166002600050600084815260200190815260200160002060009054906101000a9004600160a060020a0316600160a060020a0316141561013857600160205260406000208190555b5050565b6060908152602090f35b56`
+// ResolverBin is the compiled bytecode used for deploying new contracts.
+const ResolverBin = `0x`
 
-// DeployENS deploys a new Ethereum contract, binding an instance of ENS to it.
-func DeployENS(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *ENS, error) {
-	parsed, err := abi.JSON(strings.NewReader(ENSABI))
+// DeployResolver deploys a new Ethereum contract, binding an instance of Resolver to it.
+func DeployResolver(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Resolver, error) {
+	parsed, err := abi.JSON(strings.NewReader(ResolverABI))
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(ENSBin), backend)
+	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(ResolverBin), backend)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	return address, tx, &ENS{ENSCaller: ENSCaller{contract: contract}, ENSTransactor: ENSTransactor{contract: contract}}, nil
+	return address, tx, &Resolver{ResolverCaller: ResolverCaller{contract: contract}, ResolverTransactor: ResolverTransactor{contract: contract}}, nil
 }
 
-// ENS is an auto generated Go binding around an Ethereum contract.
-type ENS struct {
-	ENSCaller     // Read-only binding to the contract
-	ENSTransactor // Write-only binding to the contract
+// Resolver is an auto generated Go binding around an Ethereum contract.
+type Resolver struct {
+	ResolverCaller     // Read-only binding to the contract
+	ResolverTransactor // Write-only binding to the contract
 }
 
-// ENSCaller is an auto generated read-only Go binding around an Ethereum contract.
-type ENSCaller struct {
+// ResolverCaller is an auto generated read-only Go binding around an Ethereum contract.
+type ResolverCaller struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// ENSTransactor is an auto generated write-only Go binding around an Ethereum contract.
-type ENSTransactor struct {
+// ResolverTransactor is an auto generated write-only Go binding around an Ethereum contract.
+type ResolverTransactor struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-// ENSSession is an auto generated Go binding around an Ethereum contract,
+// ResolverSession is an auto generated Go binding around an Ethereum contract,
 // with pre-set call and transact options.
-type ENSSession struct {
-	Contract     *ENS              // Generic contract binding to set the session for
+type ResolverSession struct {
+	Contract     *Resolver         // Generic contract binding to set the session for
 	CallOpts     bind.CallOpts     // Call options to use throughout this session
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
 
-// ENSCallerSession is an auto generated read-only Go binding around an Ethereum contract,
+// ResolverCallerSession is an auto generated read-only Go binding around an Ethereum contract,
 // with pre-set call options.
-type ENSCallerSession struct {
-	Contract *ENSCaller    // Generic contract caller binding to set the session for
-	CallOpts bind.CallOpts // Call options to use throughout this session
+type ResolverCallerSession struct {
+	Contract *ResolverCaller // Generic contract caller binding to set the session for
+	CallOpts bind.CallOpts   // Call options to use throughout this session
 }
 
-// ENSTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
+// ResolverTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
 // with pre-set transact options.
-type ENSTransactorSession struct {
-	Contract     *ENSTransactor    // Generic contract transactor binding to set the session for
-	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
+type ResolverTransactorSession struct {
+	Contract     *ResolverTransactor // Generic contract transactor binding to set the session for
+	TransactOpts bind.TransactOpts   // Transaction auth options to use throughout this session
 }
 
-// ENSRaw is an auto generated low-level Go binding around an Ethereum contract.
-type ENSRaw struct {
-	Contract *ENS // Generic contract binding to access the raw methods on
+// ResolverRaw is an auto generated low-level Go binding around an Ethereum contract.
+type ResolverRaw struct {
+	Contract *Resolver // Generic contract binding to access the raw methods on
 }
 
-// ENSCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
-type ENSCallerRaw struct {
-	Contract *ENSCaller // Generic read-only contract binding to access the raw methods on
+// ResolverCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
+type ResolverCallerRaw struct {
+	Contract *ResolverCaller // Generic read-only contract binding to access the raw methods on
 }
 
-// ENSTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
-type ENSTransactorRaw struct {
-	Contract *ENSTransactor // Generic write-only contract binding to access the raw methods on
+// ResolverTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
+type ResolverTransactorRaw struct {
+	Contract *ResolverTransactor // Generic write-only contract binding to access the raw methods on
 }
 
-// NewENS creates a new instance of ENS, bound to a specific deployed contract.
-func NewENS(address common.Address, backend bind.ContractBackend) (*ENS, error) {
-	contract, err := bindENS(address, backend.(bind.ContractCaller), backend.(bind.ContractTransactor))
+// NewResolver creates a new instance of Resolver, bound to a specific deployed contract.
+func NewResolver(address common.Address, backend bind.ContractBackend) (*Resolver, error) {
+	contract, err := bindResolver(address, backend.(bind.ContractCaller), backend.(bind.ContractTransactor))
 	if err != nil {
 		return nil, err
 	}
-	return &ENS{ENSCaller: ENSCaller{contract: contract}, ENSTransactor: ENSTransactor{contract: contract}}, nil
+	return &Resolver{ResolverCaller: ResolverCaller{contract: contract}, ResolverTransactor: ResolverTransactor{contract: contract}}, nil
 }
 
-// NewENSCaller creates a new read-only instance of ENS, bound to a specific deployed contract.
-func NewENSCaller(address common.Address, caller bind.ContractCaller) (*ENSCaller, error) {
-	contract, err := bindENS(address, caller, nil)
+// NewResolverCaller creates a new read-only instance of Resolver, bound to a specific deployed contract.
+func NewResolverCaller(address common.Address, caller bind.ContractCaller) (*ResolverCaller, error) {
+	contract, err := bindResolver(address, caller, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &ENSCaller{contract: contract}, nil
+	return &ResolverCaller{contract: contract}, nil
 }
 
-// NewENSTransactor creates a new write-only instance of ENS, bound to a specific deployed contract.
-func NewENSTransactor(address common.Address, transactor bind.ContractTransactor) (*ENSTransactor, error) {
-	contract, err := bindENS(address, nil, transactor)
+// NewResolverTransactor creates a new write-only instance of Resolver, bound to a specific deployed contract.
+func NewResolverTransactor(address common.Address, transactor bind.ContractTransactor) (*ResolverTransactor, error) {
+	contract, err := bindResolver(address, nil, transactor)
 	if err != nil {
 		return nil, err
 	}
-	return &ENSTransactor{contract: contract}, nil
+	return &ResolverTransactor{contract: contract}, nil
 }
 
-// bindENS binds a generic wrapper to an already deployed contract.
-func bindENS(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
-	parsed, err := abi.JSON(strings.NewReader(ENSABI))
+// bindResolver binds a generic wrapper to an already deployed contract.
+func bindResolver(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+	parsed, err := abi.JSON(strings.NewReader(ResolverABI))
 	if err != nil {
 		return nil, err
 	}
@@ -124,443 +124,353 @@ func bindENS(address common.Address, caller bind.ContractCaller, transactor bind
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_ENS *ENSRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-	return _ENS.Contract.ENSCaller.contract.Call(opts, result, method, params...)
+func (_Resolver *ResolverRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+	return _Resolver.Contract.ResolverCaller.contract.Call(opts, result, method, params...)
 }
 
 // Transfer initiates a plain transaction to move funds to the contract, calling
 // its default method if one is available.
-func (_ENS *ENSRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _ENS.Contract.ENSTransactor.contract.Transfer(opts)
+func (_Resolver *ResolverRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
+	return _Resolver.Contract.ResolverTransactor.contract.Transfer(opts)
 }
 
 // Transact invokes the (paid) contract method with params as input values.
-func (_ENS *ENSRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	return _ENS.Contract.ENSTransactor.contract.Transact(opts, method, params...)
+func (_Resolver *ResolverRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
+	return _Resolver.Contract.ResolverTransactor.contract.Transact(opts, method, params...)
 }
 
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result. The result type might be a single field for simple
 // returns, a slice of interfaces for anonymous returns and a struct for named
 // returns.
-func (_ENS *ENSCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-	return _ENS.Contract.contract.Call(opts, result, method, params...)
+func (_Resolver *ResolverCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
+	return _Resolver.Contract.contract.Call(opts, result, method, params...)
 }
 
 // Transfer initiates a plain transaction to move funds to the contract, calling
 // its default method if one is available.
-func (_ENS *ENSTransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _ENS.Contract.contract.Transfer(opts)
+func (_Resolver *ResolverTransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
+	return _Resolver.Contract.contract.Transfer(opts)
 }
 
 // Transact invokes the (paid) contract method with params as input values.
-func (_ENS *ENSTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	return _ENS.Contract.contract.Transact(opts, method, params...)
+func (_Resolver *ResolverTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
+	return _Resolver.Contract.contract.Transact(opts, method, params...)
 }
 
-// Owners is a free data retrieval call binding the contract method 0x3d14b257.
+// FindResolver is a free data retrieval call binding the contract method 0xedc0277c.
 //
-// Solidity: function Owners( bytes32) constant returns(address)
-func (_ENS *ENSCaller) Owners(opts *bind.CallOpts, arg0 [32]byte) (common.Address, error) {
+// Solidity: function findResolver(nodeId bytes12, label bytes32) constant returns(rcode uint16, ttl uint32, rnode bytes12, raddress address)
+func (_Resolver *ResolverCaller) FindResolver(opts *bind.CallOpts, nodeId [12]byte, label [32]byte) (struct {
+	Rcode    uint16
+	Ttl      uint32
+	Rnode    [12]byte
+	Raddress common.Address
+}, error) {
+	ret := new(struct {
+		Rcode    uint16
+		Ttl      uint32
+		Rnode    [12]byte
+		Raddress common.Address
+	})
+	out := ret
+	err := _Resolver.contract.Call(opts, out, "findResolver", nodeId, label)
+	return *ret, err
+}
+
+// FindResolver is a free data retrieval call binding the contract method 0xedc0277c.
+//
+// Solidity: function findResolver(nodeId bytes12, label bytes32) constant returns(rcode uint16, ttl uint32, rnode bytes12, raddress address)
+func (_Resolver *ResolverSession) FindResolver(nodeId [12]byte, label [32]byte) (struct {
+	Rcode    uint16
+	Ttl      uint32
+	Rnode    [12]byte
+	Raddress common.Address
+}, error) {
+	return _Resolver.Contract.FindResolver(&_Resolver.CallOpts, nodeId, label)
+}
+
+// FindResolver is a free data retrieval call binding the contract method 0xedc0277c.
+//
+// Solidity: function findResolver(nodeId bytes12, label bytes32) constant returns(rcode uint16, ttl uint32, rnode bytes12, raddress address)
+func (_Resolver *ResolverCallerSession) FindResolver(nodeId [12]byte, label [32]byte) (struct {
+	Rcode    uint16
+	Ttl      uint32
+	Rnode    [12]byte
+	Raddress common.Address
+}, error) {
+	return _Resolver.Contract.FindResolver(&_Resolver.CallOpts, nodeId, label)
+}
+
+// GetExtended is a free data retrieval call binding the contract method 0x8021061c.
+//
+// Solidity: function getExtended(id bytes32) constant returns(data bytes)
+func (_Resolver *ResolverCaller) GetExtended(opts *bind.CallOpts, id [32]byte) ([]byte, error) {
+	var (
+		ret0 = new([]byte)
+	)
+	out := ret0
+	err := _Resolver.contract.Call(opts, out, "getExtended", id)
+	return *ret0, err
+}
+
+// GetExtended is a free data retrieval call binding the contract method 0x8021061c.
+//
+// Solidity: function getExtended(id bytes32) constant returns(data bytes)
+func (_Resolver *ResolverSession) GetExtended(id [32]byte) ([]byte, error) {
+	return _Resolver.Contract.GetExtended(&_Resolver.CallOpts, id)
+}
+
+// GetExtended is a free data retrieval call binding the contract method 0x8021061c.
+//
+// Solidity: function getExtended(id bytes32) constant returns(data bytes)
+func (_Resolver *ResolverCallerSession) GetExtended(id [32]byte) ([]byte, error) {
+	return _Resolver.Contract.GetExtended(&_Resolver.CallOpts, id)
+}
+
+// GetOwner is a free data retrieval call binding the contract method 0xdeb931a2.
+//
+// Solidity: function getOwner(label bytes32) constant returns(address)
+func (_Resolver *ResolverCaller) GetOwner(opts *bind.CallOpts, label [32]byte) (common.Address, error) {
 	var (
 		ret0 = new(common.Address)
 	)
 	out := ret0
-	err := _ENS.contract.Call(opts, out, "Owners", arg0)
+	err := _Resolver.contract.Call(opts, out, "getOwner", label)
 	return *ret0, err
 }
 
-// Owners is a free data retrieval call binding the contract method 0x3d14b257.
+// GetOwner is a free data retrieval call binding the contract method 0xdeb931a2.
 //
-// Solidity: function Owners( bytes32) constant returns(address)
-func (_ENS *ENSSession) Owners(arg0 [32]byte) (common.Address, error) {
-	return _ENS.Contract.Owners(&_ENS.CallOpts, arg0)
+// Solidity: function getOwner(label bytes32) constant returns(address)
+func (_Resolver *ResolverSession) GetOwner(label [32]byte) (common.Address, error) {
+	return _Resolver.Contract.GetOwner(&_Resolver.CallOpts, label)
 }
 
-// Owners is a free data retrieval call binding the contract method 0x3d14b257.
+// GetOwner is a free data retrieval call binding the contract method 0xdeb931a2.
 //
-// Solidity: function Owners( bytes32) constant returns(address)
-func (_ENS *ENSCallerSession) Owners(arg0 [32]byte) (common.Address, error) {
-	return _ENS.Contract.Owners(&_ENS.CallOpts, arg0)
+// Solidity: function getOwner(label bytes32) constant returns(address)
+func (_Resolver *ResolverCallerSession) GetOwner(label [32]byte) (common.Address, error) {
+	return _Resolver.Contract.GetOwner(&_Resolver.CallOpts, label)
 }
 
-// Registry is a free data retrieval call binding the contract method 0xa0d03d36.
+// IsPersonalResolver is a free data retrieval call binding the contract method 0x3f5665e7.
 //
-// Solidity: function Registry( bytes32) constant returns(bytes32)
-func (_ENS *ENSCaller) Registry(opts *bind.CallOpts, arg0 [32]byte) ([32]byte, error) {
+// Solidity: function isPersonalResolver() constant returns(bool)
+func (_Resolver *ResolverCaller) IsPersonalResolver(opts *bind.CallOpts) (bool, error) {
 	var (
-		ret0 = new([32]byte)
+		ret0 = new(bool)
 	)
 	out := ret0
-	err := _ENS.contract.Call(opts, out, "Registry", arg0)
+	err := _Resolver.contract.Call(opts, out, "isPersonalResolver")
 	return *ret0, err
 }
 
-// Registry is a free data retrieval call binding the contract method 0xa0d03d36.
+// IsPersonalResolver is a free data retrieval call binding the contract method 0x3f5665e7.
 //
-// Solidity: function Registry( bytes32) constant returns(bytes32)
-func (_ENS *ENSSession) Registry(arg0 [32]byte) ([32]byte, error) {
-	return _ENS.Contract.Registry(&_ENS.CallOpts, arg0)
+// Solidity: function isPersonalResolver() constant returns(bool)
+func (_Resolver *ResolverSession) IsPersonalResolver() (bool, error) {
+	return _Resolver.Contract.IsPersonalResolver(&_Resolver.CallOpts)
 }
 
-// Registry is a free data retrieval call binding the contract method 0xa0d03d36.
+// IsPersonalResolver is a free data retrieval call binding the contract method 0x3f5665e7.
 //
-// Solidity: function Registry( bytes32) constant returns(bytes32)
-func (_ENS *ENSCallerSession) Registry(arg0 [32]byte) ([32]byte, error) {
-	return _ENS.Contract.Registry(&_ENS.CallOpts, arg0)
+// Solidity: function isPersonalResolver() constant returns(bool)
+func (_Resolver *ResolverCallerSession) IsPersonalResolver() (bool, error) {
+	return _Resolver.Contract.IsPersonalResolver(&_Resolver.CallOpts)
 }
 
-// Set is a paid mutator transaction binding the contract method 0xbe36e676.
+// Resolve is a free data retrieval call binding the contract method 0xa16fdafa.
 //
-// Solidity: function Set(host bytes32, content bytes32) returns()
-func (_ENS *ENSTransactor) Set(opts *bind.TransactOpts, host [32]byte, content [32]byte) (*types.Transaction, error) {
-	return _ENS.contract.Transact(opts, "Set", host, content)
+// Solidity: function resolve(nodeId bytes12, qtype bytes32, index uint16) constant returns(rcode uint16, rtype bytes16, ttl uint32, len uint16, data bytes32)
+func (_Resolver *ResolverCaller) Resolve(opts *bind.CallOpts, nodeId [12]byte, qtype [32]byte, index uint16) (struct {
+	Rcode uint16
+	Rtype [16]byte
+	Ttl   uint32
+	Len   uint16
+	Data  [32]byte
+}, error) {
+	ret := new(struct {
+		Rcode uint16
+		Rtype [16]byte
+		Ttl   uint32
+		Len   uint16
+		Data  [32]byte
+	})
+	out := ret
+	err := _Resolver.contract.Call(opts, out, "resolve", nodeId, qtype, index)
+	return *ret, err
 }
 
-// Set is a paid mutator transaction binding the contract method 0xbe36e676.
+// Resolve is a free data retrieval call binding the contract method 0xa16fdafa.
 //
-// Solidity: function Set(host bytes32, content bytes32) returns()
-func (_ENS *ENSSession) Set(host [32]byte, content [32]byte) (*types.Transaction, error) {
-	return _ENS.Contract.Set(&_ENS.TransactOpts, host, content)
+// Solidity: function resolve(nodeId bytes12, qtype bytes32, index uint16) constant returns(rcode uint16, rtype bytes16, ttl uint32, len uint16, data bytes32)
+func (_Resolver *ResolverSession) Resolve(nodeId [12]byte, qtype [32]byte, index uint16) (struct {
+	Rcode uint16
+	Rtype [16]byte
+	Ttl   uint32
+	Len   uint16
+	Data  [32]byte
+}, error) {
+	return _Resolver.Contract.Resolve(&_Resolver.CallOpts, nodeId, qtype, index)
 }
 
-// Set is a paid mutator transaction binding the contract method 0xbe36e676.
+// Resolve is a free data retrieval call binding the contract method 0xa16fdafa.
 //
-// Solidity: function Set(host bytes32, content bytes32) returns()
-func (_ENS *ENSTransactorSession) Set(host [32]byte, content [32]byte) (*types.Transaction, error) {
-	return _ENS.Contract.Set(&_ENS.TransactOpts, host, content)
+// Solidity: function resolve(nodeId bytes12, qtype bytes32, index uint16) constant returns(rcode uint16, rtype bytes16, ttl uint32, len uint16, data bytes32)
+func (_Resolver *ResolverCallerSession) Resolve(nodeId [12]byte, qtype [32]byte, index uint16) (struct {
+	Rcode uint16
+	Rtype [16]byte
+	Ttl   uint32
+	Len   uint16
+	Data  [32]byte
+}, error) {
+	return _Resolver.Contract.Resolve(&_Resolver.CallOpts, nodeId, qtype, index)
 }
 
-// Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.
+// DeletePrivateRR is a paid mutator transaction binding the contract method 0x1b370194.
 //
-// Solidity: function kill() returns()
-func (_ENS *ENSTransactor) Kill(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _ENS.contract.Transact(opts, "kill")
+// Solidity: function deletePrivateRR(rootNodeId bytes12, name bytes32[]) returns()
+func (_Resolver *ResolverTransactor) DeletePrivateRR(opts *bind.TransactOpts, rootNodeId [12]byte, name [][32]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "deletePrivateRR", rootNodeId, name)
 }
 
-// Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.
+// DeletePrivateRR is a paid mutator transaction binding the contract method 0x1b370194.
 //
-// Solidity: function kill() returns()
-func (_ENS *ENSSession) Kill() (*types.Transaction, error) {
-	return _ENS.Contract.Kill(&_ENS.TransactOpts)
+// Solidity: function deletePrivateRR(rootNodeId bytes12, name bytes32[]) returns()
+func (_Resolver *ResolverSession) DeletePrivateRR(rootNodeId [12]byte, name [][32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.DeletePrivateRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.
+// DeletePrivateRR is a paid mutator transaction binding the contract method 0x1b370194.
 //
-// Solidity: function kill() returns()
-func (_ENS *ENSTransactorSession) Kill() (*types.Transaction, error) {
-	return _ENS.Contract.Kill(&_ENS.TransactOpts)
+// Solidity: function deletePrivateRR(rootNodeId bytes12, name bytes32[]) returns()
+func (_Resolver *ResolverTransactorSession) DeletePrivateRR(rootNodeId [12]byte, name [][32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.DeletePrivateRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// MortalABI is the input ABI used to generate the binding from.
-const MortalABI = `[{"constant":false,"inputs":[],"name":"kill","outputs":[],"type":"function"}]`
-
-// MortalBin is the compiled bytecode used for deploying new contracts.
-const MortalBin = `0x606060405260008054600160a060020a03191633179055605c8060226000396000f3606060405260e060020a600035046341c0e1b58114601a575b005b60186000543373ffffffffffffffffffffffffffffffffffffffff90811691161415605a5760005473ffffffffffffffffffffffffffffffffffffffff16ff5b56`
-
-// DeployMortal deploys a new Ethereum contract, binding an instance of Mortal to it.
-func DeployMortal(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Mortal, error) {
-	parsed, err := abi.JSON(strings.NewReader(MortalABI))
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(MortalBin), backend)
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	return address, tx, &Mortal{MortalCaller: MortalCaller{contract: contract}, MortalTransactor: MortalTransactor{contract: contract}}, nil
-}
-
-// Mortal is an auto generated Go binding around an Ethereum contract.
-type Mortal struct {
-	MortalCaller     // Read-only binding to the contract
-	MortalTransactor // Write-only binding to the contract
-}
-
-// MortalCaller is an auto generated read-only Go binding around an Ethereum contract.
-type MortalCaller struct {
-	contract *bind.BoundContract // Generic contract wrapper for the low level calls
-}
-
-// MortalTransactor is an auto generated write-only Go binding around an Ethereum contract.
-type MortalTransactor struct {
-	contract *bind.BoundContract // Generic contract wrapper for the low level calls
-}
-
-// MortalSession is an auto generated Go binding around an Ethereum contract,
-// with pre-set call and transact options.
-type MortalSession struct {
-	Contract     *Mortal           // Generic contract binding to set the session for
-	CallOpts     bind.CallOpts     // Call options to use throughout this session
-	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
-}
-
-// MortalCallerSession is an auto generated read-only Go binding around an Ethereum contract,
-// with pre-set call options.
-type MortalCallerSession struct {
-	Contract *MortalCaller // Generic contract caller binding to set the session for
-	CallOpts bind.CallOpts // Call options to use throughout this session
-}
-
-// MortalTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
-// with pre-set transact options.
-type MortalTransactorSession struct {
-	Contract     *MortalTransactor // Generic contract transactor binding to set the session for
-	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
-}
-
-// MortalRaw is an auto generated low-level Go binding around an Ethereum contract.
-type MortalRaw struct {
-	Contract *Mortal // Generic contract binding to access the raw methods on
-}
-
-// MortalCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
-type MortalCallerRaw struct {
-	Contract *MortalCaller // Generic read-only contract binding to access the raw methods on
-}
-
-// MortalTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
-type MortalTransactorRaw struct {
-	Contract *MortalTransactor // Generic write-only contract binding to access the raw methods on
-}
-
-// NewMortal creates a new instance of Mortal, bound to a specific deployed contract.
-func NewMortal(address common.Address, backend bind.ContractBackend) (*Mortal, error) {
-	contract, err := bindMortal(address, backend.(bind.ContractCaller), backend.(bind.ContractTransactor))
-	if err != nil {
-		return nil, err
-	}
-	return &Mortal{MortalCaller: MortalCaller{contract: contract}, MortalTransactor: MortalTransactor{contract: contract}}, nil
-}
-
-// NewMortalCaller creates a new read-only instance of Mortal, bound to a specific deployed contract.
-func NewMortalCaller(address common.Address, caller bind.ContractCaller) (*MortalCaller, error) {
-	contract, err := bindMortal(address, caller, nil)
-	if err != nil {
-		return nil, err
-	}
-	return &MortalCaller{contract: contract}, nil
-}
-
-// NewMortalTransactor creates a new write-only instance of Mortal, bound to a specific deployed contract.
-func NewMortalTransactor(address common.Address, transactor bind.ContractTransactor) (*MortalTransactor, error) {
-	contract, err := bindMortal(address, nil, transactor)
-	if err != nil {
-		return nil, err
-	}
-	return &MortalTransactor{contract: contract}, nil
-}
-
-// bindMortal binds a generic wrapper to an already deployed contract.
-func bindMortal(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
-	parsed, err := abi.JSON(strings.NewReader(MortalABI))
-	if err != nil {
-		return nil, err
-	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
-}
-
-// Call invokes the (constant) contract method with params as input values and
-// sets the output to result. The result type might be a single field for simple
-// returns, a slice of interfaces for anonymous returns and a struct for named
-// returns.
-func (_Mortal *MortalRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-	return _Mortal.Contract.MortalCaller.contract.Call(opts, result, method, params...)
-}
-
-// Transfer initiates a plain transaction to move funds to the contract, calling
-// its default method if one is available.
-func (_Mortal *MortalRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _Mortal.Contract.MortalTransactor.contract.Transfer(opts)
-}
-
-// Transact invokes the (paid) contract method with params as input values.
-func (_Mortal *MortalRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	return _Mortal.Contract.MortalTransactor.contract.Transact(opts, method, params...)
-}
-
-// Call invokes the (constant) contract method with params as input values and
-// sets the output to result. The result type might be a single field for simple
-// returns, a slice of interfaces for anonymous returns and a struct for named
-// returns.
-func (_Mortal *MortalCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-	return _Mortal.Contract.contract.Call(opts, result, method, params...)
-}
-
-// Transfer initiates a plain transaction to move funds to the contract, calling
-// its default method if one is available.
-func (_Mortal *MortalTransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _Mortal.Contract.contract.Transfer(opts)
-}
-
-// Transact invokes the (paid) contract method with params as input values.
-func (_Mortal *MortalTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	return _Mortal.Contract.contract.Transact(opts, method, params...)
-}
-
-// Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.
+// DeleteRR is a paid mutator transaction binding the contract method 0xbc06183d.
 //
-// Solidity: function kill() returns()
-func (_Mortal *MortalTransactor) Kill(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _Mortal.contract.Transact(opts, "kill")
+// Solidity: function deleteRR(rootNodeId bytes12, name string) returns()
+func (_Resolver *ResolverTransactor) DeleteRR(opts *bind.TransactOpts, rootNodeId [12]byte, name string) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "deleteRR", rootNodeId, name)
 }
 
-// Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.
+// DeleteRR is a paid mutator transaction binding the contract method 0xbc06183d.
 //
-// Solidity: function kill() returns()
-func (_Mortal *MortalSession) Kill() (*types.Transaction, error) {
-	return _Mortal.Contract.Kill(&_Mortal.TransactOpts)
+// Solidity: function deleteRR(rootNodeId bytes12, name string) returns()
+func (_Resolver *ResolverSession) DeleteRR(rootNodeId [12]byte, name string) (*types.Transaction, error) {
+	return _Resolver.Contract.DeleteRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// Kill is a paid mutator transaction binding the contract method 0x41c0e1b5.
+// DeleteRR is a paid mutator transaction binding the contract method 0xbc06183d.
 //
-// Solidity: function kill() returns()
-func (_Mortal *MortalTransactorSession) Kill() (*types.Transaction, error) {
-	return _Mortal.Contract.Kill(&_Mortal.TransactOpts)
+// Solidity: function deleteRR(rootNodeId bytes12, name string) returns()
+func (_Resolver *ResolverTransactorSession) DeleteRR(rootNodeId [12]byte, name string) (*types.Transaction, error) {
+	return _Resolver.Contract.DeleteRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// OwnedABI is the input ABI used to generate the binding from.
-const OwnedABI = `[{"inputs":[],"type":"constructor"}]`
-
-// OwnedBin is the compiled bytecode used for deploying new contracts.
-const OwnedBin = `0x606060405260008054600160a060020a0319163317905560068060226000396000f3606060405200`
-
-// DeployOwned deploys a new Ethereum contract, binding an instance of Owned to it.
-func DeployOwned(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *Owned, error) {
-	parsed, err := abi.JSON(strings.NewReader(OwnedABI))
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(OwnedBin), backend)
-	if err != nil {
-		return common.Address{}, nil, nil, err
-	}
-	return address, tx, &Owned{OwnedCaller: OwnedCaller{contract: contract}, OwnedTransactor: OwnedTransactor{contract: contract}}, nil
+// Register is a paid mutator transaction binding the contract method 0xa1f8f8f0.
+//
+// Solidity: function register(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactor) Register(opts *bind.TransactOpts, label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "register", label, resolver, nodeId)
 }
 
-// Owned is an auto generated Go binding around an Ethereum contract.
-type Owned struct {
-	OwnedCaller     // Read-only binding to the contract
-	OwnedTransactor // Write-only binding to the contract
+// Register is a paid mutator transaction binding the contract method 0xa1f8f8f0.
+//
+// Solidity: function register(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverSession) Register(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.Register(&_Resolver.TransactOpts, label, resolver, nodeId)
 }
 
-// OwnedCaller is an auto generated read-only Go binding around an Ethereum contract.
-type OwnedCaller struct {
-	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+// Register is a paid mutator transaction binding the contract method 0xa1f8f8f0.
+//
+// Solidity: function register(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactorSession) Register(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.Register(&_Resolver.TransactOpts, label, resolver, nodeId)
 }
 
-// OwnedTransactor is an auto generated write-only Go binding around an Ethereum contract.
-type OwnedTransactor struct {
-	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+// SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
+//
+// Solidity: function setOwner(label bytes32, newOwner address) returns()
+func (_Resolver *ResolverTransactor) SetOwner(opts *bind.TransactOpts, label [32]byte, newOwner common.Address) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setOwner", label, newOwner)
 }
 
-// OwnedSession is an auto generated Go binding around an Ethereum contract,
-// with pre-set call and transact options.
-type OwnedSession struct {
-	Contract     *Owned            // Generic contract binding to set the session for
-	CallOpts     bind.CallOpts     // Call options to use throughout this session
-	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
+// SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
+//
+// Solidity: function setOwner(label bytes32, newOwner address) returns()
+func (_Resolver *ResolverSession) SetOwner(label [32]byte, newOwner common.Address) (*types.Transaction, error) {
+	return _Resolver.Contract.SetOwner(&_Resolver.TransactOpts, label, newOwner)
 }
 
-// OwnedCallerSession is an auto generated read-only Go binding around an Ethereum contract,
-// with pre-set call options.
-type OwnedCallerSession struct {
-	Contract *OwnedCaller  // Generic contract caller binding to set the session for
-	CallOpts bind.CallOpts // Call options to use throughout this session
+// SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
+//
+// Solidity: function setOwner(label bytes32, newOwner address) returns()
+func (_Resolver *ResolverTransactorSession) SetOwner(label [32]byte, newOwner common.Address) (*types.Transaction, error) {
+	return _Resolver.Contract.SetOwner(&_Resolver.TransactOpts, label, newOwner)
 }
 
-// OwnedTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
-// with pre-set transact options.
-type OwnedTransactorSession struct {
-	Contract     *OwnedTransactor  // Generic contract transactor binding to set the session for
-	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
+// SetPrivateRR is a paid mutator transaction binding the contract method 0x91c8e7b9.
+//
+// Solidity: function setPrivateRR(rootNodeId bytes12, name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactor) SetPrivateRR(opts *bind.TransactOpts, rootNodeId [12]byte, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setPrivateRR", rootNodeId, name, rtype, ttl, len, data)
 }
 
-// OwnedRaw is an auto generated low-level Go binding around an Ethereum contract.
-type OwnedRaw struct {
-	Contract *Owned // Generic contract binding to access the raw methods on
+// SetPrivateRR is a paid mutator transaction binding the contract method 0x91c8e7b9.
+//
+// Solidity: function setPrivateRR(rootNodeId bytes12, name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverSession) SetPrivateRR(rootNodeId [12]byte, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetPrivateRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
 }
 
-// OwnedCallerRaw is an auto generated low-level read-only Go binding around an Ethereum contract.
-type OwnedCallerRaw struct {
-	Contract *OwnedCaller // Generic read-only contract binding to access the raw methods on
+// SetPrivateRR is a paid mutator transaction binding the contract method 0x91c8e7b9.
+//
+// Solidity: function setPrivateRR(rootNodeId bytes12, name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactorSession) SetPrivateRR(rootNodeId [12]byte, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetPrivateRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
 }
 
-// OwnedTransactorRaw is an auto generated low-level write-only Go binding around an Ethereum contract.
-type OwnedTransactorRaw struct {
-	Contract *OwnedTransactor // Generic write-only contract binding to access the raw methods on
+// SetRR is a paid mutator transaction binding the contract method 0x8bba944d.
+//
+// Solidity: function setRR(rootNodeId bytes12, name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactor) SetRR(opts *bind.TransactOpts, rootNodeId [12]byte, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setRR", rootNodeId, name, rtype, ttl, len, data)
 }
 
-// NewOwned creates a new instance of Owned, bound to a specific deployed contract.
-func NewOwned(address common.Address, backend bind.ContractBackend) (*Owned, error) {
-	contract, err := bindOwned(address, backend.(bind.ContractCaller), backend.(bind.ContractTransactor))
-	if err != nil {
-		return nil, err
-	}
-	return &Owned{OwnedCaller: OwnedCaller{contract: contract}, OwnedTransactor: OwnedTransactor{contract: contract}}, nil
+// SetRR is a paid mutator transaction binding the contract method 0x8bba944d.
+//
+// Solidity: function setRR(rootNodeId bytes12, name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverSession) SetRR(rootNodeId [12]byte, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
 }
 
-// NewOwnedCaller creates a new read-only instance of Owned, bound to a specific deployed contract.
-func NewOwnedCaller(address common.Address, caller bind.ContractCaller) (*OwnedCaller, error) {
-	contract, err := bindOwned(address, caller, nil)
-	if err != nil {
-		return nil, err
-	}
-	return &OwnedCaller{contract: contract}, nil
+// SetRR is a paid mutator transaction binding the contract method 0x8bba944d.
+//
+// Solidity: function setRR(rootNodeId bytes12, name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactorSession) SetRR(rootNodeId [12]byte, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
 }
 
-// NewOwnedTransactor creates a new write-only instance of Owned, bound to a specific deployed contract.
-func NewOwnedTransactor(address common.Address, transactor bind.ContractTransactor) (*OwnedTransactor, error) {
-	contract, err := bindOwned(address, nil, transactor)
-	if err != nil {
-		return nil, err
-	}
-	return &OwnedTransactor{contract: contract}, nil
+// SetResolver is a paid mutator transaction binding the contract method 0xa9f2a1b2.
+//
+// Solidity: function setResolver(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactor) SetResolver(opts *bind.TransactOpts, label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setResolver", label, resolver, nodeId)
 }
 
-// bindOwned binds a generic wrapper to an already deployed contract.
-func bindOwned(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
-	parsed, err := abi.JSON(strings.NewReader(OwnedABI))
-	if err != nil {
-		return nil, err
-	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+// SetResolver is a paid mutator transaction binding the contract method 0xa9f2a1b2.
+//
+// Solidity: function setResolver(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverSession) SetResolver(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetResolver(&_Resolver.TransactOpts, label, resolver, nodeId)
 }
 
-// Call invokes the (constant) contract method with params as input values and
-// sets the output to result. The result type might be a single field for simple
-// returns, a slice of interfaces for anonymous returns and a struct for named
-// returns.
-func (_Owned *OwnedRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-	return _Owned.Contract.OwnedCaller.contract.Call(opts, result, method, params...)
-}
-
-// Transfer initiates a plain transaction to move funds to the contract, calling
-// its default method if one is available.
-func (_Owned *OwnedRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _Owned.Contract.OwnedTransactor.contract.Transfer(opts)
-}
-
-// Transact invokes the (paid) contract method with params as input values.
-func (_Owned *OwnedRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	return _Owned.Contract.OwnedTransactor.contract.Transact(opts, method, params...)
-}
-
-// Call invokes the (constant) contract method with params as input values and
-// sets the output to result. The result type might be a single field for simple
-// returns, a slice of interfaces for anonymous returns and a struct for named
-// returns.
-func (_Owned *OwnedCallerRaw) Call(opts *bind.CallOpts, result interface{}, method string, params ...interface{}) error {
-	return _Owned.Contract.contract.Call(opts, result, method, params...)
-}
-
-// Transfer initiates a plain transaction to move funds to the contract, calling
-// its default method if one is available.
-func (_Owned *OwnedTransactorRaw) Transfer(opts *bind.TransactOpts) (*types.Transaction, error) {
-	return _Owned.Contract.contract.Transfer(opts)
-}
-
-// Transact invokes the (paid) contract method with params as input values.
-func (_Owned *OwnedTransactorRaw) Transact(opts *bind.TransactOpts, method string, params ...interface{}) (*types.Transaction, error) {
-	return _Owned.Contract.contract.Transact(opts, method, params...)
+// SetResolver is a paid mutator transaction binding the contract method 0xa9f2a1b2.
+//
+// Solidity: function setResolver(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactorSession) SetResolver(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetResolver(&_Resolver.TransactOpts, label, resolver, nodeId)
 }

@@ -712,7 +712,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	accounts := strings.Split(ctx.GlobalString(UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			UnlockAccount(accman, trimmed, i, passwords)
+			UnlockAccount(ctx, accman, trimmed, i, passwords)
 		}
 	}
 

@@ -1,0 +1,759 @@
+#!/bin/bash
+if [ "$GETH_DIR" = "" ]; then
+  if [ "$GOPATH" = "" ]; then echo "either GETH_DIR or GOPATH environment variable must be set"; exit 1; fi
+  export GETH_DIR=$GOPATH/src/github.com/ethereum/go-ethereum
+fi
+
+if [ "$GETH" = "" ]; then
+  export GETH=$GETH_DIR/geth
+fi
+
+if [ "$SWARM_NETWORK_ID" = "" ]; then export SWARM_NETWORK_ID=322; fi
+
+if [ "$SWARM_DIR" = "" ]; then export SWARM_DIR=$HOME/bzz; fi
+
+if [ "$IP_ADDR" = "" ]; then
+  # export IP_ADDR=`curl ipecho.net/plain 2>/dev/null;echo f`
+  export IP_ADDR=
+fi
+
+root=$SWARM_DIR
+network_id=$SWARM_NETWORK_ID
+cmd=$1
+shift
+
+dir="$root/$network_id"
+
+tmpdir=/tmp
+
+function randomfile {
+  dd if=/dev/urandom of=/dev/stdout bs=1024 count=$1 2>/dev/null
+}
+
+# swarm attach 00 brings up a console attached to a running instance
+function attach {
+  id=$1
+  shift
+  echo "attaching console to instance $id"
+  cmd="$GETH --datadir=$dir/data/$id $* attach ipc:$dir/data/$id/geth.ipc"
+  # echo $cmd
+  eval $cmd
+ }
+
+# swarm attach 00 brings up a console attached to a running instance
+function execute {
+  id=$1
+  shift
+  # attach $id --exec "'$*' "
+  cmd="$GETH --datadir=$dir/data/$id --exec '$*' attach ipc:$dir/data/$id/geth.ipc"
+  # echo $cmd
+  eval $cmd
+}
+
+# swarm hive 00 displays the kademlia table of the given running instance
+function hive {
+  if [ "$1" = "all" ]; then
+    N=`ls -1 -d $dir/data/* |wc -l`
+    for ((i=0;i<N;++i)); do
+      instance=`printf "%02d" $i`
+      hive $instance
+    done
+  else
+    # echo "kademlia table of instance $id"
+    execute $1 'console.log(bzz.hive)'|grep -v undefined
+  fi
+}
+
+# swarm log 00 shows the running tail logs of an instance
+function log {
+  id=$1
+  shift
+  echo "streaming logs for instance $id"
+  cmd="tail -f $dir/log/$id.log"
+  echo $cmd
+  eval $cmd
+}
+
+# swarm cleanlog 00 removes the old log files for a given instance (all for every instance)
+function cleanlog {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    echo "remove logs for all instances"
+    rm -rf "$dir/log/"
+  else
+    echo "remove logs for instance $id"
+    rm -rf $dir/log/$id*
+  fi
+}
+
+# display kademlia tables of istances
+function monitor {
+  if [ "$3" = "" ]; then
+    id=$1
+    period=$2
+    while true; do
+      hive $id
+      sleep $period
+    done
+  else
+    node=$1
+    id=$2
+    period=$3
+    while true; do
+      remote-run $node swarm hive $id
+      sleep $period
+    done
+  fi
+}
+
+
+# swarm cleanbzz 00 removes the bzz subdirectory for a given instance (all for every instance)
+function cleanbzz {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    echo "remove bzz data for all instances"
+    rm -rf $dir/data/*/bzz
+  else
+    echo "remove bzz data for instance $id"
+    rm -rf "$dir/data/$id"
+  fi
+}
+
+# swarm less/viewlogd 00 displays the last (current) log for the given instance (in a pager)
+function viewlog {
+  id=$1
+  shift
+  echo "viewing logs for instance $id"
+  cmd="/usr/bin/less $dir/log/$id.log"
+  echo $cmd
+  eval $cmd
+}
+
+# display the swawrm base account for an instance
+function key {
+  id=$1
+  shift
+  mkdir -p $dir/data/$id/
+  $GETH --datadir=$dir/data/$id account list|head -n1|perl -ne '/([a-f0-9]{40})/ && print $1'
+}
+
+# swarm options 00 displays the geth command line options used to start the swarm
+function rawoptions {
+  id=$1
+  shift
+
+  globaloptions="
+  --dev
+  --maxpeers=40
+  --shh=false
+  --nodiscover
+  --networkid=$network_id
+  --bzznoswap
+  --verbosity=0
+  --vmodule=swarm/*=5"
+
+  datadir=$dir/data/$id
+  password=$id
+  port=303$id
+  bzzport=322$id
+  rpcport=302$id
+  key=`swarm key $id`
+
+  instanceoptions="
+  --datadir=$datadir
+  --identity=$id
+  --bzzaccount=$key
+  --unlock=$key
+  --bzzport=$bzzport
+  --port=$port
+  --rpc
+  --rpcport=$rpcport
+  --rpccorsdomain='*'"
+
+  echo "$globaloptions"
+  echo "$instanceoptions"
+  echo "$*"
+}
+
+function options {
+  echo "The command line options passed to geth are the following:"
+  echo "use 'geth help' to see further options"
+  rawoptions $*
+}
+
+function start {
+  id=$1
+  shift
+
+  if [ -f $dir/pids/$id.pid ]; then
+    echo "instance $id already running"
+    return
+  fi
+
+  datetag=`date "+%Y-%m-%d-%H:%M:%S"`
+  log=$dir/log/$id.$datetag.log
+  linklog=$dir/log/$id.log
+  opts=`swarm rawoptions $id $*|tr '\r' ' '`
+  # echo; echo "$GETH $opts > $log 2>&1 &"
+
+  $GETH $opts  --password=<(echo -n $id) > "$log" 2>&1 &  # comment out if you pipe it to a tty etc.
+  ln -sf "$log" "$linklog"
+
+   # wait until ready
+
+  ((j=0))
+  while true; do
+      execute $id "net" > /dev/null 2>&1 && break
+    sleep 1
+    echo -n "."
+    if ((j++>10)); then
+      echo "instance $id failed to start"
+      exit 1
+    fi
+  done
+  echo -n "started - "
+  pid=`ps auxwww|grep geth|grep "ty=$id"|grep -v grep|awk '{print $2}'`
+  echo "pid: $pid"
+  echo $pid > $dir/pids/$id.pid
+}
+
+
+# setup 00 creates the direcories for instance
+function setup {
+  id=$1
+  shift
+  mkdir -p $dir/data/$id
+  mkdir -p $dir/enodes
+  mkdir -p $dir/pids
+  mkdir -p $dir/log
+}
+
+# creates the swarm base account for an  instance
+function create-account {
+  id=$1
+  datadir=$dir/data/$id
+  # if we do not have an account, create one
+  # will not prompt for password, we use the double digit instance id as passwd
+  # NEVER EVER USE THESE ACCOUNTS FOR INTERACTING WITH A LIVE CHAIN
+  keystoredir="$datadir/keystore/"
+  # echo "KeyStore dir: $keystoredir"
+  if [ ! -d "$keystoredir" ]; then
+    # echo "create an account with password $id [DO NOT EVER USE THIS ON LIVE]"
+    # mkdir -p $datadir/keystore
+    $GETH --datadir=$datadir --password=<(echo -n $id) account new >/dev/null 2>&1
+    # create account with password 00, 01, ...
+    # note that the account key will be stored also separately outside
+    # datadir
+    # this way you can safely clear the data directory and still keep your key
+    # under <rootdir>/keystore/dd
+    # LS=$(ls $datadir/keystore)
+    # echo $LS
+    while [ ! -d "$keystoredir" ]; do
+      echo "."
+      ((i++))
+      if ((i>10)); then break; fi
+      sleep 1
+    done
+    # echo "copying keys $datadir/keystore $root/keystore/$id"
+    mkdir -p $dir/keystore/$id
+    cp -R "$keystoredir" $dir/keystore/$id
+  fi
+}
+
+# shuts down a running instance, cleans the pid
+function stop {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    procs=`cat $dir/pids/*.pid 2>/dev/null |perl -pe 's/^\s+//;s/\s+\\$//;s/\s+/\n/g'`
+    # echo "stopping processes $procs"
+    for p in $procs; do
+      shutdown $p
+    done
+    rm -rf $dir/pids/*
+  else
+    pid=$dir/pids/$id.pid
+    if [ -f $pid ]; then
+      echo "stopping instance $id, pid="`cat $pid`
+      shutdown `cat $pid`
+      rm $pid
+    fi
+  fi
+}
+
+# shutdown kills the node with interrupt 2 - if it resits falls back to -9 after 10s
+function shutdown {
+  echo -n "stopping $1..."
+  kill -2 $1
+  while true; do
+    ps auxwww|grep geth|grep -v grep|awk '{print $2}'|grep -ql $1 || break
+    if ((i++>5)); then
+      echo "not stopping. killing it"
+      kill -QUIT $1
+      break
+    fi
+    echo '.'
+    sleep 1
+  done
+  echo "stopped"
+}
+
+# swarm restart 00 calls stop and start
+function restart {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    stop all
+    N=`ls -d1 $dir/data/*|wc -l`
+    cluster $N $*
+  else
+    stop $id
+    start $id $*
+  fi
+}
+
+# swarm init X sets up and starts a new client instance
+##########################################################
+#
+# IT WIPES THE DATABASE
+#
+##########################################################
+function init {
+  killall geth
+  reset all
+  cluster $*
+  enode all
+  connect all
+}
+
+# reset wipes the datadirs of the instance
+function reset {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    rm -rf $dir
+  else
+    rm -rf$dir/*/$id*
+  fi
+}
+
+# enode displays the instance's enode address
+# swarm enode all writes all instances' enodes in a file
+function enode {
+  id=$1
+  shift
+
+  if [ $id = "all" ]; then
+    json=$dir/static-nodes.json
+    enodes=$dir/enodes.lst
+    cmd=$dir/connect.js
+    rm -f $enodes $json $cmd
+    # build a static nodes(-like) list of all enodes of the local cluster
+    echo "[" >> $json
+    N=`ls -1 -d $dir/data/* |wc -l`
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      f=$dir/enodes/$id.enode
+      enode $id > $f
+      echo -n "admin.addPeer(" >> $cmd
+      cat "$f"  |  perl -pe 's/\s*$//' >> $cmd
+      echo ");" >> $cmd
+      cat $f |perl -pe 's/"//g'>> $enodes
+      cat $f >> $json
+      echo "," >> $json
+    done
+    echo "\"\"]" >> $json
+    cat $enodes
+  else
+    # echo "local IP: $ip_addr "
+    execute $id 'admin.nodeInfo.enode' |perl -pe "s/\[\:\:\]/$IP_ADDR/ "
+  fi
+}
+
+# connect sources the local or remote set of peers and connects the node to the peers
+function connect {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    N=`ls -1 -d $dir/data/* |wc -l`
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      connect $id
+    done
+  else
+    echo -n 'peer count: '
+    attach $id --preload $dir/connect.js --exec net.peerCount
+  fi
+}
+
+# swarm cluster N launches N nodes; 00 01 02 ...
+function cluster {
+  N=$1
+  shift
+  echo "launching cluster of $N instances"
+  for ((i=0;i<N;++i)); do
+    id=`printf "%02d" $i`
+    setup $id $*
+    create-account $id
+    echo "launching node $i/$N.."
+    start $id $*
+    # info $id
+    enode $id
+  done
+}
+
+# swarm needs instance keyfile destination
+# tests if the content for the key is available for the intance
+#
+function needs {
+  id=$1
+  keyfile=$2
+
+  target=$3
+  dest=$tmpdir/down
+  mkdir -p $dest
+  file=$dest/`basename $target`
+  rm -f $file
+  echo -n "waiting for root hash in '$keyfile'..."
+  while true; do
+   if [ ! -z $keyfile ]; then
+    break
+   fi
+   sleep 1
+   echo -n "."
+  done
+  key=`cat $keyfile|tr -d \"`
+  echo " => $key"
+  download $id $key $dest && cmp --silent $file $target && echo "PASS" || echo "FAIL"
+}
+
+# swarm up 00 file uploads file via instances CLI
+function up { #port, file
+  echo "Upload file '$2' to node $1... " 1>&2
+  file=`basename $2`
+  /usr/bin/time -f "latency: %e" swarm execute $1 "bzz.upload(\"$2\", \"$file\")"|tail -n1> /tmp/key
+  cat /tmp/key
+}
+
+# swarm download 00 file download file via instances CLI
+function download {
+  echo "download '$2' from node $1 to '$3'"
+  execute $1 "bzz.download(\"$2\", \"$3\")" >/dev/null
+}
+
+# swarm down issues bzz.get to download the content 10 attempts
+function down {
+  echo -n "Download hash '$2' from node $1... "
+  while true; do
+    execute $1 "bzz.get(\"$2\")" 2> /dev/null |grep -qil "status" && break
+    sleep 1
+    echo -n "."
+    if ((i++>10)); then
+      echo "not found"
+      return
+    fi
+  done
+  echo "found OK"
+}
+
+# static info about an instance (available even if node is off)
+function info {
+  echo "swarm node information"
+  echo "ROOTDIR: $root"
+  echo "DATADIR: $dir/data/$1"
+  echo "LOGFILE: $dir/log/$1.log"
+  echo "HTTPAPI: http://localhost:322$1"
+  echo "ETHPORT: 303$1"
+  echo "RPCPORT: 302$1"
+  echo "ACCOUNT:" 0x`ls -1 $dir/data/$1/bzz`
+  echo "CHEQUEB:" `cat $dir/data/$1/bzz/*/config.json|grep Contract|awk -F\" '{print $4}'`
+  echo "ROOTDIR: $root"
+  echo "DATADIR: $dir/data/$1"
+  echo "LOGFILE: $dir/log/$1.log"
+}
+
+# live into about an instance
+function status {
+  echo -n "account balance:     "
+  execute $1 'eth.getBalance(eth.accounts[0])'
+  echo -n "swap contract balance:       "
+  execute $1 "eth.getBalance(bzz.info.Swap.Contract)"
+  echo -n "chequebook balance:  "
+  execute $1 "chequebook.balance"
+  echo -n "peer count:          "
+  execute $1 'net.peerCount'
+  echo -n "latest block number: "
+  execute $1 "eth.blockNumber"
+}
+
+# display peers for an instance
+function peers {
+  execute $1 'admin.peers'
+}
+
+# add peers into an instance (connection not guaranteed)
+function addpeers {
+  id=$1
+  peers=$2
+  if [ $id = "all" ]; then
+    N=`ls -1 -d $dir/data/* |wc -l`
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      addpeers $id $peers
+    done
+  else
+    echo "addpeer to instance $id"
+    for peer in `cat $peers|grep -v '^#'`; do
+      execute  $id "admin.addPeer(\"$peer\")"
+    done
+  fi
+}
+
+# configures the eth-net-intelligence-api network monitor
+function netstatconf {
+  group=$1
+  N=`ls -1 -d $dir/data/* |wc -l`
+  ip=`curl ipecho.net/plain 2>/dev/null;echo `
+  ws_server="ws://146.185.130.117:3000"
+  ws_secret=BZZ322
+  conf="$dir/$group-$ip.netstat.json"
+
+  echo "writing netstat conf for cluster $group-$ip ($N instances) -> $conf"
+
+  echo -e "[" > $conf
+
+  for ((i=0;i<$N;++i)); do
+    id=`printf "%02d" $i`
+    single_template="  {\n    \"name\"        : \"$group-$ip-$i\",\n    \"cwd\"         : \".\",\n    \"script\"      : \"app.js\",\n    \"log_date_format\"   : \"YYYY-MM-DD HH:mm Z\",\n    \"merge_logs\"    : false,\n    \"watch\"       : false,\n    \"exec_interpreter\"  : \"node\",\n    \"exec_mode\"     : \"fork_mode\",\n    \"env\":\n    {\n      \"NODE_ENV\"    : \"production\",\n      \"RPC_HOST\"    : \"localhost\",\n      \"RPC_PORT\"    : \"302$id\",\n      \"INSTANCE_NAME\"   : \"$group-$ip-$i\",\n      \"WS_SERVER\"     : \"$ws_server\",\n      \"WS_SECRET\"     : \"$ws_secret\",\n    }\n  }"
+
+    endline=""
+    if ((i<$N-1)); then
+    # if [ "$i" -ne "$N" ]; then
+        endline=","
+    fi
+    echo -e "$single_template$endline" >> $conf
+  done
+  echo "]" >> $conf
+}
+
+# (re)starts the eth-net-intelligence-api network monitor
+function netstatrun {
+  cd $GETH_DIR/../eth-net-intelligence-api
+  pm2 kill
+  pm2 start $dir/*.netstat.json
+}
+
+# kills the eth-net-intelligence-api network monitor
+function netstatkill {
+  cd $GETH_DIR/../eth-net-intelligence-api
+  pm2 kill
+}
+
+# copies the swarm control script to the remote node(s)
+function remote-update-scripts {
+  scriptdir=$GETH_DIR/swarm/cmd/swarm/
+  remotes=$1
+  for remote in `cat $remotes|grep -v '^#'`; do echo "updating scripts on $remote..."; ssh $remote mkdir -p bin && scp -r $scriptdir/* $remote:bin/; done
+}
+
+# copies the geth executable to the  remote nodes
+function remote-update-bin {
+  remotes=$1
+  # remote-update-scripts $remotes
+  for remote in `cat $remotes|grep -v '^#'`; do  echo "updating binary on $remote..."; scp -r $GETH_DIR/geth $remote:bin/; done
+}
+
+# runs a command on remote node or nodes from a file
+function remote-run {
+  remotes=$1
+  shift
+  if `echo "$remotes" | grep -qil @`; then
+    ip=`echo "$remotes"|cut -d@ -f2`
+    ssh $remotes "export IP_ADDR=$ip;" '. $HOME/bin/env.sh;' "$*"
+  else
+    for remote in `cat $remotes|grep -v '^#'`; do echo "running on $remote..."; remote-run $remote "$*"; done
+  fi
+}
+
+# updates the code from the given branch
+function update {
+  branch=$1
+  echo "cd $GETH_DIR &&  git remote update && git reset --hard $branch"
+  (cd $GETH_DIR &&  git remote update && git reset --hard $branch)
+}
+
+function checksum {
+  tar -cf - $1 | md5sum|awk '{print $1}'
+}
+
+function checkaccess {
+  nodes=$1
+  target=`basename $2`
+  chsum=`md5sum $2|cut -f1 -d' '`
+  master=`head  -1 $nodes`
+  echo "uploading target on $master (md5sum $chsum, size: `du -b -d0 $2|cut -f1`)"
+  scp $2 $master:$target
+  hash=`swarm remote-run $master "swarm up 00 $target $file"|tr -d '"'`
+  remote-run $nodes swarm checkdownload all $hash $chsum
+}
+
+function checkdownload {
+  id=$1
+  if [ "$id" = "all"  ]; then
+    shift
+    N=`ls -1 -d $dir/data/* |wc -l`
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      checkdownload $id $*
+    done
+  else
+    hash=$2
+    target=$3
+    datetag=`date "+%Y-%m-%d-%H:%M:%S"`
+    file="swarm-$datetag"
+    rm -rf $tmpdir/$file
+    /usr/bin/time -o $tmpdir/$file.log -f "%e" swarm download $id $hash $tmpdir/$file > /dev/null
+    echo
+    if [ -f $target ]; then
+      cmp --silent  $target $tmpdir/$file/* && echo PASS || echo FAIL
+    elif [ -r $target ]; then
+      diff -r $target $tmpdir/$file/ >/dev/null && echo PASS || echo FAIL
+    else
+      exp=`md5sum $tmpdir/$file/*|cut -f1 -d' '`
+      if [ "$exp" = "$target" ]; then
+        echo -n  PASS
+      else
+        echo FAIL "$exp = $target"
+      fi
+    fi
+    echo " latency: " `cat $tmpdir/$file.log`
+  fi
+}
+
+function meminfo {
+  pid="$dir/pids/$1.pid"
+  if [ -f "$pid" ]; then
+    # cd  /proc/`cat "$pid"` && cat status
+    ps aux|awk -v PID=`cat $pid` '$2 == PID {print $5 "Kb (" $4 "%)" }'
+  fi
+}
+
+function cpuinfo {
+  pid="$dir/pids/$1.pid"
+  if [ -f "$pid" ]; then
+    # cd  /proc/`cat "$pid"` && cat status
+   ps aux|awk -v PID=`cat $pid`  '$2  == PID {print $3 "%" }'
+ fi
+}
+
+function diskusage {
+  if [ "$1" == "" ]; then
+    echo "DISK USAGE:" `df -m |grep '/$'|awk '{print $(NF-2) "Mb (" $(NF-1) ")"} '`
+  else
+    du -m -d0 $*|cut -f1
+  fi
+}
+
+function diskinfo {
+  echo "DISK USAGE $1:"
+  echo "blockchain:" `diskusage $dir/data/$1/chaindata`
+  echo "chunkstore:" `diskusage $dir/data/$1/bzz/*/chunks`
+  echo "overall:  /"  `diskusage`
+}
+
+case $cmd in
+  "info" )
+    info $*;;
+  "enode" )
+    enode $*;;
+  "status" )
+    status $*;;
+  "peers" )
+    peers $*;;
+  "addpeers" )
+    addpeers $*;;
+  "clean" )
+    clean $*;;
+  "needs" )
+    needs $*;;
+  "up" )
+    up $*;;
+  "key" )
+    key $*;;
+  "down" )
+    down $*;;
+  "download" )
+    download $*;;
+  "init" )
+    init $*;;
+  "exec" )
+    execute $*;;
+  "hive" )
+    hive $*;;
+  "start" )
+    start $*;;
+  "stop" )
+    stop $* ;;
+  "restart" )
+    restart $*;;
+  "reset" )
+    reset $*;;
+  "cluster" )
+    cluster $*;;
+  "attach" )
+    attach $*;;
+  "execute" )
+    execute $*;;
+  "exec" )
+    execute $*;;
+  "cleanbzz" )
+    cleanbzz $*;;
+  "cleanlog" )
+    cleanlog $*;;
+  "log" )
+    log $*;;
+  "viewlog" )
+    viewlog $*;;
+  "less" )
+    viewlog $*;;
+  "connect" )
+    connect $*;;
+  "monitor" )
+    monitor $*;;
+  "remote-update-scripts" )
+    remote-update-scripts $*;;
+  "remote-update-bin" )
+    remote-update-bin $*;;
+  "update-src" )
+    update-src $*;;
+  "remote-run" )
+    remote-run $*;;
+  "netstatconf" )
+    netstatconf  $*;;
+  "netstatkill" )
+    netstatkill  $*;;
+  "netstatrun" )
+    netstatrun  $*;;
+  "options" )
+    options $*;;
+  "rawoptions" )
+    rawoptions $*;;
+  "randomfile" )
+    randomfile $*;;
+  "diskinfo" )
+    diskinfo $*;;
+  "meminfo" )
+    meminfo $*;;
+  "cpuinfo" )
+    cpuinfo $*;;
+  "setup" )
+    setup $* ;;
+  "create-account" )
+    create-account $*;;
+  "checkaccess" )
+    checkaccess $* ;;
+  "checkdownload" )
+    checkdownload $* ;;
+esac

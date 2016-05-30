@@ -24,7 +24,6 @@ import (
 	"os/signal"
 	"regexp"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -209,58 +208,4 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	}
 	glog.Infoln("Exported blockchain to ", fn)
 	return nil
-}
-
-// tries unlocking the specified account a few times.
-func UnlockAccount(accman *accounts.Manager, address string, i int, passwords []string) (accounts.Account, string) {
-	account, err := MakeAddress(accman, address)
-	if err != nil {
-		Fatalf("Could not list accounts: %v", err)
-	}
-	for trials := 0; trials < 3; trials++ {
-		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
-		password := GetPassPhrase(prompt, false, i, passwords)
-		err = accman.Unlock(account, password)
-		if err == nil {
-			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
-			return account, password
-		}
-		if err, ok := err.(*accounts.AmbiguousAddrError); ok {
-			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
-			return ambiguousAddrRecovery(accman, err, password), password
-		}
-		if err != accounts.ErrDecrypt {
-			// No need to prompt again if the error is not decryption-related.
-			break
-		}
-	}
-	// All trials expended to unlock account, bail out
-	Fatalf("Failed to unlock account %s (%v)", address, err)
-	return accounts.Account{}, ""
-}
-
-func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrError, auth string) accounts.Account {
-	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
-	for _, a := range err.Matches {
-		fmt.Println("  ", a.File)
-	}
-	fmt.Println("Testing your passphrase against all of them...")
-	var match *accounts.Account
-	for _, a := range err.Matches {
-		if err := am.Unlock(a, auth); err == nil {
-			match = &a
-			break
-		}
-	}
-	if match == nil {
-		Fatalf("None of the listed files could be unlocked.")
-	}
-	fmt.Printf("Your passphrase unlocked %s\n", match.File)
-	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
-	for _, a := range err.Matches {
-		if a != *match {
-			fmt.Println("  ", a.File)
-		}
-	}
-	return *match
 }

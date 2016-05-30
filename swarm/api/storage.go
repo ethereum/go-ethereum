@@ -34,7 +34,11 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	expsize := reader.Size()
+	quitC := make(chan bool)
+	expsize, err := reader.Size(quitC)
+	if err != nil {
+		return nil, err
+	}
 	body := make([]byte, expsize)
 	size, err := reader.Read(body)
 	if int64(size) == expsize {
@@ -43,6 +47,8 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	return &Response{mimeType, status, expsize, string(body[:size])}, err
 }
 
+// Modify(rootHash, path, contentHash, contentType) takes th e manifest trie rooted in rootHash,
+// and merge on  to it. creating an entry w conentType (mime)
 func (self *Storage) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
 	return self.api.Modify(rootHash+"/"+path, contentHash, contentType, true)
 }

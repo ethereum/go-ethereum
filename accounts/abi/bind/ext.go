@@ -31,9 +31,9 @@ func DefaultDeployOptions() *DeployOptions {
 
 // implemented by eth.APIBackend
 type Backend interface {
-	GetTxReceipt(txhash common.Hash) *types.Receipt
-	CodeAt(address common.Address) string
-	BalanceAt(address common.Address) *big.Int
+	GetTxReceipt(txhash common.Hash) (map[string]interface{}, error)
+	BalanceAt(address common.Address) (*big.Int, error)
+	CodeAt(address common.Address) (string, error)
 	ContractBackend
 }
 
@@ -64,7 +64,7 @@ DEPLOY:
 			receiptQueryTimer = time.NewTimer(0).C
 
 		case <-receiptQueryTimer:
-			receipt := backend.GetTxReceipt(txhash)
+			receipt, _ := backend.GetTxReceipt(txhash)
 			receiptQueries++
 			if receipt == nil {
 				if receiptQueries == opt.MaxReceiptQueryAttempts {
@@ -80,7 +80,7 @@ DEPLOY:
 				continue DEPLOY
 			}
 
-			contractAddr = receipt.ContractAddress
+			contractAddr = receipt["contractAddress"].(common.Address)
 			glog.V(logger.Detail).Infof("new chequebook contract mined at %v (owner: %v)", contractAddr.Hex(), deployTransactor.From.Hex())
 			<-time.NewTimer(opt.ConfirmationInterval).C
 			err = Validate(contractAddr, contractCode, backend)
@@ -101,7 +101,10 @@ func Validate(contractAddr common.Address, expCode string, backend Backend) (err
 	if (contractAddr == common.Address{}) {
 		return fmt.Errorf("zero address")
 	}
-	code := backend.CodeAt(contractAddr)
+	code, err := backend.CodeAt(contractAddr)
+	if err != nil {
+		return err
+	}
 	if len(expCode) > 0 && code != expCode {
 		return fmt.Errorf("incorrect code %v:\n%v\n%v", contractAddr.Hex(), code, expCode)
 	}
