@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+var errUnboundedParent = errors.New("core/fork: parent hash does not match last block") // unbounded parent
+
 // ChainResolver should implement chain resolving and should be capable
 // handling reorganisations.
 type ChainResolver interface {
@@ -57,41 +59,11 @@ type receipt struct {
 
 // ChainFork is a temporary fork of the blockchain to which all block changes
 // must be applied before being written out to the database.
-//
-// Example chain processing
-//
-// 	fork := Fork(chain, blocks[0].ParentHash)
-//	for _, block := range blocks {
-//		// State is an in-memory StateDB used throughout the fork
-//		err := ValidateBlock(block, fork.State())
-//		if err != nil {
-//			return err
-//		}
-//		fork.CommitBlock(block)
-//	}
-//	fork.ApplyTo(blockchain)
-//	fork.CommitToDb()
-//
-// Example block generation
-//
-//	fork := Fork(chain, hash)
-//
-//	// Create a new unsealed block
-//	block := fork.NewUnsealedBlock()
-//	// Apply transactions and uncles
-//	appliedTxs := block.ApplyTransactions(txpool.Transactions())
-// 	appliedUncles := block.ApplyUncles(someUncles)
-//
-//  	// Seal the block, making it a valid sealed and signed block.
-//	block := Seal(powSealer, block)
-//
-//	// Commit the block back to the fork.
-//	fork.CommitBlock(block)
-//
 type ChainFork struct {
 	db     ethdb.Database // backing database
 	reader BlockReader    // block reader utility interface
 	state  *state.StateDB // the current state database
+	config *ChainConfig   // the chain configuration
 
 	originN      uint64       // the origin block number
 	origin       *types.Block // origin notes the start of the fork
@@ -102,10 +74,11 @@ type ChainFork struct {
 
 // Fork returns a new blockchain with the given database as backing layer
 // for the localised blockchain transaction.
-func Fork(blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
+func Fork(config *ChainConfig, blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
 	fork := &ChainFork{
 		db:     blockReader.Db(),
 		reader: blockReader,
+		config: config,
 	}
 
 	// get the origin block from which this fork originates
@@ -131,25 +104,25 @@ func (fork *ChainFork) GetNumHash(n uint64) common.Hash {
 		return common.Hash{}
 	}
 
-	// check if we should have it cached
+	// Check whether we should have it cached and retrieve it
+	// if present.
 	if n > fork.originN {
-		return fork.changes[n-fork.originN].block.Hash()
+		return fork.changes[n-(fork.originN+1)].block.Hash()
 	}
 
-	// otherwise search in the database
+	// Otherwise search in the database and retrieve it.
 	for block := fork.reader.GetBlock(fork.origin.Hash()); block != nil; block = fork.reader.GetBlock(block.ParentHash()) {
 		if block.NumberU64() == n {
 			return block.Hash()
 		}
 	}
+	// Returns empty hash indicating "not-found".
 	return common.Hash{}
 }
 
 func (fork *ChainFork) State() *state.StateDB {
 	return fork.state
 }
-
-var errUnboundedParent = errors.New("core/fork: parent hash does not match last block")
 
 // CommitBlock commits a new block to the fork. The block that's being commited their parent hash must
 // match the previously committed block or the origin if the fork is empty.
@@ -257,17 +230,17 @@ func (fork *ChainFork) NewUnsealedBlock(coinbase common.Address, extra []byte) *
 		tstamp = parent.Time.Int64() + 1
 	}
 
-	unsealedBlock.header = types.Header{
+	unsealedBlock.Block = types.NewBlockWithHeader(&types.Header{
 		Root:       fork.state.IntermediateRoot(),
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		Difficulty: CalcDifficulty(nil, uint64(tstamp), parent.Time.Uint64(), parent.Number, parent.Difficulty),
+		Difficulty: CalcDifficulty(fork.config, uint64(tstamp), parent.Time.Uint64(), parent.Number, parent.Difficulty),
 		GasLimit:   CalcGasLimit(types.NewBlockWithHeader(parent)),
 		GasUsed:    new(big.Int),
 		Coinbase:   coinbase,
 		Extra:      extra,
 		Time:       big.NewInt(tstamp),
-	}
+	})
 
 	return unsealedBlock
 }
