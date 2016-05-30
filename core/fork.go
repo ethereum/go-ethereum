@@ -69,16 +69,18 @@ type ChainFork struct {
 	origin       *types.Block // origin notes the start of the fork
 	currentBlock *types.Block // the current block within this transaction
 
-	changes []Changes // changes
+	changes   []Changes           // changes
+	hashToIdx map[common.Hash]int // mapping from block hash to array changes index
 }
 
 // Fork returns a new blockchain with the given database as backing layer
 // for the localised blockchain transaction.
 func Fork(config *ChainConfig, blockReader BlockReader, origin common.Hash) (*ChainFork, error) {
 	fork := &ChainFork{
-		db:     blockReader.Db(),
-		reader: blockReader,
-		config: config,
+		db:        blockReader.Db(),
+		reader:    blockReader,
+		config:    config,
+		hashToIdx: make(map[common.Hash]int),
 	}
 
 	// get the origin block from which this fork originates
@@ -120,8 +122,28 @@ func (fork *ChainFork) GetNumHash(n uint64) common.Hash {
 	return common.Hash{}
 }
 
+// State returns the current pending state of the fork. This state is re-used throughout the entire
+// session of the fork.
 func (fork *ChainFork) State() *state.StateDB {
 	return fork.state
+}
+
+// GetBlock returns the block within the fork that corresponds to the given hash. If the
+// block is not found within the fork nil will be returned -- this is subject to change
+// and might include blocks that lay outside of the fork, in the future.
+func (fork *ChainFork) GetBlock(hash common.Hash) *types.Block {
+	if len(fork.changes) == 0 {
+		if fork.origin.Hash() == hash {
+			return fork.origin
+		}
+		return nil
+	}
+
+	if idx, ok := fork.hashToIdx[hash]; ok {
+		return fork.changes[idx].block
+	}
+	return nil
+
 }
 
 // CommitBlock commits a new block to the fork. The block that's being commited their parent hash must
@@ -135,6 +157,7 @@ func (fork *ChainFork) CommitBlock(td *big.Int, block *types.Block, receipts typ
 		return errUnboundedParent
 	}
 
+	fork.hashToIdx[block.Hash()] = len(fork.changes)
 	fork.changes = append(fork.changes, Changes{
 		td:       td,
 		block:    block,

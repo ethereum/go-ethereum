@@ -120,7 +120,7 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		data:     data,
 	}
 	// Execute the call and return
-	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
+	vmenv := core.NewEnv(statedb, chainConfig, core.GetHashFn(block.ParentHash(), b.blockchain), msg, block.Header(), vm.Config{})
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 
 	out, _, err := core.ApplyMessage(vmenv, msg, gaspool)
@@ -168,7 +168,7 @@ func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *com
 		data:     data,
 	}
 	// Execute the call and return
-	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
+	vmenv := core.NewEnv(statedb, chainConfig, core.GetHashFn(block.ParentHash(), b.blockchain), msg, block.Header(), vm.Config{})
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 
 	_, gas, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()

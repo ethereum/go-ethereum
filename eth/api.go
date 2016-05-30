@@ -777,7 +777,7 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), s.config.VmConfig)
+	vmenv := core.NewEnv(stateDb, s.config, core.GetHashFn(block.ParentHash(), s.bc), msg, block.Header(), s.config.VmConfig)
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
 	res, requiredGas, _, err := core.NewStateTransition(vmenv, msg, gp).TransitionDb()
@@ -1753,7 +1753,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config *vm.Config) (b
 		return false, collector.traces, err
 	}
 
-	receipts, _, usedGas, err := processor.Process(block, statedb, *config)
+	receipts, _, usedGas, err := processor.Process(core.GetHashFn(block.ParentHash(), api.eth.BlockChain()), block, statedb, *config)
 	if err != nil {
 		return false, collector.traces, err
 	}
@@ -1871,7 +1871,7 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogC
 		}
 		// Mutate the state if we haven't reached the tracing transaction yet
 		if uint64(idx) < txIndex {
-			vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{})
+			vmenv := core.NewEnv(stateDb, api.config, core.GetHashFn(block.ParentHash(), api.eth.BlockChain()), msg, block.Header(), vm.Config{})
 			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				return nil, fmt.Errorf("mutation failed: %v", err)
@@ -1879,7 +1879,7 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogC
 			continue
 		}
 		// Otherwise trace the transaction and return
-		vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{Debug: true, Logger: *logger})
+		vmenv := core.NewEnv(stateDb, api.config, core.GetHashFn(block.ParentHash(), api.eth.BlockChain()), msg, block.Header(), vm.Config{Debug: true, Logger: *logger})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)
@@ -1933,7 +1933,7 @@ func (s *PublicBlockChainAPI) TraceCall(args CallArgs, blockNr rpc.BlockNumber) 
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), vm.Config{
+	vmenv := core.NewEnv(stateDb, s.config, core.GetHashFn(block.ParentHash(), s.bc), msg, block.Header(), vm.Config{
 		Debug: true,
 	})
 	gp := new(core.GasPool).AddGas(common.MaxBig)

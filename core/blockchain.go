@@ -162,6 +162,11 @@ func NewBlockChain(chainDb ethdb.Database, config *ChainConfig, pow pow.PoW, mux
 	return bc, nil
 }
 
+// XXX temporary
+func (self *BlockChain) Db() ethdb.Database {
+	return self.chainDb
+}
+
 func (self *BlockChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&self.procInterrupt) == 1
 }
@@ -896,7 +901,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(block, statedb, self.config.VmConfig)
+		receipts, logs, usedGas, err := self.processor.Process(GetHashFn(block.ParentHash(), self), block, statedb, self.config.VmConfig)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err

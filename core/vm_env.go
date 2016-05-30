@@ -28,9 +28,9 @@ import (
 // GetHashFn returns a function for which the VM env can query block hashes through
 // up to the limit defined by the Yellow Paper and uses the given block chain
 // to query for information.
-func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
+func GetHashFn(ref common.Hash, bc *BlockChain) func(n uint64) common.Hash {
 	return func(n uint64) common.Hash {
-		for block := chain.GetBlock(ref); block != nil; block = chain.GetBlock(block.ParentHash()) {
+		for block := bc.GetBlock(ref); block != nil; block = bc.GetBlock(block.ParentHash()) {
 			if block.NumberU64() == n {
 				return block.Hash()
 			}
@@ -47,20 +47,20 @@ type VMEnv struct {
 	depth       int            // Current execution depth
 	msg         Message        // Message appliod
 
-	header    *types.Header            // Header information
-	chain     *BlockChain              // Blockchain handle
-	logs      []vm.StructLog           // Logs for the custom structured logger
-	getHashFn func(uint64) common.Hash // getHashFn callback is used to retrieve block hashes
+	header    *types.Header   // Header information
+	logs      []vm.StructLog  // Logs for the custom structured logger
+	getHashFn BlockNoToHashFn // getHashFn callback is used to retrieve block hashes
 }
 
-func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
+type BlockNoToHashFn func(n uint64) common.Hash
+
+func NewEnv(state *state.StateDB, chainConfig *ChainConfig, getHashFn BlockNoToHashFn, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		chainConfig: chainConfig,
-		chain:       chain,
 		state:       state,
 		header:      header,
 		msg:         msg,
-		getHashFn:   GetHashFn(header.ParentHash, chain),
+		getHashFn:   getHashFn, //GetHashFn(header.ParentHash, reader),
 	}
 
 	// if no log collector is present set self as the collector

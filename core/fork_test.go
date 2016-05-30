@@ -59,5 +59,10 @@ func TestGetNumHash(t *testing.T) {
 		if fork.GetNumHash(fork.originN+i+1) != blocks[i].Block.Hash() {
 			t.Errorf("%d failed: expected %x got %x", i, fork.GetNumHash(fork.originN+i+1), blocks[i].Block.Hash())
 		}
+
+		idx := fork.hashToIdx[blocks[i].Block.Hash()]
+		if uint64(idx) != i {
+			t.Errorf("%d failed: expected hash %x to map to %d got %d", i, blocks[i].Block.Hash(), i, idx)
+		}
 	}
 }
