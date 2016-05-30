@@ -326,6 +326,8 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	d.cancelCh = make(chan struct{})
 	d.cancelLock.Unlock()
 
+	defer d.cancel() // No matter what, we can't leave the cancel channel open
+
 	// Set the requested sync mode, unless it's forbidden
 	d.mode = mode
 	if d.mode == FastSync && d.noFast {
