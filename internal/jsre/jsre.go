@@ -21,6 +21,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"sync"
@@ -40,6 +41,7 @@ It provides some helper functions to
 */
 type JSRE struct {
 	assetPath     string
+	output        io.Writer
 	evalQueue     chan *evalReq
 	stopEventLoop chan bool
 	loopWg        sync.WaitGroup
@@ -60,9 +62,10 @@ type evalReq struct {
 }
 
 // runtime must be stopped with Stop() after use and cannot be used after stopping
-func New(assetPath string) *JSRE {
+func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
+		output:        output,
 		evalQueue:     make(chan *evalReq),
 		stopEventLoop: make(chan bool),
 	}
@@ -292,19 +295,21 @@ func (self *JSRE) loadScript(call otto.FunctionCall) otto.Value {
 	return otto.TrueValue()
 }
 
-// EvalAndPrettyPrint evaluates code and pretty prints the result to
-// standard output.
-func (self *JSRE) EvalAndPrettyPrint(code string) (err error) {
+// Evaluate executes code and pretty prints the result to the specified output
+// stream.
+func (self *JSRE) Evaluate(code string, w io.Writer) error {
+	var fail error
+
 	self.Do(func(vm *otto.Otto) {
-		var val otto.Value
-		val, err = vm.Run(code)
+		val, err := vm.Run(code)
 		if err != nil {
-			return
+			prettyError(vm, err, w)
+		} else {
+			prettyPrint(vm, val, w)
 		}
-		prettyPrint(vm, val)
-		fmt.Println()
+		fmt.Fprintln(w)
 	})
-	return err
+	return fail
 }
 
 // Compile compiles and then runs a piece of JS code.

@@ -26,6 +26,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -116,7 +117,7 @@ func exportChain(ctx *cli.Context) {
 }
 
 func removeDB(ctx *cli.Context) {
-	confirm, err := utils.Stdin.ConfirmPrompt("Remove local database?")
+	confirm, err := console.Stdin.PromptConfirm("Remove local database?")
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
