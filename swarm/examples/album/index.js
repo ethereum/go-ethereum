@@ -59,6 +59,18 @@ var idle;	// idle timer
 var clayout;	// current layout
 var csr;	// current scaling ratio
 
+function showModal(text, previewImageUrl) {
+  if (!previewImageUrl) {
+    previewImageUrl = 'throbber.gif';
+  }
+
+  jQuery('#currentPreview').attr('src', previewImageUrl);
+  jQuery('#action-text').text(text);
+  jQuery('#preview-modal').modal({
+    fadeDuration: 250
+  });
+}
+
 function resize()
 {
   // best layout
@@ -278,6 +290,7 @@ function deleteImg() {
     var fname = imgs.data[eidx].img[0];
     imgs.data.splice(eidx, 1);
 
+    showModal('Delete photo..', fname);
     // construct an HTTP request
     var xhr = new XMLHttpRequest();
 
@@ -302,6 +315,13 @@ function deleteImg() {
 
 function moveUpDown(off) {
     var me = imgs.data[eidx];
+    console.log(me.thumb[0]);
+    var moveText = 'Moving down..';
+    if (off > 0) {
+        moveText = 'Moving up..';
+    }
+
+    showModal(moveText, me.thumb[0]);
     imgs.data[eidx] = imgs.data[eidx + off];
     imgs.data[eidx + off] = me;
     var xhr = new XMLHttpRequest();
