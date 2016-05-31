@@ -188,7 +188,17 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 		}
 	}
 	dl.lock.RUnlock()
-	return dl.downloader.synchronise(id, hash, td, mode)
+
+	// Synchronise with the chosen peer and ensure proper cleanup afterwards
+	err := dl.downloader.synchronise(id, hash, td, mode)
+	select {
+	case <-dl.downloader.cancelCh:
+		// Ok, downloader fully cancelled after sync cycle
+	default:
+		// Downloader is still accepting packets, can block a peer up
+		panic("downloader active post sync cycle") // panic will be caught by tester
+	}
+	return err
 }
 
 // hasHeader checks if a header is present in the testers canonical chain.
