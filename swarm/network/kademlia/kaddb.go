@@ -183,7 +183,7 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 	defer self.lock.Unlock()
 	self.lock.Lock()
 
-	var interval int64
+	var interval time.Duration
 	var found bool
 	for rounds := 1; rounds <= bucketSize; rounds++ {
 	ROUND:
@@ -220,10 +220,13 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 
 						// if node is scheduled to connect
 						if time.Time(node.After).Before(time.Now()) {
+							glog.V(logger.Debug).Infof("[KΛÐ]: last seen %v ago", node.Seen)
 
 							// if checked longer than purge interval
-							if time.Time(node.Seen).Add(self.purgeInterval).Before(time.Now()) {
-								// delete node
+							period := time.Since(time.Time(node.Seen))
+							if period > self.purgeInterval {
+								glog.V(logger.Debug).Infof("[KΛÐ]: last seen %v ago", node.Seen)
+								// delete nodes
 								purge = append(purge, n)
 								glog.V(logger.Debug).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.Seen, node.After)
 							} else {
@@ -231,8 +234,8 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 								if (node.After == Time(time.Time{})) {
 									node.After = Time(time.Now().Add(self.initialRetryInterval))
 								} else {
-									interval = delta * int64(self.connRetryExp)
-									node.After = Time(time.Unix(time.Now().Unix()+interval, 0))
+									interval = time.Duration(delta * int64(self.connRetryExp))
+									node.After = Time(time.Now().Add(interval))
 								}
 
 								glog.V(logger.Debug).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.Seen, node.After)
