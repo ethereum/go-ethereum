@@ -477,7 +477,11 @@ LOOP:
 				// history channel is closed, waiting for new state (called from sync())
 				syncStates = self.syncStates
 				state.Synced = true // this signals that the  current segment is complete
-				state.synced <- false
+				select {
+				case state.synced <- false:
+				case <-self.quit:
+					break LOOP
+				}
 				justSynced = true
 				history = nil
 			}
