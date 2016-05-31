@@ -401,7 +401,7 @@ func (self *Kademlia) String() string {
 
 	var rows []string
 	rows = append(rows, "=========================================================================")
-	rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.Count(), self.DBCount()))
+	rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.count, self.DBCount()))
 	rows = append(rows, fmt.Sprintf("%v : MaxProx: %d, ProxBinSize: %d, BucketSize: %d, proxLimit: %d, proxSize: %d", time.Now(), self.MaxProx, self.ProxBinSize, self.BucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {

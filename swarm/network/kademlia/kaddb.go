@@ -32,6 +32,10 @@ func (t Time) Unix() int64 {
 	return time.Time(t).Unix()
 }
 
+func (t Time) String() string {
+	return time.Time(t).Format("2000-01-01 20:41:00")
+}
+
 type NodeData interface {
 	json.Marshaler
 	json.Unmarshaler
@@ -206,7 +210,7 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 					// skip already connected nodes
 					if !node.connected {
 
-						glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %v", node.Addr, po, n, node.After)
+						glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %v", node.Addr, po, n, node.After)
 
 						// time since last known connection attempt
 						delta := node.After.Unix() - node.Seen.Unix()
@@ -221,7 +225,7 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 							if time.Time(node.Seen).Add(self.purgeInterval).Before(time.Now()) {
 								// delete node
 								purge = append(purge, n)
-								glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.Seen, node.After)
+								glog.V(logger.Debug).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.Seen, node.After)
 							} else {
 								// scheduling next check
 								if (node.After == Time(time.Time{})) {
@@ -231,12 +235,12 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 									node.After = Time(time.Unix(time.Now().Unix()+interval, 0))
 								}
 
-								glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.Seen, node.After)
+								glog.V(logger.Debug).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.Seen, node.After)
 							}
 							found = true
 							break ROW
 						}
-						glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready. skipped. not to be retried before: %v", node.Addr, po, n, node.After)
+						glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready. skipped. not to be retried before: %v", node.Addr, po, n, node.After)
 					} // if node.node == nil
 					n++
 					count++
