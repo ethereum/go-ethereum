@@ -1262,13 +1262,19 @@ func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(error, 
 
 // Prepare configures the result cache to allow accepting and caching inbound
 // fetch results.
-func (q *queue) Prepare(offset uint64, mode SyncMode, pivot uint64) {
+func (q *queue) Prepare(offset uint64, mode SyncMode, pivot uint64, head *types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
+	// Prepare the queue for sync results
 	if q.resultOffset < offset {
 		q.resultOffset = offset
 	}
 	q.fastSyncPivot = pivot
 	q.mode = mode
+
+	// If long running fast sync, also start up a head stateretrieval immediately
+	if mode == FastSync && pivot > 0 {
+		q.stateScheduler = state.NewStateSync(head.Root, q.stateDatabase)
+	}
 }
