@@ -1734,7 +1734,7 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 			impl := tester.peerGetAbsHeadersFn("peer", 0)
 			go impl(from, count, skip, reverse)
 			// None of the extra deliveries should block.
-			timeout := time.After(5 * time.Second)
+			timeout := time.After(15 * time.Second)
 			for i := 0; i < cap(deliveriesDone); i++ {
 				select {
 				case <-deliveriesDone:
