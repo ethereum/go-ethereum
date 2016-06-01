@@ -290,7 +290,7 @@ function deleteImg() {
     var fname = imgs.data[eidx].img[0];
     imgs.data.splice(eidx, 1);
 
-    showModal('Delete photo..', fname);
+    showModal('Deleting photo..', fname);
     // construct an HTTP request
     var xhr = new XMLHttpRequest();
 
@@ -316,9 +316,9 @@ function deleteImg() {
 function moveUpDown(off) {
     var me = imgs.data[eidx];
     console.log(me.thumb[0]);
-    var moveText = 'Moving down..';
+    var moveText = 'Moving up..';
     if (off > 0) {
-        moveText = 'Moving up..';
+        moveText = 'Moving down..';
     }
 
     showModal(moveText, me.thumb[0]);
