@@ -220,15 +220,15 @@ func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRe
 
 						// if node is scheduled to connect
 						if time.Time(node.After).Before(time.Now()) {
-							glog.V(logger.Debug).Infof("[KΛÐ]: last seen %v ago", node.Seen)
+							glog.V(logger.Debug).Infof("[KΛÐ]: scheduled at %v, seen at %v", node.After, node.Seen)
 
 							// if checked longer than purge interval
 							period := time.Since(time.Time(node.Seen))
 							if period > self.purgeInterval {
-								glog.V(logger.Debug).Infof("[KΛÐ]: last seen %v ago", node.Seen)
+								glog.V(logger.Debug).Infof("[KΛÐ]: expired node last seen %v ago", period)
 								// delete nodes
 								purge = append(purge, n)
-								glog.V(logger.Debug).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.Seen, node.After)
+								glog.V(logger.Debug).Infof("[KΛÐ]: deleting inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.Seen, node.After)
 							} else {
 								// scheduling next check
 								if (node.After == Time(time.Time{})) {
