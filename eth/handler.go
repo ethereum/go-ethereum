@@ -59,7 +59,9 @@ type blockFetcherFn func([]common.Hash) error
 type ProtocolManager struct {
 	networkId int
 
-	fastSync   uint32
+	fastSync uint32 // Flag whether fast sync is enabled (gets disabled if we already have blocks)
+	synced   uint32 // Flag whether we're considered synchronised (enables transaction processing)
+
 	txpool     txPool
 	blockchain *core.BlockChain
 	chaindb    ethdb.Database
@@ -161,7 +163,11 @@ func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, 
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlock, validator, manager.BroadcastBlock, heighter, manager.insertChain, manager.removePeer)
+	inserter := func(blocks types.Blocks) (int, error) {
+		atomic.StoreUint32(&manager.synced, 1) // Mark initial sync done on any fetcher import
+		return manager.insertChain(blocks)
+	}
+	manager.fetcher = fetcher.New(blockchain.GetBlock, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
 
 	if blockchain.Genesis().Hash().Hex() == defaultGenesisHash && networkId == 1 {
 		glog.V(logger.Debug).Infoln("Bad Block Reporting is enabled")
@@ -698,8 +704,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == TxMsg:
-		// Transactions arrived, make sure we have a valid chain to handle them
-		if atomic.LoadUint32(&pm.fastSync) == 1 {
+		// Transactions arrived, make sure we have a valid and fresh chain to handle them
+		if atomic.LoadUint32(&pm.synced) == 0 {
 			break
 		}
 		// Transactions can be processed, parse all of them and deliver to the pool
