@@ -26,20 +26,9 @@ import (
 func TestNumberTypes(t *testing.T) {
 	ubytes := make([]byte, 32)
 	ubytes[31] = 1
-	sbytesmin := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 
 	unsigned := U256(big.NewInt(1))
 	if !bytes.Equal(unsigned, ubytes) {
-		t.Errorf("expected %x got %x", ubytes, unsigned)
-	}
-
-	signed := S256(big.NewInt(1))
-	if !bytes.Equal(signed, ubytes) {
-		t.Errorf("expected %x got %x", ubytes, unsigned)
-	}
-
-	signed = S256(big.NewInt(-1))
-	if !bytes.Equal(signed, sbytesmin) {
 		t.Errorf("expected %x got %x", ubytes, unsigned)
 	}
 }
@@ -47,27 +36,18 @@ func TestNumberTypes(t *testing.T) {
 func TestPackNumber(t *testing.T) {
 	ubytes := make([]byte, 32)
 	ubytes[31] = 1
-	sbytesmin := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 	maxunsigned := []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255}
 
-	packed := packNum(reflect.ValueOf(1), IntTy)
+	packed := packNum(reflect.ValueOf(1))
 	if !bytes.Equal(packed, ubytes) {
 		t.Errorf("expected %x got %x", ubytes, packed)
 	}
-	packed = packNum(reflect.ValueOf(-1), IntTy)
-	if !bytes.Equal(packed, sbytesmin) {
-		t.Errorf("expected %x got %x", ubytes, packed)
-	}
-	packed = packNum(reflect.ValueOf(1), UintTy)
-	if !bytes.Equal(packed, ubytes) {
-		t.Errorf("expected %x got %x", ubytes, packed)
-	}
-	packed = packNum(reflect.ValueOf(-1), UintTy)
+	packed = packNum(reflect.ValueOf(-1))
 	if !bytes.Equal(packed, maxunsigned) {
 		t.Errorf("expected %x got %x", maxunsigned, packed)
 	}
 
-	packed = packNum(reflect.ValueOf("string"), UintTy)
+	packed = packNum(reflect.ValueOf("string"))
 	if packed != nil {
 		t.Errorf("expected 'string' to pack to nil. got %x instead", packed)
 	}

@@ -61,54 +61,20 @@ func U256(n *big.Int) []byte {
 	return common.LeftPadBytes(common.U256(n).Bytes(), 32)
 }
 
-func S256(n *big.Int) []byte {
-	sint := common.S256(n)
-	ret := common.LeftPadBytes(sint.Bytes(), 32)
-	if sint.Cmp(common.Big0) < 0 {
-		for i, b := range ret {
-			if b == 0 {
-				ret[i] = 1
-				continue
-			}
-			break
-		}
-	}
-
-	return ret
-}
-
 // S256 will ensure signed 256bit on big nums
 func U2U256(n uint64) []byte {
 	return U256(big.NewInt(int64(n)))
 }
 
-func S2S256(n int64) []byte {
-	return S256(big.NewInt(n))
-}
-
 // packNum packs the given number (using the reflect value) and will cast it to appropriate number representation
-func packNum(value reflect.Value, to byte) []byte {
+func packNum(value reflect.Value) []byte {
 	switch kind := value.Kind(); kind {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if to == UintTy {
-			return U2U256(value.Uint())
-		} else {
-			return S2S256(int64(value.Uint()))
-		}
+		return U2U256(value.Uint())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if to == UintTy {
-			return U2U256(uint64(value.Int()))
-		} else {
-			return S2S256(value.Int())
-		}
+		return U2U256(uint64(value.Int()))
 	case reflect.Ptr:
-		// This only takes care of packing and casting. No type checking is done here. It should be done prior to using this function.
-		if to == UintTy {
-			return U256(value.Interface().(*big.Int))
-		} else {
-			return S256(value.Interface().(*big.Int))
-		}
-
+		return U256(value.Interface().(*big.Int))
 	}
 
 	return nil
