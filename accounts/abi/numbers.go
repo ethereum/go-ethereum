@@ -96,7 +96,7 @@ func packNum(value reflect.Value, to byte) []byte {
 			return S2S256(int64(value.Uint()))
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if to == UintTy {
+		if to == IntTy {
 			return U2U256(uint64(value.Int()))
 		} else {
 			return S2S256(value.Int())
