@@ -147,8 +147,6 @@ func ephemeralConsole(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Failed to start the JavaScript console: %v", err)
 	}
-	defer console.Stop(false)
-
 	// Evaluate each of the specified JavaScript files
 	for _, file := range ctx.Args() {
 		if err = console.Execute(file); err != nil {
@@ -161,7 +159,7 @@ func ephemeralConsole(ctx *cli.Context) {
 
 	go func() {
 		<-abort
-		os.Exit(0)
+		console.Stop(false)
 	}()
 	console.Stop(true)
 }
