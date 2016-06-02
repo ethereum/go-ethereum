@@ -149,22 +149,25 @@ type downloadTester struct {
 	peerReceipts map[string]map[common.Hash]types.Receipts // Receipts belonging to different test peers
 	peerChainTds map[string]map[common.Hash]*big.Int       // Total difficulties of the blocks in the peer chains
 
+	peerMissingStates map[string]map[common.Hash]bool // State entries that fast sync should not return
+
 	lock sync.RWMutex
 }
 
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
 	tester := &downloadTester{
-		ownHashes:    []common.Hash{genesis.Hash()},
-		ownHeaders:   map[common.Hash]*types.Header{genesis.Hash(): genesis.Header()},
-		ownBlocks:    map[common.Hash]*types.Block{genesis.Hash(): genesis},
-		ownReceipts:  map[common.Hash]types.Receipts{genesis.Hash(): nil},
-		ownChainTd:   map[common.Hash]*big.Int{genesis.Hash(): genesis.Difficulty()},
-		peerHashes:   make(map[string][]common.Hash),
-		peerHeaders:  make(map[string]map[common.Hash]*types.Header),
-		peerBlocks:   make(map[string]map[common.Hash]*types.Block),
-		peerReceipts: make(map[string]map[common.Hash]types.Receipts),
-		peerChainTds: make(map[string]map[common.Hash]*big.Int),
+		ownHashes:         []common.Hash{genesis.Hash()},
+		ownHeaders:        map[common.Hash]*types.Header{genesis.Hash(): genesis.Header()},
+		ownBlocks:         map[common.Hash]*types.Block{genesis.Hash(): genesis},
+		ownReceipts:       map[common.Hash]types.Receipts{genesis.Hash(): nil},
+		ownChainTd:        map[common.Hash]*big.Int{genesis.Hash(): genesis.Difficulty()},
+		peerHashes:        make(map[string][]common.Hash),
+		peerHeaders:       make(map[string]map[common.Hash]*types.Header),
+		peerBlocks:        make(map[string]map[common.Hash]*types.Block),
+		peerReceipts:      make(map[string]map[common.Hash]types.Receipts),
+		peerChainTds:      make(map[string]map[common.Hash]*big.Int),
+		peerMissingStates: make(map[string]map[common.Hash]bool),
 	}
 	tester.stateDb, _ = ethdb.NewMemDatabase()
 	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
@@ -408,6 +411,7 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 		dl.peerBlocks[id] = make(map[common.Hash]*types.Block)
 		dl.peerReceipts[id] = make(map[common.Hash]types.Receipts)
 		dl.peerChainTds[id] = make(map[common.Hash]*big.Int)
+		dl.peerMissingStates[id] = make(map[common.Hash]bool)
 
 		genesis := hashes[len(hashes)-1]
 		if header := headers[genesis]; header != nil {
@@ -648,7 +652,9 @@ func (dl *downloadTester) peerGetNodeDataFn(id string, delay time.Duration) func
 		results := make([][]byte, 0, len(hashes))
 		for _, hash := range hashes {
 			if data, err := testdb.Get(hash.Bytes()); err == nil {
-				results = append(results, data)
+				if !dl.peerMissingStates[id][hash] {
+					results = append(results, data)
+				}
 			}
 		}
 		go dl.downloader.DeliverNodeData(id, results)
@@ -1288,7 +1294,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	tester.newPeer("withhold-attack", protocol, hashes, headers, blocks, receipts)
 	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
 
-	tester.downloader.noFast = false
+	tester.downloader.fsPivotFails = 0
 	tester.downloader.syncInitHook = func(uint64, uint64) {
 		for i := missing; i <= len(hashes); i++ {
 			delete(tester.peerHeaders["withhold-attack"], hashes[len(hashes)-i])
@@ -1307,6 +1313,8 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
+	tester.downloader.fsPivotFails = fsCriticalTrials
+
 	// Synchronise with the valid peer and make sure sync succeeds. Since the last
 	// rollback should also disable fast syncing for this process, verify that we
 	// did a fresh full sync. Note, we can't assert anything about the receipts
@@ -1748,4 +1756,42 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 			t.Errorf("sync failed: %v", err)
 		}
 	}
+}
+
+// Tests that if fast sync aborts in the critical section, it can restart a few
+// times before giving up.
+func TestFastCriticalRestarts63(t *testing.T) { testFastCriticalRestarts(t, 63) }
+func TestFastCriticalRestarts64(t *testing.T) { testFastCriticalRestarts(t, 64) }
+
+func testFastCriticalRestarts(t *testing.T, protocol int) {
+	t.Parallel()
+
+	// Create a large enough blockchin to actually fast sync on
+	targetBlocks := fsMinFullBlocks + 2*fsPivotInterval - 15
+	hashes, headers, blocks, receipts := makeChain(targetBlocks, 0, genesis, nil, false)
+
+	// Create a tester peer with the critical section state roots missing (force failures)
+	tester := newTester()
+	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
+
+	for i := 0; i < fsPivotInterval; i++ {
+		tester.peerMissingStates["peer"][headers[hashes[fsMinFullBlocks+i]].Root] = true
+	}
+	// Synchronise with the peer a few times and make sure they fail until the retry limit
+	for i := 0; i < fsCriticalTrials; i++ {
+		// Attempt a sync and ensure it fails properly
+		if err := tester.sync("peer", nil, FastSync); err == nil {
+			t.Fatalf("failing fast sync succeeded: %v", err)
+		}
+		// If it's the first failure, pivot should be locked => reenable all others to detect pivot changes
+		if i == 0 {
+			tester.peerMissingStates["peer"] = map[common.Hash]bool{tester.downloader.fsPivotLock.Root: true}
+		}
+		time.Sleep(100 * time.Millisecond) // Make sure no in-flight requests remain
+	}
+	// Retry limit exhausted, downloader will switch to full sync, should succeed
+	if err := tester.sync("peer", nil, FastSync); err != nil {
+		t.Fatalf("failed to synchronise blocks in slow sync: %v", err)
+	}
+	assertOwnChain(t, tester, targetBlocks+1)
 }
