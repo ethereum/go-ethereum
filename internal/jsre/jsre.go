@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,7 +43,7 @@ type JSRE struct {
 	output        io.Writer
 	evalQueue     chan *evalReq
 	stopEventLoop chan bool
-	loopWg        sync.WaitGroup
+	closed        chan struct{}
 }
 
 // jsTimer is a single timer instance with a callback function
@@ -66,10 +65,10 @@ func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
 		output:        output,
+		closed:        make(chan struct{}),
 		evalQueue:     make(chan *evalReq),
 		stopEventLoop: make(chan bool),
 	}
-	re.loopWg.Add(1)
 	go re.runEventLoop()
 	re.Set("loadScript", re.loadScript)
 	re.Set("inspect", prettyPrintJS)
@@ -98,6 +97,8 @@ func randomSource() *rand.Rand {
 // functions should be used if and only if running a routine that was already
 // called from JS through an RPC call.
 func (self *JSRE) runEventLoop() {
+	defer close(self.closed)
+
 	vm := otto.New()
 	r := randomSource()
 	vm.SetRandomSource(r.Float64)
@@ -213,8 +214,6 @@ loop:
 		timer.timer.Stop()
 		delete(registry, timer)
 	}
-
-	self.loopWg.Done()
 }
 
 // Do executes the given function on the JS event loop.
@@ -227,8 +226,11 @@ func (self *JSRE) Do(fn func(*otto.Otto)) {
 
 // stops the event loop before exit, optionally waits for all timers to expire
 func (self *JSRE) Stop(waitForCallbacks bool) {
-	self.stopEventLoop <- waitForCallbacks
-	self.loopWg.Wait()
+	select {
+	case <-self.closed:
+	case self.stopEventLoop <- waitForCallbacks:
+		<-self.closed
+	}
 }
 
 // Exec(file) loads and runs the contents of a file

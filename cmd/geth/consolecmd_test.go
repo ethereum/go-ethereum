@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -37,9 +36,10 @@ func TestConsoleWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
 	// Start a geth console, make sure it's cleaned up and terminate the console
-	geth := runGeth(t, "--nat", "none", "--nodiscover", "--etherbase", coinbase, "-shh", "console")
-	defer geth.expectExit()
-	geth.stdin.Close()
+	geth := runGeth(t,
+		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
+		"--etherbase", coinbase, "--shh",
+		"console")
 
 	// Gather all the infos the welcome message needs to contain
 	geth.setTemplateFunc("goos", func() string { return runtime.GOOS })
@@ -51,7 +51,6 @@ func TestConsoleWelcome(t *testing.T) {
 		sort.Strings(apis)
 		return apis
 	})
-	geth.setTemplateFunc("prompt", func() string { return console.DefaultPrompt })
 
 	// Verify the actual welcome message to the required template
 	geth.expect(`
@@ -63,52 +62,63 @@ at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
  modules:{{range apis}} {{.}}:1.0{{end}}
 
-{{prompt}}
+> {{.InputLine "exit"}}
 `)
+	geth.expectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
 func TestIPCAttachWelcome(t *testing.T) {
 	// Configure the instance for IPC attachement
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-
 	var ipc string
 	if runtime.GOOS == "windows" {
 		ipc = `\\.\pipe\geth` + strconv.Itoa(rand.Int())
 	} else {
 		ws := tmpdir(t)
 		defer os.RemoveAll(ws)
-
 		ipc = filepath.Join(ws, "geth.ipc")
 	}
-	// Run the parent geth and attach with a child console
-	geth := runGeth(t, "--nat", "none", "--nodiscover", "--etherbase", coinbase, "-shh", "--ipcpath", ipc)
-	defer geth.interrupt()
+	// Note: we need --shh because testAttachWelcome checks for default
+	// list of ipc modules and shh is included there.
+	geth := runGeth(t,
+		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
+		"--etherbase", coinbase, "--shh", "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "ipc:"+ipc)
+
+	geth.interrupt()
+	geth.expectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(rand.Intn(65535-1024) + 1024) // Yeah, sometimes this will fail, sorry :P
-
-	geth := runGeth(t, "--nat", "none", "--nodiscover", "--etherbase", coinbase, "--rpc", "--rpcport", port)
-	defer geth.interrupt()
+	geth := runGeth(t,
+		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
+		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "http://localhost:"+port)
+
+	geth.interrupt()
+	geth.expectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(rand.Intn(65535-1024) + 1024) // Yeah, sometimes this will fail, sorry :P
 
-	geth := runGeth(t, "--nat", "none", "--nodiscover", "--etherbase", coinbase, "--ws", "--wsport", port)
-	defer geth.interrupt()
+	geth := runGeth(t,
+		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
+		"--etherbase", coinbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
 	testAttachWelcome(t, geth, "ws://localhost:"+port)
+
+	geth.interrupt()
+	geth.expectExit()
 }
 
 func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
@@ -135,7 +145,6 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
 		sort.Strings(apis)
 		return apis
 	})
-	attach.setTemplateFunc("prompt", func() string { return console.DefaultPrompt })
 
 	// Verify the actual welcome message to the required template
 	attach.expect(`
@@ -147,6 +156,7 @@ at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
  modules:{{range apis}} {{.}}:1.0{{end}}
 
-{{prompt}}
+> {{.InputLine "exit" }}
 `)
+	attach.expectExit()
 }
