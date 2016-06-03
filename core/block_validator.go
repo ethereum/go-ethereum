@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
@@ -35,7 +36,6 @@ var (
 	ExpDiffPeriod = big.NewInt(100000)
 	big10         = big.NewInt(10)
 	bigMinus99    = big.NewInt(-99)
-	needExtraData = []byte("hello!")
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -199,10 +199,45 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 	if v.bc.HasHeader(header.Hash()) {
 		return nil
 	}
-	if !bytes.Equal(parent.Extra, needExtraData) {
-		return ValidationError("Invalid extraData field in block header!")
-	}
 	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
+}
+
+func ValidateHeaderSignature(header, parent *types.Header) error {
+	if header.Coinbase != parent.Coinbase {
+		return ValidationError("Block signature validation error: coinbase does not match parent.")
+	}
+
+	validator := parent.Coinbase
+	hash := HashOfHashes(header)
+	sig := header.Extra
+
+	if sig == nil || len(sig) == 0 {
+		return ValidationError("Rejecting unsigned block")
+	}
+
+	pub, err := crypto.SigToPub(hash.Bytes(), sig)
+
+	if err != nil {
+		return ValidationError(fmt.Sprintf("Block signature validation error: %s", err))
+	}
+	addr := crypto.PubkeyToAddress(*pub)
+
+	if addr != validator {
+		return ValidationError("Block signature check failed.")
+	}
+	return nil
+}
+
+func HashOfHashes(header *types.Header) common.Hash {
+	hashes := [][]byte{
+		header.ParentHash.Bytes(),
+		header.UncleHash.Bytes(),
+		header.Root.Bytes(),
+		header.TxHash.Bytes(),
+		header.ReceiptHash.Bytes(),
+	}
+	hash := crypto.Keccak256Hash(bytes.Join(hashes, []byte("")))
+	return hash
 }
 
 // Validates a header. Returns an error if the header is invalid.
@@ -211,6 +246,11 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
 	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
+	}
+
+	sigResult := ValidateHeaderSignature(header, parent)
+	if sigResult != nil {
+		return sigResult
 	}
 
 	if uncle {
@@ -260,9 +300,9 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 // given the parent block's time and difficulty.
 func CalcDifficulty(config *ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
 	if config.FixedDifficulty != -1 {
-        return big.NewInt(int64(config.FixedDifficulty))
-    }
-    if config.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
+		return big.NewInt(int64(config.FixedDifficulty))
+	}
+	if config.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
 		return calcDifficultyHomestead(time, parentTime, parentNumber, parentDiff)
 	} else {
 		return calcDifficultyFrontier(time, parentTime, parentNumber, parentDiff)

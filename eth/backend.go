@@ -101,7 +101,8 @@ type Config struct {
 	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
 
-    FixedDifficulty int
+	FixedDifficulty int
+	MinerPassphrase string
 }
 
 type Ethereum struct {
@@ -145,7 +146,8 @@ type Ethereum struct {
 	netVersionId  int
 	netRPCService *PublicNetAPI
 
-    fixedDifficulty int
+	fixedDifficulty int
+	minerPassphrase string
 }
 
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
@@ -222,6 +224,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 		httpclient:              httpclient.New(config.DocRoot),
+		minerPassphrase:         config.MinerPassphrase,
 	}
 	switch {
 	case config.PowTest:
@@ -382,9 +385,10 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
-func (s *Ethereum) StopMining()         { s.miner.Stop() }
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (s *Ethereum) StopMining()             { s.miner.Stop() }
+func (s *Ethereum) IsMining() bool          { return s.miner.Mining() }
+func (s *Ethereum) Miner() *miner.Miner     { return s.miner }
+func (s *Ethereum) MinerPassphrase() string { return s.minerPassphrase }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
