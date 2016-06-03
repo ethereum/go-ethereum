@@ -39,11 +39,11 @@
 // This package provides several flags that modify this behavior.
 // As a result, flag.Parse must be called before any logging is done.
 //
-//	-logtostderr=false
+//	-logtostdout=false
 //		Logs are written to standard error instead of to files.
-//	-alsologtostderr=false
+//	-alsologtostdout=false
 //		Logs are written to standard error as well as to files.
-//	-stderrthreshold=ERROR
+//	-stdoutthreshold=ERROR
 //		Log events at or above this severity are logged to standard
 //		error as well as to files.
 //	-log_dir=""
@@ -91,10 +91,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/logger"
 )
 
 // severity identifies the sort of log: info, warning etc. It also implements
-// the flag.Value interface. The -stderrthreshold flag is of type severity and
+// the flag.Value interface. The -stdoutthreshold flag is of type severity and
 // should be modified only through the flag.Value interface. The values match
 // the corresponding constants in C++.
 type severity int32 // sync/atomic int32
@@ -138,10 +140,10 @@ func SetV(v int) {
 	logging.verbosity.set(Level(v))
 }
 
-// SetToStderr sets the global output style
-func SetToStderr(toStderr bool) {
+// SetToStdout sets the global output style
+func SetToStdout(toStdout bool) {
 	logging.mu.Lock()
-	logging.toStderr = toStderr
+	logging.toStdout = toStdout
 	logging.mu.Unlock()
 }
 
@@ -193,7 +195,7 @@ func (s *severity) Set(value string) error {
 		}
 		threshold = severity(v)
 	}
-	logging.stderrThreshold.set(threshold)
+	logging.stdoutThreshold.set(threshold)
 	return nil
 }
 
@@ -365,7 +367,7 @@ func compileModulePattern(pat string) (*regexp.Regexp, error) {
 	return regexp.Compile(re + "$")
 }
 
-// traceLocation represents the setting of the -log_backtrace_at flag.
+// TraceLocation represents the setting of the -log_backtrace_at flag.
 type TraceLocation struct {
 	file string
 	line int
@@ -405,7 +407,7 @@ func (t *TraceLocation) Get() interface{} {
 
 var errTraceSyntax = errors.New("syntax error: expect file.go:234")
 
-// Syntax: -log_backtrace_at=gopherflakes.go:234
+// Set syntax: -log_backtrace_at=gopherflakes.go:234
 // Note that unlike vmodule the file extension is included here.
 func (t *TraceLocation) Set(value string) error {
 	if value == "" {
@@ -447,15 +449,15 @@ type flushSyncWriter interface {
 }
 
 func init() {
-	//flag.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
-	//flag.BoolVar(&logging.alsoToStderr, "alsologtostderr", false, "log to standard error as well as files")
+	//flag.BoolVar(&logging.toStdout, "logtostdout", false, "log to standard error instead of files")
+	//flag.BoolVar(&logging.alsoToStdout, "alsologtostdout", false, "log to standard error as well as files")
 	//flag.Var(&logging.verbosity, "v", "log level for V logs")
-	//flag.Var(&logging.stderrThreshold, "stderrthreshold", "logs at or above this threshold go to stderr")
+	//flag.Var(&logging.stdoutThreshold, "stdoutthreshold", "logs at or above this threshold go to stdout")
 	//flag.Var(&logging.vmodule, "vmodule", "comma-separated list of pattern=N settings for file-filtered logging")
 	//flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 
-	// Default stderrThreshold is ERROR.
-	logging.stderrThreshold = errorLog
+	// Default stdoutThreshold is ERROR.
+	logging.stdoutThreshold = errorLog
 	logging.setVState(3, nil, false)
 	go logging.flushDaemon()
 }
@@ -470,11 +472,11 @@ type loggingT struct {
 	// Boolean flags. Not handled atomically because the flag.Value interface
 	// does not let us avoid the =true, and that shorthand is necessary for
 	// compatibility. TODO: does this matter enough to fix? Seems unlikely.
-	toStderr     bool // The -logtostderr flag.
-	alsoToStderr bool // The -alsologtostderr flag.
+	toStdout     bool // The -logtostdout flag.
+	alsoToStdout bool // The -alsologtostdout flag.
 
 	// Level flag. Handled atomically.
-	stderrThreshold severity // The -stderrthreshold flag.
+	stdoutThreshold severity // The -stdoutthreshold flag.
 
 	// freeList is a list of byte buffers, maintained under freeListMu.
 	freeList *buffer
@@ -486,8 +488,10 @@ type loggingT struct {
 	// mu protects the remaining elements of this structure and is
 	// used to synchronize logging.
 	mu sync.Mutex
-	// file holds writer for each of the log types.
+	// file holds the temp directory writer for each of the log types.
 	file [numSeverity]flushSyncWriter
+	// generalLogger holds the logging listeners for each of the log types
+	generalLogger [numSeverity]*logger.Logger
 	// pcs is used in V to avoid an allocation when computing the caller's PC.
 	pcs [1]uintptr
 	// vmap is a cache of the V Level for each V() call site, identified by PC.
@@ -709,30 +713,37 @@ func (l *loggingT) printfmt(s severity, format string, args ...interface{}) {
 
 // printWithFileLine behaves like print but uses the provided file and line number.  If
 // alsoLogToStderr is true, the log message always appears on standard error; it
-// will also appear in the log file unless --logtostderr is set.
-func (l *loggingT) printWithFileLine(s severity, file string, line int, alsoToStderr bool, args ...interface{}) {
+// will also appear in the log file unless --logtostdout is set.
+func (l *loggingT) printWithFileLine(s severity, file string, line int, alsoToStdout bool, args ...interface{}) {
 	buf := l.formatHeader(s, file, line)
 	fmt.Fprint(buf, args...)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
 	}
-	l.output(s, buf, file, line, alsoToStderr)
+	l.output(s, buf, file, line, alsoToStdout)
 }
 
 // output writes the data to the log files and releases the buffer.
-func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoToStderr bool) {
+func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoToStdout bool) {
 	l.mu.Lock()
 	if l.traceLocation.isSet() {
 		if l.traceLocation.match(file, line) {
 			buf.Write(stacks(false))
 		}
 	}
+
 	data := buf.Bytes()
-	if l.toStderr {
-		os.Stderr.Write(data)
+
+	if l.generalLogger[s] == nil {
+		l.generalLogger[s] = logger.NewLogger(severityName[s])
+	}
+	l.generalLogger[s].Info(string(data))
+
+	if l.toStdout {
+		os.Stdout.Write(data)
 	} else {
-		if alsoToStderr || l.alsoToStderr || s >= l.stderrThreshold.get() {
-			os.Stderr.Write(data)
+		if alsoToStdout || l.alsoToStdout || s >= l.stdoutThreshold.get() {
+			os.Stdout.Write(data)
 		}
 		if l.file[s] == nil {
 			if err := l.createFiles(s); err != nil {
@@ -740,6 +751,7 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 				l.exit(err)
 			}
 		}
+
 		switch s {
 		case fatalLog:
 			l.file[fatalLog].Write(data)
@@ -763,16 +775,13 @@ func (l *loggingT) output(s severity, buf *buffer, file string, line int, alsoTo
 		}
 		// Dump all goroutine stacks before exiting.
 		// First, make sure we see the trace for the current goroutine on standard error.
-		// If -logtostderr has been specified, the loop below will do that anyway
-		// as the first stack in the full dump.
-		if !l.toStderr {
-			os.Stderr.Write(stacks(false))
-		}
+
+		os.Stderr.Write(stacks(false))
 		// Write the stack trace for all goroutines to the files.
 		trace := stacks(true)
 		logExitFunc = func(error) {} // If we get a write error, we'll still exit below.
 		for log := fatalLog; log >= infoLog; log-- {
-			if f := l.file[log]; f != nil { // Can be nil if -logtostderr is set.
+			if f := l.file[log]; f != nil { // Can be nil if -logtostdout is set.
 				f.Write(trace)
 			}
 		}
@@ -835,6 +844,8 @@ var logExitFunc func(error)
 // l.mu is held.
 func (l *loggingT) exit(err error) {
 	fmt.Fprintf(os.Stderr, "log: exiting because of error: %s\n", err)
+	logger := logger.NewLogger("Exit")
+	logger.Errorf("log: exiting because of error: %s\n", err)
 	// If logExitFunc is set, we do that instead of exiting.
 	if logExitFunc != nil {
 		logExitFunc(err)
@@ -995,7 +1006,7 @@ func (lb logBridge) Write(b []byte) (n int, err error) {
 			line = 1
 		}
 	}
-	// printWithFileLine with alsoToStderr=true, so standard log messages
+	// printWithFileLine with alsoToStdout=true, so standard log messages
 	// always appear on standard error.
 	logging.printWithFileLine(severity(lb), file, line, true, text)
 	return len(b), nil

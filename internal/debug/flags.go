@@ -38,6 +38,15 @@ var (
 		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=6,p2p=5)",
 		Value: glog.GetVModule(),
 	}
+	logFileFlag = cli.StringFlag{
+		Name:  "logfile",
+		Usage: "Log output to this file (default = no log file generated)",
+		Value: "",
+	}
+	templogFileFlag = cli.BoolFlag{
+		Name:  "templog",
+		Usage: "Disables console output and sends output to timestamped files in the OS temp directory on an interval",
+	}
 	backtraceAtFlag = cli.GenericFlag{
 		Name:  "backtrace",
 		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
@@ -73,7 +82,7 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag,
+	verbosityFlag, vmoduleFlag, logFileFlag, templogFileFlag, backtraceAtFlag,
 	pprofFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
 }
@@ -83,7 +92,7 @@ var Flags = []cli.Flag{
 func Setup(ctx *cli.Context) error {
 	// logging
 	glog.CopyStandardLogTo("INFO")
-	glog.SetToStderr(true)
+	glog.SetToStdout(!ctx.GlobalIsSet(templogFileFlag.Name))
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
@@ -107,6 +116,12 @@ func Setup(ctx *cli.Context) error {
 			glog.Errorln(http.ListenAndServe(address, nil))
 		}()
 	}
+
+	//glog.SetV(ctx.GlobalInt(verbosityFlag.Name))
+	if ctx.GlobalIsSet(logFileFlag.Name) {
+		logger.New("", ctx.GlobalString(logFileFlag.Name), ctx.GlobalInt(verbosityFlag.Name))
+	}
+
 	return nil
 }
 

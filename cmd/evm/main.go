@@ -105,7 +105,7 @@ func init() {
 }
 
 func run(ctx *cli.Context) {
-	glog.SetToStderr(true)
+	glog.SetToStdout(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	db, _ := ethdb.NewMemDatabase()

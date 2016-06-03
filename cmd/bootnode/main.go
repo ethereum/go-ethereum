@@ -42,7 +42,7 @@ func main() {
 	)
 	flag.Var(glog.GetVerbosity(), "verbosity", "log verbosity (0-9)")
 	flag.Var(glog.GetVModule(), "vmodule", "log verbosity pattern")
-	glog.SetToStderr(true)
+	glog.SetToStdout(true)
 	flag.Parse()
 
 	if *genKey != "" {
