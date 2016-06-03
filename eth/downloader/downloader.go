@@ -1878,24 +1878,8 @@ func (d *Downloader) deliver(id string, destCh chan dataPack, packet dataPack, i
 // peer latency statistics and updates the estimated request round trip time.
 func (d *Downloader) qosTuner() {
 	for atomic.LoadInt32(&d.interrupt) == 0 {
-		// Gather all the active RTTs and set the target RTT to the median
-		rtts := d.peers.RTTs()
-
-		var rtt time.Duration
-		if qosTuningPeers <= len(rtts) {
-			rtt = rtts[qosTuningPeers/2] // Median of our tuning peers
-		} else if len(rtts) > 0 {
-			rtt = rtts[len(rtts)/2] // Median of our connected peers (maintain even like this some baseline qos)
-		} else {
-			rtt = rttMaxEstimate // No peers, reset to some sane default
-		}
-		if rtt < rttMinEstimate {
-			rtt = rttMinEstimate
-		}
-		if rtt > rttMaxEstimate {
-			rtt = rttMaxEstimate
-		}
-		rtt = time.Duration(float64(1-qosTuningImpact)*float64(atomic.LoadUint64(&d.rttEstimate)) + qosTuningImpact*float64(rtt))
+		// Retrieve the current median RTT and integrate into the previoust target RTT
+		rtt := time.Duration(float64(1-qosTuningImpact)*float64(atomic.LoadUint64(&d.rttEstimate)) + qosTuningImpact*float64(d.peers.medianRTT()))
 		atomic.StoreUint64(&d.rttEstimate, uint64(rtt))
 
 		// A new RTT cycle passed, increase our confidence in the estimated RTT

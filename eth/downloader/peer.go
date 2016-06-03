@@ -409,6 +409,10 @@ func (ps *peerSet) Reset() {
 // average of all existing peers, to give it a realistic chance of being used
 // for data retrievals.
 func (ps *peerSet) Register(p *peer) error {
+	// Retrieve the current median RTT as a sane default
+	p.rtt = ps.medianRTT()
+
+	// Register the new peer with some meaningful defaults
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -417,7 +421,6 @@ func (ps *peerSet) Register(p *peer) error {
 	}
 	if len(ps.peers) > 0 {
 		p.headerThroughput, p.blockThroughput, p.receiptThroughput, p.stateThroughput = 0, 0, 0, 0
-		p.rtt = rttMaxEstimate
 
 		for _, peer := range ps.peers {
 			peer.lock.RLock()
@@ -573,9 +576,9 @@ func (ps *peerSet) idlePeers(minProtocol, maxProtocol int, idleCheck func(*peer)
 	return idle, total
 }
 
-// RTTs retrieves all the round trip times measured for the current set of peers,
-// sorted ascending.
-func (ps *peerSet) RTTs() []time.Duration {
+// medianRTT returns the median RTT of te peerset, considering only the tuning
+// peers if there are more peers available.
+func (ps *peerSet) medianRTT() time.Duration {
 	// Gather all the currnetly measured round trip times
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
@@ -586,7 +589,7 @@ func (ps *peerSet) RTTs() []time.Duration {
 		rtts = append(rtts, p.rtt)
 		p.lock.RUnlock()
 	}
-	// Sort into ascending order and return them
+	// Sort into ascending order and retrieve the median
 	for i := 0; i < len(rtts); i++ {
 		for j := i + 1; j < len(rtts); j++ {
 			if rtts[i] > rtts[j] {
@@ -594,5 +597,18 @@ func (ps *peerSet) RTTs() []time.Duration {
 			}
 		}
 	}
-	return rtts
+	median := rttMaxEstimate
+	if qosTuningPeers <= len(rtts) {
+		median = rtts[qosTuningPeers/2] // Median of our tuning peers
+	} else if len(rtts) > 0 {
+		median = rtts[len(rtts)/2] // Median of our connected peers (maintain even like this some baseline qos)
+	}
+	// Restrict the RTT into some QoS defaults, irrelevant of true RTT
+	if median < rttMinEstimate {
+		median = rttMinEstimate
+	}
+	if median > rttMaxEstimate {
+		median = rttMaxEstimate
+	}
+	return median
 }
