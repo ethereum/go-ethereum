@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -366,14 +367,14 @@ func (p *peer) String() string {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return fmt.Sprintf("Peer %s [%s]", p.id,
-		fmt.Sprintf("hs %3.2f/s, ", p.headerThroughput)+
-			fmt.Sprintf("bs %3.2f/s, ", p.blockThroughput)+
-			fmt.Sprintf("rs %3.2f/s, ", p.receiptThroughput)+
-			fmt.Sprintf("ss %3.2f/s, ", p.stateThroughput)+
-			fmt.Sprintf("miss %4d, ", len(p.lacking))+
-			fmt.Sprintf("rtt %v", p.rtt),
-	)
+	return fmt.Sprintf("Peer %s [%s]", p.id, strings.Join([]string{
+		fmt.Sprintf("hs %3.2f/s", p.headerThroughput),
+		fmt.Sprintf("bs %3.2f/s", p.blockThroughput),
+		fmt.Sprintf("rs %3.2f/s", p.receiptThroughput),
+		fmt.Sprintf("ss %3.2f/s", p.stateThroughput),
+		fmt.Sprintf("miss %4d", len(p.lacking)),
+		fmt.Sprintf("rtt %v", p.rtt),
+	}, ", "))
 }
 
 // peerSet represents the collection of active peer participating in the chain
