@@ -57,7 +57,8 @@ var (
 	rttMinEstimate   = 2 * time.Second  // Minimum round-trip time to target for download requests
 	rttMaxEstimate   = 20 * time.Second // Maximum rount-trip time to target for download requests
 	rttMinConfidence = 0.1              // Worse confidence factor in our estimated RTT value
-	rttTTLScaling    = 3                // Constant scaling factor for RTT -> TTL conversion
+	ttlScaling       = 3                // Constant scaling factor for RTT -> TTL conversion
+	ttlLimit         = time.Minute      // Maximum TTL allowance to prevent reaching crazy timeouts
 
 	qosTuningPeers   = 5    // Number of peers to tune based on (best peers)
 	qosConfidenceCap = 10   // Number of peers above which not to modify RTT confidence
@@ -1949,5 +1950,9 @@ func (d *Downloader) requestTTL() time.Duration {
 		rtt  = time.Duration(atomic.LoadUint64(&d.rttEstimate))
 		conf = float64(atomic.LoadUint64(&d.rttConfidence)) / 1000000.0
 	)
-	return time.Duration(rttTTLScaling) * time.Duration(float64(rtt)/conf)
+	ttl := time.Duration(ttlScaling) * time.Duration(float64(rtt)/conf)
+	if ttl > ttlLimit {
+		ttl = ttlLimit
+	}
+	return ttl
 }
