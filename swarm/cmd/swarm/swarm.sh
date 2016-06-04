@@ -104,7 +104,6 @@ function shutdown {
   while true   ;do
     ps auxwww|grep geth|grep -v grep|awk '{print $2}'|grep -ql $1 || break
     sleep 1
-    # ps auxwww|grep geth|grep -v grep |grep  $1 #|awk '{print $2}'
   done
   echo "stopped"
 }
@@ -123,8 +122,6 @@ function init {
   cluster $*
   enode all
   connect all
-  # stop all
-  # cluster $*
 }
 
 function reset {
