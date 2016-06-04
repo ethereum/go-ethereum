@@ -232,7 +232,8 @@ var (
 
 // Unpack output in v according to the abi specification
 func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
-	var method = abi.Methods[name]
+	var method, ok = abi.Methods[name]
+	var args []Argument
 
 	if len(output) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")
@@ -244,18 +245,27 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
 	}
 
+	if ok {
+		args = method.Outputs
+	} else {
+		var event, ok = abi.Events[name]
+		if ok {
+			args = event.Inputs
+		}
+	}
+
 	var (
 		value = valueOf.Elem()
 		typ   = value.Type()
 	)
 
-	if len(method.Outputs) > 1 {
+	if len(args) > 1 {
 		switch value.Kind() {
 		// struct will match named return values to the struct's field
 		// names
 		case reflect.Struct:
-			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+			for i := 0; i < len(args); i++ {
+				marshalledValue, err := toGoType(i, args[i], output)
 				if err != nil {
 					return err
 				}
@@ -264,8 +274,8 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 				for j := 0; j < typ.NumField(); j++ {
 					field := typ.Field(j)
 					// TODO read tags: `abi:"fieldName"`
-					if field.Name == strings.ToUpper(method.Outputs[i].Name[:1])+method.Outputs[i].Name[1:] {
-						if err := set(value.Field(j), reflectValue, method.Outputs[i]); err != nil {
+					if field.Name == strings.ToUpper(args[i].Name[:1])+args[i].Name[1:] {
+						if err := set(value.Field(j), reflectValue, args[i]); err != nil {
 							return err
 						}
 					}
@@ -278,17 +288,17 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 
 			// if the slice already contains values, set those instead of the interface slice itself.
 			if value.Len() > 0 {
-				if len(method.Outputs) > value.Len() {
-					return fmt.Errorf("abi: cannot marshal in to slices of unequal size (require: %v, got: %v)", len(method.Outputs), value.Len())
+				if len(args) > value.Len() {
+					return fmt.Errorf("abi: cannot marshal in to slices of unequal size (require: %v, got: %v)", len(args), value.Len())
 				}
 
-				for i := 0; i < len(method.Outputs); i++ {
-					marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				for i := 0; i < len(args); i++ {
+					marshalledValue, err := toGoType(i, args[i], output)
 					if err != nil {
 						return err
 					}
 					reflectValue := reflect.ValueOf(marshalledValue)
-					if err := set(value.Index(i).Elem(), reflectValue, method.Outputs[i]); err != nil {
+					if err := set(value.Index(i).Elem(), reflectValue, args[i]); err != nil {
 						return err
 					}
 				}
@@ -297,9 +307,9 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 
 			// create a new slice and start appending the unmarshalled
 			// values to the new interface slice.
-			z := reflect.MakeSlice(typ, 0, len(method.Outputs))
-			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+			z := reflect.MakeSlice(typ, 0, len(args))
+			for i := 0; i < len(args); i++ {
+				marshalledValue, err := toGoType(i, args[i], output)
 				if err != nil {
 					return err
 				}
@@ -311,11 +321,11 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		}
 
 	} else {
-		marshalledValue, err := toGoType(0, method.Outputs[0], output)
+		marshalledValue, err := toGoType(0, args[0], output)
 		if err != nil {
 			return err
 		}
-		if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
+		if err := set(value, reflect.ValueOf(marshalledValue), args[0]); err != nil {
 			return err
 		}
 	}
