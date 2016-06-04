@@ -121,8 +121,10 @@ function init {
   killall geth
   reset all
   cluster $*
-  stop all
-  cluster $*
+  enode all
+  connect all
+  # stop all
+  # cluster $*
 }
 
 function reset {
@@ -134,6 +136,61 @@ function reset {
     rm -rf$root/$network_id/*/$id*
   fi
 
+}
+
+function enode {
+  dir=$root/$network_id
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    N=`ls -1 $dir/enodes/|wc -l`
+    enodes=$dir/enodes.all
+    rm -f $enodes
+    # build a static nodes(-like) list of all enodes of the local cluster
+    echo "[" >> $enodes
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      enode=$dir/enodes/$id.enode
+      enode $id
+      if [ -f "$enode" ] && [ ! -z "$enode" ]; then
+        cat "$enode" >> $enodes
+        echo "," >> $enodes
+      fi
+    done
+    echo "\"\"]" >> $enodes
+    cmd=$dir/connect.js
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      enode=$dir/enodes/$id.enode
+      if [ -f "$enode" ] && [ ! -z "$enode" ]; then
+        echo -n "admin.addPeer(" >> $cmd
+        cat "$enode" >> $cmd
+        echo ");" >> $cmd
+      fi
+    done
+  else
+    enode=$dir/enodes/$id.enode
+    attach $id --exec "'console.log(admin.nodeInfo.enode)'" |head -2 |tail -1| perl -pe 's/^/"/;s/$/"/'|perl -pe 's/\s*$//' > $enode
+    # cat $enode
+  fi
+
+}
+
+function connect {
+  dir=$root/$network_id
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      connect $id
+    done
+  else
+    cmd="$GETH --preload $dir/connect.js --exec '\"admin.peers\"' attach ipc:$root/$network_id/data/$id/geth.ipc $dir/connect.js"
+    # echo $cmd
+    eval $cmd
+    cat $dir/connect.js
+  fi
 }
 
 function cluster {
@@ -148,20 +205,6 @@ function cluster {
   mkdir -p $dir/enodes
   mkdir -p $dir/pids
   mkdir -p $dir/log
-
-  enodes=$dir/enodes.all
-  rm -f $enodes
-  # build a static nodes(-like) list of all enodes of the local cluster
-  echo "[" >> $enodes
-  for ((i=0;i<N;++i)); do
-    id=`printf "%02d" $i`
-    enode=$dir/enodes/$id.enode
-    if [ -f "$enode" ]; then
-      cat "$enode" >> $enodes
-      echo "," >> $enodes
-    fi
-  done
-  echo "\"\"]" >> $enodes
 
   for ((i=0;i<N;++i)); do
     id=`printf "%02d" $i`
@@ -282,6 +325,10 @@ function netstatconf {
 case $cmd in
   "info" )
     info $*;;
+  "enode" )
+    enode $*;;
+  "connect" )
+    connect $*;;
   "status" )
     status $*;;
   "clean" )
