@@ -100,10 +100,15 @@ type timeoutEvent struct {
 
 func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, dbPath string) (*Network, error) {
 	ourID := PubkeyID(&ourPubkey)
-	db, err := newNodeDB(dbPath, Version, ourID)
-	if err != nil {
-		return nil, err
+
+	var db *nodeDB
+	if dbPath != "<no database>" {
+		var err error
+		if db, err = newNodeDB(dbPath, Version, ourID); err != nil {
+			return nil, err
+		}
 	}
+
 	net := &Network{
 		db:            db,
 		conn:          conn,
@@ -112,7 +117,7 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, d
 		refreshResp:   make(chan (<-chan struct{})),
 		closed:        make(chan struct{}),
 		closeReq:      make(chan struct{}),
-		read:          make(chan ingressPacket),
+		read:          make(chan ingressPacket, 100),
 		timeout:       make(chan timeoutEvent),
 		timeoutTimers: make(map[timeoutEvent]*time.Timer),
 		tableOpReq:    make(chan func()),
@@ -291,7 +296,6 @@ loop:
 				glog.Infof("<<< (%d) %v from %x@%v: %v -> %v (%v)",
 					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
 			}
-
 			// TODO: persist state if n.state goes >= known, delete if it goes <= known
 
 		// State transition timeouts.
@@ -356,7 +360,9 @@ loop:
 	for _, timer := range net.timeoutTimers {
 		timer.Stop()
 	}
-	net.db.close()
+	if net.db != nil {
+		net.db.close()
+	}
 	close(net.closed)
 }
 
@@ -364,7 +370,10 @@ loop:
 // and can modify Node, Table and Network at any time without locking.
 
 func (net *Network) refresh(done chan<- struct{}) {
-	seeds := net.db.querySeeds(seedCount, seedMaxAge)
+	var seeds []*Node
+	if net.db != nil {
+		seeds = net.db.querySeeds(seedCount, seedMaxAge)
+	}
 	if len(seeds) == 0 {
 		seeds = net.nursery
 	}
@@ -375,8 +384,13 @@ func (net *Network) refresh(done chan<- struct{}) {
 	}
 	for _, n := range seeds {
 		if glog.V(logger.Debug) {
-			age := time.Since(net.db.lastPong(n.ID))
-			glog.Infof("seed node (age %v): %v", age, n)
+			var age string
+			if net.db != nil {
+				age = time.Since(net.db.lastPong(n.ID)).String()
+			} else {
+				age = "unknown"
+			}
+			glog.Infof("seed node (age %s): %v", age, n)
 		}
 		n = net.internNodeFromDB(n)
 		if n.state == unknown {
@@ -699,7 +713,9 @@ func (net *Network) handle(n *Node, ev nodeEvent, pkt *ingressPacket) error {
 		// is already running. We do this here instead of somewhere else
 		// so that the search for seed nodes also considers older nodes
 		// that would otherwise be removed by the expirer.
-		net.db.ensureExpirer()
+		if net.db != nil {
+			net.db.ensureExpirer()
+		}
 	}
 	next, err := n.state.handle(net, n, ev, pkt)
 	net.transition(n, next)

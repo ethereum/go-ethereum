@@ -24,13 +24,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 func TestNetwork_Lookup(t *testing.T) {
-	glog.SetV(6)
-	glog.SetToStderr(true)
-
 	key, _ := crypto.GenerateKey()
 	network, err := newNetwork(lookupTestnet, key.PublicKey, nil, "")
 	if err != nil {
