@@ -174,6 +174,8 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode); err != nil {
 		return
 	}
+	atomic.StoreUint32(&pm.synced, 1) // Mark initial sync done
+
 	// If fast sync was enabled, and we synced up, disable it
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		// Disable fast sync if we indeed have something in our chain
