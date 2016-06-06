@@ -19,6 +19,7 @@ package discover
 import (
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -28,7 +29,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func TestSimBasic(t *testing.T) {
+// In this test, nodes try to randomly resolve each other.
+func TestSimRandomResolve(t *testing.T) {
 	if runWithPlaygroundTime(t) {
 		return
 	}
@@ -41,6 +43,7 @@ func TestSimBasic(t *testing.T) {
 	go func() {
 		for range launcher.C {
 			net := sim.launchNode()
+			go randomResolves(t, sim, net)
 			if err := net.SetFallbackNodes([]*Node{bootnode.Self()}); err != nil {
 				panic(err)
 			}
@@ -48,18 +51,34 @@ func TestSimBasic(t *testing.T) {
 		}
 	}()
 
-	// Print statistics every hour.
-	statsticker := time.NewTicker(1 * time.Hour)
-	go func() {
-		for range statsticker.C {
-			sim.printStats()
-		}
-	}()
-
-	time.Sleep(2 * 24 * time.Hour)
+	time.Sleep(3 * time.Hour)
 	launcher.Stop()
 	sim.shutdown()
 	sim.printStats()
+}
+
+func randomResolves(t *testing.T, s *simulation, net *Network) {
+	randtime := func() time.Duration {
+		return time.Duration(rand.Intn(50)+20) * time.Second
+	}
+	lookup := func(target NodeID) bool {
+		result := net.Resolve(target)
+		return result != nil && result.ID == target
+	}
+
+	timer := time.NewTimer(randtime())
+	for {
+		select {
+		case <-timer.C:
+			target := s.randomNode().Self().ID
+			if !lookup(target) {
+				t.Errorf("node %x: target %x not found", net.Self().ID[:8], target[:8])
+			}
+			timer.Reset(randtime())
+		case <-net.closed:
+			return
+		}
+	}
 }
 
 type simulation struct {
@@ -93,6 +112,20 @@ func (s *simulation) printStats() {
 	// 	fmt.Println("   sends:", transport.hashctr)
 	// 	fmt.Println("   table size:", n.tab.count)
 	// }
+}
+
+func (s *simulation) randomNode() *Network {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	n := rand.Intn(len(s.nodes))
+	for _, net := range s.nodes {
+		if n == 0 {
+			return net
+		}
+		n--
+	}
+	return nil
 }
 
 func (s *simulation) launchNode() *Network {
@@ -218,7 +251,7 @@ func (st *simTransport) sendPacket(remote NodeID, p ingressPacket) {
 	st.sim.mu.Unlock()
 
 	// TODO: apply packet loss
-	time.AfterFunc(100*time.Millisecond, func() {
+	time.AfterFunc(200*time.Millisecond, func() {
 		recipient.reqReadPacket(p)
 	})
 }
