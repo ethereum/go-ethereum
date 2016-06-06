@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"runtime"
 
@@ -24,15 +23,11 @@ func main() {
 	}
 
 	stat, _ := f.Stat()
-	sr := io.NewSectionReader(f, 0, stat.Size())
 	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
-	hash := make([]byte, chunker.KeySize())
-	errC := chunker.Split(hash, sr, nil, nil)
-	err, ok := <-errC
+	key, err := chunker.Split(f, stat.Size(), nil, nil, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
-	}
-	if !ok {
-		fmt.Printf("%064x\n", hash)
+	} else {
+		fmt.Printf("%v\n", key)
 	}
 }

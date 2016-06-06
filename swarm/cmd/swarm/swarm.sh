@@ -336,6 +336,8 @@ case $cmd in
     up $*;;
   "down" )
     down $*;;
+  "download" )
+    download $*;;
   "init" )
     init $*;;
   "start" )

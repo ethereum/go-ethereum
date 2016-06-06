@@ -96,17 +96,16 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 			f, err := os.Open(entry.Path)
 			if err == nil {
 				stat, _ := f.Stat()
-				sr := io.NewSectionReader(f, 0, stat.Size())
 				wg := &sync.WaitGroup{}
 				var hash storage.Key
-				hash, err = self.api.dpa.Store(sr, wg)
+				hash, err = self.api.dpa.Store(f, stat.Size(), wg)
 				if hash != nil {
 					list[i].Hash = hash.String()
 				}
 				wg.Wait()
 				if err == nil {
 					first512 := make([]byte, 512)
-					fread, _ := sr.ReadAt(first512, 0)
+					fread, _ := f.ReadAt(first512, 0)
 					if fread > 0 {
 						mimeType := http.DetectContentType(first512[:fread])
 						if filepath.Ext(entry.Path) == ".css" {

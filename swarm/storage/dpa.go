@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"io"
 	"sync"
 	"time"
 
@@ -78,27 +79,8 @@ func (self *DPA) Retrieve(key Key) SectionReader {
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data SectionReader, wg *sync.WaitGroup) (key Key, err error) {
-	key = make([]byte, self.Chunker.KeySize())
-	errC := self.Chunker.Split(key, data, self.storeC, wg)
-
-SPLIT:
-	for {
-		select {
-		case err, ok := <-errC:
-			if err != nil {
-				glog.V(logger.Error).Infof("[BZZ] chunker split error: %v", err)
-			}
-			if !ok {
-				break SPLIT
-			}
-
-		case <-self.quitC:
-			break SPLIT
-		}
-	}
-	return
-
+func (self *DPA) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key Key, err error) {
+	return self.Chunker.Split(data, size, self.storeC, nil, wg)
 }
 
 func (self *DPA) Start() {

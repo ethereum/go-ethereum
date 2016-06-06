@@ -47,8 +47,8 @@ func (self *Api) Retrieve(key storage.Key) storage.SectionReader {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data storage.SectionReader, wg *sync.WaitGroup) (key storage.Key, err error) {
-	return self.dpa.Store(data, wg)
+func (self *Api) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key storage.Key, err error) {
+	return self.dpa.Store(data, size, wg)
 }
 
 type ErrResolve error
@@ -105,15 +105,15 @@ func (self *Api) parseAndResolve(uri string, nameresolver bool) (contentHash sto
 
 // Put provides singleton manifest creation on top of dpa store
 func (self *Api) Put(content, contentType string) (string, error) {
-	sr := io.NewSectionReader(strings.NewReader(content), 0, int64(len(content)))
+	r := strings.NewReader(content)
 	wg := &sync.WaitGroup{}
-	key, err := self.dpa.Store(sr, wg)
+	key, err := self.dpa.Store(r, int64(len(content)), wg)
 	if err != nil {
 		return "", err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
-	sr = io.NewSectionReader(strings.NewReader(manifest), 0, int64(len(manifest)))
-	key, err = self.dpa.Store(sr, wg)
+	r = strings.NewReader(manifest)
+	key, err = self.dpa.Store(r, int64(len(manifest)), wg)
 	if err != nil {
 		return "", err
 	}

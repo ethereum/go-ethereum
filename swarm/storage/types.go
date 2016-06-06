@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"fmt"
 	"hash"
+	"io"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,6 +17,41 @@ type Hasher func() hash.Hash
 type Peer interface{}
 
 type Key []byte
+
+func (x Key) Size() uint {
+	return uint(len(x))
+}
+
+func (x Key) isEqual(y Key) bool {
+	return bytes.Compare(x, y) == 0
+}
+
+func (h Key) bits(i, j uint) uint {
+	ii := i >> 3
+	jj := i & 7
+	if ii >= h.Size() {
+		return 0
+	}
+
+	if jj+j <= 8 {
+		return uint((h[ii] >> jj) & ((1 << j) - 1))
+	}
+
+	res := uint(h[ii] >> jj)
+	jj = 8 - jj
+	j -= jj
+	for j != 0 {
+		ii++
+		if j < 8 {
+			res += uint(h[ii]&((1<<j)-1)) << jj
+			return res
+		}
+		res += uint(h[ii]) << jj
+		jj += 8
+		j -= 8
+	}
+	return res
+}
 
 func IsZeroKey(key Key) bool {
 	return len(key) == 0 || bytes.Equal(key, ZeroKey)
@@ -127,7 +163,7 @@ After getting notified that all the data has been split (the error channel is cl
 
 When calling Join with a root key, the caller gets returned a seekable lazy reader. The caller again provides a channel on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery). As the seekable reader is used, the chunker then puts these together the relevant parts on demand.
 */
-type Chunker interface {
+type Splitter interface {
 	/*
 	   When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	   New chunks to store are coming to caller via the chunk storage channel, which the caller provides.
@@ -135,7 +171,10 @@ type Chunker interface {
 	   The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
 	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
-	Split(key Key, data SectionReader, chunkC chan *Chunk, wg *sync.WaitGroup) chan error
+	Split(io.Reader, int64, chan *Chunk, *sync.WaitGroup, *sync.WaitGroup) (Key, error)
+}
+
+type Joiner interface {
 	/*
 	   Join reconstructs original content based on a root key.
 	   When joining, the caller gets returned a Lazy SectionReader, which is
@@ -149,7 +188,19 @@ type Chunker interface {
 	   is because it is left to the DPA to decide which sources are trusted.
 	*/
 	Join(key Key, chunkC chan *Chunk) SectionReader
+}
 
+type Chunker interface {
+	Joiner
+	Splitter
 	// returns the key length
-	KeySize() int64
+	// KeySize() int64
+}
+
+// Size, Seek, Read, ReadAt
+type SectionReader interface {
+	Size() int64
+	io.Seeker
+	io.Reader
+	io.ReaderAt
 }

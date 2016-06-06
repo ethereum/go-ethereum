@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -198,9 +197,9 @@ func (self *manifestTrie) recalcAndStore() error {
 		return err
 	}
 
-	sr := io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest)))
+	sr := bytes.NewReader(manifest)
 	wg := &sync.WaitGroup{}
-	key, err2 := self.dpa.Store(sr, wg)
+	key, err2 := self.dpa.Store(sr, int64(len(manifest)), wg)
 	wg.Wait()
 	self.hash = key
 	return err2

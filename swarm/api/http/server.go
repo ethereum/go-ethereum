@@ -96,10 +96,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 	switch {
 	case r.Method == "POST" || r.Method == "PUT":
-		key, err := a.Store(io.NewSectionReader(&sequentialReader{
-			reader: r.Body,
-			ahead:  make(map[int64]chan bool),
-		}, 0, r.ContentLength), nil)
+		key, err := a.Store(r.Body, r.ContentLength, nil)
 		if err == nil {
 			glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for %v stored", key.Log())
 		} else {

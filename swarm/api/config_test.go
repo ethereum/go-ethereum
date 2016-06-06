@@ -20,8 +20,6 @@ var (
     "Radius": 0,
     "Branches": 128,
     "Hash": "SHA256",
-    "JoinTimeout": 120,
-    "SplitTimeout": 120,
     "CallInterval": 3000000000,
     "KadDbPath": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e", "bzz-peers.json") + `",
     "MaxProx": 8,
