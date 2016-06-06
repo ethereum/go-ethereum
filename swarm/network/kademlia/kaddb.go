@@ -12,30 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-type Time time.Time
-
-func (t *Time) MarshalJSON() (out []byte, err error) {
-	return []byte(fmt.Sprintf("%d", t.Unix())), nil
-}
-
-func (t *Time) UnmarshalJSON(value []byte) error {
-	var i int64
-	_, err := fmt.Sscanf(string(value), "%d", &i)
-	if err != nil {
-		return err
-	}
-	*t = Time(time.Unix(i, 0))
-	return nil
-}
-
-func (t Time) Unix() int64 {
-	return time.Time(t).Unix()
-}
-
-func (t Time) String() string {
-	return time.Time(t).Format("2000-01-01 20:41:00")
-}
-
 type NodeData interface {
 	json.Marshaler
 	json.Unmarshaler
@@ -45,17 +21,18 @@ type NodeData interface {
 type NodeRecord struct {
 	Addr  Address          // address of node
 	Url   string           // Url, used to connect to node
-	After Time             // next call after time
-	Seen  Time             // last connected at time
+	After time.Time        // next call after time
+	Seen  time.Time        // last connected at time
 	Meta  *json.RawMessage // arbitrary metadata saved for a peer
 
 	node      Node
 	connected bool
 }
 
-// set checked to current time,
 func (self *NodeRecord) setSeen() {
-	self.Seen = Time(time.Now())
+	t := time.Now()
+	self.Seen = t
+	self.After = t
 }
 
 func (self *NodeRecord) String() string {
@@ -146,16 +123,19 @@ This is used to pick candidates for live nodes that are most wanted for
 a higly connected low centrality network structure for Swarm which best suits
 for a Kademlia-style routing.
 
-The candidate is chosen using the following strategy.
+* Starting as naive node with empty db, this implements Kademlia bootstrapping
+* As a mature node, it fills short lines. All on demand.
+
+The candidate is chosen using the following strategy:
 We check for missing online nodes in the buckets for 1 upto Max BucketSize rounds.
 On each round we proceed from the low to high proximity order buckets.
 If the number of active nodes (=connected peers) is < rounds, then start looking
 for a known candidate. To determine if there is a candidate to recommend the
-node record database row corresponding to the bucket is checked.
+kaddb node record database row corresponding to the bucket is checked.
 
 If the row cursor is on position i, the ith element in the row is chosen.
 If the record is scheduled not to be retried before NOW, the next element is taken.
-If the record is scheduled can be retried, it is set as checked, scheduled for
+If the record is scheduled to be retried, it is set as checked, scheduled for
 checking and is returned. The time of the next check is in X (duration) such that
 X = ConnRetryExp * delta where delta is the time past since the last check and
 ConnRetryExp is constant obsoletion factor. (Note that when node records are added
@@ -171,103 +151,91 @@ offline past peer)
 || (proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|)
 || (proxBin(a) == proxBin(b) && lastChecked(a) < lastChecked(b))
 
-This has double role. Starting as naive node with empty db, this implements
-Kademlia bootstrapping
-As a mature node, it fills short lines. All on demand.
 
 The second argument returned names the first missing slot found
 */
-func (self *KadDb) findBest(bucketSize int, binsize func(int) int) (node *NodeRecord, proxLimit int) {
-	// return value -1 indicates that buckets are filled in all
-	proxLimit = -1
+func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRecord, need bool, proxLimit int) {
+	// return nil, proxLimit indicates that all buckets are filled
 	defer self.lock.Unlock()
 	self.lock.Lock()
 
 	var interval time.Duration
 	var found bool
-	for rounds := 1; rounds <= bucketSize; rounds++ {
+	var count int
+	var purge []int
+	var delta time.Duration
+	var cursor int
+	var after time.Time
+
+	// iterate over columns maximum bucketsize times
+	for rounds := 1; rounds <= maxBinSize; rounds++ {
 	ROUND:
+		// iterate over rows from PO 0 upto MaxProx
 		for po, dbrow := range self.Nodes {
-			if po > len(self.Nodes) {
-				break ROUND
+			// if row has rounds connected peers, then take the next
+			if binSize(po) >= rounds {
+				continue ROUND
 			}
-			size := binsize(po)
-			if size < rounds {
-				if proxLimit < 0 {
-					// set the first missing slot found
-					proxLimit = po
+			if !need {
+				// set proxlimit to the PO where the first missing slot is found
+				proxLimit = po
+				need = true
+			}
+			cursor = self.cursors[po]
+
+			// there is a missing slot - finding a node to connect to
+			// select a node record from the relavant kaddb row (of identical prox order)
+		ROW:
+			for cursor = self.cursors[po]; !found && count < len(dbrow); cursor = (cursor + 1) % len(dbrow) {
+				count++
+				node = dbrow[cursor]
+
+				// skip already connected nodes
+				if node.connected {
+					glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d/%d) already connected", node.Addr, po, cursor, len(dbrow))
+					continue ROW
 				}
-				var count int
-				var purge []int
-				n := self.cursors[po]
 
-				// try node records in the relavant kaddb row (of identical prox order)
-				// if they are ripe for checking
-			ROW:
-				for count < len(dbrow) {
-					node = dbrow[n]
-
-					// skip already connected nodes
-					if !node.connected {
-
-						glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %v", node.Addr, po, n, node.After)
-
-						// time since last known connection attempt
-						delta := node.After.Unix() - node.Seen.Unix()
-						// if delta < 4 {
-						// 	node.After = Time(time.Time{})
-						// }
-
-						// if node is scheduled to connect
-						if time.Time(node.After).Before(time.Now()) {
-							glog.V(logger.Debug).Infof("[KΛÐ]: scheduled at %v, seen at %v", node.After, node.Seen)
-
-							// if checked longer than purge interval
-							period := time.Since(time.Time(node.Seen))
-							if period > self.purgeInterval {
-								glog.V(logger.Debug).Infof("[KΛÐ]: expired node last seen %v ago", period)
-								// delete nodes
-								purge = append(purge, n)
-								glog.V(logger.Debug).Infof("[KΛÐ]: deleting inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.Seen, node.After)
-							} else {
-								// scheduling next check
-								if (node.After == Time(time.Time{})) {
-									node.After = Time(time.Now().Add(self.initialRetryInterval))
-								} else {
-									interval = time.Duration(delta * int64(self.connRetryExp))
-									node.After = Time(time.Now().Add(interval))
-								}
-
-								glog.V(logger.Debug).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.Seen, node.After)
-							}
-							found = true
-							break ROW
-						}
-						glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready. skipped. not to be retried before: %v", node.Addr, po, n, node.After)
-					} // if node.node == nil
-					n++
-					count++
-					// cycle: n = n %  len(dbrow)
-					if n >= len(dbrow) {
-						n = 0
-					}
+				// if node is scheduled to connect
+				if time.Time(node.After).After(time.Now()) {
+					glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) skipped. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After)
+					continue ROW
 				}
-				self.cursors[po] = n
-				self.delete(po, purge...)
-				if found {
-					glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: prox limit: PO%03d\n%v", rounds, proxLimit, node)
-					node.setSeen()
-					return
+
+				delta = time.Since(time.Time(node.Seen))
+				if delta < self.initialRetryInterval {
+					delta = self.initialRetryInterval
 				}
-			} // if len < rounds
-		} // for po-s
-		glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d", rounds, proxLimit)
-		if proxLimit == 0 || proxLimit < 0 && bucketSize == rounds {
-			return
+				if delta > self.purgeInterval {
+					// remove node
+					purge = append(purge, cursor)
+					glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) unreachable since %v. Removed", node.Addr, po, cursor, node.Seen)
+					continue ROW
+				}
+
+				glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) ready to be tried. seen at %v (%v ago), scheduled at %v", node.Addr, po, cursor, node.Seen, delta, node.After)
+
+				// scheduling next check
+				interval = time.Duration(delta * time.Duration(self.connRetryExp))
+				after = time.Now().Add(interval)
+
+				glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) selected as candidate connection %v. seen at %v (%v ago), selectable since %v, retry after %v (in %v)", node.Addr, po, cursor, rounds, node.Seen, delta, node.After, after, interval)
+				node.After = after
+				found = true
+				break ROW
+			} // ROW
+			self.cursors[po] = cursor
+			self.delete(po, purge...)
+			if found {
+				return node, true, proxLimit
+			}
+		} // ROUND
+		if need {
+			return nil, true, proxLimit
 		}
-	} // for round
+	} // ROUNDS
 
-	return
+	return nil, false, proxLimit
 }
 
 // deletes the noderecords of a kaddb row corresponding to the indexes
@@ -301,8 +269,8 @@ func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
 	for _, b := range self.Nodes {
 		for _, node := range b {
 			n++
-			node.After = Time(time.Now())
-			node.Seen = Time(time.Now())
+			node.After = time.Now()
+			node.Seen = time.Now()
 			if cb != nil {
 				cb(node, node.node)
 			}
@@ -350,8 +318,8 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 				}
 			}
 			n++
-			if (node.After == Time(time.Time{})) {
-				node.After = Time(time.Now())
+			if (node.After == time.Time{}) {
+				node.After = time.Now()
 			}
 			self.index[node.Addr] = node
 		}

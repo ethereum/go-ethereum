@@ -2,6 +2,7 @@ package kademlia
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -11,8 +12,8 @@ import (
 
 var (
 	quickrand           = rand.New(rand.NewSource(time.Now().Unix()))
-	quickcfgFindClosest = &quick.Config{MaxCount: 5000, Rand: quickrand}
-	quickcfgBootStrap   = &quick.Config{MaxCount: 1000, Rand: quickrand}
+	quickcfgFindClosest = &quick.Config{MaxCount: 50, Rand: quickrand}
+	quickcfgBootStrap   = &quick.Config{MaxCount: 100, Rand: quickrand}
 )
 
 type testNode struct {
@@ -60,43 +61,36 @@ func TestBootstrap(t *testing.T) {
 		kad := New(test.Self, params)
 		var err error
 
-		addr := RandomAddress()
-		prox := proximity(addr, test.Self)
-
-		for p := 0; p <= prox; p++ {
+		for p := 0; p < 9; p++ {
 			var nrs []*NodeRecord
-			for i := 0; i < 3; i++ {
+			n := math.Pow(float64(2), float64(7-p))
+			for i := 0; i < int(n); i++ {
+				addr := RandomAddressAt(test.Self, p)
 				nrs = append(nrs, &NodeRecord{
-					Addr: RandomAddressAt(test.Self, p),
+					Addr: addr,
 				})
 			}
 			kad.Add(nrs)
 		}
 
-		node := &testNode{addr}
+		node := &testNode{test.Self}
 
 		n := 0
 		for n < 100 {
 			err = kad.On(node, nil)
-			if err != nil {
-				t.Errorf("backend not accepting node")
-				return false
+			if err != nil && err.Error() != "bucket full" {
+				t.Fatalf("backend not accepting node: %v", err)
 			}
-			var nrs []*NodeRecord
-			prox := proximity(test.Self, node.addr)
-			for i := 0; i < 13; i++ {
-				nrs = append(nrs, &NodeRecord{
-					Addr: RandomAddressAt(test.Self, prox+1),
-				})
-			}
-			kad.Add(nrs)
 
-			record, _ := kad.FindBest()
-			if record == nil {
+			record, need, _ := kad.FindBest()
+			if !need {
 				break
 			}
-			node = &testNode{record.Addr}
 			n++
+			if record == nil {
+				continue
+			}
+			node = &testNode{record.Addr}
 		}
 		exp := test.BucketSize * (test.MaxProx + 1)
 		if kad.Count() != exp {
@@ -116,15 +110,14 @@ func TestFindClosest(t *testing.T) {
 	test := func(test *FindClosestTest) bool {
 		// for any node kad.le, Target and N
 		params := NewKadParams()
-		params.MaxProx = 10
+		params.MaxProx = 7
 		kad := New(test.Self, params)
 		var err error
 		// t.Logf("FindClosestTest %v: %v\n", len(test.All), test)
 		for _, node := range test.All {
 			err = kad.On(node, nil)
-			if err != nil {
-				t.Errorf("backend not accepting node")
-				return false
+			if err != nil && err.Error() != "bucket full" {
+				t.Fatalf("backend not accepting node: %v", err)
 			}
 		}
 
@@ -193,7 +186,7 @@ func TestProxAdjust(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
 	params := NewKadParams()
-	params.MaxProx = 10
+	params.MaxProx = 7
 	kad := New(self, params)
 
 	var err error
@@ -201,9 +194,8 @@ func TestProxAdjust(t *testing.T) {
 		a := gen(Address{}, r).(Address)
 		addresses = append(addresses, a)
 		err = kad.On(&testNode{addr: a}, nil)
-		if err != nil {
-			t.Errorf("backend not accepting node")
-			return
+		if err != nil && err.Error() != "bucket full" {
+			t.Fatalf("backend not accepting node: %v", err)
 		}
 		if !kad.proxCheck(t) {
 			return
@@ -229,16 +221,15 @@ func TestSaveLoad(t *testing.T) {
 	addresses := gen([]Address{}, r).([]Address)
 	self := RandomAddress()
 	params := NewKadParams()
-	params.MaxProx = 10
+	params.MaxProx = 7
 	kad := New(self, params)
 
 	var err error
 
 	for _, a := range addresses {
 		err = kad.On(&testNode{addr: a}, nil)
-		if err != nil {
-			t.Errorf("backend not accepting node")
-			return
+		if err != nil && err.Error() != "bucket full" {
+			t.Fatalf("backend not accepting node: %v", err)
 		}
 	}
 	nodes := kad.FindClosest(self, 100)
@@ -255,9 +246,8 @@ func TestSaveLoad(t *testing.T) {
 	for _, b := range kad.db.Nodes {
 		for _, node := range b {
 			err = kad.On(&testNode{node.Addr}, nil)
-			if err != nil {
-				t.Errorf("backend not accepting node")
-				return
+			if err != nil && err.Error() != "bucket full" {
+				t.Fatalf("backend not accepting node: %v", err)
 			}
 		}
 	}
@@ -309,7 +299,7 @@ type bootstrapTest struct {
 func (*bootstrapTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	t := &bootstrapTest{
 		Self:       gen(Address{}, rand).(Address),
-		MaxProx:    10 + rand.Intn(3),
+		MaxProx:    5 + rand.Intn(2),
 		BucketSize: rand.Intn(3) + 1,
 	}
 	return reflect.ValueOf(t)

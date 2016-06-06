@@ -123,13 +123,15 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			node, proxLimit := self.kad.FindBest()
+			node, need, proxLimit := self.kad.FindBest()
+
+			glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: select candidate peer")
 			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
+				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)
-			} else if proxLimit > -1 {
+			} else if need {
 				// a random peer is taken from the table
 				peers := self.kad.FindClosest(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)
 				if len(peers) > 0 {
@@ -138,15 +140,18 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 					req := &retrieveRequestMsgData{
 						Key: storage.Key(randAddr[:]),
 					}
-					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
 					peers[0].(*peer).retrieve(req)
+				} else {
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: no peer")
 				}
 				self.toggle <- true
-				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
+				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
 			} else {
+				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: no need for more bees")
 				self.toggle <- false
 			}
-			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
+			glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
 		}
 	}()
 	return
@@ -165,6 +170,7 @@ func (self *Hive) keepAlive() {
 			if self.kad.DBCount() > 0 {
 				select {
 				case self.more <- true:
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz wakeup")
 				default:
 				}
 			}
@@ -241,7 +247,7 @@ func (self *Hive) DropAll() {
 // contructor for kademlia.NodeRecord based on peer address alone
 // TODO: should go away and only addr passed to kademlia
 func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
-	now := kademlia.Time(time.Now())
+	now := time.Now()
 	return &kademlia.NodeRecord{
 		Addr:  addr.Addr,
 		Url:   addr.String(),
@@ -336,7 +342,7 @@ func (self *Hive) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Detail).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %x", len(addrs), req.from, req.Id, req.Key.Log())
+			glog.V(logger.Debug).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %x", len(addrs), req.from, req.Id, req.Key.Log())
 
 			peersData := &peersMsgData{
 				Peers: addrs,
