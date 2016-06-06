@@ -54,12 +54,8 @@ var errServerStopped = errors.New("server stopped")
 
 var srvjslog = logger.NewJsonLogger()
 
-// Server manages all peer connections.
-//
-// The fields of Server are used as configuration parameters.
-// You should set them before starting the Server. Fields may not be
-// modified while the server is running.
-type Server struct {
+// Config holds Server options.
+type Config struct {
 	// This field must be set to a valid secp256k1 private key.
 	PrivateKey *ecdsa.PrivateKey
 
@@ -120,6 +116,12 @@ type Server struct {
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool
+}
+
+// Server manages all peer connections.
+type Server struct {
+	// Config fields may not be modified while the server is running.
+	Config
 
 	// Hooks for testing. These are useful because we can inhibit
 	// the whole protocol stack.

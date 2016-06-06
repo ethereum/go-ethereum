@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	jsonRPCVersion         = "2.0"
+	JSONRPCVersion         = "2.0"
 	serviceMethodSeparator = "_"
 	subscribeMethod        = "eth_subscribe"
 	unsubscribeMethod      = "eth_unsubscribe"
@@ -302,31 +302,31 @@ func parsePositionalArguments(args json.RawMessage, callbackArgs []reflect.Type)
 // CreateResponse will create a JSON-RPC success response with the given id and reply as result.
 func (c *jsonCodec) CreateResponse(id interface{}, reply interface{}) interface{} {
 	if isHexNum(reflect.TypeOf(reply)) {
-		return &JSONSuccessResponse{Version: jsonRPCVersion, Id: id, Result: fmt.Sprintf(`%#x`, reply)}
+		return &JSONSuccessResponse{Version: JSONRPCVersion, Id: id, Result: fmt.Sprintf(`%#x`, reply)}
 	}
-	return &JSONSuccessResponse{Version: jsonRPCVersion, Id: id, Result: reply}
+	return &JSONSuccessResponse{Version: JSONRPCVersion, Id: id, Result: reply}
 }
 
 // CreateErrorResponse will create a JSON-RPC error response with the given id and error.
 func (c *jsonCodec) CreateErrorResponse(id interface{}, err RPCError) interface{} {
-	return &JSONErrResponse{Version: jsonRPCVersion, Id: id, Error: JSONError{Code: err.Code(), Message: err.Error()}}
+	return &JSONErrResponse{Version: JSONRPCVersion, Id: id, Error: JSONError{Code: err.Code(), Message: err.Error()}}
 }
 
 // CreateErrorResponseWithInfo will create a JSON-RPC error response with the given id and error.
 // info is optional and contains additional information about the error. When an empty string is passed it is ignored.
 func (c *jsonCodec) CreateErrorResponseWithInfo(id interface{}, err RPCError, info interface{}) interface{} {
-	return &JSONErrResponse{Version: jsonRPCVersion, Id: id,
+	return &JSONErrResponse{Version: JSONRPCVersion, Id: id,
 		Error: JSONError{Code: err.Code(), Message: err.Error(), Data: info}}
 }
 
 // CreateNotification will create a JSON-RPC notification with the given subscription id and event as params.
 func (c *jsonCodec) CreateNotification(subid string, event interface{}) interface{} {
 	if isHexNum(reflect.TypeOf(event)) {
-		return &jsonNotification{Version: jsonRPCVersion, Method: notificationMethod,
+		return &jsonNotification{Version: JSONRPCVersion, Method: notificationMethod,
 			Params: jsonSubscription{Subscription: subid, Result: fmt.Sprintf(`%#x`, event)}}
 	}
 
-	return &jsonNotification{Version: jsonRPCVersion, Method: notificationMethod,
+	return &jsonNotification{Version: JSONRPCVersion, Method: notificationMethod,
 		Params: jsonSubscription{Subscription: subid, Result: event}}
 }
 

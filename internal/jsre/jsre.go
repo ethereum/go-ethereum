@@ -21,9 +21,9 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,9 +40,10 @@ It provides some helper functions to
 */
 type JSRE struct {
 	assetPath     string
+	output        io.Writer
 	evalQueue     chan *evalReq
 	stopEventLoop chan bool
-	loopWg        sync.WaitGroup
+	closed        chan struct{}
 }
 
 // jsTimer is a single timer instance with a callback function
@@ -60,13 +61,14 @@ type evalReq struct {
 }
 
 // runtime must be stopped with Stop() after use and cannot be used after stopping
-func New(assetPath string) *JSRE {
+func New(assetPath string, output io.Writer) *JSRE {
 	re := &JSRE{
 		assetPath:     assetPath,
+		output:        output,
+		closed:        make(chan struct{}),
 		evalQueue:     make(chan *evalReq),
 		stopEventLoop: make(chan bool),
 	}
-	re.loopWg.Add(1)
 	go re.runEventLoop()
 	re.Set("loadScript", re.loadScript)
 	re.Set("inspect", prettyPrintJS)
@@ -95,6 +97,8 @@ func randomSource() *rand.Rand {
 // functions should be used if and only if running a routine that was already
 // called from JS through an RPC call.
 func (self *JSRE) runEventLoop() {
+	defer close(self.closed)
+
 	vm := otto.New()
 	r := randomSource()
 	vm.SetRandomSource(r.Float64)
@@ -210,8 +214,6 @@ loop:
 		timer.timer.Stop()
 		delete(registry, timer)
 	}
-
-	self.loopWg.Done()
 }
 
 // Do executes the given function on the JS event loop.
@@ -224,8 +226,11 @@ func (self *JSRE) Do(fn func(*otto.Otto)) {
 
 // stops the event loop before exit, optionally waits for all timers to expire
 func (self *JSRE) Stop(waitForCallbacks bool) {
-	self.stopEventLoop <- waitForCallbacks
-	self.loopWg.Wait()
+	select {
+	case <-self.closed:
+	case self.stopEventLoop <- waitForCallbacks:
+		<-self.closed
+	}
 }
 
 // Exec(file) loads and runs the contents of a file
@@ -292,19 +297,21 @@ func (self *JSRE) loadScript(call otto.FunctionCall) otto.Value {
 	return otto.TrueValue()
 }
 
-// EvalAndPrettyPrint evaluates code and pretty prints the result to
-// standard output.
-func (self *JSRE) EvalAndPrettyPrint(code string) (err error) {
+// Evaluate executes code and pretty prints the result to the specified output
+// stream.
+func (self *JSRE) Evaluate(code string, w io.Writer) error {
+	var fail error
+
 	self.Do(func(vm *otto.Otto) {
-		var val otto.Value
-		val, err = vm.Run(code)
+		val, err := vm.Run(code)
 		if err != nil {
-			return
+			prettyError(vm, err, w)
+		} else {
+			prettyPrint(vm, val, w)
 		}
-		prettyPrint(vm, val)
-		fmt.Println()
+		fmt.Fprintln(w)
 	})
-	return err
+	return fail
 }
 
 // Compile compiles and then runs a piece of JS code.

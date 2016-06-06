@@ -68,6 +68,28 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	}, nil
 }
 
+// Reset clears out all emphemeral state objects from the state db, but keeps
+// the underlying state trie to avoid reloading data for the next operations.
+func (self *StateDB) Reset(root common.Hash) error {
+	var (
+		err error
+		tr  = self.trie
+	)
+	if self.trie.Hash() != root {
+		if tr, err = trie.NewSecure(root, self.db); err != nil {
+			return err
+		}
+	}
+	*self = StateDB{
+		db:           self.db,
+		trie:         tr,
+		stateObjects: make(map[string]*StateObject),
+		refund:       new(big.Int),
+		logs:         make(map[common.Hash]vm.Logs),
+	}
+	return nil
+}
+
 func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
 	self.thash = thash
 	self.bhash = bhash
@@ -127,7 +149,7 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 		return stateObject.nonce
 	}
 
-	return 0
+	return StartingNonce
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
