@@ -17,7 +17,8 @@
 package main
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -73,7 +74,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
-		ipc = `\\.\pipe\geth` + strconv.Itoa(rand.Int())
+		ipc = `\\.\pipe\geth` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
 		ws := tmpdir(t)
 		defer os.RemoveAll(ws)
@@ -94,7 +95,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-	port := strconv.Itoa(rand.Intn(65535-1024) + 1024) // Yeah, sometimes this will fail, sorry :P
+	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 	geth := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
@@ -108,7 +109,7 @@ func TestHTTPAttachWelcome(t *testing.T) {
 
 func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-	port := strconv.Itoa(rand.Intn(65535-1024) + 1024) // Yeah, sometimes this will fail, sorry :P
+	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
 	geth := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
@@ -159,4 +160,11 @@ at block: 0 ({{niltime}}){{if ipc}}
 > {{.InputLine "exit" }}
 `)
 	attach.expectExit()
+}
+
+// trulyRandInt generates a crypto random integer used by the console tests to
+// not clash network ports with other tests running cocurrently.
+func trulyRandInt(lo, hi int) int {
+	num, _ := rand.Int(rand.Reader, big.NewInt(int64(hi-lo)))
+	return int(num.Int64()) + lo
 }
