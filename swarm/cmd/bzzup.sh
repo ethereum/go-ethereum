@@ -11,7 +11,7 @@ fi
 
 if [ -f "$1" ]; then
 hash=`wget -q -O- --post-file="$1" $proxy/bzzr:/`
-mime=`mimetype -b "$1"`
+mime=`file --mime-type -b "$1"`
 # echo wget -q -O- --post-data="$delimiter\"hash\":\"$hash\",\"contentType\":\"$mime\"}]}" $proxy/bzzr:/
 wget -q -O- --post-data="$delimiter\"hash\":\"$hash\",\"contentType\":\"$mime\"}]}" $proxy/bzzr:/
 echo
@@ -31,7 +31,7 @@ name=`echo "$path" | cut -c3-`
 [ _`basename "$name"` = "_$INDEX" ] && name=`dirname "$name"`
 echo -n "$delimiter"
 hash=`wget -q -O- --post-file="$path" $proxy/bzzr:/`
-mime=`mimetype -b "$path"`
+mime=`file --mime-type -b "$1"`
 if [ "$mime" = "text/plain" ]; then
    echo -n $path|grep -q '.css' && mime="text/css"
 fi
