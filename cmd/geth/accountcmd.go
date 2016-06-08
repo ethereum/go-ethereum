@@ -70,7 +70,7 @@ either new or import). Without it you are not able to unlock your account.
 
 Note that exporting your key in unencrypted format is NOT supported.
 
-Keys are stored under <DATADIR>/keys.
+Keys are stored under <DATADIR>/keystore.
 It is safe to transfer the entire directory or the individual keys therein
 between ethereum nodes by simply copying.
 Make sure you backup your keys regularly.
