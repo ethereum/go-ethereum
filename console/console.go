@@ -330,11 +330,11 @@ func (c *Console) Interactive() {
 			// Append the line to the input and check for multi-line interpretation
 			input += line + "\n"
 
-			indents = strings.Count(input, "{") + strings.Count(input, "(") - strings.Count(input, "}") - strings.Count(input, ")")
+			indents = countIndents(input)
 			if indents <= 0 {
 				prompt = c.prompt
 			} else {
-				prompt = strings.Repeat("..", indents*2) + " "
+				prompt = strings.Repeat(".", indents*3) + " "
 			}
 			// If all the needed lines are present, save the command and run
 			if indents <= 0 {
@@ -351,6 +351,49 @@ func (c *Console) Interactive() {
 			}
 		}
 	}
+}
+
+// countIndents returns the number of identations for the given input.
+// In case of invalid input such as var a = } the result can be negative.
+func countIndents(input string) int {
+	var (
+		indents     = 0
+		inString    = false
+		strOpenChar = ' '   // keep track of the string open char to allow var str = "I'm ....";
+		charEscaped = false // keep track if the previous char was the '\' char, allow var str = "abc\"def";
+	)
+
+	for _, c := range input {
+		switch c {
+		case '\\':
+			// indicate next char as escaped when in string and previous char isn't escaping this backslash
+			if !charEscaped && inString {
+				charEscaped = true
+			}
+		case '\'', '"':
+			if inString && !charEscaped && strOpenChar == c { // end string
+				inString = false
+			} else if !inString && !charEscaped { // begin string
+				inString = true
+				strOpenChar = c
+			}
+			charEscaped = false
+		case '{', '(':
+			if !inString { // ignore brackets when in string, allow var str = "a{"; without indenting
+				indents++
+			}
+			charEscaped = false
+		case '}', ')':
+			if !inString {
+				indents--
+			}
+			charEscaped = false
+		default:
+			charEscaped = false
+		}
+	}
+
+	return indents
 }
 
 // Execute runs the JavaScript file specified as the argument.
