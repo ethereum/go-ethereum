@@ -30,7 +30,7 @@ import (
 )
 
 func init() {
-	// glog.SetToStderr(true)
+	// glog.SetToStdout(true)
 	// glog.SetV(6)
 }
 

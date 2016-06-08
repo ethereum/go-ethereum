@@ -201,7 +201,7 @@ func setupApp(c *cli.Context) {
 }
 
 func main() {
-	glog.SetToStderr(true)
+	glog.SetToStdout(true)
 
 	app := cli.NewApp()
 	app.Name = "ethtest"

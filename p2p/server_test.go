@@ -32,7 +32,7 @@ import (
 
 func init() {
 	// glog.SetV(6)
-	// glog.SetToStderr(true)
+	// glog.SetToStdout(true)
 }
 
 type testTransport struct {

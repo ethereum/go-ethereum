@@ -57,12 +57,41 @@ func NewLogger(tag string) *Logger {
 	return &Logger{"[" + tag + "] "}
 }
 
+func (logger *Logger) Send(level LogLevel, v ...interface{}) {
+	logMessageC <- stdMsg{level, logger.tag + fmt.Sprint(v...)}
+}
+
 func (logger *Logger) Sendln(level LogLevel, v ...interface{}) {
 	logMessageC <- stdMsg{level, logger.tag + fmt.Sprintln(v...)}
 }
 
 func (logger *Logger) Sendf(level LogLevel, format string, v ...interface{}) {
 	logMessageC <- stdMsg{level, logger.tag + fmt.Sprintf(format, v...)}
+}
+
+// Error writes a message with ErrorLevel.
+func (logger *Logger) Error(v ...interface{}) {
+	logger.Send(ErrorLevel, v...)
+}
+
+// Warn writes a message with WarnLevel.
+func (logger *Logger) Warn(v ...interface{}) {
+	logger.Send(WarnLevel, v...)
+}
+
+// Info writes a message with InfoLevel.
+func (logger *Logger) Info(v ...interface{}) {
+	logger.Send(InfoLevel, v...)
+}
+
+// Debug writes a message with DebugLevel.
+func (logger *Logger) Debug(v ...interface{}) {
+	logger.Send(DebugLevel, v...)
+}
+
+// DebugDetail writes a message with DebugDetailLevel.
+func (logger *Logger) DebugDetail(v ...interface{}) {
+	logger.Send(DebugDetailLevel, v...)
 }
 
 // Errorln writes a message with ErrorLevel.
