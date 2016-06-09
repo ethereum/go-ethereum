@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
@@ -32,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (

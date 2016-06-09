@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rlp"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
