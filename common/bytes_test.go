@@ -76,10 +76,21 @@ func (s *BytesSuite) TestReadVarInt(c *checker.C) {
 }
 
 func (s *BytesSuite) TestCopyBytes(c *checker.C) {
-	data1 := []byte{1, 2, 3, 4}
-	exp1 := []byte{1, 2, 3, 4}
-	res1 := CopyBytes(data1)
-	c.Assert(res1, checker.DeepEquals, exp1)
+	data := [][]byte{
+		[]byte{0x00, 0x7f, 0x80, 0xff}, // interesting bytes
+		[]byte{},                       // empty case
+	}
+
+	// test
+	for i := 0; i < len(data); i++ {
+		have := CopyBytes(data[i])
+		if data[i] != nil {
+			// make sure we're not just returning the input arg
+			c.Assert(&have, checker.Not(checker.Equals), &data[i])
+		}
+		// verify deep copy
+		c.Assert(have, checker.DeepEquals, data[i])
+	}
 }
 
 func (s *BytesSuite) TestIsHex(c *checker.C) {

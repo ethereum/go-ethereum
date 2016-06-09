@@ -107,14 +107,9 @@ func ReadVarInt(buff []byte) (ret uint64) {
 	return
 }
 
-// Copy bytes
-//
 // Returns an exact copy of the provided bytes
 func CopyBytes(b []byte) (copiedBytes []byte) {
-	copiedBytes = make([]byte, len(b))
-	copy(copiedBytes, b)
-
-	return
+	return append([]byte{}, b...)
 }
 
 func HasHexPrefix(str string) bool {
