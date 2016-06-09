@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
@@ -72,14 +71,6 @@ func BenchmarkSha3(b *testing.B) {
 	fmt.Println(amount, ":", time.Since(start))
 }
 
-func Test0Key(t *testing.T) {
-	key := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	_, err := secp256k1.GeneratePubKey(key)
-	if err == nil {
-		t.Errorf("expected error due to zero privkey")
-	}
-}
-
 func TestSign(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
 	addr := common.HexToAddress(testAddrHex)
@@ -87,11 +78,11 @@ func TestSign(t *testing.T) {
 	msg := Keccak256([]byte("foo"))
 	sig, err := Sign(msg, key)
 	if err != nil {
-		t.Errorf("Sign error: %s", err)
+		t.Fatal("Sign error:", err)
 	}
 	recoveredPub, err := Ecrecover(msg, sig)
 	if err != nil {
-		t.Errorf("ECRecover error: %s", err)
+		t.Fatal("ECRecover error:", err)
 	}
 	recoveredAddr := PubkeyToAddress(*ToECDSAPub(recoveredPub))
 	if addr != recoveredAddr {
@@ -101,7 +92,7 @@ func TestSign(t *testing.T) {
 	// should be equal to SigToPub
 	recoveredPub2, err := SigToPub(msg, sig)
 	if err != nil {
-		t.Errorf("ECRecover error: %s", err)
+		t.Fatal("SigToPub error:", err)
 	}
 	recoveredAddr2 := PubkeyToAddress(*recoveredPub2)
 	if addr != recoveredAddr2 {
@@ -181,7 +172,7 @@ func TestValidateSignatureValues(t *testing.T) {
 	minusOne := big.NewInt(-1)
 	one := common.Big1
 	zero := common.Big0
-	secp256k1nMinus1 := new(big.Int).Sub(secp256k1.N, common.Big1)
+	secp256k1nMinus1 := new(big.Int).Sub(secp256k1N, common.Big1)
 
 	// correct v,r,s
 	check(true, 27, one, one)
@@ -208,9 +199,9 @@ func TestValidateSignatureValues(t *testing.T) {
 	// correct sig with max r,s
 	check(true, 27, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 27, secp256k1.N, secp256k1nMinus1)
-	check(false, 27, secp256k1nMinus1, secp256k1.N)
-	check(false, 27, secp256k1.N, secp256k1.N)
+	check(false, 27, secp256k1N, secp256k1nMinus1)
+	check(false, 27, secp256k1nMinus1, secp256k1N)
+	check(false, 27, secp256k1N, secp256k1N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone
@@ -229,21 +220,4 @@ func checkAddr(t *testing.T, addr0, addr1 common.Address) {
 	if addr0 != addr1 {
 		t.Fatalf("address mismatch: want: %x have: %x", addr0, addr1)
 	}
-}
-
-// test to help Python team with integration of libsecp256k1
-// skip but keep it after they are done
-func TestPythonIntegration(t *testing.T) {
-	kh := "289c2857d4598e37fb9647507e47a309d6133539bf21a8b9cb6df88fd5232032"
-	k0, _ := HexToECDSA(kh)
-	k1 := FromECDSA(k0)
-
-	msg0 := Keccak256([]byte("foo"))
-	sig0, _ := secp256k1.Sign(msg0, k1)
-
-	msg1 := common.FromHex("00000000000000000000000000000000")
-	sig1, _ := secp256k1.Sign(msg0, k1)
-
-	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg0, k1, sig0)
-	fmt.Printf("msg: %x, privkey: %x sig: %x\n", msg1, k1, sig1)
 }
