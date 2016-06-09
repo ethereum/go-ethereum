@@ -1,6 +1,7 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
 	"GoVersion": "go1.5.2",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],
@@ -8,6 +9,15 @@
 		{
 			"ImportPath": "github.com/Gustav-Simonsson/go-opencl/cl",
 			"Rev": "593e01cfc4f3353585015321e01951d4a907d3ef"
+		},
+		{
+			"ImportPath": "github.com/btcsuite/btcd/btcec",
+			"Comment": "BTCD_0_12_0_BETA-101-gff4ada0",
+			"Rev": "ff4ada0b0e1ebffa3f9c15cadc96ab0d08a11034"
+		},
+		{
+			"ImportPath": "github.com/btcsuite/fastsha256",
+			"Rev": "302ad4db268b46f9ebda3078f6f7397f96047735"
 		},
 		{
 			"ImportPath": "github.com/cespare/cp",
@@ -154,6 +164,10 @@
 		{
 			"ImportPath": "github.com/rs/cors",
 			"Rev": "5950cf11d77f8a61b432a25dd4d444b4ced01379"
+		},
+		{
+			"ImportPath": "github.com/rs/xhandler",
+			"Rev": "d9d9599b6aaf6a058cb7b1f48291ded2cbd13390"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
