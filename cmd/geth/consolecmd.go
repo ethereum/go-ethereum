@@ -20,9 +20,9 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
