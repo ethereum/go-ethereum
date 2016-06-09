@@ -23,7 +23,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -32,7 +31,6 @@ import (
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/ripemd160"
@@ -81,10 +79,6 @@ func Ripemd160(data []byte) []byte {
 	ripemd.Write(data)
 
 	return ripemd.Sum(nil)
-}
-
-func Ecrecover(hash, sig []byte) ([]byte, error) {
-	return secp256k1.RecoverPubkey(hash, sig)
 }
 
 // New methods using proper ecdsa keys from the stdlib
@@ -181,27 +175,6 @@ func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	} else {
 		return false
 	}
-}
-
-func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
-	s, err := Ecrecover(hash, sig)
-	if err != nil {
-		return nil, err
-	}
-
-	x, y := elliptic.Unmarshal(btcec.S256(), s)
-	return &ecdsa.PublicKey{Curve: btcec.S256(), X: x, Y: y}, nil
-}
-
-func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
-	if len(hash) != 32 {
-		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
-	}
-
-	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
-	defer zeroBytes(seckey)
-	sig, err = secp256k1.Sign(hash, seckey)
-	return
 }
 
 func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {
