@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package common contains various helper functions.
 package common
 
 import (
@@ -106,7 +105,7 @@ func Hex2Bytes(str string) []byte {
 	return h
 }
 
-func Hex2BytesFixed(str string, flen int) []byte {
+func HexToBytesFixed(str string, flen int) []byte {
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
 		return h
