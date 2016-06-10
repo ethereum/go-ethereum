@@ -60,7 +60,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 
 // localConsole starts a new geth node, attaching a JavaScript console to it at the
 // same time.
-func localConsole(ctx *cli.Context) {
+func localConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
@@ -86,16 +86,18 @@ func localConsole(ctx *cli.Context) {
 	// If only a short execution was requested, evaluate and return
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
 		console.Evaluate(script)
-		return
+		return nil
 	}
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
 	console.Interactive()
+
+	return nil
 }
 
 // remoteConsole will connect to a remote geth instance, attaching a JavaScript
 // console to it.
-func remoteConsole(ctx *cli.Context) {
+func remoteConsole(ctx *cli.Context) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
 	client, err := utils.NewRemoteRPCClient(ctx)
 	if err != nil {
@@ -116,17 +118,19 @@ func remoteConsole(ctx *cli.Context) {
 	// If only a short execution was requested, evaluate and return
 	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
 		console.Evaluate(script)
-		return
+		return nil
 	}
 	// Otherwise print the welcome screen and enter interactive mode
 	console.Welcome()
 	console.Interactive()
+
+	return nil
 }
 
 // ephemeralConsole starts a new geth node, attaches an ephemeral JavaScript
 // console to it, and each of the files specified as arguments and tears the
 // everything down.
-func ephemeralConsole(ctx *cli.Context) {
+func ephemeralConsole(ctx *cli.Context) error {
 	// Create and start the node based on the CLI flags
 	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
@@ -164,4 +168,6 @@ func ephemeralConsole(ctx *cli.Context) {
 		os.Exit(0)
 	}()
 	console.Stop(true)
+
+	return nil
 }

@@ -271,15 +271,17 @@ func makeDefaultExtra() []byte {
 // geth is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func geth(ctx *cli.Context) {
+func geth(ctx *cli.Context) error {
 	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 	node.Wait()
+
+	return nil
 }
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) {
+func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
@@ -300,6 +302,7 @@ func initGenesis(ctx *cli.Context) {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	return nil
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -331,7 +334,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 }
 
-func makedag(ctx *cli.Context) {
+func makedag(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
@@ -358,13 +361,15 @@ func makedag(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func gpuinfo(ctx *cli.Context) {
+func gpuinfo(ctx *cli.Context) error {
 	eth.PrintOpenCLDevices()
+	return nil
 }
 
-func gpubench(ctx *cli.Context) {
+func gpubench(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
@@ -381,9 +386,10 @@ func gpubench(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func version(c *cli.Context) {
+func version(c *cli.Context) error {
 	fmt.Println(clientIdentifier)
 	fmt.Println("Version:", verString)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
@@ -392,4 +398,6 @@ func version(c *cli.Context) {
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
+	return nil
 }
