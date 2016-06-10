@@ -183,7 +183,7 @@ func runSuite(test, file string) {
 	}
 }
 
-func setupApp(c *cli.Context) {
+func setupApp(c *cli.Context) error {
 	flagTest := c.GlobalString(TestFlag.Name)
 	flagFile := c.GlobalString(FileFlag.Name)
 	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
@@ -196,8 +196,8 @@ func setupApp(c *cli.Context) {
 		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
 			glog.Fatalln(err)
 		}
-
 	}
+	return nil
 }
 
 func main() {

@@ -167,11 +167,12 @@ nodes.
 	}
 )
 
-func accountList(ctx *cli.Context) {
+func accountList(ctx *cli.Context) error {
 	accman := utils.MakeAccountManager(ctx)
 	for i, acct := range accman.Accounts() {
 		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
 	}
+	return nil
 }
 
 // tries unlocking the specified account a few times.
@@ -259,7 +260,7 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 }
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
-func accountCreate(ctx *cli.Context) {
+func accountCreate(ctx *cli.Context) error {
 	accman := utils.MakeAccountManager(ctx)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
@@ -268,11 +269,12 @@ func accountCreate(ctx *cli.Context) {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
 	fmt.Printf("Address: {%x}\n", account.Address)
+	return nil
 }
 
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
-func accountUpdate(ctx *cli.Context) {
+func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
@@ -283,9 +285,10 @@ func accountUpdate(ctx *cli.Context) {
 	if err := accman.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
+	return nil
 }
 
-func importWallet(ctx *cli.Context) {
+func importWallet(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
@@ -303,9 +306,10 @@ func importWallet(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
+	return nil
 }
 
-func accountImport(ctx *cli.Context) {
+func accountImport(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
@@ -321,4 +325,5 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
+	return nil
 }
