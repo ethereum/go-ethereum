@@ -56,27 +56,21 @@ var (
 	big_ts   = reflect.TypeOf([]*big.Int(nil))
 )
 
-// U256 will ensure unsigned 256bit on big nums
+// U256 converts a big Int into a 256bit EVM number.
 func U256(n *big.Int) []byte {
 	return common.LeftPadBytes(common.U256(n).Bytes(), 32)
-}
-
-// S256 will ensure signed 256bit on big nums
-func U2U256(n uint64) []byte {
-	return U256(big.NewInt(int64(n)))
 }
 
 // packNum packs the given number (using the reflect value) and will cast it to appropriate number representation
 func packNum(value reflect.Value) []byte {
 	switch kind := value.Kind(); kind {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return U2U256(value.Uint())
+		return U256(new(big.Int).SetUint64(value.Uint()))
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return U2U256(uint64(value.Int()))
+		return U256(big.NewInt(value.Int()))
 	case reflect.Ptr:
 		return U256(value.Interface().(*big.Int))
 	}
-
 	return nil
 }
 
