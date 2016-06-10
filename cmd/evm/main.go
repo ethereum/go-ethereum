@@ -104,7 +104,7 @@ func init() {
 	app.Action = run
 }
 
-func run(ctx *cli.Context) {
+func run(ctx *cli.Context) error {
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
@@ -154,6 +154,7 @@ num gc:     %d
 		fmt.Printf(" error: %v", e)
 	}
 	fmt.Println()
+	return nil
 }
 
 func main() {

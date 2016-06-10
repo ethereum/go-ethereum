@@ -67,7 +67,7 @@ to display multiple metrics simultaneously.
 )
 
 // monitor starts a terminal UI based monitoring tool for the requested metrics.
-func monitor(ctx *cli.Context) {
+func monitor(ctx *cli.Context) error {
 	var (
 		client rpc.Client
 		err    error
@@ -154,6 +154,7 @@ func monitor(ctx *cli.Context) {
 		}
 	}()
 	termui.Loop()
+	return nil
 }
 
 // retrieveMetrics contacts the attached geth node and retrieves the entire set
