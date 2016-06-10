@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/event/filter"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -301,10 +302,11 @@ func (self *Whisper) open(envelope *Envelope) *Message {
 	// Iterate over the keys and try to decrypt the message
 	for _, key := range self.keys {
 		message, err := envelope.Open(key)
-		if err == nil {
+		switch err {
+		case nil:
 			message.To = &key.PublicKey
 			return message
-		} else {
+		case ecies.ErrInvalidPublicKey:
 			origMessage, err := envelope.Open(nil)
 			if err != nil {
 				return nil
