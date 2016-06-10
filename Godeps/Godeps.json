@@ -1,6 +1,7 @@
 {
 	"ImportPath": "github.com/ethereum/go-ethereum",
 	"GoVersion": "go1.5.2",
+	"GodepVersion": "v74",
 	"Packages": [
 		"./..."
 	],
@@ -12,11 +13,6 @@
 		{
 			"ImportPath": "github.com/cespare/cp",
 			"Rev": "165db2f241fd235aec29ba6d9b1ccd5f1c14637c"
-		},
-		{
-			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-215-g0ab42fd",
-			"Rev": "0ab42fd482c27cf2c95e7794ad3bb2082c2ab2d7"
 		},
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
@@ -154,6 +150,10 @@
 		{
 			"ImportPath": "github.com/rs/cors",
 			"Rev": "5950cf11d77f8a61b432a25dd4d444b4ced01379"
+		},
+		{
+			"ImportPath": "github.com/rs/xhandler",
+			"Rev": "d9d9599b6aaf6a058cb7b1f48291ded2cbd13390"
 		},
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb",
@@ -319,6 +319,11 @@
 		{
 			"ImportPath": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
 			"Rev": "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
+		},
+		{
+			"ImportPath": "gopkg.in/urfave/cli.v1",
+			"Comment": "v1.17.0",
+			"Rev": "01857ac33766ce0c93856370626f9799281c14f4"
 		}
 	]
 }
