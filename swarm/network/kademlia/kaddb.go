@@ -247,14 +247,14 @@ func (self *KadDb) delete(row int, indexes ...int) {
 	dbrow := self.Nodes[row]
 	for _, next := range indexes {
 		// need to adjust dbcursor
+		if next <= self.cursors[row] {
+			self.cursors[row]--
+		}
 		if next > 0 {
-			if next <= self.cursors[row] {
-				self.cursors[row]--
-			}
 			nodes = append(nodes, dbrow[prev:next]...)
 		}
-		prev = next + 1
 		delete(self.index, dbrow[next].Addr)
+		prev = next + 1
 	}
 	self.Nodes[row] = append(nodes, dbrow[prev:]...)
 }

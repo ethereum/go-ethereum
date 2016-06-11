@@ -3,7 +3,6 @@
 package storage
 
 import (
-	"bytes"
 	"sync"
 )
 
@@ -42,41 +41,6 @@ func NewMemStore(d *DbStore, capacity uint) (m *MemStore) {
 	m.dbStore = d
 	m.setCapacity(capacity)
 	return
-}
-
-func (x Key) Size() uint {
-	return uint(len(x))
-}
-
-func (x Key) isEqual(y Key) bool {
-	return bytes.Compare(x, y) == 0
-}
-
-func (h Key) bits(i, j uint) uint {
-	ii := i >> 3
-	jj := i & 7
-	if ii >= h.Size() {
-		return 0
-	}
-
-	if jj+j <= 8 {
-		return uint((h[ii] >> jj) & ((1 << j) - 1))
-	}
-
-	res := uint(h[ii] >> jj)
-	jj = 8 - jj
-	j -= jj
-	for j != 0 {
-		ii++
-		if j < 8 {
-			res += uint(h[ii]&((1<<j)-1)) << jj
-			return res
-		}
-		res += uint(h[ii]) << jj
-		jj += 8
-		j -= 8
-	}
-	return res
 }
 
 type memTree struct {
