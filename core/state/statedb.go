@@ -370,6 +370,27 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 	return s.trie.Hash()
 }
 
+// DeleteSuicides flags the suicided objects for deletion so that it
+// won't be referenced again when called / queried up on.
+//
+// DeleteSuicides should not be used for consensus related updates
+// under any circumstances.
+func (s *StateDB) DeleteSuicides() {
+	// Reset refund so that any used-gas calculations can use
+	// this method.
+	s.refund = new(big.Int)
+	for _, stateObject := range s.stateObjects {
+		if stateObject.dirty {
+			// If the object has been removed by a suicide
+			// flag the object as deleted.
+			if stateObject.remove {
+				stateObject.deleted = true
+			}
+			stateObject.dirty = false
+		}
+	}
+}
+
 // Commit commits all state changes to the database.
 func (s *StateDB) Commit() (root common.Hash, err error) {
 	root, batch := s.CommitBatch()
