@@ -307,11 +307,7 @@ func (self *Whisper) open(envelope *Envelope) *Message {
 			message.To = &key.PublicKey
 			return message
 		case ecies.ErrInvalidPublicKey:
-			origMessage, err := envelope.Open(nil)
-			if err != nil {
-				return nil
-			}
-			return origMessage
+			return message
 		}
 	}
 	// Failed to decrypt, don't return anything
