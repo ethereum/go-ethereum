@@ -18,7 +18,6 @@
 package eth
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -47,7 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -104,9 +102,9 @@ type Config struct {
 }
 
 type Ethereum struct {
-	chainConfig *core.ChainConfig
-	// Channel for shutting down the ethereum
-	shutdownChan chan bool
+	chainConfig   *core.ChainConfig
+	shutdownChan  chan bool // Channel for shutting down the ethereum
+	stopDbUpgrade func()    // stop chain db sequential key upgrade
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -161,6 +159,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
+	stopDbUpgrade := upgradeSequentialKeys(chainDb)
 
 	dappDb, err := ctx.OpenDatabase("dapp", config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
@@ -185,7 +184,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainDb = config.TestGenesisState
 	}
 	if config.TestGenesisBlock != nil {
-		core.WriteTd(chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.Difficulty())
+		core.WriteTd(chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.NumberU64(), config.TestGenesisBlock.Difficulty())
 		core.WriteBlock(chainDb, config.TestGenesisBlock)
 		core.WriteCanonicalHash(chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.NumberU64())
 		core.WriteHeadBlockHash(chainDb, config.TestGenesisBlock.Hash())
@@ -202,6 +201,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth := &Ethereum{
 		shutdownChan:            make(chan bool),
+		stopDbUpgrade:           stopDbUpgrade,
 		chainDb:                 chainDb,
 		dappDb:                  dappDb,
 		eventMux:                ctx.EventMux,
@@ -238,7 +238,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	// load the genesis block or write a new one if no genesis
 	// block is prenent in the database.
-	genesis := core.GetBlock(chainDb, core.GetCanonicalHash(chainDb, 0))
+	genesis := core.GetBlock(chainDb, core.GetCanonicalHash(chainDb, 0), 0)
 	if genesis == nil {
 		genesis, err = core.WriteDefaultGenesisBlock(chainDb)
 		if err != nil {
@@ -415,6 +415,9 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
+	if s.stopDbUpgrade != nil {
+		s.stopDbUpgrade()
+	}
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
 	s.txPool.Stop()
@@ -525,105 +528,4 @@ func dagFiles(epoch uint64) (string, string) {
 	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
 	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
 	return dag, "full-R" + dag
-}
-
-// upgradeChainDatabase ensures that the chain database stores block split into
-// separate header and body entries.
-func upgradeChainDatabase(db ethdb.Database) error {
-	// Short circuit if the head block is stored already as separate header and body
-	data, err := db.Get([]byte("LastBlock"))
-	if err != nil {
-		return nil
-	}
-	head := common.BytesToHash(data)
-
-	if block := core.GetBlockByHashOld(db, head); block == nil {
-		return nil
-	}
-	// At least some of the database is still the old format, upgrade (skip the head block!)
-	glog.V(logger.Info).Info("Old database detected, upgrading...")
-
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		blockPrefix := []byte("block-hash-")
-		for it := db.NewIterator(); it.Next(); {
-			// Skip anything other than a combined block
-			if !bytes.HasPrefix(it.Key(), blockPrefix) {
-				continue
-			}
-			// Skip the head block (merge last to signal upgrade completion)
-			if bytes.HasSuffix(it.Key(), head.Bytes()) {
-				continue
-			}
-			// Load the block, split and serialize (order!)
-			block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
-
-			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
-				return err
-			}
-			if err := core.WriteBody(db, block.Hash(), block.Body()); err != nil {
-				return err
-			}
-			if err := core.WriteHeader(db, block.Header()); err != nil {
-				return err
-			}
-			if err := db.Delete(it.Key()); err != nil {
-				return err
-			}
-		}
-		// Lastly, upgrade the head block, disabling the upgrade mechanism
-		current := core.GetBlockByHashOld(db, head)
-
-		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
-			return err
-		}
-		if err := core.WriteBody(db, current.Hash(), current.Body()); err != nil {
-			return err
-		}
-		if err := core.WriteHeader(db, current.Header()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func addMipmapBloomBins(db ethdb.Database) (err error) {
-	const mipmapVersion uint = 2
-
-	// check if the version is set. We ignore data for now since there's
-	// only one version so we can easily ignore it for now
-	var data []byte
-	data, _ = db.Get([]byte("setting-mipmap-version"))
-	if len(data) > 0 {
-		var version uint
-		if err := rlp.DecodeBytes(data, &version); err == nil && version == mipmapVersion {
-			return nil
-		}
-	}
-
-	defer func() {
-		if err == nil {
-			var val []byte
-			val, err = rlp.EncodeToBytes(mipmapVersion)
-			if err == nil {
-				err = db.Put([]byte("setting-mipmap-version"), val)
-			}
-			return
-		}
-	}()
-	latestBlock := core.GetBlock(db, core.GetHeadBlockHash(db))
-	if latestBlock == nil { // clean database
-		return
-	}
-
-	tstart := time.Now()
-	glog.V(logger.Info).Infoln("upgrading db log bloom bins")
-	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
-		hash := core.GetCanonicalHash(db, i)
-		if (hash == common.Hash{}) {
-			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
-		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash))
-	}
-	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
-	return nil
 }

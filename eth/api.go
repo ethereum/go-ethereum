@@ -594,7 +594,7 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(blockNr rpc.BlockNumber, fullTx b
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
 // detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByHash(blockHash common.Hash, fullTx bool) (map[string]interface{}, error) {
-	if block := s.bc.GetBlock(blockHash); block != nil {
+	if block := s.bc.GetBlockByHash(blockHash); block != nil {
 		return s.rpcOutputBlock(block, true, fullTx)
 	}
 	return nil, nil
@@ -618,7 +618,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(blockNr rpc.BlockNum
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(blockHash common.Hash, index rpc.HexNumber) (map[string]interface{}, error) {
-	if block := s.bc.GetBlock(blockHash); block != nil {
+	if block := s.bc.GetBlockByHash(blockHash); block != nil {
 		uncles := block.Uncles()
 		if index.Int() < 0 || index.Int() >= len(uncles) {
 			glog.V(logger.Debug).Infof("uncle block on index %d not found for block %s", index.Int(), blockHash.Hex())
@@ -640,7 +640,7 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockNumber(blockNr rpc.BlockNumber
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
 func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(blockHash common.Hash) *rpc.HexNumber {
-	if block := s.bc.GetBlock(blockHash); block != nil {
+	if block := s.bc.GetBlockByHash(blockHash); block != nil {
 		return rpc.NewHexNumber(len(block.Uncles()))
 	}
 	return nil
@@ -814,7 +814,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		"stateRoot":        b.Root(),
 		"miner":            b.Coinbase(),
 		"difficulty":       rpc.NewHexNumber(b.Difficulty()),
-		"totalDifficulty":  rpc.NewHexNumber(s.bc.GetTd(b.Hash())),
+		"totalDifficulty":  rpc.NewHexNumber(s.bc.GetTd(b.Hash(), b.NumberU64())),
 		"extraData":        fmt.Sprintf("0x%x", b.Extra()),
 		"size":             rpc.NewHexNumber(b.Size().Int64()),
 		"gasLimit":         rpc.NewHexNumber(b.GasLimit()),
@@ -1004,7 +1004,7 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByNumber(blockNr rpc.
 
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
 func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(blockHash common.Hash) *rpc.HexNumber {
-	if block := s.bc.GetBlock(blockHash); block != nil {
+	if block := s.bc.GetBlockByHash(blockHash); block != nil {
 		return rpc.NewHexNumber(len(block.Transactions()))
 	}
 	return nil
@@ -1020,7 +1020,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(blockNr r
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
 func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(blockHash common.Hash, index rpc.HexNumber) (*RPCTransaction, error) {
-	if block := s.bc.GetBlock(blockHash); block != nil {
+	if block := s.bc.GetBlockByHash(blockHash); block != nil {
 		return newRPCTransactionFromBlockIndex(block, index.Int())
 	}
 	return nil, nil
@@ -1080,7 +1080,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(txHash common.Hash) (*RP
 		return nil, nil
 	}
 
-	if block := s.bc.GetBlock(blockHash); block != nil {
+	if block := s.bc.GetBlockByHash(blockHash); block != nil {
 		return newRPCTransaction(block, txHash)
 	}
 
@@ -1705,7 +1705,7 @@ func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config *vm.Config)
 // TraceBlockByHash processes the block by hash.
 func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config *vm.Config) BlockTraceResult {
 	// Fetch the block that we aim to reprocess
-	block := api.eth.BlockChain().GetBlock(hash)
+	block := api.eth.BlockChain().GetBlockByHash(hash)
 	if block == nil {
 		return BlockTraceResult{Error: fmt.Sprintf("block #%x not found", hash)}
 	}
@@ -1745,10 +1745,10 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config *vm.Config) (b
 	config.Debug = true // make sure debug is set.
 	config.Logger.Collector = collector
 
-	if err := core.ValidateHeader(api.config, blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false); err != nil {
+	if err := core.ValidateHeader(api.config, blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash(), block.NumberU64()-1), true, false); err != nil {
 		return false, collector.traces, err
 	}
-	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), api.eth.ChainDb())
+	statedb, err := state.New(blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1).Root(), api.eth.ChainDb())
 	if err != nil {
 		return false, collector.traces, err
 	}
@@ -1757,7 +1757,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config *vm.Config) (b
 	if err != nil {
 		return false, collector.traces, err
 	}
-	if err := validator.ValidateState(block, blockchain.GetBlock(block.ParentHash()), statedb, receipts, usedGas); err != nil {
+	if err := validator.ValidateState(block, blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1), statedb, receipts, usedGas); err != nil {
 		return false, collector.traces, err
 	}
 	return true, collector.traces, nil
@@ -1841,12 +1841,12 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogC
 	if tx == nil {
 		return nil, fmt.Errorf("transaction %x not found", txHash)
 	}
-	block := api.eth.BlockChain().GetBlock(blockHash)
+	block := api.eth.BlockChain().GetBlockByHash(blockHash)
 	if block == nil {
 		return nil, fmt.Errorf("block %x not found", blockHash)
 	}
 	// Create the state database to mutate and eventually trace
-	parent := api.eth.BlockChain().GetBlock(block.ParentHash())
+	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
 		return nil, fmt.Errorf("block parent %x not found", block.ParentHash())
 	}

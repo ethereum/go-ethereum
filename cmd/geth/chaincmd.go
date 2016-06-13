@@ -174,7 +174,7 @@ func dump(ctx *cli.Context) error {
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {
-			block = chain.GetBlock(common.HexToHash(arg))
+			block = chain.GetBlockByHash(common.HexToHash(arg))
 		} else {
 			num, _ := strconv.Atoi(arg)
 			block = chain.GetBlockByNumber(uint64(num))

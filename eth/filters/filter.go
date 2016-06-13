@@ -72,7 +72,8 @@ func (self *Filter) SetTopics(topics [][]common.Hash) {
 
 // Run filters logs with the current parameters set
 func (self *Filter) Find() vm.Logs {
-	latestBlock := core.GetBlock(self.db, core.GetHeadBlockHash(self.db))
+	latestHash := core.GetHeadBlockHash(self.db)
+	latestBlock := core.GetBlock(self.db, latestHash, core.GetBlockNumber(self.db, latestHash))
 	var beginBlockNo uint64 = uint64(self.begin)
 	if self.begin == -1 {
 		beginBlockNo = latestBlock.NumberU64()
@@ -127,7 +128,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 	for i := start; i <= end; i++ {
 		hash := core.GetCanonicalHash(self.db, i)
 		if hash != (common.Hash{}) {
-			block = core.GetBlock(self.db, hash)
+			block = core.GetBlock(self.db, hash, i)
 		} else { // block not found
 			return logs
 		}
@@ -137,7 +138,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 		if self.bloomFilter(block) {
 			// Get the logs of the block
 			var (
-				receipts   = core.GetBlockReceipts(self.db, block.Hash())
+				receipts   = core.GetBlockReceipts(self.db, block.Hash(), i)
 				unfiltered vm.Logs
 			)
 			for _, receipt := range receipts {

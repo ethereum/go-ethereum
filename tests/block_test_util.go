@@ -164,7 +164,7 @@ func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	core.WriteTd(db, test.Genesis.Hash(), test.Genesis.Difficulty())
+	core.WriteTd(db, test.Genesis.Hash(), 0, test.Genesis.Difficulty())
 	core.WriteBlock(db, test.Genesis)
 	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
 	core.WriteHeadBlockHash(db, test.Genesis.Hash())
@@ -412,7 +412,7 @@ func (test *BlockTest) ValidateImportedHeaders(cm *core.BlockChain, validBlocks 
 	// block-by-block, so we can only validate imported headers after
 	// all blocks have been processed by ChainManager, as they may not
 	// be part of the longest chain until last block is imported.
-	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlock(b.Header().ParentHash) {
+	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
 		bHash := common.Bytes2Hex(b.Hash().Bytes()) // hex without 0x prefix
 		if err := validateHeader(bmap[bHash].BlockHeader, b.Header()); err != nil {
 			return fmt.Errorf("Imported block header validation failed: %v", err)
