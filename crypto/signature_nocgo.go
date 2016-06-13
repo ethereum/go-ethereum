@@ -30,8 +30,8 @@ func Ecrecover(hash, sig []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	bytes := (*btcec.PublicKey)(pub).SerializeUncompressed()
-	return bytes, err
+	bytes := (*btcec.PublicKey)(pub).SerializeUncompressed(),
+	return bytes, nil
 }
 
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
