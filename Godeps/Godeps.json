@@ -20,8 +20,8 @@
 		},
 		{
 			"ImportPath": "github.com/ethereum/ethash",
-			"Comment": "v23.1-245-g25b32de",
-			"Rev": "25b32de0c0271065c28c3719c2bfe86959d72f0c"
+			"Comment": "v23.1-247-g2e80de5",
+			"Rev": "2e80de5022370cfe632195b1720db52d07ff8a77"
 		},
 		{
 			"ImportPath": "github.com/fatih/color",
