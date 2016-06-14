@@ -44,7 +44,7 @@ type ContractBackend struct {
 // Etheruem object.
 func NewContractBackend(eth *Ethereum) *ContractBackend {
 	return &ContractBackend{
-		eapi:  ethapi.NewPublicEthereumAPI(eth.apiBackend, nil, nil),
+		eapi:  ethapi.NewPublicEthereumAPI(eth.apiBackend),
 		bcapi: ethapi.NewPublicBlockChainAPI(eth.apiBackend),
 		txapi: ethapi.NewPublicTransactionPoolAPI(eth.apiBackend),
 	}

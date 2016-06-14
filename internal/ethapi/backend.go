@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -69,12 +68,13 @@ type State interface {
 	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
-func GetAPIs(apiBackend Backend, solcPath *string, solc **compiler.Solidity) []rpc.API {
-	return []rpc.API{
+func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
+	compiler := makeCompilerAPIs(solcPath)
+	all := []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(apiBackend, solcPath, solc),
+			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
 			Namespace: "eth",
@@ -91,10 +91,6 @@ func GetAPIs(apiBackend Backend, solcPath *string, solc **compiler.Solidity) []r
 			Version:   "1.0",
 			Service:   NewPublicTxPoolAPI(apiBackend),
 			Public:    true,
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(apiBackend, solcPath, solc),
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
@@ -116,4 +112,5 @@ func GetAPIs(apiBackend Backend, solcPath *string, solc **compiler.Solidity) []r
 			Public:    false,
 		},
 	}
+	return append(compiler, all...)
 }
