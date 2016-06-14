@@ -162,7 +162,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 	var interval time.Duration
 	var found bool
 	var count int
-	var purge []int
+	var purge []bool
 	var delta time.Duration
 	var cursor int
 	var after time.Time
@@ -182,6 +182,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				need = true
 			}
 			cursor = self.cursors[po]
+			purge = make([]bool, len(dbrow))
 
 			// there is a missing slot - finding a node to connect to
 			// select a node record from the relavant kaddb row (of identical prox order)
@@ -208,7 +209,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				}
 				if delta > self.purgeInterval {
 					// remove node
-					purge = append(purge, cursor)
+					purge[cursor] = true
 					glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) unreachable since %v. Removed", node.Addr, po, cursor, node.Seen)
 					continue ROW
 				}
@@ -225,7 +226,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				break ROW
 			} // ROW
 			self.cursors[po] = cursor
-			self.delete(po, purge...)
+			self.delete(po, purge)
 			if found {
 				return node, true, proxLimit
 			}
@@ -241,22 +242,23 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 // deletes the noderecords of a kaddb row corresponding to the indexes
 // caller must hold the dblock
 // the call is unsafe, no index checks
-func (self *KadDb) delete(row int, indexes ...int) {
-	var prev int
+func (self *KadDb) delete(row int, purge []bool) {
 	var nodes []*NodeRecord
 	dbrow := self.Nodes[row]
-	for _, next := range indexes {
-		// need to adjust dbcursor
-		if next <= self.cursors[row] {
-			self.cursors[row]--
+	for i, del := range purge {
+		if i == self.cursors[row] {
+			//reset cursor
+			self.cursors[row] = len(nodes)
 		}
-		if next > 0 {
-			nodes = append(nodes, dbrow[prev:next]...)
+		// delete the entry to be purged
+		if del {
+			delete(self.index, dbrow[i].Addr)
+			continue
 		}
-		delete(self.index, dbrow[next].Addr)
-		prev = next + 1
+		// otherwise append to new list
+		nodes = append(nodes, dbrow[i])
 	}
-	self.Nodes[row] = append(nodes, dbrow[prev:]...)
+	self.Nodes[row] = nodes
 }
 
 // save persists kaddb on disk (written to file on path in json format.
@@ -306,14 +308,15 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 		return
 	}
 	var n int
-	var purge []int
+	var purge []bool
 	for po, b := range self.Nodes {
+		purge = make([]bool, len(b))
 	ROW:
 		for i, node := range b {
 			if cb != nil {
 				err = cb(node, node.node)
 				if err != nil {
-					purge = append(purge, i)
+					purge[i] = true
 					continue ROW
 				}
 			}
@@ -323,7 +326,7 @@ func (self *KadDb) load(path string, cb func(*NodeRecord, Node) error) (err erro
 			}
 			self.index[node.Addr] = node
 		}
-		self.delete(po, purge...)
+		self.delete(po, purge)
 	}
 	glog.V(logger.Info).Infof("[KΛÐ] loaded kaddb with %v nodes from %v", n, path)
 
