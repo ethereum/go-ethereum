@@ -3088,7 +3088,7 @@ ContractFactory.prototype.getData = function () {
  * @param {Address} contract address
  */
 var Contract = function (exp, abi, address) {
-    this._eth = exp;
+    this._exp = exp;
     this.transactionHash = null;
     this.address = address;
     this.abi = abi;
@@ -3965,7 +3965,7 @@ var sha3 = require('../utils/sha3');
  * This prototype should be used to call/sendTransaction to solidity functions
  */
 var SolidityFunction = function (exp, json, address) {
-    this._eth = exp;
+    this._exp = exp;
     this._inputTypes = json.inputs.map(function (i) {
         return i.type;
     });

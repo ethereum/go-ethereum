@@ -221,7 +221,7 @@ participating.
 		// because it is not intended to run while testing.
 		// In addition to this check, bad block reports are sent only
 		// for chains with the main network genesis block and network id 1.
-		eth.EnableBadBlockReporting = true
+		exp.EnableBadBlockReporting = true
 
 		utils.SetupNetwork(ctx)
 

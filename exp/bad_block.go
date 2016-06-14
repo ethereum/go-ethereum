@@ -27,7 +27,7 @@ import (
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.comexpanse-project/go-expanse/rlp"
+	"github.com/expanse-project/go-expanse/rlp"
 )
 
 const (
