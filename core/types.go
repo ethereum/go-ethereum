@@ -73,6 +73,5 @@ type Backend interface {
 	BlockChain() *BlockChain
 	TxPool() *TxPool
 	ChainDb() ethdb.Database
-	DappDb() ethdb.Database
 	EventMux() *event.TypeMux
 }

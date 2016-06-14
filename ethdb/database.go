@@ -39,14 +39,12 @@ var OpenFileLimit = 64
 // cacheRatio specifies how the total allotted cache is distributed between the
 // various system databases.
 var cacheRatio = map[string]float64{
-	"dapp":      0.0,
 	"chaindata": 1.0,
 }
 
 // handleRatio specifies how the total allotted file descriptors is distributed
 // between the various system databases.
 var handleRatio = map[string]float64{
-	"dapp":      0.0,
 	"chaindata": 1.0,
 }
 
