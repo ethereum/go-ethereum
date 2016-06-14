@@ -26,8 +26,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/expanse-project/go-expanse/core"
 )
 
 var (
@@ -59,11 +57,6 @@ var (
 	StateSkipTests = []string{}
 	VmSkipTests    = []string{}
 )
-
-// Disable reporting bad blocks for the tests
-func init() {
-	core.DisableBadBlockReporting = true
-}
 
 func readJson(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)

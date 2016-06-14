@@ -149,7 +149,6 @@ func (sol *Solidity) Compile(source string) (map[string]*Contract, error) {
 	compilerOptions := strings.Join(params, " ")
 
 	cmd := exec.Command(sol.solcPath, params...)
-	cmd.Dir = wd
 	cmd.Stdin = strings.NewReader(source)
 	cmd.Stderr = stderr
 

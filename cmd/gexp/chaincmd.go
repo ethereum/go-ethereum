@@ -27,6 +27,7 @@ import (
 
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/console"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
@@ -117,7 +118,7 @@ func exportChain(ctx *cli.Context) {
 }
 
 func removeDB(ctx *cli.Context) {
-	confirm, err := utils.Stdin.ConfirmPrompt("Remove local database?")
+	confirm, err := console.Stdin.PromptConfirm("Remove local database?")
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}

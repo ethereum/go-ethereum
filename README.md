@@ -35,6 +35,10 @@ Once the dependencies are installed, run
 
     make gexp
 
+or, to build the full suite of utilities:
+
+    make all
+
 ## Executables
 
 Go Expanse comes with several wrappers/executables found in
@@ -60,10 +64,10 @@ to ensure those changes are in line with the general philosophy of the project a
 early feedback which can make both your efforts much lighter as well as our review and merge
 procedures quick and simple.
 
-Please make sure your contributions adhere to our coding guidlines:
+Please make sure your contributions adhere to our coding guidelines:
 
  * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
- * Code must be documented adherign to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
+ * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
  * Pull requests need to be based on and opened against the `develop` branch.
  * Commit messages should be prefixed with the package(s) they modify.
    * E.g. "exp, rpc: make trace configs optional"

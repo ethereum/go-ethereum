@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -30,9 +29,11 @@ import (
 	"time"
 
 	"github.com/codegangsta/cli"
+
 	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/console"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
@@ -50,7 +51,7 @@ const (
 	clientIdentifier = "Gexp"   // Client identifier to advertise over the network
 	versionMajor     = 1        // Major version component of the current release
 	versionMinor     = 4        // Minor version component of the current release
-	versionPatch     = 5        // Patch version component of the current release
+	versionPatch     = 6        // Patch version component of the current release
 	versionMeta      = "stable" // Version metadata to append to the version string
 	versionOracle = "0x926d69cc3bbf81d52cba6886d788df007a15a3cd" // Expanse address of the Gexp release oracle
 )
@@ -94,6 +95,9 @@ func init() {
 		monitorCommand,
 		accountCommand,
 		walletCommand,
+		consoleCommand,
+		attachCommand,
+		javascriptCommand,
 		{
 			Action: makedag,
 			Name:   "makedag",
@@ -137,36 +141,6 @@ The output of this command is supposed to be machine-readable.
 The init command initialises a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
-`,
-		},
-		{
-			Action: console,
-			Name:   "console",
-			Usage:  `Gexp Console: interactive JavaScript environment`,
-			Description: `
-The Gexp console is an interactive shell for the JavaScript runtime environment
-which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
-`,
-		},
-		{
-			Action: attach,
-			Name:   "attach",
-			Usage:  `Gexp Console: interactive JavaScript environment (connect to node)`,
-			Description: `
-		The Gexp console is an interactive shell for the JavaScript runtime environment
-		which exposes a node admin interface as well as the Ðapp JavaScript API.
-		See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console.
-		This command allows to open a console on a running gexp node.
-		`,
-		},
-		{
-			Action: execScripts,
-			Name:   "js",
-			Usage:  `executes the given JavaScript files in the Gexp JavaScript VM`,
-			Description: `
-The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
 `,
 		},
 	}
@@ -213,7 +187,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.ExecFlag,
-		utils.PreLoadJSFlag,
+		utils.PreloadJSFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
@@ -243,6 +217,12 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
+		// This should be the only place where reporting is enabled
+		// because it is not intended to run while testing.
+		// In addition to this check, bad block reports are sent only
+		// for chains with the main network genesis block and network id 1.
+		eth.EnableBadBlockReporting = true
+
 		utils.SetupNetwork(ctx)
 
 		// Deprecation warning.
@@ -256,7 +236,7 @@ JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt
 	app.After = func(ctx *cli.Context) error {
 		logger.Flush()
 		debug.Exit()
-		utils.Stdin.Close() // Resets terminal mode.
+		console.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }
@@ -297,35 +277,6 @@ func gexp(ctx *cli.Context) {
 	node.Wait()
 }
 
-// attach will connect to a running gexp instance attaching a JavaScript console and to it.
-func attach(ctx *cli.Context) {
-	// attach to a running gexp instance
-	client, err := utils.NewRemoteRPCClient(ctx)
-	if err != nil {
-		utils.Fatalf("Unable to attach to gexp: %v", err)
-	}
-
-	repl := newLightweightJSRE(
-		ctx.GlobalString(utils.JSpathFlag.Name),
-		client,
-		ctx.GlobalString(utils.DataDirFlag.Name),
-		true,
-	)
-
-	// preload user defined JS files into the console
-	err = repl.preloadJSFiles(ctx)
-	if err != nil {
-		utils.Fatalf("unable to preload JS file %v", err)
-	}
-
-	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
-		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
-	} else {
-		repl.welcome()
-		repl.interactive()
-	}
-}
-
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
 func initGenesis(ctx *cli.Context) {
@@ -349,77 +300,6 @@ func initGenesis(ctx *cli.Context) {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
-}
-
-// console starts a new gexp node, attaching a JavaScript console to it at the
-// same time.
-func console(ctx *cli.Context) {
-	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
-	startNode(ctx, node)
-
-	// Attach to the newly started node, and either execute script or become interactive
-	client, err := node.Attach()
-	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc gexp: %v", err)
-	}
-	repl := newJSRE(node,
-		ctx.GlobalString(utils.JSpathFlag.Name),
-		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client, true)
-
-	// preload user defined JS files into the console
-	err = repl.preloadJSFiles(ctx)
-	if err != nil {
-		utils.Fatalf("%v", err)
-	}
-
-	// in case the exec flag holds a JS statement execute it and return
-	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		repl.batch(script)
-	} else {
-		repl.welcome()
-		repl.interactive()
-	}
-	node.Stop()
-}
-
-// execScripts starts a new gexp node based on the CLI flags, and executes each
-// of the JavaScript files specified as command arguments.
-func execScripts(ctx *cli.Context) {
-	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
-	startNode(ctx, node)
-	defer node.Stop()
-
-	// Attach to the newly started node and execute the given scripts
-	client, err := node.Attach()
-	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc gexp: %v", err)
-	}
-	repl := newJSRE(node,
-		ctx.GlobalString(utils.JSpathFlag.Name),
-		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client, false)
-
-	// Run all given files.
-	for _, file := range ctx.Args() {
-		if err = repl.re.Exec(file); err != nil {
-			break
-		}
-	}
-	if err != nil {
-		utils.Fatalf("JavaScript Error: %v", jsErrorString(err))
-	}
-	// JS files loaded successfully.
-	// Wait for pending callbacks, but stop for Ctrl-C.
-	abort := make(chan os.Signal, 1)
-	signal.Notify(abort, os.Interrupt)
-	go func() {
-		<-abort
-		repl.re.Stop(false)
-	}()
-	repl.re.Stop(true)
 }
 
 // startNode boots up the system node and all registered protocols, after which

@@ -51,7 +51,7 @@ func newWithTestJS(t *testing.T, testjs string) (*JSRE, string) {
 			t.Fatal("cannot create test.js:", err)
 		}
 	}
-	return New(dir), dir
+	return New(dir, os.Stdout), dir
 }
 
 func TestExec(t *testing.T) {
@@ -102,7 +102,7 @@ func TestNatto(t *testing.T) {
 }
 
 func TestBind(t *testing.T) {
-	jsre := New("")
+	jsre := New("", os.Stdout)
 	defer jsre.Stop(false)
 
 	jsre.Bind("no", &testNativeObjectBinding{})

@@ -23,6 +23,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/expanse-project/go-expanse/accounts"
 	"github.com/expanse-project/go-expanse/cmd/utils"
+	"github.com/expanse-project/go-expanse/console"
 	"github.com/expanse-project/go-expanse/crypto"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
@@ -215,12 +216,12 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
-	password, err := utils.Stdin.PasswordPrompt("Passphrase: ")
+	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
 	}
 	if confirmation {
-		confirm, err := utils.Stdin.PasswordPrompt("Repeat passphrase: ")
+		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
 		if err != nil {
 			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
 		}
