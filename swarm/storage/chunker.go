@@ -336,17 +336,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		wg.Wait()
 		close(self.errC)
 	}()
-	select {
-	case err = <-self.errC:
-		// glog.V(logger.Detail).Infof("[BZZ] ReadAt received %v", err)
-		read = len(b)
-		if off+int64(read) == self.size {
-			err = io.EOF
-		}
-		// glog.V(logger.Detail).Infof("[BZZ] ReadAt returning at %d: %v", read, err)
-	case <-self.quitC:
-		// glog.V(logger.Detail).Infof("[BZZ] ReadAt aborted at %d: %v", read, err)
+
+	err = <-self.errC
+	// glog.V(logger.Detail).Infof("[BZZ] ReadAt received %v", err)
+	read = len(b)
+	if off+int64(read) == self.size {
+		err = io.EOF
 	}
+	// glog.V(logger.Detail).Infof("[BZZ] ReadAt returning at %d: %v", read, err)
 	return
 }
 
@@ -374,10 +371,10 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		return // simply give back the chunks reader for content chunks
 	}
 
-	// subtree index
+	// subtree
 	start := off / treeSize
 	end := (eoff + treeSize - 1) / treeSize
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 
 	for i := start; i < end; i++ {
 
@@ -391,7 +388,9 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		if seoff > eoff {
 			seoff = eoff
 		}
-
+		if depth > 1 {
+			wg.Wait()
+		}
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunk.SData[8+j*self.chunker.hashSize : 8+(j+1)*self.chunker.hashSize]
@@ -416,10 +415,13 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 				soff = off
 			}
 			if len(ch.SData) == 0 {
-				self.errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize)
+				select {
+				case self.errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize):
+				case <-self.quitC:
+				}
 				return
 			}
-			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.branches, ch, &wg)
+			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.branches, ch, wg)
 		}(i)
 	} //for
 	wg.Wait()
