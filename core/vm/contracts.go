@@ -40,6 +40,18 @@ func (self PrecompiledAccount) Call(in []byte) []byte {
 // Precompiled contains the default set of ethereum contracts
 var Precompiled = PrecompiledContracts()
 
+// RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
+func RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
+	gas := p.Gas(len(input))
+	if contract.UseGas(gas.Uint64()) {
+		ret = p.Call(input)
+
+		return ret, nil
+	} else {
+		return nil, OutOfGasError
+	}
+}
+
 // PrecompiledContracts returns the default set of precompiled ethereum
 // contracts defined by the ethereum yellow paper.
 func PrecompiledContracts() map[string]*PrecompiledAccount {
