@@ -22,13 +22,11 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -214,18 +212,10 @@ var (
 		Value: "",
 	}
 
-	VMForceJitFlag = cli.BoolFlag{
-		Name:  "forcejit",
-		Usage: "Force the JIT VM to take precedence",
-	}
-	VMJitCacheFlag = cli.IntFlag{
-		Name:  "jitcache",
-		Usage: "Amount of cached JIT VM programs",
-		Value: 64,
-	}
-	VMEnableJitFlag = cli.BoolFlag{
-		Name:  "jitvm",
-		Usage: "Enable the JIT VM",
+	VMCacheFlag = cli.IntFlag{
+		Name:  "vmcache",
+		Usage: "Amount of cached VM programs",
+		Value: 1024,
 	}
 
 	// logging and debug settings
@@ -455,9 +445,6 @@ func makeNodeUserIdent(ctx *cli.Context) string {
 	if identity := ctx.GlobalString(IdentityFlag.Name); len(identity) > 0 {
 		comps = append(comps, identity)
 	}
-	if ctx.GlobalBool(VMEnableJitFlag.Name) {
-		comps = append(comps, "JIT")
-	}
 	return strings.Join(comps, "/")
 }
 
@@ -666,16 +653,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		Fatalf("The %v flags are mutually exclusive", netFlags)
 	}
 
-	// initialise new random number generator
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	// get enabled jit flag
-	jitEnabled := ctx.GlobalBool(VMEnableJitFlag.Name)
-	// if the jit is not enabled enable it for 10 pct of the people
-	if !jitEnabled && rand.Float64() < 0.1 {
-		jitEnabled = true
-		glog.V(logger.Info).Infoln("You're one of the lucky few that will try out the JIT VM (random). If you get a consensus failure please be so kind to report this incident with the block hash that failed. You can switch to the regular VM by setting --jitvm=false")
-	}
-
 	ethConf := &eth.Config{
 		Etherbase:               MakeEtherbase(stack.AccountManager(), ctx),
 		ChainConfig:             MakeChainConfig(ctx, stack),
@@ -687,8 +664,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		ExtraData:               MakeMinerExtra(extra, ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
-		EnableJit:               jitEnabled,
-		ForceJit:                ctx.GlobalBool(VMForceJitFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
 		GpoMaxGasPrice:          common.String2Big(ctx.GlobalString(GpoMaxGasPriceFlag.Name)),

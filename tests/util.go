@@ -167,7 +167,7 @@ type Env struct {
 
 	vmTest bool
 
-	evm *vm.EVM
+	evm vm.VirtualMachine
 }
 
 func NewEnv(chainConfig *params.ChainConfig, state *state.StateDB) *Env {

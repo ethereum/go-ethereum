@@ -27,7 +27,7 @@ import (
 
 type programInstruction interface {
 	// executes the program instruction and allows the instruction to modify the state of the program
-	do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
+	do(vm *EVM, program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
 	// returns whether the program instruction halts the execution of the JIT
 	halts() bool
 	// Returns the current op code (debugging purposes)
@@ -58,9 +58,9 @@ func jump(mapping map[uint64]uint64, destinations map[uint64]struct{}, contract 
 	return mapping[to.Uint64()], nil
 }
 
-func (instr instruction) do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func (instr instruction) do(vm *EVM, program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// calculate the new memory size and gas price for the current executing opcode
-	newMemSize, cost, err := jitCalculateGasAndSize(env, contract, instr, env.Db(), memory, stack)
+	newMemSize, cost, err := jitCalculateGasAndSize(vm.gasTable, env, contract, instr, env.Db(), memory, stack)
 	if err != nil {
 		return nil, err
 	}

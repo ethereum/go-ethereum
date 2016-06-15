@@ -18,7 +18,6 @@ package vm
 
 import (
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,13 +57,13 @@ func New(env Environment, cfg Config) *EVM {
 }
 
 // Run loops and evaluates the contract's code with the given input data
-func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
+func (evm *EVM) Run(contract *Contract, input []byte) ([]byte, error) {
 	evm.env.SetDepth(evm.env.Depth() + 1)
 	defer evm.env.SetDepth(evm.env.Depth() - 1)
 
 	if contract.CodeAddr != nil {
 		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
-			return evm.RunPrecompiled(p, input, contract)
+			return RunPrecompiled(p, input, contract)
 		}
 	}
 
@@ -73,393 +72,75 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		return nil, nil
 	}
 
-	codehash := contract.CodeHash // codehash is used when doing jump dest caching
+	codehash := contract.CodeHash // codehash is used as an identifier for the programs
 	if codehash == (common.Hash{}) {
 		codehash = crypto.Keccak256Hash(contract.Code)
 	}
-	var program *Program
-	if false {
-		// JIT disabled due to JIT not being Homestead gas reprice ready.
+	// If the JIT is enabled check the status of the JIT program,
+	// if it doesn't exist compile a new program in a separate
+	// goroutine or wait for compilation to finish if the JIT is
+	// forced.
+	switch GetProgramStatus(codehash) {
+	case progReady:
+		return evm.runProgram(GetProgram(codehash), contract, input)
+	case progUnknown:
+		// Create and compile program
+		program := NewProgram(contract.Code)
+		CompileProgram(program)
 
-		// If the JIT is enabled check the status of the JIT program,
-		// if it doesn't exist compile a new program in a separate
-		// goroutine or wait for compilation to finish if the JIT is
-		// forced.
-		switch GetProgramStatus(codehash) {
-		case progReady:
-			return RunProgram(GetProgram(codehash), evm.env, contract, input)
-		case progUnknown:
-			if evm.cfg.ForceJit {
-				// Create and compile program
-				program = NewProgram(contract.Code)
-				perr := CompileProgram(program)
-				if perr == nil {
-					return RunProgram(program, evm.env, contract, input)
-				}
-				glog.V(logger.Info).Infoln("error compiling program", err)
-			} else {
-				// create and compile the program. Compilation
-				// is done in a separate goroutine
-				program = NewProgram(contract.Code)
-				go func() {
-					err := CompileProgram(program)
-					if err != nil {
-						glog.V(logger.Info).Infoln("error compiling program", err)
-						return
-					}
-				}()
-			}
-		}
+		return evm.runProgram(program, contract, input)
+	case progCompile:
+		// if the program is already compling wait for the compilation to finish
+		// and use the program instead of defaulting to the regular byte code vm.
+		<-WaitCompile(codehash)
+
+		return evm.runProgram(GetProgram(codehash), contract, input)
 	}
+	return nil, fmt.Errorf("Unexpected return using program %x", codehash)
+}
 
-	var (
-		caller     = contract.caller
-		code       = contract.Code
-		instrCount = 0
-
-		op      OpCode         // current opcode
-		mem     = NewMemory()  // bound memory
-		stack   = newstack()   // local stack
-		statedb = evm.env.Db() // current state
-		// For optimisation reason we're using uint64 as the program counter.
-		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
-		pc = uint64(0) // program counter
-
-		// jump evaluates and checks whether the given jump destination is a valid one
-		// if valid move the `pc` otherwise return an error.
-		jump = func(from uint64, to *big.Int) error {
-			if !contract.jumpdests.has(codehash, code, to) {
-				nop := contract.GetOp(to.Uint64())
-				return fmt.Errorf("invalid jump destination (%v) %v", nop, to)
-			}
-
-			pc = to.Uint64()
-
-			return nil
-		}
-
-		newMemSize *big.Int
-		cost       *big.Int
-	)
+func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) ([]byte, error) {
 	contract.Input = input
 
-	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
-	defer func() {
-		if err != nil && evm.cfg.Debug {
-			gas := new(big.Int).SetUint64(contract.gas64)
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, gas, cost, mem, stack, contract, evm.env.Depth(), err)
-		}
-	}()
+	var (
+		pc         uint64 = 0 //program.mapping[pcstart]
+		instrCount uint64 = 0
+		mem               = NewMemory()
+		stack             = newstack()
+		env               = evm.env
+	)
 
 	if glog.V(logger.Debug) {
-		glog.Infof("running byte VM %x\n", codehash[:4])
+		glog.Infof("running JIT program %x\n", program.Id[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("VM %x done. time: %v instrc: %v\n", codehash[:4], time.Since(tstart), instrCount)
+			glog.Infof("JIT program %x done. time: %v instrc: %v\n", program.Id[:4], time.Since(tstart), instrCount)
 		}()
 	}
 
-	for ; ; instrCount++ {
-		// Get the memory location of pc
-		op = contract.GetOp(pc)
-		//fmt.Printf("OP %d %v\n", op, op)
-		// calculate the new memory size and gas price for the current executing opcode
-		newMemSize, cost, err = calculateGasAndSize(evm.gasTable, evm.env, contract, caller, op, statedb, mem, stack)
+	homestead := env.ChainConfig().IsHomestead(env.BlockNumber())
+	for pc < uint64(len(program.instructions)) {
+		instrCount++
+
+		instr := program.instructions[pc]
+		if instr.Op() == DELEGATECALL && !homestead {
+			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.Op())
+		}
+
+		ret, err := instr.do(evm, program, &pc, env, contract, mem, stack)
 		if err != nil {
+			//gas := new(big.Int).SetUint64(contract.gas64)
+			//evm.cfg.Tracer.CaptureState(evm.env, pc, instr.Op(), gas, cost, mem, stack, contract, evm.env.Depth(), err)
+
 			return nil, err
 		}
 
-		// Use the calculated gas. When insufficient gas is present, use all gas and return an
-		// Out Of Gas error
-		if !contract.UseGas(cost.Uint64()) {
-			return nil, OutOfGasError
+		if instr.halts() {
+			return ret, nil
 		}
-
-		// Resize the memory calculated previously
-		mem.Resize(newMemSize.Uint64())
-		// Add a log message
-		if evm.cfg.Debug {
-			gas := new(big.Int).SetUint64(contract.gas64)
-			err = evm.cfg.Tracer.CaptureState(evm.env, pc, op, gas, cost, mem, stack, contract, evm.env.Depth(), nil)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if opPtr := evm.jumpTable[op]; opPtr.valid {
-			if opPtr.fn != nil {
-				opPtr.fn(instruction{}, &pc, evm.env, contract, mem, stack)
-			} else {
-				switch op {
-				case PC:
-					opPc(instruction{data: new(big.Int).SetUint64(pc)}, &pc, evm.env, contract, mem, stack)
-				case JUMP:
-					if err := jump(pc, stack.pop()); err != nil {
-						return nil, err
-					}
-
-					continue
-				case JUMPI:
-					pos, cond := stack.pop(), stack.pop()
-
-					if cond.Cmp(common.BigTrue) >= 0 {
-						if err := jump(pc, pos); err != nil {
-							return nil, err
-						}
-
-						continue
-					}
-				case RETURN:
-					offset, size := stack.pop(), stack.pop()
-					ret := mem.GetPtr(offset.Int64(), size.Int64())
-
-					return ret, nil
-				case SUICIDE:
-					opSuicide(instruction{}, nil, evm.env, contract, mem, stack)
-
-					fallthrough
-				case STOP: // Stop the contract
-					return nil, nil
-				}
-			}
-		} else {
-			return nil, fmt.Errorf("Invalid opcode %x", op)
-		}
-
-		pc++
-
-	}
-}
-
-// calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
-// the operation. This does not reduce gas or resizes the memory.
-func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Contract, caller ContractRef, op OpCode, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
-	var (
-		gas                 = new(big.Int)
-		newMemSize *big.Int = new(big.Int)
-	)
-	err := baseCheck(op, stack, gas)
-	if err != nil {
-		return nil, nil, err
 	}
 
-	// stack Check, memory resize & gas phase
-	switch op {
-	case SUICIDE:
-		// if suicide is not nil: homestead gas fork
-		if gasTable.CreateBySuicide != nil {
-			gas.Set(gasTable.Suicide)
-			var (
-				address = common.BigToAddress(stack.data[len(stack.data)-1])
-				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
-			)
+	contract.Input = nil
 
-			switch {
-			case eip158:
-				var (
-					empty          = env.Db().Empty(address) // checking exist avoids going through the trie on nonexistent
-					transfersValue = statedb.GetBalance(contract.Address()).BitLen() > 0
-				)
-				if empty && transfersValue {
-					gas.Add(gas, gasTable.CreateBySuicide)
-				}
-			default:
-				exist := env.Db().Exist(address)
-				if !exist {
-					gas.Add(gas, gasTable.CreateBySuicide)
-				}
-			}
-		}
-
-		if !statedb.HasSuicided(contract.Address()) {
-			statedb.AddRefund(params.SuicideRefundGas)
-		}
-	case EXTCODESIZE:
-		gas.Set(gasTable.ExtcodeSize)
-	case BALANCE:
-		gas.Set(gasTable.Balance)
-	case SLOAD:
-		gas.Set(gasTable.SLoad)
-	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
-		n := int(op - SWAP1 + 2)
-		err := stack.require(n)
-		if err != nil {
-			return nil, nil, err
-		}
-		gas.Set(GasFastestStep)
-	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
-		n := int(op - DUP1 + 1)
-		err := stack.require(n)
-		if err != nil {
-			return nil, nil, err
-		}
-		gas.Set(GasFastestStep)
-	case LOG0, LOG1, LOG2, LOG3, LOG4:
-		n := int(op - LOG0)
-		err := stack.require(n + 2)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
-
-		gas.Add(gas, params.LogGas)
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(n)), params.LogTopicGas))
-		gas.Add(gas, new(big.Int).Mul(mSize, params.LogDataGas))
-
-		newMemSize = calcMemSize(mStart, mSize)
-
-		quadMemGas(mem, newMemSize, gas)
-	case EXP:
-		expByteLen := int64((stack.data[stack.len()-2].BitLen() + 7) / 8)
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(expByteLen), gasTable.ExpByte))
-	case SSTORE:
-		err := stack.require(2)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		var g *big.Int
-		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
-		val := statedb.GetState(contract.Address(), common.BigToHash(x))
-
-		// This checks for 3 scenario's and calculates gas accordingly
-		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
-		// 2. From a non-zero value address to a zero-value address (DELETE)
-		// 3. From a non-zero to a non-zero                         (CHANGE)
-		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
-			// 0 => non 0
-			g = params.SstoreSetGas
-		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
-			statedb.AddRefund(params.SstoreRefundGas)
-
-			g = params.SstoreClearGas
-		} else {
-			// non 0 => non 0 (or 0 => 0)
-			g = params.SstoreResetGas
-		}
-		gas.Set(g)
-	case MLOAD:
-		newMemSize = calcMemSize(stack.peek(), u256(32))
-		quadMemGas(mem, newMemSize, gas)
-	case MSTORE8:
-		newMemSize = calcMemSize(stack.peek(), u256(1))
-		quadMemGas(mem, newMemSize, gas)
-	case MSTORE:
-		newMemSize = calcMemSize(stack.peek(), u256(32))
-		quadMemGas(mem, newMemSize, gas)
-	case RETURN:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
-		quadMemGas(mem, newMemSize, gas)
-	case SHA3:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
-
-		words := toWordSize(stack.data[stack.len()-2])
-		gas.Add(gas, words.Mul(words, params.Sha3WordGas))
-
-		quadMemGas(mem, newMemSize, gas)
-	case CALLDATACOPY:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
-
-		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, params.CopyGas))
-
-		quadMemGas(mem, newMemSize, gas)
-	case CODECOPY:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
-
-		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, params.CopyGas))
-
-		quadMemGas(mem, newMemSize, gas)
-	case EXTCODECOPY:
-		gas.Set(gasTable.ExtcodeCopy)
-
-		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
-
-		words := toWordSize(stack.data[stack.len()-4])
-		gas.Add(gas, words.Mul(words, params.CopyGas))
-
-		quadMemGas(mem, newMemSize, gas)
-	case CREATE:
-		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
-
-		quadMemGas(mem, newMemSize, gas)
-	case CALL, CALLCODE:
-		gas.Set(gasTable.Calls)
-
-		transfersValue := stack.data[len(stack.data)-3].BitLen() > 0
-		if op == CALL {
-			var (
-				address = common.BigToAddress(stack.data[len(stack.data)-2])
-				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
-			)
-
-			switch {
-			case eip158:
-				empty := env.Db().Empty(address)
-				if empty && transfersValue {
-					gas.Add(gas, params.CallNewAccountGas)
-				}
-			default:
-				exist := env.Db().Exist(address)
-				if !exist {
-					gas.Add(gas, params.CallNewAccountGas)
-				}
-			}
-		}
-		if transfersValue {
-			gas.Add(gas, params.CallValueTransferGas)
-		}
-		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
-		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
-
-		newMemSize = common.BigMax(x, y)
-
-		quadMemGas(mem, newMemSize, gas)
-
-		cg := new(big.Int).SetUint64(callGas(gasTable, contract.gas64, gas.Uint64(), stack.data[stack.len()-1].Uint64()))
-		// Replace the stack item with the new gas calculation. This means that
-		// either the original item is left on the stack or the item is replaced by:
-		// (availableGas - gas) * 63 / 64
-		// We replace the stack item so that it's available when the opCall instruction is
-		// called. This information is otherwise lost due to the dependency on *current*
-		// available gas.
-		stack.data[stack.len()-1] = cg
-		gas.Add(gas, cg)
-
-	case DELEGATECALL:
-		gas.Set(gasTable.Calls)
-
-		x := calcMemSize(stack.data[stack.len()-5], stack.data[stack.len()-6])
-		y := calcMemSize(stack.data[stack.len()-3], stack.data[stack.len()-4])
-
-		newMemSize = common.BigMax(x, y)
-
-		quadMemGas(mem, newMemSize, gas)
-
-		cg := new(big.Int).SetUint64(callGas(gasTable, contract.gas64, gas.Uint64(), stack.data[stack.len()-1].Uint64()))
-		// Replace the stack item with the new gas calculation. This means that
-		// either the original item is left on the stack or the item is replaced by:
-		// (availableGas - gas) * 63 / 64
-		// We replace the stack item so that it's available when the opCall instruction is
-		// called.
-		stack.data[stack.len()-1] = cg
-		gas.Add(gas, cg)
-
-	}
-
-	return newMemSize, gas, nil
-}
-
-// RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
-func (evm *EVM) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.Gas(len(input))
-	if contract.UseGas(gas.Uint64()) {
-		ret = p.Call(input)
-
-		return ret, nil
-	} else {
-		return nil, OutOfGasError
-	}
+	return nil, nil
 }

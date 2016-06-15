@@ -115,7 +115,7 @@ func makePushSeg(instrs []instruction) (pushSeg, int) {
 // makeStaticJumpSeg creates a new static jump segment from a predefined
 // destination (PUSH, JUMP).
 func makeStaticJumpSeg(to *big.Int, program *Program) jumpSeg {
-	gas := _baseCheck64[PUSH1].gas + _baseCheck64[JUMP].gas
+	gas := _baseCheck[PUSH1].gas + _baseCheck[JUMP].gas
 
 	contract := &Contract{Code: program.code}
 	pos, err := jump(program.mapping, program.destinations, contract, to)
