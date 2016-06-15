@@ -228,15 +228,12 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 			self.cursors[po] = cursor
 			self.delete(po, purge)
 			if found {
-				return node, true, proxLimit
+				return node, need, proxLimit
 			}
 		} // ROUND
-		if need {
-			return nil, true, proxLimit
-		}
 	} // ROUNDS
 
-	return nil, false, proxLimit
+	return nil, need, proxLimit
 }
 
 // deletes the noderecords of a kaddb row corresponding to the indexes

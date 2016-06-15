@@ -131,7 +131,8 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)
-			} else if need {
+			}
+			if need {
 				// a random peer is taken from the table
 				peers := self.kad.FindClosest(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)
 				if len(peers) > 0 {
@@ -342,7 +343,7 @@ func (self *Hive) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Debug).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %x", len(addrs), req.from, req.Id, req.Key.Log())
+			glog.V(logger.Debug).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %v", len(addrs), req.from, req.Id, req.Key.Log())
 
 			peersData := &peersMsgData{
 				Peers: addrs,
