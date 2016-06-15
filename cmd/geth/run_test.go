@@ -58,7 +58,10 @@ type testgeth struct {
 func init() {
 	// Run the app if we're the child process for runGeth.
 	if os.Getenv("GETH_TEST_CHILD") != "" {
-		app.RunAndExitOnError()
+		if err := app.Run(os.Args); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 }

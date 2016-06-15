@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -44,13 +43,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rlp"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
 	clientIdentifier = "Geth"   // Client identifier to advertise over the network
 	versionMajor     = 1        // Major version component of the current release
 	versionMinor     = 4        // Minor version component of the current release
-	versionPatch     = 6        // Patch version component of the current release
+	versionPatch     = 7        // Patch version component of the current release
 	versionMeta      = "stable" // Version metadata to append to the version string
 
 	versionOracle = "0xfa7b9770ca4cb04296cac84f37736d4041251cdf" // Ethereum address of the Geth release oracle
@@ -271,15 +271,17 @@ func makeDefaultExtra() []byte {
 // geth is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func geth(ctx *cli.Context) {
+func geth(ctx *cli.Context) error {
 	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 	node.Wait()
+
+	return nil
 }
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) {
+func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
@@ -300,6 +302,7 @@ func initGenesis(ctx *cli.Context) {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	return nil
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -331,7 +334,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 }
 
-func makedag(ctx *cli.Context) {
+func makedag(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
@@ -358,13 +361,15 @@ func makedag(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func gpuinfo(ctx *cli.Context) {
+func gpuinfo(ctx *cli.Context) error {
 	eth.PrintOpenCLDevices()
+	return nil
 }
 
-func gpubench(ctx *cli.Context) {
+func gpubench(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
@@ -381,9 +386,10 @@ func gpubench(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func version(c *cli.Context) {
+func version(c *cli.Context) error {
 	fmt.Println(clientIdentifier)
 	fmt.Println("Version:", verString)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
@@ -392,4 +398,6 @@ func version(c *cli.Context) {
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
+	return nil
 }

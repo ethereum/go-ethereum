@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // NewRemoteRPCClient returns a RPC client which connects to a running geth instance.
