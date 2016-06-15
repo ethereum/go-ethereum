@@ -168,7 +168,7 @@ type Env struct {
 
 	vmTest bool
 
-	evm *vm.EVM
+	evm vm.VirtualMachine
 }
 
 func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
