@@ -79,6 +79,12 @@ type jsonNotification struct {
 	Params  jsonSubscription `json:"params"`
 }
 
+// JSON-RPC pending request status
+type jsonPendingStatus struct {
+	Id     interface{} `json:"id"`
+	Status string      `json:"status"`
+}
+
 // jsonCodec reads and writes JSON-RPC messages to the underlying connection. It
 // also has support for parsing arguments and serializing (result) objects.
 type jsonCodec struct {
@@ -129,20 +135,21 @@ func (c *jsonCodec) ReadRequestHeaders() ([]rpcRequest, bool, RPCError) {
 	return parseRequest(incomingMsg)
 }
 
-// checkReqId returns an error when the given reqId isn't valid for RPC method calls.
+// parseReqId converts reqId to the appropriate format or returns an error
+// when the given reqId isn't valid for RPC method calls.
 // valid id's are strings, numbers or null
-func checkReqId(reqId json.RawMessage) error {
+func parseReqId(reqId json.RawMessage) (interface{}, error) {
 	if len(reqId) == 0 {
-		return fmt.Errorf("missing request id")
+		return nil, fmt.Errorf("missing request id")
 	}
-	if _, err := strconv.ParseFloat(string(reqId), 64); err == nil {
-		return nil
+	if f, err := strconv.ParseFloat(string(reqId), 64); err == nil {
+		return f, nil
 	}
 	var str string
 	if err := json.Unmarshal(reqId, &str); err == nil {
-		return nil
+		return str, nil
 	}
-	return fmt.Errorf("invalid request id")
+	return nil, fmt.Errorf("invalid request id")
 }
 
 // parseRequest will parse a single request from the given RawMessage. It will return
@@ -154,13 +161,14 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCError) {
 		return nil, false, &invalidMessageError{err.Error()}
 	}
 
-	if err := checkReqId(in.Id); err != nil {
+	id, err := parseReqId(in.Id)
+	if err != nil {
 		return nil, false, &invalidMessageError{err.Error()}
 	}
 
 	// subscribe are special, they will always use `subscribeMethod` as first param in the payload
 	if in.Method == subscribeMethod {
-		reqs := []rpcRequest{rpcRequest{id: &in.Id, isPubSub: true}}
+		reqs := []rpcRequest{rpcRequest{id: id, isPubSub: true}}
 		if len(in.Payload) > 0 {
 			// first param must be subscription name
 			var subscribeMethod [1]string
@@ -178,7 +186,7 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCError) {
 	}
 
 	if in.Method == unsubscribeMethod {
-		return []rpcRequest{rpcRequest{id: &in.Id, isPubSub: true,
+		return []rpcRequest{rpcRequest{id: id, isPubSub: true,
 			method: unsubscribeMethod, params: in.Payload}}, false, nil
 	}
 
@@ -189,10 +197,10 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCError) {
 	}
 
 	if len(in.Payload) == 0 {
-		return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: &in.Id}}, false, nil
+		return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: id}}, false, nil
 	}
 
-	return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: &in.Id, params: in.Payload}}, false, nil
+	return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: id, params: in.Payload}}, false, nil
 }
 
 // parseBatchRequest will parse a batch request into a collection of requests from the given RawMessage, an indication
@@ -205,11 +213,10 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCErro
 
 	requests := make([]rpcRequest, len(in))
 	for i, r := range in {
-		if err := checkReqId(r.Id); err != nil {
+		id, err := parseReqId(r.Id)
+		if err != nil {
 			return nil, false, &invalidMessageError{err.Error()}
 		}
-
-		id := &in[i].Id
 
 		// subscribe are special, they will always use `subscribeMethod` as first param in the payload
 		if r.Method == subscribeMethod {
