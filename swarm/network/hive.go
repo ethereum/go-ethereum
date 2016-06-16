@@ -198,9 +198,18 @@ func (self *Hive) Stop() error {
 }
 
 // called at the end of a successful protocol handshake
-func (self *Hive) addPeer(p *peer) {
+func (self *Hive) addPeer(p *peer) error {
+	defer func() {
+		select {
+		case self.more <- true:
+		default:
+		}
+	}()
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: hi new bee %v", p)
-	self.kad.On(p, loadSync)
+	err := self.kad.On(p, loadSync)
+	if err != nil {
+		return err
+	}
 	// self lookup (can be encoded as nil/zero key since peers addr known) + no id ()
 	// the most common way of saying hi in bzz is initiation of gossip
 	// let me know about anyone new from my hood , here is the storageradius
@@ -208,10 +217,8 @@ func (self *Hive) addPeer(p *peer) {
 	// we do not record as request or forward it, just reply with peers
 	p.retrieve(&retrieveRequestMsgData{})
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: 'whatsup wheresdaparty' sent to %v", p)
-	select {
-	case self.more <- true:
-	default:
-	}
+
+	return nil
 }
 
 // called after peer disconnected

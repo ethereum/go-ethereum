@@ -136,13 +136,14 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	}
 	if replaced != nil {
 		glog.V(logger.Debug).Infof("[KΛÐ]: node %v replaced by %v ", replaced, node)
-		return
+		replaced.Drop()
+		return nil
 	}
 	// new node added
 	glog.V(logger.Info).Infof("[KΛÐ]: add node %v to table", node)
 	self.count++
 	self.setProxLimit(index, false)
-	return
+	return nil
 }
 
 //  is the entrypoint called when a node is taken offline
@@ -161,7 +162,8 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	}
 
 	if !found {
-		return
+		// gracefully return without error if peer already offline
+		return nil
 	}
 	glog.V(logger.Info).Infof("[KΛÐ]: remove node %v from table", node)
 
@@ -215,8 +217,6 @@ func (self *Kademlia) setProxLimit(r int, off bool) {
 		self.proxLimit++
 		glog.V(logger.Detail).Infof("[KΛÐ]: proxbin contraction (size: %v, limit: %v, bin: %v, off: %v)", self.proxSize, self.proxLimit, r, off)
 	}
-	// glog.V(logger.Detail).Infof("%v", self)
-
 }
 
 /*
