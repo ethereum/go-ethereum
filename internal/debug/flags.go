@@ -22,9 +22,9 @@ import (
 	_ "net/http/pprof"
 	"runtime"
 
-	"github.com/codegangsta/cli"
 	"github.com/expanse-project/go-expanse/logger"
 	"github.com/expanse-project/go-expanse/logger/glog"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (

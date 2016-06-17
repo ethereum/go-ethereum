@@ -21,9 +21,9 @@ package main
 import (
 	"io"
 
-	"github.com/codegangsta/cli"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/internal/debug"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // AppHelpTemplate is the test template for the default, global app help topic.

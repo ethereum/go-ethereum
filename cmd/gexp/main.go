@@ -28,14 +28,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codegangsta/cli"
-
 	"github.com/expanse-project/ethash"
 	"github.com/expanse-project/go-expanse/cmd/utils"
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/console"
 	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/internal/debug"
 	"github.com/expanse-project/go-expanse/logger"
@@ -45,13 +43,14 @@ import (
 	"github.com/expanse-project/go-expanse/params"
 	"github.com/expanse-project/go-expanse/release"
 	"github.com/expanse-project/go-expanse/rlp"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
 	clientIdentifier = "Gexp"   // Client identifier to advertise over the network
 	versionMajor     = 1        // Major version component of the current release
 	versionMinor     = 4        // Minor version component of the current release
-	versionPatch     = 6        // Patch version component of the current release
+	versionPatch     = 7        // Patch version component of the current release
 	versionMeta      = "stable" // Version metadata to append to the version string
 	versionOracle = "0x926d69cc3bbf81d52cba6886d788df007a15a3cd" // Expanse address of the Gexp release oracle
 )
@@ -271,15 +270,17 @@ func makeDefaultExtra() []byte {
 // gexp is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func gexp(ctx *cli.Context) {
+func gexp(ctx *cli.Context) error {
 	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
 	startNode(ctx, node)
 	node.Wait()
+
+	return nil
 }
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) {
+func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
@@ -300,6 +301,7 @@ func initGenesis(ctx *cli.Context) {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	return nil
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -331,7 +333,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 }
 
-func makedag(ctx *cli.Context) {
+func makedag(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: gexp makedag <block number> <outputdir>`)
@@ -358,13 +360,15 @@ func makedag(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func gpuinfo(ctx *cli.Context) {
+func gpuinfo(ctx *cli.Context) error {
 	exp.PrintOpenCLDevices()
+	return nil
 }
 
-func gpubench(ctx *cli.Context) {
+func gpubench(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: gexp gpubench <gpu number>`)
@@ -381,9 +385,10 @@ func gpubench(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func version(c *cli.Context) {
+func version(c *cli.Context) error {
 	fmt.Println(clientIdentifier)
 	fmt.Println("Version:", verString)
 	fmt.Println("Protocol Versions:", exp.ProtocolVersions)
@@ -392,4 +397,6 @@ func version(c *cli.Context) {
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
+	return nil
 }

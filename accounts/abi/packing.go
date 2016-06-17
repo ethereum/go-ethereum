@@ -25,7 +25,7 @@ import (
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation
 // bytes slice
 func packBytesSlice(bytes []byte, l int) []byte {
-	len := packNum(reflect.ValueOf(l), UintTy)
+	len := packNum(reflect.ValueOf(l))
 	return append(len, common.RightPadBytes(bytes, (l+31)/32*32)...)
 }
 
@@ -34,7 +34,7 @@ func packBytesSlice(bytes []byte, l int) []byte {
 func packElement(t Type, reflectValue reflect.Value) []byte {
 	switch t.T {
 	case IntTy, UintTy:
-		return packNum(reflectValue, t.T)
+		return packNum(reflectValue)
 	case StringTy:
 		return packBytesSlice([]byte(reflectValue.String()), reflectValue.Len())
 	case AddressTy:

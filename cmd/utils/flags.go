@@ -37,7 +37,7 @@ import (
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/exp"
+	"github.com/expanse-project/go-expanse/eth"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger"
@@ -51,6 +51,7 @@ import (
 	"github.com/expanse-project/go-expanse/release"
 	"github.com/expanse-project/go-expanse/rpc"
 	"github.com/expanse-project/go-expanse/whisper"
+	"gopkg.in/urfave/cli.v1"
 )
 
 func init() {
