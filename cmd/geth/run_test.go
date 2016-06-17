@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"regexp"
 	"sync"
 	"testing"
+	"text/template"
 	"time"
 )
 
@@ -45,6 +45,7 @@ type testgeth struct {
 	// template variables for expect
 	Datadir    string
 	Executable string
+	Etherbase  string
 	Func       template.FuncMap
 
 	removeDatadir bool
@@ -57,7 +58,10 @@ type testgeth struct {
 func init() {
 	// Run the app if we're the child process for runGeth.
 	if os.Getenv("GETH_TEST_CHILD") != "" {
-		app.RunAndExitOnError()
+		if err := app.Run(os.Args); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 }
@@ -67,11 +71,15 @@ func init() {
 func runGeth(t *testing.T, args ...string) *testgeth {
 	tt := &testgeth{T: t, Executable: os.Args[0]}
 	for i, arg := range args {
-		if arg == "-datadir" || arg == "--datadir" {
+		switch {
+		case arg == "-datadir" || arg == "--datadir":
 			if i < len(args)-1 {
 				tt.Datadir = args[i+1]
 			}
-			break
+		case arg == "-etherbase" || arg == "--etherbase":
+			if i < len(args)-1 {
+				tt.Etherbase = args[i+1]
+			}
 		}
 	}
 	if tt.Datadir == "" {

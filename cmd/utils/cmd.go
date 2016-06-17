@@ -120,7 +120,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 	}
 
-	glog.Infoln("Importing blockchain", fn)
+	glog.Infoln("Importing blockchain ", fn)
 	fh, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -182,7 +182,7 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 }
 
 func ExportChain(blockchain *core.BlockChain, fn string) error {
-	glog.Infoln("Exporting blockchain to", fn)
+	glog.Infoln("Exporting blockchain to ", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -191,12 +191,12 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	if err := blockchain.Export(fh); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	glog.Infoln("Exported blockchain to ", fn)
 	return nil
 }
 
 func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
-	glog.Infoln("Exporting blockchain to", fn)
+	glog.Infoln("Exporting blockchain to ", fn)
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
@@ -206,6 +206,6 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	if err := blockchain.ExportN(fh, first, last); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	glog.Infoln("Exported blockchain to ", fn)
 	return nil
 }

@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var (
@@ -69,7 +70,7 @@ either new or import). Without it you are not able to unlock your account.
 
 Note that exporting your key in unencrypted format is NOT supported.
 
-Keys are stored under <DATADIR>/keys.
+Keys are stored under <DATADIR>/keystore.
 It is safe to transfer the entire directory or the individual keys therein
 between ethereum nodes by simply copying.
 Make sure you backup your keys regularly.
@@ -166,11 +167,12 @@ nodes.
 	}
 )
 
-func accountList(ctx *cli.Context) {
+func accountList(ctx *cli.Context) error {
 	accman := utils.MakeAccountManager(ctx)
 	for i, acct := range accman.Accounts() {
 		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
 	}
+	return nil
 }
 
 // tries unlocking the specified account a few times.
@@ -215,12 +217,12 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
-	password, err := utils.Stdin.PasswordPrompt("Passphrase: ")
+	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
 		utils.Fatalf("Failed to read passphrase: %v", err)
 	}
 	if confirmation {
-		confirm, err := utils.Stdin.PasswordPrompt("Repeat passphrase: ")
+		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
 		if err != nil {
 			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
 		}
@@ -258,7 +260,7 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 }
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
-func accountCreate(ctx *cli.Context) {
+func accountCreate(ctx *cli.Context) error {
 	accman := utils.MakeAccountManager(ctx)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
@@ -267,11 +269,12 @@ func accountCreate(ctx *cli.Context) {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
 	fmt.Printf("Address: {%x}\n", account.Address)
+	return nil
 }
 
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
-func accountUpdate(ctx *cli.Context) {
+func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
@@ -282,9 +285,10 @@ func accountUpdate(ctx *cli.Context) {
 	if err := accman.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
+	return nil
 }
 
-func importWallet(ctx *cli.Context) {
+func importWallet(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
@@ -302,9 +306,10 @@ func importWallet(ctx *cli.Context) {
 		utils.Fatalf("%v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
+	return nil
 }
 
-func accountImport(ctx *cli.Context) {
+func accountImport(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
@@ -320,4 +325,5 @@ func accountImport(ctx *cli.Context) {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
+	return nil
 }
