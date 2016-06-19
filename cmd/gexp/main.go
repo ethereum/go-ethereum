@@ -33,7 +33,7 @@ import (
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/console"
 	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/eth"
+	"github.com/expanse-project/go-expanse/exp"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/internal/debug"
 	"github.com/expanse-project/go-expanse/logger"
