@@ -133,7 +133,7 @@ type FullNodeService struct {
 	httpclient     *httpclient.HTTPClient
 	accountManager *accounts.Manager
 
-	apiBackend *EthApiBackend
+	ApiBackend *EthApiBackend
 
 	miner        *miner.Miner
 	Mining       bool
@@ -251,7 +251,7 @@ func New(ctx *node.ServiceContext, config *Config) (*FullNodeService, error) {
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 	gpo := gasprice.NewGasPriceOracle(eth.blockchain, chainDb, eth.eventMux, gpoParams)
-	eth.apiBackend = &EthApiBackend{eth, gpo}
+	eth.ApiBackend = &EthApiBackend{eth, gpo}
 
 	return eth, nil
 }
@@ -318,7 +318,7 @@ func CreatePoW(config *Config) (*ethash.Ethash, error) {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *FullNodeService) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.apiBackend, &s.solcPath, &s.solc), []rpc.API{
+	return append(ethapi.GetAPIs(s.ApiBackend, &s.solcPath, &s.solc), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",

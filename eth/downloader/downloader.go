@@ -1648,10 +1648,23 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			for i, header := range rollback {
 				hashes[i] = header.Hash()
 			}
-			lastHeader, lastFastBlock, lastBlock := d.headHeader().Number, d.headFastBlock().Number(), d.headBlock().Number()
+			lastHeader, lastFastBlock, lastBlock := d.headHeader().Number, common.Big0, common.Big0
+			if d.headFastBlock != nil {
+				lastFastBlock = d.headFastBlock().Number()
+			}
+			if d.headBlock != nil {
+				lastBlock = d.headBlock().Number()
+			}
 			d.rollback(hashes)
+			curFastBlock, curBlock := common.Big0, common.Big0
+			if d.headFastBlock != nil {
+				curFastBlock = d.headFastBlock().Number()
+			}
+			if d.headBlock != nil {
+				curBlock = d.headBlock().Number()
+			}
 			glog.V(logger.Warn).Infof("Rolled back %d headers (LH: %d->%d, FB: %d->%d, LB: %d->%d)",
-				len(hashes), lastHeader, d.headHeader().Number, lastFastBlock, d.headFastBlock().Number(), lastBlock, d.headBlock().Number())
+				len(hashes), lastHeader, d.headHeader().Number, lastFastBlock, curFastBlock, lastBlock, curBlock)
 
 			// If we're already past the pivot point, this could be an attack, thread carefully
 			if rollback[len(rollback)-1].Number.Uint64() > pivot {

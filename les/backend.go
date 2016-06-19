@@ -55,7 +55,7 @@ type LightNodeService struct {
 	chainDb ethdb.Database // Block chain database
 	dappDb  ethdb.Database // Dapp database
 
-	apiBackend *LesApiBackend
+	ApiBackend *LesApiBackend
 
 	eventMux       *event.TypeMux
 	pow            *ethash.Ethash
@@ -123,15 +123,15 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightNodeService, error
 	}
 	odr.removePeer = eth.protocolManager.removePeer
 
-	eth.apiBackend = &LesApiBackend{eth, nil}
-	eth.apiBackend.gpo = gasprice.NewLightPriceOracle(eth.apiBackend)
+	eth.ApiBackend = &LesApiBackend{eth, nil}
+	eth.ApiBackend.gpo = gasprice.NewLightPriceOracle(eth.ApiBackend)
 	return eth, nil
 }
 
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *LightNodeService) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.apiBackend, &s.solcPath, &s.solc), []rpc.API{
+	return append(ethapi.GetAPIs(s.ApiBackend, &s.solcPath, &s.solc), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
