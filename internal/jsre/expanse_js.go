@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package jsre
 
@@ -1271,7 +1271,7 @@ SolidityParam.prototype.withOffset = function (offset) {
 };
 
 /**
- * This method should be used to combine solidity params togexper
+ * This method should be used to combine solidity params together
  * eg. when appending an array
  *
  * @method combine
@@ -1815,27 +1815,27 @@ var ETH_UNITS = [
     'Gwei',
     'szabo',
     'finney',
-    'femtoexpanse',
-    'picoexpanse',
-    'nanoexpanse',
-    'microexpanse',
-    'milliexpanse',
+    'femtoether',
+    'picoether',
+    'nanoether',
+    'microether',
+    'milliether',
     'nano',
     'micro',
     'milli',
-    'expanse',
+    'ether',
     'grand',
-    'Mexpanse',
-    'Gexpanse',
-    'Texpanse',
-    'Pexpanse',
-    'Eexpanse',
-    'Zexpanse',
-    'Yexpanse',
-    'Nexpanse',
-    'Dexpanse',
-    'Vexpanse',
-    'Uexpanse'
+    'Mether',
+    'Gether',
+    'Tether',
+    'Pether',
+    'Eether',
+    'Zether',
+    'Yether',
+    'Nether',
+    'Dether',
+    'Vether',
+    'Uether'
 ];
 
 module.exports = {
@@ -1891,9 +1891,9 @@ module.exports = function (value, options) {
 
 },{"crypto-js":58,"crypto-js/sha3":79}],20:[function(require,module,exports){
 /*
-    This file is part of expanse.js.
+    This file is part of web3.js.
 
-    expanse.js is free software: you can redistribute it and/or modify
+    web3.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
@@ -1934,33 +1934,30 @@ var unitMap = {
     'noether':      '0',
     'wei':          '1',
     'kwei':         '1000',
-    'ada':          '1000',
-    'femtoexpanse':   '1000',
+    'Kwei':         '1000',
+    'babbage':      '1000',
+    'femtoether':   '1000',
     'mwei':         '1000000',
-    'babbage':      '1000000',
-    'picoexpanse':    '1000000',
+    'Mwei':         '1000000',
+    'lovelace':     '1000000',
+    'picoether':    '1000000',
     'gwei':         '1000000000',
     'Gwei':         '1000000000',
     'shannon':      '1000000000',
-    'nanoexpanse':    '1000000000',
+    'nanoether':    '1000000000',
     'nano':         '1000000000',
     'szabo':        '1000000000000',
-    'microexpanse':   '1000000000000',
+    'microether':   '1000000000000',
     'micro':        '1000000000000',
     'finney':       '1000000000000000',
-    'milliexpanse':    '1000000000000000',
+    'milliether':    '1000000000000000',
     'milli':         '1000000000000000',
-    'expanse':        '1000000000000000000',
-    'kexpanse':       '1000000000000000000000',
+    'ether':        '1000000000000000000',
+    'kether':       '1000000000000000000000',
     'grand':        '1000000000000000000000',
-    'einstein':     '1000000000000000000000',
-    'elora':        '1000000000000000000000',
-    'mexpanse':       '1000000000000000000000000',
-    'aiden':        '1000000000000000000000000',
-    'gexpanse':       '1000000000000000000000000000',
-    'heather':      '1000000000000000000000000000',
-    'texpanse':       '1000000000000000000000000000000',
-    'franko':       '1000000000000000000000000000000'
+    'mether':       '1000000000000000000000000',
+    'gether':       '1000000000000000000000000000',
+    'tether':       '1000000000000000000000000000000'
 };
 
 /**
@@ -2174,12 +2171,12 @@ var toHex = function (val) {
  * Returns value of unit in Wei
  *
  * @method getValueOfUnit
- * @param {String} unit the unit to convert to, default expanse
+ * @param {String} unit the unit to convert to, default ether
  * @returns {BigNumber} value of the unit (in Wei)
  * @throws error if the unit is not correct:w
  */
 var getValueOfUnit = function (unit) {
-    unit = unit ? unit.toLowerCase() : 'expanse';
+    unit = unit ? unit.toLowerCase() : 'ether';
     var unitValue = unitMap[unit];
     if (unitValue === undefined) {
         throw new Error('This unit doesn\'t exists, please use the one of the following units' + JSON.stringify(unitMap, null, 2));
@@ -2188,24 +2185,24 @@ var getValueOfUnit = function (unit) {
 };
 
 /**
- * Takes a number of wei and converts it to any other expanse unit.
+ * Takes a number of wei and converts it to any other ether unit.
  *
  * Possible units are:
  *   SI Short   SI Full        Effigy       Other
- * - kwei       femtoexpanse     ada
- * - mwei       picoexpanse      babbage
- * - gwei       nanoexpanse      shannon      nano
- * - --         microexpanse     szabo        micro
- * - --         milliexpanse     finney       milli
- * - expanse      --             --
- * - kexpanse                    einstein     grand
- * - mexpanse
- * - gexpanse
- * - texpanse
+ * - kwei       femtoether     babbage
+ * - mwei       picoether      lovelace
+ * - gwei       nanoether      shannon      nano
+ * - --         microether     szabo        micro
+ * - --         milliether     finney       milli
+ * - ether      --             --
+ * - kether                    --           grand
+ * - mether
+ * - gether
+ * - tether
  *
  * @method fromWei
  * @param {Number|String} number can be a number, number string or a HEX of a decimal
- * @param {String} unit the unit to convert to, default expanse
+ * @param {String} unit the unit to convert to, default ether
  * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
 */
 var fromWei = function(number, unit) {
@@ -2219,20 +2216,21 @@ var fromWei = function(number, unit) {
  *
  * Possible units are:
  *   SI Short   SI Full        Effigy       Other
- * - kwei       femtoexpanse     ada
- * - mwei       picoexpanse      babbage
- * - gwei       nanoexpanse      shannon      nano
- * - --         microexpanse     szabo        micro
- * - --         milliexpanse     finney       milli
- * - expanse      --             --
- * - kexpanse                    einstein     grand
- * - mexpanse
- * - gexpanse
- * - texpanse
+ * - kwei       femtoether     babbage
+ * - mwei       picoether      lovelace
+ * - gwei       nanoether      shannon      nano
+ * - --         microether     szabo        micro
+ * - --         microether     szabo        micro
+ * - --         milliether     finney       milli
+ * - ether      --             --
+ * - kether                    --           grand
+ * - mether
+ * - gether
+ * - tether
  *
  * @method toWei
  * @param {Number|String|BigNumber} number can be a number, number string or a HEX of a decimal
- * @param {String} unit the unit to convert from, default expanse
+ * @param {String} unit the unit to convert from, default ether
  * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
 */
 var toWei = function(number, unit) {
@@ -2540,6 +2538,8 @@ var Property = require('./web3/property');
 var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 
+
+
 function Web3 (provider) {
     this._requestManager = new RequestManager(provider);
     this.currentProvider = provider;
@@ -2594,6 +2594,7 @@ Web3.prototype.isChecksumAddress = utils.isChecksumAddress;
 Web3.prototype.toChecksumAddress = utils.toChecksumAddress;
 Web3.prototype.isIBAN = utils.isIBAN;
 
+
 Web3.prototype.sha3 = function(string, options) {
     return '0x' + sha3(string, options);
 };
@@ -2618,7 +2619,7 @@ var properties = function () {
             inputFormatter: utils.toDecimal
         }),
         new Property({
-            name: 'version.expanse',
+            name: 'version.ethereum',
             getter: 'exp_protocolVersion',
             inputFormatter: utils.toDecimal
         }),
@@ -2639,6 +2640,7 @@ Web3.prototype.createBatch = function () {
 };
 
 module.exports = Web3;
+
 
 },{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/exp":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/property":44,"./web3/requestmanager":45,"./web3/settings":46}],23:[function(require,module,exports){
 /*
@@ -2719,7 +2721,7 @@ AllSolidityEvents.prototype.execute = function (options, callback) {
 
     var o = this.encode(options);
     var formatter = this.decode.bind(this);
-    return new Filter(this._requestManager, o, watches.exp(), formatter, callback);
+    return new Filter(this._requestManager, o, watches.eth(), formatter, callback);
 };
 
 AllSolidityEvents.prototype.attachToContract = function (contract) {
@@ -2745,7 +2747,6 @@ module.exports = AllSolidityEvents;
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
@@ -3023,6 +3024,7 @@ var ContractFactory = function (exp, abi) {
 
         return contract;
     };
+
     this.new.getData = this.getData.bind(this);
 };
 
@@ -3036,6 +3038,8 @@ var ContractFactory = function (exp, abi) {
 //var contract = function (abi) {
     //return new ContractFactory(abi);
 //};
+
+
 
 /**
  * Should be called to get access to existing contract on a blockchain
@@ -3193,7 +3197,7 @@ SolidityEvent.prototype.types = function (indexed) {
 };
 
 /**
- * Exp methods and properties
+ * Should be used to get event display name
  *
  * @method displayName
  * @return {String} event display name
@@ -3228,7 +3232,7 @@ SolidityEvent.prototype.signature = function () {
  * @method encode
  * @param {Object} indexed
  * @param {Object} options
- * @return {Object} everything combined togexper and encoded
+ * @return {Object} everything combined together and encoded
  */
 SolidityEvent.prototype.encode = function (indexed, options) {
     indexed = indexed || {};
@@ -3325,7 +3329,7 @@ SolidityEvent.prototype.execute = function (indexed, options, callback) {
 
     var o = this.encode(indexed, options);
     var formatter = this.decode.bind(this);
-    return new Filter(this._requestManager, o, watches.exp(), formatter, callback);
+    return new Filter(this._requestManager, o, watches.eth(), formatter, callback);
 };
 
 /**
@@ -3344,6 +3348,7 @@ SolidityEvent.prototype.attachToContract = function (contract) {
 };
 
 module.exports = SolidityEvent;
+
 
 },{"../solidity/coder":7,"../utils/sha3":19,"../utils/utils":20,"./filter":29,"./formatters":30,"./methods/watches":42}],28:[function(require,module,exports){
 var formatters = require('./formatters');
@@ -4231,7 +4236,7 @@ if (typeof Meteor !== 'undefined' && Meteor.isServer) { // jshint ignore: line
  * HttpProvider should be used to send rpc calls over http
  */
 var HttpProvider = function (host) {
-    this.host = host || 'http://localhost:9656';
+    this.host = host || 'http://localhost:8545';
 };
 
 /**
@@ -4418,7 +4423,7 @@ var Iban = function (iban) {
 };
 
 /**
- * This method should be used to create iban object from expanse address
+ * This method should be used to create iban object from ethereum address
  *
  * @method fromAddress
  * @param {String} address
@@ -4457,7 +4462,7 @@ Iban.fromBban = function (bban) {
  * @return {Iban} the IBAN object
  */
 Iban.createIndirect = function (options) {
-    return Iban.fromBban('EXP' + options.institution + options.identifier);
+    return Iban.fromBban('ETH' + options.institution + options.identifier);
 };
 
 /**
@@ -4479,7 +4484,6 @@ Iban.isValid = function (iban) {
  * @returns {Boolean} true if it is, otherwise false
  */
 Iban.prototype.isValid = function () {
-
     return /^XE[0-9]{2}(ETH[0-9A-Z]{13}|[0-9A-Z]{30,31})$/.test(this._iban) &&
         mod9710(iso13616Prepare(this._iban)) === 1;
 };
@@ -4562,7 +4566,6 @@ module.exports = Iban;
 
 },{"bignumber.js":"bignumber.js"}],34:[function(require,module,exports){
 /*
-
     This file is part of web3.js.
 
     web3.js is free software: you can redistribute it and/or modify
@@ -4570,14 +4573,12 @@ module.exports = Iban;
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-
     web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file ipcprovider.js
@@ -4780,13 +4781,14 @@ module.exports = IpcProvider;
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
+
     web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-    along with expanse.js.  If not, see <http://www.gnu.org/licenses/>.
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file jsonrpc.js
  * @authors:
@@ -5108,16 +5110,16 @@ module.exports = DB;
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-
+    web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @file exp.js
+ * @file eth.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Fabian Vogelsteller <fabian@ethdev.com>
  * @date 2015
@@ -5426,7 +5428,7 @@ Exp.prototype.contract = function (abi) {
 };
 
 Exp.prototype.filter = function (fil, callback) {
-    return new Filter(this._requestManager, fil, watches.exp(), formatters.outputLogFormatter, callback);
+    return new Filter(this._requestManager, fil, watches.eth(), formatters.outputLogFormatter, callback);
 };
 
 Exp.prototype.namereg = function () {
@@ -5446,17 +5448,22 @@ module.exports = Exp;
 
 },{"../../utils/config":18,"../../utils/utils":20,"../contract":25,"../filter":29,"../formatters":30,"../iban":33,"../method":36,"../namereg":43,"../property":44,"../syncing":47,"../transfer":48,"./watches":42}],39:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
+    web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file exp.js
+/** @file eth.js
  * @authors:
  *   Marek Kotewicz <marek@ethdev.com>
  * @date 2015
@@ -5476,7 +5483,7 @@ var Net = function (web3) {
     });
 };
 
-/// @returns an array of objects describing web3.exp api properties
+/// @returns an array of objects describing web3.eth api properties
 var properties = function () {
     return [
         new Property({
@@ -5511,7 +5518,7 @@ module.exports = Net;
     along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
- * @file exp.js
+ * @file eth.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Fabian Vogelsteller <fabian@ethdev.com>
  * @date 2015
@@ -5582,18 +5589,20 @@ module.exports = Personal;
 
 },{"../formatters":30,"../method":36,"../property":44}],41:[function(require,module,exports){
 /*
+    This file is part of web3.js.
 
+    web3.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-
+    web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file shh.js
  * @authors:
@@ -5668,17 +5677,20 @@ module.exports = Shh;
 
 },{"../filter":29,"../formatters":30,"../method":36,"./watches":42}],42:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-
+    web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file watches.js
  * @authors:
@@ -5688,7 +5700,7 @@ module.exports = Shh;
 
 var Method = require('../method');
 
-/// @returns an array of objects describing web3.exp.filter api methods
+/// @returns an array of objects describing web3.eth.filter api methods
 var exp = function () {
     var newFilterCall = function (args) {
         var type = args[0];
@@ -5781,15 +5793,20 @@ module.exports = {
 
 },{"../method":36}],43:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
+
+    web3.js is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file namereg.js
@@ -5817,6 +5834,20 @@ module.exports = {
 
 },{"../contracts/GlobalRegistrar.json":1,"../contracts/ICAPRegistrar.json":2}],44:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    web3.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file property.js
@@ -5949,6 +5980,20 @@ module.exports = Property;
 
 },{"../utils/utils":20}],45:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    web3.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file requestmanager.js
@@ -5967,7 +6012,7 @@ var errors = require('./errors');
 
 /**
  * It's responsible for passing messages to providers
- * It's also responsible for polling the expanse node for incoming messages
+ * It's also responsible for polling the ethereum node for incoming messages
  * Default poll timeout is 1 second
  * Singleton
  */
@@ -6213,6 +6258,20 @@ module.exports = Settings;
 
 },{}],47:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    web3.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file syncing.js
  * @authors:
@@ -6294,6 +6353,20 @@ module.exports = IsSyncing;
 
 },{"../utils/utils":20,"./formatters":30}],48:[function(require,module,exports){
 /*
+    This file is part of web3.js.
+
+    web3.js is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    web3.js is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with web3.js.  If not, see <http://www.gnu.org/licenses/>.
 */
 /**
  * @file transfer.js
@@ -6370,6 +6443,7 @@ var deposit = function (exp, from, to, value, client, callback) {
 };
 
 module.exports = transfer;
+
 
 },{"../contracts/SmartExchange.json":3,"./iban":33}],49:[function(require,module,exports){
 

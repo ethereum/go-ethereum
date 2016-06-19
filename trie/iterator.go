@@ -62,7 +62,7 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 	switch node := node.(type) {
 	case fullNode:
 		if len(key) > 0 {
-			k := self.next(node[key[0]], key[1:], isIterStart)
+			k := self.next(node.Children[key[0]], key[1:], isIterStart)
 			if k != nil {
 				return append([]byte{key[0]}, k...)
 			}
@@ -74,7 +74,7 @@ func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byt
 		}
 
 		for i := r; i < 16; i++ {
-			k := self.key(node[i])
+			k := self.key(node.Children[i])
 			if k != nil {
 				return append([]byte{i}, k...)
 			}
@@ -130,12 +130,12 @@ func (self *Iterator) key(node interface{}) []byte {
 		}
 		return append(k, self.key(node.Val)...)
 	case fullNode:
-		if node[16] != nil {
-			self.Value = node[16].(valueNode)
+		if node.Children[16] != nil {
+			self.Value = node.Children[16].(valueNode)
 			return []byte{16}
 		}
 		for i := 0; i < 16; i++ {
-			k := self.key(node[i])
+			k := self.key(node.Children[i])
 			if k != nil {
 				return append([]byte{byte(i)}, k...)
 			}
@@ -175,7 +175,7 @@ type NodeIterator struct {
 
 // NewNodeIterator creates an post-order trie iterator.
 func NewNodeIterator(trie *Trie) *NodeIterator {
-	if bytes.Compare(trie.Root(), emptyRoot.Bytes()) == 0 {
+	if trie.Hash() == emptyState {
 		return new(NodeIterator)
 	}
 	return &NodeIterator{trie: trie}
@@ -205,9 +205,11 @@ func (it *NodeIterator) step() error {
 	}
 	// Initialize the iterator if we've just started, or pop off the old node otherwise
 	if len(it.stack) == 0 {
-		it.stack = append(it.stack, &nodeIteratorState{node: it.trie.root, child: -1})
+		// Always start with a collapsed root
+		root := it.trie.Hash()
+		it.stack = append(it.stack, &nodeIteratorState{node: hashNode(root[:]), child: -1})
 		if it.stack[0].node == nil {
-			return fmt.Errorf("root node missing: %x", it.trie.Root())
+			return fmt.Errorf("root node missing: %x", it.trie.Hash())
 		}
 	} else {
 		it.stack = it.stack[:len(it.stack)-1]
@@ -225,11 +227,11 @@ func (it *NodeIterator) step() error {
 		}
 		if node, ok := parent.node.(fullNode); ok {
 			// Full node, traverse all children, then the node itself
-			if parent.child >= len(node) {
+			if parent.child >= len(node.Children) {
 				break
 			}
-			for parent.child++; parent.child < len(node); parent.child++ {
-				if current := node[parent.child]; current != nil {
+			for parent.child++; parent.child < len(node.Children); parent.child++ {
+				if current := node.Children[parent.child]; current != nil {
 					it.stack = append(it.stack, &nodeIteratorState{node: current, parent: ancestor, child: -1})
 					break
 				}

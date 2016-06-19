@@ -49,7 +49,7 @@ type Node struct {
 	datadir  string         // Path to the currently used data directory
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 
-	serverConfig *p2p.Server // Configuration of the underlying P2P networking layer
+	serverConfig p2p.Config
 	server       *p2p.Server // Currently running P2P networking layer
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
@@ -97,7 +97,7 @@ func New(conf *Config) (*Node, error) {
 	}
 	return &Node{
 		datadir: conf.DataDir,
-		serverConfig: &p2p.Server{
+		serverConfig: p2p.Config{
 			PrivateKey:      conf.NodeKey(),
 			Name:            conf.Name,
 			Discovery:       !conf.NoDiscovery,
@@ -151,9 +151,7 @@ func (n *Node) Start() error {
 		return ErrNodeRunning
 	}
 	// Otherwise copy and specialize the P2P configuration
-	running := new(p2p.Server)
-	*running = *n.serverConfig
-
+	running := &p2p.Server{Config: n.serverConfig}
 	services := make(map[reflect.Type]Service)
 	for _, constructor := range n.serviceFuncs {
 		// Create a new context for the particular service

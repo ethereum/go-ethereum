@@ -67,11 +67,14 @@ func (c *testTransport) close(err error) {
 }
 
 func startTestServer(t *testing.T, id discover.NodeID, pf func(*Peer)) *Server {
+	config := Config{
+		Name:       "test",
+		MaxPeers:   10,
+		ListenAddr: "127.0.0.1:0",
+		PrivateKey: newkey(),
+	}
 	server := &Server{
-		Name:         "test",
-		MaxPeers:     10,
-		ListenAddr:   "127.0.0.1:0",
-		PrivateKey:   newkey(),
+		Config:       config,
 		newPeerHook:  pf,
 		newTransport: func(fd net.Conn) transport { return newTestTransport(id, fd) },
 	}
@@ -200,10 +203,10 @@ func TestServerTaskScheduling(t *testing.T) {
 	// The Server in this test isn't actually running
 	// because we're only interested in what run does.
 	srv := &Server{
-		MaxPeers: 10,
-		quit:     make(chan struct{}),
-		ntab:     fakeTable{},
-		running:  true,
+		Config:  Config{MaxPeers: 10},
+		quit:    make(chan struct{}),
+		ntab:    fakeTable{},
+		running: true,
 	}
 	srv.loopWG.Add(1)
 	go func() {
@@ -314,10 +317,12 @@ func (t *testTask) Do(srv *Server) {
 func TestServerAtCap(t *testing.T) {
 	trustedID := randomID()
 	srv := &Server{
-		PrivateKey:   newkey(),
-		MaxPeers:     10,
-		NoDial:       true,
-		TrustedNodes: []*discover.Node{{ID: trustedID}},
+		Config: Config{
+			PrivateKey:   newkey(),
+			MaxPeers:     10,
+			NoDial:       true,
+			TrustedNodes: []*discover.Node{{ID: trustedID}},
+		},
 	}
 	if err := srv.Start(); err != nil {
 		t.Fatalf("could not start: %v", err)
@@ -415,10 +420,12 @@ func TestServerSetupConn(t *testing.T) {
 
 	for i, test := range tests {
 		srv := &Server{
-			PrivateKey:   srvkey,
-			MaxPeers:     10,
-			NoDial:       true,
-			Protocols:    []Protocol{discard},
+			Config: Config{
+				PrivateKey: srvkey,
+				MaxPeers:   10,
+				NoDial:     true,
+				Protocols:  []Protocol{discard},
+			},
 			newTransport: func(fd net.Conn) transport { return test.tt },
 		}
 		if !test.dontstart {

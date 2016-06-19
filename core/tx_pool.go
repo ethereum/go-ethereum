@@ -368,6 +368,9 @@ func (self *TxPool) AddTransactions(txs []*types.Transaction) {
 // GetTransaction returns a transaction if it is contained in the pool
 // and nil otherwise.
 func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
+	tp.mu.RLock()
+	defer tp.mu.RUnlock()
+
 	// check the txs first
 	if tx, ok := tp.pending[hash]; ok {
 		return tx
@@ -421,12 +424,18 @@ func (self *TxPool) RemoveTransactions(txs types.Transactions) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	for _, tx := range txs {
-		self.RemoveTx(tx.Hash())
+		self.removeTx(tx.Hash())
 	}
 }
 
 // RemoveTx removes the transaction with the given hash from the pool.
 func (pool *TxPool) RemoveTx(hash common.Hash) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.removeTx(hash)
+}
+
+func (pool *TxPool) removeTx(hash common.Hash) {
 	// delete from pending pool
 	delete(pool.pending, hash)
 	// delete from queue

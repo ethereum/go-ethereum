@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/codegangsta/cli"
 	"github.com/expanse-project/go-expanse/node"
 	"github.com/expanse-project/go-expanse/rpc"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // NewRemoteRPCClient returns a RPC client which connects to a running gexp instance.

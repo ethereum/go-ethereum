@@ -113,7 +113,7 @@ func (s *PublicEthereumAPI) GasPrice() *big.Int {
 // GetCompilers returns the collection of available smart contract compilers
 func (s *PublicEthereumAPI) GetCompilers() ([]string, error) {
 	solc, err := s.e.Solc()
-	if err != nil && solc != nil {
+	if err == nil && solc != nil {
 		return []string{"Solidity"}, nil
 	}
 
@@ -1876,6 +1876,7 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogC
 			if err != nil {
 				return nil, fmt.Errorf("mutation failed: %v", err)
 			}
+			stateDb.DeleteSuicides()
 			continue
 		}
 		// Otherwise trace the transaction and return
