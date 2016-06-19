@@ -284,3 +284,31 @@ type Client interface {
 
 	Close()
 }
+
+type ClientRestartWrapper struct {
+	client Client
+	newClientFn func() Client
+	mu sync.RWMutex
+}
+
+func NewClientRestartWrapper(newClientFn func() Client) *ClientRestartWrapper {
+	return &ClientRestartWrapper {
+		client: newClientFn(),
+		newClientFn: newClientFn,
+	}
+}
+
+func (rw *ClientRestartWrapper) Client() Client {
+	rw.mu.RLock()
+	defer rw.mu.RUnlock()
+	
+	return rw.client
+}
+
+func (rw *ClientRestartWrapper) Restart() {
+	rw.mu.Lock()
+	defer rw.mu.Unlock()
+	
+	rw.client.Close()
+	rw.client = rw.newClientFn()
+}

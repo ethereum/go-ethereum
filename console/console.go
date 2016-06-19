@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/internal/web3ext"
@@ -33,6 +34,7 @@ import (
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
+	"golang.org/x/net/context"
 )
 
 var (
@@ -50,26 +52,27 @@ const DefaultPrompt = "> "
 // Config is te collection of configurations to fine tune the behavior of the
 // JavaScript console.
 type Config struct {
-	DataDir  string       // Data directory to store the console history at
-	DocRoot  string       // Filesystem path from where to load JavaScript files from
-	Client   rpc.Client   // RPC client to execute Ethereum requests through
-	Prompt   string       // Input prompt prefix string (defaults to DefaultPrompt)
-	Prompter UserPrompter // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
-	Printer  io.Writer    // Output writer to serialize any display strings to (defaults to os.Stdout)
-	Preload  []string     // Absolute paths to JavaScript files to preload
+	DataDir  string                    // Data directory to store the console history at
+	DocRoot  string                    // Filesystem path from where to load JavaScript files from
+	Client   *rpc.ClientRestartWrapper // RPC client to execute Ethereum requests through
+	Prompt   string                    // Input prompt prefix string (defaults to DefaultPrompt)
+	Prompter UserPrompter              // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
+	Printer  io.Writer                 // Output writer to serialize any display strings to (defaults to os.Stdout)
+	Preload  []string                  // Absolute paths to JavaScript files to preload
 }
 
 // Console is a JavaScript interpreted runtime environment. It is a fully fleged
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   rpc.Client   // RPC client to execute Ethereum requests through
-	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
-	prompt   string       // Input prompt prefix string
-	prompter UserPrompter // Input prompter to allow interactive user feedback
-	histPath string       // Absolute path to the console scrollback history
-	history  []string     // Scroll history maintained by the console
-	printer  io.Writer    // Output writer to serialize any display strings to
+	client     *rpc.ClientRestartWrapper // RPC client to execute Ethereum requests through
+	jsre       *jsre.JSRE                // JavaScript runtime environment running the interpreter
+	prompt     string                    // Input prompt prefix string
+	prompter   UserPrompter              // Input prompter to allow interactive user feedback
+	histPath   string                    // Absolute path to the console scrollback history
+	history    []string                  // Scroll history maintained by the console
+	printer    io.Writer                 // Output writer to serialize any display strings to
+	setContext func(context.Context)
 }
 
 func New(config Config) (*Console, error) {
@@ -103,6 +106,7 @@ func New(config Config) (*Console, error) {
 func (c *Console) init(preload []string) error {
 	// Initialize the JavaScript <-> Go RPC bridge
 	bridge := newBridge(c.client, c.prompter, c.printer)
+	c.setContext = bridge.setContext
 	c.jsre.Set("jeth", struct{}{})
 
 	jethObj, _ := c.jsre.Get("jeth")
@@ -127,7 +131,7 @@ func (c *Console) init(preload []string) error {
 		return fmt.Errorf("web3 provider: %v", err)
 	}
 	// Load the supported APIs into the JavaScript runtime environment
-	apis, err := c.client.SupportedModules()
+	apis, err := c.client.Client().SupportedModules()
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
@@ -253,7 +257,7 @@ func (c *Console) Welcome() {
 		console.log(" datadir: " + admin.datadir);
 	`)
 	// List all the supported modules for the user to call
-	if apis, err := c.client.SupportedModules(); err == nil {
+	if apis, err := c.client.Client().SupportedModules(); err == nil {
 		modules := make([]string, 0, len(apis))
 		for api, version := range apis {
 			modules = append(modules, fmt.Sprintf("%s:%s", api, version))
@@ -347,7 +351,12 @@ func (c *Console) Interactive() {
 						}
 					}
 				}
+				done := make(chan struct{})
+				ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+				c.setContext(ctx)
 				c.Evaluate(input)
+				c.setContext(nil)
+				close(done)
 				input = ""
 			}
 		}
