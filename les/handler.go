@@ -170,7 +170,7 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 		glog.V(logger.Debug).Infof("LES: create downloader")
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
-			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, manager.removePeer)
+			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, func(id string) {}) // manager.removePeer)
 	}
 
 	/*validator := func(block *types.Block, parent *types.Block) error {
