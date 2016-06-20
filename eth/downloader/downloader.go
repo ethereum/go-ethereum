@@ -1712,8 +1712,10 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// L: Sync begins, and finds common ancestor at 11
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
-				if !gotHeaders && td.Cmp(d.getTd(d.headBlock().Hash())) > 0 {
-					return errStallingPeer
+				if d.mode != LightSync {
+					if !gotHeaders && td.Cmp(d.getTd(d.headBlock().Hash())) > 0 {
+						return errStallingPeer
+					}
 				}
 				// If fast or light syncing, ensure promised headers are indeed delivered. This is
 				// needed to detect scenarios where an attacker feeds a bad pivot and then bails out
