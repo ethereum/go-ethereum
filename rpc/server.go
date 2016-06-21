@@ -82,7 +82,7 @@ func (s *RPCService) Modules() map[string]string {
 	return modules
 }
 
-// RegisterName will create an service for the given rcvr type under the given name. When no methods on the given rcvr
+// RegisterName will create a service for the given rcvr type under the given name. When no methods on the given rcvr
 // match the criteria to be either a RPC method or a subscription an error is returned. Otherwise a new service is
 // created and added to the service collection this server instance serves.
 func (s *Server) RegisterName(name string, rcvr interface{}) error {
@@ -236,7 +236,7 @@ func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
 }
 
 // Stop will stop reading new requests, wait for stopPendingRequestTimeout to allow pending requests to finish,
-// close all codecs which will cancels pending requests/subscriptions.
+// close all codecs which will cancel pending requests/subscriptions.
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		glog.V(logger.Debug).Infoln("RPC Server shutdown initiatied")
@@ -294,7 +294,7 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 			return codec.CreateErrorResponse(&req.id, &callbackError{err.Error()}), nil
 		}
 
-		// active the subscription after the sub id was successful sent to the client
+		// active the subscription after the sub id was successfully sent to the client
 		activateSub := func() {
 			notifier, _ := NotifierFromContext(ctx)
 			notifier.(*bufferedNotifier).activate(subid)
