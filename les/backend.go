@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -136,6 +137,11 @@ func (s *LightNodeService) APIs() []rpc.API {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Public:    true,
+		}, {
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend),
 			Public:    true,
 		}, {
 			Namespace: "net",

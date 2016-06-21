@@ -342,7 +342,7 @@ func (s *FullNodeService) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.chainDb, s.eventMux),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend),
 			Public:    true,
 		}, {
 			Namespace: "admin",

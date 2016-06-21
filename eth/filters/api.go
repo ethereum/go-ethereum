@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"golang.org/x/net/context"
@@ -50,10 +51,11 @@ const (
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	mux *event.TypeMux
+	apiBackend ethapi.Backend
 
 	quit    chan struct{}
 	chainDb ethdb.Database
+	mux     *event.TypeMux
 
 	filterManager *FilterSystem
 
@@ -73,10 +75,11 @@ type PublicFilterAPI struct {
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(chainDb ethdb.Database, mux *event.TypeMux) *PublicFilterAPI {
+func NewPublicFilterAPI(apiBackend ethapi.Backend) *PublicFilterAPI {
 	svc := &PublicFilterAPI{
-		mux:              mux,
-		chainDb:          chainDb,
+		apiBackend:       apiBackend,
+		mux:              apiBackend.EventMux(),
+		chainDb:          apiBackend.ChainDb(),
 		filterManager:    NewFilterSystem(mux),
 		filterMapping:    make(map[string]int),
 		logQueue:         make(map[int]*logQueue),
@@ -141,7 +144,7 @@ func (s *PublicFilterAPI) NewBlockFilter() (string, error) {
 	}
 
 	s.blockMu.Lock()
-	filter := New(s.chainDb)
+	filter := New(s.apiBackend)
 	id, err := s.filterManager.Add(filter, ChainFilter)
 	if err != nil {
 		return "", err
@@ -177,7 +180,7 @@ func (s *PublicFilterAPI) NewPendingTransactionFilter() (string, error) {
 	s.transactionMu.Lock()
 	defer s.transactionMu.Unlock()
 
-	filter := New(s.chainDb)
+	filter := New(s.apiBackend)
 	id, err := s.filterManager.Add(filter, PendingTxFilter)
 	if err != nil {
 		return "", err
@@ -206,7 +209,7 @@ func (s *PublicFilterAPI) newLogFilter(earliest, latest int64, addresses []commo
 	s.logMu.Lock()
 	defer s.logMu.Unlock()
 
-	filter := New(s.chainDb)
+	filter := New(s.apiBackend)
 	id, err := s.filterManager.Add(filter, LogFilter)
 	if err != nil {
 		return 0, err
@@ -432,7 +435,7 @@ func (s *PublicFilterAPI) NewFilter(args NewFilterArgs) (string, error) {
 
 // GetLogs returns the logs matching the given argument.
 func (s *PublicFilterAPI) GetLogs(args NewFilterArgs) []vmlog {
-	filter := New(s.chainDb)
+	filter := New(s.apiBackend)
 	filter.SetBeginBlock(args.FromBlock.Int64())
 	filter.SetEndBlock(args.ToBlock.Int64())
 	filter.SetAddresses(args.Addresses)
