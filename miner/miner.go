@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -50,7 +51,7 @@ type Miner struct {
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 
-    sub event.Subscription
+	sub event.Subscription
 }
 
 func New(eth core.Backend, config *core.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
@@ -103,56 +104,75 @@ func (m *Miner) SetGasPrice(price *big.Int) {
 
 func (self *Miner) Start(coinbase common.Address, threads int) {
 	self.sub = self.mux.Subscribe(core.TxPreEvent{}, core.NewBlockEvent{}, core.NewMinedBlockEvent{})
-    go self.filterLoop(coinbase, threads)
+	//go self.filterLoop(coinbase, threads)
+	go self.runLoop(coinbase, threads)
+
+}
+
+func (self *Miner) runLoop(coinbase common.Address, threads int) {
+	for true {
+		if len(self.worker.txQueue) == 0 {
+			if self.Mining() {
+				glog.V(logger.Info).Infoln("Nothing to do. The miner sleeps.")
+				self.Stop()
+			}
+		} else {
+			if self.Mining() == false {
+				glog.V(logger.Info).Infoln("A transaction awaits! Waking up miner.")
+				self.Start(coinbase, threads)
+			}
+			time.Sleep(3000 * time.Millisecond)
+		}
+	}
 }
 
 func (self *Miner) filterLoop(coinbase common.Address, threads int) {
-    for event := range self.sub.Chan() {
-        switch event.Data.(type) {
-            case core.TxPreEvent:
-                glog.V(logger.Info).Infoln("New pending tranny yo, start mining!")
-                self.actuallyStart(coinbase, threads)
-            case core.NewBlockEvent:
-                glog.V(logger.Info).Infoln("New block event")
-                self.Stop()
-                self.Start(coinbase, threads)
-            case core.NewMinedBlockEvent:
-                glog.V(logger.Info).Infoln("New MINED block event")
-                self.Stop()
-                self.Start(coinbase, threads)
-        }
-    }
+	for event := range self.sub.Chan() {
+		switch event.Data.(type) {
+		case core.TxPreEvent:
+			glog.V(logger.Info).Infoln("New pending tranny yo, start mining!")
+			self.actuallyStart(coinbase, threads)
+		case core.NewBlockEvent:
+			glog.V(logger.Info).Infoln("New block event")
+			self.Stop()
+			self.Start(coinbase, threads)
+		case core.NewMinedBlockEvent:
+			glog.V(logger.Info).Infoln("New MINED block event")
+			self.Stop()
+			self.Start(coinbase, threads)
+		}
+	}
 }
 
 func (self *Miner) actuallyStart(coinbase common.Address, threads int) {
-    atomic.StoreInt32(&self.shouldStart, 1)
-    self.threads = threads
-    self.worker.coinbase = coinbase
-    self.coinbase = coinbase
+	atomic.StoreInt32(&self.shouldStart, 1)
+	self.threads = threads
+	self.worker.coinbase = coinbase
+	self.coinbase = coinbase
 
-    if atomic.LoadInt32(&self.canStart) == 0 {
-        glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
-        return
-    }
+	if atomic.LoadInt32(&self.canStart) == 0 {
+		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
+		return
+	}
 
-    atomic.StoreInt32(&self.mining, 1)
+	atomic.StoreInt32(&self.mining, 1)
 
-    for i := 0; i < threads; i++ {
-        self.worker.register(NewCpuAgent(i, self.pow))
-    }
+	for i := 0; i < threads; i++ {
+		self.worker.register(NewCpuAgent(i, self.pow))
+	}
 
-    glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
 
-    self.worker.start()
+	self.worker.start()
 
-    self.worker.commitNewWork()
+	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
-	if(self.sub != nil) {
-        self.sub.Unsubscribe();
-    }
-    self.worker.stop()
+	if self.sub != nil {
+		self.sub.Unsubscribe()
+	}
+	self.worker.stop()
 	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
