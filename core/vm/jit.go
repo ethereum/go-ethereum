@@ -421,7 +421,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 
 			g = params.SstoreClearGas
 		} else {
-			g = params.SstoreClearGas
+			g = params.SstoreResetGas
 		}
 		gas.Set(g)
 	case SUICIDE:
