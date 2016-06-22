@@ -25,6 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+var IllegalCodeHashes map[common.Hash]struct{}
+
 // GetHashFn returns a function for which the VM env can query block hashes through
 // up to the limit defined by the Yellow Paper and uses the given block chain
 // to query for information.
@@ -46,6 +48,8 @@ type VMEnv struct {
 	evm         *vm.EVM        // The Ethereum Virtual Machine
 	depth       int            // Current execution depth
 	msg         Message        // Message appliod
+
+	CodeHashes []common.Hash // code hashes collected during execution
 
 	header    *types.Header            // Header information
 	chain     *BlockChain              // Blockchain handle
@@ -71,6 +75,8 @@ func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, m
 	env.evm = vm.New(env, cfg)
 	return env
 }
+
+func (self *VMEnv) MarkCodeHash(hash common.Hash) { self.CodeHashes = append(self.CodeHashes, hash) }
 
 func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
 func (self *VMEnv) Vm() vm.Vm                { return self.evm }
