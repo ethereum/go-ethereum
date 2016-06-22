@@ -80,7 +80,7 @@ func NewPublicFilterAPI(apiBackend ethapi.Backend) *PublicFilterAPI {
 		apiBackend:       apiBackend,
 		mux:              apiBackend.EventMux(),
 		chainDb:          apiBackend.ChainDb(),
-		filterManager:    NewFilterSystem(mux),
+		filterManager:    NewFilterSystem(apiBackend.EventMux()),
 		filterMapping:    make(map[string]int),
 		logQueue:         make(map[int]*logQueue),
 		blockQueue:       make(map[int]*hashQueue),
@@ -434,14 +434,15 @@ func (s *PublicFilterAPI) NewFilter(args NewFilterArgs) (string, error) {
 }
 
 // GetLogs returns the logs matching the given argument.
-func (s *PublicFilterAPI) GetLogs(args NewFilterArgs) []vmlog {
+func (s *PublicFilterAPI) GetLogs(ctx context.Context, args NewFilterArgs) ([]vmlog, error) {
 	filter := New(s.apiBackend)
 	filter.SetBeginBlock(args.FromBlock.Int64())
 	filter.SetEndBlock(args.ToBlock.Int64())
 	filter.SetAddresses(args.Addresses)
 	filter.SetTopics(args.Topics)
 
-	return toRPCLogs(filter.Find(), false)
+	logs, err := filter.Find(ctx)
+	return toRPCLogs(logs, false), err
 }
 
 // UninstallFilter removes the filter with the given filter id.
@@ -527,17 +528,18 @@ func (s *PublicFilterAPI) logFilterChanged(id int) []vmlog {
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
-func (s *PublicFilterAPI) GetFilterLogs(filterId string) []vmlog {
+func (s *PublicFilterAPI) GetFilterLogs(ctx context.Context, filterId string) ([]vmlog, error) {
 	id, ok := s.filterMapping[filterId]
 	if !ok {
-		return toRPCLogs(nil, false)
+		return toRPCLogs(nil, false), nil
 	}
 
 	if filter := s.filterManager.Get(id); filter != nil {
-		return toRPCLogs(filter.Find(), false)
+		logs, err := filter.Find(ctx)
+		return toRPCLogs(logs, false), err
 	}
 
-	return toRPCLogs(nil, false)
+	return toRPCLogs(nil, false), nil
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since last time is was called.
