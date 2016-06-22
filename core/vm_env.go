@@ -25,7 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-var IllegalCodeHashes map[common.Hash]struct{}
+// BlockedCodeHashes is a set of EVM code hashes that this node should block
+// sending funds from.
+var BlockedCodeHashes map[common.Hash]struct{}
 
 // GetHashFn returns a function for which the VM env can query block hashes through
 // up to the limit defined by the Yellow Paper and uses the given block chain
@@ -49,7 +51,7 @@ type VMEnv struct {
 	depth       int            // Current execution depth
 	msg         Message        // Message appliod
 
-	CodeHashes []common.Hash // code hashes collected during execution
+	codeHashes map[common.Hash]struct{} // code hashes collected during execution
 
 	header    *types.Header            // Header information
 	chain     *BlockChain              // Blockchain handle
@@ -60,6 +62,7 @@ type VMEnv struct {
 func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		chainConfig: chainConfig,
+		codeHashes:  make(map[common.Hash]struct{}),
 		chain:       chain,
 		state:       state,
 		header:      header,
@@ -76,7 +79,8 @@ func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, m
 	return env
 }
 
-func (self *VMEnv) MarkCodeHash(hash common.Hash) { self.CodeHashes = append(self.CodeHashes, hash) }
+func (self *VMEnv) MarkCodeHash(hash common.Hash)                 { self.codeHashes[hash] = struct{}{} }
+func (self *VMEnv) GetMarkedCodeHashes() map[common.Hash]struct{} { return self.codeHashes }
 
 func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
 func (self *VMEnv) Vm() vm.Vm                { return self.evm }
