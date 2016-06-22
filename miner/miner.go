@@ -57,6 +57,7 @@ type Miner struct {
 func New(eth core.Backend, config *core.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
 	miner := &Miner{eth: eth, mux: mux, pow: pow, worker: newWorker(config, common.Address{}, eth), canStart: 1}
 	go miner.update()
+	go miner.runLoop()
 
 	return miner
 }
@@ -105,13 +106,13 @@ func (m *Miner) SetGasPrice(price *big.Int) {
 func (self *Miner) Start(coinbase common.Address, threads int) {
 	self.sub = self.mux.Subscribe(core.TxPreEvent{}, core.NewBlockEvent{}, core.NewMinedBlockEvent{})
 	//go self.filterLoop(coinbase, threads)
-	go self.runLoop(coinbase, threads)
+	self.actuallyStart(coinbase, threads)
 
 }
 
-func (self *Miner) runLoop(coinbase common.Address, threads int) {
+func (self *Miner) runLoop() {
 	for true {
-		if len(self.worker.txQueue) == 0 {
+		if len(self.worker.current.txs) == 0 {
 			if self.Mining() {
 				glog.V(logger.Info).Infoln("Nothing to do. The miner sleeps.")
 				self.Stop()
@@ -119,10 +120,10 @@ func (self *Miner) runLoop(coinbase common.Address, threads int) {
 		} else {
 			if self.Mining() == false {
 				glog.V(logger.Info).Infoln("A transaction awaits! Waking up miner.")
-				self.Start(coinbase, threads)
+				self.Start(self.coinbase, self.threads)
 			}
-			time.Sleep(3000 * time.Millisecond)
 		}
+		time.Sleep(3000 * time.Millisecond)
 	}
 }
 
