@@ -17,13 +17,13 @@ shift
 # ls -l $GETH
 
 # geth CLI params       e.g., (dd=04, run=09)
-datetag=`date "+%c%y%m%d-%H%M%S"|cut -d ' ' -f 5`
+datetag=`date "+%Y-%m-%d-%H:%M:%S"`
 datadir=$root/data/$id        # /tmp/eth/04
 log=$root/log/$id.$datetag.log     # /tmp/eth/04.09.log
 linklog=$root/log/$id.log     # /tmp/eth/04.09.log
 password=$id            # 04
 port=303$id              # 34504
-bzzport=322$id              # 32204
+bzzport=322$id              # 3   2204
 rpcport=302$id            # 3204
 
 mkdir -p $root/data
@@ -43,8 +43,8 @@ if [ ! -d "$keystoredir" ]; then
   # note that the account key will be stored also separately outside
   # datadir
   # this way you can safely clear the data directory and still keep your key
-  # under `<rootdir>/keystore/dd
-  # LS=`ls $datadir/keystore`
+  # under <rootdir>/keystore/dd
+  # LS=$(ls $datadir/keystore)
   # echo $LS
   while [ ! -d "$keystoredir" ]; do
     echo "."
@@ -56,13 +56,6 @@ if [ ! -d "$keystoredir" ]; then
   mkdir -p $root/keystore/$id
   cp -R "$datadir/keystore/" $root/keystore/$id
 fi
-
-# # mkdir -p $datadir/keystore
-# if [ ! -d "$datadir/keystore" ]; then
-#   echo "copying keys $root/keystore/$id $datadir/keystore"
-#   cp -R $root/keystore/$id/keystore/ $datadir/keystore/
-# fi
-
 
 # query node's enode url
 if [ $ip_addr="" ]; then

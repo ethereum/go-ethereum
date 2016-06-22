@@ -1,0 +1,2 @@
+#!/bin/bash
+bash ~/bin/swarm.sh $SWARM_DIR $SWARM_NETWORK_ID $*

@@ -44,8 +44,8 @@ function attach {
   id=$1
   shift
   echo "attaching console to instance $id"
-  cmd="$GETH  $* attach ipc:$root/$network_id/data/$id/geth.ipc"
-  # echo $cmd
+  cmd="$GETH $* attach ipc:$root/$network_id/data/$id/geth.ipc"
+  echo $cmd
   eval $cmd
 }
 
@@ -56,6 +56,30 @@ function log {
   cmd="tail -f $root/$network_id/log/$id.log"
   echo $cmd
   eval $cmd
+}
+
+function cleanlog {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    echo "remove logs for all instances"
+    rm -rf "$root/$network_id/log/"
+  else
+    echo "remove logs for instance $id"
+    rm -rf $root/$network_id/log/$id*
+  fi
+}
+
+function cleanbzz {
+  id=$1
+  shift
+  if [ $id = "all" ]; then
+    echo "remove bzz data for all instances"
+    rm -rf $root/$network_id/data/*/bzz
+  else
+    echo "remove bzz data for instance $id"
+    rm -rf "$root/$network_id/data/$id"
+  fi
 }
 
 function less {
@@ -319,6 +343,37 @@ function netstatconf {
   echo "]" >> $conf
 }
 
+function remote-update-scripts {
+  scriptdir=$1
+  remotes=$2
+  cd $GETH_DIR
+  for remote in `cat $remotes|grep -v '^#'`; do echo "updating scripts on $remote..."; ssh $remote mkdir -p bin && scp -r $scriptdir/* $remote:bin/; done
+}
+
+function remote-update-bin {
+  remote-update-scripts ~/bin $remotes
+  for remote in `cat $remotes|grep -v '^#'`; do  echo "updating binary on $remote..."; scp -r $GETH_DIR/geth $remote:bin/; done
+}
+
+function remote-run {
+  remotes=$1
+  shift
+  for remote in `cat $remotes|grep -v '^#'`; do echo "running on $remote..."; ssh $remote ". ~/bin/env.sh; $*"; done
+}
+
+function update-src {
+  branch=$1
+  echo "cd $GETH_DIR &&  git remote update && git reset --hard $branch"
+  (cd $GETH_DIR &&  git remote update && git reset --hard $branch)
+}
+
+function netstatrun {
+  cd ~/eth-net-intelligence-api
+  pm2 kill
+  pm2 start $root/$network_id/*.netstat.json
+}
+
+
 case $cmd in
   "info" )
     info $*;;
@@ -352,11 +407,25 @@ case $cmd in
     cluster $*;;
   "attach" )
     attach $*;;
+  "cleanbzz" )
+    cleanbzz $*;;
+  "cleanlog" )
+    cleanlog $*;;
   "log" )
     log $*;;
   "less" )
     less $*;;
-    "netstatconf" )
+  "remote-update-scripts" )
+    remote-update-scripts $*;;
+  "remote-update-bin" )
+    remote-update-bin $*;;
+  "update-src" )
+    update-src $*;;
+  "remote-run" )
+    remote-run $*;;
+  "netstatconf" )
     netstatconf  $*;;
+  "netstatrun" )
+    netstatrun  $*;;
 
 esac
