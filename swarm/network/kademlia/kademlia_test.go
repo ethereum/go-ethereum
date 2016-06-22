@@ -82,7 +82,7 @@ func TestBootstrap(t *testing.T) {
 				t.Fatalf("backend not accepting node: %v", err)
 			}
 
-			record, need, _ := kad.FindBest()
+			record, need, _ := kad.Suggest()
 			if !need {
 				break
 			}

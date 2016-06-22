@@ -279,7 +279,7 @@ func (self *Kademlia) binsize(p int) int {
 	return len(b.nodes)
 }
 
-func (self *Kademlia) FindBest() (*NodeRecord, bool, int) {
+func (self *Kademlia) Suggest() (*NodeRecord, bool, int) {
 	return self.db.findBest(self.BucketSize, self.binsize)
 }
 
