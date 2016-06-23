@@ -351,7 +351,8 @@ function remote-update-scripts {
 }
 
 function remote-update-bin {
-  remote-update-scripts ~/bin $remotes
+  remotes=$1
+  remote-update-scripts $GETH_DIR/swarm/cmd/swarm/ $remotes
   for remote in `cat $remotes|grep -v '^#'`; do  echo "updating binary on $remote..."; scp -r $GETH_DIR/geth $remote:bin/; done
 }
 
