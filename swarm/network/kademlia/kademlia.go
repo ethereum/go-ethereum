@@ -340,7 +340,11 @@ func (self *bucket) insert(node Node) (replaced Node, err error) {
 	if len(self.nodes) >= self.size { // >= allows us to add peers beyond the bucketsize limitation
 		// dev p2p kicks out nodes idle for > 30 s, so here we never replace nodes if
 		// bucket is full
-		return nil, fmt.Errorf("bucket full")
+		// update, it seems we need to replace nodes
+		// return nil, fmt.Errorf("bucket full")
+		replaced := self.nodes[0]
+		self.nodes = append(self.nodes[1:], node)
+		return replaced, nil
 	}
 	self.nodes = append(self.nodes, node)
 	return
