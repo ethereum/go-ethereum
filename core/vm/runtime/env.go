@@ -27,10 +27,9 @@ import (
 
 // Env is a basic runtime environment required for running the EVM.
 type Env struct {
-	ruleSet       vm.RuleSet
-	depth         int
-	state         *state.StateDB
-	illegalHashes []common.Hash
+	ruleSet vm.RuleSet
+	depth   int
+	state   *state.StateDB
 
 	origin   common.Address
 	coinbase common.Address
@@ -50,15 +49,14 @@ type Env struct {
 // NewEnv returns a new vm.Environment
 func NewEnv(cfg *Config, state *state.StateDB) vm.Environment {
 	env := &Env{
-		ruleSet:       cfg.RuleSet,
-		illegalHashes: cfg.illegalHashes,
-		state:         state,
-		origin:        cfg.Origin,
-		coinbase:      cfg.Coinbase,
-		number:        cfg.BlockNumber,
-		time:          cfg.Time,
-		difficulty:    cfg.Difficulty,
-		gasLimit:      cfg.GasLimit,
+		ruleSet:    cfg.RuleSet,
+		state:      state,
+		origin:     cfg.Origin,
+		coinbase:   cfg.Coinbase,
+		number:     cfg.BlockNumber,
+		time:       cfg.Time,
+		difficulty: cfg.Difficulty,
+		gasLimit:   cfg.GasLimit,
 	}
 	env.evm = vm.New(env, vm.Config{
 		Debug:     cfg.Debug,

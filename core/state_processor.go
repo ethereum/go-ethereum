@@ -35,7 +35,10 @@ var (
 	blockedCodeHashErr = errors.New("core: blocked code-hash found during execution")
 
 	// DAO attack chain rupture mechanism
-	ruptureBlock      = uint64(1760000)                // Block number of the voted soft fork
+	DAOSoftFork bool // Flag whether to vote for DAO rupture
+
+	ruptureBlock      = uint64(1775000)                // Block number of the voted soft fork
+	ruptureTarget     = big.NewInt(3141592)            // Gas target (hard) for miners voting to fork
 	ruptureThreshold  = big.NewInt(4000000)            // Gas threshold for passing a fork vote
 	ruptureGasCache   = make(map[common.Hash]*big.Int) // Amount of gas in the point of rupture
 	ruptureCodeHashes = map[common.Hash]struct{}{
@@ -141,21 +144,13 @@ func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb 
 				}
 			}
 		}
-		// Iterate over the bullshit blacklist to keep waste some time while keeping random Joe's happy
-		if len(BlockedCodeHashes) > 0 {
-			for hash, _ := range env.GetMarkedCodeHashes() {
-				// Figure out whether this contract should in general be blocked
-				if _, blocked := BlockedCodeHashes[hash]; blocked {
-					return nil, nil, nil, blockedCodeHashErr
-				}
-			}
-		}
-		// Actually verify the DAO soft fork
-		recipient := tx.To()
-		if blockRuptureCodes && (recipient == nil || !ruptureWhitelist[*recipient]) {
-			for hash, _ := range env.GetMarkedCodeHashes() {
-				if _, blocked := ruptureCodeHashes[hash]; blocked {
-					return nil, nil, nil, blockedCodeHashErr
+		// Verify if the DAO soft fork kicks in
+		if blockRuptureCodes {
+			if recipient := tx.To(); recipient == nil || !ruptureWhitelist[*recipient] {
+				for hash, _ := range env.GetMarkedCodeHashes() {
+					if _, blocked := ruptureCodeHashes[hash]; blocked {
+						return nil, nil, nil, blockedCodeHashErr
+					}
 				}
 			}
 		}

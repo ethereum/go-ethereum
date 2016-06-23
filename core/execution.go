@@ -84,12 +84,10 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		address = &addr
 		createAccount = true
 	}
-
-	// mark the code hash if the execution is a call, callcode or delegate.
+	// Mark all contracts doing outbound value transfers to allow DAO filtering.
 	if value.Cmp(common.Big0) > 0 {
 		env.MarkCodeHash(env.Db().GetCodeHash(caller.Address()))
 	}
-
 	snapshotPreTransfer := env.MakeSnapshot()
 	var (
 		from = env.Db().GetAccount(caller.Address())
@@ -148,7 +146,7 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 		caller.ReturnGas(gas, gasPrice)
 		return nil, common.Address{}, vm.DepthError
 	}
-
+	// Mark all contracts doing outbound value transfers to allow DAO filtering.
 	if value.Cmp(common.Big0) > 0 {
 		env.MarkCodeHash(env.Db().GetCodeHash(caller.Address()))
 	}
