@@ -169,6 +169,7 @@ participating.
 		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
+		utils.DAOSoftForkFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,

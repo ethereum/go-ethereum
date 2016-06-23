@@ -51,8 +51,6 @@ type StateDB struct {
 	txIndex      int
 	logs         map[common.Hash]vm.Logs
 	logSize      uint
-
-	reducedDao bool
 }
 
 // Create a new state from a given trie
