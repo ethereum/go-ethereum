@@ -124,6 +124,12 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	return p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
 }
 
+// SendNewBlockHashes announces the availability of a number of blocks through
+// a hash notification.
+func (p *peer) SendNewBlockHashes(request newBlockHashesData) error {
+	return p2p.Send(p.rw, NewBlockHashesMsg, request)
+}
+
 // SendBlockHeaders sends a batch of block headers to the remote peer.
 func (p *peer) SendBlockHeaders(reqID, bv uint64, headers []*types.Header) error {
 	return sendResponse(p.rw, BlockHeadersMsg, reqID, bv, headers)

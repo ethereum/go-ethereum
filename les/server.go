@@ -39,6 +39,8 @@ func NewLesServer(eth *eth.FullNodeService, config *eth.Config) (*LesServer, err
 	if err != nil {
 		return nil, err
 	}
+	pm.broadcastBlockLoop()
+
 	srv := &LesServer{protocolManager: pm}
 	pm.server = srv
 

@@ -353,6 +353,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
 	// Block header query, collect the requested headers and reply
+	case NewBlockHashesMsg:
+		var req newBlockHashesData
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
+		}
+fmt.Println("RECEIVED", req[0].Number, req[0].Hash, req[0].Td)
+		
 	case GetBlockHeadersMsg:
 		glog.V(logger.Debug).Infof("LES: received GetBlockHeadersMsg from peer %v", p.id)
 		// Decode the complex header query
@@ -733,4 +740,30 @@ func (self *ProtocolManager) NodeInfo() *eth.EthNodeInfo {
 		Genesis:    self.blockchain.Genesis().Hash(),
 		Head:       self.blockchain.LastBlockHash(),
 	}
+}
+
+func (pm *ProtocolManager) broadcastBlockLoop() {
+	sub := pm.eventMux.Subscribe(	core.ChainEvent{})
+	go func() {
+		for {
+			select {
+			case ev := <-sub.Chan():
+				peers := pm.peers.AllPeers()
+				if len(peers) > 0 {
+					header := ev.Data.(core.ChainEvent).Block.Header()
+					hash := header.Hash()
+					number := header.Number.Uint64()
+					td := core.GetTd(pm.chainDb, hash, number)
+fmt.Println("BROADCAST", number, hash, td)
+					announce := newBlockHashesData{{Hash: hash, Number: number, Td: td}}
+					for _, p := range peers {
+						go p.SendNewBlockHashes(announce)
+					}
+				}
+			case <-pm.quitSync:
+				sub.Unsubscribe()
+				return
+			}
+		}
+	}()
 }
