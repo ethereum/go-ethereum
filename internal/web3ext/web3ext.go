@@ -111,21 +111,6 @@ web3._extend({
 			params: 3
 		}),
 		new web3._extend.Method({
-			name: 'startNatSpec',
-			call: 'admin_startNatSpec',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'stopNatSpec',
-			call: 'admin_stopNatSpec',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'getContractInfo',
-			call: 'admin_getContractInfo',
-			params: 1
-		}),
-		new web3._extend.Method({
 			name: 'httpGet',
 			call: 'admin_httpGet',
 			params: 2
