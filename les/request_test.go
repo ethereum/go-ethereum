@@ -63,7 +63,7 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 		t.Fatalf("peer 1 handshake error: %v", err)
 	}
 	
-	lpm.synchronise(lpeer, true)
+	lpm.synchronise(lpeer)
 
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().GetNumberU64(); i++ {

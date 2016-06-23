@@ -95,7 +95,7 @@ type ProtocolManager struct {
 	server     *LesServer
 
 	downloader *downloader.Downloader
-	//fetcher    *fetcher.Fetcher
+	fetcher    *lightFetcher
 	peers *peerSet
 
 	SubProtocols []p2p.Protocol
@@ -171,6 +171,7 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
 			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, func(id string) {}) // manager.removePeer)
+		manager.fetcher = newLightFetcher(odr, blockchain)
 	}
 
 	/*validator := func(block *types.Block, parent *types.Block) error {
@@ -359,6 +360,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 fmt.Println("RECEIVED", req[0].Number, req[0].Hash, req[0].Td)
+		for _, r := range req {
+			pm.fetcher.notify(p, r)
+		}
 		
 	case GetBlockHeadersMsg:
 		glog.V(logger.Debug).Infof("LES: received GetBlockHeadersMsg from peer %v", p.id)
@@ -452,9 +456,13 @@ fmt.Println("RECEIVED", req[0].Number, req[0].Hash, req[0].Td)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
-		err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
-		if err != nil {
-			glog.V(logger.Debug).Infoln(err)
+		if pm.fetcher.requestedID(resp.ReqID) {
+			pm.fetcher.deliverHeaders(resp.ReqID, resp.Headers)
+		} else {
+			err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
+			if err != nil {
+				glog.V(logger.Debug).Infoln(err)
+			}
 		}
 
 	case GetBlockBodiesMsg:
@@ -757,7 +765,7 @@ func (pm *ProtocolManager) broadcastBlockLoop() {
 fmt.Println("BROADCAST", number, hash, td)
 					announce := newBlockHashesData{{Hash: hash, Number: number, Td: td}}
 					for _, p := range peers {
-						go p.SendNewBlockHashes(announce)
+						p.SendNewBlockHashes(announce)
 					}
 				}
 			case <-pm.quitSync:

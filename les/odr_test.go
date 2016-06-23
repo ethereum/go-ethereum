@@ -191,7 +191,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 		t.Fatalf("peer 1 handshake error: %v", err)
 	}
 	
-	lpm.synchronise(lpeer, true)
+	lpm.synchronise(lpeer)
 
 	test := func(expFail uint64) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().GetNumberU64(); i++ {

@@ -124,7 +124,8 @@ type statusData struct {
 }
 
 // newBlockHashesData is the network packet for the block announcements.
-type newBlockHashesData []struct {
+type newBlockHashesData []newBlockHashData
+type newBlockHashData struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
 	Td     *big.Int    // Total difficulty of one particular block being announced

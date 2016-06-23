@@ -44,11 +44,11 @@ func (pm *ProtocolManager) syncer() {
 			if pm.peers.Len() < minDesiredPeerCount {
 				break
 			}
-			go pm.synchronise(pm.peers.BestPeer(), false)
+			go pm.synchronise(pm.peers.BestPeer())
 
 		case <-forceSync:
 			// Force a sync even if not enough peers are present
-			go pm.synchronise(pm.peers.BestPeer(), false)
+			go pm.synchronise(pm.peers.BestPeer())
 
 		case <-pm.noMorePeers:
 			return
@@ -57,22 +57,17 @@ func (pm *ProtocolManager) syncer() {
 }
 
 // synchronise tries to sync up our local block chain with a remote peer.
-func (pm *ProtocolManager) synchronise(peer *peer, exit bool) {
+func (pm *ProtocolManager) synchronise(peer *peer) {
 	// Short circuit if no peers are available
 	if peer == nil {
 		return
 	}
 	// Make sure the peer's TD is higher than our own.
 	td := pm.blockchain.GetTdByHash(pm.blockchain.LastBlockHash())
-	if peer.Td().Cmp(td) > 0 {
-		for {
-			if pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync) != nil {
-				return
-			}
-			if exit {
-				return
-			}
-			time.Sleep(time.Second * 5)
-		}
+	if peer.Td().Cmp(td) <= 0 {
+		return
+	}
+	if pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync) != nil {
+		return
 	}
 }
