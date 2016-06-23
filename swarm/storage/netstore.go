@@ -91,7 +91,8 @@ func (self *NetStore) Put(entry *Chunk) {
 	} else {
 		glog.V(logger.Detail).Infof("[BZZ] NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
 		// handle propagating store requests
-		go self.cloud.Store(entry)
+		// go self.cloud.Store(entry)
+		self.cloud.Store(entry)
 	}
 }
 
