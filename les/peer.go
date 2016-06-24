@@ -54,8 +54,8 @@ type peer struct {
 
 	id string
 
-	head common.Hash
-	td   *big.Int
+	headInfo blockInfo
+	number uint64
 	lock sync.RWMutex
 
 	knownBlocks *set.Set // Set of block hashes known to be known by this peer
@@ -92,8 +92,15 @@ func (p *peer) Head() (hash common.Hash) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	copy(hash[:], p.head[:])
+	copy(hash[:], p.headInfo.Hash[:])
 	return hash
+}
+
+func (p *peer) headBlockInfo() blockInfo {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.headInfo
 }
 
 // Td retrieves the current total difficulty of a peer.
@@ -101,7 +108,7 @@ func (p *peer) Td() *big.Int {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return new(big.Int).Set(p.td)
+	return new(big.Int).Set(p.headInfo.Td)
 }
 
 func sendRequest(w p2p.MsgWriter, msgcode, reqID, cost uint64, data interface{}) error {
@@ -273,15 +280,16 @@ func (p *peer) sendReceiveHandshake(sendList keyValueList) (keyValueList, error)
 
 // Handshake executes the les protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
-func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash, server *LesServer) error {
+func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis common.Hash, server *LesServer) error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	var send keyValueList
 	send = send.add("protocolVersion", uint64(p.version))
 	send = send.add("networkId", uint64(p.network))
-	send = send.add("td", td)
-	send = send.add("bestHash", head)
+	send = send.add("headTd", td)
+	send = send.add("headHash", head)
+	send = send.add("headNum", headNum)
 	send = send.add("genesisHash", genesis)
 	if server != nil {
 		send = send.add("serveHeaders", nil)
@@ -300,8 +308,8 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash, ser
 	}
 	recv := recvList.decode()
 	
-	var rGenesis, rBest common.Hash
-	var rVersion, rNetwork uint64
+	var rGenesis, rHash common.Hash
+	var rVersion, rNetwork, rNum uint64
 	var rTd *big.Int
 
 	if err := recv.get("protocolVersion", &rVersion); err != nil {
@@ -310,10 +318,13 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash, ser
 	if err := recv.get("networkId", &rNetwork); err != nil {
 		return err
 	}
-	if err := recv.get("td", &rTd); err != nil {
+	if err := recv.get("headTd", &rTd); err != nil {
 		return err
 	}
-	if err := recv.get("bestHash", &rBest); err != nil {
+	if err := recv.get("headHash", &rHash); err != nil {
+		return err
+	}
+	if err := recv.get("headNum", &rNum); err != nil {
 		return err
 	}
 	if err := recv.get("genesisHash", &rGenesis); err != nil {
@@ -359,7 +370,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, genesis common.Hash, ser
 		p.fcCosts = MRC.decode()
 	}
 	// Configure the remote peer, and sanity check out handshake too
-	p.td, p.head = rTd, rBest
+	p.headInfo.Td, p.headInfo.Hash, p.headInfo.Number = rTd, rHash, rNum
 	return nil
 }
 

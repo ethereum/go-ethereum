@@ -17,8 +17,10 @@
 package les
 
 import (
+	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 )
 
@@ -56,18 +58,31 @@ func (pm *ProtocolManager) syncer() {
 	}
 }
 
+func (pm *ProtocolManager) needToSync(peerHead blockInfo) bool {
+	head := pm.blockchain.CurrentHeader()
+	currentTd := core.GetTd(pm.chainDb, head.Hash(), head.Number.Uint64())
+	return peerHead.Td.Cmp(currentTd) > 0
+}
+
 // synchronise tries to sync up our local block chain with a remote peer.
 func (pm *ProtocolManager) synchronise(peer *peer) {
 	// Short circuit if no peers are available
 	if peer == nil {
 		return
 	}
+	
 	// Make sure the peer's TD is higher than our own.
-	td := pm.blockchain.GetTdByHash(pm.blockchain.LastBlockHash())
-	if peer.Td().Cmp(td) <= 0 {
+	if !pm.needToSync(peer.headBlockInfo()) {
 		return
 	}
-	if pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync) != nil {
-		return
-	}
+
+	pm.syncMu.Lock()
+	pm.syncWithoutLock(peer)
+	pm.syncMu.Unlock()
+}
+
+func (pm *ProtocolManager) syncWithoutLock(peer *peer) {
+	atomic.StoreUint32(&pm.syncing, 1)
+	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync)
+	atomic.StoreUint32(&pm.syncing, 0)
 }

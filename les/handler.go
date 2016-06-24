@@ -107,6 +107,9 @@ type ProtocolManager struct {
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
 
+	syncMu		sync.Mutex
+	syncing		uint32
+
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
@@ -171,7 +174,7 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
 			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, func(id string) {}) // manager.removePeer)
-		manager.fetcher = newLightFetcher(odr, blockchain)
+		manager.fetcher = newLightFetcher(manager)
 	}
 
 	/*validator := func(block *types.Block, parent *types.Block) error {
@@ -252,7 +255,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	// Execute the LES handshake
 	td, head, genesis := pm.blockchain.Status()
-	if err := p.Handshake(td, head, genesis, pm.server); err != nil {
+	headNum := core.GetBlockNumber(pm.chainDb, head)
+	if err := p.Handshake(td, head, headNum, genesis, pm.server); err != nil {
 		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
 		return err
 	}
