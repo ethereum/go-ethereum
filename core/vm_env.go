@@ -47,6 +47,8 @@ type VMEnv struct {
 	depth       int            // Current execution depth
 	msg         Message        // Message appliod
 
+	codeHashes map[common.Hash]struct{} // code hashes collected during execution
+
 	header    *types.Header            // Header information
 	chain     *BlockChain              // Blockchain handle
 	logs      []vm.StructLog           // Logs for the custom structured logger
@@ -56,6 +58,7 @@ type VMEnv struct {
 func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		chainConfig: chainConfig,
+		codeHashes:  make(map[common.Hash]struct{}),
 		chain:       chain,
 		state:       state,
 		header:      header,
@@ -71,6 +74,9 @@ func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, m
 	env.evm = vm.New(env, cfg)
 	return env
 }
+
+func (self *VMEnv) MarkCodeHash(hash common.Hash)                 { self.codeHashes[hash] = struct{}{} }
+func (self *VMEnv) GetMarkedCodeHashes() map[common.Hash]struct{} { return self.codeHashes }
 
 func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
 func (self *VMEnv) Vm() vm.Vm                { return self.evm }
