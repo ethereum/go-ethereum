@@ -86,8 +86,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			return
 		}
 	}
-	raw = proto[1:5] == "bzzr"
-	nameresolver = proto[1:5] != "bzzi"
+	if len(proto) > 4 {
+		raw = proto[1:5] == "bzzr"
+		nameresolver = proto[1:5] != "bzzi"
+	}
 
 	glog.V(logger.Debug).Infof(
 		"[BZZ] Swarm: %s request over protocol %s '%s' received.",
