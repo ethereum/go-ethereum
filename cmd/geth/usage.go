@@ -128,6 +128,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.TargetGasLimitFlag,
 			utils.GasPriceFlag,
 			utils.ExtraDataFlag,
+			utils.DAOSoftForkFlag,
 		},
 	},
 	{

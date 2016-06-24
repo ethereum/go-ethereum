@@ -79,6 +79,8 @@ func (self *Env) AddStructLog(log vm.StructLog) {
 	self.logs = append(self.logs, log)
 }
 
+func (self *Env) MarkCodeHash(hash common.Hash) {}
+
 func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
 func (self *Env) Vm() vm.Vm                { return self.evm }
 func (self *Env) Origin() common.Address   { return self.origin }
