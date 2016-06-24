@@ -37,7 +37,7 @@ shift
 # ip_addr=`curl ipecho.net/plain 2>/dev/null;echo `
 
 # echo "external IP: $ip_addr"
-swarmoptions='--dev --maxpeers=20 --shh=false --nodiscover'
+swarmoptions='--dev --maxpeers=40 --shh=false --nodiscover'
 tmpdir=/tmp
 
 function attach {
