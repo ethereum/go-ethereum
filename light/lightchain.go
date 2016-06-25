@@ -338,9 +338,9 @@ func (self *LightChain) Rollback(chain []common.Hash) {
 // posts them into the event mux.
 func (self *LightChain) postChainEvents(events []interface{}) {
 	for _, event := range events {
-		if event, ok := event.(LightChainEvent); ok {
+		if event, ok := event.(core.ChainEvent); ok {
 			if self.LastBlockHash() == event.Hash {
-				self.eventMux.Post(LightChainHeadEvent{event.Header})
+				self.eventMux.Post(core.ChainHeadEvent{Block: event.Block})
 			}
 		}
 		// Fire the insertion events individually too
@@ -379,16 +379,16 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 			if glog.V(logger.Debug) {
 				glog.Infof("[%v] inserted header #%d (%x...).\n", time.Now().UnixNano(), header.Number, header.Hash().Bytes()[0:4])
 			}
-			events = append(events, LightChainEvent{header, header.Hash()})
+			events = append(events, core.ChainEvent{Block: types.NewBlockWithHeader(header), Hash: header.Hash()})
 
 		case core.SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked header #%d (TD=%v) (%x...).\n", header.Number, header.Difficulty, header.Hash().Bytes()[0:4])
 			}
-			events = append(events, LightChainSideEvent{header})
+			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
 
 		case core.SplitStatTy:
-			events = append(events, LightChainSplitEvent{header})
+			events = append(events, core.ChainSplitEvent{Block: types.NewBlockWithHeader(header)})
 		}
 
 		return err

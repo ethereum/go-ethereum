@@ -84,7 +84,7 @@ func NewTxPool(config *core.ChainConfig, eventMux *event.TypeMux, chain *LightCh
 		mined:    make(map[common.Hash][]*types.Transaction),
 		quit:     make(chan bool),
 		eventMux: eventMux,
-		events:   eventMux.Subscribe(LightChainHeadEvent{}),
+		events:   eventMux.Subscribe(core.ChainHeadEvent{}),
 		chain:    chain,
 		relay:    relay,
 		odr:      chain.Odr(),
@@ -274,7 +274,7 @@ const blockCheckTimeout = time.Second * 3
 func (pool *TxPool) eventLoop() {
 	for ev := range pool.events.Chan() {
 		switch ev.Data.(type) {
-		case LightChainHeadEvent:
+		case core.ChainHeadEvent:
 			pool.mu.Lock()
 			ctx, _ := context.WithTimeout(context.Background(), blockCheckTimeout)
 			head := pool.chain.CurrentHeader()
