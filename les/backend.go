@@ -122,7 +122,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightNodeService, error
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.LightMode, config.NetworkId, eth.eventMux, eth.pow, eth.blockchain, nil, chainDb, odr, relay); err != nil {
 		return nil, err
 	}
-	odr.removePeer = eth.protocolManager.removePeer
 
 	eth.ApiBackend = &LesApiBackend{eth, nil}
 	eth.ApiBackend.gpo = gasprice.NewLightPriceOracle(eth.ApiBackend)

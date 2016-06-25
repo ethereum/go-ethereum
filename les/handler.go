@@ -51,6 +51,8 @@ const (
 	MaxReceiptFetch = 128 // Amount of transaction receipts to allow fetching per request
 	MaxCodeFetch    = 64  // Amount of contract codes to allow fetching per request
 	MaxProofsFetch  = 64  // Amount of merkle proofs to be fetched per retrieval request
+	
+	disableClientRemovePeer = true
 )
 
 // errIncompatibleConfig is returned if the requested protocols and configs are
@@ -170,12 +172,21 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 		return nil, errIncompatibleConfig
 	}
 
+	removePeer := manager.removePeer	
+	if disableClientRemovePeer {
+		removePeer = func(id string) {}
+	}
+
 	if lightSync {
 		glog.V(logger.Debug).Infof("LES: create downloader")
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
-			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, func(id string) {}) // manager.removePeer)
+			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, removePeer)
 		manager.fetcher = newLightFetcher(manager)
+	}
+
+	if odr != nil {
+		odr.removePeer = removePeer
 	}
 
 	/*validator := func(block *types.Block, parent *types.Block) error {
