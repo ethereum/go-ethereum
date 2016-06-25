@@ -17,7 +17,6 @@
 package les
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -76,13 +75,48 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 
+	pm.waitSyncLock()
+	pm.syncWithLockAcquired(peer)
+}
+
+func (pm *ProtocolManager) waitSyncLock() {
+	for {
+		chn := pm.getSyncLock(true)
+		if chn == nil {
+			break
+		}
+		<-chn
+	}
+}
+
+// getSyncLock either acquires the sync lock and returns nil or returns a channel
+// which is closed when the lock is free again
+func (pm *ProtocolManager) getSyncLock(acquire bool) chan struct{} {
 	pm.syncMu.Lock()
-	pm.syncWithoutLock(peer)
+	defer pm.syncMu.Unlock()
+
+	if pm.syncing {
+		if pm.syncDone == nil {
+			pm.syncDone = make(chan struct{})
+		}
+		return pm.syncDone
+	} else {
+		pm.syncing = acquire
+		return nil
+	}	
+}
+
+func (pm *ProtocolManager) releaseSyncLock() {
+	pm.syncMu.Lock()
+	pm.syncing = false
+	if pm.syncDone != nil {
+		close(pm.syncDone)
+		pm.syncDone = nil
+	}
 	pm.syncMu.Unlock()
 }
 
-func (pm *ProtocolManager) syncWithoutLock(peer *peer) {
-	atomic.StoreUint32(&pm.syncing, 1)
+func (pm *ProtocolManager) syncWithLockAcquired(peer *peer) {
 	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync)
-	atomic.StoreUint32(&pm.syncing, 0)
+	pm.releaseSyncLock()
 }

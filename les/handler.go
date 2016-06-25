@@ -108,7 +108,8 @@ type ProtocolManager struct {
 	noMorePeers chan struct{}
 
 	syncMu		sync.Mutex
-	syncing		uint32
+	syncing		bool
+	syncDone		chan struct{}
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
