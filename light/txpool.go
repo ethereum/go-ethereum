@@ -469,8 +469,8 @@ func (tp *TxPool) GetTransaction(hash common.Hash) *types.Transaction {
 // GetTransactions returns all currently processable transactions.
 // The returned slice may be modified by the caller.
 func (self *TxPool) GetTransactions() (txs types.Transactions) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+	self.mu.RLock()
+	defer self.mu.RUnlock()
 
 	txs = make(types.Transactions, len(self.pending))
 	i := 0
@@ -479,6 +479,29 @@ func (self *TxPool) GetTransactions() (txs types.Transactions) {
 		i++
 	}
 	return txs
+}
+
+// Content retrieves the data content of the transaction pool, returning all the
+// pending as well as queued transactions, grouped by account and nonce.
+func (self *TxPool) Content() (map[common.Address]map[uint64][]*types.Transaction, map[common.Address]map[uint64][]*types.Transaction) {
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	// Retrieve all the pending transactions and sort by account and by nonce
+	pending := make(map[common.Address]map[uint64][]*types.Transaction)
+	for _, tx := range self.pending {
+		account, _ := tx.From()
+
+		owned, ok := pending[account]
+		if !ok {
+			owned = make(map[uint64][]*types.Transaction)
+			pending[account] = owned
+		}
+		owned[tx.Nonce()] = append(owned[tx.Nonce()], tx)
+	}
+	// There are no queued transactions in a light pool, just return an empty map
+	queued := make(map[common.Address]map[uint64][]*types.Transaction)
+	return pending, queued
 }
 
 // RemoveTransactions removes all given transactions from the pool.

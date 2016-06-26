@@ -116,7 +116,7 @@ func (b *LesApiBackend) Stats() (pending int, queued int) {
 }
 
 func (b *LesApiBackend) TxPoolContent() (map[common.Address]map[uint64][]*types.Transaction, map[common.Address]map[uint64][]*types.Transaction) {
-	return make(map[common.Address]map[uint64][]*types.Transaction), make(map[common.Address]map[uint64][]*types.Transaction)
+	return b.eth.txPool.Content()
 }
 
 func (b *LesApiBackend) Downloader() *downloader.Downloader {
