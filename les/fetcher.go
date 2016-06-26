@@ -115,6 +115,8 @@ func (f *lightFetcher) fetchBestFromPool() *peer {
 func (f *lightFetcher) syncLoop() {
 	for {
 		select {	
+		case <-f.pm.quitSync:
+			return
 		case <-f.syncPoolNotify:
 			chn := f.pm.getSyncLock(false)
 			if chn != nil {
@@ -131,13 +133,14 @@ func (f *lightFetcher) syncLoop() {
 					}()
 				}
 			}
-		case <-f.pm.quitSync:
-			return
 		}
 	}
 }
 
 func (f *lightFetcher) syncWithPeer(p *peer) bool {
+	f.pm.wg.Add(1)
+	defer f.pm.wg.Done()
+	
 	headNum := f.chain.CurrentHeader().Number.Uint64()
 	peerHead := p.headBlockInfo()
 
