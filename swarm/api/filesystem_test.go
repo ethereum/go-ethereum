@@ -1,12 +1,16 @@
 package api
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
 	"testing"
-)
+
+"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	)
 
 var (
 	testDir         string
@@ -17,8 +21,8 @@ func init() {
 	_, filename, _, _ := runtime.Caller(1)
 	testDir = path.Join(path.Dir(filename), "../test")
 	testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
-}
-
+ glog.SetV(logger.Detail)
+ glog.SetV = nil
 func testFileSystem(t *testing.T, f func(*FileSystem)) {
 	testApi(t, func(api *Api) {
 		f(NewFileSystem(api))
@@ -29,6 +33,7 @@ func readPath(t *testing.T, parts ...string) string {
 	// func readPath(t *testing.T, parts ...string) []byte {
 	file := path.Join(parts...)
 	content, err := ioutil.ReadFile(file)
+
 	if err != nil {
 		t.Fatalf("unexpected error reading '%v': %v", file, err)
 	}
@@ -45,13 +50,17 @@ func TestApiDirUpload0(t *testing.T) {
 		}
 
 		content := readPath(t, testDir, "test0", "index.html")
+		t.Logf("content (%v): %v ", len(content), content)
 		resp := testGet(t, api, bzzhash+"/index.html")
-		exp := expResponse(content, "text/html; charset=utf-8", 0)
+		exp := expRes	ponse(content, "text/html; charset=utf-8", 0)
+		t.Logf("index.html (size%v=?=%v)", resp.Size, exp.Size)
 		checkResponse(t, resp, exp)
+		t.FailNow()
 
 		content = readPath(t, testDir, "test0", "index.css")
 		resp = testGet(t, api, bzzhash+"/index.css")
 		exp = expResponse(content, "text/css", 0)
+		t.Logf("index.css (size%v=?=%v)", resp.Size, exp.Size)
 		checkResponse(t, resp, exp)
 
 		content = readPath(t, testDir, "test0", "img", "logo.png")
@@ -163,7 +172,7 @@ func TestApiFileUploadWithRootFile(t *testing.T) {
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
 		bzzhash, err := fs.Upload(path.Join(testDir, "test0", "index.html"), "index.html")
-		if err != nil {
+		if err != io.EOF {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}

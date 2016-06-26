@@ -1,7 +1,7 @@
 package api
 
 import (
-	// "bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -51,10 +51,8 @@ func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
 		resp.Content = string(content)
 	}
 	if resp.Content != exp.Content {
-		// if !bytes.Equal(resp.Content, exp.Content) {
-		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Content))
-	}
-}
+		// if !bytes.Equal(resp.Content, exp.Content)
+		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Con}
 
 // func expResponse(content []byte, mimeType string, status int) *Response {
 func expResponse(content string, mimeType string, status int) *Response {
@@ -67,7 +65,13 @@ func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	return &testResponse{reader, &Response{mimeType, status, reader.Size(), ""}}
+
+	s := make([]byte, reader.Size())
+	_, err = reader.Read(s)
+	if err != io.EOF {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	return &testResponse{reader, &Response{mimeType, status, reader.Size(), string(s)}}
 	// return &testResponse{reader, &Response{mimeType, status, reader.Size(), nil}}
 }
 
