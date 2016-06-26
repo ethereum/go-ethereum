@@ -152,8 +152,6 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 				case manager.newPeerCh <- peer:
 					manager.wg.Add(1)
 					defer manager.wg.Done()
-					fmt.Println("enter handler", p.ID())					
-					defer fmt.Println("exit handler", p.ID())					
 					return manager.handle(peer)
 				case <-manager.quitSync:
 					return p2p.DiscQuitting
@@ -274,13 +272,10 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Execute the LES handshake
 	td, head, genesis := pm.blockchain.Status()
 	headNum := core.GetBlockNumber(pm.chainDb, head)
-fmt.Println("handshake")
 	if err := p.Handshake(td, head, headNum, genesis, pm.server); err != nil {
 		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
-fmt.Println(" err:", err)
 		return err
 	}
-fmt.Println(" done")
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
 	}
@@ -385,7 +380,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-fmt.Println("RECEIVED", req[0].Number, req[0].Hash, req[0].Td)
+//fmt.Println("RECEIVED", req[0].Number, req[0].Hash, req[0].Td)
 		for _, r := range req {
 			pm.fetcher.notify(p, r)
 		}
@@ -777,18 +772,18 @@ func (self *ProtocolManager) NodeInfo() *eth.EthNodeInfo {
 }
 
 func (pm *ProtocolManager) broadcastBlockLoop() {
-	sub := pm.eventMux.Subscribe(	core.ChainEvent{})
+	sub := pm.eventMux.Subscribe(	core.ChainHeadEvent{})
 	go func() {
 		for {
 			select {
 			case ev := <-sub.Chan():
 				peers := pm.peers.AllPeers()
 				if len(peers) > 0 {
-					header := ev.Data.(core.ChainEvent).Block.Header()
+					header := ev.Data.(core.ChainHeadEvent).Block.Header()
 					hash := header.Hash()
 					number := header.Number.Uint64()
 					td := core.GetTd(pm.chainDb, hash, number)
-fmt.Println("BROADCAST", number, hash, td)
+//fmt.Println("BROADCAST", number, hash, td)
 					announce := newBlockHashesData{{Hash: hash, Number: number, Td: td}}
 					for _, p := range peers {
 						p.SendNewBlockHashes(announce)
