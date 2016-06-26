@@ -38,8 +38,8 @@ data_{i} := size(subtree_{i}) || key_{j} || key_{j+1} .... || key_{j+n-1}
 */
 
 const (
-	// defaultHash = "SHA3" // http://golang.org/pkg/hash/#Hash
-	defaultHash           = "SHA256" // http://golang.org/pkg/hash/#Hash
+	defaultHash = "SHA3" // http://golang.org/pkg/hash/#Hash
+	// defaultHash           = "SHA256" // http://golang.org/pkg/hash/#Hash
 	defaultBranches int64 = 128
 	// hashSize     int64 = hasherfunc.New().Size() // hasher knows about its own length in bytes
 	// chunksize    int64 = branches * hashSize     // chunk is defined as this
@@ -364,7 +364,8 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		// glog.V(logger.Detail).Infof("[BZZ] depth: %v, len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
 		if int64(len(b)) != eoff-off {
 			//fmt.Printf("len(b) = %v  off = %v  eoff = %v", len(b), off, eoff)
-			panic("len(b) does not match")
+			msg := fmt.Sprintf("len(b) = %v =?= %v = eoff-off", len(b), eoff-off)
+			panic(msg)
 		}
 
 		copy(b, chunk.SData[8+off:8+eoff])
