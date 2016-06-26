@@ -67,7 +67,7 @@ func (ps *odrPeerSet) unregister(p *peer) error {
 
 func (ps *odrPeerSet) peerPriority(p *peer, info *odrPeerInfo, req LesOdrRequest) uint64 {
 	tm := p.fcServer.CanSend(req.GetCost(p))
-	if info.reqCnt > 0 {
+	if info.reqTimeCnt > 0 {
 		tm += info.reqTimeSum / info.reqTimeCnt
 	}
 	return tm

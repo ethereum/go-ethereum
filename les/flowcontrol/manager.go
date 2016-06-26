@@ -190,8 +190,8 @@ func (self *ClientManager) accept(node *cmNode, time int64) bool {
 	self.update(time)
 	if !self.canStartReq() {
 		resume := make(chan bool)
-		self.resumeQueue <- resume
 		self.lock.Unlock()
+		self.resumeQueue <- resume
 		<-resume
 		self.lock.Lock()
 		if _, ok := self.nodes[node]; !ok {
