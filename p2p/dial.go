@@ -121,6 +121,11 @@ func (s *dialstate) addStatic(n *discover.Node) {
 	s.static[n.ID] = &dialTask{flags: staticDialedConn, dest: n}
 }
 
+func (s *dialstate) removeStatic(n *discover.Node) {
+	// This removes a task so future attempts to connect will not be made.
+	delete(s.static, n.ID)
+}
+
 func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now time.Time) []task {
 	var newtasks []task
 	isDialing := func(id discover.NodeID) bool {
