@@ -325,10 +325,9 @@ fmt.Println(" done")
 
 	// main loop. handle incoming messages.
 	for {
-fmt.Println("handleMsg")
 		if err := pm.handleMsg(p); err != nil {
 			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
-fmt.Println(" err:", err)
+fmt.Println("handleMsg err:", err)
 			return err
 		}
 	}

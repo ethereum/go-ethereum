@@ -159,8 +159,10 @@ fmt.Println("removePeer 1")
 			}
 			
 		case <-time.After(hardRequestTimeout):
+			if !disableClientRemovePeer {
 fmt.Println("removePeer 2")
-			f.pm.removePeer(p.id)
+				f.pm.removePeer(p.id)
+			}
 			f.reqMu.Lock()
 			close(f.requested[reqID])
 			delete(f.requested, reqID)

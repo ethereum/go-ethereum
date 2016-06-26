@@ -134,12 +134,9 @@ func (fs *FilterSystem) filterLoop() {
 	for event := range fs.sub.Chan() {
 		switch ev := event.Data.(type) {
 		case core.ChainEvent:
-fmt.Println("ChainEvent")
 			fs.filterMu.RLock()
 			for _, filter := range fs.chainFilters {
-fmt.Println("1")
 				if filter.BlockCallback != nil && !filter.created.After(event.Time) {
-fmt.Println("2")
 					filter.BlockCallback(ev.Block, ev.Logs)
 				}
 			}

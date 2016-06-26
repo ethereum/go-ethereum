@@ -138,7 +138,6 @@ done:
 
 // NewBlockFilter create a new filter that returns blocks that are included into the canonical chain.
 func (s *PublicFilterAPI) NewBlockFilter() (string, error) {
-fmt.Println("NewBlockFilter")
 	externalId, err := newFilterId()
 	if err != nil {
 		return "", err
@@ -156,10 +155,8 @@ fmt.Println("NewBlockFilter")
 	filter.BlockCallback = func(block *types.Block, logs vm.Logs) {
 		s.blockMu.Lock()
 		defer s.blockMu.Unlock()
-fmt.Println("callback")
 
 		if queue := s.blockQueue[id]; queue != nil {
-fmt.Println(" add")
 			queue.add(block.Hash())
 		}
 	}
@@ -501,10 +498,8 @@ func (s *PublicFilterAPI) blockFilterChanged(id int) []common.Hash {
 	s.blockMu.Lock()
 	defer s.blockMu.Unlock()
 
-fmt.Println("blockFilterChanged")
 	if s.blockQueue[id] != nil {
 		res := s.blockQueue[id].get()
-fmt.Println(" len = ", len(res))
 		return res
 	}
 	return nil
