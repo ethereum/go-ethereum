@@ -20,6 +20,8 @@ package flowcontrol
 import (
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 const fcTimeConst = 1000000
@@ -110,7 +112,7 @@ func NewServerNode(params *ServerParams) *ServerNode {
 }
 
 func getTime() int64 {
-	return time.Now().UnixNano()
+	return int64(mclock.Now())
 }
 
 func (peer *ServerNode) recalcBLE(time int64) {

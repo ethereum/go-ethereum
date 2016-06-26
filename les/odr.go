@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/logger"
@@ -129,7 +130,7 @@ func (self *LesOdr) Deliver(peer *peer, msg *Msg) error {
 }
 
 func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout chan struct{}, reqWg *sync.WaitGroup) {
-	stime := time.Now()
+	stime := mclock.Now()
 	defer func() {
 		req.lock.Lock()
 		delete(req.sentTo, peer)
@@ -139,7 +140,7 @@ func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout cha
 
 	select {
 	case <-delivered:
-		servTime := uint64(time.Now().Sub(stime))
+		servTime := uint64(mclock.Now()-stime)
 		self.peers.updateTimeout(peer, false)
 		self.peers.updateServTime(peer, servTime)
 		return
@@ -154,7 +155,7 @@ func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout cha
 
 	select {
 	case <-delivered:
-		servTime := uint64(time.Now().Sub(stime))
+		servTime := uint64(mclock.Now()-stime)
 		self.peers.updateServTime(peer, servTime)
 		return
 	case <-time.After(hardRequestTimeout):
