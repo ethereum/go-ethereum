@@ -133,7 +133,7 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 		txrelay:     txrelay,
 		odr:         odr,
 		peers:       newPeerSet(),
-		newPeerCh:   make(chan *peer, 1),
+		newPeerCh:   make(chan *peer),
 		quitSync:    make(chan struct{}),
 		noMorePeers: make(chan struct{}),
 	}
@@ -152,6 +152,8 @@ func NewProtocolManager(chainConfig *core.ChainConfig, lightSync bool, networkId
 				case manager.newPeerCh <- peer:
 					manager.wg.Add(1)
 					defer manager.wg.Done()
+					fmt.Println("enter handler", p.ID())					
+					defer fmt.Println("exit handler", p.ID())					
 					return manager.handle(peer)
 				case <-manager.quitSync:
 					return p2p.DiscQuitting
@@ -230,6 +232,10 @@ func (pm *ProtocolManager) Start() {
 	if pm.lightSync {
 		// start sync handler
 		go pm.syncer()
+	} else {
+		go func() {
+			for range pm.newPeerCh {}
+		}()
 	}
 }
 
@@ -268,10 +274,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Execute the LES handshake
 	td, head, genesis := pm.blockchain.Status()
 	headNum := core.GetBlockNumber(pm.chainDb, head)
+fmt.Println("handshake")
 	if err := p.Handshake(td, head, headNum, genesis, pm.server); err != nil {
 		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
+fmt.Println(" err:", err)
 		return err
 	}
+fmt.Println(" done")
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
 	}
@@ -316,8 +325,10 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 	// main loop. handle incoming messages.
 	for {
+fmt.Println("handleMsg")
 		if err := pm.handleMsg(p); err != nil {
 			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
+fmt.Println(" err:", err)
 			return err
 		}
 	}
