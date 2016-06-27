@@ -708,8 +708,8 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		Genesis:                 MakeGenesisBlock(ctx),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
-		LightServ:				  ctx.GlobalInt(LightServFlag.Name),
-		LightPeers:				  ctx.GlobalInt(LightPeersFlag.Name),
+		LightServ:               ctx.GlobalInt(LightServFlag.Name),
+		LightPeers:              ctx.GlobalInt(LightPeersFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		DatabaseHandles:         MakeDatabaseHandles(),
@@ -789,7 +789,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	}); err != nil {
 		Fatalf("Failed to register the account manager service: %v", err)
 	}
-	
+
 	if ethConf.LightMode {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)
@@ -866,15 +866,24 @@ func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainC
 	return &core.ChainConfig{HomesteadBlock: homesteadBlockNo}
 }
 
+func ChainDbName(ctx *cli.Context) string {
+	if ctx.GlobalBool(LightModeFlag.Name) {
+		return "lightchaindata"
+	} else {
+		return "chaindata"
+	}
+}
+
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context) ethdb.Database {
 	var (
 		datadir = MustMakeDataDir(ctx)
 		cache   = ctx.GlobalInt(CacheFlag.Name)
 		handles = MakeDatabaseHandles()
+		name    = ChainDbName(ctx)
 	)
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache, handles)
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(datadir, name), cache, handles)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}

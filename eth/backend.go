@@ -157,7 +157,7 @@ func (s *FullNodeService) AddLesServer(ls LesServer) {
 // New creates a new FullNodeService object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*FullNodeService, error) {
-	chainDb, dappDb, err := CreateDBs(ctx, config)
+	chainDb, dappDb, err := CreateDBs(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
 	}
@@ -257,9 +257,9 @@ func New(ctx *node.ServiceContext, config *Config) (*FullNodeService, error) {
 }
 
 // CreateDBs creates the chain and dapp databases for an Ethereum service
-func CreateDBs(ctx *node.ServiceContext, config *Config) (chainDb, dappDb ethdb.Database, err error) {
+func CreateDBs(ctx *node.ServiceContext, config *Config, name string) (chainDb, dappDb ethdb.Database, err error) {
 	// Open the chain database and perform any upgrades needed
-	chainDb, err = ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles)
+	chainDb, err = ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
 	if err != nil {
 		return nil, nil, err
 	}

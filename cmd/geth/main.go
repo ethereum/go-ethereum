@@ -291,7 +291,7 @@ func initGenesis(ctx *cli.Context) error {
 		utils.Fatalf("must supply path to genesis JSON file")
 	}
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MustMakeDataDir(ctx), "chaindata"), 0, 0)
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MustMakeDataDir(ctx), utils.ChainDbName(ctx)), 0, 0)
 	if err != nil {
 		utils.Fatalf("could not open database: %v", err)
 	}

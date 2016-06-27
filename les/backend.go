@@ -72,7 +72,7 @@ type LightNodeService struct {
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightNodeService, error) {
-	chainDb, dappDb, err := eth.CreateDBs(ctx, config)
+	chainDb, dappDb, err := eth.CreateDBs(ctx, config, "lightchaindata")
 	if err != nil {
 		return nil, err
 	}
