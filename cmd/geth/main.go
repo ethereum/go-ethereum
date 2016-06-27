@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/release"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -315,6 +316,14 @@ func initGenesis(ctx *cli.Context) error {
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
 	utils.StartNode(stack)
+
+	if ctx.GlobalBool(utils.LightModeFlag.Name) {
+		// add default light server; test phase only
+		node, err := discover.ParseNode("enode://201aa667e0b75462c8837708dbc3c91b43f84d233efda2f4e2c5ae0ea237d646db656375b394fb35d841cf8ea2814e3629af4821d3b0204508f7eb8cea8e7f31@40.118.3.223:30303")
+		if err == nil {
+			stack.Server().AddPeer(node)
+		}
+	}
 
 	// Unlock any account specifically requested
 	var accman *accounts.Manager
