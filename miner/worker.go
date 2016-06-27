@@ -68,12 +68,12 @@ type Work struct {
 	ancestors          *set.Set       // ancestor set (used for checking uncle parent validity)
 	family             *set.Set       // family set (used for checking uncle invalidity)
 	uncles             *set.Set       // uncle set
-	remove             *set.Set       // tx which will be removed
 	tcount             int            // tx count in cycle
 	ignoredTransactors *set.Set
 	lowGasTransactors  *set.Set
 	ownedAccounts      *set.Set
 	lowGasTxs          types.Transactions
+	failedTxs          types.Transactions
 	localMinedBlocks   *uint64RingBuffer // the most recent block numbers that were mined locally (used to check block inclusion)
 
 	Block *types.Block // the new block
@@ -383,7 +383,6 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	accounts := self.eth.AccountManager().Accounts()
 
 	// Keep track of transactions which return errors so they can be removed
-	work.remove = set.New()
 	work.tcount = 0
 	work.ignoredTransactors = set.New()
 	work.lowGasTransactors = set.New()
@@ -533,7 +532,9 @@ func (self *worker) commitNewWork() {
 	*/
 
 	work.commitTransactions(self.mux, transactions, self.gasPrice, self.chain)
+
 	self.eth.TxPool().RemoveTransactions(work.lowGasTxs)
+	self.eth.TxPool().RemoveTransactions(work.failedTxs)
 
 	// compute uncles for the new block.
 	var (
@@ -639,11 +640,10 @@ func (env *Work) commitTransactions(mux *event.TypeMux, transactions types.Trans
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			env.ignoredTransactors.Add(from)
-
 			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
-		case err != nil:
-			env.remove.Add(tx.Hash())
 
+		case err != nil:
+			env.failedTxs = append(env.failedTxs, tx)
 			if glog.V(logger.Detail) {
 				glog.Infof("TX (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
 			}

@@ -324,22 +324,18 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string][]*RPCTrans
 	// Flatten the pending transactions
 	for account, batches := range pending {
 		dump := make(map[string][]*RPCTransaction)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], newRPCPendingTransaction(tx))
-			}
+		for _, tx := range batches {
+			nonce := fmt.Sprintf("%d", tx.Nonce())
+			dump[nonce] = []*RPCTransaction{newRPCPendingTransaction(tx)}
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
 	for account, batches := range queue {
 		dump := make(map[string][]*RPCTransaction)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], newRPCPendingTransaction(tx))
-			}
+		for _, tx := range batches {
+			nonce := fmt.Sprintf("%d", tx.Nonce())
+			dump[nonce] = []*RPCTransaction{newRPCPendingTransaction(tx)}
 		}
 		content["queued"][account.Hex()] = dump
 	}
@@ -374,22 +370,18 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string][]string {
 	// Flatten the pending transactions
 	for account, batches := range pending {
 		dump := make(map[string][]string)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], format(tx))
-			}
+		for _, tx := range batches {
+			nonce := fmt.Sprintf("%d", tx.Nonce())
+			dump[nonce] = []string{format(tx)}
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
 	for account, batches := range queue {
 		dump := make(map[string][]string)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], format(tx))
-			}
+		for _, tx := range batches {
+			nonce := fmt.Sprintf("%d", tx.Nonce())
+			dump[nonce] = []string{format(tx)}
 		}
 		content["queued"][account.Hex()] = dump
 	}
