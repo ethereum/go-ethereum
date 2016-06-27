@@ -149,7 +149,7 @@ func (b *EthApiBackend) Stats() (pending int, queued int) {
 	return b.eth.txPool.Stats()
 }
 
-func (b *EthApiBackend) TxPoolContent() (map[common.Address]map[uint64][]*types.Transaction, map[common.Address]map[uint64][]*types.Transaction) {
+func (b *EthApiBackend) TxPoolContent() (map[common.Address]core.TxList, map[common.Address]core.TxList) {
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 
