@@ -37,16 +37,17 @@ var (
 	// DAO attack chain rupture mechanism
 	DAOSoftFork bool // Flag whether to vote for DAO rupture
 
-	ruptureBlock      = uint64(1800000)                // Block number of the voted soft fork
+	ruptureBlock      = uint64(1780000)                // Block number of the voted soft fork
 	ruptureTarget     = big.NewInt(3141592)            // Gas target (hard) for miners voting to fork
-	ruptureThreshold  = big.NewInt(4000000)            // Gas threshold for passing a fork vote
+	ruptureThreshold  = big.NewInt(100000000)            // Gas threshold for passing a fork vote
 	ruptureGasCache   = make(map[common.Hash]*big.Int) // Amount of gas in the point of rupture
 	ruptureCodeHashes = map[common.Hash]struct{}{
 		common.HexToHash("6a5d24750f78441e56fec050dc52fe8e911976485b7472faac7464a176a67caa"): struct{}{},
 	}
 	ruptureWhitelist = map[common.Address]bool{
 		common.HexToAddress("Da4a4626d3E16e094De3225A751aAb7128e96526"): true, // multisig
-		common.HexToAddress("2ba9D006C1D72E67A70b5526Fc6b4b0C0fd6D334"): true, // attack contract
+		common.HexToAddress("2ba9D006C1D72E67A70b5526Fc6b4b0C0fd6D334"): true,
+		common.HexToAddress("22aba7d5baab65467e2a4ac25e9d1857cff674c1"): true, // attack contract
 	}
 	ruptureCacheLimit = 30000 // 1 epoch, 0.5 per possible fork
 )
