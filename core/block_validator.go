@@ -268,7 +268,7 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
 	//        ) + 2^(periodCount - 2)
 
-	if (big.NewInt(1600000).Cmp(parentNumber) > 0 || big.NewInt(1799000).Cmp(parentNumber) < 0){
+	if (big.NewInt(1780000).Cmp(parentNumber) > 0 || big.NewInt(1780005).Cmp(parentNumber) < 0){
 		bigTime := new(big.Int).SetUint64(time)
 		bigParentTime := new(big.Int).SetUint64(parentTime)
 
@@ -310,7 +310,7 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 
 		return x
 	} else {
-	return big.NewInt(20000)
+	return big.NewInt(500000)
 	}
 }
 
