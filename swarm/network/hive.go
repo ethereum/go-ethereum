@@ -30,6 +30,7 @@ type Hive struct {
 	addr         kademlia.Address
 	kad          *kademlia.Kademlia
 	path         string
+	quit         chan bool
 	toggle       chan bool
 	more         chan bool
 
@@ -106,6 +107,7 @@ func (self *Hive) Addr() kademlia.Address {
 func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
 	self.toggle = make(chan bool)
 	self.more = make(chan bool)
+	self.quit = make(chan bool)
 	self.id = id
 	self.listenAddr = listenAddr
 	err = self.kad.Load(self.path, nil)
@@ -145,11 +147,14 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 				} else {
 					glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ hive: no peer")
 				}
-				self.toggle <- true
 				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
 			} else {
 				glog.V(logger.Info).Infof("[BZZ] KΛÐΞMLIΛ hive: no need for more bees")
-				self.toggle <- false
+			}
+			select {
+			case self.toggle <- need:
+			case <-self.quit:
+				return
 			}
 			glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
 		}
@@ -174,11 +179,7 @@ func (self *Hive) keepAlive() {
 				default:
 				}
 			}
-		case need, alive := <-self.toggle:
-			if !alive {
-				self.more <- false
-				return
-			}
+		case need := <-self.toggle:
 			if alarm == nil && need {
 				alarm = time.NewTicker(time.Duration(self.callInterval)).C
 			}
@@ -186,13 +187,15 @@ func (self *Hive) keepAlive() {
 				alarm = nil
 
 			}
+		case <-self.quit:
+			return
 		}
 	}
 }
 
 func (self *Hive) Stop() error {
 	// closing toggle channel quits the updateloop
-	close(self.toggle)
+	close(self.quit)
 	return self.kad.Save(self.path, saveSync)
 }
 

@@ -4,7 +4,7 @@ echo " two nodes that do not sync and do not have any funds"
 echo " cannot retrieve content from each other"
 
 dir=`dirname $0`
-source $dir/../../cmd/swarm/test.sh
+source $dir/../test.sh
 
 FILE_00=/tmp/1K.0
 randomfile 1 > $FILE_00

@@ -25,8 +25,7 @@ type NodeRecord struct {
 	Seen  time.Time        // last connected at time
 	Meta  *json.RawMessage // arbitrary metadata saved for a peer
 
-	node      Node
-	connected bool
+	node Node
 }
 
 func (self *NodeRecord) setSeen() {
@@ -45,7 +44,7 @@ type KadDb struct {
 	Nodes                [][]*NodeRecord
 	index                map[Address]*NodeRecord
 	cursors              []int
-	lock                 sync.Mutex
+	lock                 sync.RWMutex
 	purgeInterval        time.Duration
 	initialRetryInterval time.Duration
 	connRetryExp         int
@@ -161,10 +160,10 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 
 	var interval time.Duration
 	var found bool
-	var count int
 	var purge []bool
 	var delta time.Duration
 	var cursor int
+	var count int
 	var after time.Time
 
 	// iterate over columns maximum bucketsize times
@@ -181,7 +180,6 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				proxLimit = po
 				need = true
 			}
-			cursor = self.cursors[po]
 			purge = make([]bool, len(dbrow))
 
 			// there is a missing slot - finding a node to connect to
@@ -192,7 +190,7 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				node = dbrow[cursor]
 
 				// skip already connected nodes
-				if node.connected {
+				if node.node != nil {
 					glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d/%d) already connected", node.Addr, po, cursor, len(dbrow))
 					continue ROW
 				}
@@ -223,7 +221,6 @@ func (self *KadDb) findBest(maxBinSize int, binSize func(int) int) (node *NodeRe
 				glog.V(logger.Debug).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) selected as candidate connection %v. seen at %v (%v ago), selectable since %v, retry after %v (in %v)", node.Addr, po, cursor, rounds, node.Seen, delta, node.After, after, interval)
 				node.After = after
 				found = true
-				break ROW
 			} // ROW
 			self.cursors[po] = cursor
 			self.delete(po, purge)

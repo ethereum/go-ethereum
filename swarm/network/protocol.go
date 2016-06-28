@@ -181,7 +181,8 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend bind.Backe
 	// the main forever loop that handles incoming requests
 	for {
 		if self.hive.blockRead {
-			time.Sleep(1 * time.Second)
+			glog.V(logger.Warn).Infof("[BZZ] Cannot read network")
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 		err = self.handle()
@@ -225,7 +226,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("[BZZ] incoming store request: %s", req.String())
+		glog.V(logger.Detail).Infof("[BZZ] incoming store request: %s", req.String())
 		// swap accounting is done within forwarding
 		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})
 

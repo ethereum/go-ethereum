@@ -1,9 +1,6 @@
-export GOPATH=~/go
-export PATH=~/bin:$GOPATH/bin:$PATH
+export PATH=$HOME/bin:$PATH
+export GETH_DIR=$HOME/bin
+export SWARM_DIR=
 
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
-fi
-
-export NVM_DIR="/home/ubuntu/.nvm"
+export NVM_DIR=$HOME/.nvm
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm

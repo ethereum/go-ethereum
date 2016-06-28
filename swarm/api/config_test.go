@@ -26,7 +26,8 @@ var (
     "ProxBinSize": 4,
     "BucketSize": 3,
     "PurgeInterval": 151200000000000,
-    "InitialRetryInterval": 4200000000,
+    "InitialRetryInterval": 42000000,
+    "MaxIdleInterval": 4200000000,
     "ConnRetryExp": 2,
     "Swap": {
         "BuyAt": 20000000000,

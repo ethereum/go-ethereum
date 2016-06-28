@@ -464,11 +464,11 @@ LOOP:
 			//  send the unsynced keys
 			stateCopy := *state
 			err := self.unsyncedKeys(unsynced, &stateCopy)
-			self.state = state
-			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", self.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy)
 			if err != nil {
 				glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: unable to send unsynced keys: %v", err)
 			}
+			self.state = state
+			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", self.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy)
 			unsynced = nil
 			keys = nil
 		}
@@ -585,7 +585,7 @@ func (self *syncer) syncDeliveries() {
 		total++
 		msg, err = self.newStoreRequestMsgData(req)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: failed to deliver %v: %v", self.key.Log(), req, err)
+			glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: failed to create store request for %v: %v", self.key.Log(), req, err)
 		} else {
 			err = self.store(msg)
 			if err != nil {

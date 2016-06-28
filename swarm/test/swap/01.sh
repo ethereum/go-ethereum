@@ -3,19 +3,20 @@ echo " two nodes that do not sync but have enough funds"
 echo " can retrieve content from each other"
 
 dir=`dirname $0`
-source $dir/../../cmd/swarm/test.sh
+source $dir/..s/test.sh
 
 file=/tmp/test.file
 mininginterval=120
 key=/tmp/key
-logargs="--verbosity=0 --vmodule='swarm/*=6'"
-# logargs='--verbosity=6'
+# logargs="--verbosity=0 --vmodule='swarm/*=6'"
+logargs='--verbosity=6'
 
+# swarm init 2 --mine --bzznosync --bzznoswap=false $logargsc
+# echo "Mining some ether..."
+# sleep $mininginterval
 
-swarm init 2 --mine --bzznosync $logargs
+swarm cluster 2 --mine --bzznosync --bzznoswap=false $logargsc
 
-echo "Mining some ether..."
-sleep $mininginterval
 
 randomfile 10 > $file
 swarm up 00 $file|tail -n1 > $key
