@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -49,11 +50,13 @@ type Miner struct {
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
+
 }
 
 func New(eth core.Backend, config *core.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
 	miner := &Miner{eth: eth, mux: mux, pow: pow, worker: newWorker(config, common.Address{}, eth), canStart: 1}
 	go miner.update()
+	go miner.runLoop()
 
 	return miner
 }
@@ -121,6 +124,24 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 	self.worker.start()
 
 	self.worker.commitNewWork()
+
+}
+
+func (self *Miner) runLoop() {
+	for true {
+		if len(self.worker.current.txs) == 0 {
+			if self.Mining() {
+				glog.V(logger.Info).Infoln("Nothing to do. The miner sleeps.")
+				self.Stop()
+			}
+		} else {
+			if self.Mining() == false {
+				glog.V(logger.Info).Infoln("A transaction awaits! Waking up miner.")
+				self.Start(self.coinbase, self.threads)
+			}
+		}
+		time.Sleep(self.eth.PollInterval() * time.Millisecond)
+	}
 }
 
 func (self *Miner) Stop() {

@@ -98,7 +98,7 @@ geth-ios: xgo
 	@ls -ld $(GOBIN)/geth-ios-*
 
 evm:
-	build/env.sh $(GOROOT)/bin/go install -v $(shell build/flags.sh) ./cmd/evm
+	build/env.sh go install -v $(shell build/flags.sh) ./cmd/evm
 	@echo "Done building."
 	@echo "Run \"$(GOBIN)/evm to start the evm."
 

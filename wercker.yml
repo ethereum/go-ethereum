@@ -1,0 +1,19 @@
+box: golang
+build:
+  steps:
+    - setup-go-workspace
+    - script:
+        name: go build
+        code: |
+          make geth
+          BIN=/pipeline/source/build/bin/$WERCKER_GIT_BRANCH/`cat VERSION`
+          mkdir -p $BIN
+          cp build/bin/geth $BIN/geth
+deploy:
+  steps:
+  - s3sync:
+      source_dir:     build/bin 
+      delete-removed: false
+      bucket-url:     $AWS_BUCKET_URL
+      key-id:         $AWS_ACCESS_KEY_ID
+      key-secret:     $AWS_SECRET_ACCESS_KEY

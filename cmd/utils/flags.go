@@ -396,6 +396,21 @@ var (
 		Usage: "Suggested gas price base correction factor (%)",
 		Value: 110,
 	}
+	FixedDifficultyFlag = cli.IntFlag{
+		Name:  "difficulty",
+		Usage: "Specify a fixed difficulty.",
+		Value: -1,
+	}
+	PollIntervalFlag = cli.IntFlag{
+		Name:  "interval",
+		Usage: "Miner polling interval in milliseconds.",
+		Value: 200,
+	}
+	MinerPassphraseFlag = cli.StringFlag{
+		Name:  "minerpass",
+		Usage: "Passphrase used to unlock key for signing blocks.",
+		Value: "",
+	}
 )
 
 // MustMakeDataDir retrieves the currently requested data directory, terminating
@@ -719,6 +734,9 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
+		MinerPassphrase:         ctx.GlobalString(MinerPassphraseFlag.Name),
+		FixedDifficulty:         ctx.GlobalInt(FixedDifficultyFlag.Name),
+		PollInterval:            ctx.GlobalInt(PollIntervalFlag.Name),
 	}
 	// Configure the Whisper service
 	shhEnable := ctx.GlobalBool(WhisperEnabledFlag.Name)
@@ -808,7 +826,9 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 	db := MakeChainDatabase(ctx)
 	defer db.Close()
 
-	return MustMakeChainConfigFromDb(ctx, db)
+	config := MustMakeChainConfigFromDb(ctx, db)
+	config.FixedDifficulty = ctx.GlobalInt(FixedDifficultyFlag.Name)
+	return config
 }
 
 // MustMakeChainConfigFromDb reads the chain configuration from the given database.

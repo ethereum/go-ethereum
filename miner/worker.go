@@ -548,7 +548,16 @@ func (self *worker) commitNewWork() {
 	}
 
 	// create the new block whose nonce will be mined.
-	work.Block = types.NewBlock(header, work.txs, uncles, work.receipts)
+	newBlock := types.NewBlock(header, work.txs, uncles, work.receipts)
+	sig, signError := self.signBlock(newBlock)
+	if signError != nil {
+		glog.V(logger.Info).Infoln(fmt.Sprintf("Error signing block: %s.", signError))
+		return
+	}
+	newHeader := newBlock.Header()
+	newHeader.Extra = sig
+	signedBlock := types.NewBlock(newHeader, work.txs, uncles, work.receipts)
+	work.Block = signedBlock
 
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
@@ -556,6 +565,22 @@ func (self *worker) commitNewWork() {
 		self.logLocalMinedBlocks(work, previous)
 	}
 	self.push(work)
+}
+
+func (self *worker) signBlock(block *types.Block) ([]byte, error) {
+	addr := block.Coinbase()
+	header := block.Header()
+	hash := core.HashOfHashes(header)
+	acct := accounts.Account{Address: addr}
+	unlockErr := self.eth.AccountManager().Unlock(acct, self.eth.MinerPassphrase())
+	if unlockErr != nil {
+		return nil, unlockErr
+	}
+	sig, err := self.eth.AccountManager().Sign(addr, hash.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return sig, nil
 }
 
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {

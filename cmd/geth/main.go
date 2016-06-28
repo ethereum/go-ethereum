@@ -207,6 +207,9 @@ participating.
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
 		utils.ExtraDataFlag,
+		utils.FixedDifficultyFlag,
+		utils.PollIntervalFlag,
+		utils.MinerPassphraseFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 
