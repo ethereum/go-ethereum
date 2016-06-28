@@ -14,6 +14,8 @@ import (
 
 type Hasher func() hash.Hash
 
+// Peer is the recorded as Source on the chunk
+// should probably not be here? but network should wrap chunk object
 type Peer interface{}
 
 type Key []byte
@@ -187,7 +189,7 @@ type Joiner interface {
 	   The chunks are not meant to be validated by the chunker when joining. This
 	   is because it is left to the DPA to decide which sources are trusted.
 	*/
-	Join(key Key, chunkC chan *Chunk) SectionReader
+	Join(key Key, chunkC chan *Chunk) LazySectionReader
 }
 
 type Chunker interface {
@@ -198,9 +200,17 @@ type Chunker interface {
 }
 
 // Size, Seek, Read, ReadAt
-type SectionReader interface {
-	Size() int64
+type LazySectionReader interface {
+	Size(chan bool) (int64, error)
 	io.Seeker
 	io.Reader
 	io.ReaderAt
+}
+
+type LazyTestSectionReader struct {
+	*io.SectionReader
+}
+
+func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
+	return self.SectionReader.Size(), nil
 }

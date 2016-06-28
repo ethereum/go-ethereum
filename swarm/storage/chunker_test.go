@@ -83,7 +83,7 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 	return
 }
 
-func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) SectionReader {
+func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) LazySectionReader {
 	// reset but not the chunks
 
 	reader := chunker.Join(key, chunkC)
@@ -163,7 +163,7 @@ func TestRandomData(t *testing.T) {
 	testRandomData(253, 7, t)
 }
 
-func readAll(reader SectionReader, result []byte) {
+func readAll(reader LazySectionReader, result []byte) {
 	size := int64(len(result))
 
 	var end int64
@@ -177,8 +177,8 @@ func readAll(reader SectionReader, result []byte) {
 	}
 }
 
-func benchReadAll(reader SectionReader) {
-	size := reader.Size()
+func benchReadAll(reader LazySectionReader) {
+	size, _ := reader.Size(nil)
 	output := make([]byte, 1000)
 	for pos := int64(0); pos < size; pos += 1000 {
 		reader.ReadAt(output, pos)

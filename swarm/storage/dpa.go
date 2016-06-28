@@ -73,7 +73,7 @@ func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
-func (self *DPA) Retrieve(key Key) SectionReader {
+func (self *DPA) Retrieve(key Key) LazySectionReader {
 	return self.Chunker.Join(key, self.retrieveC)
 }
 
@@ -146,7 +146,7 @@ func (self *DPA) storeLoop() {
 			go func(chunk *Chunk) {
 				self.Put(chunk)
 				if chunk.wg != nil {
-					glog.V(logger.Detail).Infof("[BZZ] DPA.storeLoop %v", chunk.Key.Log())
+					glog.V(logger.Detail).Infof("[BZZ] dpa: store loop %v", chunk.Key.Log())
 					chunk.wg.Done()
 				}
 			}(ch)

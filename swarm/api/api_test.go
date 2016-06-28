@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -27,7 +29,7 @@ func testApi(t *testing.T, f func(*Api)) {
 }
 
 type testResponse struct {
-	reader storage.SectionReader
+	reader storage.LazySectionReader
 	*Response
 }
 
@@ -52,10 +54,13 @@ func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
 	}
 	if resp.Content != exp.Content {
 		// if !bytes.Equal(resp.Content, exp.Content)
-		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Con}
+		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Content))
+	}
+}
 
 // func expResponse(content []byte, mimeType string, status int) *Response {
 func expResponse(content string, mimeType string, status int) *Response {
+	glog.V(logger.Detail).Infof("expected content (%v): %v ", len(content), content)
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
@@ -65,13 +70,19 @@ func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	s := make([]byte, reader.Size())
+	quitC := make(chan bool)
+	size, err := reader.Size(quitC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	glog.V(logger.Detail).Infof("reader size: %v ", size)
+	s := make([]byte, size)
 	_, err = reader.Read(s)
 	if err != io.EOF {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	return &testResponse{reader, &Response{mimeType, status, reader.Size(), string(s)}}
+	reader.Seek(0, 0)
+	return &testResponse{reader, &Response{mimeType, status, size, string(s)}}
 	// return &testResponse{reader, &Response{mimeType, status, reader.Size(), nil}}
 }
 

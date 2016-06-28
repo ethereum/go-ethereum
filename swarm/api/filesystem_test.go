@@ -1,16 +1,14 @@
 package api
 
 import (
-	"io"
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
+	"sync"
 	"testing"
-
-"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	)
+)
 
 var (
 	testDir         string
@@ -21,8 +19,8 @@ func init() {
 	_, filename, _, _ := runtime.Caller(1)
 	testDir = path.Join(path.Dir(filename), "../test")
 	testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
- glog.SetV(logger.Detail)
- glog.SetV = nil
+}
+
 func testFileSystem(t *testing.T, f func(*FileSystem)) {
 	testApi(t, func(api *Api) {
 		f(NewFileSystem(api))
@@ -30,7 +28,6 @@ func testFileSystem(t *testing.T, f func(*FileSystem)) {
 }
 
 func readPath(t *testing.T, parts ...string) string {
-	// func readPath(t *testing.T, parts ...string) []byte {
 	file := path.Join(parts...)
 	content, err := ioutil.ReadFile(file)
 
@@ -41,31 +38,21 @@ func readPath(t *testing.T, parts ...string) string {
 }
 
 func TestApiDirUpload0(t *testing.T) {
-	// t.Skip("FIXME")
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
 		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-
 		content := readPath(t, testDir, "test0", "index.html")
-		t.Logf("content (%v): %v ", len(content), content)
 		resp := testGet(t, api, bzzhash+"/index.html")
-		exp := expRes	ponse(content, "text/html; charset=utf-8", 0)
-		t.Logf("index.html (size%v=?=%v)", resp.Size, exp.Size)
+		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
-		t.FailNow()
 
 		content = readPath(t, testDir, "test0", "index.css")
 		resp = testGet(t, api, bzzhash+"/index.css")
 		exp = expResponse(content, "text/css", 0)
-		t.Logf("index.css (size%v=?=%v)", resp.Size, exp.Size)
 		checkResponse(t, resp, exp)
-
-		content = readPath(t, testDir, "test0", "img", "logo.png")
-		resp = testGet(t, api, bzzhash+"/img/logo.png")
-		exp = expResponse(content, "image/png", 0)
 
 		_, _, _, err = api.Get(bzzhash, true)
 		if err == nil {
@@ -73,7 +60,6 @@ func TestApiDirUpload0(t *testing.T) {
 		}
 
 		downloadDir := path.Join(testDownloadDir, "test0")
-		os.RemoveAll(downloadDir)
 		defer os.RemoveAll(downloadDir)
 		err = fs.Download(bzzhash, downloadDir)
 		if err != nil {
@@ -86,12 +72,10 @@ func TestApiDirUpload0(t *testing.T) {
 		if bzzhash != newbzzhash {
 			t.Fatalf("download %v reuploaded has incorrect hash, expected %v, got %v", downloadDir, bzzhash, newbzzhash)
 		}
-
 	})
 }
 
 func TestApiDirUploadModify(t *testing.T) {
-	// t.Skip("FIXME")
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
 		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "")
@@ -105,12 +89,24 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
+		index, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
+		wg := &sync.WaitGroup{}
+		hash, err := api.Store(bytes.NewReader(index), int64(len(index)), wg)
+		wg.Wait()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		bzzhash, err = api.Modify(bzzhash+"/index2.html", hash.Hex(), "text/html; charset=utf-8", true)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", hash.Hex(), "text/html; charset=utf-8", true)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -172,7 +168,7 @@ func TestApiFileUploadWithRootFile(t *testing.T) {
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
 		bzzhash, err := fs.Upload(path.Join(testDir, "test0", "index.html"), "index.html")
-		if err != io.EOF {
+		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}

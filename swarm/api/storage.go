@@ -34,7 +34,11 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	expsize := reader.Size()
+	quitC := make(chan bool)
+	expsize, err := reader.Size(quitC)
+	if err != nil {
+		return nil, err
+	}
 	body := make([]byte, expsize)
 	size, err := reader.Read(body)
 	if int64(size) == expsize {

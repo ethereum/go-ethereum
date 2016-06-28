@@ -44,7 +44,6 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 	swg.Wait()
 	close(chunkC)
 	chunkC = make(chan *Chunk)
-	r := chunker.Join(key, chunkC)
 
 	quit := make(chan bool)
 
@@ -53,18 +52,20 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
 				if err == notFound {
-					glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
+					glog.V(logger.Detail).Infof("[BZZ] chunk '%v' not found", chunk.Key.Log())
 				} else if err != nil {
-					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
+					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %v: %v", chunk.Key.Log(), err)
 				} else {
 					chunk.SData = storedChunk.SData
+					chunk.Size = storedChunk.Size
 				}
-				glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key[:4])
+				glog.V(logger.Detail).Infof("[BZZ] chunk '%v' not found", chunk.Key.Log())
 				close(chunk.C)
 			}(ch)
 		}
 		close(quit)
 	}()
+	r := chunker.Join(key, chunkC)
 
 	b := make([]byte, l)
 	n, err := r.ReadAt(b, 0)
