@@ -234,6 +234,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GpobaseCorrectionFactorFlag,
 		utils.ExtraDataFlag,
 		utils.FixedDifficultyFlag,
+		utils.PollIntervalFlag,
 		utils.MinerPassphraseFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)

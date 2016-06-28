@@ -140,7 +140,7 @@ func (self *Miner) runLoop() {
 				self.Start(self.coinbase, self.threads)
 			}
 		}
-		time.Sleep(3000 * time.Millisecond)
+		time.Sleep(self.eth.PollInterval() * time.Millisecond)
 	}
 }
 

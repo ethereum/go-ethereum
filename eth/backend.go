@@ -102,6 +102,7 @@ type Config struct {
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
 
 	FixedDifficulty int
+	PollInterval    int
 	MinerPassphrase string
 }
 
@@ -147,6 +148,7 @@ type Ethereum struct {
 	netRPCService *PublicNetAPI
 
 	fixedDifficulty int
+	pollInterval    int
 	minerPassphrase string
 }
 
@@ -224,6 +226,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 		httpclient:              httpclient.New(config.DocRoot),
+		fixedDifficulty:         config.FixedDifficulty,
+		pollInterval:            config.PollInterval,
 		minerPassphrase:         config.MinerPassphrase,
 	}
 	switch {
@@ -389,6 +393,8 @@ func (s *Ethereum) StopMining()             { s.miner.Stop() }
 func (s *Ethereum) IsMining() bool          { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner     { return s.miner }
 func (s *Ethereum) MinerPassphrase() string { return s.minerPassphrase }
+func (s *Ethereum) FixedDifficulty() int    { return s.fixedDifficulty }
+func (s *Ethereum) PollInterval() int       { return s.pollInterval }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }

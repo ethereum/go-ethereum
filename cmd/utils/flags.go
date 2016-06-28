@@ -397,6 +397,11 @@ var (
 		Usage: "Specify a fixed difficulty.",
 		Value: -1,
 	}
+	PollIntervalFlag = cli.IntFlag{
+		Name:  "interval",
+		Usage: "Miner polling interval in milliseconds.",
+		Value: 200,
+	}
 	MinerPassphraseFlag = cli.StringFlag{
 		Name:  "minerpass",
 		Usage: "Passphrase used to unlock key for signing blocks.",
@@ -723,6 +728,8 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 		MinerPassphrase:         ctx.GlobalString(MinerPassphraseFlag.Name),
+		FixedDifficulty:         ctx.GlobalInt(FixedDifficultyFlag.Name),
+		PollInterval:            ctx.GlobalInt(PollIntervalFlag.Name),
 	}
 	// Configure the Whisper service
 	shhEnable := ctx.GlobalBool(WhisperEnabledFlag.Name)
