@@ -220,7 +220,6 @@ type ruleSet struct{}
 
 func (ruleSet) IsHomestead(*big.Int) bool { return true }
 
-func (self *VMEnv) MarkCodeHash(common.Hash)   {}
 func (self *VMEnv) RuleSet() vm.RuleSet        { return ruleSet{} }
 func (self *VMEnv) Vm() vm.Vm                  { return self.evm }
 func (self *VMEnv) Db() vm.Database            { return self.state }
