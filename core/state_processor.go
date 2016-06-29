@@ -17,10 +17,8 @@
 package core
 
 import (
-	"errors"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -30,15 +28,8 @@ import (
 )
 
 var (
-	big8               = big.NewInt(8)
-	big32              = big.NewInt(32)
-	illegalCodeHashErr = errors.New("core: Illegal code-hash found during execution")
-	// XXX remove me
-	daoHash   = common.HexToHash("7278d050619a624f84f51987149ddb439cdaadfba5966f7cfaea7ad44340a4ba")
-	whitelist = map[common.Address]bool{
-		common.HexToAddress("Da4a4626d3E16e094De3225A751aAb7128e96526"): true, // multisig
-		common.HexToAddress("2ba9D006C1D72E67A70b5526Fc6b4b0C0fd6D334"): true, // attack contract
-	}
+	big8  = big.NewInt(8)
+	big32 = big.NewInt(32)
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -95,18 +86,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
 func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
-	env := NewEnv(statedb, config, bc, tx, header, cfg)
-	_, gas, err := ApplyMessage(env, tx, gp)
+	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, tx, header, cfg), tx, gp)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-
-	for _, codeHash := range env.CodeHashes {
-		_, illegalHash := IllegalCodeHashes[codeHash]
-		to := tx.To()
-		if illegalHash && to != nil && !whitelist[*to] {
-			return nil, nil, nil, illegalCodeHashErr
-		}
 	}
 
 	// Update the state with pending changes

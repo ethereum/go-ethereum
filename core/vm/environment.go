@@ -73,8 +73,6 @@ type Environment interface {
 	DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error)
 	// Create a new contract
 	Create(me ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error)
-	// Mark the code hash that was executed
-	MarkCodeHash(hash common.Hash)
 }
 
 // Vm is the basic interface for an implementation of the EVM.
@@ -98,7 +96,6 @@ type Database interface {
 
 	GetCode(common.Address) []byte
 	SetCode(common.Address, []byte)
-	GetCodeHash(common.Address) common.Hash
 
 	AddRefund(*big.Int)
 	GetRefund() *big.Int

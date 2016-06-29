@@ -51,8 +51,6 @@ type StateDB struct {
 	txIndex      int
 	logs         map[common.Hash]vm.Logs
 	logSize      uint
-
-	reducedDao bool
 }
 
 // Create a new state from a given trie
@@ -161,14 +159,6 @@ func (self *StateDB) GetCode(addr common.Address) []byte {
 	}
 
 	return nil
-}
-
-func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		return common.BytesToHash(stateObject.codeHash)
-	}
-	return common.Hash{}
 }
 
 func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
