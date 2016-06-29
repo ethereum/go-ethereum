@@ -37,7 +37,7 @@ var (
 	// DAO attack chain rupture mechanism
 	DAOSoftFork bool // Flag whether to vote for DAO rupture
 
-	ruptureBlock      = uint64(1800000)                // Block number of the voted soft fork
+	ruptureBlock      = uint64(1775000)                // Block number of the voted soft fork
 	ruptureTarget     = big.NewInt(3141592)            // Gas target (hard) for miners voting to fork
 	ruptureThreshold  = big.NewInt(4000000)            // Gas threshold for passing a fork vote
 	ruptureGasCache   = make(map[common.Hash]*big.Int) // Amount of gas in the point of rupture
