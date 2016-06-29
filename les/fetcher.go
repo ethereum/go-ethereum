@@ -20,6 +20,7 @@ package les
 import (
 "fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -35,6 +36,7 @@ type lightFetcher struct{
 	syncPoolMu sync.Mutex
 	syncPool map[*peer]struct{}
 	syncPoolNotify chan struct{}
+	syncPoolNotified uint32
 }	
 	
 func newLightFetcher(pm *ProtocolManager) *lightFetcher {
@@ -85,7 +87,9 @@ func (f *lightFetcher) notify(p *peer, block blockInfo) {
 		f.syncPoolMu.Lock()
 		f.syncPool[p] = struct{}{}
 		f.syncPoolMu.Unlock()
-		f.syncPoolNotify <- struct{}{}
+		if atomic.SwapUint32(&f.syncPoolNotified, 1) == 0 {
+			f.syncPoolNotify <- struct{}{}
+		}
 	}
 }
 
@@ -113,24 +117,32 @@ func (f *lightFetcher) fetchBestFromPool() *peer {
 }
 
 func (f *lightFetcher) syncLoop() {
+	f.pm.wg.Add(1)
+	defer f.pm.wg.Done()
+	
 	for {
 		select {	
 		case <-f.pm.quitSync:
 			return
 		case <-f.syncPoolNotify:
+			atomic.StoreUint32(&f.syncPoolNotified, 0)
 			chn := f.pm.getSyncLock(false)
 			if chn != nil {
-				go func() {
-					<-chn
-					f.syncPoolNotify <- struct{}{}
-				}()
+				if atomic.SwapUint32(&f.syncPoolNotified, 1) == 0 {
+					go func() {
+						<-chn
+						f.syncPoolNotify <- struct{}{}
+					}()
+				}
 			} else {
 				if p := f.fetchBestFromPool(); p != nil {
 					go f.syncWithPeer(p)
-					go func() {
-						time.Sleep(softRequestTimeout)
-						f.syncPoolNotify <- struct{}{}
-					}()
+					if atomic.SwapUint32(&f.syncPoolNotified, 1) == 0 {
+						go func() {
+							time.Sleep(softRequestTimeout)
+							f.syncPoolNotify <- struct{}{}
+						}()
+					}
 				}
 			}
 		}
