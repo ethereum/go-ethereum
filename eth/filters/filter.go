@@ -17,14 +17,17 @@
 package filters
 
 import (
-	"math"
+//	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+//	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/net/context"
 )
 
 type AccountChange struct {
@@ -33,6 +36,8 @@ type AccountChange struct {
 
 // Filtering interface
 type Filter struct {
+	apiBackend ethapi.Backend
+
 	created time.Time
 
 	db         ethdb.Database
@@ -47,8 +52,11 @@ type Filter struct {
 
 // Create a new filter which uses a bloom filter on blocks to figure out whether a particular block
 // is interesting or not.
-func New(db ethdb.Database) *Filter {
-	return &Filter{db: db}
+func New(apiBackend ethapi.Backend) *Filter {
+	return &Filter{
+		apiBackend: apiBackend,
+		db:         apiBackend.ChainDb(),
+	}
 }
 
 // Set the earliest and latest block for filtering.
@@ -71,28 +79,28 @@ func (self *Filter) SetTopics(topics [][]common.Hash) {
 }
 
 // Run filters logs with the current parameters set
-func (self *Filter) Find() vm.Logs {
-	latestHash := core.GetHeadBlockHash(self.db)
-	latestBlock := core.GetBlock(self.db, latestHash, core.GetBlockNumber(self.db, latestHash))
+func (self *Filter) Find(ctx context.Context) (vm.Logs, error) {
+	headBlockNumber := self.apiBackend.HeaderByNumber(rpc.LatestBlockNumber).Number.Uint64()
+	
 	var beginBlockNo uint64 = uint64(self.begin)
 	if self.begin == -1 {
-		beginBlockNo = latestBlock.NumberU64()
+		beginBlockNo = headBlockNumber
 	}
 	var endBlockNo uint64 = uint64(self.end)
 	if self.end == -1 {
-		endBlockNo = latestBlock.NumberU64()
+		endBlockNo = headBlockNumber
 	}
 
 	// if no addresses are present we can't make use of fast search which
 	// uses the mipmap bloom filters to check for fast inclusion and uses
 	// higher range probability in order to ensure at least a false positive
-	if len(self.addresses) == 0 {
-		return self.getLogs(beginBlockNo, endBlockNo)
-	}
-	return self.mipFind(beginBlockNo, endBlockNo, 0)
+//	if len(self.addresses) == 0 {
+		return self.getLogs(ctx, beginBlockNo, endBlockNo)
+//	}
+//	return self.mipFind(beginBlockNo, endBlockNo, 0)
 }
 
-func (self *Filter) mipFind(start, end uint64, depth int) (logs vm.Logs) {
+/*func (self *Filter) mipFind(start, end uint64, depth int) (logs vm.Logs) {
 	level := core.MIPMapLevels[depth]
 	// normalise numerator so we can work in level specific batches and
 	// work with the proper range checks
@@ -120,27 +128,24 @@ func (self *Filter) mipFind(start, end uint64, depth int) (logs vm.Logs) {
 	}
 
 	return logs
-}
+}*/
 
-func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
-	var block *types.Block
-
+func (self *Filter) getLogs(ctx context.Context, start, end uint64) (logs vm.Logs, err error) {
 	for i := start; i <= end; i++ {
-		hash := core.GetCanonicalHash(self.db, i)
-		if hash != (common.Hash{}) {
-			block = core.GetBlock(self.db, hash, i)
-		} else { // block not found
-			return logs
+		header := self.apiBackend.HeaderByNumber(rpc.BlockNumber(i))
+		if header == nil {
+			return logs, nil
 		}
 
 		// Use bloom filtering to see if this block is interesting given the
 		// current parameters
-		if self.bloomFilter(block) {
+		if self.bloomFilter(header.Bloom) {
 			// Get the logs of the block
-			var (
-				receipts   = core.GetBlockReceipts(self.db, block.Hash(), i)
-				unfiltered vm.Logs
-			)
+			receipts, err := self.apiBackend.GetReceipts(ctx, header.Hash())
+			if err != nil {
+				return nil, err
+			}
+			var 	unfiltered vm.Logs
 			for _, receipt := range receipts {
 				unfiltered = append(unfiltered, receipt.Logs...)
 			}
@@ -148,7 +153,7 @@ func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
 		}
 	}
 
-	return logs
+	return logs, nil
 }
 
 func includes(addresses []common.Address, a common.Address) bool {
@@ -202,11 +207,11 @@ Logs:
 	return ret
 }
 
-func (self *Filter) bloomFilter(block *types.Block) bool {
+func (self *Filter) bloomFilter(bloom types.Bloom) bool {
 	if len(self.addresses) > 0 {
 		var included bool
 		for _, addr := range self.addresses {
-			if types.BloomLookup(block.Bloom(), addr) {
+			if types.BloomLookup(bloom, addr) {
 				included = true
 				break
 			}
@@ -220,7 +225,7 @@ func (self *Filter) bloomFilter(block *types.Block) bool {
 	for _, sub := range self.topics {
 		var included bool
 		for _, topic := range sub {
-			if (topic == common.Hash{}) || types.BloomLookup(block.Bloom(), topic) {
+			if (topic == common.Hash{}) || types.BloomLookup(bloom, topic) {
 				included = true
 				break
 			}

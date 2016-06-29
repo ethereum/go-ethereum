@@ -342,7 +342,13 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 	if req.err != nil {
 		response = codec.CreateErrorResponse(&req.id, req.err)
 	} else {
+/*fmt.Println()
+fmt.Println("SREQ")
+fmt.Println(*req)*/
 		response, callback = s.handle(ctx, codec, req)
+/*fmt.Println("RESP")
+fmt.Println(response)
+fmt.Println()*/
 	}
 
 	if err := codec.Write(response); err != nil {
@@ -366,9 +372,15 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 			responses[i] = codec.CreateErrorResponse(&req.id, req.err)
 		} else {
 			var callback func()
+/*fmt.Println()
+fmt.Println("SREQ batch")
+fmt.Println(*req)*/
 			if responses[i], callback = s.handle(ctx, codec, req); callback != nil {
 				callbacks = append(callbacks, callback)
 			}
+/*fmt.Println("RESP")
+fmt.Println(responses[i])
+fmt.Println()*/
 		}
 	}
 
@@ -396,6 +408,10 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 
 	// verify requests
 	for i, r := range reqs {
+/*fmt.Println()
+fmt.Println(time.Now())
+fmt.Println("REQ")
+fmt.Println(r)*/
 		var ok bool
 		var svc *service
 

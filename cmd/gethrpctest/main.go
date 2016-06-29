@@ -146,7 +146,7 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 // RunTest executes the specified test against an already pre-configured protocol
 // stack to ensure basic checks pass before running RPC tests.
 func RunTest(stack *node.Node, test *tests.BlockTest) error {
-	var ethereum *eth.Ethereum
+	var ethereum *eth.FullNodeService
 	stack.Service(&ethereum)
 	blockchain := ethereum.BlockChain()
 

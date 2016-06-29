@@ -26,23 +26,29 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/robertkrimen/otto"
+	"golang.org/x/net/context"
 )
 
 // bridge is a collection of JavaScript utility methods to bride the .js runtime
 // environment and the Go RPC connection backing the remote method calls.
 type bridge struct {
-	client   rpc.Client   // RPC client to execute Ethereum requests through
+	client   *rpc.ClientRestartWrapper   // RPC client to execute Ethereum requests through
 	prompter UserPrompter // Input prompter to allow interactive user feedback
 	printer  io.Writer    // Output writer to serialize any display strings to
+	ctx context.Context
 }
 
 // newBridge creates a new JavaScript wrapper around an RPC client.
-func newBridge(client rpc.Client, prompter UserPrompter, printer io.Writer) *bridge {
+func newBridge(client *rpc.ClientRestartWrapper, prompter UserPrompter, printer io.Writer) *bridge {
 	return &bridge{
 		client:   client,
 		prompter: prompter,
 		printer:  printer,
 	}
+}
+
+func (b *bridge) setContext(ctx context.Context) {
+	b.ctx = ctx
 }
 
 // NewAccount is a wrapper around the personal.newAccount RPC method that uses a
@@ -223,11 +229,29 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 
 	for i, req := range reqs {
 		// Execute the RPC request and parse the reply
-		if err = b.client.Send(&req); err != nil {
+		client := b.client.Client()
+		if err = client.Send(&req); err != nil {
 			return newErrorResponse(call, -32603, err.Error(), req.Id)
 		}
+		errc := make(chan error, 1)
+		errc2 := make(chan error)
+		go func(){
+			if b.ctx != nil {
+				select {
+				case <-b.ctx.Done():
+					b.client.Restart()
+					errc2 <- b.ctx.Err()
+				case err := <-errc:
+					errc2 <- err
+				}
+			} else {
+				errc2 <- <-errc
+			}
+		}()
 		result := make(map[string]interface{})
-		if err = b.client.Recv(&result); err != nil {
+		errc <- client.Recv(&result)
+		err := <-errc2
+		if err != nil {
 			return newErrorResponse(call, -32603, err.Error(), req.Id)
 		}
 		// Feed the reply back into the JavaScript runtime environment

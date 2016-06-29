@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -67,10 +68,13 @@ func localConsole(ctx *cli.Context) error {
 	defer node.Stop()
 
 	// Attach to the newly started node and start the JavaScript console
-	client, err := node.Attach()
-	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
-	}
+	client := rpc.NewClientRestartWrapper(func() rpc.Client {
+		client, err := node.Attach()
+		if err != nil {
+			utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		}
+		return client
+	})
 	config := console.Config{
 		DataDir: node.DataDir(),
 		DocRoot: ctx.GlobalString(utils.JSpathFlag.Name),
@@ -99,10 +103,14 @@ func localConsole(ctx *cli.Context) error {
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
-	client, err := utils.NewRemoteRPCClient(ctx)
-	if err != nil {
-		utils.Fatalf("Unable to attach to remote geth: %v", err)
-	}
+	client := rpc.NewClientRestartWrapper(func() rpc.Client {
+		client, err := utils.NewRemoteRPCClient(ctx)
+		if err != nil {
+			utils.Fatalf("Unable to attach to remote geth: %v", err)
+		}
+		return client
+	})
+
 	config := console.Config{
 		DataDir: utils.MustMakeDataDir(ctx),
 		DocRoot: ctx.GlobalString(utils.JSpathFlag.Name),
@@ -137,10 +145,14 @@ func ephemeralConsole(ctx *cli.Context) error {
 	defer node.Stop()
 
 	// Attach to the newly started node and start the JavaScript console
-	client, err := node.Attach()
-	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
-	}
+	client := rpc.NewClientRestartWrapper(func() rpc.Client {
+		client, err := node.Attach()
+		if err != nil {
+			utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		}
+		return client
+	})
+
 	config := console.Config{
 		DataDir: node.DataDir(),
 		DocRoot: ctx.GlobalString(utils.JSpathFlag.Name),

@@ -128,7 +128,7 @@ func removeDB(ctx *cli.Context) error {
 		fmt.Println("Removing chaindata...")
 		start := time.Now()
 
-		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "chaindata"))
+		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), utils.ChainDbName(ctx)))
 
 		fmt.Printf("Removed in %v\n", time.Since(start))
 	} else {
@@ -153,7 +153,7 @@ func upgradeDB(ctx *cli.Context) error {
 		utils.Fatalf("Unable to export chain for reimport %s", err)
 	}
 	chainDb.Close()
-	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "chaindata"))
+	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), utils.ChainDbName(ctx)))
 
 	// Import the chain file.
 	chain, chainDb = utils.MakeChain(ctx)

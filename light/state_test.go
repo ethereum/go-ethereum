@@ -22,33 +22,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/net/context"
 )
-
-type testOdr struct {
-	OdrBackend
-	sdb, ldb ethdb.Database
-}
-
-func (odr *testOdr) Database() ethdb.Database {
-	return odr.ldb
-}
-
-func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
-	switch req := req.(type) {
-	case *TrieRequest:
-		t, _ := trie.New(req.root, odr.sdb)
-		req.proof = t.Prove(req.key)
-		trie.ClearGlobalCache()
-	case *NodeDataRequest:
-		req.data, _ = odr.sdb.Get(req.hash[:])
-	}
-	req.StoreResult(odr.ldb)
-	return nil
-}
 
 func makeTestState() (common.Hash, ethdb.Database) {
 	sdb, _ := ethdb.NewMemDatabase()
@@ -71,9 +51,11 @@ func makeTestState() (common.Hash, ethdb.Database) {
 
 func TestLightStateOdr(t *testing.T) {
 	root, sdb := makeTestState()
+	header := &types.Header{Root: root, Number: big.NewInt(0)}
+	core.WriteHeader(sdb, header)
 	ldb, _ := ethdb.NewMemDatabase()
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	ls := NewLightState(root, odr)
+	ls := NewLightState(StateTrieID(header), odr)
 	ctx := context.Background()
 	trie.ClearGlobalCache()
 
@@ -156,9 +138,11 @@ func TestLightStateOdr(t *testing.T) {
 
 func TestLightStateSetCopy(t *testing.T) {
 	root, sdb := makeTestState()
+	header := &types.Header{Root: root, Number: big.NewInt(0)}
+	core.WriteHeader(sdb, header)
 	ldb, _ := ethdb.NewMemDatabase()
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	ls := NewLightState(root, odr)
+	ls := NewLightState(StateTrieID(header), odr)
 	ctx := context.Background()
 	trie.ClearGlobalCache()
 
@@ -233,9 +217,11 @@ func TestLightStateSetCopy(t *testing.T) {
 
 func TestLightStateDelete(t *testing.T) {
 	root, sdb := makeTestState()
+	header := &types.Header{Root: root, Number: big.NewInt(0)}
+	core.WriteHeader(sdb, header)
 	ldb, _ := ethdb.NewMemDatabase()
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	ls := NewLightState(root, odr)
+	ls := NewLightState(StateTrieID(header), odr)
 	ctx := context.Background()
 	trie.ClearGlobalCache()
 

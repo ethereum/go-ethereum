@@ -39,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -156,6 +158,20 @@ var (
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
 		Usage: "Enable fast syncing through state downloads",
+	}
+	LightModeFlag = cli.BoolFlag{
+		Name:  "light",
+		Usage: "Enable light client mode",
+	}
+	LightServFlag = cli.IntFlag{
+		Name:  "lightserv",
+		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
+		Value: 20,
+	}
+	LightPeersFlag = cli.IntFlag{
+		Name:  "lightpeers",
+		Usage: "Maximum number of LES client peers",
+		Value: 10,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
@@ -658,7 +674,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		DataDir:         MustMakeDataDir(ctx),
 		PrivateKey:      MakeNodeKey(ctx),
 		Name:            MakeNodeName(name, version, ctx),
-		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name),
+		NoDiscovery:     ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name),  // light client hack
 		BootstrapNodes:  MakeBootstrapNodes(ctx),
 		ListenAddr:      MakeListenAddress(ctx),
 		NAT:             MakeNAT(ctx),
@@ -691,6 +707,9 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		ChainConfig:             MustMakeChainConfig(ctx),
 		Genesis:                 MakeGenesisBlock(ctx),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
+		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
+		LightServ:               ctx.GlobalInt(LightServFlag.Name),
+		LightPeers:              ctx.GlobalInt(LightPeersFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		DatabaseHandles:         MakeDatabaseHandles(),
@@ -734,6 +753,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 			ethConf.Genesis = core.TestNetGenesisBlock()
 		}
 		state.StartingNonce = 1048576 // (2**20)
+		light.StartingNonce = 1048576 // (2**20)
 
 	case ctx.GlobalBool(DevModeFlag.Name):
 		// Override the base network stack configs
@@ -763,10 +783,30 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	if err != nil {
 		Fatalf("Failed to create the protocol stack: %v", err)
 	}
+
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return eth.New(ctx, ethConf)
+		return accman, nil
 	}); err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		Fatalf("Failed to register the account manager service: %v", err)
+	}
+
+	if ethConf.LightMode {
+		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			return les.New(ctx, ethConf)
+		}); err != nil {
+			Fatalf("Failed to register the Ethereum light node service: %v", err)
+		}
+	} else {
+		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			fullNode, err := eth.New(ctx, ethConf)
+			if fullNode != nil {
+				ls, _ := les.NewLesServer(fullNode, ethConf)
+				fullNode.AddLesServer(ls)
+			}
+			return fullNode, err
+		}); err != nil {
+			Fatalf("Failed to register the Ethereum full node service: %v", err)
+		}
 	}
 	if shhEnable {
 		if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
@@ -826,15 +866,24 @@ func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainC
 	return &core.ChainConfig{HomesteadBlock: homesteadBlockNo}
 }
 
+func ChainDbName(ctx *cli.Context) string {
+	if ctx.GlobalBool(LightModeFlag.Name) {
+		return "lightchaindata"
+	} else {
+		return "chaindata"
+	}
+}
+
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context) ethdb.Database {
 	var (
 		datadir = MustMakeDataDir(ctx)
 		cache   = ctx.GlobalInt(CacheFlag.Name)
 		handles = MakeDatabaseHandles()
+		name    = ChainDbName(ctx)
 	)
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache, handles)
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(datadir, name), cache, handles)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
