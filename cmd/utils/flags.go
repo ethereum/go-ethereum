@@ -163,6 +163,10 @@ var (
 	}
 	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
+	BlockedCodeHashesFlag = cli.StringFlag{
+		Name:  "blocked-code-hashes",
+		Usage: "Comma separated list of code-hashes to ignore any interaction from",
+	}
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable mining",
@@ -180,10 +184,6 @@ var (
 		Name:  "targetgaslimit",
 		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
 		Value: params.GenesisGasLimit.String(),
-	}
-	DAOSoftForkFlag = cli.BoolFlag{
-		Name:  "dao-soft-fork",
-		Usage: "Vote for the DAO soft-fork, temporarilly decreasing the gas limits",
 	}
 	AutoDAGFlag = cli.BoolFlag{
 		Name:  "autodag",
@@ -644,6 +644,16 @@ func MakePasswordList(ctx *cli.Context) []string {
 	return lines
 }
 
+// MakeBlockedCodeHashes parses a comma separated list of hashes.
+func MakeBlockedCodeHashes(ctx *cli.Context) map[common.Hash]struct{} {
+	splittedHexHashes := strings.Split(ctx.GlobalString(BlockedCodeHashesFlag.Name), ",")
+	illegalCodeHashes := make(map[common.Hash]struct{})
+	for _, hexHash := range splittedHexHashes {
+		illegalCodeHashes[common.HexToHash(strings.TrimSpace(hexHash))] = struct{}{}
+	}
+	return illegalCodeHashes
+}
+
 // MakeSystemNode sets up a local node, configures the services to launch and
 // assembles the P2P protocol stack.
 func MakeSystemNode(name, version string, relconf release.Config, extra []byte, ctx *cli.Context) *node.Node {
@@ -680,9 +690,8 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
-
-	// Handle some miner strategies arrising from the DAO fiasco
-	core.DAOSoftFork = ctx.GlobalBool(DAOSoftForkFlag.Name)
+	// parse the blocked code hashes and set them to the core package.
+	core.BlockedCodeHashes = MakeBlockedCodeHashes(ctx)
 
 	// initialise new random number generator
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))

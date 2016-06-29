@@ -25,6 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
+// BlockedCodeHashes is a set of EVM code hashes that this node should block
+// sending funds from.
+var BlockedCodeHashes map[common.Hash]struct{}
+
 // GetHashFn returns a function for which the VM env can query block hashes through
 // up to the limit defined by the Yellow Paper and uses the given block chain
 // to query for information.

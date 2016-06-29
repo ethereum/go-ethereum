@@ -371,10 +371,5 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 		gl.Add(parent.GasLimit(), decay)
 		gl.Set(common.BigMin(gl, params.TargetGasLimit))
 	}
-	// Temporary special case: if DAO rupture is requested, cap the gas limit
-	if DAOSoftFork && parent.NumberU64() <= ruptureBlock && gl.Cmp(ruptureTarget) > 0 {
-		gl.Sub(parent.GasLimit(), decay)
-		gl.Set(common.BigMax(gl, ruptureTarget))
-	}
 	return gl
 }
