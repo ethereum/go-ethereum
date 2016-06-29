@@ -447,6 +447,16 @@ func WriteTransactions(db ethdb.Database, block *types.Block) error {
 	return nil
 }
 
+// WriteReceipt stores a single transaction receipt into the database.
+func WriteReceipt(db ethdb.Database, receipt *types.Receipt) error {
+	storageReceipt := (*types.ReceiptForStorage)(receipt)
+	data, err := rlp.EncodeToBytes(storageReceipt)
+	if err != nil {
+		return err
+	}
+	return db.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data)
+}
+
 // WriteReceipts stores a batch of transaction receipts into the database.
 func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
 	batch := db.NewBatch()
