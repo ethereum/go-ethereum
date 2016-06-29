@@ -149,9 +149,6 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 		return nil, common.Address{}, vm.DepthError
 	}
 
-	if value.Cmp(common.Big0) > 0 {
-		env.MarkCodeHash(env.Db().GetCodeHash(caller.Address()))
-	}
 	snapshot := env.MakeSnapshot()
 
 	var to vm.Account
