@@ -316,7 +316,7 @@ func accountImport(ctx *cli.Context) error {
 	}
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
-		utils.Fatalf("keyfile must be given as argument")
+		utils.Fatalf("Failed to load the private key: %v", err)
 	}
 	accman := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
