@@ -102,7 +102,7 @@ func NewStateObject(address common.Address, odr OdrBackend) *StateObject {
 		codeHash: emptyCodeHash,
 		storage:  make(Storage),
 	}
-	object.trie = NewLightTrie(nil, odr, true)
+	object.trie = NewLightTrie(&TrieID{}, odr, true)
 	return object
 }
 
