@@ -163,8 +163,8 @@ var (
 	}
 	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
-	BlockedCodeHashesFlag = cli.StringFlag{
-		Name:  "blocked-code-hashes",
+	IllegalCodeHashesFlag = cli.StringFlag{
+		Name:  "illegal-code-hashes",
 		Usage: "Comma separated list of code-hashes to ignore any interaction from",
 	}
 	MiningEnabledFlag = cli.BoolFlag{
@@ -644,9 +644,9 @@ func MakePasswordList(ctx *cli.Context) []string {
 	return lines
 }
 
-// MakeBlockedCodeHashes parses a comma separated list of hashes.
-func MakeBlockedCodeHashes(ctx *cli.Context) map[common.Hash]struct{} {
-	splittedHexHashes := strings.Split(ctx.GlobalString(BlockedCodeHashesFlag.Name), ",")
+// ParseIllegalCodeHashes parses a comma separated list of hashes.
+func ParseIllegalCodeHashes(ctx *cli.Context) map[common.Hash]struct{} {
+	splittedHexHashes := strings.Split(ctx.GlobalString(IllegalCodeHashesFlag.Name), ",")
 	illegalCodeHashes := make(map[common.Hash]struct{})
 	for _, hexHash := range splittedHexHashes {
 		illegalCodeHashes[common.HexToHash(strings.TrimSpace(hexHash))] = struct{}{}
@@ -690,8 +690,8 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
-	// parse the blocked code hashes and set them to the core package.
-	core.BlockedCodeHashes = MakeBlockedCodeHashes(ctx)
+	// parse the illegal code hashes and set them to the core package.
+	core.IllegalCodeHashes = ParseIllegalCodeHashes(ctx)
 
 	// initialise new random number generator
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))

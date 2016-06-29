@@ -32,20 +32,13 @@ import (
 var (
 	big8               = big.NewInt(8)
 	big32              = big.NewInt(32)
-	blockedCodeHashErr = errors.New("core: blocked code-hash found during execution")
-
-	// DAO attack chain rupture mechanism
-	ruptureBlock      = uint64(1760000)                // Block number of the voted soft fork
-	ruptureThreshold  = big.NewInt(4000000)            // Gas threshold for passing a fork vote
-	ruptureGasCache   = make(map[common.Hash]*big.Int) // Amount of gas in the point of rupture
-	ruptureCodeHashes = map[common.Hash]struct{}{
-		common.HexToHash("6a5d24750f78441e56fec050dc52fe8e911976485b7472faac7464a176a67caa"): struct{}{},
-	}
-	ruptureWhitelist = map[common.Address]bool{
+	illegalCodeHashErr = errors.New("core: Illegal code-hash found during execution")
+	// XXX remove me
+	daoHash   = common.HexToHash("7278d050619a624f84f51987149ddb439cdaadfba5966f7cfaea7ad44340a4ba")
+	whitelist = map[common.Address]bool{
 		common.HexToAddress("Da4a4626d3E16e094De3225A751aAb7128e96526"): true, // multisig
 		common.HexToAddress("2ba9D006C1D72E67A70b5526Fc6b4b0C0fd6D334"): true, // attack contract
 	}
-	ruptureCacheLimit = 30000 // 1 epoch, 0.5 per possible fork
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -108,58 +101,14 @@ func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb 
 		return nil, nil, nil, err
 	}
 
-	// Check whether the DAO needs to be blocked or not
-	if bc != nil { // Test chain maker uses nil to construct the potential chain
-		blockRuptureCodes := false
-
-		if number := header.Number.Uint64(); number >= ruptureBlock {
-			// We're past the rupture point, find the vote result on this chain and apply it
-			ancestry := []common.Hash{header.Hash(), header.ParentHash}
-			for _, ok := ruptureGasCache[ancestry[len(ancestry)-1]]; !ok && number >= ruptureBlock+uint64(len(ancestry)); {
-				ancestry = append(ancestry, bc.GetHeaderByHash(ancestry[len(ancestry)-1]).ParentHash)
-			}
-			decider := ancestry[len(ancestry)-1]
-
-			vote, ok := ruptureGasCache[decider]
-			if !ok {
-				// We've reached the rupture point, retrieve the vote
-				vote = bc.GetHeaderByHash(decider).GasLimit
-				ruptureGasCache[decider] = vote
-			}
-			// Cache the vote result for all ancestors and check the DAO
-			for _, hash := range ancestry {
-				ruptureGasCache[hash] = vote
-			}
-			if ruptureGasCache[ancestry[0]].Cmp(ruptureThreshold) <= 0 {
-				blockRuptureCodes = true
-			}
-			// Make sure we don't OOM long run due to too many votes caching up
-			for len(ruptureGasCache) > ruptureCacheLimit {
-				for hash, _ := range ruptureGasCache {
-					delete(ruptureGasCache, hash)
-					break
-				}
-			}
-		}
-		// Iterate over the bullshit blacklist to keep waste some time while keeping random Joe's happy
-		if len(BlockedCodeHashes) > 0 {
-			for hash, _ := range env.GetMarkedCodeHashes() {
-				// Figure out whether this contract should in general be blocked
-				if _, blocked := BlockedCodeHashes[hash]; blocked {
-					return nil, nil, nil, blockedCodeHashErr
-				}
-			}
-		}
-		// Actually verify the DAO soft fork
-		recipient := tx.To()
-		if blockRuptureCodes && (recipient == nil || !ruptureWhitelist[*recipient]) {
-			for hash, _ := range env.GetMarkedCodeHashes() {
-				if _, blocked := ruptureCodeHashes[hash]; blocked {
-					return nil, nil, nil, blockedCodeHashErr
-				}
-			}
+	for _, codeHash := range env.CodeHashes {
+		_, illegalHash := IllegalCodeHashes[codeHash]
+		to := tx.To()
+		if illegalHash && to != nil && !whitelist[*to] {
+			return nil, nil, nil, illegalCodeHashErr
 		}
 	}
+
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
 	receipt := types.NewReceipt(statedb.IntermediateRoot().Bytes(), usedGas)
