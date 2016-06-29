@@ -181,10 +181,6 @@ var (
 		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
 		Value: params.GenesisGasLimit.String(),
 	}
-	DAOSoftForkFlag = cli.BoolFlag{
-		Name:  "dao-soft-fork",
-		Usage: "Vote for the DAO soft-fork, temporarilly decreasing the gas limits",
-	}
 	AutoDAGFlag = cli.BoolFlag{
 		Name:  "autodag",
 		Usage: "Enable automatic DAG pregeneration",
@@ -680,9 +676,6 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 	}
 	// Configure the Ethereum service
 	accman := MakeAccountManager(ctx)
-
-	// Handle some miner strategies arrising from the DAO fiasco
-	core.DAOSoftFork = ctx.GlobalBool(DAOSoftForkFlag.Name)
 
 	// initialise new random number generator
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
