@@ -175,11 +175,10 @@ func NewEnv(noJit, forceJit bool) *Env {
 	return env
 }
 
-func (self *Env) MarkCodeHash(common.Hash) {}
-func (self *Env) RuleSet() RuleSet         { return ruleSet{new(big.Int)} }
-func (self *Env) Vm() Vm                   { return self.evm }
-func (self *Env) Origin() common.Address   { return common.Address{} }
-func (self *Env) BlockNumber() *big.Int    { return big.NewInt(0) }
+func (self *Env) RuleSet() RuleSet       { return ruleSet{new(big.Int)} }
+func (self *Env) Vm() Vm                 { return self.evm }
+func (self *Env) Origin() common.Address { return common.Address{} }
+func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 func (self *Env) AddStructLog(log StructLog) {
 }
 func (self *Env) StructLogs() []StructLog {

@@ -35,18 +35,17 @@ func (ruleSet) IsHomestead(*big.Int) bool { return true }
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
-	RuleSet       vm.RuleSet
-	Difficulty    *big.Int
-	Origin        common.Address
-	Coinbase      common.Address
-	BlockNumber   *big.Int
-	Time          *big.Int
-	GasLimit      *big.Int
-	GasPrice      *big.Int
-	Value         *big.Int
-	DisableJit    bool // "disable" so it's enabled by default
-	Debug         bool
-	illegalHashes []common.Hash
+	RuleSet     vm.RuleSet
+	Difficulty  *big.Int
+	Origin      common.Address
+	Coinbase    common.Address
+	BlockNumber *big.Int
+	Time        *big.Int
+	GasLimit    *big.Int
+	GasPrice    *big.Int
+	Value       *big.Int
+	DisableJit  bool // "disable" so it's enabled by default
+	Debug       bool
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
