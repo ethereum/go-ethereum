@@ -96,7 +96,7 @@ func prepareHardForkData(eth *Ethereum) (*DAOHardForkData, error) {
 		return nil, err
 	}
 
-	// create list of "The DAO" and all it's children, recursively
+	// create list of "The DAO" and all its children, recursively
 	daos, err := traverseDAOs(theDAO, eth)
 	if err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func traverseDAOs(d *dao.DAO, eth *Ethereum) ([]*dao.DAO, error) {
 				glog.V(logger.Info).Infof("could not instantiate childDAO: %x %v", childAddr, err)
 				return nil, err
 			}
-			// append this child, then all it's children (recursively)
+			// append this child, then all its children (recursively)
 			daos = append(daos, childDAO)
 			children, err := traverseDAOs(childDAO, eth)
 			if err != nil {
