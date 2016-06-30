@@ -29,7 +29,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/dao"
+	"github.com/ethereum/go-ethereum/internal/dao"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -167,12 +167,6 @@ func applyHardFork(hfData *DAOHardForkData, eth *Ethereum) error {
 		return err
 	}
 
-	// first, delete "The DAO" state object to wipe any state
-	statedb.Delete(theDAOAddr)
-
-	// next, re-create account
-	statedb.CreateAccount(theDAOAddr)
-
 	// move all ether from all the children of the "The DAO"
 	// as well as their extraBalance accounts back to "The DAO" account
 	theDAOAcc := statedb.GetAccount(theDAOAddr)
@@ -195,7 +189,8 @@ func applyHardFork(hfData *DAOHardForkData, eth *Ethereum) error {
 	// set new code of "The DAO" account (this also sets codeHash, see core/state/state_object.go)
 	theDAOAcc.SetCode(hfData.TheDAOReplacementCode)
 
-	// TODO: set state or run constructor of new contract code
+	// TODO: at this point, the account state (variables) have not changed;
+	//       verify if they should be modified or can be kept unmodified.
 
 	glog.V(logger.Info).Infof("wei in re-created DAO: %v", theDAOAcc.Balance())
 	return nil
