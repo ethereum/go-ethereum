@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"golang.org/x/net/context"
 )
 
 // This nil assignment ensures compile time that nilBackend implements bind.ContractBackend.
@@ -32,16 +33,22 @@ var _ bind.ContractBackend = (*nilBackend)(nil)
 // wrappers without calling any methods on them.
 type nilBackend struct{}
 
-func (*nilBackend) ContractCall(common.Address, []byte, bool) ([]byte, error) {
+func (*nilBackend) ContractCall(context.Context, common.Address, []byte, bool) ([]byte, error) {
 	panic("not implemented")
 }
-func (*nilBackend) EstimateGasLimit(common.Address, *common.Address, *big.Int, []byte) (*big.Int, error) {
+func (*nilBackend) EstimateGasLimit(context.Context, common.Address, *common.Address, *big.Int, []byte) (*big.Int, error) {
 	panic("not implemented")
 }
-func (*nilBackend) HasCode(common.Address, bool) (bool, error)         { panic("not implemented") }
-func (*nilBackend) SuggestGasPrice() (*big.Int, error)                 { panic("not implemented") }
-func (*nilBackend) PendingAccountNonce(common.Address) (uint64, error) { panic("not implemented") }
-func (*nilBackend) SendTransaction(*types.Transaction) error           { panic("not implemented") }
+func (*nilBackend) HasCode(context.Context, common.Address, bool) (bool, error) {
+	panic("not implemented")
+}
+func (*nilBackend) SuggestGasPrice(context.Context) (*big.Int, error) { panic("not implemented") }
+func (*nilBackend) PendingAccountNonce(context.Context, common.Address) (uint64, error) {
+	panic("not implemented")
+}
+func (*nilBackend) SendTransaction(context.Context, *types.Transaction) error {
+	panic("not implemented")
+}
 
 // NewNilBackend creates a new binding backend that can be used for instantiation
 // but will panic on any invocation. Its sole purpose is to help testing.
