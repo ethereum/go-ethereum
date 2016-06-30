@@ -103,8 +103,8 @@ type Config struct {
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
 }
 
-// FullNodeService implements the Ethereum full node service.
-type FullNodeService struct {
+// Ethereum implements the Ethereum full node service.
+type Ethereum struct {
 	chainConfig *core.ChainConfig
 	// Channel for shutting down the service
 	shutdownChan  chan bool // Channel for shutting down the ethereum
@@ -140,9 +140,9 @@ type FullNodeService struct {
 	netRPCService *ethapi.PublicNetAPI
 }
 
-// New creates a new FullNodeService object (including the
+// New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config) (*FullNodeService, error) {
+func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	chainDb, dappDb, err := CreateDBs(ctx, config)
 	if err != nil {
 		return nil, err
@@ -156,7 +156,7 @@ func New(ctx *node.ServiceContext, config *Config) (*FullNodeService, error) {
 		return nil, err
 	}
 
-	eth := &FullNodeService{
+	eth := &Ethereum{
 		chainDb:        chainDb,
 		dappDb:         dappDb,
 		eventMux:       ctx.EventMux,
@@ -303,12 +303,12 @@ func CreatePoW(config *Config) (*ethash.Ethash, error) {
 
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *FullNodeService) APIs() []rpc.API {
+func (s *Ethereum) APIs() []rpc.API {
 	return append(ethapi.GetAPIs(s.apiBackend, &s.solcPath, &s.solc), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicFullEthereumAPI(s),
+			Service:   NewPublicEthereumAPI(s),
 			Public:    true,
 		}, {
 			Namespace: "eth",
@@ -333,16 +333,16 @@ func (s *FullNodeService) APIs() []rpc.API {
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
-			Service:   NewPrivateFullAdminAPI(s),
+			Service:   NewPrivateAdminAPI(s),
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPublicFullDebugAPI(s),
+			Service:   NewPublicDebugAPI(s),
 			Public:    true,
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateFullDebugAPI(s.chainConfig, s),
+			Service:   NewPrivateDebugAPI(s.chainConfig, s),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
@@ -356,11 +356,11 @@ func (s *FullNodeService) APIs() []rpc.API {
 	}...)
 }
 
-func (s *FullNodeService) ResetWithGenesisBlock(gb *types.Block) {
+func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-func (s *FullNodeService) Etherbase() (eb common.Address, err error) {
+func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
 		firstAccount, err := s.AccountManager().AccountByIndex(0)
@@ -373,36 +373,36 @@ func (s *FullNodeService) Etherbase() (eb common.Address, err error) {
 }
 
 // set in js console via admin interface or wrapper from cli flags
-func (self *FullNodeService) SetEtherbase(etherbase common.Address) {
+func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.etherbase = etherbase
 	self.miner.SetEtherbase(etherbase)
 }
 
-func (s *FullNodeService) StopMining()         { s.miner.Stop() }
-func (s *FullNodeService) IsMining() bool      { return s.miner.Mining() }
-func (s *FullNodeService) Miner() *miner.Miner { return s.miner }
+func (s *Ethereum) StopMining()         { s.miner.Stop() }
+func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
+func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
-func (s *FullNodeService) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *FullNodeService) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *FullNodeService) TxPool() *core.TxPool               { return s.txPool }
-func (s *FullNodeService) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *FullNodeService) Pow() *ethash.Ethash                { return s.pow }
-func (s *FullNodeService) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *FullNodeService) DappDb() ethdb.Database             { return s.dappDb }
-func (s *FullNodeService) IsListening() bool                  { return true } // Always listening
-func (s *FullNodeService) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *FullNodeService) NetVersion() int                    { return s.netVersionId }
-func (s *FullNodeService) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
+func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
+func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
+func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *Ethereum) Pow() *ethash.Ethash                { return s.pow }
+func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
+func (s *Ethereum) DappDb() ethdb.Database             { return s.dappDb }
+func (s *Ethereum) IsListening() bool                  { return true } // Always listening
+func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Ethereum) NetVersion() int                    { return s.netVersionId }
+func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
-func (s *FullNodeService) Protocols() []p2p.Protocol {
+func (s *Ethereum) Protocols() []p2p.Protocol {
 	return s.protocolManager.SubProtocols
 }
 
 // Start implements node.Service, starting all internal goroutines needed by the
-// FullNodeService protocol implementation.
-func (s *FullNodeService) Start(srvr *p2p.Server) error {
+// Ethereum protocol implementation.
+func (s *Ethereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
 	if s.AutoDAG {
 		s.StartAutoDAG()
@@ -413,7 +413,7 @@ func (s *FullNodeService) Start(srvr *p2p.Server) error {
 
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
-func (s *FullNodeService) Stop() error {
+func (s *Ethereum) Stop() error {
 	if s.stopDbUpgrade != nil {
 		s.stopDbUpgrade()
 	}
@@ -433,7 +433,7 @@ func (s *FullNodeService) Stop() error {
 }
 
 // This function will wait for a shutdown and resumes main thread execution
-func (s *FullNodeService) WaitForShutdown() {
+func (s *Ethereum) WaitForShutdown() {
 	<-s.shutdownChan
 }
 
@@ -446,7 +446,7 @@ func (s *FullNodeService) WaitForShutdown() {
 // stop any number of times.
 // For any more sophisticated pattern of DAG generation, use CLI subcommand
 // makedag
-func (self *FullNodeService) StartAutoDAG() {
+func (self *Ethereum) StartAutoDAG() {
 	if self.autodagquit != nil {
 		return // already started
 	}
@@ -492,7 +492,7 @@ func (self *FullNodeService) StartAutoDAG() {
 }
 
 // stopAutoDAG stops automatic DAG pregeneration by quitting the loop
-func (self *FullNodeService) StopAutoDAG() {
+func (self *Ethereum) StopAutoDAG() {
 	if self.autodagquit != nil {
 		close(self.autodagquit)
 		self.autodagquit = nil
@@ -502,7 +502,7 @@ func (self *FullNodeService) StopAutoDAG() {
 
 // HTTPClient returns the light http client used for fetching offchain docs
 // (natspec, source for verification)
-func (self *FullNodeService) HTTPClient() *httpclient.HTTPClient {
+func (self *Ethereum) HTTPClient() *httpclient.HTTPClient {
 	return self.httpclient
 }
 
