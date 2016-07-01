@@ -328,7 +328,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		var ethereum *eth.FullNodeService
+		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("ethereum service not running: %v", err)
 		}

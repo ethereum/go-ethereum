@@ -99,7 +99,7 @@ const (
 
 type testFrontend struct {
 	t           *testing.T
-	ethereum    *eth.FullNodeService
+	ethereum    *eth.Ethereum
 	xeth        *xe.XEth
 	wait        chan *big.Int
 	lastConfirm string
@@ -123,7 +123,7 @@ func (self *testFrontend) ConfirmTransaction(tx string) bool {
 	return true
 }
 
-func testEth(t *testing.T) (ethereum *eth.FullNodeService, err error) {
+func testEth(t *testing.T) (ethereum *eth.Ethereum, err error) {
 
 	tmp, err := ioutil.TempDir("", "natspec-test")
 	if err != nil {

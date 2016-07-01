@@ -40,41 +40,41 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// PublicFullEthereumAPI provides an API to access Ethereum full node-related
+// PublicEthereumAPI provides an API to access Ethereum full node-related
 // information.
-type PublicFullEthereumAPI struct {
-	e *FullNodeService
+type PublicEthereumAPI struct {
+	e *Ethereum
 }
 
-// NewPublicFullEthereumAPI creates a new Etheruem protocol API for full nodes.
-func NewPublicFullEthereumAPI(e *FullNodeService) *PublicFullEthereumAPI {
-	return &PublicFullEthereumAPI{e}
+// NewPublicEthereumAPI creates a new Etheruem protocol API for full nodes.
+func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
+	return &PublicEthereumAPI{e}
 }
 
 // Etherbase is the address that mining rewards will be send to
-func (s *PublicFullEthereumAPI) Etherbase() (common.Address, error) {
+func (s *PublicEthereumAPI) Etherbase() (common.Address, error) {
 	return s.e.Etherbase()
 }
 
 // Coinbase is the address that mining rewards will be send to (alias for Etherbase)
-func (s *PublicFullEthereumAPI) Coinbase() (common.Address, error) {
+func (s *PublicEthereumAPI) Coinbase() (common.Address, error) {
 	return s.Etherbase()
 }
 
 // Hashrate returns the POW hashrate
-func (s *PublicFullEthereumAPI) Hashrate() *rpc.HexNumber {
+func (s *PublicEthereumAPI) Hashrate() *rpc.HexNumber {
 	return rpc.NewHexNumber(s.e.Miner().HashRate())
 }
 
 // PublicMinerAPI provides an API to control the miner.
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type PublicMinerAPI struct {
-	e     *FullNodeService
+	e     *Ethereum
 	agent *miner.RemoteAgent
 }
 
 // NewPublicMinerAPI create a new PublicMinerAPI instance.
-func NewPublicMinerAPI(e *FullNodeService) *PublicMinerAPI {
+func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
 	agent := miner.NewRemoteAgent()
 	e.Miner().Register(agent)
 
@@ -120,11 +120,11 @@ func (s *PublicMinerAPI) SubmitHashrate(hashrate rpc.HexNumber, id common.Hash) 
 // PrivateMinerAPI provides private RPC methods to control the miner.
 // These methods can be abused by external users and must be considered insecure for use by untrusted users.
 type PrivateMinerAPI struct {
-	e *FullNodeService
+	e *Ethereum
 }
 
 // NewPrivateMinerAPI create a new RPC service which controls the miner of this node.
-func NewPrivateMinerAPI(e *FullNodeService) *PrivateMinerAPI {
+func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
@@ -191,20 +191,20 @@ func (s *PrivateMinerAPI) MakeDAG(blockNr rpc.BlockNumber) (bool, error) {
 	return true, nil
 }
 
-// PrivateFullAdminAPI is the collection of Etheruem full node-related APIs
+// PrivateAdminAPI is the collection of Etheruem full node-related APIs
 // exposed over the private admin endpoint.
-type PrivateFullAdminAPI struct {
-	eth *FullNodeService
+type PrivateAdminAPI struct {
+	eth *Ethereum
 }
 
 // NewPrivateAdminAPI creates a new API definition for the full node private
 // admin methods of the Ethereum service.
-func NewPrivateFullAdminAPI(eth *FullNodeService) *PrivateFullAdminAPI {
-	return &PrivateFullAdminAPI{eth: eth}
+func NewPrivateAdminAPI(eth *Ethereum) *PrivateAdminAPI {
+	return &PrivateAdminAPI{eth: eth}
 }
 
 // ExportChain exports the current blockchain into a local file.
-func (api *PrivateFullAdminAPI) ExportChain(file string) (bool, error) {
+func (api *PrivateAdminAPI) ExportChain(file string) (bool, error) {
 	// Make sure we can create the file to export into
 	out, err := os.OpenFile(file, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
@@ -230,7 +230,7 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 }
 
 // ImportChain imports a blockchain from a local file.
-func (api *PrivateFullAdminAPI) ImportChain(file string) (bool, error) {
+func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	// Make sure the can access the file to import
 	in, err := os.Open(file)
 	if err != nil {
@@ -271,20 +271,20 @@ func (api *PrivateFullAdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
-// PublicFullDebugAPI is the collection of Etheruem full node APIs exposed
+// PublicDebugAPI is the collection of Etheruem full node APIs exposed
 // over the public debugging endpoint.
-type PublicFullDebugAPI struct {
-	eth *FullNodeService
+type PublicDebugAPI struct {
+	eth *Ethereum
 }
 
-// NewPublicFullDebugAPI creates a new API definition for the full node-
+// NewPublicDebugAPI creates a new API definition for the full node-
 // related public debug methods of the Ethereum service.
-func NewPublicFullDebugAPI(eth *FullNodeService) *PublicFullDebugAPI {
-	return &PublicFullDebugAPI{eth: eth}
+func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
+	return &PublicDebugAPI{eth: eth}
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
-func (api *PublicFullDebugAPI) DumpBlock(number uint64) (state.World, error) {
+func (api *PublicDebugAPI) DumpBlock(number uint64) (state.World, error) {
 	block := api.eth.BlockChain().GetBlockByNumber(number)
 	if block == nil {
 		return state.World{}, fmt.Errorf("block #%d not found", number)
@@ -296,17 +296,17 @@ func (api *PublicFullDebugAPI) DumpBlock(number uint64) (state.World, error) {
 	return stateDb.RawDump(), nil
 }
 
-// PrivateFullDebugAPI is the collection of Etheruem full node APIs exposed over
+// PrivateDebugAPI is the collection of Etheruem full node APIs exposed over
 // the private debugging endpoint.
-type PrivateFullDebugAPI struct {
+type PrivateDebugAPI struct {
 	config *core.ChainConfig
-	eth    *FullNodeService
+	eth    *Ethereum
 }
 
-// NewPrivateFullDebugAPI creates a new API definition for the full node-related
+// NewPrivateDebugAPI creates a new API definition for the full node-related
 // private debug methods of the Ethereum service.
-func NewPrivateFullDebugAPI(config *core.ChainConfig, eth *FullNodeService) *PrivateFullDebugAPI {
-	return &PrivateFullDebugAPI{config: config, eth: eth}
+func NewPrivateDebugAPI(config *core.ChainConfig, eth *Ethereum) *PrivateDebugAPI {
+	return &PrivateDebugAPI{config: config, eth: eth}
 }
 
 // BlockTraceResult is the returned value when replaying a block to check for
@@ -319,7 +319,7 @@ type BlockTraceResult struct {
 
 // TraceBlock processes the given block's RLP but does not import the block in to
 // the chain.
-func (api *PrivateFullDebugAPI) TraceBlock(blockRlp []byte, config *vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config *vm.Config) BlockTraceResult {
 	var block types.Block
 	err := rlp.Decode(bytes.NewReader(blockRlp), &block)
 	if err != nil {
@@ -336,7 +336,7 @@ func (api *PrivateFullDebugAPI) TraceBlock(blockRlp []byte, config *vm.Config) B
 
 // TraceBlockFromFile loads the block's RLP from the given file name and attempts to
 // process it but does not import the block in to the chain.
-func (api *PrivateFullDebugAPI) TraceBlockFromFile(file string, config *vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config *vm.Config) BlockTraceResult {
 	blockRlp, err := ioutil.ReadFile(file)
 	if err != nil {
 		return BlockTraceResult{Error: fmt.Sprintf("could not read file: %v", err)}
@@ -345,7 +345,7 @@ func (api *PrivateFullDebugAPI) TraceBlockFromFile(file string, config *vm.Confi
 }
 
 // TraceBlockByNumber processes the block by canonical block number.
-func (api *PrivateFullDebugAPI) TraceBlockByNumber(number uint64, config *vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config *vm.Config) BlockTraceResult {
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlockByNumber(number)
 	if block == nil {
@@ -361,7 +361,7 @@ func (api *PrivateFullDebugAPI) TraceBlockByNumber(number uint64, config *vm.Con
 }
 
 // TraceBlockByHash processes the block by hash.
-func (api *PrivateFullDebugAPI) TraceBlockByHash(hash common.Hash, config *vm.Config) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockByHash(hash common.Hash, config *vm.Config) BlockTraceResult {
 	// Fetch the block that we aim to reprocess
 	block := api.eth.BlockChain().GetBlockByHash(hash)
 	if block == nil {
@@ -389,7 +389,7 @@ func (t *TraceCollector) AddStructLog(slog vm.StructLog) {
 }
 
 // traceBlock processes the given block but does not save the state.
-func (api *PrivateFullDebugAPI) traceBlock(block *types.Block, config *vm.Config) (bool, []vm.StructLog, error) {
+func (api *PrivateDebugAPI) traceBlock(block *types.Block, config *vm.Config) (bool, []vm.StructLog, error) {
 	// Validate and reprocess the block
 	var (
 		blockchain = api.eth.BlockChain()
@@ -452,7 +452,7 @@ func formatError(err error) string {
 
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *PrivateFullDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ethapi.ExecutionResult, error) {
+func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ethapi.ExecutionResult, error) {
 	if logger == nil {
 		logger = new(vm.LogConfig)
 	}

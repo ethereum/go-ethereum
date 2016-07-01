@@ -58,7 +58,7 @@ type ReleaseService struct {
 // releases and notify the user of such.
 func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, error) {
 	// Retrieve the Ethereum service dependency to access the blockchain
-	var ethereum *eth.FullNodeService
+	var ethereum *eth.Ethereum
 	if err := ctx.Service(&ethereum); err != nil {
 		return nil, err
 	}
