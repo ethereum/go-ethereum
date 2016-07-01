@@ -501,8 +501,7 @@ func (self *worker) commitNewWork() {
 	*/
 
 	//approach 2
-	transactions := self.eth.TxPool().GetTransactions()
-	types.SortByPriceAndNonce(transactions)
+	transactions := types.SortByPriceAndNonce(self.eth.TxPool().Pending())
 
 	/* // approach 3
 	// commit transactions for this run.
@@ -533,8 +532,8 @@ func (self *worker) commitNewWork() {
 
 	work.commitTransactions(self.mux, transactions, self.gasPrice, self.chain)
 
-	self.eth.TxPool().RemoveTransactions(work.lowGasTxs)
-	self.eth.TxPool().RemoveTransactions(work.failedTxs)
+	self.eth.TxPool().RemoveBatch(work.lowGasTxs)
+	self.eth.TxPool().RemoveBatch(work.failedTxs)
 
 	// compute uncles for the new block.
 	var (
