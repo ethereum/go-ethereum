@@ -10,14 +10,14 @@ if [ ! -f "$root/build/env.sh" ]; then
 fi
 
 # Create build/bin if it doesn't exist yet.
-if [ ! -L "$root/build/bin" ]; then
+if [ ! -a "$root/build/bin" ]; then
     mkdir -p "$root/build/bin"
 fi
 
 # Create fake Go workspace if it doesn't exist yet.
 workspace="$root/../_go_build/_workspace"
 ethdir="$workspace/src/github.com/ethereum"
-if [ ! -L "$ethdir/go-ethereum" ]; then
+if [ ! -a "$ethdir/go-ethereum" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
     ln -s "$root" go-ethereum
