@@ -8,13 +8,13 @@ if [ ! -f "build/env.sh" ]; then
 fi
 
 # Create fake Go workspace if it doesn't exist yet.
-workspace="$PWD/build/_workspace"
+workspace="$PWD/../_go_build/_workspace"
 root="$PWD"
 ethdir="$workspace/src/github.com/ethereum"
 if [ ! -L "$ethdir/go-ethereum" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
-    ln -s ../../../../../. go-ethereum
+    ln -s "$root" go-ethereum
     cd "$root"
 fi
 
