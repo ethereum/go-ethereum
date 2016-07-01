@@ -118,21 +118,25 @@ func (b *EthApiBackend) RemoveTx(txHash common.Hash) {
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 
-	b.eth.txPool.RemoveTx(txHash)
+	b.eth.txPool.Remove(txHash)
 }
 
 func (b *EthApiBackend) GetPoolTransactions() types.Transactions {
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 
-	return b.eth.txPool.GetTransactions()
+	var txs types.Transactions
+	for _, batch := range b.eth.txPool.Pending() {
+		txs = append(txs, batch...)
+	}
+	return txs
 }
 
-func (b *EthApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
+func (b *EthApiBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 
-	return b.eth.txPool.GetTransaction(txHash)
+	return b.eth.txPool.Get(hash)
 }
 
 func (b *EthApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
@@ -149,7 +153,7 @@ func (b *EthApiBackend) Stats() (pending int, queued int) {
 	return b.eth.txPool.Stats()
 }
 
-func (b *EthApiBackend) TxPoolContent() (map[common.Address]core.TxList, map[common.Address]core.TxList) {
+func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 

@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -439,37 +438,29 @@ func (s *TxByPrice) Pop() interface{} {
 // sender accounts and sorts them by nonce. After the account nonce ordering is
 // satisfied, the results are merged back together by price, always comparing only
 // the head transaction from each account. This is done via a heap to keep it fast.
-func SortByPriceAndNonce(txs []*Transaction) {
-	// Separate the transactions by account and sort by nonce
-	byNonce := make(map[common.Address][]*Transaction)
-	for _, tx := range txs {
-		acc, _ := tx.From() // we only sort valid txs so this cannot fail
-		byNonce[acc] = append(byNonce[acc], tx)
-	}
-	for _, accTxs := range byNonce {
-		sort.Sort(TxByNonce(accTxs))
-	}
+func SortByPriceAndNonce(txs map[common.Address]Transactions) Transactions {
 	// Initialize a price based heap with the head transactions
-	byPrice := make(TxByPrice, 0, len(byNonce))
-	for acc, accTxs := range byNonce {
+	byPrice := make(TxByPrice, 0, len(txs))
+	for acc, accTxs := range txs {
 		byPrice = append(byPrice, accTxs[0])
-		byNonce[acc] = accTxs[1:]
+		txs[acc] = accTxs[1:]
 	}
 	heap.Init(&byPrice)
 
 	// Merge by replacing the best with the next from the same account
-	txs = txs[:0]
+	var sorted Transactions
 	for len(byPrice) > 0 {
 		// Retrieve the next best transaction by price
 		best := heap.Pop(&byPrice).(*Transaction)
 
 		// Push in its place the next transaction from the same account
 		acc, _ := best.From() // we only sort valid txs so this cannot fail
-		if accTxs, ok := byNonce[acc]; ok && len(accTxs) > 0 {
+		if accTxs, ok := txs[acc]; ok && len(accTxs) > 0 {
 			heap.Push(&byPrice, accTxs[0])
-			byNonce[acc] = accTxs[1:]
+			txs[acc] = accTxs[1:]
 		}
 		// Accumulate the best priced transaction
-		txs = append(txs, best)
+		sorted = append(sorted, best)
 	}
+	return sorted
 }
