@@ -143,6 +143,8 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 type GenesisAccount struct {
 	Address common.Address
 	Balance *big.Int
+	Code    []byte // runtime code
+	Storage map[common.Hash]common.Hash
 }
 
 func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *types.Block {
@@ -151,7 +153,21 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 		if i != 0 {
 			accountJson += ","
 		}
-		accountJson += fmt.Sprintf(`"0x%x":{"balance":"0x%x"}`, account.Address, account.Balance.Bytes())
+		if len(account.Storage) == 0 {
+			accountJson += fmt.Sprintf(`"0x%x":{"balance":"0x%x","code":"%x"}`, account.Address, account.Balance.Bytes(), account.Code)
+		} else {
+			accountJson += fmt.Sprintf(`"0x%x":{"balance":"0x%x","code":"%x", "storage": {`, account.Address, account.Balance.Bytes(), account.Code)
+			prefixComma := false
+			for key, value := range account.Storage {
+				if prefixComma {
+					accountJson += fmt.Sprintf(`,"%x": "%x"`, key, value)
+				} else {
+					accountJson += fmt.Sprintf(`"%x": "%x"`, key, value)
+				}
+				prefixComma = true
+			}
+			accountJson += "}}"
+		}
 	}
 	accountJson += "}"
 
