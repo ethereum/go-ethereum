@@ -125,6 +125,8 @@ wget -O- gateway-url/bzz:/swarm-url
 # Further examples
 
 ```shell
+# start with updaing
+swarm update chambers
 
 # display CLI options given to geth used to launch swarm instance 02
 swarm options 02
@@ -154,6 +156,15 @@ swarm remote-run nodes.lst 'swarm enode all' > enodes.lst
 for node in `cat nodes.lst|grep -v '^#'`; do scp enodes.lst $node:; done
 swarm remote-run nodes.lst 'swarm addpeers enodes.lst'
 
+# if you run a local network and  your nodes do not listen to external IPs
+swarm  remote-run pivot.lst 'swarm restart all'
+
+# to add just one or a few guardians and let the network bootstrap
+# swarm remote-run 'swarm enode all'
+swarm addpeers pivot.lst
+# or directly
+swarm addpeers all <(IP_ADDR='[::]' swarm enode 01|tr -d '"')
+
 # stop all running instances on the node
 swarm stop all
 
@@ -180,7 +191,7 @@ swarm netstatun
 swarm remote-run nodes.lst 'swarm netstatconf cicada-sworm; swarm netstatrun'
 
 
-swarm remote-run-all nodes.lst 'swarm netstatconf cicada-sworm; swarm netstatrun'
+swarm remote nodes.lst 'swarm netstatconf cicada-sworm; swarm netstatrun'
 ```
 
 
@@ -214,5 +225,5 @@ npm install -g pm2
 ## configure and run netstats client for each node
 
 ```shell
-swarm remote-run-all nodes.lst 'swarm netstatconf cicada-sworm; swarm netstatrun'
+swarm remote-run nodes.lst 'swarm netstatconf cicada-sworm; swarm netstatrun'
 ```
