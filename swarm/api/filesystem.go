@@ -86,23 +86,26 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	errors := make([]error, cnt)
 	done := make(chan bool, maxParallelFiles)
 	dcnt := 0
-	wg := &sync.WaitGroup{}
+	awg := &sync.WaitGroup{}
 
 	for i, entry := range list {
 		if i >= dcnt+maxParallelFiles {
 			<-done
 			dcnt++
 		}
+		awg.Add(1)
 		go func(i int, entry *manifestTrieEntry, done chan bool) {
 			f, err := os.Open(entry.Path)
 			if err == nil {
 				stat, _ := f.Stat()
 				var hash storage.Key
+				wg := &sync.WaitGroup{}
 				hash, err = self.api.dpa.Store(f, stat.Size(), wg)
 				if hash != nil {
 					list[i].Hash = hash.String()
 				}
 				wg.Wait()
+				awg.Done()
 				if err == nil {
 					first512 := make([]byte, 512)
 					fread, _ := f.ReadAt(first512, 0)
@@ -150,7 +153,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	if err2 == nil {
 		hs = trie.hash.String()
 	}
-	wg.Wait()
+	awg.Wait()
 	return hs, err2
 }
 
