@@ -149,7 +149,6 @@ participating.
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.GenesisFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
@@ -164,6 +163,8 @@ participating.
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
+		utils.SupportDAOFork,
+		utils.OpposeDAOFork,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
 		utils.MiningGPUFlag,
@@ -224,12 +225,6 @@ participating.
 		eth.EnableBadBlockReporting = true
 
 		utils.SetupNetwork(ctx)
-
-		// Deprecation warning.
-		if ctx.GlobalIsSet(utils.GenesisFileFlag.Name) {
-			common.PrintDepricationWarning("--genesis is deprecated. Switch to use 'geth init /path/to/file'")
-		}
-
 		return nil
 	}
 
