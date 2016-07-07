@@ -31,7 +31,8 @@ var ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general conf
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
 type ChainConfig struct {
-	HomesteadBlock *big.Int // homestead switch block
+	HomesteadBlock *big.Int `json:"homesteadBlock"` // homestead switch block (0 = already homestead)
+	DAOForkBlock   *big.Int `json:"daoForkBlock"`   // TheDAO hard-fork block (nil = no fork)
 
 	VmConfig vm.Config `json:"-"`
 }
@@ -41,6 +42,5 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 	if num == nil {
 		return false
 	}
-
 	return num.Cmp(c.HomesteadBlock) >= 0
 }

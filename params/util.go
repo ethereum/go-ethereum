@@ -21,4 +21,6 @@ import "math/big"
 var (
 	TestNetHomesteadBlock = big.NewInt(494000)  // testnet homestead block
 	MainNetHomesteadBlock = big.NewInt(1150000) // mainnet homestead block
+	TestNetDAOForkBlock   = big.NewInt(8888888) // testnet dao hard-fork block
+	MainNetDAOForkBlock   = big.NewInt(9999999) // mainnet dao hard-fork block
 )
