@@ -798,43 +798,42 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 // MustMakeChainConfigFromDb reads the chain configuration from the given database.
 func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfig {
 	// If the chain is already initialized, use any existing chain configs
+	config := new(core.ChainConfig)
+
 	if genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0); genesis != nil {
 		storedConfig, err := core.GetChainConfig(db, genesis.Hash())
-		if err == nil {
-			// Force override any existing configs if explicitly requested
-			switch {
-			case storedConfig.DAOForkBlock == nil && ctx.GlobalBool(SupportDAOFork.Name) && ctx.GlobalBool(TestNetFlag.Name):
-				storedConfig.DAOForkBlock = params.TestNetDAOForkBlock
-			case storedConfig.DAOForkBlock == nil && ctx.GlobalBool(SupportDAOFork.Name):
-				storedConfig.DAOForkBlock = params.MainNetDAOForkBlock
-			case ctx.GlobalBool(OpposeDAOFork.Name):
-				storedConfig.DAOForkBlock = nil
-			}
-			return storedConfig
-		} else if err != core.ChainConfigNotFoundErr {
+		switch err {
+		case nil:
+			config = storedConfig
+		case core.ChainConfigNotFoundErr:
+			// No configs found, use empty, will populate below
+		default:
 			Fatalf("Could not make chain configuration: %v", err)
 		}
 	}
-	// If the chain is uninitialized nor no configs are present, create one
-	var homesteadBlock *big.Int
-	if ctx.GlobalBool(TestNetFlag.Name) {
-		homesteadBlock = params.TestNetHomesteadBlock
-	} else {
-		homesteadBlock = params.MainNetHomesteadBlock
+	// Set any missing fields due to them being unset or system upgrade
+	if config.HomesteadBlock == nil {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.HomesteadBlock = new(big.Int).Set(params.TestNetHomesteadBlock)
+		} else {
+			config.HomesteadBlock = new(big.Int).Set(params.MainNetHomesteadBlock)
+		}
 	}
-	var daoForkBlock *big.Int
+	if config.DAOForkBlock == nil {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.DAOForkBlock = new(big.Int).Set(params.TestNetDAOForkBlock)
+		} else {
+			config.DAOForkBlock = new(big.Int).Set(params.MainNetDAOForkBlock)
+		}
+	}
+	// Force override any existing configs if explicitly requested
 	switch {
-	case ctx.GlobalBool(SupportDAOFork.Name) && ctx.GlobalBool(TestNetFlag.Name):
-		daoForkBlock = params.TestNetDAOForkBlock
 	case ctx.GlobalBool(SupportDAOFork.Name):
-		daoForkBlock = params.MainNetDAOForkBlock
+		config.DAOForkSupport = true
 	case ctx.GlobalBool(OpposeDAOFork.Name):
-		daoForkBlock = nil
+		config.DAOForkSupport = false
 	}
-	return &core.ChainConfig{
-		HomesteadBlock: homesteadBlock,
-		DAOForkBlock:   daoForkBlock,
-	}
+	return config
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
