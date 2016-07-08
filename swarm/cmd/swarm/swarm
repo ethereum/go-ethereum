@@ -13,7 +13,8 @@ if [ "$SWARM_NETWORK_ID" = "" ]; then export SWARM_NETWORK_ID=322; fi
 if [ "$SWARM_DIR" = "" ]; then export SWARM_DIR=$HOME/bzz; fi
 
 if [ "$IP_ADDR" = "" ]; then
-  export IP_ADDR=`curl ipecho.net/plain 2>/dev/null;echo `
+  # export IP_ADDR=`curl ipecho.net/plain 2>/dev/null;echo f`
+  export IP_ADDR=
 fi
 
 root=$SWARM_DIR
@@ -24,6 +25,10 @@ shift
 dir="$root/$network_id"
 
 tmpdir=/tmp
+
+function randomfile {
+  dd if=/dev/urandom of=/dev/stdout bs=1024 count=$1 2>/dev/null
+}
 
 # swarm attach 00 brings up a console attached to a running instance
 function attach {
@@ -428,7 +433,7 @@ function needs {
 function up { #port, file
   echo "Upload file '$2' to node $1... " 1>&2
   file=`basename $2`
-  execute $1 "bzz.upload(\"$2\", \"$file\")"|tail -n1> /tmp/key
+  /usr/bin/time -f "latency: %e" swarm execute $1 "bzz.upload(\"$2\", \"$file\")"|tail -n1> /tmp/key
   cat /tmp/key
 }
 
@@ -565,7 +570,8 @@ function remote-run {
   remotes=$1
   shift
   if `echo "$remotes" | grep -qil @`; then
-    ssh $remotes '. $HOME/bin/env.sh;' "$*"
+    ip=`echo "$remotes"|cut -d@ -f2`
+    ssh $remotes "export IP_ADDR=$ip;" '. $HOME/bin/env.sh;' "$*"
   else
     for remote in `cat $remotes|grep -v '^#'`; do echo "running on $remote..."; remote-run $remote "$*"; done
   fi
@@ -578,6 +584,84 @@ function update {
   (cd $GETH_DIR &&  git remote update && git reset --hard $branch)
 }
 
+function checksum {
+  tar -cf - $1 | md5sum|awk '{print $1}'
+}
+
+function checkaccess {
+  nodes=$1
+  target=`basename $2`
+  chsum=`md5sum $2|cut -f1 -d' '`
+  master=`head  -1 $nodes`
+  echo "uploading target on $master (md5sum $chsum, size: `du -b -d0 $2|cut -f1`)"
+  scp $2 $master:$target
+  hash=`swarm remote-run $master "swarm up 00 $target $file"|tr -d '"'`
+  remote-run $nodes swarm checkdownload all $hash $chsum
+}
+
+function checkdownload {
+  id=$1
+  if [ "$id" = "all"  ]; then
+    shift
+    N=`ls -1 -d $dir/data/* |wc -l`
+    for ((i=0;i<N;++i)); do
+      id=`printf "%02d" $i`
+      checkdownload $id $*
+    done
+  else
+    hash=$2
+    target=$3
+    datetag=`date "+%Y-%m-%d-%H:%M:%S"`
+    file="swarm-$datetag"
+    rm -rf $tmpdir/$file
+    /usr/bin/time -o $tmpdir/$file.log -f "%e" swarm download $id $hash $tmpdir/$file > /dev/null
+    echo
+    if [ -f $target ]; then
+      cmp --silent  $target $tmpdir/$file/* && echo PASS || echo FAIL
+    elif [ -r $target ]; then
+      diff -r $target $tmpdir/$file/ >/dev/null && echo PASS || echo FAIL
+    else
+      exp=`md5sum $tmpdir/$file/*|cut -f1 -d' '`
+      if [ "$exp" = "$target" ]; then
+        echo -n  PASS
+      else
+        echo FAIL "$exp = $target"
+      fi
+    fi
+    echo " latency: " `cat $tmpdir/$file.log`
+  fi
+}
+
+function meminfo {
+  pid="$dir/pids/$1.pid"
+  if [ -f "$pid" ]; then
+    # cd  /proc/`cat "$pid"` && cat status
+    ps aux|awk -v PID=`cat $pid` '$2 == PID {print $5 "Kb (" $4 "%)" }'
+  fi
+}
+
+function cpuinfo {
+  pid="$dir/pids/$1.pid"
+  if [ -f "$pid" ]; then
+    # cd  /proc/`cat "$pid"` && cat status
+   ps aux|awk -v PID=`cat $pid`  '$2  == PID {print $3 "%" }'
+ fi
+}
+
+function diskusage {
+  if [ "$1" == "" ]; then
+    echo "DISK USAGE:" `df -m |grep '/$'|awk '{print $(NF-2) "Mb (" $(NF-1) ")"} '`
+  else
+    du -m -d0 $*|cut -f1
+  fi
+}
+
+function diskinfo {
+  echo "DISK USAGE $1:"
+  echo "blockchain:" `diskusage $dir/data/$1/chaindata`
+  echo "chunkstore:" `diskusage $dir/data/$1/bzz/*/chunks`
+  echo "overall:  /"  `diskusage`
+}
 
 case $cmd in
   "info" )
@@ -656,9 +740,20 @@ case $cmd in
     options $*;;
   "rawoptions" )
     rawoptions $*;;
+  "randomfile" )
+    randomfile $*;;
+  "diskinfo" )
+    diskinfo $*;;
+  "meminfo" )
+    meminfo $*;;
+  "cpuinfo" )
+    cpuinfo $*;;
   "setup" )
     setup $* ;;
   "create-account" )
     create-account $*;;
-
+  "checkaccess" )
+    checkaccess $* ;;
+  "checkdownload" )
+    checkdownload $* ;;
 esac
