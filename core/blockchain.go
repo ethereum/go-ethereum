@@ -771,13 +771,12 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 	if ptd == nil {
 		return NonStatTy, ParentError(block.ParentHash())
 	}
-
-	localTd := self.GetTd(self.currentBlock.Hash(), self.currentBlock.NumberU64())
-	externTd := new(big.Int).Add(block.Difficulty(), ptd)
-
 	// Make sure no inconsistent state is leaked during insertion
 	self.mu.Lock()
 	defer self.mu.Unlock()
+
+	localTd := self.GetTd(self.currentBlock.Hash(), self.currentBlock.NumberU64())
+	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
