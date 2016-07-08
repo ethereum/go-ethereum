@@ -1,5 +1,9 @@
 package storage
 
+import (
+	"encoding/binary"
+)
+
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
@@ -48,6 +52,7 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	if err != nil {
 		return
 	}
+	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
 	return
 }

@@ -78,11 +78,11 @@ func TestBootstrap(t *testing.T) {
 		n := 0
 		for n < 100 {
 			err = kad.On(node, nil)
-			if err != nil && err.Error() != "bucket full" {
+			if err != nil {
 				t.Fatalf("backend not accepting node: %v", err)
 			}
 
-			record, need, _ := kad.FindBest()
+			record, need, _ := kad.Suggest()
 			if !need {
 				break
 			}
@@ -150,7 +150,7 @@ func TestFindClosest(t *testing.T) {
 		// check that the result nodes have minimum distance to target.
 		farthestResult := nodes[len(nodes)-1].Addr()
 		for i, b := range kad.buckets {
-			for j, n := range b.nodes {
+			for j, n := range b {
 				if contains(nodes, n.Addr()) {
 					continue // don't run the check below for nodes in result
 				}
@@ -235,12 +235,12 @@ func TestSaveLoad(t *testing.T) {
 	nodes := kad.FindClosest(self, 100)
 	path := "/tmp/bzz.peers"
 	err = kad.Save(path, nil)
-	if err != nil {
+	if err != nil && err.Error() != "bucket full" {
 		t.Fatalf("unepected error saving kaddb: %v", err)
 	}
 	kad = New(self, params)
 	err = kad.Load(path, nil)
-	if err != nil {
+	if err != nil && err.Error() != "bucket full" {
 		t.Fatalf("unepected error loading kaddb: %v", err)
 	}
 	for _, b := range kad.db.Nodes {
@@ -260,30 +260,30 @@ func TestSaveLoad(t *testing.T) {
 }
 
 func (self *Kademlia) proxCheck(t *testing.T) bool {
-	var sum, i int
-	var b *bucket
-	for i, b = range self.buckets {
-		l := len(b.nodes)
+	var sum int
+	for i, b := range self.buckets {
+		l := len(b)
 		// if we are in the high prox multibucket
 		if i >= self.proxLimit {
 			sum += l
 		} else if l == 0 {
-			t.Errorf("bucket %d empty, yet proxLimit is %d\n%v", len(b.nodes), self.proxLimit, self)
+			t.Errorf("bucket %d empty, yet proxLimit is %d\n%v", len(b), self.proxLimit, self)
 			return false
 		}
 	}
 	// check if merged high prox bucket does not exceed size
 	if sum > 0 {
-		// if sum > self.ProxBinSize {
-		// 	t.Errorf("bucket %d is empty, yet proxSize is %d\n%v", i, self.proxSize, self)
-		// 	return false
-		// }
 		if sum != self.proxSize {
 			t.Errorf("proxSize incorrect, expected %v, got %v", sum, self.proxSize)
 			return false
 		}
-		if self.proxLimit > 0 && sum+len(self.buckets[self.proxLimit-1].nodes) < self.ProxBinSize {
-			t.Errorf("proxBinSize incorrect, expected %v got %v", sum, self.proxSize)
+		last := len(self.buckets[self.proxLimit])
+		if last > 0 && sum >= self.ProxBinSize+last {
+			t.Errorf("proxLimit %v incorrect, redundant non-empty bucket %d added to proxBin with %v (target %v)", self.proxLimit, last, sum-last, self.ProxBinSize)
+			return false
+		}
+		if self.proxLimit > 0 && sum < self.ProxBinSize {
+			t.Errorf("proxLimit %v incorrect. proxSize %v is less than target %v, yet there is more peers", self.proxLimit, sum, self.ProxBinSize)
 			return false
 		}
 	}

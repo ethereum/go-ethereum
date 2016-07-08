@@ -86,27 +86,29 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	errors := make([]error, cnt)
 	done := make(chan bool, maxParallelFiles)
 	dcnt := 0
+	awg := &sync.WaitGroup{}
 
 	for i, entry := range list {
 		if i >= dcnt+maxParallelFiles {
 			<-done
 			dcnt++
 		}
+		awg.Add(1)
 		go func(i int, entry *manifestTrieEntry, done chan bool) {
 			f, err := os.Open(entry.Path)
 			if err == nil {
 				stat, _ := f.Stat()
-				sr := io.NewSectionReader(f, 0, stat.Size())
-				wg := &sync.WaitGroup{}
 				var hash storage.Key
-				hash, err = self.api.dpa.Store(sr, wg)
+				wg := &sync.WaitGroup{}
+				hash, err = self.api.dpa.Store(f, stat.Size(), wg)
 				if hash != nil {
 					list[i].Hash = hash.String()
 				}
 				wg.Wait()
+				awg.Done()
 				if err == nil {
 					first512 := make([]byte, 512)
-					fread, _ := sr.ReadAt(first512, 0)
+					fread, _ := f.ReadAt(first512, 0)
 					if fread > 0 {
 						mimeType := http.DetectContentType(first512[:fread])
 						if filepath.Ext(entry.Path) == ".css" {
@@ -129,6 +131,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	trie := &manifestTrie{
 		dpa: self.api.dpa,
 	}
+	quitC := make(chan bool)
 	for i, entry := range list {
 		if errors[i] != nil {
 			return "", errors[i]
@@ -140,9 +143,9 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				Hash:        entry.Hash,
 				ContentType: entry.ContentType,
 			}
-			trie.addEntry(ientry)
+			trie.addEntry(ientry, quitC)
 		}
-		trie.addEntry(entry)
+		trie.addEntry(entry, quitC)
 	}
 
 	err2 := trie.recalcAndStore()
@@ -150,6 +153,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	if err2 == nil {
 		hs = trie.hash.String()
 	}
+	awg.Wait()
 	return hs, err2
 }
 
@@ -170,11 +174,13 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	if err != nil {
 		return err
 	}
-	// if len(path) > 0 {
-	// 	path += "/"
-	// }
 
-	trie, err := loadManifest(self.api.dpa, key)
+	if len(path) > 0 {
+		path += "/"
+	}
+
+	quitC := make(chan bool)
+	trie, err := loadManifest(self.api.dpa, key, quitC)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] fs.Download: loadManifestTrie error: %v", err)
 		return err
@@ -186,72 +192,76 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	var list []*downloadListEntry
-	var mde, mderr error
+	var mde error
 
 	prevPath := lpath
-	err = trie.listWithPrefix(path, func(entry *manifestTrieEntry, suffix string) { // TODO: paralellize
+	err = trie.listWithPrefix(path, quitC, func(entry *manifestTrieEntry, suffix string) {
 		glog.V(logger.Detail).Infof("[BZZ] fs.Download: %#v", entry)
 
-		key := common.Hex2Bytes(entry.Hash)
+		key = common.Hex2Bytes(entry.Hash)
 		path := lpath + "/" + suffix
 		dir := filepath.Dir(path)
 		if dir != prevPath {
 			mde = os.MkdirAll(dir, os.ModePerm)
-			if mde != nil {
-				mderr = mde
-			}
 			prevPath = dir
 		}
 		if (mde == nil) && (path != dir+"/") {
 			list = append(list, &downloadListEntry{key: key, path: path})
 		}
 	})
-	if err == nil {
-		err = mderr
-	}
-
-	cnt := len(list)
-	errors := make([]error, cnt)
-	done := make(chan bool, maxParallelFiles)
-	dcnt := 0
-
-	for i, entry := range list {
-		if i >= dcnt+maxParallelFiles {
-			<-done
-			dcnt++
-		}
-		go func(i int, entry *downloadListEntry, done chan bool) {
-			f, err := os.Create(entry.path) // TODO: path separators
-			if err == nil {
-				reader := self.api.dpa.Retrieve(entry.key)
-				writer := bufio.NewWriter(f)
-				_, err = io.CopyN(writer, reader, reader.Size()) // TODO: handle errors
-				err2 := writer.Flush()
-				if err == nil {
-					err = err2
-				}
-				err2 = f.Close()
-				if err == nil {
-					err = err2
-				}
-			}
-
-			errors[i] = err
-			done <- true
-		}(i, entry, done)
-	}
-	for dcnt < cnt {
-		<-done
-		dcnt++
-	}
-
 	if err != nil {
 		return err
 	}
-	for i, _ := range list {
-		if errors[i] != nil {
-			return errors[i]
+
+	wg := sync.WaitGroup{}
+	errC := make(chan error)
+	done := make(chan bool, maxParallelFiles)
+	for i, entry := range list {
+		select {
+		case done <- true:
+			wg.Add(1)
+		case <-quitC:
+			return fmt.Errorf("aborted")
 		}
+		go func(i int, entry *downloadListEntry) {
+			defer wg.Done()
+			f, err := os.Create(entry.path) // TODO: path separators
+			if err == nil {
+
+				reader := self.api.dpa.Retrieve(entry.key)
+				writer := bufio.NewWriter(f)
+				size, err := reader.Size(quitC)
+				if err == nil {
+					_, err = io.CopyN(writer, reader, size) // TODO: handle errors
+					err2 := writer.Flush()
+					if err == nil {
+						err = err2
+					}
+					err2 = f.Close()
+					if err == nil {
+						err = err2
+					}
+				}
+			}
+			if err != nil {
+				select {
+				case errC <- err:
+				case <-quitC:
+				}
+				return
+			}
+			<-done
+		}(i, entry)
 	}
-	return err
+	go func() {
+		wg.Wait()
+		close(errC)
+	}()
+	select {
+	case err = <-errC:
+		return err
+	case <-quitC:
+		return fmt.Errorf("aborted")
+	}
+
 }

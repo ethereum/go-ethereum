@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"io"
 	"sync"
 	"time"
 
@@ -72,33 +73,14 @@ func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
-func (self *DPA) Retrieve(key Key) SectionReader {
+func (self *DPA) Retrieve(key Key) LazySectionReader {
 	return self.Chunker.Join(key, self.retrieveC)
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data SectionReader, wg *sync.WaitGroup) (key Key, err error) {
-	key = make([]byte, self.Chunker.KeySize())
-	errC := self.Chunker.Split(key, data, self.storeC, wg)
-
-SPLIT:
-	for {
-		select {
-		case err, ok := <-errC:
-			if err != nil {
-				glog.V(logger.Error).Infof("[BZZ] chunker split error: %v", err)
-			}
-			if !ok {
-				break SPLIT
-			}
-
-		case <-self.quitC:
-			break SPLIT
-		}
-	}
-	return
-
+func (self *DPA) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key Key, err error) {
+	return self.Chunker.Split(data, size, self.storeC, nil, wg)
 }
 
 func (self *DPA) Start() {
@@ -164,7 +146,7 @@ func (self *DPA) storeLoop() {
 			go func(chunk *Chunk) {
 				self.Put(chunk)
 				if chunk.wg != nil {
-					glog.V(logger.Detail).Infof("[BZZ] DPA.storeLoop %v", chunk.Key.Log())
+					glog.V(logger.Detail).Infof("[BZZ] dpa: store loop %v", chunk.Key.Log())
 					chunk.wg.Done()
 				}
 			}(ch)

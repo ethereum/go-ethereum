@@ -43,12 +43,12 @@ func NewApi(dpa *storage.DPA, dns Resolver) (self *Api) {
 }
 
 // DPA reader API
-func (self *Api) Retrieve(key storage.Key) storage.SectionReader {
+func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data storage.SectionReader, wg *sync.WaitGroup) (key storage.Key, err error) {
-	return self.dpa.Store(data, wg)
+func (self *Api) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key storage.Key, err error) {
+	return self.dpa.Store(data, size, wg)
 }
 
 type ErrResolve error
@@ -105,15 +105,15 @@ func (self *Api) parseAndResolve(uri string, nameresolver bool) (contentHash sto
 
 // Put provides singleton manifest creation on top of dpa store
 func (self *Api) Put(content, contentType string) (string, error) {
-	sr := io.NewSectionReader(strings.NewReader(content), 0, int64(len(content)))
+	r := strings.NewReader(content)
 	wg := &sync.WaitGroup{}
-	key, err := self.dpa.Store(sr, wg)
+	key, err := self.dpa.Store(r, int64(len(content)), wg)
 	if err != nil {
 		return "", err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
-	sr = io.NewSectionReader(strings.NewReader(manifest), 0, int64(len(manifest)))
-	key, err = self.dpa.Store(sr, wg)
+	r = strings.NewReader(manifest)
+	key, err = self.dpa.Store(r, int64(len(manifest)), wg)
 	if err != nil {
 		return "", err
 	}
@@ -124,11 +124,11 @@ func (self *Api) Put(content, contentType string) (string, error) {
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve path to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
-func (self *Api) Get(uri string, nameresolver bool) (reader storage.SectionReader, mimeType string, status int, err error) {
+func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionReader, mimeType string, status int, err error) {
 
 	key, _, path, err := self.parseAndResolve(uri, nameresolver)
-
-	trie, err := loadManifest(self.dpa, key)
+	quitC := make(chan bool)
+	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] Swarm: loadManifestTrie error: %v", err)
 		return
@@ -151,7 +151,8 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.SectionReade
 
 func (self *Api) Modify(uri, contentHash, contentType string, nameresolver bool) (newRootHash string, err error) {
 	root, _, path, err := self.parseAndResolve(uri, nameresolver)
-	trie, err := loadManifest(self.dpa, root)
+	quitC := make(chan bool)
+	trie, err := loadManifest(self.dpa, root, quitC)
 	if err != nil {
 		return
 	}
@@ -162,9 +163,9 @@ func (self *Api) Modify(uri, contentHash, contentType string, nameresolver bool)
 			Hash:        contentHash,
 			ContentType: contentType,
 		}
-		trie.addEntry(entry)
+		trie.addEntry(entry, quitC)
 	} else {
-		trie.deleteEntry(path)
+		trie.deleteEntry(path, quitC)
 	}
 
 	err = trie.recalcAndStore()

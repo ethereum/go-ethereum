@@ -298,6 +298,7 @@ func (self *syncer) sync() {
 	if state.LastSeenAt < state.SessionAt {
 		state.Last = state.SessionAt
 		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: start syncronising history since last disconnect at %v up until session start at %v: %v", self.key.Log(), state.LastSeenAt, state.SessionAt, state)
+		// blocks until state syncing is finished
 		self.syncState(state)
 	}
 	glog.V(logger.Info).Infof("[BZZ] syncer[%v]: syncing all history complete", self.key.Log())
@@ -358,18 +359,17 @@ func (self *syncer) syncHistory(state *syncState) chan interface{} {
 		IT:
 			for {
 				key := it.Next()
-				if key != nil {
-					select {
-					// blocking until history channel is read from
-					case history <- storage.Key(key):
-						n++
-						glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: history: %v (%v keys)", self.key.Log(), key.Log(), n)
-						state.Latest = key
-					case <-self.quit:
-						return
-					}
-				} else {
+				if key == nil {
 					break IT
+				}
+				select {
+				// blocking until history channel is read from
+				case history <- storage.Key(key):
+					n++
+					glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: history: %v (%v keys)", self.key.Log(), key.Log(), n)
+					state.Latest = key
+				case <-self.quit:
+					return
 				}
 			}
 			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: finished syncing history between %v - %v for chunk addresses %v - %v (at %v) (chunks = %v)", self.key.Log(), state.First, state.Last, state.Start, state.Stop, state.Latest, n)
@@ -416,25 +416,31 @@ LOOP:
 		// are checked first - integrity can only be guaranteed if writing
 		// is locked while selecting
 		if priority != High || len(keys) == 0 {
+			// selection is not needed if the High priority queue has items
 			keys = nil
+		PRIORITIES:
 			for priority = High; priority >= 0; priority-- {
+				// the first priority channel that is non-empty will be assigned to keys
 				if len(self.keys[priority]) > 0 {
 					glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: reading request with	 priority %v", self.key.Log(), priority)
 					keys = self.keys[priority]
-					break
+					break PRIORITIES
 				}
+				glog.V(logger.Debug).Infof("[BZZ] syncer[%v/%v]: queue: [%v, %v, %v]", self.key.Log(), priority, len(self.keys[High]), len(self.keys[Medium]), len(self.keys[Low]))
+				// if the input queue is empty on this level, resort to history if there is any
 				if uint(priority) == histPrior && history != nil {
 					glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: reading history for %v", self.key.Log(), self.key)
 					keys = history
-					break
+					break PRIORITIES
 				}
 			}
-			// if peer ready to receive but nothing to send
-			if keys == nil && deliveryRequest == nil {
-				// if no items left and switch to waiting mode
-				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: buffers consumed. Waiting", self.key.Log())
-				newUnsyncedKeys = self.newUnsyncedKeys
-			}
+		}
+
+		// if peer ready to receive but nothing to send
+		if keys == nil && deliveryRequest == nil {
+			// if no items left and switch to waiting mode
+			glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: buffers consumed. Waiting", self.key.Log())
+			newUnsyncedKeys = self.newUnsyncedKeys
 		}
 
 		// send msg iff
@@ -447,7 +453,7 @@ LOOP:
 				len(unsynced) > 0 && keys == nil ||
 				len(unsynced) == int(self.SyncBatchSize)) {
 			justSynced = false
-			// listen to requests again
+			// listen to requests
 			deliveryRequest = self.deliveryRequest
 			newUnsyncedKeys = nil // not care about data until next req comes in
 			// set sync to current counter
@@ -458,11 +464,11 @@ LOOP:
 			//  send the unsynced keys
 			stateCopy := *state
 			err := self.unsyncedKeys(unsynced, &stateCopy)
-			self.state = state
-			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", self.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy)
 			if err != nil {
 				glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: unable to send unsynced keys: %v", err)
 			}
+			self.state = state
+			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", self.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy)
 			unsynced = nil
 			keys = nil
 		}
@@ -579,7 +585,7 @@ func (self *syncer) syncDeliveries() {
 		total++
 		msg, err = self.newStoreRequestMsgData(req)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: failed to deliver %v: %v", self.key.Log(), req, err)
+			glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: failed to create store request for %v: %v", self.key.Log(), req, err)
 		} else {
 			err = self.store(msg)
 			if err != nil {

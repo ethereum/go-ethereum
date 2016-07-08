@@ -86,8 +86,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			return
 		}
 	}
-	raw = proto[1:5] == "bzzr"
-	nameresolver = proto[1:5] != "bzzi"
+	if len(proto) > 4 {
+		raw = proto[1:5] == "bzzr"
+		nameresolver = proto[1:5] != "bzzi"
+	}
 
 	glog.V(logger.Debug).Infof(
 		"[BZZ] Swarm: %s request over protocol %s '%s' received.",
@@ -96,10 +98,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 	switch {
 	case r.Method == "POST" || r.Method == "PUT":
-		key, err := a.Store(io.NewSectionReader(&sequentialReader{
-			reader: r.Body,
-			ahead:  make(map[int64]chan bool),
-		}, 0, r.ContentLength), nil)
+		key, err := a.Store(r.Body, r.ContentLength, nil)
 		if err == nil {
 			glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for %v stored", key.Log())
 		} else {
@@ -165,7 +164,9 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 			// retrieving content
 			reader := a.Retrieve(key)
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Reading %d bytes.", reader.Size())
+			quitC := make(chan bool)
+			size, err := reader.Size(quitC)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Reading %d bytes.", size)
 
 			// setting mime type
 			qv := requestURL.Query()
@@ -176,7 +177,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 			w.Header().Set("Content-Type", mimeType)
 			http.ServeContent(w, r, uri, forever(), reader)
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType)
 
 			// retrieve path via manifest
 		} else {
@@ -203,7 +204,9 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			} else {
 				status = 200
 			}
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, status)
+			quitC := make(chan bool)
+			size, err := reader.Size(quitC)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status)
 
 			http.ServeContent(w, r, path, forever(), reader)
 

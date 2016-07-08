@@ -29,9 +29,9 @@ func TestDPArandom(t *testing.T) {
 		ChunkStore: localStore,
 	}
 	dpa.Start()
-	reader, slice := testDataReader(testDataSize)
+	reader, slice := testDataReaderAndSlice(testDataSize)
 	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, wg)
+	key, err := dpa.Store(reader, testDataSize, wg)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
@@ -85,9 +85,9 @@ func TestDPA_capacity(t *testing.T) {
 		ChunkStore: localStore,
 	}
 	dpa.Start()
-	reader, slice := testDataReader(testDataSize)
+	reader, slice := testDataReaderAndSlice(testDataSize)
 	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, wg)
+	key, err := dpa.Store(reader, testDataSize, wg)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}

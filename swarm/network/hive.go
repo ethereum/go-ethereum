@@ -30,6 +30,7 @@ type Hive struct {
 	addr         kademlia.Address
 	kad          *kademlia.Kademlia
 	path         string
+	quit         chan bool
 	toggle       chan bool
 	more         chan bool
 
@@ -106,6 +107,7 @@ func (self *Hive) Addr() kademlia.Address {
 func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
 	self.toggle = make(chan bool)
 	self.more = make(chan bool)
+	self.quit = make(chan bool)
 	self.id = id
 	self.listenAddr = listenAddr
 	err = self.kad.Load(self.path, nil)
@@ -123,15 +125,15 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			node, need, proxLimit := self.kad.FindBest()
+			node, need, proxLimit := self.kad.Suggest()
 
-			glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: select candidate peer")
 			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
+				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call known bee %v", node.Url)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)
-			} else if need {
+			}
+			if need {
 				// a random peer is taken from the table
 				peers := self.kad.FindClosest(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)
 				if len(peers) > 0 {
@@ -140,16 +142,19 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 					req := &retrieveRequestMsgData{
 						Key: storage.Key(randAddr[:]),
 					}
-					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee near %v (PO%03d) - messenger bee: %v", randAddr, proxLimit, peers[0])
 					peers[0].(*peer).retrieve(req)
 				} else {
-					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: no peer")
+					glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ hive: no peer")
 				}
-				self.toggle <- true
-				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
+				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
 			} else {
-				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: no need for more bees")
-				self.toggle <- false
+				glog.V(logger.Info).Infof("[BZZ] KΛÐΞMLIΛ hive: no need for more bees")
+			}
+			select {
+			case self.toggle <- need:
+			case <-self.quit:
+				return
 			}
 			glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
 		}
@@ -174,11 +179,7 @@ func (self *Hive) keepAlive() {
 				default:
 				}
 			}
-		case need, alive := <-self.toggle:
-			if !alive {
-				self.more <- false
-				return
-			}
+		case need := <-self.toggle:
 			if alarm == nil && need {
 				alarm = time.NewTicker(time.Duration(self.callInterval)).C
 			}
@@ -186,20 +187,31 @@ func (self *Hive) keepAlive() {
 				alarm = nil
 
 			}
+		case <-self.quit:
+			return
 		}
 	}
 }
 
 func (self *Hive) Stop() error {
 	// closing toggle channel quits the updateloop
-	close(self.toggle)
+	close(self.quit)
 	return self.kad.Save(self.path, saveSync)
 }
 
 // called at the end of a successful protocol handshake
-func (self *Hive) addPeer(p *peer) {
+func (self *Hive) addPeer(p *peer) error {
+	defer func() {
+		select {
+		case self.more <- true:
+		default:
+		}
+	}()
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: hi new bee %v", p)
-	self.kad.On(p, loadSync)
+	err := self.kad.On(p, loadSync)
+	if err != nil {
+		return err
+	}
 	// self lookup (can be encoded as nil/zero key since peers addr known) + no id ()
 	// the most common way of saying hi in bzz is initiation of gossip
 	// let me know about anyone new from my hood , here is the storageradius
@@ -207,10 +219,8 @@ func (self *Hive) addPeer(p *peer) {
 	// we do not record as request or forward it, just reply with peers
 	p.retrieve(&retrieveRequestMsgData{})
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: 'whatsup wheresdaparty' sent to %v", p)
-	select {
-	case self.more <- true:
-	default:
-	}
+
+	return nil
 }
 
 // called after peer disconnected
@@ -342,7 +352,7 @@ func (self *Hive) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Debug).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %x", len(addrs), req.from, req.Id, req.Key.Log())
+			glog.V(logger.Debug).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %v", len(addrs), req.from, req.Id, req.Key.Log())
 
 			peersData := &peersMsgData{
 				Peers: addrs,

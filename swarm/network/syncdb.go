@@ -126,7 +126,7 @@ LOOP:
 			// if syncdb is stopped. In this case we need to save the item to the db
 			more = deliver(req, self.quit)
 			if !more {
-				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] quit: switching to db. session tally (db/total): %v/%v", self.priority, self.dbTotal, self.total)
+				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v/%v] quit: switching to db. session tally (db/total): %v/%v", self.key.Log(), self.priority, self.dbTotal, self.total)
 				// received quit signal, save request currently waiting delivery
 				// by switching to db mode and closing the buffer
 				buffer = nil
@@ -136,12 +136,12 @@ LOOP:
 				break      // break from select, this item will be written to the db
 			}
 			self.total++
-			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] deliver (db/total): %v/%v", self.priority, self.dbTotal, self.total)
+			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] deliver (db/total): %v/%v", self.key.Log(), self.priority, self.dbTotal, self.total)
 			// by the time deliver returns, there were new writes to the buffer
 			// if buffer contention is detected, switch to db mode which drains
 			// the buffer so no process will block on pushing store requests
 			if len(buffer) == cap(buffer) {
-				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] buffer full %v: switching to db. session tally (db/total): %v/%v", self.priority, cap(buffer), self.dbTotal, self.total)
+				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v/%v] buffer full %v: switching to db. session tally (db/total): %v/%v", self.key.Log(), self.priority, cap(buffer), self.dbTotal, self.total)
 				buffer = nil
 				db = self.buffer
 			}
@@ -154,18 +154,18 @@ LOOP:
 				binary.BigEndian.PutUint64(counterValue, counter)
 				batch.Put(self.counterKey, counterValue) // persist counter in batch
 				self.writeSyncBatch(batch)               // save batch
-				glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] quitting: save current batch to db", self.priority)
+				glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] quitting: save current batch to db", self.key.Log(), self.priority)
 				break LOOP
 			}
 			self.dbTotal++
 			self.total++
-			// otherwise break after selec
+			// otherwise break after select
 		case dbSize = <-self.batch:
 			// explicit request for batch
 			if inBatch == 0 && quit != nil {
 				// there was no writes since the last batch so db depleted
 				// switch to buffer mode
-				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] empty db: switching to buffer", self.priority)
+				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v/%v] empty db: switching to buffer", self.key.Log(), self.priority)
 				db = nil
 				buffer = self.buffer
 				dbSize <- 0 // indicates to 'caller' that batch has been written
@@ -174,7 +174,7 @@ LOOP:
 			}
 			binary.BigEndian.PutUint64(counterValue, counter)
 			batch.Put(self.counterKey, counterValue)
-			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] write batch %v/%v - %x - %x", self.priority, inBatch, counter, self.counterKey, counterValue)
+			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v/%v] write batch %v/%v - %x - %x", self.key.Log(), self.priority, inBatch, counter, self.counterKey, counterValue)
 			batch = self.writeSyncBatch(batch)
 			dbSize <- inBatch // indicates to 'caller' that batch has been written
 			inBatch = 0
@@ -186,7 +186,7 @@ LOOP:
 			db = self.buffer
 			buffer = nil
 			quit = nil
-			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] quitting: save buffer to db", self.priority)
+			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] quitting: save buffer to db", self.key.Log(), self.priority)
 			close(db)
 			continue LOOP
 		}
@@ -194,15 +194,15 @@ LOOP:
 		// only get here if we put req into db
 		entry, err = self.newSyncDbEntry(req, counter)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] syncDb[%v] saving request %v (#%v/%v) failed: %v", self.priority, req, inBatch, inDb, err)
+			glog.V(logger.Warn).Infof("[BZZ] syncDb[%v/%v] saving request %v (#%v/%v) failed: %v", self.key.Log(), self.priority, req, inBatch, inDb, err)
 			continue LOOP
 		}
 		batch.Put(entry.key, entry.val)
-		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] to batch %v '%v' (#%v/%v/%v)", self.priority, req, entry, inBatch, inDb, counter)
+		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] to batch %v '%v' (#%v/%v/%v)", self.key.Log(), self.priority, req, entry, inBatch, inDb, counter)
 		// if just switched to db mode and not quitting, then launch dbRead
 		// in a parallel go routine to send deliveries from db
 		if inDb == 0 && quit != nil {
-			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] start dbRead")
+			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] start dbRead")
 			go self.dbRead(true, counter, deliver)
 		}
 		inDb++
@@ -221,7 +221,7 @@ LOOP:
 func (self *syncDb) writeSyncBatch(batch *leveldb.Batch) *leveldb.Batch {
 	err := self.db.Write(batch)
 	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] syncDb[%v] saving batch to db failed: %v", self.priority, err)
+		glog.V(logger.Warn).Infof("[BZZ] syncDb[%v/%v] saving batch to db failed: %v", self.key.Log(), self.priority, err)
 		return batch
 	}
 	return new(leveldb.Batch)
@@ -295,7 +295,7 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			continue
 		}
 		del = new(leveldb.Batch)
-		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v]: new iterator: %x (batch %v, count %v)", self.priority, key, batches, cnt)
+		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v]: new iterator: %x (batch %v, count %v)", self.key.Log(), self.priority, key, batches, cnt)
 
 		for n = 0; !useBatches || n < cnt; it.Next() {
 			copy(key, it.Key())
@@ -307,11 +307,11 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			val := make([]byte, 40)
 			copy(val, it.Value())
 			entry = &syncDbEntry{key, val}
-			// glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - %v, batches: %v, total: %v, session total from db: %v/%v", self.priority, self.key.Log(), batches, total, self.dbTotal, self.total)
+			// glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] - %v, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, self.key.Log(), batches, total, self.dbTotal, self.total)
 			more = fun(entry, self.quit)
 			if !more {
 				// quit received when waiting to deliver entry, the entry will not be deleted
-				glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] batch %v quit after %v/%v items", self.priority, batches, n, cnt)
+				glog.V(logger.Detail).Infof("[BZZ] syncDb[%v/%v] batch %v quit after %v/%v items", self.key.Log(), self.priority, batches, n, cnt)
 				break
 			}
 			// since subsequent batches of the same db session are indexed incrementally

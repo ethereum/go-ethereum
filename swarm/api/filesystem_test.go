@@ -1,10 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path"
 	"runtime"
+	"sync"
 	"testing"
 )
 
@@ -26,9 +28,9 @@ func testFileSystem(t *testing.T, f func(*FileSystem)) {
 }
 
 func readPath(t *testing.T, parts ...string) string {
-	// func readPath(t *testing.T, parts ...string) []byte {
 	file := path.Join(parts...)
 	content, err := ioutil.ReadFile(file)
+
 	if err != nil {
 		t.Fatalf("unexpected error reading '%v': %v", file, err)
 	}
@@ -36,14 +38,12 @@ func readPath(t *testing.T, parts ...string) string {
 }
 
 func TestApiDirUpload0(t *testing.T) {
-	// t.Skip("FIXME")
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
 		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-
 		content := readPath(t, testDir, "test0", "index.html")
 		resp := testGet(t, api, bzzhash+"/index.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
@@ -54,17 +54,12 @@ func TestApiDirUpload0(t *testing.T) {
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		content = readPath(t, testDir, "test0", "img", "logo.png")
-		resp = testGet(t, api, bzzhash+"/img/logo.png")
-		exp = expResponse(content, "image/png", 0)
-
 		_, _, _, err = api.Get(bzzhash, true)
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
 
 		downloadDir := path.Join(testDownloadDir, "test0")
-		os.RemoveAll(downloadDir)
 		defer os.RemoveAll(downloadDir)
 		err = fs.Download(bzzhash, downloadDir)
 		if err != nil {
@@ -77,12 +72,10 @@ func TestApiDirUpload0(t *testing.T) {
 		if bzzhash != newbzzhash {
 			t.Fatalf("download %v reuploaded has incorrect hash, expected %v, got %v", downloadDir, bzzhash, newbzzhash)
 		}
-
 	})
 }
 
 func TestApiDirUploadModify(t *testing.T) {
-	// t.Skip("FIXME")
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
 		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "")
@@ -96,12 +89,24 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
+		index, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
+		wg := &sync.WaitGroup{}
+		hash, err := api.Store(bytes.NewReader(index), int64(len(index)), wg)
+		wg.Wait()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		bzzhash, err = api.Modify(bzzhash+"/index2.html", hash.Hex(), "text/html; charset=utf-8", true)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", hash.Hex(), "text/html; charset=utf-8", true)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
