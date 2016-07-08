@@ -248,6 +248,13 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 			return &BlockNonceErr{header.Number, header.Hash(), header.Nonce.Uint64()}
 		}
 	}
+	// If all checks passed, validate the extra-data field for hard forks
+	return ValidateHeaderExtraData(config, header)
+}
+
+// ValidateHeaderExtraData validates the extra-data field of a block header to
+// ensure it conforms to hard-fork rules.
+func ValidateHeaderExtraData(config *ChainConfig, header *types.Header) error {
 	// DAO hard-fork extension to the header validity: a) if the node is no-fork,
 	// do not accept blocks in the [fork, fork+10) range with the fork specific
 	// extra-data set; b) if the node is pro-fork, require blocks in the specific
