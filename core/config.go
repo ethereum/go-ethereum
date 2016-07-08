@@ -39,7 +39,7 @@ type ChainConfig struct {
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
-	if num == nil {
+	if c.HomesteadBlock == nil || num == nil {
 		return false
 	}
 	return num.Cmp(c.HomesteadBlock) >= 0
