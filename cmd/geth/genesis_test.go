@@ -75,6 +75,7 @@ var customGenesisTests = []struct {
 			"timestamp"  : "0x00",
 			"config"     : {
 				"homesteadBlock" : 314,
+				"daoForkBlock"   : 141
 			},
 		}`,
 		query:  "eth.getBlock(0).nonce",
