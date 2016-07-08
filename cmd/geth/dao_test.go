@@ -29,6 +29,21 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// Genesis block for nodes which don't care about the DAO fork (i.e. not configured)
+var daoOldGenesis = `{
+	"alloc"      : {},
+	"coinbase"   : "0x0000000000000000000000000000000000000000",
+	"difficulty" : "0x20000",
+	"extraData"  : "",
+	"gasLimit"   : "0x2fefd8",
+	"nonce"      : "0x0000000000000042",
+	"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
+	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+	"timestamp"  : "0x00",
+	"config"     : {}
+}`
+
+// Genesis block for nodes which actively oppose the DAO fork
 var daoNoForkGenesis = `{
 	"alloc"      : {},
 	"coinbase"   : "0x0000000000000000000000000000000000000000",
@@ -38,50 +53,121 @@ var daoNoForkGenesis = `{
 	"nonce"      : "0x0000000000000042",
 	"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
-	"timestamp"  : "0x00"
+	"timestamp"  : "0x00",
+	"config"     : {
+		"daoForkBlock"   : 314,
+		"daoForkSupport" : false
+	}
 }`
-var daoNoForkGenesisHash = common.HexToHash("5e1fc79cb4ffa4739177b5408045cd5d51c6cf766133f23f7cd72ee1f8d790e0")
 
+// Genesis block for nodes which actively support the DAO fork
 var daoProForkGenesis = `{
 	"alloc"      : {},
 	"coinbase"   : "0x0000000000000000000000000000000000000000",
 	"difficulty" : "0x20000",
 	"extraData"  : "",
 	"gasLimit"   : "0x2fefd8",
-	"nonce"      : "0x0000000000000043",
+	"nonce"      : "0x0000000000000042",
 	"mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
 	"timestamp"  : "0x00",
 	"config"     : {
-		"daoForkBlock": 314
+		"daoForkBlock"   : 314,
+		"daoForkSupport" : true
 	}
 }`
-var daoProForkGenesisHash = common.HexToHash("c80f3c1c3d81ae6d8ea59edf35d3e4b723e4c8684ec71fdb6d4715e3f8add237")
-var daoProForkBlock = big.NewInt(314)
 
-// Tests that creating a new node to with or without the DAO fork flag will correctly
-// set the genesis block but with DAO support explicitly set or unset in the chain
-// config in the database.
+var daoGenesisHash = common.HexToHash("5e1fc79cb4ffa4739177b5408045cd5d51c6cf766133f23f7cd72ee1f8d790e0")
+var daoGenesisForkBlock = big.NewInt(314)
+
+// Tests that the DAO hard-fork number and the nodes support/opposition is correctly
+// set in the database after various initialization procedures and invocations.
+func TestDAODefaultMainnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, false}}, params.MainNetDAOForkBlock, false)
+}
 func TestDAOSupportMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", true, params.MainNetDAOForkBlock)
+	testDAOForkBlockNewChain(t, false, "", [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true)
+}
+func TestDAOOpposeMainnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, true}}, params.MainNetDAOForkBlock, false)
+}
+func TestDAOSwitchToSupportMainnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, true}, {true, false}}, params.MainNetDAOForkBlock, true)
+}
+func TestDAOSwitchToOpposeMainnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, "", [][2]bool{{true, false}, {false, true}}, params.MainNetDAOForkBlock, false)
+}
+func TestDAODefaultTestnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, false}}, params.TestNetDAOForkBlock, false)
 }
 func TestDAOSupportTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", true, params.TestNetDAOForkBlock)
+	testDAOForkBlockNewChain(t, true, "", [][2]bool{{true, false}}, params.TestNetDAOForkBlock, true)
 }
-func TestDAOSupportPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, false, daoProForkBlock)
+func TestDAOOpposeTestnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, true}}, params.TestNetDAOForkBlock, false)
 }
-func TestDAONoSupportMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", false, nil)
+func TestDAOSwitchToSupportTestnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, true}, {true, false}}, params.TestNetDAOForkBlock, true)
 }
-func TestDAONoSupportTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", false, nil)
+func TestDAOSwitchToOpposeTestnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, true, "", [][2]bool{{true, false}, {false, true}}, params.TestNetDAOForkBlock, false)
 }
-func TestDAONoSupportPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, false, nil)
+func TestDAOInitOldPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{}, nil, false)
+}
+func TestDAODefaultOldPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, false}}, params.MainNetDAOForkBlock, false)
+}
+func TestDAOSupportOldPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true)
+}
+func TestDAOOpposeOldPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}}, params.MainNetDAOForkBlock, false)
+}
+func TestDAOSwitchToSupportOldPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}, {true, false}}, params.MainNetDAOForkBlock, true)
+}
+func TestDAOSwitchToOpposeOldPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}, {false, true}}, params.MainNetDAOForkBlock, false)
+}
+func TestDAOInitNoForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{}, daoGenesisForkBlock, false)
+}
+func TestDAODefaultNoForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{false, false}}, daoGenesisForkBlock, false)
+}
+func TestDAOSupportNoForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{true, false}}, daoGenesisForkBlock, true)
+}
+func TestDAOOpposeNoForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{false, true}}, daoGenesisForkBlock, false)
+}
+func TestDAOSwitchToSupportNoForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{false, true}, {true, false}}, daoGenesisForkBlock, true)
+}
+func TestDAOSwitchToOpposeNoForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{true, false}, {false, true}}, daoGenesisForkBlock, false)
+}
+func TestDAOInitProForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{}, daoGenesisForkBlock, true)
+}
+func TestDAODefaultProForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{false, false}}, daoGenesisForkBlock, true)
+}
+func TestDAOSupportProForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{true, false}}, daoGenesisForkBlock, true)
+}
+func TestDAOOpposeProForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{false, true}}, daoGenesisForkBlock, false)
+}
+func TestDAOSwitchToSupportProForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{false, true}, {true, false}}, daoGenesisForkBlock, true)
+}
+func TestDAOSwitchToOpposeProForkPrivnet(t *testing.T) {
+	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{true, false}, {false, true}}, daoGenesisForkBlock, false)
 }
 
-func testDAOForkBlockNewChain(t *testing.T, testnet bool, genesis string, fork bool, expect *big.Int) {
+func testDAOForkBlockNewChain(t *testing.T, testnet bool, genesis string, votes [][2]bool, expectBlock *big.Int, expectVote bool) {
 	// Create a temporary data directory to use and inspect later
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
@@ -94,11 +180,23 @@ func testDAOForkBlockNewChain(t *testing.T, testnet bool, genesis string, fork b
 		}
 		runGeth(t, "--datadir", datadir, "init", json).cmd.Wait()
 	}
-	execDAOGeth(t, datadir, testnet, fork, false)
-
+	for _, vote := range votes {
+		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
+		if testnet {
+			args = append(args, "--testnet")
+		}
+		if vote[0] {
+			args = append(args, "--support-dao-fork")
+		}
+		if vote[1] {
+			args = append(args, "--oppose-dao-fork")
+		}
+		geth := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
+		geth.cmd.Wait()
+	}
 	// Retrieve the DAO config flag from the database
 	path := filepath.Join(datadir, "chaindata")
-	if testnet {
+	if testnet && genesis == "" {
 		path = filepath.Join(datadir, "testnet", "chaindata")
 	}
 	db, err := ethdb.NewLDBDatabase(path, 0, 0)
@@ -110,170 +208,9 @@ func testDAOForkBlockNewChain(t *testing.T, testnet bool, genesis string, fork b
 	genesisHash := common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	if testnet {
 		genesisHash = common.HexToHash("0x0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303")
-	} else if genesis == daoNoForkGenesis {
-		genesisHash = daoNoForkGenesisHash
-	} else if genesis == daoProForkGenesis {
-		genesisHash = daoProForkGenesisHash
 	}
-	config, err := core.GetChainConfig(db, genesisHash)
-	if err != nil {
-		t.Fatalf("failed to retrieve chain config: %v", err)
-	}
-	// Validate the DAO hard-fork block number against the expected value
-	if config.DAOForkBlock == nil {
-		if expect != nil {
-			t.Fatalf("dao hard-fork block mismatch: have nil, want %v", expect)
-		}
-	} else if config.DAOForkBlock.Cmp(expect) != 0 {
-		t.Fatalf("dao hard-fork block mismatch: have %v, want %v", config.DAOForkBlock, expect)
-	}
-}
-
-// Tests that starting up an already existing node with various DAO fork override
-// flags correctly changes the chain configs in the database.
-func TestDAODefaultMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", false, false, false, false, nil)
-}
-func TestDAOStartSupportMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", false, true, false, false, params.MainNetDAOForkBlock)
-}
-func TestDAOContinueExplicitSupportMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", true, true, false, false, params.MainNetDAOForkBlock)
-}
-func TestDAOContinueImplicitSupportMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", true, false, false, false, params.MainNetDAOForkBlock)
-}
-func TestDAOSwitchSupportMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", false, true, true, false, params.MainNetDAOForkBlock)
-}
-func TestDAOStartOpposeMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", false, false, false, true, nil)
-}
-func TestDAOContinueExplicitOpposeMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", false, false, true, true, nil)
-}
-func TestDAOContinueImplicitOpposeMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", false, false, true, false, nil)
-}
-func TestDAOSwitchOpposeMainnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, "", true, false, false, true, nil)
-}
-func TestDAODefaultTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", false, false, false, false, nil)
-}
-func TestDAOStartSupportTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", false, true, false, false, params.TestNetDAOForkBlock)
-}
-func TestDAOContinueExplicitSupportTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", true, true, false, false, params.TestNetDAOForkBlock)
-}
-func TestDAOContinueImplicitSupportTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", true, false, false, false, params.TestNetDAOForkBlock)
-}
-func TestDAOSwitchSupportTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", false, true, true, false, params.TestNetDAOForkBlock)
-}
-func TestDAOStartOpposeTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", false, false, false, true, nil)
-}
-func TestDAOContinueExplicitOpposeTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", false, false, true, true, nil)
-}
-func TestDAOContinueImplicitOpposeTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", false, false, true, false, nil)
-}
-func TestDAOSwitchOpposeTestnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, true, "", true, false, false, true, nil)
-}
-func TestDAODefaultPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, false, false, false, false, nil)
-}
-func TestDAOStartSupportConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, false, true, false, false, params.MainNetDAOForkBlock)
-}
-func TestDAOContinueExplicitSupportConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, true, true, false, false, params.MainNetDAOForkBlock)
-}
-func TestDAOContinueImplicitSupportConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, true, false, false, false, params.MainNetDAOForkBlock)
-}
-func TestDAOSwitchSupportConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, false, true, true, false, params.MainNetDAOForkBlock)
-}
-func TestDAOStartOpposeConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, false, false, false, true, nil)
-}
-func TestDAOContinueExplicitOpposeConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, false, false, true, true, nil)
-}
-func TestDAOContinueImplicitOpposeConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, false, false, true, false, nil)
-}
-func TestDAOSwitchOpposeConPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoNoForkGenesis, true, false, false, true, nil)
-}
-func TestDAODefaultProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, false, false, false, false, daoProForkBlock)
-}
-func TestDAOStartSupportProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, false, true, false, false, daoProForkBlock)
-}
-func TestDAOContinueExplicitSupportProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, true, true, false, false, daoProForkBlock)
-}
-func TestDAOContinueImplicitSupportProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, true, false, false, false, daoProForkBlock)
-}
-func TestDAOSwitchSupportProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, false, true, true, false, params.MainNetDAOForkBlock)
-}
-func TestDAOStartOpposeProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, false, false, false, true, nil)
-}
-func TestDAOContinueExplicitOpposeProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, false, false, true, true, nil)
-}
-func TestDAOContinueImplicitOpposeProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, false, false, true, false, nil)
-}
-func TestDAOSwitchOpposeProPrivnet(t *testing.T) {
-	testDAOForkBlockOldChain(t, false, daoProForkGenesis, true, false, false, true, nil)
-}
-
-func testDAOForkBlockOldChain(t *testing.T, testnet bool, genesis string, oldSupport, newSupport, oldOppose, newOppose bool, expect *big.Int) {
-	// Create a temporary data directory to use and inspect later
-	datadir := tmpdir(t)
-	defer os.RemoveAll(datadir)
-
-	// Cycle two Geth instances, possibly changing fork support in between
 	if genesis != "" {
-		json := filepath.Join(datadir, "genesis.json")
-		if err := ioutil.WriteFile(json, []byte(genesis), 0600); err != nil {
-			t.Fatalf("failed to write genesis file: %v", err)
-		}
-		runGeth(t, "--datadir", datadir, "init", json).cmd.Wait()
-	}
-	execDAOGeth(t, datadir, testnet, oldSupport, oldOppose)
-	execDAOGeth(t, datadir, testnet, newSupport, newOppose)
-
-	// Retrieve the DAO config flag from the database
-	path := filepath.Join(datadir, "chaindata")
-	if testnet {
-		path = filepath.Join(datadir, "testnet", "chaindata")
-	}
-	db, err := ethdb.NewLDBDatabase(path, 0, 0)
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
-	}
-	defer db.Close()
-
-	genesisHash := common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	if testnet {
-		genesisHash = common.HexToHash("0x0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303")
-	} else if genesis == daoNoForkGenesis {
-		genesisHash = daoNoForkGenesisHash
-	} else if genesis == daoProForkGenesis {
-		genesisHash = daoProForkGenesisHash
+		genesisHash = daoGenesisHash
 	}
 	config, err := core.GetChainConfig(db, genesisHash)
 	if err != nil {
@@ -281,26 +218,15 @@ func testDAOForkBlockOldChain(t *testing.T, testnet bool, genesis string, oldSup
 	}
 	// Validate the DAO hard-fork block number against the expected value
 	if config.DAOForkBlock == nil {
-		if expect != nil {
-			t.Fatalf("dao hard-fork block mismatch: have nil, want %v", expect)
+		if expectBlock != nil {
+			t.Errorf("dao hard-fork block mismatch: have nil, want %v", expectBlock)
 		}
-	} else if config.DAOForkBlock.Cmp(expect) != 0 {
-		t.Fatalf("dao hard-fork block mismatch: have %v, want %v", config.DAOForkBlock, expect)
+	} else if expectBlock == nil {
+		t.Errorf("dao hard-fork block mismatch: have %v, want nil", config.DAOForkBlock)
+	} else if config.DAOForkBlock.Cmp(expectBlock) != 0 {
+		t.Errorf("dao hard-fork block mismatch: have %v, want %v", config.DAOForkBlock, expectBlock)
 	}
-}
-
-// execDAOGeth starts a Geth instance with some DAO forks set and terminates.
-func execDAOGeth(t *testing.T, datadir string, testnet bool, supportFork bool, opposeFork bool) {
-	args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-	if testnet {
-		args = append(args, "--testnet")
+	if config.DAOForkSupport != expectVote {
+		t.Errorf("dao hard-fork support mismatch: have %v, want %v", config.DAOForkSupport, expectVote)
 	}
-	if supportFork {
-		args = append(args, "--support-dao-fork")
-	}
-	if opposeFork {
-		args = append(args, "--oppose-dao-fork")
-	}
-	geth := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
-	geth.cmd.Wait()
 }
