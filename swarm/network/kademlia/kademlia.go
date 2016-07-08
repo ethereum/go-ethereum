@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	bucketSize   = 3
-	proxBinSize  = 4
+	bucketSize   = 4
+	proxBinSize  = 2
 	maxProx      = 8
 	connRetryExp = 2
 	maxPeers     = 100
