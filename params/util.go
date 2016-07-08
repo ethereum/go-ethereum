@@ -16,11 +16,18 @@
 
 package params
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 var (
-	TestNetHomesteadBlock = big.NewInt(494000)  // testnet homestead block
-	MainNetHomesteadBlock = big.NewInt(1150000) // mainnet homestead block
-	TestNetDAOForkBlock   = big.NewInt(8888888) // testnet dao hard-fork block
-	MainNetDAOForkBlock   = big.NewInt(9999999) // mainnet dao hard-fork block
+	TestNetHomesteadBlock = big.NewInt(494000)  // Testnet homestead block
+	MainNetHomesteadBlock = big.NewInt(1150000) // Mainnet homestead block
+
+	TestNetDAOForkBlock = big.NewInt(8888888)                            // Testnet dao hard-fork block
+	MainNetDAOForkBlock = big.NewInt(9999999)                            // Mainnet dao hard-fork block
+	DAOForkBlockExtra   = common.FromHex("0x64616f2d686172642d666f726b") // Block extradata to signel the fork with ("dao-hard-fork")
+	DAOForkExtraRange   = big.NewInt(10)                                 // Number of blocks to override the extradata (prevent no-fork attacks)
 )

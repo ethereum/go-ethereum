@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/fatih/set.v0"
 )
@@ -468,7 +469,14 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
-
+	// If we are doing a DAO hard-fork check whether to override the extra-data or not
+	if daoBlock := self.config.DAOForkBlock; daoBlock != nil {
+		// Check whether the block is among the fork extra-override range
+		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
+		if daoBlock.Cmp(header.Number) <= 0 && header.Number.Cmp(limit) < 0 {
+			header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+		}
+	}
 	previous := self.current
 	// Could potentially happen if starting to mine in an odd state.
 	err := self.makeCurrent(parent, header)
