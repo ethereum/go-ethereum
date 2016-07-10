@@ -112,7 +112,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 	}
 
 	// update chunk with size and data
-	chunk.SData = req.SData
+	chunk.SData = req.SData // protocol validates that SData is minimum 9 bytes long (int64 size  + at least one byte of data)
 	chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
 	glog.V(logger.Detail).Infof("[BZZ] delivery of %p from %v", chunk, p)
 	chunk.Source = p
@@ -136,7 +136,7 @@ func (self *Depo) HandleRetrieveRequestMsg(req *retrieveRequestMsgData, p *peer)
 
 	// call storage.NetStore#Get which
 	// blocks until local retrieval finished
-	// launches cloud retrieval in a separate go routine
+	// launches cloud retrieval
 	chunk, _ := self.netStore.Get(req.Key)
 	req = self.strategyUpdateRequest(chunk.Req, req)
 	// check if we can immediately deliver

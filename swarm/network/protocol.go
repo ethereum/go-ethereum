@@ -226,6 +226,9 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
+		if len(req.SData) < 9 {
+			return self.protoError(ErrDecode, "<- %v: Data too short (%v)", msg)
+		}
 		glog.V(logger.Detail).Infof("[BZZ] incoming store request: %s", req.String())
 		// swap accounting is done within forwarding
 		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})

@@ -3,7 +3,6 @@ package ens
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -14,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var domainAndVersion = regexp.MustCompile("[@:;,]+")
 var qtypeChash = [32]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
 var rtypeChash = [16]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
 
@@ -46,13 +44,8 @@ func (self *ENS) newResolver(contractAddr common.Address) (*contract.ResolverSes
 }
 
 // resolve is a non-tranasctional call, returns hash as storage.Key
-func (self *ENS) Resolve(hostPort string) (storage.Key, error) {
-	host := hostPort
-	parts := domainAndVersion.Split(host, 3)
-	if len(parts) > 1 && parts[1] != "" {
-		host = parts[0]
-	}
-	return self.resolveName(self.rootAddress, host)
+func (self *ENS) Resolve(name string) (storage.Key, error) {
+	return self.resolveName(self.rootAddress, name)
 }
 
 func (self *ENS) nextResolver(resolver *contract.ResolverSession, nodeId [12]byte, label string) (*contract.ResolverSession, [12]byte, error) {
