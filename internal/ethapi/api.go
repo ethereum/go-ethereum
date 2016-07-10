@@ -579,10 +579,15 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	} else {
 		addr = args.From
 	}
+	nonce, err := state.GetNonce(ctx, addr)
+	if err != nil {
+		return "0x", common.Big0, err
+	}
 
 	// Assemble the CALL invocation
 	msg := callmsg{
 		addr:     addr,
+		nonce:    nonce,
 		to:       args.To,
 		gas:      args.Gas.BigInt(),
 		gasPrice: args.GasPrice.BigInt(),
@@ -698,10 +703,15 @@ func (s *PublicBlockChainAPI) TraceCall(ctx context.Context, args CallArgs, bloc
 	} else {
 		addr = args.From
 	}
+	nonce, err := state.GetNonce(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
 
 	// Assemble the CALL invocation
 	msg := callmsg{
 		addr:     addr,
+		nonce:    nonce,
 		to:       args.To,
 		gas:      args.Gas.BigInt(),
 		gasPrice: args.GasPrice.BigInt(),
