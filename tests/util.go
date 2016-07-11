@@ -141,6 +141,8 @@ type VmTest struct {
 
 type RuleSet struct {
 	HomesteadBlock *big.Int
+	DAOForkBlock   *big.Int
+	DAOForkSupport bool
 }
 
 func (r RuleSet) IsHomestead(n *big.Int) bool {
