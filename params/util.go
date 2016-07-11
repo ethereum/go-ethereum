@@ -26,8 +26,9 @@ var (
 	TestNetHomesteadBlock = big.NewInt(494000)  // Testnet homestead block
 	MainNetHomesteadBlock = big.NewInt(1150000) // Mainnet homestead block
 
-	TestNetDAOForkBlock = big.NewInt(8888888)                            // Testnet dao hard-fork block
-	MainNetDAOForkBlock = big.NewInt(9999999)                            // Mainnet dao hard-fork block
-	DAOForkBlockExtra   = common.FromHex("0x64616f2d686172642d666f726b") // Block extradata to signel the fork with ("dao-hard-fork")
-	DAOForkExtraRange   = big.NewInt(10)                                 // Number of blocks to override the extradata (prevent no-fork attacks)
+	TestNetDAOForkBlock = big.NewInt(8888888)                                               // Testnet dao hard-fork block
+	MainNetDAOForkBlock = big.NewInt(9999999)                                               // Mainnet dao hard-fork block
+	DAOForkBlockExtra   = common.FromHex("0x64616f2d686172642d666f726b")                    // Block extradata to signel the fork with ("dao-hard-fork")
+	DAOForkExtraRange   = big.NewInt(10)                                                    // Number of blocks to override the extradata (prevent no-fork attacks)
+	DAORefundContract   = common.HexToAddress("0x0000000000000000000000000000000000000000") // Address of the refund contract to send DAO balances to
 )
