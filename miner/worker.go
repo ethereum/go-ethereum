@@ -490,7 +490,11 @@ func (self *worker) commitNewWork() {
 		glog.V(logger.Info).Infoln("Could not create new env for mining, retrying on next block.")
 		return
 	}
+	// Create the current work task and check any fork transitions needed
 	work := self.current
+	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
+		core.ApplyDAOHardFork(work.state)
+	}
 
 	/* //approach 1
 	transactions := self.eth.TxPool().GetTransactions()
