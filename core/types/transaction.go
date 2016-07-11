@@ -113,6 +113,7 @@ func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.Gas
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
 func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool   { return true }
 
 func (tx *Transaction) To() *common.Address {
 	if tx.data.Recipient == nil {

@@ -534,7 +534,6 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 // callmsg is the message type used for call transations.
 type callmsg struct {
 	addr          common.Address
-	nonce         uint64
 	to            *common.Address
 	gas, gasPrice *big.Int
 	value         *big.Int
@@ -544,7 +543,8 @@ type callmsg struct {
 // accessor boilerplate to implement core.Message
 func (m callmsg) From() (common.Address, error)         { return m.addr, nil }
 func (m callmsg) FromFrontier() (common.Address, error) { return m.addr, nil }
-func (m callmsg) Nonce() uint64                         { return m.nonce }
+func (m callmsg) Nonce() uint64                         { return 0 }
+func (m callmsg) CheckNonce() bool                      { return false }
 func (m callmsg) To() *common.Address                   { return m.to }
 func (m callmsg) GasPrice() *big.Int                    { return m.gasPrice }
 func (m callmsg) Gas() *big.Int                         { return m.gas }

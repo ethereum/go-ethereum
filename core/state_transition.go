@@ -71,6 +71,7 @@ type Message interface {
 	Value() *big.Int
 
 	Nonce() uint64
+	CheckNonce() bool
 	Data() []byte
 }
 
@@ -208,8 +209,10 @@ func (self *StateTransition) preCheck() (err error) {
 	}
 
 	// Make sure this transaction's nonce is correct
-	if n := self.state.GetNonce(sender.Address()); n != msg.Nonce() {
-		return NonceError(msg.Nonce(), n)
+	if msg.CheckNonce() {
+		if n := self.state.GetNonce(sender.Address()); n != msg.Nonce() {
+			return NonceError(msg.Nonce(), n)
+		}
 	}
 
 	// Pre-pay gas

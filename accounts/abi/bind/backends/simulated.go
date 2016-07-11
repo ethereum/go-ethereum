@@ -203,7 +203,8 @@ type callmsg struct {
 
 func (m callmsg) From() (common.Address, error)         { return m.from.Address(), nil }
 func (m callmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
-func (m callmsg) Nonce() uint64                         { return m.from.Nonce() }
+func (m callmsg) Nonce() uint64                         { return 0 }
+func (m callmsg) CheckNonce() bool                      { return false }
 func (m callmsg) To() *common.Address                   { return m.to }
 func (m callmsg) GasPrice() *big.Int                    { return m.gasPrice }
 func (m callmsg) Gas() *big.Int                         { return m.gasLimit }
