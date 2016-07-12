@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"runtime"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -30,8 +29,6 @@ import (
 )
 
 const (
-	stopPendingRequestTimeout = 3 * time.Second // give pending requests stopPendingRequestTimeout the time to finish when the server is stopped
-
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
 	MetadataApi     = "rpc"
@@ -240,13 +237,11 @@ func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		glog.V(logger.Debug).Infoln("RPC Server shutdown initiatied")
-		time.AfterFunc(stopPendingRequestTimeout, func() {
-			s.codecsMu.Lock()
-			defer s.codecsMu.Unlock()
-			s.codecs.Each(func(c interface{}) bool {
-				c.(ServerCodec).Close()
-				return true
-			})
+		s.codecsMu.Lock()
+		defer s.codecsMu.Unlock()
+		s.codecs.Each(func(c interface{}) bool {
+			c.(ServerCodec).Close()
+			return true
 		})
 	}
 }
