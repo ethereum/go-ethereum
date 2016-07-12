@@ -88,6 +88,7 @@ type rpcRequest struct {
 	id       interface{}
 	isPubSub bool
 	params   interface{}
+	err      RPCError // invalid batch element
 }
 
 // RPCError implements RPC error, is add support for error codec over regular go errors

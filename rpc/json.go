@@ -182,12 +182,12 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCError) {
 			method: unsubscribeMethod, params: in.Payload}}, false, nil
 	}
 
-	// regular RPC call
 	elems := strings.Split(in.Method, serviceMethodSeparator)
 	if len(elems) != 2 {
 		return nil, false, &methodNotFoundError{in.Method, ""}
 	}
 
+	// regular RPC call
 	if len(in.Payload) == 0 {
 		return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: &in.Id}}, false, nil
 	}
@@ -236,15 +236,15 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, RPCErro
 			continue
 		}
 
-		elems := strings.Split(r.Method, serviceMethodSeparator)
-		if len(elems) != 2 {
-			return nil, true, &methodNotFoundError{r.Method, ""}
-		}
-
 		if len(r.Payload) == 0 {
-			requests[i] = rpcRequest{service: elems[0], method: elems[1], id: id, params: nil}
+			requests[i] = rpcRequest{id: id, params: nil}
 		} else {
-			requests[i] = rpcRequest{service: elems[0], method: elems[1], id: id, params: r.Payload}
+			requests[i] = rpcRequest{id: id, params: r.Payload}
+		}
+		if elem := strings.Split(r.Method, serviceMethodSeparator); len(elem) == 2 {
+			requests[i].service, requests[i].method = elem[0], elem[1]
+		} else {
+			requests[i].err = &methodNotFoundError{r.Method, ""}
 		}
 	}
 

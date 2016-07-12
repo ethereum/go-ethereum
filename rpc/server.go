@@ -180,7 +180,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 	for atomic.LoadInt32(&s.run) == 1 {
 		reqs, batch, err := s.readRequest(codec)
 		if err != nil {
-			glog.V(logger.Debug).Infof("%v\n", err)
+			glog.V(logger.Debug).Infof("read error %v\n", err)
 			codec.Write(codec.CreateErrorResponse(nil, err))
 			return nil
 		}
@@ -393,6 +393,11 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 	for i, r := range reqs {
 		var ok bool
 		var svc *service
+
+		if r.err != nil {
+			requests[i] = &serverRequest{id: r.id, err: r.err}
+			continue
+		}
 
 		if r.isPubSub && r.method == unsubscribeMethod {
 			requests[i] = &serverRequest{id: r.id, isUnsubscribe: true}
