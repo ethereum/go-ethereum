@@ -310,6 +310,8 @@ func initGenesis(ctx *cli.Context) error {
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
+	// Report geth version
+	glog.V(logger.Info).Infof("instance: Geth/%s/%s/%s\n", verString, runtime.Version(), runtime.GOOS)
 	// Start up the node itself
 	utils.StartNode(stack)
 
