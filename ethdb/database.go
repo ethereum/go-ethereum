@@ -36,14 +36,14 @@ import (
 
 var OpenFileLimit = 64
 
-// cacheRatio specifies how the total alloted cache is distributed between the
+// cacheRatio specifies how the total allotted cache is distributed between the
 // various system databases.
 var cacheRatio = map[string]float64{
 	"dapp":      0.0,
 	"chaindata": 1.0,
 }
 
-// handleRatio specifies how the total alloted file descriptors is distributed
+// handleRatio specifies how the total allotted file descriptors is distributed
 // between the various system databases.
 var handleRatio = map[string]float64{
 	"dapp":      0.0,
@@ -79,7 +79,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	glog.V(logger.Info).Infof("Alloted %dMB cache and %d file handles to %s", cache, handles, file)
+	glog.V(logger.Info).Infof("Allotted %dMB cache and %d file handles to %s", cache, handles, file)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{

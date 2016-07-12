@@ -243,7 +243,7 @@ func (db *nodeDB) expirer() {
 }
 
 // expireNodes iterates over the database and deletes all nodes that have not
-// been seen (i.e. received a pong from) for some alloted time.
+// been seen (i.e. received a pong from) for some allotted time.
 func (db *nodeDB) expireNodes() error {
 	threshold := time.Now().Add(-nodeDBNodeExpiration)
 
