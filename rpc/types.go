@@ -62,7 +62,7 @@ type serverRequest struct {
 	callb         *callback
 	args          []reflect.Value
 	isUnsubscribe bool
-	err           RPCError
+	err           Error
 }
 
 type serviceRegistry map[string]*service       // collection of services
@@ -88,15 +88,13 @@ type rpcRequest struct {
 	id       interface{}
 	isPubSub bool
 	params   interface{}
-	err      RPCError // invalid batch element
+	err      Error // invalid batch element
 }
 
-// RPCError implements RPC error, is add support for error codec over regular go errors
-type RPCError interface {
-	// RPC error code
-	Code() int
-	// Error message
-	Error() string
+// Error wraps RPC errors, which contain an error code in addition to the message.
+type Error interface {
+	Error() string  // returns the message
+	ErrorCode() int // returns the code
 }
 
 // ServerCodec implements reading, parsing and writing RPC messages for the server side of
@@ -104,15 +102,15 @@ type RPCError interface {
 // multiple go-routines concurrently.
 type ServerCodec interface {
 	// Read next request
-	ReadRequestHeaders() ([]rpcRequest, bool, RPCError)
+	ReadRequestHeaders() ([]rpcRequest, bool, Error)
 	// Parse request argument to the given types
-	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, RPCError)
+	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, Error)
 	// Assemble success response, expects response id and payload
 	CreateResponse(interface{}, interface{}) interface{}
 	// Assemble error response, expects response id and error
-	CreateErrorResponse(interface{}, RPCError) interface{}
+	CreateErrorResponse(interface{}, Error) interface{}
 	// Assemble error response with extra information about the error through info
-	CreateErrorResponseWithInfo(id interface{}, err RPCError, info interface{}) interface{}
+	CreateErrorResponseWithInfo(id interface{}, err Error, info interface{}) interface{}
 	// Create notification response
 	CreateNotification(string, interface{}) interface{}
 	// Write msg to client.
@@ -273,15 +271,4 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 
 func (bn *BlockNumber) Int64() int64 {
 	return (int64)(*bn)
-}
-
-// Client defines the interface for go client that wants to connect to a geth RPC endpoint
-type Client interface {
-	// SupportedModules returns the collection of API's the server offers
-	SupportedModules() (map[string]string, error)
-
-	Send(req interface{}) error
-	Recv(msg interface{}) error
-
-	Close()
 }

@@ -116,7 +116,7 @@ func (ctx ppctx) printValue(v otto.Value, level int, inArray bool) {
 
 func (ctx ppctx) printObject(obj *otto.Object, level int, inArray bool) {
 	switch obj.Class() {
-	case "Array":
+	case "Array", "GoArray":
 		lv, _ := obj.Get("length")
 		len, _ := lv.ToInteger()
 		if len == 0 {

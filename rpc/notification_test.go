@@ -19,20 +19,31 @@ package rpc
 import (
 	"encoding/json"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
 )
 
-type NotificationTestService struct{}
+type NotificationTestService struct {
+	mu           sync.Mutex
+	unsubscribed bool
 
-var (
-	unsubCallbackCalled = false
-)
+	gotHangSubscriptionReq  chan struct{}
+	unblockHangSubscription chan struct{}
+}
+
+func (s *NotificationTestService) wasUnsubCallbackCalled() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.unsubscribed
+}
 
 func (s *NotificationTestService) Unsubscribe(subid string) {
-	unsubCallbackCalled = true
+	s.mu.Lock()
+	s.unsubscribed = true
+	s.mu.Unlock()
 }
 
 func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val int) (Subscription, error) {
@@ -57,6 +68,26 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 		}
 	}()
 
+	return subscription, nil
+}
+
+// HangSubscription blocks on s.unblockHangSubscription before
+// sending anything.
+func (s *NotificationTestService) HangSubscription(ctx context.Context, val int) (Subscription, error) {
+	notifier, supported := NotifierFromContext(ctx)
+	if !supported {
+		return nil, ErrNotificationsUnsupported
+	}
+
+	s.gotHangSubscriptionReq <- struct{}{}
+	<-s.unblockHangSubscription
+	subscription, err := notifier.NewSubscription(s.Unsubscribe)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		subscription.Notify(val)
+	}()
 	return subscription, nil
 }
 
@@ -90,7 +121,7 @@ func TestNotifications(t *testing.T) {
 	}
 
 	var subid string
-	response := JSONSuccessResponse{Result: subid}
+	response := jsonSuccessResponse{Result: subid}
 	if err := in.Decode(&response); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +145,7 @@ func TestNotifications(t *testing.T) {
 	clientConn.Close() // causes notification unsubscribe callback to be called
 	time.Sleep(1 * time.Second)
 
-	if !unsubCallbackCalled {
+	if !service.wasUnsubCallbackCalled() {
 		t.Error("unsubscribe callback not called after closing connection")
 	}
 }

@@ -381,7 +381,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 // readRequest requests the next (batch) request from the codec. It will return the collection
 // of requests, an indication if the request was a batch, the invalid request identifier and an
 // error when the request could not be read/parsed.
-func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCError) {
+func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, Error) {
 	reqs, batch, err := codec.ReadRequestHeaders()
 	if err != nil {
 		return nil, batch, err
