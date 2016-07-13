@@ -7,16 +7,15 @@ version: "{branch}.{build}"
 environment:
   global:
     GOPATH: c:\gopath
-
-# cache choco package files so we don't hit sourceforge all
-# the time.
-cache:
-  - c:\cache
+    # MinGW and Go are preinstalled. Go is already in PATH.
+    PATH: c:\mingw-w64\i686-5.3.0-posix-dwarf-rt_v4-rev0\mingw32\bin:%PATH%
 
 install:
-  - cmd: choco install --cache c:\cache golang mingw | find /v "Extracting  "
-  - refreshenv
   - cd c:\gopath\src\github.com\ethereum\go-ethereum
+  - dir c:\mingw-w64\i686-5.3.0-posix-dwarf-rt_v4-rev0\mingw32\bin
+  - echo %PATH%
+  - go version
+  - gcc --version
 
 build_script:
   - go run build\ci.go install
