@@ -17,10 +17,11 @@ environment:
 
 install:
   - "%GO% version"
-  # Update MSYS2, install MinGW gcc
-  - bash -lc "pacman --noconfirm --sync --refresh --refresh pacman"
-  - bash -lc "pacman --noconfirm --sync --refresh --refresh --sysupgrade --sysupgrade"
-  - bash -lc "pacman --noconfirm -S --needed base-devel"
+  # Update MSYS2
+  # - bash -lc "pacman --noconfirm --sync --refresh --refresh pacman"
+  # - bash -lc "pacman --noconfirm --sync --refresh --refresh --sysupgrade --sysupgrade"
+  # Install MinGW gcc
+  - bash -lc "pacman --noconfirm -S mingw-w64-gcc"
   - gcc --version
 
 build_script:
