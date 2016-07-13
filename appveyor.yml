@@ -7,20 +7,20 @@ version: "{branch}.{build}"
 environment:
   global:
     GOPATH: c:\gopath
-    PATH: c:\go16-x86;c:\mingw\bin;%PATH%
+    PATH: c:\mingw\bin;%PATH%
 
 install:
-  - go version
+  - c:\go-x86\go version
   - gcc --version
 
 build_script:
-  - go run build\ci.go install
+  - c:\go-x86\go run build\ci.go install
 
 test_script:
-  - go run build\ci.go test -vet -coverage
+  - c:\go-x86\go run build\ci.go test -vet -coverage
 
 after_build:
-  - go run build\ci.go archive -type zip
+  - c:\go-x86\go run build\ci.go archive -type zip
 
 artifacts:
   - path: geth-*.zip
