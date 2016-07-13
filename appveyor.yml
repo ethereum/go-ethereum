@@ -7,12 +7,11 @@ version: "{branch}.{build}"
 environment:
   global:
     GOPATH: c:\gopath
-    CC: clang
+    CC: c:\mingw-w64\i686-5.3.0-posix-dwarf-rt_v4-rev0\mingw32\bin\gcc.exe
 
 install:
-  - cd c:\gopath\src\github.com\ethereum\go-ethereum
   - go version
-  - clang --version
+  - "%CC% --version"
 
 build_script:
   - go run build\ci.go install
