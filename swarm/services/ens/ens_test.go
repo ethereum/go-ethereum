@@ -1,3 +1,5 @@
+//go:generate abigen --abi contract/OpenRegistrar.abi --bin contract/OpenRegistrar.bin --pkg contract --type OpenRegistrar --out contract/OpenRegistrar.go
+//go:generate abigen --abi contract/PersonalResolver.abi --bin contract/PersonalResolver.bin --pkg contract --type PersonalResolver --out contract/PersonalResolver.go
 package ens
 
 import (
@@ -26,10 +28,21 @@ var (
 	addr   = crypto.PubkeyToAddress(key.PublicKey)
 )
 
-func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
+func deployRegistrar(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
 	deployTransactor := bind.NewKeyedTransactor(prvKey)
 	deployTransactor.Value = amount
-	addr, _, _, err := contract.DeployResolver(deployTransactor, backend)
+	addr, _, _, err := contract.DeployOpenRegistrar(deployTransactor, backend)
+	if err != nil {
+		return common.Address{}, err
+	}
+	backend.Commit()
+	return addr, nil
+}
+
+func deployResolver(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
+	deployTransactor := bind.NewKeyedTransactor(prvKey)
+	deployTransactor.Value = amount
+	addr, _, _, err := contract.DeployPersonalResolver(deployTransactor, backend)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -40,12 +53,12 @@ func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.Simulat
 func TestENS(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAccount{addr, big.NewInt(1000000000)})
 	transactOpts := bind.NewKeyedTransactor(key)
-	contractAddr, err := deploy(key, big.NewInt(0), contractBackend)
+	contractAddr, err := deployRegistrar(key, big.NewInt(0), contractBackend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	resolverAddr, err := deploy(key, big.NewInt(0), contractBackend)
+	resolverAddr, err := deployResolver(key, big.NewInt(0), contractBackend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -69,7 +82,6 @@ func TestENS(t *testing.T) {
 	}
 	if vhost.Hex() != hash.Hex()[2:] {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost)
-		// t.Fatalf("resolve error, expected %v, got %v", transactOpts.From, hash)
 	}
 
 }
