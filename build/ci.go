@@ -148,7 +148,7 @@ func doInstall(cmdline []string) {
 	}
 
 	goinstall := goTool("install", makeBuildFlags(*commitHash)...)
-	goinstall.Args = append(goinstall.Args, "-v", "-x")
+	goinstall.Args = append(goinstall.Args, "-v")
 	goinstall.Args = append(goinstall.Args, packages...)
 	build.MustRun(goinstall)
 }
