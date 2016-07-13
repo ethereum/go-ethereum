@@ -8,19 +8,21 @@ environment:
   global:
     GOPATH: c:\gopath
     PATH: c:\mingw\bin;%PATH%
+    GO: c:\go-x86\bin\go
+    GOROOT: c:\go-x86
 
 install:
-  - c:\go-x86\go version
+  - "%GO% version"
   - gcc --version
 
 build_script:
-  - c:\go-x86\go run build\ci.go install
+  - "%GO% run build\\ci.go install"
 
 test_script:
-  - c:\go-x86\go run build\ci.go test -vet -coverage
+  - "%GO% run build\\ci.go test -vet -coverage"
 
 after_build:
-  - c:\go-x86\go run build\ci.go archive -type zip
+  - "%GO% run build\\ci.go archive -type zip"
 
 artifacts:
   - path: geth-*.zip
