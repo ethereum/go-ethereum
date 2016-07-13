@@ -6,13 +6,21 @@ clone_depth: 5
 version: "{branch}.{build}"
 environment:
   global:
+    # Go stuff
     GOPATH: c:\gopath
-    PATH: c:\mingw\bin;%PATH%
-    GO: c:\go-x86\bin\go
-    GOROOT: c:\go-x86
+    GO: c:\go\bin\go
+    GOROOT: c:\go
+    # MSYS2 stuff
+    MSYS2_ARCH: x86_64
+    MSYSTEM: MINGW64
+    PATH: C:\msys64\%MSYSTEM%\bin;C:\msys64\usr\bin;%PATH%
 
 install:
   - "%GO% version"
+  # Update MSYS2, install MinGW gcc
+  - bash -lc "pacman --noconfirm --sync --refresh --refresh pacman"
+  - bash -lc "pacman --noconfirm --sync --refresh --refresh --sysupgrade --sysupgrade"
+  - bash -lc "pacman --noconfirm -S --needed base-devel"
   - gcc --version
 
 build_script:
