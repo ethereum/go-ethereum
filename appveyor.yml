@@ -6,26 +6,32 @@ clone_depth: 5
 version: "{branch}.{build}"
 environment:
   global:
+    # Go stuff
     GOPATH: c:\gopath
-
-# cache choco package files so we don't hit sourceforge all
-# the time.
-cache:
-  - c:\cache
+    GO: c:\go\bin\go
+    GOROOT: c:\go
+    # MSYS2 stuff
+    MSYS2_ARCH: x86_64
+    MSYSTEM: MINGW64
+    PATH: C:\msys64\%MSYSTEM%\bin;C:\msys64\usr\bin;%PATH%
 
 install:
-  - cmd: choco install --cache c:\cache golang mingw | find /v "Extracting  "
-  - refreshenv
-  - cd c:\gopath\src\github.com\ethereum\go-ethereum
+  - "%GO% version"
+  # Update MSYS2
+  # - bash -lc "pacman --noconfirm --sync --refresh --refresh pacman"
+  # - bash -lc "pacman --noconfirm --sync --refresh --refresh --sysupgrade --sysupgrade"
+  # Install MinGW gcc
+  - bash -lc "pacman --noconfirm -S mingw-w64-gcc"
+  - gcc --version
 
 build_script:
-  - go run build\ci.go install
+  - "%GO% run build\\ci.go install"
 
 test_script:
-  - go run build\ci.go test -vet -coverage
+  - "%GO% run build\\ci.go test -vet -coverage"
 
 after_build:
-  - go run build\ci.go archive -type zip
+  - "%GO% run build\\ci.go archive -type zip"
 
 artifacts:
   - path: geth-*.zip
