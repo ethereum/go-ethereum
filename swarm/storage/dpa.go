@@ -27,6 +27,8 @@ const (
 	retrieveChanCapacity        = 100
 	singletonSwarmDbCapacity    = 50000
 	singletonSwarmCacheCapacity = 500
+	maxStoreProcesses = 100
+	maxRetrieveProcesses = 100
 )
 
 var (
@@ -42,7 +44,7 @@ type DPA struct {
 	lock    sync.Mutex
 	running bool
 	wg      *sync.WaitGroup
-	quitC   chan bool
+	quitC chan bool
 }
 
 // for testing locally
@@ -79,8 +81,8 @@ func (self *DPA) Retrieve(key Key) LazySectionReader {
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key Key, err error) {
-	return self.Chunker.Split(data, size, self.storeC, nil, wg)
+func (self *DPA) Store(data io.Reader, size int64, swg *sync.WaitGroup, wwg *sync.WaitGroup) (key Key, err error) {
+	return self.Chunker.Split(data, size, self.storeC, swg, wwg)
 }
 
 func (self *DPA) Start() {
@@ -90,6 +92,8 @@ func (self *DPA) Start() {
 		return
 	}
 	self.running = true
+	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
+	self.storeC = make(chan *Chunk, storeChanCapacity)
 	self.quitC = make(chan bool)
 	self.storeLoop()
 	self.retrieveLoop()
@@ -108,13 +112,14 @@ func (self *DPA) Stop() {
 // retrieveLoop dispatches the parallel chunk retrieval requests received on the
 // retrieve channel to its ChunkStore  (NetStore or LocalStore)
 func (self *DPA) retrieveLoop() {
-	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
+	for i:=0; i< maxRetrieveProcesses; i++ {
+		go self.retrieveWorker()
+	}
+					glog.V(logger.Detail).Infof("[BZZ] dpa: retrieve loop spawning %v workers", maxRetrieveProcesses)
+}
 
-	go func() {
-	RETRIEVE:
-		for ch := range self.retrieveC {
-
-			go func(chunk *Chunk) {
+func (self *DPA) retrieveWorker() {
+		for chunk := range self.retrieveC {
 				glog.V(logger.Detail).Infof("[BZZ] dpa: retrieve loop : chunk %v", chunk.Key.Log())
 				storedChunk, err := self.Get(chunk.Key)
 				if err == notFound {
@@ -126,37 +131,39 @@ func (self *DPA) retrieveLoop() {
 					chunk.Size = storedChunk.Size
 				}
 				close(chunk.C)
-			}(ch)
-			select {
+
+				select {
 			case <-self.quitC:
-				break RETRIEVE
+				return
 			default:
-			}
+}
 		}
-	}()
+	}
+
+// storeLoop dispatches the parallel chunk store request processors
+// received on the store channel to its ChunkStore (NetStore or LocalStore)
+func (self *DPA) storeLoop() {
+	for i:=0; i< maxStoreProcesses; i++ {
+		go self.storeWorker()
+	}
+					glog.V(logger.Detail).Infof("[BZZ] dpa: store spawning %v workers", maxStoreProcesses)
 }
 
-// storeLoop dispatches the parallel chunk store requests received on the
-// store channel to its ChunkStore (NetStore or LocalStore)
-func (self *DPA) storeLoop() {
-	self.storeC = make(chan *Chunk)
-	go func() {
-	STORE:
-		for ch := range self.storeC {
-			go func(chunk *Chunk) {
+func (self *DPA) storeWorker() {
+
+		for chunk := range self.storeC {
 				self.Put(chunk)
 				if chunk.wg != nil {
-					glog.V(logger.Detail).Infof("[BZZ] dpa: store loop %v", chunk.Key.Log())
+					glog.V(logger.Detail).Infof("[BZZ] dpa: store processor %v", chunk.Key.Log())
 					chunk.wg.Done()
+
 				}
-			}(ch)
-			select {
+				select {
 			case <-self.quitC:
-				break STORE
+				return
 			default:
-			}
-		}
-	}()
+}
+}
 }
 
 // DpaChunkStore implements the ChunkStore interface,

@@ -100,7 +100,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 				stat, _ := f.Stat()
 				var hash storage.Key
 				wg := &sync.WaitGroup{}
-				hash, err = self.api.dpa.Store(f, stat.Size(), wg)
+				hash, err = self.api.dpa.Store(f, stat.Size(), wg, nil)
 				if hash != nil {
 					list[i].Hash = hash.String()
 				}

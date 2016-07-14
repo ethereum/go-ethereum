@@ -199,7 +199,7 @@ func (self *manifestTrie) recalcAndStore() error {
 
 	sr := bytes.NewReader(manifest)
 	wg := &sync.WaitGroup{}
-	key, err2 := self.dpa.Store(sr, int64(len(manifest)), wg)
+	key, err2 := self.dpa.Store(sr, int64(len(manifest)), wg, nil)
 	wg.Wait()
 	self.hash = key
 	return err2

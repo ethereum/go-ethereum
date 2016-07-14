@@ -48,7 +48,7 @@ func (self *Api) Retrieve(key storage.Key) storage.LazySectionReader {
 }
 
 func (self *Api) Store(data io.Reader, size int64, wg *sync.WaitGroup) (key storage.Key, err error) {
-	return self.dpa.Store(data, size, wg)
+	return self.dpa.Store(data, size, wg, nil)
 }
 
 type ErrResolve error
@@ -107,13 +107,13 @@ func (self *Api) parseAndResolve(uri string, nameresolver bool) (contentHash sto
 func (self *Api) Put(content, contentType string) (string, error) {
 	r := strings.NewReader(content)
 	wg := &sync.WaitGroup{}
-	key, err := self.dpa.Store(r, int64(len(content)), wg)
+	key, err := self.dpa.Store(r, int64(len(content)), wg, nil)
 	if err != nil {
 		return "", err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, err = self.dpa.Store(r, int64(len(manifest)), wg)
+	key, err = self.dpa.Store(r, int64(len(manifest)), wg, nil)
 	if err != nil {
 		return "", err
 	}
