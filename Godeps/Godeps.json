@@ -212,23 +212,23 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html/atom",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html/charset",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
