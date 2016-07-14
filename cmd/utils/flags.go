@@ -814,17 +814,18 @@ func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainC
 	// Set any missing fields due to them being unset or system upgrade
 	if config.HomesteadBlock == nil {
 		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.HomesteadBlock = new(big.Int).Set(params.TestNetHomesteadBlock)
+			config.HomesteadBlock = params.TestNetHomesteadBlock
 		} else {
-			config.HomesteadBlock = new(big.Int).Set(params.MainNetHomesteadBlock)
+			config.HomesteadBlock = params.MainNetHomesteadBlock
 		}
 	}
 	if config.DAOForkBlock == nil {
 		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.DAOForkBlock = new(big.Int).Set(params.TestNetDAOForkBlock)
+			config.DAOForkBlock = params.TestNetDAOForkBlock
 		} else {
-			config.DAOForkBlock = new(big.Int).Set(params.MainNetDAOForkBlock)
+			config.DAOForkBlock = params.MainNetDAOForkBlock
 		}
+		config.DAOForkSupport = true
 	}
 	// Force override any existing configs if explicitly requested
 	switch {

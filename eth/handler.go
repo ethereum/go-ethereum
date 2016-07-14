@@ -513,7 +513,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// If we're seemingly on the same chain, disable the drop timer
 			if verifyDAO {
-				glog.V(logger.Info).Infof("%v: seems to be on the same side of the DAO fork", p)
+				glog.V(logger.Debug).Infof("%v: seems to be on the same side of the DAO fork", p)
 				p.forkDrop.Stop()
 				p.forkDrop = nil
 				return nil
@@ -529,11 +529,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				p.forkDrop = nil
 
 				// Validate the header and either drop the peer or continue
-				if err := core.ValidateHeaderExtraData(pm.chainconfig, headers[0]); err != nil {
-					glog.V(logger.Info).Infof("%v: verified to be on the other side of the DAO fork, dropping", p)
+				if err := core.ValidateDAOHeaderExtraData(pm.chainconfig, headers[0]); err != nil {
+					glog.V(logger.Debug).Infof("%v: verified to be on the other side of the DAO fork, dropping", p)
 					return err
 				}
-				glog.V(logger.Info).Infof("%v: verified to be on the same side of the DAO fork", p)
+				glog.V(logger.Debug).Infof("%v: verified to be on the same side of the DAO fork", p)
 			}
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
 			headers = pm.fetcher.FilterHeaders(headers, time.Now())

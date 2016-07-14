@@ -20,9 +20,6 @@ import (
 	"math/big"
 	"path/filepath"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestBcValidBlockTests(t *testing.T) {
@@ -217,10 +214,6 @@ func TestHomesteadBcState(t *testing.T) {
 
 // DAO hard-fork tests
 func TestDAOBcTheDao(t *testing.T) {
-	// Temporarilly override the hard-fork specs
-	defer func(old common.Address) { params.DAORefundContract = old }(params.DAORefundContract)
-	params.DAORefundContract = common.HexToAddress("0xabcabcabcabcabcabcabcabcabcabcabcabcabca")
-
 	err := RunBlockTest(big.NewInt(5), big.NewInt(8), filepath.Join(blockTestDir, "TestNetwork", "bcTheDaoTest.json"), BlockSkipTests)
 	if err != nil {
 		t.Fatal(err)

@@ -83,7 +83,7 @@ var daoGenesisForkBlock = big.NewInt(314)
 // Tests that the DAO hard-fork number and the nodes support/opposition is correctly
 // set in the database after various initialization procedures and invocations.
 func TestDAODefaultMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, false}}, params.MainNetDAOForkBlock, false)
+	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, false}}, params.MainNetDAOForkBlock, true)
 }
 func TestDAOSupportMainnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, false, "", [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true)
@@ -98,7 +98,7 @@ func TestDAOSwitchToOpposeMainnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, false, "", [][2]bool{{true, false}, {false, true}}, params.MainNetDAOForkBlock, false)
 }
 func TestDAODefaultTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, false}}, params.TestNetDAOForkBlock, false)
+	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, false}}, params.TestNetDAOForkBlock, true)
 }
 func TestDAOSupportTestnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, true, "", [][2]bool{{true, false}}, params.TestNetDAOForkBlock, true)
@@ -116,7 +116,7 @@ func TestDAOInitOldPrivnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{}, nil, false)
 }
 func TestDAODefaultOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, false}}, params.MainNetDAOForkBlock, false)
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, false}}, params.MainNetDAOForkBlock, true)
 }
 func TestDAOSupportOldPrivnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true)
