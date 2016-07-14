@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 	"time"
@@ -249,33 +248,7 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 		}
 	}
 	// If all checks passed, validate the extra-data field for hard forks
-	return ValidateHeaderExtraData(config, header)
-}
-
-// ValidateHeaderExtraData validates the extra-data field of a block header to
-// ensure it conforms to hard-fork rules.
-func ValidateHeaderExtraData(config *ChainConfig, header *types.Header) error {
-	// DAO hard-fork extension to the header validity: a) if the node is no-fork,
-	// do not accept blocks in the [fork, fork+10) range with the fork specific
-	// extra-data set; b) if the node is pro-fork, require blocks in the specific
-	// range to have the unique extra-data set.
-	if daoBlock := config.DAOForkBlock; daoBlock != nil {
-		// Check whether the block is among the fork extra-override range
-		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if daoBlock.Cmp(header.Number) <= 0 && header.Number.Cmp(limit) < 0 {
-			// Depending whether we support or oppose the fork, verrift the extra-data contents
-			if config.DAOForkSupport {
-				if bytes.Compare(header.Extra, params.DAOForkBlockExtra) != 0 {
-					return ValidationError("DAO pro-fork bad block extra-data: 0x%x", header.Extra)
-				}
-			} else {
-				if bytes.Compare(header.Extra, params.DAOForkBlockExtra) == 0 {
-					return ValidationError("DAO no-fork bad block extra-data: 0x%x", header.Extra)
-				}
-			}
-		}
-	}
-	return nil
+	return ValidateDAOHeaderExtraData(config, header)
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns

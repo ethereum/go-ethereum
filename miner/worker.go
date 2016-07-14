@@ -474,7 +474,7 @@ func (self *worker) commitNewWork() {
 	if daoBlock := self.config.DAOForkBlock; daoBlock != nil {
 		// Check whether the block is among the fork extra-override range
 		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if daoBlock.Cmp(header.Number) <= 0 && header.Number.Cmp(limit) < 0 {
+		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
 			// Depending whether we support or oppose the fork, override differently
 			if self.config.DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
