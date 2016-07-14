@@ -811,13 +811,13 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 
 	// bzz.	Swarm
 	var bzzconfig *bzzapi.Config
-	hexaddr := ctx.GlobalString(SwarmAccountAddrFlag.Name)
-	if hexaddr != "" {
-		swarmaccount := common.HexToAddress(hexaddr)
-		if !accman.HasAddress(swarmaccount) {
-			Fatalf("swarm account '%v' does not exist: %v", hexaddr, err)
+	accountid := ctx.GlobalString(SwarmAccountAddrFlag.Name)
+	if accountid != "" {
+		swarmaccount, err := MakeAddress(accman, accountid)
+		if err != nil {
+			Fatalf("swarm account '%v' does not exist: %v'", accountid, err)
 		}
-		prvkey, err := accman.GetUnlocked(swarmaccount)
+		prvkey, err := accman.GetUnlocked(swarmaccount.Address)
 		if err != nil {
 			Fatalf("unable to unlock swarm account: %v", err)
 		}
