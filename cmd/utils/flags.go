@@ -126,10 +126,6 @@ var (
 		Name:  "dev",
 		Usage: "Developer mode: pre-configured private network with several debugging flags",
 	}
-	GenesisFileFlag = cli.StringFlag{
-		Name:  "genesis",
-		Usage: "Insert/overwrite the genesis block (JSON format)",
-	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -160,6 +156,15 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	// Fork settings
+	SupportDAOFork = cli.BoolFlag{
+		Name:  "support-dao-fork",
+		Usage: "Updates the chain rules to support the DAO hard-fork",
+	}
+	OpposeDAOFork = cli.BoolFlag{
+		Name:  "oppose-dao-fork",
+		Usage: "Updates the chain rules to oppose the DAO hard-fork",
 	}
 	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
@@ -534,20 +539,6 @@ func MakeWSRpcHost(ctx *cli.Context) string {
 	return ctx.GlobalString(WSListenAddrFlag.Name)
 }
 
-// MakeGenesisBlock loads up a genesis block from an input file specified in the
-// command line, or returns the empty string if none set.
-func MakeGenesisBlock(ctx *cli.Context) string {
-	genesis := ctx.GlobalString(GenesisFileFlag.Name)
-	if genesis == "" {
-		return ""
-	}
-	data, err := ioutil.ReadFile(genesis)
-	if err != nil {
-		Fatalf("Failed to load custom genesis file: %v", err)
-	}
-	return string(data)
-}
-
 // MakeDatabaseHandles raises out the number of allowed file handles per process
 // for Geth and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
@@ -689,7 +680,6 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 
 	ethConf := &eth.Config{
 		ChainConfig:             MustMakeChainConfig(ctx),
-		Genesis:                 MakeGenesisBlock(ctx),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
@@ -722,17 +712,13 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			ethConf.NetworkId = 1
 		}
-		if !ctx.GlobalIsSet(GenesisFileFlag.Name) {
-			ethConf.Genesis = core.OlympicGenesisBlock()
-		}
+		ethConf.Genesis = core.OlympicGenesisBlock()
 
 	case ctx.GlobalBool(TestNetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			ethConf.NetworkId = 2
 		}
-		if !ctx.GlobalIsSet(GenesisFileFlag.Name) {
-			ethConf.Genesis = core.TestNetGenesisBlock()
-		}
+		ethConf.Genesis = core.TestNetGenesisBlock()
 		state.StartingNonce = 1048576 // (2**20)
 
 	case ctx.GlobalBool(DevModeFlag.Name):
@@ -747,9 +733,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 			stackConf.ListenAddr = ":0"
 		}
 		// Override the Ethereum protocol configs
-		if !ctx.GlobalIsSet(GenesisFileFlag.Name) {
-			ethConf.Genesis = core.OlympicGenesisBlock()
-		}
+		ethConf.Genesis = core.OlympicGenesisBlock()
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
 			ethConf.GasPrice = new(big.Int)
 		}
@@ -813,24 +797,43 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 
 // MustMakeChainConfigFromDb reads the chain configuration from the given database.
 func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfig {
-	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0)
+	// If the chain is already initialized, use any existing chain configs
+	config := new(core.ChainConfig)
 
-	if genesis != nil {
-		// Existing genesis block, use stored config if available.
+	if genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0); genesis != nil {
 		storedConfig, err := core.GetChainConfig(db, genesis.Hash())
-		if err == nil {
-			return storedConfig
-		} else if err != core.ChainConfigNotFoundErr {
+		switch err {
+		case nil:
+			config = storedConfig
+		case core.ChainConfigNotFoundErr:
+			// No configs found, use empty, will populate below
+		default:
 			Fatalf("Could not make chain configuration: %v", err)
 		}
 	}
-	var homesteadBlockNo *big.Int
-	if ctx.GlobalBool(TestNetFlag.Name) {
-		homesteadBlockNo = params.TestNetHomesteadBlock
-	} else {
-		homesteadBlockNo = params.MainNetHomesteadBlock
+	// Set any missing fields due to them being unset or system upgrade
+	if config.HomesteadBlock == nil {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.HomesteadBlock = new(big.Int).Set(params.TestNetHomesteadBlock)
+		} else {
+			config.HomesteadBlock = new(big.Int).Set(params.MainNetHomesteadBlock)
+		}
 	}
-	return &core.ChainConfig{HomesteadBlock: homesteadBlockNo}
+	if config.DAOForkBlock == nil {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.DAOForkBlock = new(big.Int).Set(params.TestNetDAOForkBlock)
+		} else {
+			config.DAOForkBlock = new(big.Int).Set(params.MainNetDAOForkBlock)
+		}
+	}
+	// Force override any existing configs if explicitly requested
+	switch {
+	case ctx.GlobalBool(SupportDAOFork.Name):
+		config.DAOForkSupport = true
+	case ctx.GlobalBool(OpposeDAOFork.Name):
+		config.DAOForkSupport = false
+	}
+	return config
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.

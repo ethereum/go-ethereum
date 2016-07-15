@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -65,7 +66,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs      vm.Logs
 		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
-
+	// Mutate the statedb according to any hard-fork specs
+	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
+		ApplyDAOHardFork(statedb)
+	}
+	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
@@ -128,4 +133,20 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 		reward.Add(reward, r)
 	}
 	statedb.AddBalance(header.Coinbase, reward)
+}
+
+// ApplyDAOHardFork modifies the state database according to the DAO hard-fork
+// rules, transferring all balances of a set of DAO accounts to a single refund
+// contract.
+func ApplyDAOHardFork(statedb *state.StateDB) {
+	// Retrieve the contract to refund balances into
+	refund := statedb.GetOrNewStateObject(params.DAORefundContract)
+
+	// Move every DAO account and extra-balance account funds into the refund contract
+	for _, addr := range params.DAODrainList {
+		if account := statedb.GetStateObject(addr); account != nil {
+			refund.AddBalance(account.Balance())
+			account.SetBalance(new(big.Int))
+		}
+	}
 }
