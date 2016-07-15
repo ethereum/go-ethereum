@@ -2,21 +2,14 @@ package storage
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
-
-func init() {
-	glog.SetV(logger.Info)
-	glog.SetToStderr(true)
-}
 
 /*
 Tests TreeChunker by splitting and joining a random byte slice
@@ -24,10 +17,12 @@ Tests TreeChunker by splitting and joining a random byte slice
 
 type test interface {
 	Fatalf(string, ...interface{})
+	Logf(string, ...interface{})
 }
 
 type chunkerTester struct {
-	chunks []*Chunk
+	inputs map[uint64][]byte
+	chunks map[string]*Chunk
 	t      test
 }
 
@@ -40,7 +35,12 @@ func (self *chunkerTester) checkChunks(t *testing.T, want int) {
 
 func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup) (key Key) {
 	// reset
-	self.chunks = nil
+	self.chunks = make(map[string]*Chunk)
+
+	if self.inputs == nil {
+		self.inputs = make(map[uint64][]byte)
+	}
+
 	quitC := make(chan bool)
 	timeout := time.After(600 * time.Second)
 	if chunkC != nil {
@@ -57,7 +57,8 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 						return
 					}
 					// glog.V(logger.Info).Infof("chunk %v received", len(self.chunks))
-					self.chunks = append(self.chunks, chunk)
+					// self.chunks = append(self.chunks, chunk)
+					self.chunks[chunk.Key.String()] = chunk
 					if chunk.wg != nil {
 						chunk.wg.Done()
 					}
@@ -73,22 +74,26 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 		if swg != nil {
 			// glog.V(logger.Info).Infof("Waiting for storage to finish")
 			swg.Wait()
-			// glog.V(logger.Info).Infof("St	orage finished")
+			// glog.V(logger.Info).Infof("Storage finished")
 		}
 		close(chunkC)
 	}
 	if chunkC != nil {
+		// glog.V(logger.Info).Infof("waiting for splitter finished")
 		<-quitC
+		// glog.V(logger.Info).Infof("Splitter finished")
 	}
 	return
 }
 
-func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) LazySectionReader {
+func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) LazySectionReader {
 	// reset but not the chunks
 
+	// glog.V(logger.Info).Infof("Splitter finished")
 	reader := chunker.Join(key, chunkC)
 
 	timeout := time.After(600 * time.Second)
+	// glog.V(logger.Info).Infof("Splitter finished")
 	i := 0
 	go func() {
 		for {
@@ -101,55 +106,59 @@ func (self *chunkerTester) Join(chunker *TreeChunker, key Key, c int, chunkC cha
 					close(quitC)
 					return
 				}
-				i++
+				// glog.V(logger.Info).Infof("chunk %v: %v", i, chunk.Key.String())
 				// this just mocks the behaviour of a chunk store retrieval
-				var found bool
-				for _, ch := range self.chunks {
-					if bytes.Equal(chunk.Key, ch.Key) {
-						found = true
-						chunk.SData = ch.SData
-						break
-					}
+				stored, success := self.chunks[chunk.Key.String()]
+				// glog.V(logger.Info).Infof("chunk %v, success: %v", chunk.Key.String(), success)
+				if !success {
+					self.t.Fatalf("not found")
+					return
 				}
-				if !found {
-					self.t.Fatalf("not found	")
-				}
+				// glog.V(logger.Info).Infof("chunk %v: %v", i, chunk.Key.String())
+				chunk.SData = stored.SData
+				chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 				close(chunk.C)
+				i++
 			}
 		}
 	}()
 	return reader
 }
 
-func testRandomData(n int, chunks int, t *testing.T) {
-	chunker := NewTreeChunker(&ChunkerParams{
-		Branches: 128,
-		Hash:     "SHA3",
-	})
-	tester := &chunkerTester{t: t}
-	data, input := testDataReaderAndSlice(n)
+func testRandomData(splitter Splitter, n int, tester *chunkerTester) {
+	if tester.inputs == nil {
+		tester.inputs = make(map[uint64][]byte)
+	}
+	input, found := tester.inputs[uint64(n)]
+	var data io.Reader
+	if !found {
+		data, input = testDataReaderAndSlice(n)
+		tester.inputs[uint64(n)] = input
+	} else {
+		data = limitReader(bytes.NewReader(input), n)
+	}
 
 	chunkC := make(chan *Chunk, 1000)
 	swg := &sync.WaitGroup{}
 
-	splitter := chunker
 	key := tester.Split(splitter, data, int64(n), chunkC, swg)
+	tester.t.Logf(" Key = %v\n", key)
 
-	// t.Logf(" Key = %v\n", key)
-
-	// tester.checkChunks(t, chunks)
 	chunkC = make(chan *Chunk, 1000)
 	quitC := make(chan bool)
 
+	chunker := NewTreeChunker(NewChunkerParams())
 	reader := tester.Join(chunker, key, 0, chunkC, quitC)
 	output := make([]byte, n)
+	// glog.V(logger.Info).Infof(" Key = %v\n", key)
 	r, err := reader.Read(output)
+	// glog.V(logger.Info).Infof(" read = %v  %v\n", r, err)
 	if r != n || err != io.EOF {
-		t.Fatalf("read error  read: %v  n = %v  err = %v\n", r, n, err)
+		tester.t.Fatalf("read error  read: %v  n = %v  err = %v\n", r, n, err)
 	}
 	if input != nil {
 		if !bytes.Equal(output, input) {
-			t.Fatalf("input and output mismatch\n IN: %v\nOUT: %v\n", input, output)
+			tester.t.Fatalf("input and output mismatch\n IN: %v\nOUT: %v\n", input, output)
 		}
 	}
 	close(chunkC)
@@ -157,10 +166,17 @@ func testRandomData(n int, chunks int, t *testing.T) {
 }
 
 func TestRandomData(t *testing.T) {
-	testRandomData(60, 1, t)
-	testRandomData(83, 3, t)
-	testRandomData(179, 5, t)
-	testRandomData(253, 7, t)
+	// sizes := []int{123456}
+	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 123456}
+	tester := &chunkerTester{t: t}
+	chunker := NewTreeChunker(NewChunkerParams())
+	for _, s := range sizes {
+		testRandomData(chunker, s, tester)
+	}
+	pyramid := NewPyramidChunker(NewChunkerParams())
+	for _, s := range sizes {
+		testRandomData(pyramid, s, tester)
+	}
 }
 
 func readAll(reader LazySectionReader, result []byte) {
@@ -186,11 +202,9 @@ func benchReadAll(reader LazySectionReader) {
 }
 
 func benchmarkJoin(n int, t *testing.B) {
+	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		chunker := NewTreeChunker(&ChunkerParams{
-			Branches: 128,
-			Hash:     "SHA3",
-		})
+		chunker := NewTreeChunker(NewChunkerParams())
 		tester := &chunkerTester{t: t}
 		data := testDataReader(n)
 
@@ -198,24 +212,24 @@ func benchmarkJoin(n int, t *testing.B) {
 		swg := &sync.WaitGroup{}
 
 		key := tester.Split(chunker, data, int64(n), chunkC, swg)
-		t.StartTimer()
+		// t.StartTimer()
 		chunkC = make(chan *Chunk, 1000)
 		quitC := make(chan bool)
 		reader := tester.Join(chunker, key, i, chunkC, quitC)
-		t.StopTimer()
 		benchReadAll(reader)
 		close(chunkC)
 		<-quitC
+		// t.StopTimer()
 	}
+	stats := new(runtime.MemStats)
+	runtime.ReadMemStats(stats)
+	fmt.Println(stats.Sys)
 }
 
 func benchmarkSplitTree(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		chunker := NewTreeChunker(&ChunkerParams{
-			Branches: 128,
-			Hash:     "SHA3",
-		})
+		chunker := NewTreeChunker(NewChunkerParams())
 		tester := &chunkerTester{t: t}
 		data := testDataReader(n)
 		// glog.V(logger.Info).Infof("splitting data of length %v", n)
@@ -229,10 +243,7 @@ func benchmarkSplitTree(n int, t *testing.B) {
 func benchmarkSplitPyramid(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		splitter := NewPyramidChunker(&ChunkerParams{
-			Branches: 128,
-			Hash:     "SHA3",
-		})
+		splitter := NewPyramidChunker(NewChunkerParams())
 		tester := &chunkerTester{t: t}
 		data := testDataReader(n)
 		// glog.V(logger.Info).Infof("splitting data of length %v", n)
@@ -243,11 +254,13 @@ func benchmarkSplitPyramid(n int, t *testing.B) {
 	fmt.Println(stats.Sys)
 }
 
-func BenchmarkJoin_100_2(t *testing.B)     { benchmarkJoin(100, t) }
-func BenchmarkJoin_1000_2(t *testing.B)    { benchmarkJoin(1000, t) }
-func BenchmarkJoin_10000_2(t *testing.B)   { benchmarkJoin(10000, t) }
-func BenchmarkJoin_100000_2(t *testing.B)  { benchmarkJoin(100000, t) }
-func BenchmarkJoin_1000000_2(t *testing.B) { benchmarkJoin(1000000, t) }
+func BenchmarkJoin_2(t *testing.B) { benchmarkJoin(100, t) }
+func BenchmarkJoin_3(t *testing.B) { benchmarkJoin(1000, t) }
+func BenchmarkJoin_4(t *testing.B) { benchmarkJoin(10000, t) }
+func BenchmarkJoin_5(t *testing.B) { benchmarkJoin(100000, t) }
+func BenchmarkJoin_6(t *testing.B) { benchmarkJoin(1000000, t) }
+func BenchmarkJoin_7(t *testing.B) { benchmarkJoin(10000000, t) }
+func BenchmarkJoin_8(t *testing.B) { benchmarkJoin(100000000, t) }
 
 func BenchmarkSplitTree_2(t *testing.B)  { benchmarkSplitTree(100, t) }
 func BenchmarkSplitTree_2h(t *testing.B) { benchmarkSplitTree(500, t) }

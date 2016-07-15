@@ -1,13 +1,14 @@
 package storage
 
 import (
+	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
@@ -22,12 +23,22 @@ type Tree struct {
 
 type Node struct {
 	Pending  int64
+	Size     uint64
 	Children []common.Hash
 	Last     bool
 }
 
+func (self *Node) String() string {
+	var children []string
+	for _, node := range self.Children {
+		children = append(children, node.Hex())
+	}
+	return fmt.Sprintf("pending: %v, size: %v, last :%v, children: %v", self.Pending, self.Size, self.Last, strings.Join(children, ", "))
+}
+
 type Task struct {
-	Index int64  // Index of the chunk being processed
+	Index int64 // Index of the chunk being processed
+	Size  uint64
 	Data  []byte // Binary blob of the chunk
 	Last  bool
 }
@@ -54,7 +65,7 @@ func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk
 
 	chunks := (size + self.chunkSize - 1) / self.chunkSize
 	depth := int(math.Ceil(math.Log(float64(chunks))/math.Log(float64(self.branches)))) + 1
-	glog.V(logger.Detail).Infof("chunks: %v, depth: %v", chunks, depth)
+	// glog.V(logger.Detail).Infof("chunks: %v, depth: %v", chunks, depth)
 
 	results := Tree{
 		Chunks: chunks,
@@ -69,22 +80,24 @@ func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk
 	abortC := make(chan bool)
 	for i := 0; i < processors; i++ {
 		pend.Add(1)
-		go self.processor(pend, tasks, &results)
+		go self.processor(pend, swg, tasks, chunkC, &results)
 	}
 	// Feed the chunks into the task pool
 	for index := 0; ; index++ {
 		buffer := make([]byte, self.chunkSize+8)
-		n, err := io.ReadFull(data, buffer)
-		last := err == io.ErrUnexpectedEOF
+		n, err := data.Read(buffer[8:])
+		last := err == io.ErrUnexpectedEOF || err == io.EOF
+		// glog.V(logger.Detail).Infof("n: %v, index: %v, depth: %v", n, index, depth)
 		if err != nil && !last {
-			glog.V(logger.Info).Infof("error: %v", err)
-
+			// glog.V(logger.Info).Infof("error: %v", err)
 			close(abortC)
+			break
 		}
+		binary.LittleEndian.PutUint64(buffer[:8], uint64(n))
 		pend.Add(1)
 		// glog.V(logger.Info).Infof("-> task %v (%v)", index, n)
 		select {
-		case tasks <- &Task{Index: int64(index), Data: buffer[:n+8], Last: last}:
+		case tasks <- &Task{Index: int64(index), Size: uint64(n), Data: buffer[:n+8], Last: last}:
 		case <-abortC:
 			return nil, err
 		}
@@ -102,7 +115,7 @@ func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk
 	return key, nil
 }
 
-func (self *PyramidChunker) processor(pend *sync.WaitGroup, tasks chan *Task, results *Tree) {
+func (self *PyramidChunker) processor(pend, swg *sync.WaitGroup, tasks chan *Task, chunkC chan *Chunk, results *Tree) {
 	defer pend.Done()
 
 	// glog.V(logger.Info).Infof("processor started")
@@ -111,16 +124,22 @@ func (self *PyramidChunker) processor(pend *sync.WaitGroup, tasks chan *Task, re
 	for task := range tasks {
 		depth, pow := len(results.Levels)-1, self.branches
 		// glog.V(logger.Info).Infof("task: %v, last: %v", task.Index, task.Last)
-
+		size := task.Size
+		data := task.Data
 		var node *Node
 		for depth >= 0 {
 			// New chunk received, reset the hasher and start processing
 			hasher.Reset()
-
 			if node == nil { // Leaf node, hash the data chunk
 				hasher.Write(task.Data)
 			} else { // Internal node, hash the children
-				for _, hash := range node.Children {
+				size = node.Size
+				data = make([]byte, hasher.Size()*len(node.Children)+8)
+				binary.LittleEndian.PutUint64(data[:8], size)
+
+				hasher.Write(data[:8])
+				for i, hash := range node.Children {
+					copy(data[i*hasher.Size()+8:], hash[:])
 					hasher.Write(hash[:])
 				}
 			}
@@ -134,22 +153,33 @@ func (self *PyramidChunker) processor(pend *sync.WaitGroup, tasks chan *Task, re
 				if task.Index/pow == results.Chunks/pow {
 					pending = (results.Chunks + pow/self.branches - 1) / (pow / self.branches) % self.branches
 				}
-				node = &Node{pending, make([]common.Hash, pending), last}
+				node = &Node{pending, 0, make([]common.Hash, pending), last}
 				results.Levels[depth][task.Index/pow] = node
+				// glog.V(logger.Info).Infof("create node %v, %v (%v children, all pending)", depth, task.Index/pow, pending)
 			}
 			node.Pending--
+			// glog.V(logger.Info).Infof("pending now: %v", node.Pending)
 			i := task.Index / (pow / self.branches) % self.branches
 			if last {
-				node.Pending -= self.branches - i
-				node.Children = node.Children[:i+1]
 				node.Last = true
 			}
 			copy(node.Children[i][:], hash)
+			node.Size += size
 			left := node.Pending
-
+			// glog.V(logger.Info).Infof("left pending now: %v, node size: %v", left, node.Size)
+			if chunkC != nil {
+				if swg != nil {
+					swg.Add(1)
+				}
+				select {
+				case chunkC <- &Chunk{Key: hash, SData: data, wg: swg}:
+					// case <- self.quitC
+				}
+			}
 			if depth+1 < len(results.Levels) {
 				delete(results.Levels[depth+1], task.Index/(pow/self.branches))
 			}
+
 			results.Lock.Unlock()
 			// If there's more work to be done, leave for others
 			// glog.V(logger.Info).Infof("left %v", left)

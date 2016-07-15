@@ -7,9 +7,8 @@ import (
 	"hash"
 	"io"
 	"sync"
-
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	// "github.com/ethereum/go-ethereum/logger"
+	// "github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*
@@ -321,7 +320,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	glog.V(logger.Detail).Infof("readAt: len(b): %v, off: %v, size: %v ", len(b), off, size)
+	// glog.V(logger.Detail).Infof("readAt: len(b): %v, off: %v, size: %v ", len(b), off, size)
 
 	errC := make(chan error)
 	// glog.V(logger.Detail).Infof("[BZZ] readAt: reading %v into %d bytes at offset %d.", self.chunk.Key.Log(), len(b), off)
@@ -350,9 +349,9 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		return 0, err
 	}
 	// glog.V(logger.Detail).Infof("[BZZ] ReadAt received %v", err)
-	glog.V(logger.Detail).Infof("end: len(b): %v, off: %v, size: %v ", len(b), off, size)
+	// glog.V(logger.Detail).Infof("end: len(b): %v, off: %v, size: %v ", len(b), off, size)
 	if off+int64(len(b)) >= size {
-		glog.V(logger.Detail).Infof(" len(b): %v EOF", len(b))
+		// glog.V(logger.Detail).Infof(" len(b): %v EOF", len(b))
 		return len(b), io.EOF
 	}
 	// glog.V(logger.Detail).Infof("[BZZ] ReadAt returning at %d: %v", read, err)
@@ -362,7 +361,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
 	// return NewDPA(&LocalStore{})
-	glog.V(logger.Detail).Infof("inh len(b): %v, off: %v eoff: %v ", len(b), off, eoff)
+	// glog.V(logger.Detail).Infof("inh len(b): %v, off: %v eoff: %v ", len(b), off, eoff)
 
 	// glog.V(logger.Detail).Infof("[BZZ] depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
 
@@ -376,7 +375,11 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 
 	// leaf chunk found
 	if depth == 0 {
-		glog.V(logger.Detail).Infof("[BZZ] depth: %v, len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
+		// glog.V(logger.Detail).Infof("[BZZ] depth: %v, len(b): %v, off: %v, eoff: %v, chunk.Size: %v %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, len(chunk.SData), treeSize)
+		extra := 8 + eoff - int64(len(chunk.SData))
+		if extra > 0 {
+			eoff -= extra
+		}
 		copy(b, chunk.SData[8+off:8+eoff])
 		return // simply give back the chunks reader for content chunks
 	}
@@ -387,7 +390,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 
 	wg := &sync.WaitGroup{}
 	defer wg.Wait()
-	glog.V(logger.Detail).Infof("[BZZ] start %v,end %v", start, end)
+	// glog.V(logger.Detail).Infof("[BZZ] start %v,end %v", start, end)
 
 	for i := start; i < end; i++ {
 		soff := i * treeSize
@@ -457,7 +460,7 @@ func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
 // Read keeps a cursor so cannot be called simulateously, see ReadAt
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	read, err = self.ReadAt(b, self.off)
-	glog.V(logger.Detail).Infof("[BZZ] read: %v, off: %v, error: %v", read, self.off, err)
+	// glog.V(logger.Detail).Infof("[BZZ] read: %v, off: %v, error: %v", read, self.off, err)
 
 	self.off += int64(read)
 	return
