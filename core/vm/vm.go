@@ -306,7 +306,7 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 			g = params.SstoreClearGas
 		} else {
 			// non 0 => non 0 (or 0 => 0)
-			g = params.SstoreClearGas
+			g = params.SstoreResetGas
 		}
 		gas.Set(g)
 	case SUICIDE:
