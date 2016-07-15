@@ -205,6 +205,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if config.ChainConfig == nil {
 		return nil, errors.New("missing chain config")
 	}
+	core.WriteChainConfig(chainDb, genesis.Hash(), config.ChainConfig)
+
 	eth.chainConfig = config.ChainConfig
 	eth.chainConfig.VmConfig = vm.Config{
 		EnableJit: config.EnableJit,
