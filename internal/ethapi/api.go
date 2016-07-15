@@ -303,10 +303,10 @@ func (s *PrivateAccountAPI) LockAccount(addr common.Address) bool {
 	return s.am.Lock(addr) == nil
 }
 
-// SignAndSendTransaction will create a transaction from the given arguments and
+// SendTransaction will create a transaction from the given arguments and
 // tries to sign it with the key associated with args.To. If the given passwd isn't
 // able to decrypt the key it fails.
-func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args SendTxArgs, passwd string) (common.Hash, error) {
+func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs, passwd string) (common.Hash, error) {
 	var err error
 	args, err = prepareSendTxArgs(ctx, args, s.b)
 	if err != nil {
@@ -334,6 +334,12 @@ func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args Sen
 	}
 
 	return submitTransaction(ctx, s.b, tx, signature)
+}
+
+// SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
+// and will be removed in the future. It primary goal is to give clients time to update.
+func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args SendTxArgs, passwd string) (common.Hash, error) {
+	return s.SendTransaction(ctx, args, passwd)
 }
 
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
