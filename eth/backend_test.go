@@ -32,7 +32,7 @@ func TestMipmapUpgrade(t *testing.T) {
 	addr := common.BytesToAddress([]byte("jeff"))
 	genesis := core.WriteGenesisBlockForTesting(db)
 
-	chain, receipts := core.GenerateChain(genesis, db, 10, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(nil, genesis, db, 10, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts
 		switch i {
 		case 1:
