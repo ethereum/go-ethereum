@@ -22,16 +22,16 @@ import (
 	"net"
 	"time"
 
-	winio "github.com/microsoft/go-winio"
+	"gopkg.in/natefinch/npipe.v2"
 )
 
 // ipcListen will create a named pipe on the given endpoint.
 func ipcListen(endpoint string) (net.Listener, error) {
-	return winio.ListenPipe(endpoint, &winio.PipeConfig{})
+	return npipe.Listen(endpoint)
 }
 
 // newIPCConnection will connect to a named pipe with the given endpoint as name.
 func newIPCConnection(endpoint string) (net.Conn, error) {
 	timeout := 5 * time.Second
-	return winio.DialPipe(endpoint, &timeout)
+	return npipe.DialTimeout(endpoint, timeout)
 }

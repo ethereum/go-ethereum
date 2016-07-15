@@ -94,11 +94,6 @@
 			"Rev": "e882a96ec18dd43fa283187b66af74497c9101c0"
 		},
 		{
-			"ImportPath": "github.com/microsoft/go-winio",
-			"Comment": "v0.2.0",
-			"Rev": "9e2895e5f6c3f16473b91d37fae6e89990a4520c"
-		},
-		{
 			"ImportPath": "github.com/nsf/termbox-go",
 			"Rev": "362329b0aa6447eadd52edd8d660ec1dff470295"
 		},
@@ -217,23 +212,23 @@
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html/atom",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/html/charset",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/net/websocket",
-			"Rev": "8968c61983e8f51a91b8c0ef25bf739278c89634"
+			"Rev": "a728288923b47049b2ce791836767ffbe964a5bd"
 		},
 		{
 			"ImportPath": "golang.org/x/sys/unix",
@@ -319,6 +314,10 @@
 		{
 			"ImportPath": "gopkg.in/karalabe/cookiejar.v2/collections/prque",
 			"Rev": "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
+		},
+		{
+			"ImportPath": "gopkg.in/natefinch/npipe.v2",
+			"Rev": "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6"
 		},
 		{
 			"ImportPath": "gopkg.in/urfave/cli.v1",
