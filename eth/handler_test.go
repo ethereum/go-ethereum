@@ -638,6 +638,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 		if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{blocks[0].Header()}); err != nil {
 			t.Fatalf("failed to answer challenge: %v", err)
 		}
+		time.Sleep(100 * time.Millisecond) // Sleep to avoid the verification racing with the drops
 	} else {
 		// Otherwise wait until the test timeout passes
 		time.Sleep(daoChallengeTimeout + 500*time.Millisecond)
