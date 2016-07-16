@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package filters_test
+package filters
 
 import (
 	"encoding/json"
@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -39,7 +38,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	)
 
 	// default values
-	var test0 filters.NewFilterArgs
+	var test0 FilterCriteria
 	if err := json.Unmarshal([]byte("{}"), &test0); err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +56,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// from, to block number
-	var test1 filters.NewFilterArgs
+	var test1 FilterCriteria
 	vector := fmt.Sprintf(`{"fromBlock":"0x%x","toBlock":"0x%x"}`, fromBlock, toBlock)
 	if err := json.Unmarshal([]byte(vector), &test1); err != nil {
 		t.Fatal(err)
@@ -70,7 +69,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// single address
-	var test2 filters.NewFilterArgs
+	var test2 FilterCriteria
 	vector = fmt.Sprintf(`{"address": "%s"}`, address0.Hex())
 	if err := json.Unmarshal([]byte(vector), &test2); err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// multiple address
-	var test3 filters.NewFilterArgs
+	var test3 FilterCriteria
 	vector = fmt.Sprintf(`{"address": ["%s", "%s"]}`, address0.Hex(), address1.Hex())
 	if err := json.Unmarshal([]byte(vector), &test3); err != nil {
 		t.Fatal(err)
@@ -99,7 +98,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// single topic
-	var test4 filters.NewFilterArgs
+	var test4 FilterCriteria
 	vector = fmt.Sprintf(`{"topics": ["%s"]}`, topic0.Hex())
 	if err := json.Unmarshal([]byte(vector), &test4); err != nil {
 		t.Fatal(err)
@@ -115,7 +114,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// test multiple "AND" topics
-	var test5 filters.NewFilterArgs
+	var test5 FilterCriteria
 	vector = fmt.Sprintf(`{"topics": ["%s", "%s"]}`, topic0.Hex(), topic1.Hex())
 	if err := json.Unmarshal([]byte(vector), &test5); err != nil {
 		t.Fatal(err)
@@ -137,7 +136,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// test optional topic
-	var test6 filters.NewFilterArgs
+	var test6 FilterCriteria
 	vector = fmt.Sprintf(`{"topics": ["%s", null, "%s"]}`, topic0.Hex(), topic2.Hex())
 	if err := json.Unmarshal([]byte(vector), &test6); err != nil {
 		t.Fatal(err)
@@ -165,7 +164,7 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	}
 
 	// test OR topics
-	var test7 filters.NewFilterArgs
+	var test7 FilterCriteria
 	vector = fmt.Sprintf(`{"topics": [["%s", "%s"], null, ["%s", null]]}`, topic0.Hex(), topic1.Hex(), topic2.Hex())
 	if err := json.Unmarshal([]byte(vector), &test7); err != nil {
 		t.Fatal(err)
