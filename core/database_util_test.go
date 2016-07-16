@@ -560,7 +560,7 @@ func TestMipmapChain(t *testing.T) {
 	)
 	defer db.Close()
 
-	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
+	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{Address: addr, Balance: big.NewInt(1000000)})
 	chain, receipts := GenerateChain(genesis, db, 1010, func(i int, gen *BlockGen) {
 		var receipts types.Receipts
 		switch i {
