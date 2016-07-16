@@ -72,7 +72,7 @@ func (b *SimulatedBackend) Commit() {
 
 // Rollback aborts all pending transactions, reverting to the last committed state.
 func (b *SimulatedBackend) Rollback() {
-	blocks, _ := core.GenerateChain(b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
 
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
@@ -178,7 +178,7 @@ func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *com
 // SendTransaction implements ContractTransactor.SendTransaction, delegating the raw
 // transaction injection to the remote node.
 func (b *SimulatedBackend) SendTransaction(tx *types.Transaction) error {
-	blocks, _ := core.GenerateChain(b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTx(tx)
 		}

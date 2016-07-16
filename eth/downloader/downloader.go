@@ -1859,7 +1859,7 @@ func (d *Downloader) processContent() error {
 			}
 			if err != nil {
 				glog.V(logger.Debug).Infof("Result #%d [%x…] processing failed: %v", results[index].Header.Number, results[index].Header.Hash().Bytes()[:4], err)
-				return err
+				return errInvalidChain
 			}
 			// Shift the results to the next batch
 			results = results[items:]
