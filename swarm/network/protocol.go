@@ -79,6 +79,7 @@ type bzz struct {
 	rw         p2p.MsgReadWriter    // messageReadWriter to send messages to
 	errors     *errs.Errors         // errors table
 	backend    bind.Backend
+	lastActive time.Time
 
 	swap        *swap.Swap          // swap instance for the peer connection
 	swapParams  *bzzswap.SwapParams // swap settings both local and remote
@@ -229,6 +230,8 @@ func (self *bzz) handle() error {
 		if len(req.SData) < 9 {
 			return self.protoError(ErrDecode, "<- %v: Data too short (%v)", msg)
 		}
+		// last Active time is set only when receiving chunks
+		self.lastActive = time.Now()
 		glog.V(logger.Detail).Infof("[BZZ] incoming store request: %s", req.String())
 		// swap accounting is done within forwarding
 		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})

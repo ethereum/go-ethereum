@@ -294,7 +294,7 @@ func (self *peer) Url() string {
 
 // TODO take into account traffic
 func (self *peer) LastActive() time.Time {
-	return time.Now()
+	return self.lastActive
 }
 
 // reads the serialised form of sync state persisted as the 'Meta' attribute
@@ -335,9 +335,6 @@ func saveSync(record *kademlia.NodeRecord, node kademlia.Node) {
 // sends relevant peer data given by the kademlia hive to the requester
 // TODO: remember peers sent for duration of the session, only new peers sent
 func (self *Hive) peers(req *retrieveRequestMsgData) {
-	// FIXME: should check req.MaxPeers but then should not default to zero or make sure we set it when sending retrieveRequests
-	// we might need chunk.req to cache relevant peers response,
-	// hive change would expire it
 	if req != nil && req.MaxPeers >= 0 {
 		var addrs []*peerAddr
 		if req.timeout == nil || time.Now().Before(*(req.timeout)) {
