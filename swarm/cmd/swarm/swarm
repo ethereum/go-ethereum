@@ -430,10 +430,15 @@ function needs {
 }
 
 # swarm up 00 file uploads file via instances CLI
-function up { #port, file
-  echo "Upload file '$2' to node $1... " 1>&2
-  file=`basename $2`
-  /usr/bin/time -f "latency: %e" swarm execute $1 "bzz.upload(\"$2\", \"$file\")"|tail -n1> /tmp/key
+function up {
+  id=$1
+  path=$2
+  file=$3
+  if [ $file = "" ]; then
+    file=`basename $path`
+  fi
+  echo "Upload file '$path' to node $id... " 1>&2
+  /usr/bin/time -f "latency: %e" swarm execute $id "bzz.upload(\"$path\", \"$file\")"|tail -n1> /tmp/key
   cat /tmp/key
 }
 
@@ -590,12 +595,15 @@ function checksum {
 
 function checkaccess {
   nodes=$1
+  path=$2
   target=`basename $2`
   chsum=`md5sum $2|cut -f1 -d' '`
+  shift
+  shift
   master=`head  -1 $nodes`
   echo "uploading target on $master (md5sum $chsum, size: `du -b -d0 $2|cut -f1`)"
-  scp $2 $master:$target
-  hash=`swarm remote-run $master "swarm up 00 $target $file"|tr -d '"'`
+  scp $path $master:$target
+  hash=`swarm remote-run $master "swarm up 00 $target $*"|tr -d '"'`
   remote-run $nodes swarm checkdownload all $hash $chsum
 }
 
