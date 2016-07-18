@@ -208,8 +208,6 @@ func deploy(deployTransactor *bind.TransactOpts, backend bind.ContractBackend) (
 	return tx, nil
 }
 
-// prvKey *ecdsa.PrivateKey, amount *big.Int,
-
 func (self *SwapParams) deployChequebook(path string, backend bind.Backend, done chan bool) {
 	owner := crypto.PubkeyToAddress(*(self.publicKey))
 	glog.V(logger.Info).Infof("[BZZ] SWAP Deploying new chequebook (owner: %v)", owner.Hex())
