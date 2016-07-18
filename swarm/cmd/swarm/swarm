@@ -1,24 +1,18 @@
 #!/bin/bash
+
+if [ "$SWARM_DOCKER_TAG" = "" ]; then export SWARM_DOCKER_TAG="arachnid/swarm:latest"; fi
+
+# Local directory, for legacy commands involving the geth binary
 if [ "$GETH_DIR" = "" ]; then
   if [ "$GOPATH" = "" ]; then echo "either GETH_DIR or GOPATH environment variable must be set"; exit 1; fi
   export GETH_DIR=$GOPATH/src/github.com/ethereum/go-ethereum
 fi
 
-if [ "$GETH" = "" ]; then
-  export GETH=$GETH_DIR/geth
-fi
-
-if [ "$SWARM_NETWORK_ID" = "" ]; then export SWARM_NETWORK_ID=322; fi
-
-if [ "$SWARM_DIR" = "" ]; then export SWARM_DIR=$HOME/bzz; fi
-
-if [ "$IP_ADDR" = "" ]; then
-  # export IP_ADDR=`curl ipecho.net/plain 2>/dev/null;echo f`
-  export IP_ADDR=
-fi
+CONTAINER_DATADIR="/swarm/data"
+CONTAINER_SOCKET="$CONTAINER_DATADIR/geth.ipc"
+GETH="/geth --datadir=$CONTAINER_DATADIR"
 
 root=$SWARM_DIR
-network_id=$SWARM_NETWORK_ID
 cmd=$1
 shift
 
@@ -30,38 +24,55 @@ function randomfile {
   dd if=/dev/urandom of=/dev/stdout bs=1024 count=$1 2>/dev/null
 }
 
-# swarm attach 00 brings up a console attached to a running instance
-function attach {
+# swarm container 00 returns the id of the docker container for node n
+function container {
+  docker ps -a --filter="label=swarm" --filter="label=id=$1" --format="{{.ID}}"
+}
+
+# swarm containers returns the IDs of all docker containers for the swarm
+function containers {
+  docker ps -a --filter="label=swarm" --format="{{.ID}}"
+}
+
+# returns the node number of a container
+function nodenum {
+  docker inspect --format "{{.Config.Labels.id}}" $1
+}
+
+function dockerexec {
   id=$1
   shift
-  echo "attaching console to instance $id"
-  cmd="$GETH --datadir=$dir/data/$id $* attach ipc:$dir/data/$id/geth.ipc"
-  # echo $cmd
-  eval $cmd
- }
+  if [ "$id" = "all" ]; then
+    for containerid in $(containers); do
+      docker exec -it $containerid $*
+    done
+  else
+    docker exec -it $(container $id) $*
+  fi
+}
+
+function dgeth {
+  id=$1
+  shift
+  dockerexec $id $GETH $*
+}
 
 # swarm attach 00 brings up a console attached to a running instance
+function attach {
+  echo "attaching console to instance $id"
+  dgeth $1 attach ipc:/$CONTAINER_SOCKET
+ }
+
+# swarm execute 00 runs the specified command in an instance
 function execute {
   id=$1
   shift
-  # attach $id --exec "'$*' "
-  cmd="$GETH --datadir=$dir/data/$id --exec '$*' attach ipc:$dir/data/$id/geth.ipc"
-  # echo $cmd
-  eval $cmd
+  dgeth $id --exec "$*" attach ipc:/$CONTAINER_SOCKET
 }
 
 # swarm hive 00 displays the kademlia table of the given running instance
 function hive {
-  if [ "$1" = "all" ]; then
-    N=`ls -1 -d $dir/data/* |wc -l`
-    for ((i=0;i<N;++i)); do
-      instance=`printf "%02d" $i`
-      hive $instance
-    done
-  else
-    # echo "kademlia table of instance $id"
-    execute $1 'console.log(bzz.hive)'|grep -v undefined
-  fi
+  execute $1 'console.log(bzz.hive)'|grep -v undefined
 }
 
 # swarm log 00 shows the running tail logs of an instance
@@ -69,22 +80,7 @@ function log {
   id=$1
   shift
   echo "streaming logs for instance $id"
-  cmd="tail -f $dir/log/$id.log"
-  echo $cmd
-  eval $cmd
-}
-
-# swarm cleanlog 00 removes the old log files for a given instance (all for every instance)
-function cleanlog {
-  id=$1
-  shift
-  if [ $id = "all" ]; then
-    echo "remove logs for all instances"
-    rm -rf "$dir/log/"
-  else
-    echo "remove logs for instance $id"
-    rm -rf $dir/log/$id*
-  fi
+  docker logs -f $(container $id)
 }
 
 # display kademlia tables of istances
@@ -97,6 +93,7 @@ function monitor {
       sleep $period
     done
   else
+    #TODO: FIXME
     node=$1
     id=$2
     period=$3
@@ -112,100 +109,63 @@ function monitor {
 function cleanbzz {
   id=$1
   shift
-  if [ $id = "all" ]; then
-    echo "remove bzz data for all instances"
-    rm -rf $dir/data/*/bzz
-  else
-    echo "remove bzz data for instance $id"
-    rm -rf "$dir/data/$id"
-  fi
+  echo "remove bzz data for instance $id"
+  dockerexec $id rm -rf /swarm/data/bzz
 }
 
-# swarm less/viewlogd 00 displays the last (current) log for the given instance (in a pager)
+# swarm less/viewlog 00 displays the last (current) log for the given instance (in a pager)
 function viewlog {
   id=$1
   shift
   echo "viewing logs for instance $id"
-  cmd="/usr/bin/less $dir/log/$id.log"
-  echo $cmd
-  eval $cmd
+  docker logs $(container $id) | less
 }
 
-# display the swawrm base account for an instance
+# display the swarm base account for an instance
 function key {
-  id=$1
-  shift
-  mkdir -p $dir/data/$id/
-  $GETH --datadir=$dir/data/$id account list|head -n1|perl -ne '/([a-f0-9]{40})/ && print $1'
+  execute $1 eth.accounts[0]
 }
 
-# swarm options 00 displays the geth command line options used to start the swarm
+function enode {
+  containerid=$(container $1)
+  ip=$(docker inspect --format="{{.NetworkSettings.IPAddress}}" $containerid)
+  docker exec $containerid $GETH --exec='admin.nodeInfo.enode' attach ipc:/$CONTAINER_SOCKET |perl -pe "s/\[\:\:\]/$ip/ "
+}
+
+# swarm options 00 displays the docker command line options used to start the swarm
 function rawoptions {
   id=$1
   shift
 
-  globaloptions="
-  --dev
-  --maxpeers=40
-  --shh=false
-  --nodiscover
-  --networkid=$network_id
-  --bzznoswap
-  --verbosity=0
-  --vmodule=swarm/*=5"
-
-  datadir=$dir/data/$id
-  password=$id
-  port=303$id
-  bzzport=322$id
-  rpcport=302$id
-  key=`swarm key $id`
-
-  instanceoptions="
-  --datadir=$datadir
-  --identity=$id
-  --bzzaccount=$key
-  --unlock=$key
-  --bzzport=$bzzport
-  --port=$port
-  --rpc
-  --rpcport=$rpcport
-  --rpccorsdomain='*'"
-
-  echo "$globaloptions"
-  echo "$instanceoptions"
-  echo "$*"
+  options="--name=swarm_$id --label="swarm" --label="id=$id" $SWARM_DOCKER_TAG --nodiscover"
+  echo -n $options
+  echo $*
 }
 
 function options {
-  echo "The command line options passed to geth are the following:"
-  echo "use 'geth help' to see further options"
+  echo "The command line options passed to 'docker run' are the following:"
   rawoptions $*
 }
 
-function start {
-  id=$1
+function startcontainer {
+  containerid=$1
   shift
+  id=$(nodenum $containerid)
 
-  if [ -f $dir/pids/$id.pid ]; then
-    echo "instance $id already running"
+  livenodes=$(docker ps --filter="label=swarm" --format="{{.ID}}")
+
+  status=`docker inspect --format="{{.State.Status}}" $containerid`
+  if [ "$status" = "running" ]; then
+    echo "instance $(nodenum $containerid) already running"
     return
   fi
 
-  datetag=`date "+%Y-%m-%d-%H:%M:%S"`
-  log=$dir/log/$id.$datetag.log
-  linklog=$dir/log/$id.log
-  opts=`swarm rawoptions $id $*|tr '\r' ' '`
-  # echo; echo "$GETH $opts > $log 2>&1 &"
+  docker start $containerid >/dev/null
 
-  $GETH $opts  --password=<(echo -n $id) > "$log" 2>&1 &  # comment out if you pipe it to a tty etc.
-  ln -sf "$log" "$linklog"
-
-   # wait until ready
-
+  # wait until ready
   ((j=0))
   while true; do
-      execute $id "net" > /dev/null 2>&1 && break
+    execute $id "net" >/dev/null 2>&1 && break
     sleep 1
     echo -n "."
     if ((j++>10)); then
@@ -213,179 +173,99 @@ function start {
       exit 1
     fi
   done
-  echo -n "started - "
-  pid=`ps auxwww|grep geth|grep "ty=$id"|grep -v grep|awk '{print $2}'`
-  echo "pid: $pid"
-  echo $pid > $dir/pids/$id.pid
+
+  # add other peers
+  for othercontainerid in $livenodes; do
+    otherid=$(nodenum $othercontainerid)
+    otherenode=$(enode $otherid)
+    execute $id "admin.addPeer($otherenode)" >/dev/null
+  done
+}
+
+function start {
+  id=$1
+  shift
+
+  if [ "$id" = "all" ]; then
+    for containerid in $(containers); do
+      startcontainer $containerid
+      echo "started instance $(nodenum $containerid)"
+    done
+    echo "started all instances"
+  else
+    startcontainer $(container $id)
+    echo "started instance $id"
+  fi
 }
 
 
-# setup 00 creates the direcories for instance
+# setup 00 creates the docker container for an instance
 function setup {
   id=$1
   shift
-  mkdir -p $dir/data/$id
-  mkdir -p $dir/enodes
-  mkdir -p $dir/pids
-  mkdir -p $dir/log
+  docker create $(rawoptions $id) >/dev/null
 }
 
-# creates the swarm base account for an  instance
-function create-account {
-  id=$1
-  datadir=$dir/data/$id
-  # if we do not have an account, create one
-  # will not prompt for password, we use the double digit instance id as passwd
-  # NEVER EVER USE THESE ACCOUNTS FOR INTERACTING WITH A LIVE CHAIN
-  keystoredir="$datadir/keystore/"
-  # echo "KeyStore dir: $keystoredir"
-  if [ ! -d "$keystoredir" ]; then
-    # echo "create an account with password $id [DO NOT EVER USE THIS ON LIVE]"
-    # mkdir -p $datadir/keystore
-    $GETH --datadir=$datadir --password=<(echo -n $id) account new >/dev/null 2>&1
-    # create account with password 00, 01, ...
-    # note that the account key will be stored also separately outside
-    # datadir
-    # this way you can safely clear the data directory and still keep your key
-    # under <rootdir>/keystore/dd
-    # LS=$(ls $datadir/keystore)
-    # echo $LS
-    while [ ! -d "$keystoredir" ]; do
-      echo "."
-      ((i++))
-      if ((i>10)); then break; fi
-      sleep 1
-    done
-    # echo "copying keys $datadir/keystore $root/keystore/$id"
-    mkdir -p $dir/keystore/$id
-    cp -R "$keystoredir" $dir/keystore/$id
-  fi
+function stopcontainer {
+  containerid=$1
+  shift
+  status=`docker inspect --format="{{.State.Status}}" $containerid`
+  if [ "$status" = "running" ]; then
+    echo "stopping instance $(nodenum $containerid)"
+    docker stop $containerid >/dev/null
+  fi  
 }
 
-# shuts down a running instance, cleans the pid
+# shuts down a running instance
 function stop {
   id=$1
   shift
-  if [ $id = "all" ]; then
-    procs=`cat $dir/pids/*.pid 2>/dev/null |perl -pe 's/^\s+//;s/\s+\\$//;s/\s+/\n/g'`
-    # echo "stopping processes $procs"
-    for p in $procs; do
-      shutdown $p
+  if [ "$id" = "all" ]; then
+    for containerid in $(containers); do
+      stopcontainer $containerid
     done
-    rm -rf $dir/pids/*
   else
-    pid=$dir/pids/$id.pid
-    if [ -f $pid ]; then
-      echo "stopping instance $id, pid="`cat $pid`
-      shutdown `cat $pid`
-      rm $pid
-    fi
+    stopcontainer $(container $id)
   fi
-}
-
-# shutdown kills the node with interrupt 2 - if it resits falls back to -9 after 10s
-function shutdown {
-  echo -n "stopping $1..."
-  kill -2 $1
-  while true; do
-    ps auxwww|grep geth|grep -v grep|awk '{print $2}'|grep -ql $1 || break
-    if ((i++>5)); then
-      echo "not stopping. killing it"
-      kill -QUIT $1
-      break
-    fi
-    echo '.'
-    sleep 1
-  done
-  echo "stopped"
 }
 
 # swarm restart 00 calls stop and start
 function restart {
   id=$1
   shift
-  if [ $id = "all" ]; then
-    stop all
-    N=`ls -d1 $dir/data/*|wc -l`
-    cluster $N $*
-  else
-    stop $id
-    start $id $*
-  fi
+  stop $id
+  start $id $*
 }
 
-# swarm init X sets up and starts a new client instance
+# swarm init X sets up and starts a new cluster
 ##########################################################
 #
 # IT WIPES THE DATABASE
 #
 ##########################################################
 function init {
-  killall geth
-  reset all
+  destroy all
   cluster $*
-  enode all
-  connect all
 }
 
-# reset wipes the datadirs of the instance
+function destroy {
+  id=$1
+  shift
+  stop $id
+  if [ "$id" = "all" ]; then
+    for containerid in $(containers); do
+      docker rm $containerid
+    done
+  else
+    containerid=$(container id)
+    docker rm $containerid
+  fi
+}
+
+# reset replaces a node with a blank instance
 function reset {
-  id=$1
-  shift
-  if [ $id = "all" ]; then
-    rm -rf $dir
-  else
-    rm -rf$dir/*/$id*
-  fi
-}
-
-# enode displays the instance's enode address
-# swarm enode all writes all instances' enodes in a file
-function enode {
-  id=$1
-  shift
-
-  if [ $id = "all" ]; then
-    json=$dir/static-nodes.json
-    enodes=$dir/enodes.lst
-    cmd=$dir/connect.js
-    rm -f $enodes $json $cmd
-    # build a static nodes(-like) list of all enodes of the local cluster
-    echo "[" >> $json
-    N=`ls -1 -d $dir/data/* |wc -l`
-    for ((i=0;i<N;++i)); do
-      id=`printf "%02d" $i`
-      f=$dir/enodes/$id.enode
-      enode $id > $f
-      echo -n "admin.addPeer(" >> $cmd
-      cat "$f"  |  perl -pe 's/\s*$//' >> $cmd
-      echo ");" >> $cmd
-      cat $f |perl -pe 's/"//g'>> $enodes
-      cat $f >> $json
-      echo "," >> $json
-    done
-    echo "\"\"]" >> $json
-    cat $enodes
-  else
-    # echo "local IP: $ip_addr "
-    execute $id 'admin.nodeInfo.enode' |perl -pe "s/\[\:\:\]/$IP_ADDR/ "
-  fi
-}
-
-# connect sources the local or remote set of peers and connects the node to the peers
-function connect {
-  id=$1
-  shift
-  if [ $id = "all" ]; then
-    N=`ls -1 -d $dir/data/* |wc -l`
-    for ((i=0;i<N;++i)); do
-      id=`printf "%02d" $i`
-      connect $id
-    done
-  else
-    echo -n 'peer count: '
-    attach $id --preload $dir/connect.js --exec net.peerCount
-  fi
+  destroy $1
+  setup $1
 }
 
 # swarm cluster N launches N nodes; 00 01 02 ...
@@ -396,12 +276,8 @@ function cluster {
   for ((i=0;i<N;++i)); do
     id=`printf "%02d" $i`
     setup $id $*
-    create-account $id
-    echo "launching node $i/$N.."
-    start $id $*
-    # info $id
-    enode $id
   done
+  start all
 }
 
 # swarm needs instance keyfile destination
@@ -433,7 +309,7 @@ function needs {
 function up { #port, file
   echo "Upload file '$2' to node $1... " 1>&2
   file=`basename $2`
-  /usr/bin/time -f "latency: %e" swarm execute $1 "bzz.upload(\"$2\", \"$file\")"|tail -n1> /tmp/key
+  /usr/bin/time -f "latency: %e" execute $1 "bzz.upload(\"$2\", \"$file\")"|tail -n1> /tmp/key
   cat /tmp/key
 }
 
@@ -458,22 +334,6 @@ function down {
   echo "found OK"
 }
 
-# static info about an instance (available even if node is off)
-function info {
-  echo "swarm node information"
-  echo "ROOTDIR: $root"
-  echo "DATADIR: $dir/data/$1"
-  echo "LOGFILE: $dir/log/$1.log"
-  echo "HTTPAPI: http://localhost:322$1"
-  echo "ETHPORT: 303$1"
-  echo "RPCPORT: 302$1"
-  echo "ACCOUNT:" 0x`ls -1 $dir/data/$1/bzz`
-  echo "CHEQUEB:" `cat $dir/data/$1/bzz/*/config.json|grep Contract|awk -F\" '{print $4}'`
-  echo "ROOTDIR: $root"
-  echo "DATADIR: $dir/data/$1"
-  echo "LOGFILE: $dir/log/$1.log"
-}
-
 # live into about an instance
 function status {
   echo -n "account balance:     "
@@ -491,24 +351,6 @@ function status {
 # display peers for an instance
 function peers {
   execute $1 'admin.peers'
-}
-
-# add peers into an instance (connection not guaranteed)
-function addpeers {
-  id=$1
-  peers=$2
-  if [ $id = "all" ]; then
-    N=`ls -1 -d $dir/data/* |wc -l`
-    for ((i=0;i<N;++i)); do
-      id=`printf "%02d" $i`
-      addpeers $id $peers
-    done
-  else
-    echo "addpeer to instance $id"
-    for peer in `cat $peers|grep -v '^#'`; do
-      execute  $id "admin.addPeer(\"$peer\")"
-    done
-  fi
 }
 
 # configures the eth-net-intelligence-api network monitor
@@ -664,6 +506,10 @@ function diskinfo {
 }
 
 case $cmd in
+  "container" )
+    container $*;;
+  "containers" )
+    containers;;
   "info" )
     info $*;;
   "enode" )
@@ -672,10 +518,6 @@ case $cmd in
     status $*;;
   "peers" )
     peers $*;;
-  "addpeers" )
-    addpeers $*;;
-  "clean" )
-    clean $*;;
   "needs" )
     needs $*;;
   "up" )
@@ -698,6 +540,8 @@ case $cmd in
     stop $* ;;
   "restart" )
     restart $*;;
+  "destroy" )
+    destroy $*;;
   "reset" )
     reset $*;;
   "cluster" )
@@ -710,16 +554,12 @@ case $cmd in
     execute $*;;
   "cleanbzz" )
     cleanbzz $*;;
-  "cleanlog" )
-    cleanlog $*;;
   "log" )
     log $*;;
   "viewlog" )
     viewlog $*;;
   "less" )
     viewlog $*;;
-  "connect" )
-    connect $*;;
   "monitor" )
     monitor $*;;
   "remote-update-scripts" )
