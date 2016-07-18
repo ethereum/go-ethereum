@@ -140,7 +140,7 @@ func NewSwarm(ctx *node.ServiceContext, config *api.Config, swapEnabled, syncEna
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	// backend := ethereum.ContractBackend()
 	self.dns = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
-	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar @ address %v", config.EnsRoot)
+	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex())
 
 	self.api = api.NewApi(self.dpa, self.dns)
 	// Manifests for Smart Hosting

@@ -8,15 +8,20 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
 	port = "8500"
+)
+
+//  by default ens root is  north internal
+var (
+	toyNetEnsRoot = common.HexToAddress("0xd422f059c2ea8e423a55b043ba427f43bf50a139")
 )
 
 // separate bzz directories
@@ -61,6 +66,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		Swap:          swap.DefaultSwapParams(contract, prvKey),
 		PublicKey:     pubkeyhex,
 		BzzKey:        keyhex,
+		EnsRoot:       toyNetEnsRoot,
 	}
 	data, err = ioutil.ReadFile(confpath)
 	if err != nil {
@@ -88,6 +94,10 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
 	}
 	self.Swap.SetKey(prvKey)
+
+	if (self.EnsRoot == common.Address{}) {
+		self.EnsRoot = toyNetEnsRoot
+	}
 
 	return
 }
