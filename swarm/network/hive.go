@@ -128,7 +128,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 			node, need, proxLimit := self.kad.Suggest()
 
 			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call known bee %v", node.Url)
+				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call known bee %v", node.Url)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)
@@ -142,7 +142,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 					req := &retrieveRequestMsgData{
 						Key: storage.Key(randAddr[:]),
 					}
-					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee near %v (PO%03d) - messenger bee: %v", randAddr, proxLimit, peers[0])
+					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee near %v (PO%03d) - messenger bee: %v", randAddr, proxLimit, peers[0])
 					peers[0].(*peer).retrieve(req)
 				} else {
 					glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ hive: no peer")

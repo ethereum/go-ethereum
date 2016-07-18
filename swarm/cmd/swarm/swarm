@@ -287,6 +287,7 @@ function stop {
 function shutdown {
   echo -n "stopping $1..."
   kill -2 $1
+  ((i=0))
   while true; do
     ps auxwww|grep geth|grep -v grep|awk '{print $2}'|grep -ql $1 || break
     if ((i++>5)); then
@@ -434,7 +435,7 @@ function up {
   id=$1
   path=$2
   file=$3
-  if [ $file = "" ]; then
+  if [ "$file" = "" ]; then
     file=`basename $path`
   fi
   echo "Upload file '$path' to node $id... " 1>&2
@@ -590,20 +591,26 @@ function update {
 }
 
 function checksum {
-  tar -cf - $1 | md5sum|awk '{print $1}'
+  if [ -f $1 ]; then
+    cat $1 | md5sum | awk '{print $1}'
+  else
+    cd $1 && md5deep -r -l . | sort | md5sum| awk '{print $1}'
+  fi
 }
 
 function checkaccess {
   nodes=$1
   path=$2
   target=`basename $2`
-  chsum=`md5sum $2|cut -f1 -d' '`
+  chsum=`checksum $2`
   shift
   shift
   master=`head  -1 $nodes`
-  echo "uploading target on $master (md5sum $chsum, size: `du -b -d0 $2|cut -f1`)"
-  scp $path $master:$target
+  echo "uploading target on $master (md5sum $chsum, size: `du -b -d0 $path|cut -f1`)"
+  remote-run $master rm -rf $target
+  scp -r $path $master:$target
   hash=`swarm remote-run $master "swarm up 00 $target $*"|tr -d '"'`
+  echo $hash
   remote-run $nodes swarm checkdownload all $hash $chsum
 }
 
@@ -618,25 +625,27 @@ function checkdownload {
     done
   else
     hash=$2
-    target=$3
     datetag=`date "+%Y-%m-%d-%H:%M:%S"`
     file="swarm-$datetag"
-    rm -rf $tmpdir/$file
-    /usr/bin/time -o $tmpdir/$file.log -f "%e" swarm download $id $hash $tmpdir/$file > /dev/null
-    echo
+    dest=$tmpdir/$file
+    target=$3
+    rm -rf $dest
+    mkdir -p $dest
+    /usr/bin/time -o $dest.log -f "%e" swarm download $id $hash $dest > /dev/null
+    echo "instance $id download $hash to $dest"
     if [ -f $target ]; then
-      cmp --silent  $target $tmpdir/$file/* && echo PASS || echo FAIL
+      cmp --silent  $target $dest/* && echo PASS || echo FAIL
     elif [ -r $target ]; then
-      diff -r $target $tmpdir/$file/ >/dev/null && echo PASS || echo FAIL
+      diff -r $target $dest >/dev/null && echo PASS || echo FAIL
     else
-      exp=`md5sum $tmpdir/$file/*|cut -f1 -d' '`
+      exp=`checksum $dest/*`
       if [ "$exp" = "$target" ]; then
         echo -n  PASS
       else
         echo FAIL "$exp = $target"
       fi
     fi
-    echo " latency: " `cat $tmpdir/$file.log`
+    echo " latency: " `cat $dest.log`
   fi
 }
 
@@ -676,6 +685,8 @@ case $cmd in
     info $*;;
   "enode" )
     enode $*;;
+  "checksum" )
+    checksum $*;;
   "status" )
     status $*;;
   "peers" )

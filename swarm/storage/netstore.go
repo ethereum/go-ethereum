@@ -87,12 +87,12 @@ func (self *NetStore) Put(entry *Chunk) {
 		// that the chunk is has been retrieved
 		close(entry.Req.C)
 		// deliver the chunk to requesters upstream
-		self.cloud.Deliver(entry)
+		go self.cloud.Deliver(entry)
 	} else {
 		glog.V(logger.Detail).Infof("[BZZ] NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
 		// handle propagating store requests
 		// go self.cloud.Store(entry)
-		self.cloud.Store(entry)
+		go self.cloud.Store(entry)
 	}
 }
 

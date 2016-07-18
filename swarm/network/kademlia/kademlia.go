@@ -22,7 +22,8 @@ const (
 var (
 	purgeInterval        = 42 * time.Hour
 	initialRetryInterval = 42 * time.Millisecond
-	maxIdleInterval      = 42 * 100 * time.Millisecond
+	maxIdleInterval      = 42 * 1000 * time.Millisecond
+	// maxIdleInterval      = 42 * 10	0 * time.Millisecond
 )
 
 type KadParams struct {

@@ -272,6 +272,7 @@ func (self *bzz) handle() error {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 		glog.V(logger.Debug).Infof("[BZZ] <- sync request: %v", req)
+		self.lastActive = time.Now()
 		self.sync(req.SyncState)
 
 	case unsyncedKeysMsg:
@@ -282,6 +283,7 @@ func (self *bzz) handle() error {
 		}
 		glog.V(logger.Debug).Infof("[BZZ] <- unsynced keys : %s", req.String())
 		err := self.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: self})
+		self.lastActive = time.Now()
 		if err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
@@ -295,6 +297,7 @@ func (self *bzz) handle() error {
 		}
 		glog.V(logger.Debug).Infof("[BZZ] <- delivery request: %s", req.String())
 		err := self.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: self})
+		self.lastActive = time.Now()
 		if err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}

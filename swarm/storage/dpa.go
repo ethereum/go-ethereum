@@ -23,12 +23,12 @@ implementation for storage or retrieval.
 */
 
 const (
-	storeChanCapacity           = 1000
-	retrieveChanCapacity        = 1000
+	storeChanCapacity           = 100
+	retrieveChanCapacity        = 100
 	singletonSwarmDbCapacity    = 50000
 	singletonSwarmCacheCapacity = 500
-	maxStoreProcesses           = 100
-	maxRetrieveProcesses        = 100
+	maxStoreProcesses           = 8
+	maxRetrieveProcesses        = 8
 )
 
 var (

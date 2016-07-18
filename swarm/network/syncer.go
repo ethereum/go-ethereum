@@ -426,7 +426,7 @@ LOOP:
 					keys = self.keys[priority]
 					break PRIORITIES
 				}
-				glog.V(logger.Debug).Infof("[BZZ] syncer[%v/%v]: queue: [%v, %v, %v]", self.key.Log(), priority, len(self.keys[High]), len(self.keys[Medium]), len(self.keys[Low]))
+				glog.V(logger.Detail).Infof("[BZZ] syncer[%v/%v]: queue: [%v, %v, %v]", self.key.Log(), priority, len(self.keys[High]), len(self.keys[Medium]), len(self.keys[Low]))
 				// if the input queue is empty on this level, resort to history if there is any
 				if uint(priority) == histPrior && history != nil {
 					glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: reading history for %v", self.key.Log(), self.key)
