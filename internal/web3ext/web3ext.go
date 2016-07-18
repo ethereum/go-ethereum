@@ -116,7 +116,16 @@ const ENS_JS = `
 web3._extend({
   property: 'ens',
   methods:
-  [		new web3._extend.Method({
+  [
+    new web3._extend.Method({
+			name: 'deployRegistrar',
+			call: 'ens_deployRegistrar',
+		}),
+    new web3._extend.Method({
+			name: 'deployResolver',
+			call: 'ens_deployResolver',
+		}),
+    new web3._extend.Method({
 			name: 'register',
 			call: 'ens_register',
 			params: 2,

@@ -13,23 +13,39 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var qtypeChash = [32]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
-var rtypeChash = [16]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
+var qtypeChash = [32]byte{0x43, 0x48, 0x41, 0x53, 0x48}
+var rtypeChash = [16]byte{0x43, 0x48, 0x41, 0x53, 0x48}
 
 // swarm domain name registry and resolver
 // the ENS instance can be directly wrapped in rpc.Api
 type ENS struct {
-	transactOpts *bind.TransactOpts;
-	contractBackend bind.ContractBackend;
-	rootAddress common.Address;
+	transactOpts    *bind.TransactOpts
+	contractBackend bind.ContractBackend
+	rootAddress     common.Address
 }
 
 func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) *ENS {
 	return &ENS{
-		transactOpts: transactOpts,
+		transactOpts:    transactOpts,
 		contractBackend: contractBackend,
-		rootAddress: contractAddr,
+		rootAddress:     contractAddr,
 	}
+}
+
+func (self *ENS) DeployRegistrar() (common.Address, error) {
+	addr, _, _, err := contract.DeployOpenRegistrar(self.transactOpts, self.contractBackend)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return addr, nil
+}
+
+func (self *ENS) DeployResolver() (common.Address, error) {
+	addr, _, _, err := contract.DeployPersonalResolver(self.transactOpts, self.contractBackend)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return addr, nil
 }
 
 func (self *ENS) newResolver(contractAddr common.Address) (*contract.ResolverSession, error) {
@@ -38,7 +54,7 @@ func (self *ENS) newResolver(contractAddr common.Address) (*contract.ResolverSes
 		return nil, err
 	}
 	return &contract.ResolverSession{
-		Contract: resolver,
+		Contract:     resolver,
 		TransactOpts: *self.transactOpts,
 	}, nil
 }
@@ -59,7 +75,7 @@ func (self *ENS) nextResolver(resolver *contract.ResolverSession, nodeId [12]byt
 		err = fmt.Errorf("error resolving label '%v': got response code %v", label, ret.Rcode)
 		return nil, [12]byte{}, err
 	}
-	nodeId = ret.Rnode;
+	nodeId = ret.Rnode
 	resolver, err = self.newResolver(ret.Raddress)
 	if err != nil {
 		return nil, [12]byte{}, err
@@ -149,7 +165,7 @@ func (self *ENS) findPersonalResolver(name string) (*contract.ResolverSession, [
 
 	for i := len(labels) - 1; i >= 0; i-- {
 		if personal, _ := resolver.IsPersonalResolver(); personal {
-			return resolver, nodeId, strings.Join(labels[0:i + 1], "."), nil
+			return resolver, nodeId, strings.Join(labels[0:i+1], "."), nil
 		}
 
 		resolver, nodeId, err = self.nextResolver(resolver, nodeId, labels[i])

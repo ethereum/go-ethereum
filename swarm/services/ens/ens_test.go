@@ -3,7 +3,6 @@
 package ens
 
 import (
-	"crypto/ecdsa"
 	"math/big"
 	"testing"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/swarm/services/ens/contract"
 )
 
 var (
@@ -22,42 +20,23 @@ var (
 	addr   = crypto.PubkeyToAddress(key.PublicKey)
 )
 
-func deployRegistrar(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
-	deployTransactor := bind.NewKeyedTransactor(prvKey)
-	deployTransactor.Value = amount
-	addr, _, _, err := contract.DeployOpenRegistrar(deployTransactor, backend)
-	if err != nil {
-		return common.Address{}, err
-	}
-	backend.Commit()
-	return addr, nil
-}
-
-func deployResolver(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {
-	deployTransactor := bind.NewKeyedTransactor(prvKey)
-	deployTransactor.Value = amount
-	addr, _, _, err := contract.DeployPersonalResolver(deployTransactor, backend)
-	if err != nil {
-		return common.Address{}, err
-	}
-	backend.Commit()
-	return addr, nil
-}
-
 func TestENS(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAccount{addr, big.NewInt(1000000000)})
 	transactOpts := bind.NewKeyedTransactor(key)
-	contractAddr, err := deployRegistrar(key, big.NewInt(0), contractBackend)
+	ens := NewENS(transactOpts, common.Address{}, contractBackend)
+	registrarAddr, err := ens.DeployRegistrar()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+	contractBackend.Commit()
 
-	resolverAddr, err := deployResolver(key, big.NewInt(0), contractBackend)
+	ens = NewENS(transactOpts, registrarAddr, contractBackend)
+	resolverAddr, err := ens.DeployResolver()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+	contractBackend.Commit()
 
-	ens := NewENS(transactOpts, contractAddr, contractBackend)
 	_, err = ens.Register(name, resolverAddr)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
