@@ -1,5 +1,83 @@
 # Swarm ENS interface
 
+## Usage
+
+Full documentation for the Ethereum Name Service  [can be found as EIP]()
+Swarm offers a simple phase-one interface that streamlines the registration of swarm content  hashes to arbitrary utf8 domain names.
+The interface is offered through the ENS RPC API module under the `ens` namespace. The API can be used via the console, rpc or web3.js.
+
+### `ens.deployRegistrar()`
+
+sends a contract creation transaction from your bzz account deploying an open registrar contract which can serve as ENS root resolver.  A root resolver is deployed on the testnet and set as default for EnsRoot. Alternative can be given by changing the `ENSRoot` parameter in swarm `config.json` file.
+
+To deploy an alternative top-level domain root resolver:
+
+```js
+registrarAddr=ens.deployRegistrar()
+// "0xa90b9572f094660f8f314b591a365985e98d2fd0"
+eth.getCode(registrarAddr) // check if contract was successfully deployed
+//  "0x"  // not mined yet
+// miner.start(1) // to start mining on a private chain
+// true
+```
+
+### `ens.deployResolver()`
+
+sends a contract creation transaction from your bzz account deploying a simple personal resolver contract, that can be registered with a (sub)domain on the root resolver. As a result the root resolver will delegate all hostnames under that domain to the child resolver.
+
+To deploy a personal resolver:
+
+```js
+resolverAddr = ens.deployResolver()
+// "0x2ba72b924a7d654c54467f7bda035ddc2f6fb4eb"
+eth.getCode(registrarAddr) // check if contract was successfully deployed
+//  "0x"  // not mined yet
+// miner.start(1) // to start mining on a private chain
+// true
+```
+
+### `ens.register(name, address)`
+
+Sends a transaction that registers a resolver contract with domain on the top-level resolver.
+As a result the bzz account becomes the owner of that domain.
+This line registers the (already deployed) personal resolver at address `resolverAddr` to the top-level domain `swarm`
+
+```
+ens.register("swarm",resolverAddr)
+// {}
+```
+
+### `ens.setContentHash(name, hash)`
+
+sends a transaction that sets a content hash to a name using a (sub-domain) resolver:
+
+```js
+ens.setContentHash("swarm","0x7420f14a28e276dd39da6a967dec332a932256717451155fbd3870b202b561c4")
+// {}
+```
+
+The content hash argument is the bzz hash as returned by a swarm upload, e.g., using `bzz.upload`:
+
+```js
+bzz.upload("path/to/my/directory", "index.html")
+```
+
+Here the second argument is the relative path to the asset mapped on to the root hash of entire collection, effectively the landing page served on the bare hash (and therefore the root of the domain registered with that hash) as url.
+
+
+### `ens.resolve(name)`
+
+To query the ENS, this read-only free call is provided.
+
+```js
+ens.resolve("swarm")
+// "7420f14a28e276dd39da6a967dec332a932256717451155fbd3870b202b561c4"
+```
+
+The same is used within swarm to resolve hostnames in urls, hence you can use the set names of registered domains in a bzz-scheme url `bzz://swarm` or normal http using a swarm http proxy: `localhost:32200/bzz:/swarm`.
+
+## Development
+
 The ABI and BIN files in contract subdirectory implement simple registrar and personal resolver contracts; they're used in tests, and can be used to deploy these contracts for your own purposes.
 
 The solidity source code can be found at [github.com/arachnid/ens/](https://github.com/arachnid/ens/).
