@@ -120,36 +120,40 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	bucket := self.buckets[index]
 	// if bucket is full insertion replaces the worst node
 	// TODO: give priority to peers with active traffic
-	if len(bucket) >= self.BucketSize { // >= allows us to add peers beyond the bucketsize limitation
-		// always rotate peers
-		idle := self.MaxIdleInterval
-		var pos int
-		var replaced Node
-		for i, p := range bucket {
-			idleInt := time.Since(p.LastActive())
-			if idleInt > idle {
-				idle = idleInt
-				pos = i
-				replaced = p
-			}
-		}
-		if replaced == nil {
-			glog.V(logger.Debug).Infof("[KΛÐ]: all peers wanted, PO%03d bucket full", index)
-			return fmt.Errorf("bucket full")
-		}
-		glog.V(logger.Debug).Infof("[KΛÐ]: node %v replaced by %v (idle for %v  > %v)", replaced, node, idle, self.MaxIdleInterval)
-		replaced.Drop()
-		self.buckets[index] = append(bucket[:pos], bucket[(pos+1):]...)
-		// there is no change in bucket cardinalities so no prox limit adjustment is needed
-		return nil
-	} else {
+	if len(bucket) < self.BucketSize { // >= allows us to add peers beyond the bucketsize limitation
 		self.buckets[index] = append(bucket, node)
 		glog.V(logger.Debug).Infof("[KΛÐ]: add node %v to table", node)
-		self.count++
 		self.setProxLimit(index, true)
+		record.node = node
+		self.count++
+		return nil
 	}
+
+	// always rotate peers
+	idle := self.MaxIdleInterval
+	var pos int
+	var replaced Node
+	for i, p := range bucket {
+		idleInt := time.Since(p.LastActive())
+		if idleInt > idle {
+			idle = idleInt
+			pos = i
+			replaced = p
+		}
+	}
+	if replaced == nil {
+		glog.V(logger.Debug).Infof("[KΛÐ]: all peers wanted, PO%03d bucket full", index)
+		return fmt.Errorf("bucket full")
+	}
+	glog.V(logger.Debug).Infof("[KΛÐ]: node %v replaced by %v (idle for %v  > %v)", replaced, node, idle, self.MaxIdleInterval)
+	replaced.Drop()
+	// actually replace in the row. When off(node) is called, the peer is no longer in the row
+	bucket[pos] = node
+	// there is no change in bucket cardinalities so no prox limit adjustment is needed
 	record.node = node
+	self.count++
 	return nil
+
 }
 
 // Off is the called when a node is taken offline (from the protocol main loop exit)
@@ -157,26 +161,15 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	var found bool
 	index := self.proximityBin(node.Addr())
 	bucket := self.buckets[index]
 	for i := 0; i < len(bucket); i++ {
 		if node.Addr() == bucket[i].Addr() {
-			found = true
 			self.buckets[index] = append(bucket[:i], bucket[(i+1):]...)
+			self.setProxLimit(index, false)
 			break
 		}
 	}
-
-	if !found {
-		// gracefully return without error if peer already unregistered
-		glog.V(logger.Warn).Infof("[KΛÐ]: remove node %v not in table, population now is %v", node, self.count)
-		return nil
-	}
-
-	self.count--
-	glog.V(logger.Debug).Infof("[KΛÐ]: remove node %v from table, population now is %v", node, self.count)
-	self.setProxLimit(index, false)
 
 	record := self.db.index[node.Addr()]
 	// callback on remove
@@ -184,6 +177,8 @@ func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
 		cb(record, record.node)
 	}
 	record.node = nil
+	self.count--
+	glog.V(logger.Debug).Infof("[KΛÐ]: remove node %v from table, population now is %v", node, self.count)
 
 	return
 }
