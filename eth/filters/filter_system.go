@@ -82,11 +82,20 @@ func (fs *FilterSystem) Stop() {
 	fs.sub.Unsubscribe()
 }
 
-// Add adds a filter to the filter manager
-func (fs *FilterSystem) Add(filter *Filter, filterType FilterType) (int, error) {
+// Acquire filter system maps lock, required to force lock acquisition
+// sequence with filterMu acquired first to avoid deadlocks by callbacks
+func (fs *FilterSystem) Lock() {
 	fs.filterMu.Lock()
-	defer fs.filterMu.Unlock()
+}
 
+// Release filter system maps lock
+func (fs *FilterSystem) Unlock() {
+	fs.filterMu.Unlock()
+}
+
+// Add adds a filter to the filter manager
+// Expects filterMu to be locked.
+func (fs *FilterSystem) Add(filter *Filter, filterType FilterType) (int, error) {
 	id := fs.filterId
 	filter.created = time.Now()
 
@@ -110,10 +119,8 @@ func (fs *FilterSystem) Add(filter *Filter, filterType FilterType) (int, error) 
 }
 
 // Remove removes a filter by filter id
+// Expects filterMu to be locked.
 func (fs *FilterSystem) Remove(id int) {
-	fs.filterMu.Lock()
-	defer fs.filterMu.Unlock()
-
 	delete(fs.chainFilters, id)
 	delete(fs.pendingTxFilters, id)
 	delete(fs.logFilters, id)
