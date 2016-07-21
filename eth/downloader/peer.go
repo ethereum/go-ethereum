@@ -37,11 +37,6 @@ const (
 	measurementImpact = 0.1  // The impact a single measurement has on a peer's final throughput value.
 )
 
-// Hash and block fetchers belonging to eth/61 and below
-type relativeHashFetcherFn func(common.Hash) error
-type absoluteHashFetcherFn func(uint64, int) error
-type blockFetcherFn func([]common.Hash) error
-
 // Block header and body fetchers belonging to eth/62 and above
 type relativeHeaderFetcherFn func(common.Hash, int, int, bool) error
 type absoluteHeaderFetcherFn func(uint64, int, int, bool) error
@@ -79,10 +74,6 @@ type peer struct {
 
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
 
-	getRelHashes relativeHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an origin hash
-	getAbsHashes absoluteHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an absolute position
-	getBlocks    blockFetcherFn        // [eth/61] Method to retrieve a batch of blocks
-
 	getRelHeaders  relativeHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an origin hash
 	getAbsHeaders  absoluteHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an absolute position
 	getBlockBodies blockBodyFetcherFn      // [eth/62] Method to retrieve a batch of block bodies
@@ -97,17 +88,12 @@ type peer struct {
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
 func newPeer(id string, version int, head common.Hash,
-	getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn, // eth/61 callbacks, remove when upgrading
 	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn,
 	getReceipts receiptFetcherFn, getNodeData stateFetcherFn) *peer {
 	return &peer{
 		id:      id,
 		head:    head,
 		lacking: make(map[common.Hash]struct{}),
-
-		getRelHashes: getRelHashes,
-		getAbsHashes: getAbsHashes,
-		getBlocks:    getBlocks,
 
 		getRelHeaders:  getRelHeaders,
 		getAbsHeaders:  getAbsHeaders,
@@ -136,28 +122,6 @@ func (p *peer) Reset() {
 	p.stateThroughput = 0
 
 	p.lacking = make(map[common.Hash]struct{})
-}
-
-// Fetch61 sends a block retrieval request to the remote peer.
-func (p *peer) Fetch61(request *fetchRequest) error {
-	// Sanity check the protocol version
-	if p.version != 61 {
-		panic(fmt.Sprintf("block fetch [eth/61] requested on eth/%d", p.version))
-	}
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.blockStarted = time.Now()
-
-	// Convert the hash set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Hashes))
-	for hash, _ := range request.Hashes {
-		hashes = append(hashes, hash)
-	}
-	go p.getBlocks(hashes)
-
-	return nil
 }
 
 // FetchHeaders sends a header retrieval request to the remote peer.
@@ -479,20 +443,6 @@ func (ps *peerSet) AllPeers() []*peer {
 		list = append(list, p)
 	}
 	return list
-}
-
-// BlockIdlePeers retrieves a flat list of all the currently idle peers within the
-// active peer set, ordered by their reputation.
-func (ps *peerSet) BlockIdlePeers() ([]*peer, int) {
-	idle := func(p *peer) bool {
-		return atomic.LoadInt32(&p.blockIdle) == 0
-	}
-	throughput := func(p *peer) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.blockThroughput
-	}
-	return ps.idlePeers(61, 61, idle, throughput)
 }
 
 // HeaderIdlePeers retrieves a flat list of all the currently header-idle peers
