@@ -295,6 +295,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			glog.V(logger.Warn).Infof("%v: timed out DAO fork-check, dropping", p)
 			pm.removePeer(p.id)
 		})
+		// Make sure it's cleaned up if the peer dies off
+		defer func() {
+			if p.forkDrop != nil {
+				p.forkDrop.Stop()
+				p.forkDrop = nil
+			}
+		}()
 	}
 	// main loop. handle incoming messages.
 	for {
