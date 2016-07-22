@@ -6,9 +6,12 @@ RUN \
   (cd go-ethereum && make geth)                     && \
   cp go-ethereum/build/bin/geth /geth               && \
   apk del go git make gcc musl-dev                  && \
-  rm -rf /go-ethereum && rm -rf /var/cache/apk/*
+  rm -rf /go-ethereum && rm -rf /var/cache/apk/*    && \
+  mkdir /datadir
 
 EXPOSE 8545
 EXPOSE 30303
 
-ENTRYPOINT ["/geth"]
+VOLUME /datadir
+
+ENTRYPOINT ["/geth", "--datadir=/datadir"]
