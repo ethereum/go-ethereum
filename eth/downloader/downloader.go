@@ -1555,7 +1555,14 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 			// Check for fetch request timeouts and demote the responsible peers
 			for pid, fails := range expire() {
 				if peer := d.peers.Peer(pid); peer != nil {
-					if fails > 1 {
+					// If a lot of retrieval elements expired, we might have overestimated the remote peer or perhaps
+					// ourselves. Only reset to minimal throughput but don't drop just yet. If even the minimal times
+					// out that sync wise we need to get rid of the peer.
+					//
+					// The reason the minimum threshold is 2 is because the downloader tries to estimate the bandwidth
+					// and latency of a peer separately, which requires pushing the measures capacity a bit and seeing
+					// how response times reacts, to it always requests one more than the minimum (i.e. min 2).
+					if fails > 2 {
 						glog.V(logger.Detail).Infof("%s: %s delivery timeout", peer, strings.ToLower(kind))
 						setIdle(peer, 0)
 					} else {
