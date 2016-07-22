@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -40,6 +41,11 @@ func NewRemoteRPCClient(ctx *cli.Context) (rpc.Client, error) {
 // endpoint. It must start with either `ipc:` or `rpc:` (HTTP).
 func NewRemoteRPCClientFromString(endpoint string) (rpc.Client, error) {
 	if strings.HasPrefix(endpoint, "ipc:") {
+		if runtime.GOOS == "windows" && !strings.HasPrefix(endpoint, `ipc:\\.\pipe\`) {
+			// user supplied named pipe name, e.g: attach "namedpipename" instead
+			// of "attach ipc:\\.\pipe\namedpipename".
+			endpoint = `ipc:\\.\pipe\` + endpoint[4:]
+		}
 		return rpc.NewIPCClient(endpoint[4:])
 	}
 	if strings.HasPrefix(endpoint, "rpc:") {

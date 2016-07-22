@@ -59,6 +59,7 @@ Welcome to the Geth JavaScript console!
 
 instance: Geth/v{{gethver}}/{{goos}}/{{gover}}
 coinbase: {{.Etherbase}}
+ network: mainnet
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
  modules:{{range apis}} {{.}}:1.0{{end}}
@@ -153,6 +154,7 @@ Welcome to the Geth JavaScript console!
 
 instance: Geth/v{{gethver}}/{{goos}}/{{gover}}
 coinbase: {{etherbase}}
+ network: mainnet
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}
  modules:{{range apis}} {{.}}:1.0{{end}}

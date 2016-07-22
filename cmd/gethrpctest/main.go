@@ -95,7 +95,7 @@ func main() {
 func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
 	stack, err := node.New(&node.Config{
-		IPCPath:     node.DefaultIPCEndpoint(),
+		IPCPath:     []string{node.DefaultIPCEndpoint()},
 		HTTPHost:    common.DefaultHTTPHost,
 		HTTPPort:    common.DefaultHTTPPort,
 		HTTPModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},

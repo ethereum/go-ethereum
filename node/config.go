@@ -53,11 +53,12 @@ type Config struct {
 	// in memory.
 	DataDir string
 
-	// IPCPath is the requested location to place the IPC endpoint. If the path is
-	// a simple file name, it is placed inside the data directory (or on the root
+	// IPCPath is the requested location to place the IPC endpoint(s). If the path
+	// is a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
-	// relative), then that specific path is enforced. An empty path disables IPC.
-	IPCPath string
+	// relative), then that specific path is enforced. A nil or empty slice
+	// disables IPC.
+	IPCPath []string
 
 	// This field should be a valid secp256k1 private key that will be used for both
 	// remote peer identification as well as network traffic encryption. If no key
@@ -138,35 +139,39 @@ type Config struct {
 	WSModules []string
 }
 
-// IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
+// IPCEndpoints resolves the IPC endpoints based on a configured value, taking into
 // account the set data folders as well as the designated platform we're currently
 // running on.
-func (c *Config) IPCEndpoint() string {
-	// Short circuit if IPC has not been enabled
-	if c.IPCPath == "" {
-		return ""
-	}
-	// On windows we can only use plain top-level pipes
-	if runtime.GOOS == "windows" {
-		if strings.HasPrefix(c.IPCPath, `\\.\pipe\`) {
-			return c.IPCPath
+func (c *Config) IPCEndpoints() []string {
+	var endpoints []string
+	for _, endpoint := range c.IPCPath {
+		if endpoint == "" {
+			endpoints = append(endpoints, "")
+		} else if runtime.GOOS == "windows" {
+			// On windows we can only use plain top-level pipes
+			if strings.HasPrefix(endpoint, `\\.\pipe\`) {
+				endpoints = append(endpoints, endpoint)
+			} else {
+				endpoints = append(endpoints, `\\.\pipe\`+endpoint)
+			}
+		} else if filepath.Base(endpoint) == endpoint { // Resolve names into the data directory full paths otherwise
+			if c.DataDir == "" {
+				endpoints = append(endpoints, filepath.Join(os.TempDir(), endpoint))
+			} else {
+				endpoints = append(endpoints, filepath.Join(c.DataDir, endpoint))
+			}
+		} else {
+			endpoints = append(endpoints, endpoint)
 		}
-		return `\\.\pipe\` + c.IPCPath
 	}
-	// Resolve names into the data directory full paths otherwise
-	if filepath.Base(c.IPCPath) == c.IPCPath {
-		if c.DataDir == "" {
-			return filepath.Join(os.TempDir(), c.IPCPath)
-		}
-		return filepath.Join(c.DataDir, c.IPCPath)
-	}
-	return c.IPCPath
+
+	return endpoints
 }
 
 // DefaultIPCEndpoint returns the IPC path used by default.
 func DefaultIPCEndpoint() string {
-	config := &Config{DataDir: common.DefaultDataDir(), IPCPath: common.DefaultIPCSocket}
-	return config.IPCEndpoint()
+	config := &Config{DataDir: common.DefaultDataDir(), IPCPath: []string{common.DefaultIPCEndpoint()}}
+	return config.IPCEndpoints()[0]
 }
 
 // HTTPEndpoint resolves an HTTP endpoint based on the configured host interface

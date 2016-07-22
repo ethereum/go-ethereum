@@ -276,8 +276,8 @@ var (
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
-		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-		Value: DirectoryString{common.DefaultIPCSocket},
+		Usage: "IPC endpoint location (explicit paths escape it)",
+		Value: DirectoryString{common.DefaultIPCEndpoint()},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
@@ -423,13 +423,27 @@ func MakeKeyStoreDir(datadir string, ctx *cli.Context) string {
 	return filepath.Join(datadir, "keystore")
 }
 
-// MakeIPCPath creates an IPC path configuration from the set command line flags,
-// returning an empty string if IPC was explicitly disabled, or the set path.
-func MakeIPCPath(ctx *cli.Context) string {
+// MakeIPCPaths creates an IPC path configuration from the set command line flags,
+// returning an empty slice if IPC was explicitly disabled, or the paths to open
+// the IPC endpoint(s).
+func MakeIPCPaths(ctx *cli.Context) []string {
 	if ctx.GlobalBool(IPCDisabledFlag.Name) {
-		return ""
+		return []string{}
 	}
-	return ctx.GlobalString(IPCPathFlag.Name)
+
+	// user overruled default location
+	if ctx.GlobalIsSet(IPCPathFlag.Name) {
+		return []string{ctx.GlobalString(IPCPathFlag.Name)}
+	}
+
+	// return the old geth specific path and new more general default path.
+	// This is a temporary situation, the old path will be removed after a couple
+	// of weeks. This gives clients time to update and users the ability to use
+	// the latest geth version with default IPC setting as they are used to.
+	if runtime.GOOS == "windows" {
+		return []string{`\\.\pipe\geth.ipc`, ctx.GlobalString(IPCPathFlag.Name)}
+	}
+	return []string{"geth.ipc", ctx.GlobalString(IPCPathFlag.Name)}
 }
 
 // MakeNodeKey creates a node key from set command line flags, either loading it
@@ -655,7 +669,7 @@ func MakeSystemNode(name, version string, relconf release.Config, extra []byte, 
 		NAT:             MakeNAT(ctx),
 		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers: ctx.GlobalInt(MaxPendingPeersFlag.Name),
-		IPCPath:         MakeIPCPath(ctx),
+		IPCPath:         MakeIPCPaths(ctx),
 		HTTPHost:        MakeHTTPRpcHost(ctx),
 		HTTPPort:        ctx.GlobalInt(RPCPortFlag.Name),
 		HTTPCors:        ctx.GlobalString(RPCCORSDomainFlag.Name),

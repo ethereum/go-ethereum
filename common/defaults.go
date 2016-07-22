@@ -19,14 +19,16 @@ package common
 import (
 	"path/filepath"
 	"runtime"
+	"os"
 )
 
 const (
-	DefaultIPCSocket = "geth.ipc"  // Default (relative) name of the IPC RPC socket
-	DefaultHTTPHost  = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort  = 8545        // Default TCP port for the HTTP RPC server
-	DefaultWSHost    = "localhost" // Default host interface for the websocket RPC server
-	DefaultWSPort    = 8546        // Default TCP port for the websocket RPC server
+	DefaultIPCSocket    = "ipc.sock"          // Default (relative) name of the IPC RPC unix socket
+	DefaultIPCNamedPipe = `\\.\pipe\ethereum` // Default name of the IPC RPC named pipe
+	DefaultHTTPHost     = "localhost"         // Default host interface for the HTTP RPC server
+	DefaultHTTPPort     = 8545                // Default TCP port for the HTTP RPC server
+	DefaultWSHost       = "localhost"         // Default host interface for the websocket RPC server
+	DefaultWSPort       = 8546                // Default TCP port for the websocket RPC server
 )
 
 // DefaultDataDir is the default data directory to use for the databases and other
@@ -45,4 +47,28 @@ func DefaultDataDir() string {
 	}
 	// As we cannot guess a stable location, return empty and handle later
 	return ""
+}
+
+// DefaultIPCEndpoint returns the default location where to open the IPC endpoint.
+//
+// On Windows this is DefaultIPCNamedPipe.
+// On OSX this is DefaultDataDir/DefaultIPCSocket.
+// Else this is $ENV{XDG_RUNTIME_DIR}/ethereum/DefaultIPCSocket, if $ENV{XDG_RUNTIME_DIR} is not set,
+// or the ethereum sub directory could not be created this is DefaultDataDir/DefaultIPCSocket.
+func DefaultIPCEndpoint() string {
+	if runtime.GOOS == "windows" {
+		return DefaultIPCNamedPipe
+	}
+	if runtime.GOOS == "darwin" {
+		return filepath.Join(DefaultDataDir(), DefaultIPCSocket)
+	}
+	if dir := os.Getenv("XDG_RUNTIME_DIR"); dir != "" {
+		dir = filepath.Join(dir, "ethereum")
+		// create "ethereum" subdirectory if it doesn't exist
+		if err := os.MkdirAll(dir, 0700); err == nil {
+			return filepath.Join(dir, DefaultIPCSocket)
+		}
+	}
+
+	return filepath.Join(DefaultDataDir(), DefaultIPCSocket)
 }

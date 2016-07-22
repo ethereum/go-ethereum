@@ -247,8 +247,17 @@ func (c *Console) Welcome() {
 	// Print some generic Geth metadata
 	fmt.Fprintf(c.printer, "Welcome to the Geth JavaScript console!\n\n")
 	c.jsre.Run(`
+		var _network = 'private';
+		switch (eth.getBlock(0).hash.toLowerCase()) {
+		case '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3':
+			_network = 'mainnet'; break
+		case '0x0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303':
+			_network = 'testnet'; break
+		}
+
 		console.log("instance: " + web3.version.node);
 		console.log("coinbase: " + eth.coinbase);
+		console.log(" network: " + _network);
 		console.log("at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")");
 		console.log(" datadir: " + admin.datadir);
 	`)
