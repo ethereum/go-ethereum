@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -154,25 +153,6 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 	return p2p.Send(p.rw, TxMsg, txs)
 }
 
-// SendBlockHashes sends a batch of known hashes to the remote peer.
-func (p *peer) SendBlockHashes(hashes []common.Hash) error {
-	return p2p.Send(p.rw, BlockHashesMsg, hashes)
-}
-
-// SendBlocks sends a batch of blocks to the remote peer.
-func (p *peer) SendBlocks(blocks []*types.Block) error {
-	return p2p.Send(p.rw, BlocksMsg, blocks)
-}
-
-// SendNewBlockHashes61 announces the availability of a number of blocks through
-// a hash notification.
-func (p *peer) SendNewBlockHashes61(hashes []common.Hash) error {
-	for _, hash := range hashes {
-		p.knownBlocks.Add(hash)
-	}
-	return p2p.Send(p.rw, NewBlockHashesMsg, hashes)
-}
-
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
@@ -219,26 +199,6 @@ func (p *peer) SendNodeData(data [][]byte) error {
 // ones requested from an already RLP encoded format.
 func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts)
-}
-
-// RequestHashes fetches a batch of hashes from a peer, starting at from, going
-// towards the genesis block.
-func (p *peer) RequestHashes(from common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from %x...", p, downloader.MaxHashFetch, from[:4])
-	return p2p.Send(p.rw, GetBlockHashesMsg, getBlockHashesData{from, uint64(downloader.MaxHashFetch)})
-}
-
-// RequestHashesFromNumber fetches a batch of hashes from a peer, starting at
-// the requested block number, going upwards towards the genesis block.
-func (p *peer) RequestHashesFromNumber(from uint64, count int) error {
-	glog.V(logger.Debug).Infof("%v fetching hashes (%d) from #%d...", p, count, from)
-	return p2p.Send(p.rw, GetBlockHashesFromNumberMsg, getBlockHashesFromNumberData{from, uint64(count)})
-}
-
-// RequestBlocks fetches a batch of blocks corresponding to the specified hashes.
-func (p *peer) RequestBlocks(hashes []common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching %v blocks", p, len(hashes))
-	return p2p.Send(p.rw, GetBlocksMsg, hashes)
 }
 
 // RequestHeaders is a wrapper around the header query functions to fetch a
