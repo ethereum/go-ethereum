@@ -84,43 +84,31 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 
 // Info gathers and returns a collection of metadata known about a peer.
 func (p *peer) Info() *PeerInfo {
+	hash, td := p.Head()
+
 	return &PeerInfo{
 		Version:    p.version,
-		Difficulty: p.Td(),
-		Head:       fmt.Sprintf("%x", p.Head()),
+		Difficulty: td,
+		Head:       hash.Hex(),
 	}
 }
 
-// Head retrieves a copy of the current head (most recent) hash of the peer.
-func (p *peer) Head() (hash common.Hash) {
+// Head retrieves a copy of the current head hash and total difficulty of the
+// peer.
+func (p *peer) Head() (hash common.Hash, td *big.Int) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
 	copy(hash[:], p.head[:])
-	return hash
+	return hash, new(big.Int).Set(p.td)
 }
 
-// SetHead updates the head (most recent) hash of the peer.
-func (p *peer) SetHead(hash common.Hash) {
+// SetHead updates the head hash and total difficulty of the peer.
+func (p *peer) SetHead(hash common.Hash, td *big.Int) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	copy(p.head[:], hash[:])
-}
-
-// Td retrieves the current total difficulty of a peer.
-func (p *peer) Td() *big.Int {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return new(big.Int).Set(p.td)
-}
-
-// SetTd updates the current total difficulty of a peer.
-func (p *peer) SetTd(td *big.Int) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
 	p.td.Set(td)
 }
 
@@ -411,7 +399,7 @@ func (ps *peerSet) BestPeer() *peer {
 		bestTd   *big.Int
 	)
 	for _, p := range ps.peers {
-		if td := p.Td(); bestPeer == nil || td.Cmp(bestTd) > 0 {
+		if _, td := p.Head(); bestPeer == nil || td.Cmp(bestTd) > 0 {
 			bestPeer, bestTd = p, td
 		}
 	}
