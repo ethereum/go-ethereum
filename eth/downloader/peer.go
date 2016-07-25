@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"sort"
 	"strings"
 	"sync"
@@ -36,6 +37,9 @@ const (
 	maxLackingHashes  = 4096 // Maximum number of entries allowed on the list or lacking items
 	measurementImpact = 0.1  // The impact a single measurement has on a peer's final throughput value.
 )
+
+// Head hash and total difficulty retriever for
+type currentHeadRetrievalFn func() (common.Hash, *big.Int)
 
 // Block header and body fetchers belonging to eth/62 and above
 type relativeHeaderFetcherFn func(common.Hash, int, int, bool) error
@@ -52,8 +56,7 @@ var (
 
 // peer represents an active peer from which hashes and blocks are retrieved.
 type peer struct {
-	id   string      // Unique identifier of the peer
-	head common.Hash // Hash of the peers latest known block
+	id string // Unique identifier of the peer
 
 	headerIdle  int32 // Current header activity state of the peer (idle = 0, active = 1)
 	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
@@ -74,6 +77,8 @@ type peer struct {
 
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
 
+	currentHead currentHeadRetrievalFn // Method to fetch the currently known head of the peer
+
 	getRelHeaders  relativeHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an origin hash
 	getAbsHeaders  absoluteHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an absolute position
 	getBlockBodies blockBodyFetcherFn      // [eth/62] Method to retrieve a batch of block bodies
@@ -87,14 +92,14 @@ type peer struct {
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, version int, head common.Hash,
+func newPeer(id string, version int, currentHead currentHeadRetrievalFn,
 	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn,
 	getReceipts receiptFetcherFn, getNodeData stateFetcherFn) *peer {
 	return &peer{
 		id:      id,
-		head:    head,
 		lacking: make(map[common.Hash]struct{}),
 
+		currentHead:    currentHead,
 		getRelHeaders:  getRelHeaders,
 		getAbsHeaders:  getAbsHeaders,
 		getBlockBodies: getBlockBodies,
