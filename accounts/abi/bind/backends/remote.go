@@ -17,11 +17,7 @@
 package backends
 
 import (
-	"encoding/json"
-	"fmt"
 	"math/big"
-	"sync"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -37,119 +33,34 @@ var _ bind.ContractBackend = (*rpcBackend)(nil)
 // rpcBackend implements bind.ContractBackend, and acts as the data provider to
 // Ethereum contracts bound to Go structs. It uses an RPC connection to delegate
 // all its functionality.
-//
-// Note: The current implementation is a blocking one. This should be replaced
-// by a proper async version when a real RPC client is created.
 type rpcBackend struct {
-	client rpc.Client // RPC client connection to interact with an API server
-	autoid uint32     // ID number to use for the next API request
-	lock   sync.Mutex // Singleton access until we get to request multiplexing
+	client *rpc.Client // RPC client connection to interact with an API server
 }
 
 // NewRPCBackend creates a new binding backend to an RPC provider that can be
 // used to interact with remote contracts.
-func NewRPCBackend(client rpc.Client) bind.ContractBackend {
-	return &rpcBackend{
-		client: client,
-	}
-}
-
-// request is a JSON RPC request package assembled internally from the client
-// method calls.
-type request struct {
-	JSONRPC string        `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
-	ID      int           `json:"id"`      // Auto incrementing ID number for this request
-	Method  string        `json:"method"`  // Remote procedure name to invoke on the server
-	Params  []interface{} `json:"params"`  // List of parameters to pass through (keep types simple)
-}
-
-// response is a JSON RPC response package sent back from the API server.
-type response struct {
-	JSONRPC string          `json:"jsonrpc"` // Version of the JSON RPC protocol, always set to 2.0
-	ID      int             `json:"id"`      // Auto incrementing ID number for this request
-	Error   *failure        `json:"error"`   // Any error returned by the remote side
-	Result  json.RawMessage `json:"result"`  // Whatever the remote side sends us in reply
-}
-
-// failure is a JSON RPC response error field sent back from the API server.
-type failure struct {
-	Code    int    `json:"code"`    // JSON RPC error code associated with the failure
-	Message string `json:"message"` // Specific error message of the failure
-}
-
-// request forwards an API request to the RPC server, and parses the response.
-//
-// This is currently painfully non-concurrent, but it will have to do until we
-// find the time for niceties like this :P
-func (b *rpcBackend) request(ctx context.Context, method string, params []interface{}) (json.RawMessage, error) {
-	b.lock.Lock()
-	defer b.lock.Unlock()
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	// Ugly hack to serialize an empty list properly
-	if params == nil {
-		params = []interface{}{}
-	}
-	// Assemble the request object
-	reqID := int(atomic.AddUint32(&b.autoid, 1))
-	req := &request{
-		JSONRPC: "2.0",
-		ID:      reqID,
-		Method:  method,
-		Params:  params,
-	}
-	if err := b.client.Send(req); err != nil {
-		return nil, err
-	}
-	res := new(response)
-	errc := make(chan error, 1)
-	go func() {
-		errc <- b.client.Recv(res)
-	}()
-	select {
-	case err := <-errc:
-		if err != nil {
-			return nil, err
-		}
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-	if res.Error != nil {
-		if res.Error.Message == bind.ErrNoCode.Error() {
-			return nil, bind.ErrNoCode
-		}
-		return nil, fmt.Errorf("remote error: %s", res.Error.Message)
-	}
-	return res.Result, nil
+func NewRPCBackend(client *rpc.Client) bind.ContractBackend {
+	return &rpcBackend{client: client}
 }
 
 // HasCode implements ContractVerifier.HasCode by retrieving any code associated
 // with the contract from the remote node, and checking its size.
 func (b *rpcBackend) HasCode(ctx context.Context, contract common.Address, pending bool) (bool, error) {
-	// Execute the RPC code retrieval
 	block := "latest"
 	if pending {
 		block = "pending"
 	}
-	res, err := b.request(ctx, "eth_getCode", []interface{}{contract.Hex(), block})
+	var hex string
+	err := b.client.CallContext(ctx, &hex, "eth_getCode", contract, block)
 	if err != nil {
 		return false, err
 	}
-	var hex string
-	if err := json.Unmarshal(res, &hex); err != nil {
-		return false, err
-	}
-	// Convert the response back to a Go byte slice and return
 	return len(common.FromHex(hex)) > 0, nil
 }
 
 // ContractCall implements ContractCaller.ContractCall, delegating the execution of
 // a contract call to the remote node, returning the reply to for local processing.
 func (b *rpcBackend) ContractCall(ctx context.Context, contract common.Address, data []byte, pending bool) ([]byte, error) {
-	// Pack up the request into an RPC argument
 	args := struct {
 		To   common.Address `json:"to"`
 		Data string         `json:"data"`
@@ -157,63 +68,43 @@ func (b *rpcBackend) ContractCall(ctx context.Context, contract common.Address, 
 		To:   contract,
 		Data: common.ToHex(data),
 	}
-	// Execute the RPC call and retrieve the response
 	block := "latest"
 	if pending {
 		block = "pending"
 	}
-	res, err := b.request(ctx, "eth_call", []interface{}{args, block})
+	var hex string
+	err := b.client.CallContext(ctx, &hex, "eth_call", args, block)
 	if err != nil {
 		return nil, err
 	}
-	var hex string
-	if err := json.Unmarshal(res, &hex); err != nil {
-		return nil, err
-	}
-	// Convert the response back to a Go byte slice and return
 	return common.FromHex(hex), nil
+
 }
 
 // PendingAccountNonce implements ContractTransactor.PendingAccountNonce, delegating
 // the current account nonce retrieval to the remote node.
 func (b *rpcBackend) PendingAccountNonce(ctx context.Context, account common.Address) (uint64, error) {
-	res, err := b.request(ctx, "eth_getTransactionCount", []interface{}{account.Hex(), "pending"})
+	var hex rpc.HexNumber
+	err := b.client.CallContext(ctx, &hex, "eth_getTransactionCount", account.Hex(), "pending")
 	if err != nil {
 		return 0, err
 	}
-	var hex string
-	if err := json.Unmarshal(res, &hex); err != nil {
-		return 0, err
-	}
-	nonce, ok := new(big.Int).SetString(hex, 0)
-	if !ok {
-		return 0, fmt.Errorf("invalid nonce hex: %s", hex)
-	}
-	return nonce.Uint64(), nil
+	return hex.Uint64(), nil
 }
 
 // SuggestGasPrice implements ContractTransactor.SuggestGasPrice, delegating the
 // gas price oracle request to the remote node.
 func (b *rpcBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
-	res, err := b.request(ctx, "eth_gasPrice", nil)
-	if err != nil {
+	var hex rpc.HexNumber
+	if err := b.client.CallContext(ctx, &hex, "eth_gasPrice"); err != nil {
 		return nil, err
 	}
-	var hex string
-	if err := json.Unmarshal(res, &hex); err != nil {
-		return nil, err
-	}
-	price, ok := new(big.Int).SetString(hex, 0)
-	if !ok {
-		return nil, fmt.Errorf("invalid price hex: %s", hex)
-	}
-	return price, nil
+	return (*big.Int)(&hex), nil
 }
 
 // EstimateGasLimit implements ContractTransactor.EstimateGasLimit, delegating
 // the gas estimation to the remote node.
 func (b *rpcBackend) EstimateGasLimit(ctx context.Context, sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
-	// Pack up the request into an RPC argument
 	args := struct {
 		From  common.Address  `json:"from"`
 		To    *common.Address `json:"to"`
@@ -226,19 +117,12 @@ func (b *rpcBackend) EstimateGasLimit(ctx context.Context, sender common.Address
 		Value: rpc.NewHexNumber(value),
 	}
 	// Execute the RPC call and retrieve the response
-	res, err := b.request(ctx, "eth_estimateGas", []interface{}{args})
+	var hex rpc.HexNumber
+	err := b.client.CallContext(ctx, &hex, "eth_estimateGas", args)
 	if err != nil {
 		return nil, err
 	}
-	var hex string
-	if err := json.Unmarshal(res, &hex); err != nil {
-		return nil, err
-	}
-	estimate, ok := new(big.Int).SetString(hex, 0)
-	if !ok {
-		return nil, fmt.Errorf("invalid estimate hex: %s", hex)
-	}
-	return estimate, nil
+	return (*big.Int)(&hex), nil
 }
 
 // SendTransaction implements ContractTransactor.SendTransaction, delegating the
@@ -248,13 +132,5 @@ func (b *rpcBackend) SendTransaction(ctx context.Context, tx *types.Transaction)
 	if err != nil {
 		return err
 	}
-	res, err := b.request(ctx, "eth_sendRawTransaction", []interface{}{common.ToHex(data)})
-	if err != nil {
-		return err
-	}
-	var hex string
-	if err := json.Unmarshal(res, &hex); err != nil {
-		return err
-	}
-	return nil
+	return b.client.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
 }

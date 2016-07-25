@@ -28,7 +28,7 @@ import (
 
 var (
 	// ErrNotificationsUnsupported is returned when the connection doesn't support notifications
-	ErrNotificationsUnsupported = errors.New("notifications not supported")
+	ErrNotificationsUnsupported = errors.New("subscription notifications not supported by the current transport")
 
 	// ErrNotificationNotFound is returned when the notification for the given id is not found
 	ErrNotificationNotFound = errors.New("notification not found")

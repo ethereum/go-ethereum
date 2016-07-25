@@ -507,21 +507,27 @@ func TestAPIGather(t *testing.T) {
 	}
 	// Register a batch of services with some configured APIs
 	calls := make(chan string, 1)
-
+	makeAPI := func(result string) *OneMethodApi {
+		return &OneMethodApi{fun: func() { calls <- result }}
+	}
 	services := map[string]struct {
 		APIs  []rpc.API
 		Maker InstrumentingWrapper
 	}{
-		"Zero APIs": {[]rpc.API{}, InstrumentedServiceMakerA},
-		"Single API": {[]rpc.API{
-			{"single", "1", &OneMethodApi{fun: func() { calls <- "single.v1" }}, true},
-		}, InstrumentedServiceMakerB},
-		"Many APIs": {[]rpc.API{
-			{"multi", "1", &OneMethodApi{fun: func() { calls <- "multi.v1" }}, true},
-			{"multi.v2", "2", &OneMethodApi{fun: func() { calls <- "multi.v2" }}, true},
-			{"multi.v2.nested", "2", &OneMethodApi{fun: func() { calls <- "multi.v2.nested" }}, true},
-		}, InstrumentedServiceMakerC},
+		"Zero APIs": {
+			[]rpc.API{}, InstrumentedServiceMakerA},
+		"Single API": {
+			[]rpc.API{
+				{Namespace: "single", Version: "1", Service: makeAPI("single.v1"), Public: true},
+			}, InstrumentedServiceMakerB},
+		"Many APIs": {
+			[]rpc.API{
+				{Namespace: "multi", Version: "1", Service: makeAPI("multi.v1"), Public: true},
+				{Namespace: "multi.v2", Version: "2", Service: makeAPI("multi.v2"), Public: true},
+				{Namespace: "multi.v2.nested", Version: "2", Service: makeAPI("multi.v2.nested"), Public: true},
+			}, InstrumentedServiceMakerC},
 	}
+
 	for id, config := range services {
 		config := config
 		constructor := func(*ServiceContext) (Service, error) {
@@ -554,12 +560,8 @@ func TestAPIGather(t *testing.T) {
 		{"multi.v2.nested_theOneMethod", "multi.v2.nested"},
 	}
 	for i, test := range tests {
-		if err := client.Send(rpc.JSONRequest{Id: []byte("1"), Version: "2.0", Method: test.Method}); err != nil {
-			t.Fatalf("test %d: failed to send API request: %v", i, err)
-		}
-		reply := new(rpc.JSONSuccessResponse)
-		if err := client.Recv(reply); err != nil {
-			t.Fatalf("test %d: failed to read API reply: %v", i, err)
+		if err := client.Call(nil, test.Method); err != nil {
+			t.Errorf("test %d: API request failed: %v", i, err)
 		}
 		select {
 		case result := <-calls:

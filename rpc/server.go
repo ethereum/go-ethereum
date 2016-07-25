@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"runtime"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -30,8 +29,6 @@ import (
 )
 
 const (
-	stopPendingRequestTimeout = 3 * time.Second // give pending requests stopPendingRequestTimeout the time to finish when the server is stopped
-
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
 	MetadataApi     = "rpc"
@@ -183,7 +180,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 	for atomic.LoadInt32(&s.run) == 1 {
 		reqs, batch, err := s.readRequest(codec)
 		if err != nil {
-			glog.V(logger.Debug).Infof("%v\n", err)
+			glog.V(logger.Debug).Infof("read error %v\n", err)
 			codec.Write(codec.CreateErrorResponse(nil, err))
 			return nil
 		}
@@ -240,13 +237,11 @@ func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
 		glog.V(logger.Debug).Infoln("RPC Server shutdown initiatied")
-		time.AfterFunc(stopPendingRequestTimeout, func() {
-			s.codecsMu.Lock()
-			defer s.codecsMu.Unlock()
-			s.codecs.Each(func(c interface{}) bool {
-				c.(ServerCodec).Close()
-				return true
-			})
+		s.codecsMu.Lock()
+		defer s.codecsMu.Unlock()
+		s.codecs.Each(func(c interface{}) bool {
+			c.(ServerCodec).Close()
+			return true
 		})
 	}
 }
@@ -386,7 +381,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 // readRequest requests the next (batch) request from the codec. It will return the collection
 // of requests, an indication if the request was a batch, the invalid request identifier and an
 // error when the request could not be read/parsed.
-func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCError) {
+func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, Error) {
 	reqs, batch, err := codec.ReadRequestHeaders()
 	if err != nil {
 		return nil, batch, err
@@ -398,6 +393,11 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 	for i, r := range reqs {
 		var ok bool
 		var svc *service
+
+		if r.err != nil {
+			requests[i] = &serverRequest{id: r.id, err: r.err}
+			continue
+		}
 
 		if r.isPubSub && r.method == unsubscribeMethod {
 			requests[i] = &serverRequest{id: r.id, isUnsubscribe: true}

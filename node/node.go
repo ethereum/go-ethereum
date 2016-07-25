@@ -505,16 +505,14 @@ func (n *Node) Restart() error {
 }
 
 // Attach creates an RPC client attached to an in-process API handler.
-func (n *Node) Attach() (rpc.Client, error) {
+func (n *Node) Attach() (*rpc.Client, error) {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	// Short circuit if the node's not running
 	if n.server == nil {
 		return nil, ErrNodeStopped
 	}
-	// Otherwise attach to the API and return
-	return rpc.NewInProcRPCClient(n.inprocHandler), nil
+	return rpc.DialInProc(n.inprocHandler), nil
 }
 
 // Server retrieves the currently running P2P network layer. This method is meant

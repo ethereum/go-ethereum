@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math/big"
 	"reflect"
 	"unicode"
@@ -226,32 +225,4 @@ func newSubscriptionID() (string, error) {
 		return "", errors.New("Unable to generate subscription id")
 	}
 	return "0x" + hex.EncodeToString(subid[:]), nil
-}
-
-// SupportedModules returns the collection of API's that the RPC server offers
-// on which the given client connects.
-func SupportedModules(client Client) (map[string]string, error) {
-	req := JSONRequest{
-		Id:      []byte("1"),
-		Version: "2.0",
-		Method:  MetadataApi + "_modules",
-	}
-	if err := client.Send(req); err != nil {
-		return nil, err
-	}
-
-	var response JSONSuccessResponse
-	if err := client.Recv(&response); err != nil {
-		return nil, err
-	}
-	if response.Result != nil {
-		mods := make(map[string]string)
-		if modules, ok := response.Result.(map[string]interface{}); ok {
-			for m, v := range modules {
-				mods[m] = fmt.Sprintf("%s", v)
-			}
-			return mods, nil
-		}
-	}
-	return nil, fmt.Errorf("unable to retrieve modules")
 }
