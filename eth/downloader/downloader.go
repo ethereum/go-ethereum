@@ -541,7 +541,7 @@ func (d *Downloader) fetchHeight(p *peer) (*types.Header, error) {
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
-	glog.V(logger.Debug).Infof("%v: looking for common ancestor", p)
+	glog.V(logger.Debug).Infof("%v: looking for common ancestor (remote height %d)", p, height)
 
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	floor, ceil := int64(-1), d.headHeader().Number.Uint64()
