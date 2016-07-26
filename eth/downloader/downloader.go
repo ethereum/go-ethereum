@@ -147,8 +147,10 @@ type Downloader struct {
 	stateWakeCh   chan bool            // [eth/63] Channel to signal the state fetcher of new tasks
 	headerProcCh  chan []*types.Header // [eth/62] Channel to feed the header processor new tasks
 
+	// Cancellation and termination
+	cancelPeer string        // Identifier of the peer currently being used as the master (cancel on drop)
 	cancelCh   chan struct{} // Channel to cancel mid-flight syncs
-	cancelLock sync.RWMutex  // Lock to protect the cancel channel in delivers
+	cancelLock sync.RWMutex  // Lock to protect the cancel channel and peer in delivers
 
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.RWMutex  // Lock to prevent double closes
@@ -254,12 +256,22 @@ func (d *Downloader) RegisterPeer(id string, version int, head common.Hash,
 // the specified peer. An effort is also made to return any pending fetches into
 // the queue.
 func (d *Downloader) UnregisterPeer(id string) error {
+	// Unregister the peer from the active peer set and revoke any fetch tasks
 	glog.V(logger.Detail).Infoln("Unregistering peer", id)
 	if err := d.peers.Unregister(id); err != nil {
 		glog.V(logger.Error).Infoln("Unregister failed:", err)
 		return err
 	}
 	d.queue.Revoke(id)
+
+	// If this peer was the master peer, abort sync immediately
+	d.cancelLock.RLock()
+	master := id == d.cancelPeer
+	d.cancelLock.RUnlock()
+
+	if master {
+		d.cancel()
+	}
 	return nil
 }
 
@@ -332,9 +344,10 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 			empty = true
 		}
 	}
-	// Create cancel channel for aborting mid-flight
+	// Create cancel channel for aborting mid-flight and mark the master peer
 	d.cancelLock.Lock()
 	d.cancelCh = make(chan struct{})
+	d.cancelPeer = id
 	d.cancelLock.Unlock()
 
 	defer d.cancel() // No matter what, we can't leave the cancel channel open
