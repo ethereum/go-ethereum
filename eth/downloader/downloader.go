@@ -558,11 +558,17 @@ func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 	if head > height {
 		head = height
 	}
-	from := int64(head) - int64(MaxHeaderFetch) + 1
+	from := int64(head) - int64(MaxHeaderFetch)
 	if from < 0 {
 		from = 0
 	}
-	go p.getAbsHeaders(uint64(from), MaxHeaderFetch, 0, false)
+	// Span out with 15 block gaps into the future to catch bad head reports
+	limit := 2 * MaxHeaderFetch / 16
+	count := 1 + int((int64(ceil)-from)/16)
+	if count > limit {
+		count = limit
+	}
+	go p.getAbsHeaders(uint64(from), count, 15, false)
 
 	// Wait for the remote response to the head fetch
 	number, hash := uint64(0), common.Hash{}
@@ -587,12 +593,8 @@ func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 			}
 			// Make sure the peer's reply conforms to the request
 			for i := 0; i < len(headers); i++ {
-				if number := headers[i].Number.Int64(); number != from+int64(i) {
-					glog.V(logger.Warn).Infof("%v: head header set (item %d) broke chain ordering: requested %d, got %d", p, i, from+int64(i), number)
-					return 0, errInvalidChain
-				}
-				if i > 0 && headers[i-1].Hash() != headers[i].ParentHash {
-					glog.V(logger.Warn).Infof("%v: head header set (item %d) broke chain ancestry: expected [%x], got [%x]", p, i, headers[i-1].Hash().Bytes()[:4], headers[i].ParentHash[:4])
+				if number := headers[i].Number.Int64(); number != from+int64(i)*16 {
+					glog.V(logger.Warn).Infof("%v: head header set (item %d) broke chain ordering: requested %d, got %d", p, i, from+int64(i)*16, number)
 					return 0, errInvalidChain
 				}
 			}
@@ -600,12 +602,18 @@ func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
 				// Skip any headers that underflow/overflow our requested set
-				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > head {
+				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > ceil {
 					continue
 				}
 				// Otherwise check if we already know the header or not
 				if (d.mode == FullSync && d.hasBlockAndState(headers[i].Hash())) || (d.mode != FullSync && d.hasHeader(headers[i].Hash())) {
 					number, hash = headers[i].Number.Uint64(), headers[i].Hash()
+
+					// If every header is known, even future ones, the peer straight out lied about its head
+					if number > height && i == limit-1 {
+						glog.V(logger.Warn).Infof("%v: lied about chain head: reported %d, found above %d", p, height, number)
+						return 0, errStallingPeer
+					}
 					break
 				}
 			}
