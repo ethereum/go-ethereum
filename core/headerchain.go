@@ -129,6 +129,14 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	localTd := hc.GetTd(hc.currentHeaderHash)
 	externTd := new(big.Int).Add(header.Difficulty, ptd)
 
+	// Irrelevant of the canonical status, write the td and header to the database
+	if err := hc.WriteTd(hash, externTd); err != nil {
+		glog.Fatalf("failed to write header total difficulty: %v", err)
+	}
+	if err := WriteHeader(hc.chainDb, header); err != nil {
+		glog.Fatalf("failed to write header contents: %v", err)
+	}
+
 	// If the total difficulty is higher than our known, add it to the canonical chain
 	// Second clause in the if statement reduces the vulnerability to selfish mining.
 	// Please refer to http://www.cs.cornell.edu/~ie53/publications/btcProcFC.pdf
@@ -150,6 +158,7 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 			headHeader = hc.GetHeader(headHash)
 			headNumber = headHeader.Number.Uint64()
 		}
+
 		// Extend the canonical chain with the new header
 		if err := WriteCanonicalHash(hc.chainDb, hash, number); err != nil {
 			glog.Fatalf("failed to insert header number: %v", err)
@@ -157,18 +166,12 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 		if err := WriteHeadHeaderHash(hc.chainDb, hash); err != nil {
 			glog.Fatalf("failed to insert head header hash: %v", err)
 		}
+
 		hc.currentHeaderHash, hc.currentHeader = hash, types.CopyHeader(header)
 
 		status = CanonStatTy
 	} else {
 		status = SideStatTy
-	}
-	// Irrelevant of the canonical status, write the header itself to the database
-	if err := hc.WriteTd(hash, externTd); err != nil {
-		glog.Fatalf("failed to write header total difficulty: %v", err)
-	}
-	if err := WriteHeader(hc.chainDb, header); err != nil {
-		glog.Fatalf("failed to write header contents: %v", err)
 	}
 	hc.headerCache.Add(hash, header)
 
