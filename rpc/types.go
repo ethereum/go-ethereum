@@ -269,6 +269,6 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("blocknumber not in range [%d, %d]", earliestBlockNumber, maxBlockNumber)
 }
 
-func (bn *BlockNumber) Int64() int64 {
-	return (int64)(*bn)
+func (bn BlockNumber) Int64() int64 {
+	return (int64)(bn)
 }

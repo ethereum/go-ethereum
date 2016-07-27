@@ -114,6 +114,28 @@ func (h *Header) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (h *Header) MarshalJSON() ([]byte, error) {
+	fields := map[string]interface{}{
+		"hash":             h.Hash(),
+		"parentHash":       h.ParentHash,
+		"number":           fmt.Sprintf("%#x", h.Number),
+		"nonce":            h.Nonce,
+		"receiptRoot":      h.ReceiptHash,
+		"logsBloom":        h.Bloom,
+		"sha3Uncles":       h.UncleHash,
+		"stateRoot":        h.Root,
+		"miner":            h.Coinbase,
+		"difficulty":       fmt.Sprintf("%#x", h.Difficulty),
+		"extraData":        fmt.Sprintf("0x%x", h.Extra),
+		"gasLimit":         fmt.Sprintf("%#x", h.GasLimit),
+		"gasUsed":          fmt.Sprintf("%#x", h.GasUsed),
+		"timestamp":        fmt.Sprintf("%#x", h.Time),
+		"transactionsRoot": h.TxHash,
+	}
+
+	return json.Marshal(fields)
+}
+
 func rlpHash(x interface{}) (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
