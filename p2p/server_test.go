@@ -301,6 +301,8 @@ func (tg taskgen) taskDone(t task, now time.Time) {
 }
 func (tg taskgen) addStatic(*discover.Node) {
 }
+func (tg taskgen) removeStatic(*discover.Node) {
+}
 
 type testTask struct {
 	index  int
