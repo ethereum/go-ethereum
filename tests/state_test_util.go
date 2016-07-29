@@ -225,7 +225,7 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx m
 		to = &t
 	}
 	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
+	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
