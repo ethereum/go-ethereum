@@ -21,7 +21,7 @@ const (
 
 //  by default ens root is  north internal
 var (
-	toyNetEnsRoot = common.HexToAddress("0xd422f059c2ea8e423a55b043ba427f43bf50a139")
+	toyNetEnsRoot = common.HexToAddress("0x606aabab27f8aa98b772bf593b18e550ede87176")
 )
 
 // separate bzz directories
