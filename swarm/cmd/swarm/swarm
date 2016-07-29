@@ -638,7 +638,11 @@ function checkdownload {
     elif [ -r $target ]; then
       diff -r $target $dest >/dev/null && echo PASS || echo FAIL
     else
-      exp=`checksum $dest/*`
+      if [ `ls -1 $dest|wc -l` = "1" ]; then
+        exp=`checksum $dest/*`
+      else
+        exp=`checksum $dest`
+      fi
       if [ "$exp" = "$target" ]; then
         echo -n  PASS
       else

@@ -7,7 +7,7 @@ swarm remote-update-scripts nodes.lst
 swarm remote-update-bin nodes.lst
 
 # spawn a 2-instance local cluster on each of our 10 host nodes
-swarm remote-run nodes.lst 'swarm init  2; swarm netstatconf sworm; swarm netstatrun'
+swarm remote-run nodes.lst 'swarm init 1; swarm netstatconf sworm; swarm netstatrun'
 
 #collect enodes from all instances on all hosts
 swarm remote-run nodes.lst 'swarm enode all' | tr -d '"' |grep -v running > enodes.lst
