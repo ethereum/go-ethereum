@@ -59,7 +59,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) ([]byte, error) {
 	defer evm.env.SetDepth(evm.env.Depth() - 1)
 
 	if contract.CodeAddr != nil {
-		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
+		if p, exist := PrecompiledContracts[*contract.CodeAddr]; exist {
 			return RunPrecompiled(p, input, contract)
 		}
 	}

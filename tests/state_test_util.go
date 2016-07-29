@@ -224,7 +224,6 @@ func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string
 		to = &t
 	}
 	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 

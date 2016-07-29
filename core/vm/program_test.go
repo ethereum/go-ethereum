@@ -75,7 +75,7 @@ func TestCompiling(t *testing.T) {
 func TestResetInput(t *testing.T) {
 	var sender account
 
-	env := NewEnv(true, true)
+	env := NewEnv(&Config{})
 	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000))
 	contract.CodeAddr = &common.Address{}
 
