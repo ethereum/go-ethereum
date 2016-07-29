@@ -8,8 +8,8 @@ FROM alpine:3.3
 # Build go-ethereum on the fly and delete all build tools afterwards
 RUN \
   apk add --update go git make gcc musl-dev            && \
-  git clone https://github.com/ethersphere/go-ethereum && \
-  (cd go-ethereum && git checkout s/sworm-rc3-update)  && \
+  git clone https://github.com/ethereum/go-ethereum && \
+  (cd go-ethereum && git checkout swarm)  && \
   (cd go-ethereum && make geth)                        && \
   cp go-ethereum/build/bin/geth /geth                  && \
   apk del go git make gcc musl-dev                     && \
