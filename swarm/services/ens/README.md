@@ -57,12 +57,22 @@ ens.setContentHash("swarm","0x7420f14a28e276dd39da6a967dec332a932256717451155fbd
 ```
 
 The content hash argument is the bzz hash as returned by a swarm upload, e.g., using `bzz.upload`:
+The name here will allow the name setting, if the top-level domain is 'swarm', it dispatches to the
+resolver just registered.
 
 ```js
 bzz.upload("path/to/my/directory", "index.html")
 ```
 
-Here the second argument is the relative path to the asset mapped on to the root hash of entire collection, effectively the landing page served on the bare hash (and therefore the root of the domain registered with that hash) as url.
+Here the second argument to `bzz.upload` is the relative path to the asset mapped on to the root hash of entire collection, effectively the landing page served on the bare hash (and therefore the root of the domain registered with that hash) as url.
+
+The same resolver will allow setting subdomains:
+
+```js
+ens.setContentHash("album.swarm","7a59235e5f9c23bf74deb4838e24f75a77f786163f404c8004d79b5674625db0")
+// {}
+```
+
 
 
 ### `ens.resolve(name)`
@@ -74,7 +84,7 @@ ens.resolve("swarm")
 // "7420f14a28e276dd39da6a967dec332a932256717451155fbd3870b202b561c4"
 ```
 
-The same is used within swarm to resolve hostnames in urls, hence you can use the set names of registered domains in a bzz-scheme url `bzz://swarm` or normal http using a swarm http proxy: `localhost:32200/bzz:/swarm`.
+This same backend method is used within swarm to resolve hostnames in urls, hence you can use the set names of registered domains in a bzz-scheme url `bzz://swarm` or normal http using a swarm http proxy: `http://localhost:32200/bzz:/swarm`.
 
 ## Development
 
