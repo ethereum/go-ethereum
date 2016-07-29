@@ -236,7 +236,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, 
 		value = common.Big(exec["value"])
 	)
 	// Reset the pre-compiled contracts for VM tests.
-	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
+	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
 	caller := state.GetOrNewStateObject(from)
 

@@ -26,25 +26,27 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// PrecompiledAccount represents a native ethereum contract
-type PrecompiledAccount struct {
-	Gas func(l int) *big.Int
-	fn  func(in []byte) []byte
-}
-
-// Call calls the native function
-func (self PrecompiledAccount) Call(in []byte) []byte {
-	return self.fn(in)
+// Precompiled contract is the basic interface for native Go contracts. The implementation
+// requires a deterministic gas count based on the input size of the Run method of the
+// contract.
+type PrecompiledContract interface {
+	RequiredGas(inputSize int) *big.Int // RequiredPrice calculates the contract gas use
+	Run(input []byte) []byte            // Run runs the precompiled contract
 }
 
 // Precompiled contains the default set of ethereum contracts
-var Precompiled = PrecompiledContracts()
+var PrecompiledContracts = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256{},
+	common.BytesToAddress([]byte{3}): &ripemd160{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+}
 
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
-func RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.Gas(len(input))
+func RunPrecompiled(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
+	gas := p.RequiredGas(len(input))
 	if contract.UseGas(gas.Uint64()) {
-		ret = p.Call(input)
+		ret = p.Run(input)
 
 		return ret, nil
 	} else {
@@ -52,50 +54,17 @@ func RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (re
 	}
 }
 
-// PrecompiledContracts returns the default set of precompiled ethereum
-// contracts defined by the ethereum yellow paper.
-func PrecompiledContracts() map[string]*PrecompiledAccount {
-	return map[string]*PrecompiledAccount{
-		// ECRECOVER
-		string(common.LeftPadBytes([]byte{1}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			return params.EcrecoverGas
-		}, ecrecoverFunc},
+// ECRECOVER implemented as a native contract
+type ecrecover struct{}
 
-		// SHA256
-		string(common.LeftPadBytes([]byte{2}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			n := big.NewInt(int64(l+31) / 32)
-			n.Mul(n, params.Sha256WordGas)
-			return n.Add(n, params.Sha256Gas)
-		}, sha256Func},
-
-		// RIPEMD160
-		string(common.LeftPadBytes([]byte{3}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			n := big.NewInt(int64(l+31) / 32)
-			n.Mul(n, params.Ripemd160WordGas)
-			return n.Add(n, params.Ripemd160Gas)
-		}, ripemd160Func},
-
-		string(common.LeftPadBytes([]byte{4}, 20)): &PrecompiledAccount{func(l int) *big.Int {
-			n := big.NewInt(int64(l+31) / 32)
-			n.Mul(n, params.IdentityWordGas)
-
-			return n.Add(n, params.IdentityGas)
-		}, memCpy},
-	}
+func (c *ecrecover) RequiredGas(inputSize int) *big.Int {
+	return params.EcrecoverGas
 }
 
-func sha256Func(in []byte) []byte {
-	return crypto.Sha256(in)
-}
+func (c *ecrecover) Run(in []byte) []byte {
+	const ecRecoverInputLength = 128
 
-func ripemd160Func(in []byte) []byte {
-	return common.LeftPadBytes(crypto.Ripemd160(in), 32)
-}
-
-const ecRecoverInputLength = 128
-
-func ecrecoverFunc(in []byte) []byte {
-	in = common.RightPadBytes(in, 128)
+	in = common.RightPadBytes(in, ecRecoverInputLength)
 	// "in" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
 
@@ -126,6 +95,39 @@ func ecrecoverFunc(in []byte) []byte {
 	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32)
 }
 
-func memCpy(in []byte) []byte {
+// SHA256 implemented as a native contract
+type sha256 struct{}
+
+func (c *sha256) RequiredGas(inputSize int) *big.Int {
+	n := big.NewInt(int64(inputSize+31) / 32)
+	n.Mul(n, params.Sha256WordGas)
+	return n.Add(n, params.Sha256Gas)
+}
+func (c *sha256) Run(in []byte) []byte {
+	return crypto.Sha256(in)
+}
+
+// RIPMED160 implemented as a native contract
+type ripemd160 struct{}
+
+func (c *ripemd160) RequiredGas(inputSize int) *big.Int {
+	n := big.NewInt(int64(inputSize+31) / 32)
+	n.Mul(n, params.Ripemd160WordGas)
+	return n.Add(n, params.Ripemd160Gas)
+}
+func (c *ripemd160) Run(in []byte) []byte {
+	return common.LeftPadBytes(crypto.Ripemd160(in), 32)
+}
+
+// data copy implemented as a native contract
+type dataCopy struct{}
+
+func (c *dataCopy) RequiredGas(inputSize int) *big.Int {
+	n := big.NewInt(int64(inputSize+31) / 32)
+	n.Mul(n, params.IdentityWordGas)
+
+	return n.Add(n, params.IdentityGas)
+}
+func (c *dataCopy) Run(in []byte) []byte {
 	return in
 }
