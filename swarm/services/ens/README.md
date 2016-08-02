@@ -99,8 +99,8 @@ solc -o `pwd` --optimise --abi --bin OpenRegistrar.sol
 solc -o `pwd` --optimise --abi --bin PersonalResolver.sol
 ```
 
-using the .sol files in [revision 8b38b23a23100d5c325ae3fa24935f5ab93d61ba](https://github.com/Arachnid/ens/commit/8b38b23a23100d5c325ae3fa24935f5ab93d61ba)
-with solc version 0.3.5-0/RelWithDebInfo-Linux/g++/Interpreter
+using the .sol files in [revision 1cbd90d0631e8e30e1c28a394c128e7503ea85c6](https://github.com/Arachnid/ens/commit/1cbd90d0631e8e30e1c28a394c128e7503ea85c6)
+with solc version 0.3.2-e3c54185
 
 The go bindings for ENS contracts are generated using `abigen` via the go generator:
 
