@@ -17,6 +17,8 @@
 package types
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -24,6 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rlp"
+)
+
+var (
+	errMissingReceiptPostState = errors.New("missing post state root in JSON receipt")
+	errMissingReceiptFields    = errors.New("missing required JSON receipt fields")
 )
 
 // Receipt represents the results of a transaction.
@@ -34,10 +41,20 @@ type Receipt struct {
 	Bloom             Bloom
 	Logs              vm.Logs
 
-	// Implementation fields
+	// Implementation fields (don't reorder!)
 	TxHash          common.Hash
 	ContractAddress common.Address
 	GasUsed         *big.Int
+}
+
+type jsonReceipt struct {
+	PostState         *common.Hash    `json:"root"`
+	CumulativeGasUsed *hexBig         `json:"cumulativeGasUsed"`
+	Bloom             *Bloom          `json:"logsBloom"`
+	Logs              *vm.Logs        `json:"logs"`
+	TxHash            *common.Hash    `json:"transactionHash"`
+	ContractAddress   *common.Address `json:"contractAddress"`
+	GasUsed           *hexBig         `json:"gasUsed"`
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
@@ -67,13 +84,34 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// RlpEncode implements common.RlpEncode required for SHA3 derivation.
-func (r *Receipt) RlpEncode() []byte {
-	bytes, err := rlp.EncodeToBytes(r)
-	if err != nil {
-		panic(err)
+// UnmarshalJSON decodes the web3 RPC receipt format.
+func (r *Receipt) UnmarshalJSON(input []byte) error {
+	var dec jsonReceipt
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
 	}
-	return bytes
+	// Ensure that all fields are set. PostState is checked separately because it is a
+	// recent addition to the RPC spec (as of August 2016) and older implementations might
+	// not provide it. Note that ContractAddress is not checked because it can be null.
+	if dec.PostState == nil {
+		return errMissingReceiptPostState
+	}
+	if dec.CumulativeGasUsed == nil || dec.Bloom == nil ||
+		dec.Logs == nil || dec.TxHash == nil || dec.GasUsed == nil {
+		return errMissingReceiptFields
+	}
+	*r = Receipt{
+		PostState:         (*dec.PostState)[:],
+		CumulativeGasUsed: (*big.Int)(dec.CumulativeGasUsed),
+		Bloom:             *dec.Bloom,
+		Logs:              *dec.Logs,
+		TxHash:            *dec.TxHash,
+		GasUsed:           (*big.Int)(dec.GasUsed),
+	}
+	if dec.ContractAddress != nil {
+		r.ContractAddress = *dec.ContractAddress
+	}
+	return nil
 }
 
 // String implements the Stringer interface.
@@ -122,7 +160,7 @@ func (r *ReceiptForStorage) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// Receipts is a wrapper around a Receipt array to implement types.DerivableList.
+// Receipts is a wrapper around a Receipt array to implement DerivableList.
 type Receipts []*Receipt
 
 // Len returns the number of receipts in this list.

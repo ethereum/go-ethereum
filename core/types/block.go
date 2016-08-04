@@ -18,9 +18,9 @@
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -33,25 +33,53 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var (
+	EmptyRootHash  = DeriveSha(Transactions{})
+	EmptyUncleHash = CalcUncleHash(nil)
+)
+
+var (
+	errMissingHeaderMixDigest = errors.New("missing mixHash in JSON block header")
+	errMissingHeaderFields    = errors.New("missing required JSON block header fields")
+	errBadNonceSize           = errors.New("invalid block nonce size, want 8 bytes")
+)
+
 // A BlockNonce is a 64-bit hash which proves (combined with the
 // mix-hash) that a sufficient amount of computation has been carried
 // out on a block.
 type BlockNonce [8]byte
 
+// EncodeNonce converts the given integer to a block nonce.
 func EncodeNonce(i uint64) BlockNonce {
 	var n BlockNonce
 	binary.BigEndian.PutUint64(n[:], i)
 	return n
 }
 
+// Uint64 returns the integer value of a block nonce.
 func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
 }
 
+// MarshalJSON implements json.Marshaler
 func (n BlockNonce) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"0x%x"`, n)), nil
 }
 
+// UnmarshalJSON implements json.Unmarshaler
+func (n *BlockNonce) UnmarshalJSON(input []byte) error {
+	var b hexBytes
+	if err := b.UnmarshalJSON(input); err != nil {
+		return err
+	}
+	if len(b) != 8 {
+		return errBadNonceSize
+	}
+	copy((*n)[:], b)
+	return nil
+}
+
+// Header represents Ethereum block headers.
 type Header struct {
 	ParentHash  common.Hash    // Hash to the previous block
 	UncleHash   common.Hash    // Uncles of this block
@@ -70,10 +98,31 @@ type Header struct {
 	Nonce       BlockNonce
 }
 
+type jsonHeader struct {
+	ParentHash  *common.Hash    `json:"parentHash"`
+	UncleHash   *common.Hash    `json:"sha3Uncles"`
+	Coinbase    *common.Address `json:"miner"`
+	Root        *common.Hash    `json:"stateRoot"`
+	TxHash      *common.Hash    `json:"transactionsRoot"`
+	ReceiptHash *common.Hash    `json:"receiptRoot"`
+	Bloom       *Bloom          `json:"logsBloom"`
+	Difficulty  *hexBig         `json:"difficulty"`
+	Number      *hexBig         `json:"number"`
+	GasLimit    *hexBig         `json:"gasLimit"`
+	GasUsed     *hexBig         `json:"gasUsed"`
+	Time        *hexBig         `json:"timestamp"`
+	Extra       *hexBytes       `json:"extraData"`
+	MixDigest   *common.Hash    `json:"mixHash"`
+	Nonce       *BlockNonce     `json:"nonce"`
+}
+
+// Hash returns the block hash of the header, which is simply the keccak256 hash of its
+// RLP encoding.
 func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+// HashNoNonce returns the hash which is used as input for the proof-of-work search.
 func (h *Header) HashNoNonce() common.Hash {
 	return rlpHash([]interface{}{
 		h.ParentHash,
@@ -92,48 +141,63 @@ func (h *Header) HashNoNonce() common.Hash {
 	})
 }
 
-func (h *Header) UnmarshalJSON(data []byte) error {
-	var ext struct {
-		ParentHash string
-		Coinbase   string
-		Difficulty string
-		GasLimit   string
-		Time       *big.Int
-		Extra      string
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&ext); err != nil {
-		return err
-	}
-
-	h.ParentHash = common.HexToHash(ext.ParentHash)
-	h.Coinbase = common.HexToAddress(ext.Coinbase)
-	h.Difficulty = common.String2Big(ext.Difficulty)
-	h.Time = ext.Time
-	h.Extra = []byte(ext.Extra)
-	return nil
+// MarshalJSON encodes headers into the web3 RPC response block format.
+func (h *Header) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&jsonHeader{
+		ParentHash:  &h.ParentHash,
+		UncleHash:   &h.UncleHash,
+		Coinbase:    &h.Coinbase,
+		Root:        &h.Root,
+		TxHash:      &h.TxHash,
+		ReceiptHash: &h.ReceiptHash,
+		Bloom:       &h.Bloom,
+		Difficulty:  (*hexBig)(h.Difficulty),
+		Number:      (*hexBig)(h.Number),
+		GasLimit:    (*hexBig)(h.GasLimit),
+		GasUsed:     (*hexBig)(h.GasUsed),
+		Time:        (*hexBig)(h.Time),
+		Extra:       (*hexBytes)(&h.Extra),
+		MixDigest:   &h.MixDigest,
+		Nonce:       &h.Nonce,
+	})
 }
 
-func (h *Header) MarshalJSON() ([]byte, error) {
-	fields := map[string]interface{}{
-		"hash":             h.Hash(),
-		"parentHash":       h.ParentHash,
-		"number":           fmt.Sprintf("%#x", h.Number),
-		"nonce":            h.Nonce,
-		"receiptRoot":      h.ReceiptHash,
-		"logsBloom":        h.Bloom,
-		"sha3Uncles":       h.UncleHash,
-		"stateRoot":        h.Root,
-		"miner":            h.Coinbase,
-		"difficulty":       fmt.Sprintf("%#x", h.Difficulty),
-		"extraData":        fmt.Sprintf("0x%x", h.Extra),
-		"gasLimit":         fmt.Sprintf("%#x", h.GasLimit),
-		"gasUsed":          fmt.Sprintf("%#x", h.GasUsed),
-		"timestamp":        fmt.Sprintf("%#x", h.Time),
-		"transactionsRoot": h.TxHash,
+// UnmarshalJSON decodes headers from the web3 RPC response block format.
+func (h *Header) UnmarshalJSON(input []byte) error {
+	var dec jsonHeader
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
 	}
-
-	return json.Marshal(fields)
+	// Ensure that all fields are set. MixDigest is checked separately because
+	// it is a recent addition to the spec (as of August 2016) and older RPC server
+	// implementations might not provide it.
+	if dec.MixDigest == nil {
+		return errMissingHeaderMixDigest
+	}
+	if dec.ParentHash == nil || dec.UncleHash == nil || dec.Coinbase == nil ||
+		dec.Root == nil || dec.TxHash == nil || dec.ReceiptHash == nil ||
+		dec.Bloom == nil || dec.Difficulty == nil || dec.Number == nil ||
+		dec.GasLimit == nil || dec.GasUsed == nil || dec.Time == nil ||
+		dec.Extra == nil || dec.Nonce == nil {
+		return errMissingHeaderFields
+	}
+	// Assign all values.
+	h.ParentHash = *dec.ParentHash
+	h.UncleHash = *dec.UncleHash
+	h.Coinbase = *dec.Coinbase
+	h.Root = *dec.Root
+	h.TxHash = *dec.TxHash
+	h.ReceiptHash = *dec.ReceiptHash
+	h.Bloom = *dec.Bloom
+	h.Difficulty = (*big.Int)(dec.Difficulty)
+	h.Number = (*big.Int)(dec.Number)
+	h.GasLimit = (*big.Int)(dec.GasLimit)
+	h.GasUsed = (*big.Int)(dec.GasUsed)
+	h.Time = (*big.Int)(dec.Time)
+	h.Extra = *dec.Extra
+	h.MixDigest = *dec.MixDigest
+	h.Nonce = *dec.Nonce
+	return nil
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
@@ -150,6 +214,7 @@ type Body struct {
 	Uncles       []*Header
 }
 
+// Block represents a block in the Ethereum blockchain.
 type Block struct {
 	header       *Header
 	uncles       []*Header
@@ -197,11 +262,6 @@ type storageblock struct {
 	Uncles []*Header
 	TD     *big.Int
 }
-
-var (
-	EmptyRootHash  = DeriveSha(Transactions{})
-	EmptyUncleHash = CalcUncleHash(nil)
-)
 
 // NewBlock creates a new block. The input data is copied,
 // changes to header and to the field values will not affect the
@@ -275,23 +335,7 @@ func CopyHeader(h *Header) *Header {
 	return &cpy
 }
 
-func (b *Block) ValidateFields() error {
-	if b.header == nil {
-		return fmt.Errorf("header is nil")
-	}
-	for i, transaction := range b.transactions {
-		if transaction == nil {
-			return fmt.Errorf("transaction %d is nil", i)
-		}
-	}
-	for i, uncle := range b.uncles {
-		if uncle == nil {
-			return fmt.Errorf("uncle %d is nil", i)
-		}
-	}
-	return nil
-}
-
+// DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
@@ -303,6 +347,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// EncodeRLP serializes b into the Ethereum RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Header: b.header,
@@ -322,6 +367,7 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 }
 
 // TODO: copies
+
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
 
@@ -409,8 +455,8 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	return block
 }
 
-// Implement pow.Block
-
+// Hash returns the keccak256 hash of b's header.
+// The hash is computed on the first call and cached thereafter.
 func (b *Block) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {
 		return hash.(common.Hash)
