@@ -21,10 +21,9 @@ env:
    - PATH=$HOME/bin:$PATH
 
 install:
- - go get golang.org/x/tools/cmd/vet
  - go get -t -v ./...
 
 script:
- - go tool vet -all .
+ - "(go version | grep -q 1.4) || go tool vet -all ."
  - go install $GOFLAGS ./...
  - go test -v -race $GOFLAGS ./...
