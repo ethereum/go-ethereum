@@ -398,6 +398,10 @@ func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error
 		err := c.write(ctx, msg)
 		c.sendDone <- err
 		return err
+	case <-ctx.Done():
+		// This can happen if the client is overloaded or unable to keep up with
+		// subscription notifications.
+		return ctx.Err()
 	case <-c.didQuit:
 		return ErrClientQuit
 	}
