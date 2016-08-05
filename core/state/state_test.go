@@ -1,19 +1,3 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package state
 
 import (
@@ -24,11 +8,138 @@ import (
 	checker "gopkg.in/check.v1"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
+func TestStateForking(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+
+	var address common.Address
+
+	object := NewStateObject(address, db)
+	object.SetBalance(big.NewInt(1))
+
+	state.StateObjects[address] = object
+
+	ss1 := Fork(state)
+	ss2 := Fork(ss1)
+	ss2.AddBalance(address, big.NewInt(1))
+
+	if ss1.GetBalance(address).Cmp(big.NewInt(1)) != 0 {
+		t.Error("expected ss2 balance to be 1")
+	}
+
+	if ss2.GetBalance(address).Cmp(big.NewInt(2)) != 0 {
+		t.Error("expected ss2 balance to be 2")
+	}
+}
+
+func TestCaching(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+
+	var address common.Address
+
+	object := NewStateObject(address, db)
+	object.SetBalance(big.NewInt(1))
+
+	state.StateObjects[address] = object
+
+	ss1 := Fork(state)
+	ss2 := Fork(ss1)
+
+	if o := ss2.GetStateObject(address); o == nil {
+		t.Error("expected object to exist")
+	}
+
+	ss1objects := ss1.StateObjects
+	ss2objects := ss2.StateObjects
+
+	if len(ss1objects) != 0 {
+		t.Error("expected ss1 objects to be empty")
+	}
+
+	if len(ss2objects) != 1 {
+		t.Error("expected ss2 objects to be 1")
+	}
+}
+
+func TestFlatten(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+
+	var address common.Address
+
+	object := NewStateObject(address, db)
+	object.SetBalance(big.NewInt(1))
+
+	state.StateObjects[address] = object
+
+	ss1 := Fork(state)
+	ss1.AddBalance(address, big.NewInt(1))
+
+	ss2 := Fork(ss1)
+	ss2.AddBalance(address, big.NewInt(1))
+
+	flat1 := Flatten(ss1)
+	if flat1.StateObjects[address].Balance().Cmp(big.NewInt(2)) != 0 {
+		t.Error("expected flat1 to have balance of 2")
+	}
+
+	flat2 := Flatten(ss2)
+	if flat2.StateObjects[address].Balance().Cmp(big.NewInt(3)) != 0 {
+		t.Error("expected flat2 to have balance of 3")
+	}
+}
+
+func TestLogs(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+	state.PrepareIntermediate(common.Hash{}, common.Hash{}, 0)
+	state.AddLog(&vm.Log{})
+	unforkedLogs := state.Logs()
+
+	fork := Fork(state)
+	fork.PrepareIntermediate(common.Hash{}, common.Hash{}, 0)
+	fork.AddLog(&vm.Log{})
+	fork.AddLog(&vm.Log{})
+	forkedLogs := fork.Logs()
+
+	if len(unforkedLogs) != 1 {
+		t.Error("expected unforked state to have 1 log")
+	}
+
+	if len(forkedLogs) != 2 {
+		t.Error("expected forked state to have 2 log")
+	}
+}
+
+func BenchmarkFork(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		db, _ := ethdb.NewMemDatabase()
+		state, _ := New(common.Hash{}, db)
+		b.StartTimer()
+
+		revertEvery := 5
+		nesting := 20
+		for x := 0; x < nesting; x++ {
+			pstate := state
+			nstate := Fork(state)
+			nstate.AddBalance(common.Address{byte(x)}, big.NewInt(10))
+			// at the very least get the balance of each previous object
+			nstate.GetBalance(common.Address{byte(x - 1)})
+			if x%revertEvery == 0 {
+				state = pstate
+			}
+		}
+	}
+}
+
 type StateSuite struct {
-	state *StateDB
+	state *State
 }
 
 var _ = checker.Suite(&StateSuite{})
@@ -47,7 +158,8 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	// write some of them to the trie
 	s.state.UpdateStateObject(obj1)
 	s.state.UpdateStateObject(obj2)
-	s.state.Commit()
+
+	Commit(s.state)
 
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
@@ -99,33 +211,11 @@ func TestNull(t *testing.T) {
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	var value common.Hash
 	state.SetState(address, common.Hash{}, value)
-	state.Commit()
+	Commit(state)
 	value = state.GetState(address, common.Hash{})
 	if !common.EmptyHash(value) {
 		t.Errorf("expected empty hash. got %x", value)
 	}
-}
-
-func (s *StateSuite) TestSnapshot(c *checker.C) {
-	stateobjaddr := toAddr([]byte("aa"))
-	var storageaddr common.Hash
-	data1 := common.BytesToHash([]byte{42})
-	data2 := common.BytesToHash([]byte{43})
-
-	// set initial state object value
-	s.state.SetState(stateobjaddr, storageaddr, data1)
-	// get snapshot of current state
-	snapshot := s.state.Copy()
-
-	// set new state object value
-	s.state.SetState(stateobjaddr, storageaddr, data2)
-	// restore snapshot
-	s.state.Set(snapshot)
-
-	// get state storage value
-	res := s.state.GetState(stateobjaddr, storageaddr)
-
-	c.Assert(data1, checker.DeepEquals, res)
 }
 
 // use testing instead of checker because checker does not support
@@ -152,8 +242,7 @@ func TestSnapshot2(t *testing.T) {
 	so0.remove = false
 	so0.deleted = false
 	so0.dirty = true
-	state.SetStateObject(so0)
-	state.Commit()
+	state.StateObjects[so0.Address()] = so0
 
 	// and one with deleted == true
 	so1 := state.GetStateObject(stateobjaddr1)
@@ -163,14 +252,17 @@ func TestSnapshot2(t *testing.T) {
 	so1.remove = true
 	so1.deleted = true
 	so1.dirty = true
-	state.SetStateObject(so1)
+	state.StateObjects[so1.Address()] = so1
 
 	so1 = state.GetStateObject(stateobjaddr1)
 	if so1 != nil {
 		t.Fatalf("deleted object not nil when getting")
 	}
 
-	snapshot := state.Copy()
+	snapshot := state
+	state = Fork(state)
+	state.AddBalance(stateobjaddr0, big.NewInt(1))
+	state.AddBalance(stateobjaddr1, big.NewInt(1))
 	state.Set(snapshot)
 
 	so0Restored := state.GetStateObject(stateobjaddr0)
@@ -220,26 +312,5 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 	}
 	if so0.dirty != so1.dirty {
 		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
-	}
-}
-
-func BenchmarkFork(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		db, _ := ethdb.NewMemDatabase()
-		state, _ := New(common.Hash{}, db)
-		b.StartTimer()
-
-		revertEvery := 5
-		nesting := 20
-		for x := 0; x < nesting; x++ {
-			pstate := state.Copy()
-			state.AddBalance(common.Address{byte(x)}, big.NewInt(10))
-			// at the very least get the balance of each previous object
-			state.GetBalance(common.Address{byte(x - 1)})
-			if x%revertEvery == 0 {
-				state.Set(pstate)
-			}
-		}
 	}
 }

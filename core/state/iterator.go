@@ -29,7 +29,7 @@ import (
 // NodeIterator is an iterator to traverse the entire state trie post-order,
 // including all of the contract code and contract state tries.
 type NodeIterator struct {
-	state *StateDB // State being iterated
+	state *State // State being iterated
 
 	stateIt *trie.NodeIterator // Primary iterator for the global state trie
 	dataIt  *trie.NodeIterator // Secondary iterator for the data trie of a contract
@@ -46,7 +46,7 @@ type NodeIterator struct {
 }
 
 // NewNodeIterator creates an post-order state node iterator.
-func NewNodeIterator(state *StateDB) *NodeIterator {
+func NewNodeIterator(state *State) *NodeIterator {
 	return &NodeIterator{
 		state: state,
 	}
@@ -76,7 +76,7 @@ func (it *NodeIterator) step() error {
 	}
 	// Initialize the iterator if we've just started
 	if it.stateIt == nil {
-		it.stateIt = trie.NewNodeIterator(it.state.trie.Trie)
+		it.stateIt = trie.NewNodeIterator(it.state.Trie.Trie)
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
@@ -115,7 +115,7 @@ func (it *NodeIterator) step() error {
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob), &account); err != nil {
 		return err
 	}
-	dataTrie, err := trie.New(account.Root, it.state.db)
+	dataTrie, err := trie.New(account.Root, it.state.Db)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (it *NodeIterator) step() error {
 	}
 	if bytes.Compare(account.CodeHash, emptyCodeHash) != 0 {
 		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code, err = it.state.db.Get(account.CodeHash)
+		it.code, err = it.state.Db.Get(account.CodeHash)
 		if err != nil {
 			return fmt.Errorf("code %x: %v", account.CodeHash, err)
 		}

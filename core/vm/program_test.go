@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+//Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -75,7 +75,7 @@ func TestCompiling(t *testing.T) {
 func TestResetInput(t *testing.T) {
 	var sender account
 
-	env := NewEnv(true, true)
+	env := NewEnv(&Config{ForceJit: true, EnableJit: true})
 	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000))
 	contract.CodeAddr = &common.Address{}
 
@@ -170,8 +170,8 @@ func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return common.Address{} }
-func (self *Env) MakeSnapshot() Database   { return nil }
-func (self *Env) SetSnapshot(Database)     {}
+func (self *Env) ForkState() Database      { return nil }
+func (self *Env) SetState(Database)        {}
 func (self *Env) Time() *big.Int           { return big.NewInt(time.Now().Unix()) }
 func (self *Env) Difficulty() *big.Int     { return big.NewInt(0) }
 func (self *Env) Db() Database             { return nil }

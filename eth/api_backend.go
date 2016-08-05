@@ -97,8 +97,8 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
-	stateDb := state.(EthApiState).state.Copy()
+func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, st ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
+	stateDb := state.Fork(st.(EthApiState).state)
 	addr, _ := msg.From()
 	from := stateDb.GetOrNewStateObject(addr)
 	from.SetBalance(common.MaxBig)
@@ -185,7 +185,7 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 }
 
 type EthApiState struct {
-	state *state.StateDB
+	state *state.State
 }
 
 func (s EthApiState) GetBalance(ctx context.Context, addr common.Address) (*big.Int, error) {

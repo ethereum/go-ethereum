@@ -56,7 +56,7 @@ func NewStateProcessor(config *ChainConfig, bc *BlockChain) *StateProcessor {
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
+func (p *StateProcessor) Process(block *types.Block, st *state.State, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
 	var (
 		receipts     types.Receipts
 		totalUsedGas = big.NewInt(0)
@@ -64,22 +64,31 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		header       = block.Header()
 		allLogs      vm.Logs
 		gp           = new(GasPool).AddGas(block.GasLimit())
+		forkState    = state.Fork(st)
 	)
+
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		ApplyDAOHardFork(statedb)
+		ApplyDAOHardFork(forkState)
 	}
+
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
+		forkState.PrepareIntermediate(tx.Hash(), block.Hash(), i)
+
+		txPostState, receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, forkState, header, tx, totalUsedGas, cfg)
 		if err != nil {
 			return nil, nil, totalUsedGas, err
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, logs...)
+
+		// fork the transaction post state for the next cycle (if any)
+		forkState = state.Fork(txPostState)
 	}
-	AccumulateRewards(statedb, header, block.Uncles())
+	AccumulateRewards(forkState, header, block.Uncles())
+
+	st.Set(state.Flatten(forkState))
 
 	return receipts, allLogs, totalUsedGas, err
 }
@@ -89,36 +98,36 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 //
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
-func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
-	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, tx, header, cfg), tx, gp)
+func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, st *state.State, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*state.State, *types.Receipt, vm.Logs, *big.Int, error) {
+	env := NewEnv(st, config, bc, tx, header, cfg)
+
+	_, gas, err := ApplyMessage(env, tx, gp)
 	if err != nil {
-		return nil, nil, nil, err
+		return env.state, nil, nil, nil, err
 	}
 
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
-	receipt := types.NewReceipt(statedb.IntermediateRoot().Bytes(), usedGas)
+	receipt := types.NewReceipt(state.IntermediateRoot(env.state).Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
 	if MessageCreatesContract(tx) {
 		from, _ := tx.From()
 		receipt.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
 	}
-
-	logs := statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
+	receipt.Logs = env.state.Logs()
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
 
-	return receipt, logs, gas, err
+	return env.state, receipt, receipt.Logs, gas, err
 }
 
 // AccumulateRewards credits the coinbase of the given block with the
 // mining reward. The total reward consists of the static block reward
 // and rewards for included uncles. The coinbase of each uncle block is
 // also rewarded.
-func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*types.Header) {
+func AccumulateRewards(st *state.State, header *types.Header, uncles []*types.Header) {
 	reward := new(big.Int).Set(BlockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
@@ -126,10 +135,10 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 		r.Sub(r, header.Number)
 		r.Mul(r, BlockReward)
 		r.Div(r, big8)
-		statedb.AddBalance(uncle.Coinbase, r)
+		st.AddBalance(uncle.Coinbase, r)
 
 		r.Div(BlockReward, big32)
 		reward.Add(reward, r)
 	}
-	statedb.AddBalance(header.Coinbase, reward)
+	st.AddBalance(header.Coinbase, reward)
 }

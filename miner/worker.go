@@ -64,11 +64,11 @@ type uint64RingBuffer struct {
 // all of the current state information
 type Work struct {
 	config           *core.ChainConfig
-	state            *state.StateDB // apply state changes here
-	ancestors        *set.Set       // ancestor set (used for checking uncle parent validity)
-	family           *set.Set       // family set (used for checking uncle invalidity)
-	uncles           *set.Set       // uncle set
-	tcount           int            // tx count in cycle
+	state            *state.State // apply state changes here
+	ancestors        *set.Set     // ancestor set (used for checking uncle parent validity)
+	family           *set.Set     // family set (used for checking uncle invalidity)
+	uncles           *set.Set     // uncle set
+	tcount           int          // tx count in cycle
 	ownedAccounts    *set.Set
 	lowGasTxs        types.Transactions
 	failedTxs        types.Transactions
@@ -159,7 +159,7 @@ func (self *worker) setEtherbase(addr common.Address) {
 	self.coinbase = addr
 }
 
-func (self *worker) pending() (*types.Block, *state.StateDB) {
+func (self *worker) pending() (*types.Block, *state.State) {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
 
@@ -276,7 +276,8 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
-				work.state.Commit()
+				//work.state.Commit()
+				state.Commit(work.state)
 				parent := self.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 				if parent == nil {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
@@ -528,7 +529,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(work.state, header, uncles)
-		header.Root = work.state.IntermediateRoot()
+		header.Root = state.IntermediateRoot(work.state)
 	}
 
 	// create the new block whose nonce will be mined.
@@ -582,8 +583,8 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 
 			continue
 		}
-		// Start executing the transaction
-		env.state.StartRecord(tx.Hash(), common.Hash{}, env.tcount)
+
+		env.state.PrepareIntermediate(tx.Hash(), common.Hash{}, env.tcount)
 
 		err, logs := env.commitTransaction(tx, bc, gp)
 		switch {
@@ -618,8 +619,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 }
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
-	snap := env.state.Copy()
-
 	// this is a bit of a hack to force jit for the miners
 	config := env.config.VmConfig
 	if !(config.EnableJit && config.ForceJit) {
@@ -627,9 +626,10 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, g
 	}
 	config.ForceJit = false // disable forcing jit
 
-	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	state, receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	defer func() { env.state = state }()
+
 	if err != nil {
-		env.state.Set(snap)
 		return err, nil
 	}
 	env.txs = append(env.txs, tx)

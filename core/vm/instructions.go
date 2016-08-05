@@ -64,6 +64,8 @@ func (instr instruction) do(program *Program, pc *uint64, env Environment, contr
 	if err != nil {
 		return nil, err
 	}
+	// Uncomment for debugging
+	//fmt.Println("OP", instr.op, "GAS", cost, "SIZE", newMemSize)
 
 	// Use the calculated gas. When insufficient gas is present, use all gas and return an
 	// Out Of Gas error
@@ -456,7 +458,8 @@ func opLog(instr instruction, pc *uint64, env Environment, contract *Contract, m
 
 	d := memory.Get(mStart.Int64(), mSize.Int64())
 	log := NewLog(contract.Address(), topics, d, env.BlockNumber().Uint64())
-	env.AddLog(log)
+	//env.AddLog(log)
+	env.Db().AddLog(log)
 }
 
 func opMload(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) {
@@ -630,7 +633,7 @@ func makeLog(size int) instrFn {
 
 		d := memory.Get(mStart.Int64(), mSize.Int64())
 		log := NewLog(contract.Address(), topics, d, env.BlockNumber().Uint64())
-		env.AddLog(log)
+		env.Db().AddLog(log)
 	}
 }
 

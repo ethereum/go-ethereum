@@ -41,7 +41,7 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	statedb, _ := state.New(common.Hash{}, db)
 
 	key, _ := crypto.GenerateKey()
-	newPool := NewTxPool(testChainConfig(), new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	newPool := NewTxPool(testChainConfig(), new(event.TypeMux), func() (*state.State, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	newPool.resetState()
 
 	return newPool, key
@@ -176,7 +176,7 @@ func TestTransactionChainFork(t *testing.T) {
 	resetState := func() {
 		db, _ := ethdb.NewMemDatabase()
 		statedb, _ := state.New(common.Hash{}, db)
-		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
+		pool.currentState = func() (*state.State, error) { return statedb, nil }
 		currentState, _ := pool.currentState()
 		currentState.AddBalance(addr, big.NewInt(100000000000000))
 		pool.resetState()
@@ -202,7 +202,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	resetState := func() {
 		db, _ := ethdb.NewMemDatabase()
 		statedb, _ := state.New(common.Hash{}, db)
-		pool.currentState = func() (*state.StateDB, error) { return statedb, nil }
+		pool.currentState = func() (*state.State, error) { return statedb, nil }
 		currentState, _ := pool.currentState()
 		currentState.AddBalance(addr, big.NewInt(100000000000000))
 		pool.resetState()
@@ -482,7 +482,7 @@ func TestTransactionQueueGlobalLimiting(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, db)
 
-	pool := NewTxPool(testChainConfig(), new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool := NewTxPool(testChainConfig(), new(event.TypeMux), func() (*state.State, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
 	pool.resetState()
 
 	// Create a number of test accounts and fund them

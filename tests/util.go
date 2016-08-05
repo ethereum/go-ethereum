@@ -152,7 +152,7 @@ func (r RuleSet) IsHomestead(n *big.Int) bool {
 type Env struct {
 	ruleSet       RuleSet
 	depth         int
-	state         *state.StateDB
+	state         *state.State
 	skipTransfer  bool
 	initial       bool
 	Gas, gasPrice *big.Int
@@ -171,7 +171,7 @@ type Env struct {
 	evm vm.VirtualMachine
 }
 
-func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
+func NewEnv(ruleSet RuleSet, state *state.State) *Env {
 	env := &Env{
 		ruleSet: ruleSet,
 		state:   state,
@@ -179,7 +179,7 @@ func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
 	return env
 }
 
-func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
+func NewEnvFromMap(ruleSet RuleSet, state *state.State, envValues map[string]string, exeValues map[string]string) *Env {
 	env := NewEnv(ruleSet, state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
@@ -229,11 +229,13 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
-func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+func (self *Env) ForkState() vm.Database {
+	self.state = state.Fork(self.state)
+	return self.state
 }
-func (self *Env) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+
+func (self *Env) SetState(st vm.Database) {
+	self.state = st.(*state.State)
 }
 
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {

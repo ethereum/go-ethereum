@@ -30,7 +30,7 @@ func create() (*ManagedState, *account) {
 	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
 	so := &StateObject{address: addr, nonce: 100}
-	ms.StateDB.stateObjects[addr.Str()] = so
+	ms.State.StateObjects[addr] = so
 	ms.accounts[addr.Str()] = newAccount(so)
 
 	return ms, ms.accounts[addr.Str()]
@@ -92,7 +92,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	account.nonces = append(account.nonces, nn...)
 	nonce := ms.NewNonce(addr)
 
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
+	ms.State.StateObjects[addr].nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 200 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
@@ -100,7 +100,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
+	ms.State.StateObjects[addr].nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
@@ -118,7 +118,7 @@ func TestSetNonce(t *testing.T) {
 	}
 
 	addr[0] = 1
-	ms.StateDB.SetNonce(addr, 1)
+	ms.State.SetNonce(addr, 1)
 
 	if ms.GetNonce(addr) != 1 {
 		t.Error("Expected nonce of 1, got", ms.GetNonce(addr))

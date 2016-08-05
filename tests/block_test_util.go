@@ -200,7 +200,7 @@ func runBlockTest(homesteadBlock, daoForkBlock *big.Int, test *BlockTest) error 
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
+func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.State, error) {
 	statedb, err := state.New(common.Hash{}, db)
 	if err != nil {
 		return nil, err
@@ -227,7 +227,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 		}
 	}
 
-	root, err := statedb.Commit()
+	root, err := state.Commit(statedb)
 	if err != nil {
 		return nil, fmt.Errorf("error writing state: %v", err)
 	}
@@ -362,7 +362,7 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	return nil
 }
 
-func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
+func (t *BlockTest) ValidatePostState(statedb *state.State) error {
 	// validate post state accounts in test file against what we have in state db
 	for addrString, acct := range t.postAccounts {
 		// XXX: is is worth it checking for errors here?

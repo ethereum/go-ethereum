@@ -60,7 +60,7 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 		state.UpdateStateObject(obj)
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit()
+	root, _ := Commit(state)
 
 	// Remove any potentially cached data from the test state creation
 	trie.ClearGlobalCache()

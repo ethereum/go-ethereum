@@ -65,7 +65,7 @@ func makeTestState() (common.Hash, ethdb.Database) {
 		so.Update()
 		st.UpdateStateObject(so)
 	}
-	root, _ := st.Commit()
+	root, _ := state.Commit(st)
 	return root, sdb
 }
 

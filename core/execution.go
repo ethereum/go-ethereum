@@ -85,7 +85,9 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		createAccount = true
 	}
 
-	snapshotPreTransfer := env.MakeSnapshot()
+	snapshotPreTransfer := env.Db()
+	// preserve the envs state and move to a new state
+	env.ForkState()
 	var (
 		from = env.Db().GetAccount(caller.Address())
 		to   vm.Account
@@ -129,7 +131,7 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 	if err != nil && (env.RuleSet().IsHomestead(env.BlockNumber()) || err != vm.CodeStoreOutOfGasError) {
 		contract.UseGas(contract.Gas())
 
-		env.SetSnapshot(snapshotPreTransfer)
+		env.SetState(snapshotPreTransfer)
 	}
 
 	return ret, addr, err
@@ -144,7 +146,8 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 		return nil, common.Address{}, vm.DepthError
 	}
 
-	snapshot := env.MakeSnapshot()
+	snapshot := env.Db()
+	env.ForkState()
 
 	var to vm.Account
 	if !env.Db().Exist(*toAddr) {
@@ -162,7 +165,7 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 	if err != nil {
 		contract.UseGas(contract.Gas())
 
-		env.SetSnapshot(snapshot)
+		env.SetState(snapshot)
 	}
 
 	return ret, addr, err

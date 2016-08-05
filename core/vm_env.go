@@ -41,18 +41,20 @@ func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
 }
 
 type VMEnv struct {
-	chainConfig *ChainConfig      // Chain configuration
-	state       *state.StateDB    // State to use for executing
-	evm         vm.VirtualMachine // The Ethereum Virtual Machine
-	depth       int               // Current execution depth
-	msg         Message           // Message appliod
+	chainConfig *ChainConfig // Chain configuration
+
+	state *state.State
+
+	evm   vm.VirtualMachine // The Ethereum Virtual Machine
+	depth int               // Current execution depth
+	msg   Message           // Message appliod
 
 	header    *types.Header            // Header information
 	chain     *BlockChain              // Blockchain handle
 	getHashFn func(uint64) common.Hash // getHashFn callback is used to retrieve block hashes
 }
 
-func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
+func NewEnv(state *state.State, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		chainConfig: chainConfig,
 		chain:       chain,
@@ -90,12 +92,13 @@ func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
 
-func (self *VMEnv) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+func (self *VMEnv) ForkState() vm.Database {
+	self.state = state.Fork(self.state)
+	return self.state
 }
 
-func (self *VMEnv) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+func (self *VMEnv) SetState(st vm.Database) {
+	self.state = st.(*state.State)
 }
 
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {

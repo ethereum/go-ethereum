@@ -55,7 +55,6 @@ type StateTransition struct {
 	initialGas    *big.Int
 	value         *big.Int
 	data          []byte
-	state         vm.Database
 
 	env vm.Environment
 }
@@ -116,7 +115,6 @@ func NewStateTransition(env vm.Environment, msg Message, gp *GasPool) *StateTran
 		initialGas: new(big.Int),
 		value:      msg.Value(),
 		data:       msg.Data(),
-		state:      env.Db(),
 	}
 }
 
@@ -138,6 +136,7 @@ func (self *StateTransition) from() (vm.Account, error) {
 	var (
 		f   common.Address
 		err error
+		st  = self.env.Db()
 	)
 	if self.env.RuleSet().IsHomestead(self.env.BlockNumber()) {
 		f, err = self.msg.From()
@@ -147,10 +146,10 @@ func (self *StateTransition) from() (vm.Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !self.state.Exist(f) {
-		return self.state.CreateAccount(f), nil
+	if !st.Exist(f) {
+		return st.CreateAccount(f), nil
 	}
-	return self.state.GetAccount(f), nil
+	return st.GetAccount(f), nil
 }
 
 func (self *StateTransition) to() vm.Account {
@@ -162,10 +161,11 @@ func (self *StateTransition) to() vm.Account {
 		return nil // contract creation
 	}
 
-	if !self.state.Exist(*to) {
-		return self.state.CreateAccount(*to)
+	state := self.env.Db()
+	if !state.Exist(*to) {
+		return state.CreateAccount(*to)
 	}
-	return self.state.GetAccount(*to)
+	return state.GetAccount(*to)
 }
 
 func (self *StateTransition) useGas(amount *big.Int) error {
@@ -210,7 +210,7 @@ func (self *StateTransition) preCheck() (err error) {
 
 	// Make sure this transaction's nonce is correct
 	if msg.CheckNonce() {
-		if n := self.state.GetNonce(sender.Address()); n != msg.Nonce() {
+		if n := self.env.Db().GetNonce(sender.Address()); n != msg.Nonce() {
 			return NonceError(msg.Nonce(), n)
 		}
 	}
@@ -255,7 +255,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 		}
 	} else {
 		// Increment the nonce for the next transaction
-		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
+		self.env.Db().SetNonce(sender.Address(), self.env.Db().GetNonce(sender.Address())+1)
 		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
 		if err != nil {
 			glog.V(logger.Core).Infoln("VM call err:", err)
@@ -274,23 +274,24 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	requiredGas = new(big.Int).Set(self.gasUsed())
 
 	self.refundGas()
-	self.state.AddBalance(self.env.Coinbase(), new(big.Int).Mul(self.gasUsed(), self.gasPrice))
+	self.env.Db().AddBalance(self.env.Coinbase(), new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 
 	return ret, requiredGas, self.gasUsed(), err
 }
 
 func (self *StateTransition) refundGas() {
+	state := self.env.Db()
 	// Return eth for remaining gas to the sender account,
 	// exchanged at the original rate.
 	sender, _ := self.from() // err already checked
 	remaining := new(big.Int).Mul(self.gas, self.gasPrice)
-	sender.AddBalance(remaining)
+	state.AddBalance(sender.Address(), remaining)
 
 	// Apply refund counter, capped to half of the used gas.
 	uhalf := remaining.Div(self.gasUsed(), common.Big2)
-	refund := common.BigMin(uhalf, self.state.GetRefund())
+	refund := common.BigMin(uhalf, state.GetRefund())
 	self.gas.Add(self.gas, refund)
-	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
+	state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

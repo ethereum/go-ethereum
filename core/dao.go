@@ -60,13 +60,13 @@ func ValidateDAOHeaderExtraData(config *ChainConfig, header *types.Header) error
 // ApplyDAOHardFork modifies the state database according to the DAO hard-fork
 // rules, transferring all balances of a set of DAO accounts to a single refund
 // contract.
-func ApplyDAOHardFork(statedb *state.StateDB) {
+func ApplyDAOHardFork(state *state.State) {
 	// Retrieve the contract to refund balances into
-	refund := statedb.GetOrNewStateObject(params.DAORefundContract)
+	refund := state.GetOrNewStateObject(params.DAORefundContract)
 
 	// Move every DAO account and extra-balance account funds into the refund contract
 	for _, addr := range params.DAODrainList {
-		if account := statedb.GetStateObject(addr); account != nil {
+		if account := state.GetStateObject(addr); account != nil {
 			refund.AddBalance(account.Balance())
 			account.SetBalance(new(big.Int))
 		}

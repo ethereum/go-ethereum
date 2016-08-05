@@ -182,7 +182,7 @@ func (self *Miner) SetExtra(extra []byte) error {
 }
 
 // Pending returns the currently pending block and associated state.
-func (self *Miner) Pending() (*types.Block, *state.StateDB) {
+func (self *Miner) Pending() (*types.Block, *state.State) {
 	return self.worker.pending()
 }
 

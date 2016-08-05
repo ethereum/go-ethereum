@@ -104,7 +104,7 @@ func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
-		statedb.SetStateObject(obj)
+		statedb.StateObjects[obj.Address()] = obj
 		for a, v := range account.Storage {
 			obj.SetState(common.HexToHash(a), common.HexToHash(v))
 		}
@@ -155,7 +155,7 @@ func runVmTest(test VmTest) error {
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
-		statedb.SetStateObject(obj)
+		statedb.StateObjects[obj.Address()] = obj
 		for a, v := range account.Storage {
 			obj.SetState(common.HexToHash(a), common.HexToHash(v))
 		}
@@ -227,7 +227,7 @@ func runVmTest(test VmTest) error {
 	return nil
 }
 
-func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunVm(statedb *state.State, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
@@ -238,13 +238,16 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, 
 	// Reset the pre-compiled contracts for VM tests.
 	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
-	caller := state.GetOrNewStateObject(from)
+	caller := statedb.GetOrNewStateObject(from)
 
-	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, state, env, exec)
+	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, statedb, env, exec)
 	vmenv.vmTest = true
 	vmenv.skipTransfer = true
 	vmenv.initial = true
 	ret, err := vmenv.Call(caller, to, data, gas, value)
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	statedb.Set(state.Flatten(vmenv.state))
+	state.Commit(statedb)
+
+	return ret, statedb.Logs(), vmenv.Gas, err
 }

@@ -63,11 +63,11 @@ var (
 // BlockGen creates blocks for testing.
 // See GenerateChain for a detailed explanation.
 type BlockGen struct {
-	i       int
-	parent  *types.Block
-	chain   []*types.Block
-	header  *types.Header
-	statedb *state.StateDB
+	i      int
+	parent *types.Block
+	chain  []*types.Block
+	header *types.Header
+	state  *state.State
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -105,11 +105,12 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
+	b.state.PrepareIntermediate(tx.Hash(), common.Hash{}, len(b.txs))
+	st, receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.state, b.header, tx, b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
+	b.state = st
 	b.txs = append(b.txs, tx)
 	b.receipts = append(b.receipts, receipt)
 }
@@ -131,10 +132,10 @@ func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	if !b.statedb.HasAccount(addr) {
+	if !b.state.HasAccount(addr) {
 		panic("account does not exist")
 	}
-	return b.statedb.GetNonce(addr)
+	return b.state.GetNonce(addr)
 }
 
 // AddUncle adds an uncle header to the generated block.
@@ -180,8 +181,12 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // a similar non-validating proof of work implementation.
 func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
+	genblock := func(i int, h *types.Header, st *state.State) (*types.Block, types.Receipts) {
+		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, state: st}
+		// this looks a bit weird, but will catch annoying issues. st should not reused for
+		// any code here. b.state should be used instead. If anything uses the st now by accident
+		// it will hard crash instead and directly point towards this comment.
+		st = nil
 
 		// Mutate the state and block according to any hard-fork specs
 		if config == nil {
@@ -196,14 +201,14 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 			}
 		}
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(h.Number) == 0 {
-			ApplyDAOHardFork(statedb)
+			ApplyDAOHardFork(b.state)
 		}
 		// Execute any user modifications to the block and finalize it
 		if gen != nil {
 			gen(i, b)
 		}
-		AccumulateRewards(statedb, h, b.uncles)
-		root, err := statedb.Commit()
+		AccumulateRewards(b.state, h, b.uncles)
+		root, err := state.Commit(b.state)
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -211,12 +216,12 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 		return types.NewBlock(h, b.txs, b.uncles, b.receipts), b.receipts
 	}
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), db)
+		st, err := state.New(parent.Root(), db)
 		if err != nil {
 			panic(err)
 		}
-		header := makeHeader(parent, statedb)
-		block, receipt := genblock(i, header, statedb)
+		header := makeHeader(parent, st)
+		block, receipt := genblock(i, header, st)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block
@@ -224,7 +229,7 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 	return blocks, receipts
 }
 
-func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
+func makeHeader(parent *types.Block, st *state.State) *types.Header {
 	var time *big.Int
 	if parent.Time() == nil {
 		time = big.NewInt(10)
@@ -232,7 +237,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
 	return &types.Header{
-		Root:       state.IntermediateRoot(),
+		Root:       state.IntermediateRoot(st),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: CalcDifficulty(MakeChainConfig(), time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),

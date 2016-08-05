@@ -50,14 +50,15 @@ func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
-func (self *Env) Coinbase() common.Address  { return common.Address{} }
-func (self *Env) MakeSnapshot() vm.Database { return nil }
-func (self *Env) SetSnapshot(vm.Database)   {}
-func (self *Env) Time() *big.Int            { return big.NewInt(time.Now().Unix()) }
-func (self *Env) Difficulty() *big.Int      { return big.NewInt(0) }
-func (self *Env) Db() vm.Database           { return nil }
-func (self *Env) GasLimit() *big.Int        { return self.gasLimit }
-func (self *Env) VmType() vm.Type           { return vm.StdVmTy }
+func (self *Env) Coinbase() common.Address { return common.Address{} }
+func (self *Env) ForkState() vm.Database   { return nil }
+func (self *Env) SetState(vm.Database)     {}
+func (self *Env) Time() *big.Int           { return big.NewInt(time.Now().Unix()) }
+func (self *Env) Difficulty() *big.Int     { return big.NewInt(0) }
+func (self *Env) Db() vm.Database          { return nil }
+func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
+func (self *Env) GasPrice() *big.Int       { return big.NewInt(0) }
+func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }
@@ -69,16 +70,16 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 	return true
 }
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {}
-func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	return nil, nil
 }
-func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
+func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	return nil, nil
 }
-func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
+func (self *Env) Create(caller vm.ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
 	return nil, common.Address{}, nil
 }
-func (self *Env) DelegateCall(me vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
+func (self *Env) DelegateCall(me vm.ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
 	return nil, nil
 }
 
@@ -92,14 +93,14 @@ func (account) SetBalance(*big.Int)                                 {}
 func (account) SetNonce(uint64)                                     {}
 func (account) Balance() *big.Int                                   { return nil }
 func (account) Address() common.Address                             { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int)                        {}
+func (account) ReturnGas(uint64)                                    {}
 func (account) SetCode([]byte)                                      {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
 func runTrace(tracer *JavascriptTracer) (interface{}, error) {
 	env := NewEnv(&vm.Config{Debug: true, Tracer: tracer})
 
-	contract := vm.NewContract(account{}, account{}, big.NewInt(0), env.GasLimit(), big.NewInt(1))
+	contract := vm.NewContract(account{}, account{}, big.NewInt(0), env.GasLimit())
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	_, err := env.Vm().Run(contract, []byte{})
@@ -188,7 +189,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	}
 
 	env := NewEnv(&vm.Config{Debug: true, Tracer: tracer})
-	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0), big.NewInt(0))
+	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0))
 
 	tracer.CaptureState(env, 0, 0, big.NewInt(0), big.NewInt(0), nil, nil, contract, 0, nil)
 	timeout := errors.New("stahp")

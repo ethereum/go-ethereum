@@ -29,7 +29,7 @@ import (
 type Env struct {
 	ruleSet vm.RuleSet
 	depth   int
-	state   *state.StateDB
+	state   *state.State
 
 	origin   common.Address
 	coinbase common.Address
@@ -46,7 +46,7 @@ type Env struct {
 }
 
 // NewEnv returns a new vm.Environment
-func NewEnv(cfg *Config, state *state.StateDB) vm.Environment {
+func NewEnv(cfg *Config, state *state.State) vm.Environment {
 	env := &Env{
 		ruleSet:    cfg.RuleSet,
 		state:      state,
@@ -89,11 +89,12 @@ func (self *Env) SetDepth(i int) { self.depth = i }
 func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
-func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+func (self *Env) ForkState() vm.Database {
+	self.state = state.Fork(self.state)
+	return self.state
 }
-func (self *Env) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+func (self *Env) SetState(st vm.Database) {
+	self.state.Set(st.(*state.State))
 }
 
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {

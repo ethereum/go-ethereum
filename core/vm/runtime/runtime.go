@@ -47,7 +47,7 @@ type Config struct {
 	DisableJit  bool // "disable" so it's enabled by default
 	Debug       bool
 
-	State     *state.StateDB
+	State     *state.State
 	GetHashFn func(n uint64) common.Hash
 }
 
@@ -88,7 +88,7 @@ func setDefaults(cfg *Config) {
 // Executes sets up a in memory, temporarily, environment for the execution of
 // the given code. It enabled the JIT by default and make sure that it's restored
 // to it's original state afterwards.
-func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
+func Execute(code, input []byte, cfg *Config) ([]byte, *state.State, error) {
 	if cfg == nil {
 		cfg = new(Config)
 	}

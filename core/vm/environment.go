@@ -22,6 +22,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Vm is the basic interface for an implementation of the EVM.
+type Vm interface {
+	// Run should execute the given contract with the input given in in
+	// and return the contract execution return bytes or an error if it
+	// failed.
+	Run(c *Contract, in []byte) ([]byte, error)
+}
+
 // RuleSet is an interface that defines the current rule set during the
 // execution of the EVM instructions (e.g. whether it's homestead)
 type RuleSet interface {
@@ -35,11 +43,17 @@ type Environment interface {
 	RuleSet() RuleSet
 	// The state database
 	Db() Database
+	// PreserveState preserve the current state and returns a new handle
+	ForkState() Database
+	// SetState sets the new state handle
+	SetState(Database)
+
 	// Creates a restorable snapshot
-	MakeSnapshot() Database
+	//MakeSnapshot() Database
 	// Set database to previous snapshot
-	SetSnapshot(Database)
+	//SetSnapshot(Database)
 	// Address of the original invoker (first occurrence of the VM invoker)
+
 	Origin() common.Address
 	// The block number this VM is invoked on
 	BlockNumber() *big.Int
@@ -59,8 +73,6 @@ type Environment interface {
 	CanTransfer(from common.Address, balance *big.Int) bool
 	// Transfers amount from one account to the other
 	Transfer(from, to Account, amount *big.Int)
-	// Adds a LOG to the state
-	AddLog(*Log)
 	// Type of the VM
 	Vm() Vm
 	// Get the curret calling depth
@@ -75,14 +87,6 @@ type Environment interface {
 	DelegateCall(me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
 	// Create a new contract
 	Create(me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
-}
-
-// Vm is the basic interface for an implementation of the EVM.
-type Vm interface {
-	// Run should execute the given contract with the input given in in
-	// and return the contract execution return bytes or an error if it
-	// failed.
-	Run(c *Contract, in []byte) ([]byte, error)
 }
 
 // Database is a EVM database for full state querying.
@@ -108,6 +112,8 @@ type Database interface {
 	Delete(common.Address) bool
 	Exist(common.Address) bool
 	IsDeleted(common.Address) bool
+
+	AddLog(*Log)
 }
 
 // Account represents a contract or basic ethereum account.

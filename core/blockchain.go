@@ -347,7 +347,7 @@ func (self *BlockChain) Processor() Processor {
 func (self *BlockChain) AuxValidator() pow.PoW { return self.pow }
 
 // State returns a new mutable state based on the current HEAD block.
-func (self *BlockChain) State() (*state.StateDB, error) {
+func (self *BlockChain) State() (*state.State, error) {
 	return state.New(self.CurrentBlock().Root(), self.chainDb)
 }
 
@@ -826,7 +826,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		tstart        = time.Now()
 
 		nonceChecked = make([]bool, len(chain))
-		statedb      *state.StateDB
+		st           *state.State
 	)
 
 	// Start the parallel nonce verifier.
@@ -893,29 +893,31 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
-		if statedb == nil {
-			statedb, err = state.New(self.GetBlock(block.ParentHash(), block.NumberU64()-1).Root(), self.chainDb)
+		if st == nil {
+			st, err = state.New(self.GetBlock(block.ParentHash(), block.NumberU64()-1).Root(), self.chainDb)
 		} else {
-			err = statedb.Reset(chain[i-1].Root())
+			err = st.Reset(chain[i-1].Root())
 		}
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(block, statedb, self.config.VmConfig)
+		receipts, logs, usedGas, err := self.processor.Process(block, st, self.config.VmConfig)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
 		}
 		// Validate the state using the default validator
-		err = self.Validator().ValidateState(block, self.GetBlock(block.ParentHash(), block.NumberU64()-1), statedb, receipts, usedGas)
+		err = self.Validator().ValidateState(block, self.GetBlock(block.ParentHash(), block.NumberU64()-1), st, receipts, usedGas)
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
 		}
+		// flatten the state before committing.
+		st = state.Flatten(st)
 		// Write state changes to database
-		_, err = statedb.Commit()
+		_, err = state.Commit(st)
 		if err != nil {
 			return i, err
 		}

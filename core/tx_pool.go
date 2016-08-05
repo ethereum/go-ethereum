@@ -52,7 +52,7 @@ var (
 	evictionInterval    = time.Minute   // Time interval to check for evictable transactions
 )
 
-type stateFn func() (*state.StateDB, error)
+type stateFn func() (*state.State, error)
 
 // TxPool contains all currently known transactions. Transactions
 // enter the pool when they are received from the network or submitted

@@ -110,7 +110,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
+func (v *BlockValidator) ValidateState(block, parent *types.Block, st *state.State, receipts types.Receipts, usedGas *big.Int) (err error) {
 	header := block.Header()
 	if block.GasUsed().Cmp(usedGas) != 0 {
 		return ValidationError(fmt.Sprintf("gas used error (%v / %v)", block.GasUsed(), usedGas))
@@ -128,7 +128,7 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(); header.Root != root {
+	if root := state.IntermediateRoot(st); header.Root != root {
 		return fmt.Errorf("invalid merkle root: header=%x computed=%x", header.Root, root)
 	}
 	return nil

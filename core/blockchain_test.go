@@ -154,7 +154,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		blockchain.mu.Lock()
 		WriteTd(blockchain.chainDb, block.Hash(), block.NumberU64(), new(big.Int).Add(block.Difficulty(), blockchain.GetTdByHash(block.ParentHash())))
 		WriteBlock(blockchain.chainDb, block)
-		statedb.Commit()
+		state.Commit(statedb)
 		blockchain.mu.Unlock()
 	}
 	return nil
@@ -432,10 +432,10 @@ type bproc struct{}
 
 func (bproc) ValidateBlock(*types.Block) error                        { return nil }
 func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return nil }
-func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
+func (bproc) ValidateState(block, parent *types.Block, state *state.State, receipts types.Receipts, usedGas *big.Int) error {
 	return nil
 }
-func (bproc) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
+func (bproc) Process(block *types.Block, statedb *state.State, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
 	return nil, nil, nil, nil
 }
 

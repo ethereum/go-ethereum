@@ -99,7 +99,7 @@ func benchStateTest(ruleSet RuleSet, test VmTest, env map[string]string, b *test
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
-		statedb.SetStateObject(obj)
+		statedb.StateObjects[obj.Address()] = obj
 		for a, v := range account.Storage {
 			obj.SetState(common.HexToHash(a), common.HexToHash(v))
 		}
@@ -121,13 +121,11 @@ func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string)
 			continue
 		}
 
-		//fmt.Println("StateTest:", name)
 		if err := runStateTest(ruleSet, test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
 		//glog.Infoln("State test passed: ", name)
-		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil
 
@@ -138,7 +136,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
 		obj := StateObjectFromAccount(db, addr, account)
-		statedb.SetStateObject(obj)
+		statedb.StateObjects[obj.Address()] = obj
 		for a, v := range account.Storage {
 			obj.SetState(common.HexToHash(a), common.HexToHash(v))
 		}
@@ -169,7 +167,6 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 	}
 
 	ret, logs, _, _ = RunState(ruleSet, statedb, env, test.Transaction)
-
 	// Compare expected and actual return
 	rexp := common.FromHex(test.Out)
 	if bytes.Compare(rexp, ret) != 0 {
@@ -201,7 +198,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 		}
 	}
 
-	root, _ := statedb.Commit()
+	root, _ := state.Commit(statedb)
 	if common.HexToHash(test.PostStateRoot) != root {
 		return fmt.Errorf("Post state root error. Expected: %s have: %x", test.PostStateRoot, root)
 	}
@@ -216,7 +213,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 	return nil
 }
 
-func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunState(ruleSet RuleSet, statedb *state.State, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
@@ -232,19 +229,21 @@ func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string
 	}
 	// Set pre compiled contracts
 	//vm.Precompiled = vm.PrecompiledContracts()
-	snapshot := statedb.Copy()
+	snapshot := statedb
+	nstatedb := state.Fork(snapshot)
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(ruleSet, statedb, env, tx)
+	vmenv := NewEnvFromMap(ruleSet, nstatedb, env, tx)
 	vmenv.origin = addr
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
-		statedb.Set(snapshot)
+		vmenv.SetState(snapshot)
 	}
-	statedb.Commit()
+	statedb.Set(state.Flatten(vmenv.state))
+	state.Commit(statedb)
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), vmenv.Gas, err
 }

@@ -37,16 +37,16 @@ type World struct {
 	Accounts map[string]Account `json:"accounts"`
 }
 
-func (self *StateDB) RawDump() World {
+func (self *State) RawDump() World {
 	world := World{
-		Root:     common.Bytes2Hex(self.trie.Root()),
+		Root:     common.Bytes2Hex(self.Trie.Root()),
 		Accounts: make(map[string]Account),
 	}
 
-	it := self.trie.Iterator()
+	it := self.Trie.Iterator()
 	for it.Next() {
-		addr := self.trie.GetKey(it.Key)
-		stateObject, err := DecodeObject(common.BytesToAddress(addr), self.db, it.Value)
+		addr := self.Trie.GetKey(it.Key)
+		stateObject, err := DecodeObject(common.BytesToAddress(addr), self.Db, it.Value)
 		if err != nil {
 			panic(err)
 		}
@@ -61,14 +61,14 @@ func (self *StateDB) RawDump() World {
 		}
 		storageIt := stateObject.trie.Iterator()
 		for storageIt.Next() {
-			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+			account.Storage[common.Bytes2Hex(self.Trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}
 		world.Accounts[common.Bytes2Hex(addr)] = account
 	}
 	return world
 }
 
-func (self *StateDB) Dump() []byte {
+func (self *State) Dump() []byte {
 	json, err := json.MarshalIndent(self.RawDump(), "", "    ")
 	if err != nil {
 		fmt.Println("dump err", err)

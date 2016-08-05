@@ -64,16 +64,16 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 
 	// creating with empty hash always works
-	statedb, _ := state.New(common.Hash{}, chainDb)
+	st, _ := state.New(common.Hash{}, chainDb)
 	for addr, account := range genesis.Alloc {
 		address := common.HexToAddress(addr)
-		statedb.AddBalance(address, common.String2Big(account.Balance))
-		statedb.SetCode(address, common.Hex2Bytes(account.Code))
+		st.AddBalance(address, common.String2Big(account.Balance))
+		st.SetCode(address, common.Hex2Bytes(account.Code))
 		for key, value := range account.Storage {
-			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
+			st.SetState(address, common.HexToHash(key), common.HexToHash(value))
 		}
 	}
-	root, stateBatch := statedb.CommitBatch()
+	root, stateBatch := state.CommitBatch(st)
 
 	difficulty := common.String2Big(genesis.Difficulty)
 	block := types.NewBlock(&types.Header{
@@ -125,10 +125,10 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 // GenesisBlockForTesting creates a block in which addr has the given wei balance.
 // The state trie of the block is written to db. the passed db needs to contain a state root
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
-	statedb, _ := state.New(common.Hash{}, db)
-	obj := statedb.GetOrNewStateObject(addr)
+	st, _ := state.New(common.Hash{}, db)
+	obj := st.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
-	root, err := statedb.Commit()
+	root, err := state.Commit(st)
 	if err != nil {
 		panic(fmt.Sprintf("cannot write state: %v", err))
 	}

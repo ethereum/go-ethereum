@@ -49,8 +49,8 @@ type SimulatedBackend struct {
 	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
 
 	mu           sync.Mutex
-	pendingBlock *types.Block   // Currently pending block that will be imported on request
-	pendingState *state.StateDB // Currently pending state that will be the active on on request
+	pendingBlock *types.Block // Currently pending block that will be imported on request
+	pendingState *state.State // Currently pending state that will be the active on on request
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
@@ -176,7 +176,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	rval, _, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
+	rval, _, err := b.callContract(ctx, call, b.pendingBlock, state.Fork(b.pendingState))
 	return rval, err
 }
 
@@ -201,13 +201,13 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
+	_, gas, err := b.callContract(ctx, call, b.pendingBlock, state.Fork(b.pendingState))
 	return gas, err
 }
 
 // callContract implemens common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, *big.Int, error) {
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.State) ([]byte, *big.Int, error) {
 	// Ensure message is initialized properly.
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)

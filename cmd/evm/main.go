@@ -115,17 +115,14 @@ func run(ctx *cli.Context) error {
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
-	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
-	sender := statedb.CreateAccount(common.StringToAddress("sender"))
-
 	logger := vm.NewStructLogger(nil)
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), common.Big(ctx.GlobalString(PriceFlag.Name)), vm.Config{
+	vmenv := NewEnv(common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), common.Big(ctx.GlobalString(PriceFlag.Name)), vm.Config{
 		Debug:     ctx.GlobalBool(DebugFlag.Name),
 		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
 		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
 		Tracer:    logger,
 	})
+	sender := vmenv.state.CreateAccount(common.StringToAddress("sender"))
 
 	tstart := time.Now()
 
@@ -143,7 +140,7 @@ func run(ctx *cli.Context) error {
 			common.Big(ctx.GlobalString(ValueFlag.Name)),
 		)
 	} else {
-		receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
+		receiver := vmenv.state.CreateAccount(common.StringToAddress("receiver"))
 		receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
 		ret, err = vmenv.Call(
 			sender,
@@ -156,8 +153,8 @@ func run(ctx *cli.Context) error {
 	vmdone := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
-		statedb.Commit()
-		fmt.Println(string(statedb.Dump()))
+		state.Commit(vmenv.state)
+		fmt.Println(string(vmenv.state.Dump()))
 	}
 	vm.StdErrFormat(logger.StructLogs())
 
@@ -190,7 +187,7 @@ func main() {
 }
 
 type VMEnv struct {
-	state *state.StateDB
+	state *state.State
 	block *types.Block
 
 	transactor *common.Address
@@ -204,9 +201,18 @@ type VMEnv struct {
 	evm *vm.EVM
 }
 
-func NewEnv(state *state.StateDB, transactor common.Address, value, price *big.Int, cfg vm.Config) *VMEnv {
+func NewEnv(transactor common.Address, value, price *big.Int, cfg vm.Config) *VMEnv {
+	db, err := ethdb.NewMemDatabase()
+	if err != nil {
+		panic(err)
+	}
+	st, err := state.New(common.Hash{}, db)
+	if err != nil {
+		panic(err)
+	}
+
 	env := &VMEnv{
-		state:      state,
+		state:      st,
 		transactor: &transactor,
 		value:      value,
 		price:      price,
@@ -222,28 +228,33 @@ type ruleSet struct{}
 
 func (ruleSet) IsHomestead(*big.Int) bool { return true }
 
-func (self *VMEnv) RuleSet() vm.RuleSet        { return ruleSet{} }
-func (self *VMEnv) Vm() vm.Vm                  { return self.evm }
-func (self *VMEnv) Db() vm.Database            { return self.state }
-func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }
-func (self *VMEnv) SetSnapshot(db vm.Database) { self.state.Set(db.(*state.StateDB)) }
-func (self *VMEnv) Origin() common.Address     { return *self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int      { return common.Big0 }
-func (self *VMEnv) Coinbase() common.Address   { return *self.transactor }
-func (self *VMEnv) Time() *big.Int             { return self.time }
-func (self *VMEnv) Difficulty() *big.Int       { return common.Big1 }
-func (self *VMEnv) BlockHash() []byte          { return make([]byte, 32) }
-func (self *VMEnv) Value() *big.Int            { return self.value }
-func (self *VMEnv) GasLimit() *big.Int         { return big.NewInt(1000000000) }
-func (self *VMEnv) GasPrice() *big.Int         { return big.NewInt(1000000000) }
-func (self *VMEnv) VmType() vm.Type            { return vm.StdVmTy }
-func (self *VMEnv) Depth() int                 { return 0 }
-func (self *VMEnv) SetDepth(i int)             { self.depth = i }
+func (self *VMEnv) RuleSet() vm.RuleSet      { return ruleSet{} }
+func (self *VMEnv) Vm() vm.Vm                { return self.evm }
+func (self *VMEnv) Db() vm.Database          { return self.state }
+func (self *VMEnv) Origin() common.Address   { return *self.transactor }
+func (self *VMEnv) BlockNumber() *big.Int    { return common.Big0 }
+func (self *VMEnv) Coinbase() common.Address { return *self.transactor }
+func (self *VMEnv) Time() *big.Int           { return self.time }
+func (self *VMEnv) Difficulty() *big.Int     { return common.Big1 }
+func (self *VMEnv) BlockHash() []byte        { return make([]byte, 32) }
+func (self *VMEnv) Value() *big.Int          { return self.value }
+func (self *VMEnv) GasLimit() *big.Int       { return big.NewInt(1000000000) }
+func (self *VMEnv) GasPrice() *big.Int       { return big.NewInt(1000000000) }
+func (self *VMEnv) VmType() vm.Type          { return vm.StdVmTy }
+func (self *VMEnv) Depth() int               { return 0 }
+func (self *VMEnv) SetDepth(i int)           { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
 	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
 		return self.block.Hash()
 	}
 	return common.Hash{}
+}
+func (self *VMEnv) ForkState() vm.Database {
+	self.state = state.Fork(self.state)
+	return self.state
+}
+func (self *VMEnv) SetState(st vm.Database) {
+	self.state = st.(*state.State)
 }
 func (self *VMEnv) AddLog(log *vm.Log) {
 	self.state.AddLog(log)
