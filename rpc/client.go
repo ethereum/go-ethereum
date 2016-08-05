@@ -354,12 +354,14 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 // sent to the given channel. The element type of the channel must match the
 // expected type of content returned by the subscription.
 //
+// The context argument cancels the RPC request that sets up the subscription but has no
+// effect on the subscription after EthSubscribe has returned.
 //
 // Slow subscribers will be dropped eventually. Client buffers up to 8000 notifications
 // before considering the subscriber dead. The subscription Err channel will receive
 // ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
 // that the channel usually has at least one reader to prevent this issue.
-func (c *Client) EthSubscribe(channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
@@ -381,8 +383,6 @@ func (c *Client) EthSubscribe(channel interface{}, args ...interface{}) (*Client
 		resp: make(chan *jsonrpcMessage),
 		sub:  newClientSubscription(c, chanVal),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), subscribeTimeout)
-	defer cancel()
 
 	// Send the subscription request.
 	// The arrival and validity of the response is signaled on sub.quit.
