@@ -112,7 +112,7 @@
 		},
 		{
 			"ImportPath": "github.com/rjeczalik/notify",
-			"Rev": "5dd6205716539662f8f14ab513552b41eab69d5d"
+			"Rev": "f627deca7a510d96f0ef9388f2d0e8b16d21f87f"
 		},
 		{
 			"ImportPath": "github.com/robertkrimen/otto",
