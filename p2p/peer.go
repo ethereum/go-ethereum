@@ -112,6 +112,7 @@ func (p *Peer) LocalAddr() net.Addr {
 func (p *Peer) Disconnect(reason DiscReason) {
 	select {
 	case p.disc <- reason:
+		glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
 	case <-p.closed:
 	}
 }
@@ -177,7 +178,6 @@ loop:
 			glog.V(logger.Debug).Infof("%v: protocol error: %v (%v)\n", p, err, reason)
 			break loop
 		case reason = <-p.disc:
-			glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
 			break loop
 		}
 	}

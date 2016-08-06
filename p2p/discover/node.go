@@ -17,6 +17,7 @@
 package discover
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
@@ -35,25 +36,17 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 )
 
-const nodeIDBits = 512
-
 // Node represents a host on the network.
-// The fields of Node may not be modified.
+// The public fields of Node may not be modified.
 type Node struct {
 	IP       net.IP // len 4 for IPv4 or 16 for IPv6
 	UDP, TCP uint16 // port numbers
 	ID       NodeID // the node's public key
 
-	// This is a cached copy of sha3(ID) which is used for node
-	// distance calculations. This is part of Node in order to make it
-	// possible to write tests that need a node at a certain distance.
-	// In those tests, the content of sha will not actually correspond
-	// with ID.
-	sha common.Hash
-
-	// whether this node is currently being pinged in order to replace
-	// it in a bucket
-	contested bool
+	// Network-related fields are contained in nodeNetGuts.
+	// These fields are not supposed to be used off the
+	// Network.loop goroutine.
+	nodeNetGuts
 }
 
 // NewNode creates a new node. It is mostly meant to be used for
@@ -63,16 +56,33 @@ func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
 		ip = ipv4
 	}
 	return &Node{
-		IP:  ip,
-		UDP: udpPort,
-		TCP: tcpPort,
-		ID:  id,
-		sha: crypto.Keccak256Hash(id[:]),
+		IP:          ip,
+		UDP:         udpPort,
+		TCP:         tcpPort,
+		ID:          id,
+		nodeNetGuts: nodeNetGuts{sha: crypto.Keccak256Hash(id[:])},
 	}
 }
 
 func (n *Node) addr() *net.UDPAddr {
 	return &net.UDPAddr{IP: n.IP, Port: int(n.UDP)}
+}
+
+func (n *Node) setAddr(a *net.UDPAddr) {
+	n.IP = a.IP
+	if ipv4 := a.IP.To4(); ipv4 != nil {
+		n.IP = ipv4
+	}
+	n.UDP = uint16(a.Port)
+}
+
+// compares the given address against the stored values.
+func (n *Node) addrEqual(a *net.UDPAddr) bool {
+	ip := a.IP
+	if ipv4 := a.IP.To4(); ipv4 != nil {
+		ip = ipv4
+	}
+	return n.UDP == uint16(a.Port) && bytes.Equal(n.IP, ip)
 }
 
 // Incomplete returns true for nodes with no IP address.
@@ -207,6 +217,36 @@ func MustParseNode(rawurl string) *Node {
 	return n
 }
 
+// type nodeQueue []*Node
+//
+// // pushNew adds n to the end if it is not present.
+// func (nl *nodeList) appendNew(n *Node) {
+// 	for _, entry := range n {
+// 		if entry == n {
+// 			return
+// 		}
+// 	}
+// 	*nq = append(*nq, n)
+// }
+//
+// // popRandom removes a random node. Nodes closer to
+// // to the head of the beginning of the have a slightly higher probability.
+// func (nl *nodeList) popRandom() *Node {
+// 	ix := rand.Intn(len(*nq))
+// 	//TODO: probability as mentioned above.
+// 	nl.removeIndex(ix)
+// }
+//
+// func (nl *nodeList) removeIndex(i int) *Node {
+// 	slice = *nl
+// 	if len(*slice) <= i {
+// 		return nil
+// 	}
+// 	*nl = append(slice[:i], slice[i+1:]...)
+// }
+
+const nodeIDBits = 512
+
 // NodeID is a unique identifier for each node.
 // The node identifier is a marshaled elliptic curve public key.
 type NodeID [nodeIDBits / 8]byte
@@ -270,6 +310,14 @@ func (id NodeID) Pubkey() (*ecdsa.PublicKey, error) {
 		return nil, errors.New("id is invalid secp256k1 curve point")
 	}
 	return p, nil
+}
+
+func (id NodeID) mustPubkey() ecdsa.PublicKey {
+	pk, err := id.Pubkey()
+	if err != nil {
+		panic(err)
+	}
+	return *pk
 }
 
 // recoverNodeID computes the public key used to sign the
