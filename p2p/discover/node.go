@@ -41,7 +41,7 @@ const nodeIDBits = 512
 // The fields of Node may not be modified.
 type Node struct {
 	IP       net.IP // len 4 for IPv4 or 16 for IPv6
-	UDP, TCP uint16 // port numbers
+	UDP, TCP int16 // port numbers
 	ID       NodeID // the node's public key
 
 	// This is a cached copy of sha3(ID) which is used for node
@@ -58,7 +58,7 @@ type Node struct {
 
 // NewNode creates a new node. It is mostly meant to be used for
 // testing purposes.
-func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
+func NewNode(id NodeID, ip net.IP, udpPort, tcpPort int16) *Node {
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
 	}
@@ -72,7 +72,7 @@ func NewNode(id NodeID, ip net.IP, udpPort, tcpPort uint16) *Node {
 }
 
 func (n *Node) addr() *net.UDPAddr {
-	return &net.UDPAddr{IP: n.IP, Port: int(n.UDP)}
+	return &net.UDPAddr{IP: n.IP, Port: n.UDP}
 }
 
 // Incomplete returns true for nodes with no IP address.
@@ -105,11 +105,11 @@ func (n *Node) String() string {
 	if n.Incomplete() {
 		u.Host = fmt.Sprintf("%x", n.ID[:])
 	} else {
-		addr := net.TCPAddr{IP: n.IP, Port: int(n.TCP)}
+		addr := net.TCPAddr{IP: n.IP, Port: n.TCP}
 		u.User = url.User(fmt.Sprintf("%x", n.ID[:]))
 		u.Host = addr.String()
 		if n.UDP != n.TCP {
-			u.RawQuery = "discport=" + strconv.Itoa(int(n.UDP))
+			u.RawQuery = "discport=" + strconv.Itoa(n.UDP)
 		}
 	}
 	return u.String()
@@ -155,7 +155,7 @@ func parseComplete(rawurl string) (*Node, error) {
 	var (
 		id               NodeID
 		ip               net.IP
-		tcpPort, udpPort uint64
+		tcpPort, udpPort int64
 	)
 	u, err := url.Parse(rawurl)
 	if err != nil {
@@ -184,18 +184,18 @@ func parseComplete(rawurl string) (*Node, error) {
 		ip = ipv4
 	}
 	// Parse the port numbers.
-	if tcpPort, err = strconv.ParseUint(port, 10, 16); err != nil {
+	if tcpPort, err = strconv.ParseInt(port, 10, 16); err != nil {
 		return nil, errors.New("invalid port")
 	}
 	udpPort = tcpPort
 	qv := u.Query()
 	if qv.Get("discport") != "" {
-		udpPort, err = strconv.ParseUint(qv.Get("discport"), 10, 16)
+		udpPort, err = strconv.ParseInt(qv.Get("discport"), 10, 16)
 		if err != nil {
 			return nil, errors.New("invalid discport in query")
 		}
 	}
-	return NewNode(id, ip, uint16(udpPort), uint16(tcpPort)), nil
+	return NewNode(id, ip, udpPort, tcpPort), nil
 }
 
 // MustParseNode parses a node URL. It panics if the URL is not valid.
