@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -106,24 +107,40 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		opts = new(CallOpts)
 	}
 	// Make sure we have a contract to operate on, and bail out otherwise
-	if (opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0) || (!opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0) {
-		if code, err := c.caller.HasCode(opts.Context, c.address, opts.Pending); err != nil {
-			return err
-		} else if !code {
-			return ErrNoCode
-		}
-		if opts.Pending {
-			atomic.StoreUint32(&c.pendingHasCode, 1)
-		} else {
-			atomic.StoreUint32(&c.latestHasCode, 1)
-		}
+	var code []byte
+	var err error
+	if opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0 {
+		code, err = c.caller.PendingCodeAt(opts.Context, c.address)
+	} else if !opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0 {
+		code, err = c.caller.CodeAt(opts.Context, c.address, nil)
+	}
+	if err != nil {
+		return err
+	} else if len(code) == 0 {
+		return ErrNoCode
+	}
+	if opts.Pending {
+		atomic.StoreUint32(&c.pendingHasCode, 1)
+	} else {
+		atomic.StoreUint32(&c.latestHasCode, 1)
 	}
 	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
 		return err
 	}
-	output, err := c.caller.ContractCall(opts.Context, c.address, input, opts.Pending)
+	// Create the call message we use to make the call
+	callMsg := ethereum.CallMsg{
+		To:   c.address,
+		Data: input,
+	}
+	var output []byte
+	// Call pending or not depending on options
+	if opts.Pending {
+		output, err = c.caller.PendingCallContract(opts.Context, callMsg)
+	} else {
+		output, err = c.caller.CallContract(opts.Context, callMsg, nil)
+	}
 	if err != nil {
 		return err
 	}
@@ -158,7 +175,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	nonce := uint64(0)
 	if opts.Nonce == nil {
-		nonce, err = c.transactor.PendingAccountNonce(opts.Context, opts.From)
+		nonce, err = c.transactor.PendingNonceAt(opts.Context, opts.From)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve account nonce: %v", err)
 		}
@@ -177,17 +194,25 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if gasLimit == nil {
 		// Gas estimation cannot succeed without code for method invocations
 		if contract != nil && atomic.LoadUint32(&c.pendingHasCode) == 0 {
-			if code, err := c.transactor.HasCode(opts.Context, c.address, true); err != nil {
+			var code []byte
+			if code, err = c.transactor.CodeAt(opts.Context, c.address, nil); err != nil {
 				return nil, err
-			} else if !code {
+			} else if len(code) == 0 {
 				return nil, ErrNoCode
 			}
 			atomic.StoreUint32(&c.pendingHasCode, 1)
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		gasLimit, err = c.transactor.EstimateGasLimit(opts.Context, opts.From, contract, value, input)
+		callMsg := ethereum.CallMsg{
+			From:     opts.From,
+			To:       *contract,
+			GasPrice: gasPrice,
+			Value:    value,
+			Data:     input,
+		}
+		gasLimit, err = c.transactor.EstimateGas(opts.Context, callMsg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to exstimate gas needed: %v", err)
+			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
 		}
 	}
 	// Create the transaction, sign it and schedule it for execution
