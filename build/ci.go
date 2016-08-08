@@ -28,6 +28,7 @@ Available commands are:
    archive    [ -type zip|tar ]                        -- archives build artefacts
    importkeys                                          -- imports signing keys from env
    debsrc     [ -sign key-id ] [ -upload dest ]        -- creates a debian source package
+   xgo        [ options ]                              -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
 
@@ -121,6 +122,8 @@ func main() {
 		doDebianSource(os.Args[2:])
 	case "travis-debsrc":
 		doTravisDebianSource(os.Args[2:])
+	case "xgo":
+		doXgo(os.Args[2:])
 	default:
 		log.Fatal("unknown command ", os.Args[1])
 	}
@@ -462,4 +465,33 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	}
 
 	return pkgdir
+}
+
+// Cross compilation
+
+func doXgo(cmdline []string) {
+	// Make sure xgo is available for cross compilation
+	gogetxgo := goTool("get", "github.com/karalabe/xgo")
+	build.MustRun(gogetxgo)
+
+	// Execute the actual cross compilation
+	pkg := cmdline[len(cmdline)-1]
+	args := append(cmdline[:len(cmdline)-1], makeBuildFlags("")...)
+
+	build.MustRun(xgoTool(append(args, pkg)...))
+}
+
+func xgoTool(args ...string) *exec.Cmd {
+	cmd := exec.Command(filepath.Join(GOBIN, "xgo"), args...)
+	cmd.Env = []string{
+		"GOPATH=" + build.GOPATH(),
+		"GOBIN=" + GOBIN,
+	}
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "GOBIN=") {
+			continue
+		}
+		cmd.Env = append(cmd.Env, e)
+	}
+	return cmd
 }
