@@ -400,11 +400,11 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 	var err error
 	switch version {
 	case 62:
-		err = dl.downloader.RegisterPeer(id, version, hashes[0], dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), nil, nil)
+		err = dl.downloader.RegisterPeer(id, version, dl.peerCurrentHeadFn(id), dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), nil, nil)
 	case 63:
-		err = dl.downloader.RegisterPeer(id, version, hashes[0], dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), dl.peerGetReceiptsFn(id, delay), dl.peerGetNodeDataFn(id, delay))
+		err = dl.downloader.RegisterPeer(id, version, dl.peerCurrentHeadFn(id), dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), dl.peerGetReceiptsFn(id, delay), dl.peerGetNodeDataFn(id, delay))
 	case 64:
-		err = dl.downloader.RegisterPeer(id, version, hashes[0], dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), dl.peerGetReceiptsFn(id, delay), dl.peerGetNodeDataFn(id, delay))
+		err = dl.downloader.RegisterPeer(id, version, dl.peerCurrentHeadFn(id), dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), dl.peerGetReceiptsFn(id, delay), dl.peerGetNodeDataFn(id, delay))
 	}
 	if err == nil {
 		// Assign the owned hashes, headers and blocks to the peer (deep copy)
@@ -461,6 +461,17 @@ func (dl *downloadTester) dropPeer(id string) {
 	delete(dl.peerChainTds, id)
 
 	dl.downloader.UnregisterPeer(id)
+}
+
+// peerCurrentHeadFn constructs a function to retrieve a peer's current head hash
+// and total difficulty.
+func (dl *downloadTester) peerCurrentHeadFn(id string) func() (common.Hash, *big.Int) {
+	return func() (common.Hash, *big.Int) {
+		dl.lock.RLock()
+		defer dl.lock.RUnlock()
+
+		return dl.peerHashes[id][0], nil
+	}
 }
 
 // peerGetRelHeadersFn constructs a GetBlockHeaders function based on a hashed

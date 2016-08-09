@@ -272,11 +272,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	defer pm.removePeer(p.id)
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(),
-		p.RequestHeadersByHash, p.RequestHeadersByNumber,
-		p.RequestBodies, p.RequestReceipts, p.RequestNodeData,
-	)
-	if err != nil {
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head, p.RequestHeadersByHash, p.RequestHeadersByNumber, p.RequestBodies, p.RequestReceipts, p.RequestNodeData); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -413,7 +409,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// If we already have a DAO header, we can check the peer's TD against it. If
 			// the peer's ahead of this, it too must have a reply to the DAO check
 			if daoHeader := pm.blockchain.GetHeaderByNumber(pm.chainconfig.DAOForkBlock.Uint64()); daoHeader != nil {
-				if p.Td().Cmp(pm.blockchain.GetTd(daoHeader.Hash(), daoHeader.Number.Uint64())) >= 0 {
+				if _, td := p.Head(); td.Cmp(pm.blockchain.GetTd(daoHeader.Hash(), daoHeader.Number.Uint64())) >= 0 {
 					verifyDAO = false
 				}
 			}
@@ -619,7 +615,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Mark the hashes as present at the remote node
 		for _, block := range announces {
 			p.MarkBlock(block.Hash)
-			p.SetHead(block.Hash)
 		}
 		// Schedule all the unknown hashes for retrieval
 		unknown := make([]announce, 0, len(announces))
@@ -646,16 +641,23 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
-		p.SetHead(request.Block.Hash())
-
 		pm.fetcher.Enqueue(p.id, request.Block)
 
-		// Update the peers total difficulty if needed, schedule a download if gapped
-		if request.TD.Cmp(p.Td()) > 0 {
-			p.SetTd(request.TD)
+		// Assuming the block is importable by the peer, but possibly not yet done so,
+		// calculate the head hash and TD that the peer truly must have.
+		var (
+			trueHead = request.Block.ParentHash()
+			trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
+		)
+		// Update the peers total difficulty if better than the previous
+		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
+			p.SetHead(trueHead, trueTD)
+
+			// Schedule a sync if above ours. Note, this will not fire a sync for a gap of
+			// a singe block (as the true TD is below the propagated block), however this
+			// scenario should easily be covered by the fetcher.
 			currentBlock := pm.blockchain.CurrentBlock()
-			td := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-			if request.TD.Cmp(new(big.Int).Add(td, request.Block.Difficulty())) > 0 {
+			if trueTD.Cmp(pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())) > 0 {
 				go pm.synchronise(p)
 			}
 		}
