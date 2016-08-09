@@ -25,6 +25,7 @@ var (
 	// accepted protocols: bzz (traditional), bzzi (immutable) and bzzr (raw)
 	bzzPrefix       = regexp.MustCompile("^/+bzz[ir]?:/+")
 	trailingSlashes = regexp.MustCompile("/+$")
+	rootDocumentUri = regexp.MustCompile("^/+bzz[i]?:/+[^/]+$")
 	// forever         = func() time.Time { return time.Unix(0, 0) }
 	forever = time.Now
 )
@@ -181,9 +182,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 			// retrieve path via manifest
 		} else {
-
 			glog.V(logger.Debug).Infof("[BZZ] Swarm: Structured GET request '%s' received.", uri)
-
+			// add trailing slash, if missing
+			if rootDocumentUri.MatchString(uri) {
+				http.Redirect(w, r, path+"/", http.StatusFound)
+				return
+			}
 			reader, mimeType, status, err := a.Get(path, nameresolver)
 			if err != nil {
 				if _, ok := err.(api.ErrResolve); ok {
@@ -196,7 +200,6 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				http.Error(w, err.Error(), status)
 				return
 			}
-
 			// set mime type and status headers
 			w.Header().Set("Content-Type", mimeType)
 			if status > 0 {
