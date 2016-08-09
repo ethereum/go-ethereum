@@ -436,6 +436,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					return err
 				}
 				glog.V(logger.Debug).Infof("%v: verified to be on the same side of the DAO fork", p)
+				return nil
 			}
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
 			headers = pm.fetcher.FilterHeaders(headers, time.Now())
