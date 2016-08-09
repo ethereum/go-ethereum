@@ -34,6 +34,10 @@ type NotificationTestService struct {
 	unblockHangSubscription chan struct{}
 }
 
+func (s *NotificationTestService) Echo(i int) int {
+	return i
+}
+
 func (s *NotificationTestService) wasUnsubCallbackCalled() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

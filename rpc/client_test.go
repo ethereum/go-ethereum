@@ -215,7 +215,7 @@ func TestClientSubscribeInvalidArg(t *testing.T) {
 				t.Error(string(buf))
 			}
 		}()
-		client.EthSubscribe(arg, "foo_bar")
+		client.EthSubscribe(context.Background(), arg, "foo_bar")
 	}
 	check(true, nil)
 	check(true, 1)
@@ -233,7 +233,7 @@ func TestClientSubscribe(t *testing.T) {
 
 	nc := make(chan int)
 	count := 10
-	sub, err := client.EthSubscribe(nc, "someSubscription", count, 0)
+	sub, err := client.EthSubscribe(context.Background(), nc, "someSubscription", count, 0)
 	if err != nil {
 		t.Fatal("can't subscribe:", err)
 	}
@@ -275,7 +275,7 @@ func TestClientSubscribeClose(t *testing.T) {
 		err  error
 	)
 	go func() {
-		sub, err = client.EthSubscribe(nc, "hangSubscription", 999)
+		sub, err = client.EthSubscribe(context.Background(), nc, "hangSubscription", 999)
 		errc <- err
 	}()
 
@@ -294,6 +294,57 @@ func TestClientSubscribeClose(t *testing.T) {
 	case <-time.After(1 * time.Second):
 		t.Fatalf("EthSubscribe did not return within 1s after Close")
 	}
+}
+
+// This test checks that Client doesn't lock up when a single subscriber
+// doesn't read subscription events.
+func TestClientNotificationStorm(t *testing.T) {
+	server := newTestServer("eth", new(NotificationTestService))
+	defer server.Stop()
+
+	doTest := func(count int, wantError bool) {
+		client := DialInProc(server)
+		defer client.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Subscribe on the server. It will start sending many notifications
+		// very quickly.
+		nc := make(chan int)
+		sub, err := client.EthSubscribe(ctx, nc, "someSubscription", count, 0)
+		if err != nil {
+			t.Fatal("can't subscribe:", err)
+		}
+		defer sub.Unsubscribe()
+
+		// Process each notification, try to run a call in between each of them.
+		for i := 0; i < count; i++ {
+			select {
+			case val := <-nc:
+				if val != i {
+					t.Fatalf("(%d/%d) unexpected value %d", i, count, val)
+				}
+			case err := <-sub.Err():
+				if wantError && err != ErrSubscriptionQueueOverflow {
+					t.Fatalf("(%d/%d) got error %q, want %q", i, count, err, ErrSubscriptionQueueOverflow)
+				} else if !wantError {
+					t.Fatalf("(%d/%d) got unexpected error %q", i, count, err)
+				}
+				return
+			}
+			var r int
+			err := client.CallContext(ctx, &r, "eth_echo", i)
+			if err != nil {
+				if !wantError {
+					t.Fatalf("(%d/%d) call error: %v", i, count, err)
+				}
+				return
+			}
+		}
+	}
+
+	doTest(8000, false)
+	doTest(10000, true)
 }
 
 func TestClientHTTP(t *testing.T) {

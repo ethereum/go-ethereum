@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"bytes"
+	"container/list"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,16 +36,31 @@ import (
 )
 
 var (
-	ErrClientQuit = errors.New("client is closed")
-	ErrNoResult   = errors.New("no result in JSON-RPC response")
+	ErrClientQuit                = errors.New("client is closed")
+	ErrNoResult                  = errors.New("no result in JSON-RPC response")
+	ErrSubscriptionQueueOverflow = errors.New("subscription queue overflow")
 )
 
 const (
-	clientSubscriptionBuffer = 100 // if exceeded, the client stops reading
-	tcpKeepAliveInterval     = 30 * time.Second
-	defaultDialTimeout       = 10 * time.Second // used when dialing if the context has no deadline
-	defaultWriteTimeout      = 10 * time.Second // used for calls if the context has no deadline
-	subscribeTimeout         = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+	// Timeouts
+	tcpKeepAliveInterval = 30 * time.Second
+	defaultDialTimeout   = 10 * time.Second // used when dialing if the context has no deadline
+	defaultWriteTimeout  = 10 * time.Second // used for calls if the context has no deadline
+	subscribeTimeout     = 5 * time.Second  // overall timeout eth_subscribe, rpc_modules calls
+)
+
+const (
+	// Subscriptions are removed when the subscriber cannot keep up.
+	//
+	// This can be worked around by supplying a channel with sufficiently sized buffer,
+	// but this can be inconvenient and hard to explain in the docs. Another issue with
+	// buffered channels is that the buffer is static even though it might not be needed
+	// most of the time.
+	//
+	// The approach taken here is to maintain a per-subscription linked list buffer
+	// shrinks on demand. If the buffer reaches the size below, the subscription is
+	// dropped.
+	maxClientSubscriptionBuffer = 8000
 )
 
 // BatchElem is an element in a batch request.
@@ -276,9 +292,9 @@ func (c *Client) BatchCall(b []BatchElem) error {
 // to return a response for all of them. The wait duration is bounded by the
 // context's deadline.
 //
-// In contrast to CallContext, BatchCallContext only returns I/O errors. Any
-// error specific to a request is reported through the Error field of the
-// corresponding BatchElem.
+// In contrast to CallContext, BatchCallContext only returns errors that have occurred
+// while sending the request. Any error specific to a request is reported through the
+// Error field of the corresponding BatchElem.
 //
 // Note that batch calls may not be executed atomically on the server side.
 func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
@@ -338,12 +354,14 @@ func (c *Client) BatchCallContext(ctx context.Context, b []BatchElem) error {
 // sent to the given channel. The element type of the channel must match the
 // expected type of content returned by the subscription.
 //
-// Callers should not use the same channel for multiple calls to EthSubscribe.
-// The channel is closed when the notification is unsubscribed or an error
-// occurs. The error can be retrieved via the Err method of the subscription.
+// The context argument cancels the RPC request that sets up the subscription but has no
+// effect on the subscription after EthSubscribe has returned.
 //
-// Slow subscribers will block the clients ingress path eventually.
-func (c *Client) EthSubscribe(channel interface{}, args ...interface{}) (*ClientSubscription, error) {
+// Slow subscribers will be dropped eventually. Client buffers up to 8000 notifications
+// before considering the subscriber dead. The subscription Err channel will receive
+// ErrSubscriptionQueueOverflow. Use a sufficiently large buffer on the channel or ensure
+// that the channel usually has at least one reader to prevent this issue.
+func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (*ClientSubscription, error) {
 	// Check type of channel first.
 	chanVal := reflect.ValueOf(channel)
 	if chanVal.Kind() != reflect.Chan || chanVal.Type().ChanDir()&reflect.SendDir == 0 {
@@ -365,8 +383,6 @@ func (c *Client) EthSubscribe(channel interface{}, args ...interface{}) (*Client
 		resp: make(chan *jsonrpcMessage),
 		sub:  newClientSubscription(c, chanVal),
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), subscribeTimeout)
-	defer cancel()
 
 	// Send the subscription request.
 	// The arrival and validity of the response is signaled on sub.quit.
@@ -398,6 +414,10 @@ func (c *Client) send(ctx context.Context, op *requestOp, msg interface{}) error
 		err := c.write(ctx, msg)
 		c.sendDone <- err
 		return err
+	case <-ctx.Done():
+		// This can happen if the client is overloaded or unable to keep up with
+		// subscription notifications.
+		return ctx.Err()
 	case <-c.didQuit:
 		return ErrClientQuit
 	}
@@ -653,8 +673,7 @@ func newClientSubscription(c *Client, channel reflect.Value) *ClientSubscription
 		channel: channel,
 		quit:    make(chan struct{}),
 		err:     make(chan error, 1),
-		// in is buffered so dispatch can continue even if the subscriber is slow.
-		in: make(chan json.RawMessage, clientSubscriptionBuffer),
+		in:      make(chan json.RawMessage),
 	}
 	return sub
 }
@@ -680,13 +699,16 @@ func (sub *ClientSubscription) Unsubscribe() {
 
 func (sub *ClientSubscription) quitWithError(err error, unsubscribeServer bool) {
 	sub.quitOnce.Do(func() {
+		// The dispatch loop won't be able to execute the unsubscribe call
+		// if it is blocked on deliver. Close sub.quit first because it
+		// unblocks deliver.
+		close(sub.quit)
 		if unsubscribeServer {
 			sub.requestUnsubscribe()
 		}
 		if err != nil {
 			sub.err <- err
 		}
-		close(sub.quit)
 	})
 }
 
@@ -706,32 +728,46 @@ func (sub *ClientSubscription) start() {
 func (sub *ClientSubscription) forward() (err error, unsubscribeServer bool) {
 	cases := []reflect.SelectCase{
 		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.quit)},
+		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(sub.in)},
 		{Dir: reflect.SelectSend, Chan: sub.channel},
 	}
+	buffer := list.New()
+	defer buffer.Init()
 	for {
-		select {
-		case result := <-sub.in:
-			val, err := sub.unmarshal(result)
+		var chosen int
+		var recv reflect.Value
+		if buffer.Len() == 0 {
+			// Idle, omit send case.
+			chosen, recv, _ = reflect.Select(cases[:2])
+		} else {
+			// Non-empty buffer, send the first queued item.
+			cases[2].Send = reflect.ValueOf(buffer.Front().Value)
+			chosen, recv, _ = reflect.Select(cases)
+		}
+
+		switch chosen {
+		case 0: // <-sub.quit
+			return nil, false
+		case 1: // <-sub.in
+			val, err := sub.unmarshal(recv.Interface().(json.RawMessage))
 			if err != nil {
 				return err, true
 			}
-			cases[1].Send = val
-			switch chosen, _, _ := reflect.Select(cases); chosen {
-			case 0: // <-sub.quit
-				return nil, false
-			case 1: // sub.channel<-
-				continue
+			if buffer.Len() == maxClientSubscriptionBuffer {
+				return ErrSubscriptionQueueOverflow, true
 			}
-		case <-sub.quit:
-			return nil, false
+			buffer.PushBack(val)
+		case 2: // sub.channel<-
+			cases[2].Send = reflect.Value{} // Don't hold onto the value.
+			buffer.Remove(buffer.Front())
 		}
 	}
 }
 
-func (sub *ClientSubscription) unmarshal(result json.RawMessage) (reflect.Value, error) {
+func (sub *ClientSubscription) unmarshal(result json.RawMessage) (interface{}, error) {
 	val := reflect.New(sub.etype)
 	err := json.Unmarshal(result, val.Interface())
-	return val.Elem(), err
+	return val.Elem().Interface(), err
 }
 
 func (sub *ClientSubscription) requestUnsubscribe() error {
