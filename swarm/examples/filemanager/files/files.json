@@ -1,0 +1,57 @@
+{
+  "result": [
+    {
+      "time": "07:09",
+      "day": "7",
+      "month": "Jun",
+      "size": "4096",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "6",
+      "rights": "drwxr-xr-x",
+      "type": "dir",
+      "name": "TextFiles",
+      "date": "2016-06-07 09:21:40"
+    },
+    {
+      "time": "07:09",
+      "day": "7",
+      "month": "Jun",
+      "size": "4096",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "6",
+      "rights": "drwxr-xr-x",
+      "type": "dir",
+      "name": "My Photos",
+      "date": "2016-06-07 09:21:40"
+    },
+    {
+      "time": "07:09",
+      "day": "7",
+      "month": "Jun",
+      "size": "4096",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "6",
+      "rights": "drwxr-xr-x",
+      "type": "dir",
+      "name": "My Videos",
+      "date": "2016-06-07 09:21:40"
+    },
+    {
+      "time": "04:04",
+      "day": "7",
+      "month": "Jun",
+      "size": "19",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "1",
+      "rights": "-rw-r--r--",
+      "type": "file",
+      "realName": "files/Hello world.txt",
+      "name": "Hello world.txt",
+      "date": "2016-06-07 09:21:40"
+    }
+  ]
+}

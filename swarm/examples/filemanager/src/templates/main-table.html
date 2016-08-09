@@ -1,0 +1,67 @@
+<table class="table mb0 table-files noselect">
+    <thead>
+        <tr>
+            <th>
+                <a href="" ng-click="order('model.name')">
+                    {{"name" | translate}}
+                    <span class="sortorder" ng-show="predicate[1] === 'model.name'" ng-class="{reverse:reverse}"></span>
+                </a>
+            </th>
+            <th class="hidden-xs" ng-hide="config.hideSize">
+                <a href="" ng-click="order('model.size')">
+                    {{"size" | translate}}
+                    <span class="sortorder" ng-show="predicate[1] === 'model.size'" ng-class="{reverse:reverse}"></span>
+                </a>
+            </th>
+            <th class="hidden-sm hidden-xs" ng-hide="config.hideDate">
+                <a href="" ng-click="order('model.date')">
+                    {{"date" | translate}}
+                    <span class="sortorder" ng-show="predicate[1] === 'model.date'" ng-class="{reverse:reverse}"></span>
+                </a>
+            </th>
+            <th class="hidden-sm hidden-xs" ng-hide="config.hidePermissions">
+                <a href="" ng-click="order('model.permissions')">
+                    {{"permissions" | translate}}
+                    <span class="sortorder" ng-show="predicate[1] === 'model.permissions'" ng-class="{reverse:reverse}"></span>
+                </a>
+            </th>
+        </tr>
+    </thead>
+    <tbody class="file-item">
+        <tr ng-show="fileNavigator.requesting">
+            <td colspan="5">
+                <div ng-include="config.tplPath + '/spinner.html'"></div>
+            </td>
+        </tr>
+        <tr ng-show="!fileNavigator.requesting &amp;&amp; fileNavigator.fileList.length < 1 &amp;&amp; !fileNavigator.error">
+            <td colspan="5">
+                {{"no_files_in_folder" | translate}}...
+            </td>
+        </tr>
+        <tr ng-show="!fileNavigator.requesting &amp;&amp; fileNavigator.error">
+            <td colspan="5">
+                {{ fileNavigator.error }}
+            </td>
+        </tr>
+        <tr class="item-list" ng-repeat="item in $parent.fileList = (fileNavigator.fileList | filter: {model:{name: query}} | orderBy:predicate:reverse)" ng-show="!fileNavigator.requesting" ng-click="selectOrUnselect(item, $event)" ng-dblclick="smartClick(item)" ng-right-click="selectOrUnselect(item, $event)" ng-class="{selected: isSelected(item)}">
+            <td>
+                <a href="" title="{{item.model.name}} ({{item.model.size | humanReadableFileSize}})">
+                    <i class="glyphicon glyphicon-folder-close" ng-show="item.model.type === 'dir'"></i>
+                    <i class="glyphicon glyphicon-file" ng-show="item.model.type === 'file'"></i>
+                    {{item.model.name | strLimit : 64}}
+                </a>
+            </td>
+            <!--<td class="hidden-xs">
+                <span ng-show="item.model.type !== 'dir' || config.showSizeForDirectories">
+                    {{item.model.size | humanReadableFileSize}}
+                </span>
+            </td>-->
+            <td class="hidden-sm hidden-xs" ng-hide="config.hideDate">
+                {{item.model.date | formatDate }}
+            </td>
+            <td class="hidden-sm hidden-xs" ng-hide="config.hidePermissions">
+                {{item.model.perms.toCode(item.model.type === 'dir'?'d':'-')}}
+            </td>
+        </tr>
+    </tbody>
+</table>

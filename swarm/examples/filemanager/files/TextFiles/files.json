@@ -1,0 +1,18 @@
+{
+  "result": [
+    {
+      "time": "04:04",
+      "day": "7",
+      "month": "Jun",
+      "size": "1494",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "1",
+      "rights": "-rw-r--r--",
+      "type": "file",
+      "realName": "files/TextFiles/DAP.txt",
+      "name": "DAP.txt",
+      "date": "2016-06-07 09:21:40"
+    }
+  ]
+}
