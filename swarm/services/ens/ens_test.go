@@ -1,5 +1,3 @@
-//go:generate abigen --abi contract/OpenRegistrar.abi --bin contract/OpenRegistrar.bin --pkg contract --type OpenRegistrar --out contract/OpenRegistrar.go
-//go:generate abigen --abi contract/PersonalResolver.abi --bin contract/PersonalResolver.bin --pkg contract --type PersonalResolver --out contract/PersonalResolver.go
 package ens
 
 import (
@@ -8,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -23,21 +20,16 @@ var (
 func TestENS(t *testing.T) {
 	contractBackend := backends.NewSimulatedBackend(core.GenesisAccount{addr, big.NewInt(1000000000)})
 	transactOpts := bind.NewKeyedTransactor(key)
-	ens := NewENS(transactOpts, common.Address{}, contractBackend)
-	registrarAddr, err := ens.DeployRegistrar()
+	// Workaround for bug estimating gas in the call to Register
+	transactOpts.GasLimit = big.NewInt(1000000)
+
+	ens, err := DeployENS(transactOpts, contractBackend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	contractBackend.Commit()
 
-	ens = NewENS(transactOpts, registrarAddr, contractBackend)
-	resolverAddr, err := ens.DeployResolver()
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	contractBackend.Commit()
-
-	_, err = ens.Register(name, resolverAddr)
+	_, err = ens.Register(name)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -56,5 +48,4 @@ func TestENS(t *testing.T) {
 	if vhost.Hex() != hash.Hex()[2:] {
 		t.Fatalf("resolve error, expected %v, got %v", hash.Hex(), vhost)
 	}
-
 }

@@ -138,8 +138,11 @@ func NewSwarm(ctx *node.ServiceContext, config *api.Config, swapEnabled, syncEna
 
 	// set up high level api
 	transactOpts := bind.NewKeyedTransactor(self.privateKey)
-	// backend := ethereum.ContractBackend()
-	self.dns = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
+
+	self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, self.backend)
+	if err != nil {
+		return nil, err
+	}
 	glog.V(logger.Debug).Infof("[BZZ] -> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex())
 
 	self.api = api.NewApi(self.dpa, self.dns)
