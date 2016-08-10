@@ -1,0 +1,46 @@
+{
+  "result": [
+    {
+      "time": "04:04",
+      "day": "7",
+      "month": "Jun",
+      "size": "140596",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "1",
+      "rights": "-rw-r--r--",
+      "type": "file",
+      "realName": "files/My Photos/Pamukkale.jpg",
+      "name": "Pamukkale.jpg",
+      "date": "2016-06-07 09:21:40"
+    },
+    {
+      "time": "04:04",
+      "day": "7",
+      "month": "Jun",
+      "size": "241247",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "1",
+      "rights": "-rw-r--r--",
+      "type": "file",
+      "realName": "files/My Photos/Paris.jpg",
+      "name": "Paris.jpg",
+      "date": "2016-06-07 09:21:40"
+    },
+    {
+      "time": "04:04",
+      "day": "7",
+      "month": "Jun",
+      "size": "480385",
+      "group": "860",
+      "user": "igor.shadurin@gmail.com",
+      "number": "1",
+      "rights": "-rw-r--r--",
+      "type": "file",
+      "realName": "files/My Photos/Rabbit.jpg",
+      "name": "Rabbit.jpg",
+      "date": "2016-06-07 09:21:40"
+    }
+  ]
+}

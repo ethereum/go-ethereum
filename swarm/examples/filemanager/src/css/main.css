@@ -1,0 +1,369 @@
+body {
+  font-size: 14px;
+  height: 100vh;
+}
+
+*,
+*:focus {
+  outline: 0!important;
+}
+
+.navbar {
+  min-height: 32px;
+  margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.navbar .navbar-toggle {
+  padding: 5px 10px;
+}
+
+.navbar .navbar-brand {
+  font-size: inherit;
+  height: 55px;
+  line-height: 100%;
+}
+
+.navbar .navbar-form {
+  border-bottom: none;
+  border-top: none;
+  box-shadow: none;
+  padding: 0 10px;
+  margin-top: 10px;
+}
+
+.breadcrumb {
+  border-radius: 0;
+}
+
+.breadcrumb .btn {
+  margin-top: -5px;
+}
+
+.btn.btn-default {
+  color: #444;
+  background-color: #FAFAFA;
+}
+
+.btn {
+  box-shadow: 0 2px 5px 0 rgba(0, 0, 0, .26);
+  font-weight: 500;
+  letter-spacing: .01em;
+  border: none;
+}
+
+textarea.code {
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 13px;
+  min-height: 250px;
+  resize: vertical;
+  color: #000;
+}
+
+.sub-header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.sidebar {
+  display: none;
+}
+
+.btn-go-back {
+  margin-top: -5px;
+}
+
+.nav-sidebar {
+  margin-right: -21px;
+  margin-bottom: 20px;
+  margin-left: -20px;
+}
+
+.nav-sidebar > li > a {
+  padding-right: 20px;
+  padding-left: 20px;
+}
+
+.nav-sidebar > .active > a,
+.nav-sidebar > .active > a:hover,
+.nav-sidebar > .active > a:focus {
+  color: #fff;
+  background-color: #2196F3;
+}
+
+.main {
+  padding: 0;
+}
+
+.main .page-header {
+  margin-top: 0;
+}
+
+.file-tree ul.nav.nav-sidebar {
+  margin: 0;
+  padding: 0;
+  padding-left: 12px;
+}
+
+.file-tree ul.nav.nav-sidebar > li {
+  border-left: 1px solid #ddd;
+  padding-left: 4px;
+}
+
+.file-tree ul.nav.nav-sidebar > li > a {
+  padding: 2px 2px 2px 4px;
+}
+
+.file-tree ul.nav.nav-sidebar:first-child {
+  padding-left: 0;
+}
+
+.file-tree ul.nav.nav-sidebar.file-tree-root > li {
+  border-left: none;
+  padding-left: 0px;
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+#context-menu {
+  position: absolute;
+  display: none;
+  z-index: 9999;
+}
+
+.iconset {
+  padding: 10px;
+}
+
+.col-120 {
+  width: 100px;
+  max-height: 100px;
+  float: left;
+  margin-bottom: 9px;
+  margin-right: 9px;
+}
+
+.col-120:last-child {
+  margin-right: 0;
+}
+
+.noselect {
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none;   /* Chrome/Safari/Opera */
+  -khtml-user-select: none;    /* Konqueror */
+  -moz-user-select: none;      /* Firefox */
+  -ms-user-select: none;       /* IE/Edge */
+  user-select: none;           /* non-prefixed version, currently */
+}
+
+.iconset .thumbnail {
+  border-radius: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  padding: 10px 0;
+  border: none;
+  background: none;
+}
+
+.table-files .selected,
+.iconset .thumbnail.selected {
+  background: #2196F3;
+}
+
+.iconset .thumbnail.selected,
+.table-files .selected td,
+.table-files .selected td a {
+  color:#fff;
+}
+
+.iconset .thumbnail .item-icon {
+  font-size: 32px;
+}
+
+.detail-sources {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  word-wrap: break-word;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background-color: #fff;
+  box-shadow: inset 1px 1px 0 rgba(0, 0, 0, .1), inset -1px -1px 0 rgba(0, 0, 0, .07);
+}
+
+::-webkit-scrollbar:hover {
+  background-color: #eee;
+}
+
+::-webkit-scrollbar-thumb {
+  min-height: 0.8em;
+  min-width: 0.8em;
+  background-color: rgba(0, 0, 0, .2);
+  box-shadow: inset 1px 1px 0 rgba(0, 0, 0, .1), inset -1px -1px 0 rgba(0, 0, 0, .07);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #bbb;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #888;
+}
+
+.dropdown-menu.dropdown-right-click {
+  display: block;
+  position: static;
+  margin-bottom: 5px;
+  font-size: 1em;
+}
+
+.dropdown-menu.dropdown-right-click>li>a {
+  padding: 5px 12px;
+}
+
+.dropdown-menu.dropdown-right-click>li>a>i {
+  font-size: .9em;
+  margin-right: 1px;
+}
+
+.dropdown-menu.dropdown-right-click .divider {
+  margin: 3px 0;
+}
+
+.upload-dragover .main {
+  opacity: .4;
+}
+
+.upload-dragover:before {
+  content: "\e198";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  color: #2196F3;
+  font-size: 8em;
+  font-family: 'Glyphicons Halflings';
+}
+
+.upload-list {
+  margin-top: 20px;
+}
+
+.spinner-wrapper {
+  margin: 0 auto;
+  text-align: center;
+  margin-top: 8%;
+}
+
+a:hover,
+a:active,
+a:focus,
+table th > a:hover,
+table th > a:active,
+table th > a:focus {
+  text-decoration: none;
+}
+
+.sortorder:after {
+  color: #2196f3;
+  content: '\25bc';
+}
+
+.sortorder.reverse:after {
+  color: #2196f3;
+  content: '\25b2';
+}
+
+[ng\:cloak], [ng-cloak],
+[data-ng-cloak], [x-ng-cloak],
+.ng-cloak, .x-ng-cloak {
+  display: none !important;
+}
+
+.mr2 {
+  margin-right: 2px;
+}
+
+.mr5 {
+  margin-right: 5px;
+}
+
+.mt10 {
+  margin-top: 10px;
+}
+
+.mb0 {
+  margin-bottom: 0;
+}
+
+.pointer {
+  cursor: pointer;
+}
+
+.block {
+  display: block;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bold {
+  font-weight: bold;
+}
+
+.main {
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .main {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  /* The view should fill all available vertical space */
+  angular-filemanager > div,.row,.main,.sidebar {
+    height: 100%;
+  }
+
+  .container-fluid {
+    height: -webkit-calc(100% - 55px);
+    height: -moz-calc(100% - 55px);
+    height: calc(100% - 55px);
+  }
+
+  .sidebar {
+    display: block;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-color: #f5f5f5;
+    border-right: 1px solid #eee;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar-form .btn {
+    margin-top: 5px;
+  }
+}
+
+@media (max-width: 475px) {
+  .table.table-files .btn {
+    display: none;
+  }
+}
+
+.selected-file-details {
+  padding-left: 20px;
+}
