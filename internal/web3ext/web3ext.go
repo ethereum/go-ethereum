@@ -118,26 +118,18 @@ web3._extend({
   methods:
   [
     new web3._extend.Method({
-			name: 'deployRegistrar',
-			call: 'ens_deployRegistrar',
-		}),
-    new web3._extend.Method({
-			name: 'deployResolver',
-			call: 'ens_deployResolver',
-		}),
-    new web3._extend.Method({
 			name: 'register',
 			call: 'ens_register',
-			params: 2,
-			inputFormatter: [null, null]
+			params: 1,
+			inputFormatter: [null]
 		}),
-		new web3._extend.Method({
+	new web3._extend.Method({
 			name: 'setContentHash',
 			call: 'ens_setContentHash',
 			params: 2,
 			inputFormatter: [null, null]
 		}),
-		new web3._extend.Method({
+	new web3._extend.Method({
 			name: 'resolve',
 			call: 'ens_resolve',
 			params: 1,
