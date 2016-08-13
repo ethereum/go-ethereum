@@ -119,17 +119,22 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		opts = new(CallOpts)
 	}
 	// Make sure we have a contract to operate on, and bail out otherwise
-	if (opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0) || (!opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0) {
-		if code, err := c.backend.CodeAt(opts.Context, c.address, nil); err != nil {
-			return err
-		} else if len(code) == 0 {
-			return ErrNoCode
-		}
-		if opts.Pending {
-			atomic.StoreUint32(&c.pendingHasCode, 1)
-		} else {
-			atomic.StoreUint32(&c.latestHasCode, 1)
-		}
+	var code []byte
+	var err error
+	if opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0 {
+		code, err = c.backend.PendingCodeAt(opts.Context, c.address)
+	} else if !opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0 {
+		code, err = c.backend.CodeAt(opts.Context, c.address, nil)
+	}
+	if err != nil {
+		return err
+	} else if len(code) == 0 {
+		return ErrNoCode
+	}
+	if opts.Pending {
+		atomic.StoreUint32(&c.pendingHasCode, 1)
+	} else {
+		atomic.StoreUint32(&c.latestHasCode, 1)
 	}
 	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
