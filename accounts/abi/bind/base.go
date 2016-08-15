@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum"
@@ -63,6 +64,15 @@ type SubscribeOpts struct {
 	FromBlock *big.Int // Block at which we want to start retrieving past events
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+}
+
+// EventOpts is a collection of options to fine tune the retrieval of events that
+// happened on a contract.
+type EventOpts struct {
+	FromBlock *big.Int
+	ToBlock   *big.Int
+
+	Context context.Context
 }
 
 // BoundContract is the base wrapper object that reflects a contract on the
@@ -247,11 +257,68 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	return signedTx, nil
 }
 
+// Events will return a list of events for this contract for the given topics and
+// the given start & end blocks.
+func (c *BoundContract) Events(opts *EventOpts, name string, output interface{}, topics ...[]common.Hash) error {
+
+	// get the event so we can encode the name into the first topic
+	event, ok := c.abi.Events[name]
+	if !ok {
+		return fmt.Errorf("unknown event name: %v", name)
+	}
+	names := []common.Hash{event.Id()}
+	topics = append([][]common.Hash{names}, topics...)
+
+	// check that output is a pointer
+	ptr := reflect.ValueOf(output)
+	if ptr.Kind() != reflect.Ptr {
+		return fmt.Errorf("need pointer to slice as output, have %T", output)
+	}
+
+	// check that it points to a slice
+	slice := ptr.Elem()
+	if slice.Kind() != reflect.Slice {
+		return fmt.Errorf("need pointer to slice as output, have %T", output)
+	}
+
+	// create the filter query and retrieve the events through the backend
+	filterQuery := ethereum.FilterQuery{
+		FromBlock: opts.FromBlock,
+		ToBlock:   opts.ToBlock,
+		Addresses: []common.Address{c.address},
+		Topics:    topics,
+	}
+	logs, err := c.backend.FilterLogs(opts.Context, filterQuery)
+	if err != nil {
+		return fmt.Errorf("could not retrieve events (%v)", err)
+	}
+
+	// for each log entry, create an event, unpack the data and append it
+	item := slice.Elem()
+	events := reflect.MakeSlice(slice.Type(), 0, len(logs))
+	for _, log := range logs {
+		event := reflect.New(item.Type())
+		err = c.abi.Unpack(item.Interface(), name, log.Data)
+		if err != nil {
+			return fmt.Errorf("could not unpack event data (%v)", err)
+		}
+		if len(log.Topics) > 1 {
+			// TODO: extract indexed parameters from topics 1-3
+		}
+		events = reflect.Append(events, event)
+	}
+
+	// set the output slice to our slice of events
+	slice.Set(events)
+	return nil
+}
+
 // Subscribe subscribes to the contract for the given topics. Subscription events
 // will be submitted to the provided channel. Upon cancelation of the subscription,
 // the channel will be closed. A channel should only be used for ones subscription.
-func (c *BoundContract) Subscribe(opts *SubscribeOpts, channel chan<- vm.Log, topics ...[]common.Hash) error {
-	// Check if we already have a subscription on this channel
+func (c *BoundContract) Subscribe(opts *SubscribeOpts, name string, channel chan<- vm.Log, topics ...[]common.Hash) error {
+
+	// check if we already have a subscription on this channel
 	_, ok := c.subscriptions[channel]
 	if ok {
 		return fmt.Errorf("cannot reuse channel for multiple subscriptions")
