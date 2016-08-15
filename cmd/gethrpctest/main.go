@@ -19,12 +19,10 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -61,14 +59,8 @@ func main() {
 	if !found {
 		log.Fatalf("Requested test (%s) not found within suite", *testName)
 	}
-	// Create the protocol stack to run the test with
-	keydir, err := ioutil.TempDir("", "")
-	if err != nil {
-		log.Fatalf("Failed to create temporary keystore directory: %v", err)
-	}
-	defer os.RemoveAll(keydir)
 
-	stack, err := MakeSystemNode(keydir, *testKey, test)
+	stack, err := MakeSystemNode(*testKey, test)
 	if err != nil {
 		log.Fatalf("Failed to assemble test stack: %v", err)
 	}
@@ -92,23 +84,24 @@ func main() {
 
 // MakeSystemNode configures a protocol stack for the RPC tests based on a given
 // keystore path and initial pre-state.
-func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node.Node, error) {
+func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
 	stack, err := node.New(&node.Config{
-		IPCPath:     node.DefaultIPCEndpoint(),
-		HTTPHost:    common.DefaultHTTPHost,
-		HTTPPort:    common.DefaultHTTPPort,
-		HTTPModules: []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
-		WSHost:      common.DefaultWSHost,
-		WSPort:      common.DefaultWSPort,
-		WSModules:   []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
-		NoDiscovery: true,
+		UseLightweightKDF: true,
+		IPCPath:           node.DefaultIPCEndpoint(),
+		HTTPHost:          common.DefaultHTTPHost,
+		HTTPPort:          common.DefaultHTTPPort,
+		HTTPModules:       []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		WSHost:            common.DefaultWSHost,
+		WSPort:            common.DefaultWSPort,
+		WSModules:         []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
+		NoDiscovery:       true,
 	})
 	if err != nil {
 		return nil, err
 	}
 	// Create the keystore and inject an unlocked account if requested
-	accman := accounts.NewPlaintextManager(keydir)
+	accman := stack.AccountManager()
 	if len(privkey) > 0 {
 		key, err := crypto.HexToECDSA(privkey)
 		if err != nil {
@@ -131,7 +124,6 @@ func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node
 		TestGenesisState: db,
 		TestGenesisBlock: test.Genesis,
 		ChainConfig:      &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock},
-		AccountManager:   accman,
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		return nil, err

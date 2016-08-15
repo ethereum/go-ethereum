@@ -83,11 +83,10 @@ type Config struct {
 	PowShared bool
 	ExtraData []byte
 
-	AccountManager *accounts.Manager
-	Etherbase      common.Address
-	GasPrice       *big.Int
-	MinerThreads   int
-	SolcPath       string
+	Etherbase    common.Address
+	GasPrice     *big.Int
+	MinerThreads int
+	SolcPath     string
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -160,7 +159,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainDb:        chainDb,
 		dappDb:         dappDb,
 		eventMux:       ctx.EventMux,
-		accountManager: config.AccountManager,
+		accountManager: ctx.AccountManager,
 		pow:            pow,
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,

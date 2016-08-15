@@ -26,6 +26,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
@@ -48,6 +49,9 @@ var (
 type Node struct {
 	datadir  string         // Path to the currently used data directory
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
+
+	accman            *accounts.Manager
+	ephemeralKeystore string // if non-empty, the key directory that will be removed by Stop
 
 	serverConfig p2p.Config
 	server       *p2p.Server // Currently running P2P networking layer
@@ -90,13 +94,20 @@ func New(conf *Config) (*Node, error) {
 			return nil, err
 		}
 	}
+	am, ephemeralKeystore, err := makeAccountManager(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	// Assemble the networking layer and the node itself
 	nodeDbPath := ""
 	if conf.DataDir != "" {
 		nodeDbPath = filepath.Join(conf.DataDir, datadirNodeDatabase)
 	}
 	return &Node{
-		datadir: conf.DataDir,
+		datadir:           conf.DataDir,
+		accman:            am,
+		ephemeralKeystore: ephemeralKeystore,
 		serverConfig: p2p.Config{
 			PrivateKey:      conf.NodeKey(),
 			Name:            conf.Name,
@@ -156,9 +167,10 @@ func (n *Node) Start() error {
 	for _, constructor := range n.serviceFuncs {
 		// Create a new context for the particular service
 		ctx := &ServiceContext{
-			datadir:  n.datadir,
-			services: make(map[reflect.Type]Service),
-			EventMux: n.eventmux,
+			datadir:        n.datadir,
+			services:       make(map[reflect.Type]Service),
+			EventMux:       n.eventmux,
+			AccountManager: n.accman,
 		}
 		for kind, s := range services { // copy needed for threaded access
 			ctx.services[kind] = s
@@ -473,8 +485,17 @@ func (n *Node) Stop() error {
 	n.server = nil
 	close(n.stop)
 
+	// Remove the keystore if it was created ephemerally.
+	var keystoreErr error
+	if n.ephemeralKeystore != "" {
+		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
+	}
+
 	if len(failure.Services) > 0 {
 		return failure
+	}
+	if keystoreErr != nil {
+		return keystoreErr
 	}
 	return nil
 }
@@ -546,6 +567,11 @@ func (n *Node) Service(service interface{}) error {
 // DataDir retrieves the current datadir used by the protocol stack.
 func (n *Node) DataDir() string {
 	return n.datadir
+}
+
+// AccountManager retrieves the account manager used by the protocol stack.
+func (n *Node) AccountManager() *accounts.Manager {
+	return n.accman
 }
 
 // IPCEndpoint retrieves the current IPC endpoint used by the protocol stack.
