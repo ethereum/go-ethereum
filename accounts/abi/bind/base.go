@@ -60,9 +60,6 @@ type TransactOpts struct {
 // SubscribeOpts is the collection of options to fine tune the contract subscription
 // and unsubscription requests.
 type SubscribeOpts struct {
-	History   bool     // Whether to also retrieve events from the past
-	FromBlock *big.Int // Block at which we want to start retrieving past events
-
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
@@ -87,17 +84,20 @@ type BoundContract struct {
 	latestHasCode  uint32 // Cached verification that the latest state contains code for this contract
 	pendingHasCode uint32 // Cached verification that the pending state contains code for this contract
 
-	subscriptions map[chan<- vm.Log]ethereum.Subscription
-	errors        map[chan<- vm.Log]error
+	subscriptions map[uint32]ethereum.Subscription
+	errors        map[uint32]error
+	nextID        uint32
 }
 
 // NewBoundContract creates a low level contract interface through which calls
 // and transactions may be made through.
 func NewBoundContract(address common.Address, abi abi.ABI, backend ContractBackend) *BoundContract {
 	return &BoundContract{
-		address: address,
-		abi:     abi,
-		backend: backend,
+		address:       address,
+		abi:           abi,
+		backend:       backend,
+		subscriptions: make(map[uint32]ethereum.Subscription),
+		errors:        make(map[uint32]error),
 	}
 }
 
@@ -261,6 +261,18 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 // the given start & end blocks.
 func (c *BoundContract) Events(opts *EventOpts, name string, output interface{}, topics ...[]common.Hash) error {
 
+	// check that output is a pointer
+	ptr := reflect.ValueOf(output)
+	if ptr.Kind() != reflect.Ptr {
+		return fmt.Errorf("need pointer to slice as output parameter, have %T", output)
+	}
+
+	// check that it points to a slice
+	slice := ptr.Elem()
+	if slice.Kind() != reflect.Slice {
+		return fmt.Errorf("need pointer to slice as output parameter, have %T", output)
+	}
+
 	// get the event so we can encode the name into the first topic
 	event, ok := c.abi.Events[name]
 	if !ok {
@@ -268,18 +280,6 @@ func (c *BoundContract) Events(opts *EventOpts, name string, output interface{},
 	}
 	names := []common.Hash{event.Id()}
 	topics = append([][]common.Hash{names}, topics...)
-
-	// check that output is a pointer
-	ptr := reflect.ValueOf(output)
-	if ptr.Kind() != reflect.Ptr {
-		return fmt.Errorf("need pointer to slice as output, have %T", output)
-	}
-
-	// check that it points to a slice
-	slice := ptr.Elem()
-	if slice.Kind() != reflect.Slice {
-		return fmt.Errorf("need pointer to slice as output, have %T", output)
-	}
 
 	// create the filter query and retrieve the events through the backend
 	filterQuery := ethereum.FilterQuery{
@@ -315,102 +315,99 @@ func (c *BoundContract) Events(opts *EventOpts, name string, output interface{},
 
 // Subscribe subscribes to the contract for the given topics. Subscription events
 // will be submitted to the provided channel. Upon cancelation of the subscription,
-// the channel will be closed. A channel should only be used for ones subscription.
-func (c *BoundContract) Subscribe(opts *SubscribeOpts, name string, channel chan<- vm.Log, topics ...[]common.Hash) error {
+// the channel will be closed. A channel should only be used for one subscription.
+func (c *BoundContract) Subscribe(opts *SubscribeOpts, name string, output interface{}, topics ...[]common.Hash) (uint32, error) {
 
-	// check if we already have a subscription on this channel
-	_, ok := c.subscriptions[channel]
-	if ok {
-		return fmt.Errorf("cannot reuse channel for multiple subscriptions")
+	// check that output is a pointer
+	channel := reflect.ValueOf(output)
+	if channel.Kind() != reflect.Chan {
+		return 0, fmt.Errorf("need channel as output parameter, have %T", output)
 	}
+	message := channel.Elem()
 
-	// Build the filter query with our desired options and topics
+	// get the event so we can encode the name into the first topic
+	event, ok := c.abi.Events[name]
+	if !ok {
+		return 0, fmt.Errorf("unknown event name: %v", name)
+	}
+	names := []common.Hash{event.Id()}
+	topics = append([][]common.Hash{names}, topics...)
+
+	// create the filter query and retrieve the events through the backend
 	filterQuery := ethereum.FilterQuery{
-		FromBlock: opts.FromBlock,
+		FromBlock: nil,
 		ToBlock:   nil,
 		Addresses: []common.Address{c.address},
 		Topics:    topics,
 	}
 
-	// If we don't want to miss any real-time event logs, we need to subscribe right away
-	tempChannel := make(chan vm.Log)
-	tempSub, err := c.backend.SubscribeFilterLogs(opts.Context, filterQuery, tempChannel)
+	// create a channel of log messages that we can decode into events
+	logs := make(chan vm.Log)
+	subscription, err := c.backend.SubscribeFilterLogs(opts.Context, filterQuery, logs)
 	if err != nil {
-		return fmt.Errorf("could not create subscription (%v)", err)
+		return 0, fmt.Errorf("could not subscribe (%v)", err)
 	}
+	id := c.nextID
+	c.subscriptions[id] = subscription
+	c.nextID++
 
-	// Get the desired historical data and feed it into the subscription channel
-	if opts.History {
-		var logs []vm.Log
-		logs, err = c.backend.FilterLogs(opts.Context, filterQuery)
-		if err != nil {
-			return fmt.Errorf("could not retrieve history of subscription events")
-		}
-		for _, log := range logs {
-			channel <- log
-		}
-	}
+	// retrieve logs and transcribe them into typed events
+	go func() {
+	Loop:
+		for {
+			select {
+			case err, ok = <-subscription.Err():
 
-	// Feed the real-time events that happenend in the meantime to the subscription channel
-	// and create the new subscription as soon as none are left
-	var subscription ethereum.Subscription
-Feed:
-	for {
-		select {
-		case log := <-tempChannel:
-			channel <- log
-		default:
-			subscription, err = c.backend.SubscribeFilterLogs(opts.Context, filterQuery, channel)
-			tempSub.Unsubscribe()
-			for _ = range tempSub.Err() {
-			}
-		Drain:
-			for {
-				select {
-				case <-tempChannel:
-				default:
-					break Drain
+				// error was closed, so we shut down
+				if !ok {
+					break Loop
 				}
+
+				// otherwise just save the error for this subscription
+				c.errors[id] = err
+
+				// receive log and transcribe
+			case log := <-logs:
+				item := reflect.New(message.Type())
+				c.abi.Unpack(item.Interface(), name, log.Data)
+				channel.Send(item)
 			}
-			close(tempChannel)
-			break Feed
 		}
-	}
 
-	// check if the subscription succeeded
-	if err != nil {
-		return fmt.Errorf("could not create subscription (%v)", err)
-	}
-	c.subscriptions[channel] = subscription
-
-	// Read from the error channel in the background
-	// When we receive an error, we save it with the channel index
-	// When the error channel is closed, it indicates an ended subscription
-	// We then close the subscription channel to notify the consumer and remove
-	// the subscription from our map
-	go func(errChannel <-chan error) {
-		for err := range errChannel {
-			c.errors[channel] = err
+		// drain the logs channel; this might not always work correctly because we
+		// are not sure all logs were put in the channel already
+	Drain:
+		for {
+			select {
+			case log := <-logs:
+				item := reflect.New(message.Type())
+				c.abi.Unpack(item.Interface(), name, log.Data)
+				channel.Send(item)
+			default:
+				break Drain
+			}
 		}
-		close(channel)
-		delete(c.subscriptions, channel)
-	}(subscription.Err())
-	return nil
+
+		// close the output channel
+		channel.Close()
+	}()
+
+	return id, nil
 }
 
 // Error returns the error that was encountered for the subscription on the given
 // channel. It will reset the error upon retrieval.
-func (c *BoundContract) Error(channel chan<- vm.Log) error {
-	err := c.errors[channel]
-	delete(c.errors, channel)
+func (c *BoundContract) Error(id uint32) error {
+	err := c.errors[id]
+	delete(c.errors, id)
 	return err
 }
 
 // Unsubscribe cancels the subscription if one exists on the given channel. The
 // subscription channel will be closed once the subscription was successfully
 // canceled.
-func (c *BoundContract) Unsubscribe(channel chan<- vm.Log) error {
-	subscription, ok := c.subscriptions[channel]
+func (c *BoundContract) Unsubscribe(id uint32) error {
+	subscription, ok := c.subscriptions[id]
 	if !ok {
 		return fmt.Errorf("subscription doesn't exist or already closed")
 	}
