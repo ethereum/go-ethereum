@@ -255,8 +255,8 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 	} else {
 		response, _ = resps.Get("0")
 	}
-	if fn := call.Argument(1).Object(); fn != nil && fn.Class() == "function" {
-		fn.Call("apply", response)
+	if fn := call.Argument(1); fn.Class() == "Function" {
+		fn.Call(otto.NullValue(), otto.NullValue(), response)
 		return otto.UndefinedValue()
 	}
 	return response
