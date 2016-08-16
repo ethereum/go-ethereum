@@ -74,6 +74,9 @@ func (self *Filter) SetTopics(topics [][]common.Hash) {
 func (self *Filter) Find() vm.Logs {
 	latestHash := core.GetHeadBlockHash(self.db)
 	latestBlock := core.GetBlock(self.db, latestHash, core.GetBlockNumber(self.db, latestHash))
+	if latestBlock == nil {
+		return vm.Logs{}
+	}
 	var beginBlockNo uint64 = uint64(self.begin)
 	if self.begin == -1 {
 		beginBlockNo = latestBlock.NumberU64()
@@ -123,13 +126,13 @@ func (self *Filter) mipFind(start, end uint64, depth int) (logs vm.Logs) {
 }
 
 func (self *Filter) getLogs(start, end uint64) (logs vm.Logs) {
-	var block *types.Block
-
 	for i := start; i <= end; i++ {
+		var block *types.Block
 		hash := core.GetCanonicalHash(self.db, i)
 		if hash != (common.Hash{}) {
 			block = core.GetBlock(self.db, hash, i)
-		} else { // block not found
+		}
+		if block == nil { // block not found/written
 			return logs
 		}
 
