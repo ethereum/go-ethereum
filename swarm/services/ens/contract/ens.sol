@@ -218,12 +218,9 @@ contract PublicResolver is Resolver {
 
 contract DeployENS {
     function DeployENS() {
-        var tld = sha3('eth');
-        var tldnode = sha3(bytes32(0), tld);
         var ens = new ENS(this);
-        var registrar = new FIFSRegistrar(ens, tldnode);
-        ens.setOwner(0, tld, registrar);
-        ens.setOwner(0, 0);
+        var registrar = new FIFSRegistrar(ens, 0);
+        ens.setOwner(0, registrar);
         selfdestruct(msg.sender);
     }
 }
