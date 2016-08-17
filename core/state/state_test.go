@@ -222,3 +222,24 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
 	}
 }
+
+func BenchmarkFork(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		db, _ := ethdb.NewMemDatabase()
+		state, _ := New(common.Hash{}, db)
+		b.StartTimer()
+
+		revertEvery := 5
+		nesting := 20
+		for x := 0; x < nesting; x++ {
+			pstate := state.Copy()
+			state.AddBalance(common.Address{byte(x)}, big.NewInt(10))
+			// at the very least get the balance of each previous object
+			state.GetBalance(common.Address{byte(x - 1)})
+			if x%revertEvery == 0 {
+				state.Set(pstate)
+			}
+		}
+	}
+}
