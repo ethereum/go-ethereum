@@ -52,11 +52,11 @@ func (h *nonceHeap) Pop() interface{} {
 type txList struct {
 	strict bool                          // Whether nonces are strictly continuous or not
 	items  map[uint64]*types.Transaction // Hash map storing the transaction data
-	cache  types.Transactions            // cache of the transactions already sorted
+	cache  types.Transactions            // Cache of the transactions already sorted
 
 	first uint64     // Nonce of the lowest stored transaction (strict mode)
 	last  uint64     // Nonce of the highest stored transaction (strict mode)
-	index *nonceHeap // Heap of nonces of all teh stored transactions (non-strict mode)
+	index *nonceHeap // Heap of nonces of all the stored transactions (non-strict mode)
 
 	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
 }
@@ -73,8 +73,8 @@ func newTxList(strict bool) *txList {
 	}
 }
 
-// Add tries to inserts a new transaction into the list, returning whether the
-// transaction was acceped, and if yes, any previous transaction it replaced.
+// Add tries to insert a new transaction into the list, returning whether the
+// transaction was accepted, and if yes, any previous transaction it replaced.
 //
 // In case of strict lists (contiguous nonces) the nonce boundaries are updated
 // appropriately with the new transaction. Otherwise (gapped nonces) the heap of
@@ -146,10 +146,10 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 //
 // This method uses the cached costcap to quickly decide if there's even a point
 // in calculating all the costs or if the balance covers all. If the threshold is
-// loewr than the costcap, the costcap will be reset to a new high after removing
+// lower than the costcap, the costcap will be reset to a new high after removing
 // expensive the too transactions.
 func (l *txList) Filter(threshold *big.Int) (types.Transactions, types.Transactions) {
-	// If all transactions are blow the threshold, short circuit
+	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(threshold) <= 0 {
 		return nil, nil
 	}
@@ -195,7 +195,7 @@ func (l *txList) Filter(threshold *big.Int) (types.Transactions, types.Transacti
 }
 
 // Cap places a hard limit on the number of items, returning all transactions
-// exceeding tht limit.
+// exceeding that limit.
 func (l *txList) Cap(threshold int) types.Transactions {
 	// Short circuit if the number of items is under the limit
 	if len(l.items) < threshold {
@@ -239,8 +239,9 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 		l.cache = nil
 
 		// Remove all invalidated transactions (strict mode only!)
-		invalids := make(types.Transactions, 0, l.last-nonce)
+		var invalids types.Transactions
 		if l.strict {
+			invalids = make(types.Transactions, 0, l.last-nonce)
 			for i := nonce + 1; i <= l.last; i++ {
 				invalids = append(invalids, l.items[i])
 				delete(l.items, i)
@@ -255,7 +256,6 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 				}
 			}
 		}
-		// Figure out the new highest nonce
 		return true, invalids
 	}
 	return false, nil
@@ -265,7 +265,7 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 // provided nonce that is ready for processing. The returned transactions will be
 // removed from the list.
 //
-// Note, all transactions with nonces lower that start will also be returned to
+// Note, all transactions with nonces lower than start will also be returned to
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (l *txList) Ready(start uint64) types.Transactions {
