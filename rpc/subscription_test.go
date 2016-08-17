@@ -50,7 +50,7 @@ func (s *NotificationTestService) Unsubscribe(subid string) {
 	s.mu.Unlock()
 }
 
-func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val int) (Subscription, error) {
+func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val int) (*Subscription, error) {
 	notifier, supported := NotifierFromContext(ctx)
 	if !supported {
 		return nil, ErrNotificationsUnsupported
@@ -59,16 +59,28 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 	// by explicitly creating an subscription we make sure that the subscription id is send back to the client
 	// before the first subscription.Notify is called. Otherwise the events might be send before the response
 	// for the eth_subscribe method.
-	subscription, err := notifier.NewSubscription(s.Unsubscribe)
-	if err != nil {
-		return nil, err
-	}
+	subscription := notifier.CreateSubscription()
 
 	go func() {
+		// test expects n events, if we begin sending event immediatly some events
+		// will probably be dropped since the subscription ID might not be send to
+		// the client.
+		time.Sleep(5 * time.Second)
 		for i := 0; i < n; i++ {
-			if err := subscription.Notify(val + i); err != nil {
+			if err := notifier.Notify(subscription.ID, val+i); err != nil {
 				return
 			}
+		}
+
+		select {
+		case <-notifier.Closed():
+			s.mu.Lock()
+			s.unsubscribed = true
+			s.mu.Unlock()
+		case <-subscription.Err():
+			s.mu.Lock()
+			s.unsubscribed = true
+			s.mu.Unlock()
 		}
 	}()
 
@@ -77,7 +89,7 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 
 // HangSubscription blocks on s.unblockHangSubscription before
 // sending anything.
-func (s *NotificationTestService) HangSubscription(ctx context.Context, val int) (Subscription, error) {
+func (s *NotificationTestService) HangSubscription(ctx context.Context, val int) (*Subscription, error) {
 	notifier, supported := NotifierFromContext(ctx)
 	if !supported {
 		return nil, ErrNotificationsUnsupported
@@ -85,12 +97,10 @@ func (s *NotificationTestService) HangSubscription(ctx context.Context, val int)
 
 	s.gotHangSubscriptionReq <- struct{}{}
 	<-s.unblockHangSubscription
-	subscription, err := notifier.NewSubscription(s.Unsubscribe)
-	if err != nil {
-		return nil, err
-	}
+	subscription := notifier.CreateSubscription()
+
 	go func() {
-		subscription.Notify(val)
+		notifier.Notify(subscription.ID, val)
 	}()
 	return subscription, nil
 }

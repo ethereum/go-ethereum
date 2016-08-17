@@ -72,7 +72,7 @@ func (s *Service) InvalidRets3() (string, string, error) {
 	return "", "", nil
 }
 
-func (s *Service) Subscription(ctx context.Context) (Subscription, error) {
+func (s *Service) Subscription(ctx context.Context) (*Subscription, error) {
 	return nil, nil
 }
 
