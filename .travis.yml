@@ -12,13 +12,16 @@ matrix:
     - os: linux
       dist: trusty
       go: 1.6.2
+    - os: linux
+      dist: trusty
+      go: 1.7
     - os: osx
-      go: 1.6.2
+      go: 1.7
 
     # This builder does the PPA upload (and nothing else).
     - os: linux
       dist: trusty
-      go: 1.6.2
+      go: 1.7
       env: PPA
       addons:
         apt:
