@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -36,10 +37,11 @@ import (
 )
 
 var (
-	datadirPrivateKey   = "nodekey"            // Path within the datadir to the node's private key
-	datadirStaticNodes  = "static-nodes.json"  // Path within the datadir to the static node list
-	datadirTrustedNodes = "trusted-nodes.json" // Path within the datadir to the trusted node list
-	datadirNodeDatabase = "nodes"              // Path within the datadir to store the node infos
+	datadirPrivateKey      = "nodekey"            // Path within the datadir to the node's private key
+	datadirDefaultKeyStore = "keystore"           // Path within the datadir to the keystore
+	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
+	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
+	datadirNodeDatabase    = "nodes"              // Path within the datadir to store the node infos
 )
 
 // Config represents a small collection of configuration values to fine tune the
@@ -52,6 +54,19 @@ type Config struct {
 	// databases or flat files. This enables ephemeral nodes which can fully reside
 	// in memory.
 	DataDir string
+
+	// KeyStoreDir is the file system folder that contains private keys. The directory can
+	// be specified as a relative path, in which case it is resolved relative to the
+	// current directory.
+	//
+	// If KeyStoreDir is empty, the default location is the "keystore" subdirectory of
+	// DataDir. If DataDir is unspecified and KeyStoreDir is empty, an ephemeral directory
+	// is created by New and destroyed when the node is stopped.
+	KeyStoreDir string
+
+	// UseLightweightKDF lowers the memory and CPU requirements of the key store
+	// scrypt KDF at the expense of security.
+	UseLightweightKDF bool
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
@@ -277,4 +292,39 @@ func (c *Config) parsePersistentNodes(file string) []*discover.Node {
 		nodes = append(nodes, node)
 	}
 	return nodes
+}
+
+func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore string, err error) {
+	scryptN := accounts.StandardScryptN
+	scryptP := accounts.StandardScryptP
+	if conf.UseLightweightKDF {
+		scryptN = accounts.LightScryptN
+		scryptP = accounts.LightScryptP
+	}
+
+	var keydir string
+	switch {
+	case filepath.IsAbs(conf.KeyStoreDir):
+		keydir = conf.KeyStoreDir
+	case conf.DataDir != "":
+		if conf.KeyStoreDir == "" {
+			keydir = filepath.Join(conf.DataDir, datadirDefaultKeyStore)
+		} else {
+			keydir, err = filepath.Abs(conf.KeyStoreDir)
+		}
+	case conf.KeyStoreDir != "":
+		keydir, err = filepath.Abs(conf.KeyStoreDir)
+	default:
+		// There is no datadir.
+		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		ephemeralKeystore = keydir
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if err := os.MkdirAll(keydir, 0700); err != nil {
+		return nil, "", err
+	}
+
+	return accounts.NewManager(keydir, scryptN, scryptP), ephemeralKeystore, nil
 }

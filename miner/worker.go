@@ -60,7 +60,7 @@ type uint64RingBuffer struct {
 	next int      //where is the next insertion? assert 0 <= next < len(ints)
 }
 
-// environment is the workers current environment and holds
+// Work is the workers current environment and holds
 // all of the current state information
 type Work struct {
 	config             *core.ChainConfig
@@ -105,7 +105,7 @@ type worker struct {
 	recv   chan *Result
 	pow    pow.PoW
 
-	eth     core.Backend
+	eth     Backend
 	chain   *core.BlockChain
 	proc    core.Validator
 	chainDb ethdb.Database
@@ -130,11 +130,11 @@ type worker struct {
 	fullValidation bool
 }
 
-func newWorker(config *core.ChainConfig, coinbase common.Address, eth core.Backend) *worker {
+func newWorker(config *core.ChainConfig, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
 	worker := &worker{
 		config:         config,
 		eth:            eth,
-		mux:            eth.EventMux(),
+		mux:            mux,
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),

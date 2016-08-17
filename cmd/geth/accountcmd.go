@@ -168,8 +168,8 @@ nodes.
 )
 
 func accountList(ctx *cli.Context) error {
-	accman := utils.MakeAccountManager(ctx)
-	for i, acct := range accman.Accounts() {
+	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	for i, acct := range stack.AccountManager().Accounts() {
 		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
 	}
 	return nil
@@ -261,10 +261,10 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, verString)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	account, err := accman.NewAccount(password)
+	account, err := stack.AccountManager().NewAccount(password)
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
@@ -278,11 +278,10 @@ func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
-	accman := utils.MakeAccountManager(ctx)
-
-	account, oldPassword := unlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
+	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	account, oldPassword := unlockAccount(ctx, stack.AccountManager(), ctx.Args().First(), 0, nil)
 	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
-	if err := accman.Update(account, oldPassword, newPassword); err != nil {
+	if err := stack.AccountManager().Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
 	return nil
@@ -298,10 +297,9 @@ func importWallet(ctx *cli.Context) error {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, verString)
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
-
-	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
+	acct, err := stack.AccountManager().ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
@@ -318,9 +316,9 @@ func accountImport(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, verString)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-	acct, err := accman.ImportECDSA(key, passphrase)
+	acct, err := stack.AccountManager().ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}

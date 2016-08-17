@@ -68,18 +68,7 @@ func main() {
 		for _, kind := range strings.Split(*excFlag, ",") {
 			exclude[strings.ToLower(kind)] = true
 		}
-		// Build the Solidity source into bindable components
-		solc, err := compiler.New(*solcFlag)
-		if err != nil {
-			fmt.Printf("Failed to locate Solidity compiler: %v\n", err)
-			os.Exit(-1)
-		}
-		source, err := ioutil.ReadFile(*solFlag)
-		if err != nil {
-			fmt.Printf("Failed to read Soldity source code: %v\n", err)
-			os.Exit(-1)
-		}
-		contracts, err := solc.Compile(string(source))
+		contracts, err := compiler.CompileSolidity(*solcFlag, *solFlag)
 		if err != nil {
 			fmt.Printf("Failed to build Solidity contract: %v\n", err)
 			os.Exit(-1)

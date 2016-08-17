@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/ethereum/ethash"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
@@ -244,34 +243,13 @@ func main() {
 	}
 }
 
-func makeDefaultExtra() []byte {
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
-	}
-
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		return nil
-	}
-	return extra
-}
-
 // geth is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
-	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
+	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()
-
 	return nil
 }
 
@@ -301,6 +279,38 @@ func initGenesis(ctx *cli.Context) error {
 	return nil
 }
 
+func makeFullNode(ctx *cli.Context) *node.Node {
+	node := utils.MakeNode(ctx, clientIdentifier, verString)
+	utils.RegisterEthService(ctx, node, relConfig, makeDefaultExtra())
+	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
+	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
+	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
+	if shhEnabled || shhAutoEnabled {
+		utils.RegisterShhService(node)
+	}
+	return node
+}
+
+func makeDefaultExtra() []byte {
+	var clientInfo = struct {
+		Version   uint
+		Name      string
+		GoVersion string
+		Os        string
+	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
+	extra, err := rlp.EncodeToBytes(clientInfo)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+	}
+
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
+		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		return nil
+	}
+	return extra
+}
+
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
@@ -311,12 +321,8 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	var accman *accounts.Manager
-	if err := stack.Service(&accman); err != nil {
-		utils.Fatalf("ethereum service not running: %v", err)
-	}
+	accman := stack.AccountManager()
 	passwords := utils.MakePasswordList(ctx)
-
 	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {

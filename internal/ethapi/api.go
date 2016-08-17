@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -29,7 +28,6 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -49,52 +47,17 @@ const defaultGas = uint64(90000)
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
-	b        Backend
-	solcPath *string
-	solc     **compiler.Solidity
+	b Backend
 }
 
 // NewPublicEthereumAPI creates a new Etheruem protocol API.
-func NewPublicEthereumAPI(b Backend, solcPath *string, solc **compiler.Solidity) *PublicEthereumAPI {
-	return &PublicEthereumAPI{b, solcPath, solc}
+func NewPublicEthereumAPI(b Backend) *PublicEthereumAPI {
+	return &PublicEthereumAPI{b}
 }
 
 // GasPrice returns a suggestion for a gas price.
 func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*big.Int, error) {
 	return s.b.SuggestPrice(ctx)
-}
-
-func (s *PublicEthereumAPI) getSolc() (*compiler.Solidity, error) {
-	var err error
-	solc := *s.solc
-	if solc == nil {
-		solc, err = compiler.New(*s.solcPath)
-	}
-	return solc, err
-}
-
-// GetCompilers returns the collection of available smart contract compilers
-func (s *PublicEthereumAPI) GetCompilers() ([]string, error) {
-	solc, err := s.getSolc()
-	if err == nil && solc != nil {
-		return []string{"Solidity"}, nil
-	}
-
-	return []string{}, nil
-}
-
-// CompileSolidity compiles the given solidity source
-func (s *PublicEthereumAPI) CompileSolidity(source string) (map[string]*compiler.Contract, error) {
-	solc, err := s.getSolc()
-	if err != nil {
-		return nil, err
-	}
-
-	if solc == nil {
-		return nil, errors.New("solc (solidity compiler) not found")
-	}
-
-	return solc.Compile(source)
 }
 
 // ProtocolVersion returns the current Ethereum protocol version this node supports
@@ -1296,31 +1259,6 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, tx *Tx, gasPrice,
 	}
 
 	return common.Hash{}, fmt.Errorf("Transaction %#x not found", tx.Hash)
-}
-
-// PrivateAdminAPI is the collection of Etheruem APIs exposed over the private
-// admin endpoint.
-type PrivateAdminAPI struct {
-	b        Backend
-	solcPath *string
-	solc     **compiler.Solidity
-}
-
-// NewPrivateAdminAPI creates a new API definition for the private admin methods
-// of the Ethereum service.
-func NewPrivateAdminAPI(b Backend, solcPath *string, solc **compiler.Solidity) *PrivateAdminAPI {
-	return &PrivateAdminAPI{b, solcPath, solc}
-}
-
-// SetSolc sets the Solidity compiler path to be used by the node.
-func (api *PrivateAdminAPI) SetSolc(path string) (string, error) {
-	var err error
-	*api.solcPath = path
-	*api.solc, err = compiler.New(path)
-	if err != nil {
-		return "", err
-	}
-	return (*api.solc).Info(), nil
 }
 
 // PublicDebugAPI is the collection of Etheruem APIs exposed over the public

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
@@ -83,11 +82,10 @@ type Config struct {
 	PowShared bool
 	ExtraData []byte
 
-	AccountManager *accounts.Manager
-	Etherbase      common.Address
-	GasPrice       *big.Int
-	MinerThreads   int
-	SolcPath       string
+	Etherbase    common.Address
+	GasPrice     *big.Int
+	MinerThreads int
+	SolcPath     string
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -116,7 +114,6 @@ type Ethereum struct {
 	protocolManager *ProtocolManager
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
-	dappDb  ethdb.Database // Dapp database
 
 	eventMux       *event.TypeMux
 	pow            *ethash.Ethash
@@ -132,7 +129,6 @@ type Ethereum struct {
 	autodagquit  chan bool
 	etherbase    common.Address
 	solcPath     string
-	solc         *compiler.Solidity
 
 	NatSpec       bool
 	PowTest       bool
@@ -143,7 +139,7 @@ type Ethereum struct {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
-	chainDb, dappDb, err := CreateDBs(ctx, config)
+	chainDb, err := createDB(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -158,9 +154,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth := &Ethereum{
 		chainDb:        chainDb,
-		dappDb:         dappDb,
 		eventMux:       ctx.EventMux,
-		accountManager: config.AccountManager,
+		accountManager: ctx.AccountManager,
 		pow:            pow,
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
@@ -244,25 +239,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-// CreateDBs creates the chain and dapp databases for an Ethereum service
-func CreateDBs(ctx *node.ServiceContext, config *Config) (chainDb, dappDb ethdb.Database, err error) {
-	// Open the chain database and perform any upgrades needed
-	chainDb, err = ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles)
-	if err != nil {
-		return nil, nil, err
-	}
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
+// createDB creates the chain database.
+func createDB(ctx *node.ServiceContext, config *Config) (ethdb.Database, error) {
+	db, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles)
+	if db, ok := db.(*ethdb.LDBDatabase); ok {
 		db.Meter("eth/db/chaindata/")
 	}
-
-	dappDb, err = ctx.OpenDatabase("dapp", config.DatabaseCache, config.DatabaseHandles)
-	if err != nil {
-		return nil, nil, err
-	}
-	if db, ok := dappDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/dapp/")
-	}
-	return
+	return db, err
 }
 
 // SetupGenesisBlock initializes the genesis block for an Ethereum service
@@ -306,7 +289,7 @@ func CreatePoW(config *Config) (*ethash.Ethash, error) {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.apiBackend, &s.solcPath, &s.solc), []rpc.API{
+	return append(ethapi.GetAPIs(s.apiBackend, s.solcPath), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -390,7 +373,6 @@ func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Pow() *ethash.Ethash                { return s.pow }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) DappDb() ethdb.Database             { return s.dappDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() int                    { return s.netVersionId }
@@ -428,7 +410,6 @@ func (s *Ethereum) Stop() error {
 	s.StopAutoDAG()
 
 	s.chainDb.Close()
-	s.dappDb.Close()
 	close(s.shutdownChan)
 
 	return nil
