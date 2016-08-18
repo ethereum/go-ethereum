@@ -38,18 +38,18 @@ func TestContextDatabases(t *testing.T) {
 		t.Fatalf("non-created database already exists")
 	}
 	// Request the opening/creation of a database and ensure it persists to disk
-	ctx := &ServiceContext{datadir: dir}
+	ctx := &ServiceContext{config: &Config{Name: "unit-test", DataDir: dir}}
 	db, err := ctx.OpenDatabase("persistent", 0, 0)
 	if err != nil {
 		t.Fatalf("failed to open persistent database: %v", err)
 	}
 	db.Close()
 
-	if _, err := os.Stat(filepath.Join(dir, "persistent")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "unit-test", "persistent")); err != nil {
 		t.Fatalf("persistent database doesn't exists: %v", err)
 	}
 	// Request th opening/creation of an ephemeral database and ensure it's not persisted
-	ctx = &ServiceContext{datadir: ""}
+	ctx = &ServiceContext{config: &Config{DataDir: ""}}
 	db, err = ctx.OpenDatabase("ephemeral", 0, 0)
 	if err != nil {
 		t.Fatalf("failed to open ephemeral database: %v", err)

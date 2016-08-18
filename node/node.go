@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package node represents the Ethereum protocol stack container.
 package node
 
 import (
@@ -23,16 +22,19 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 var (
@@ -44,14 +46,14 @@ var (
 	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
 )
 
-// Node represents a P2P node into which arbitrary (uniquely typed) services might
-// be registered.
+// Node is a container on which services can be registered.
 type Node struct {
-	datadir  string         // Path to the currently used data directory
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
+	config   *Config
+	accman   *accounts.Manager
 
-	accman            *accounts.Manager
-	ephemeralKeystore string // if non-empty, the key directory that will be removed by Stop
+	ephemeralKeystore string          // if non-empty, the key directory that will be removed by Stop
+	instanceDirLock   storage.Storage // prevents concurrent use of instance directory
 
 	serverConfig p2p.Config
 	server       *p2p.Server // Currently running P2P networking layer
@@ -66,21 +68,14 @@ type Node struct {
 	ipcListener net.Listener // IPC RPC listener socket to serve API requests
 	ipcHandler  *rpc.Server  // IPC RPC request handler to process the API requests
 
-	httpHost      string       // HTTP hostname
-	httpPort      int          // HTTP post
 	httpEndpoint  string       // HTTP endpoint (interface + port) to listen at (empty = HTTP disabled)
 	httpWhitelist []string     // HTTP RPC modules to allow through this endpoint
-	httpCors      string       // HTTP RPC Cross-Origin Resource Sharing header
 	httpListener  net.Listener // HTTP RPC listener socket to server API requests
 	httpHandler   *rpc.Server  // HTTP RPC request handler to process the API requests
 
-	wsHost      string       // Websocket host
-	wsPort      int          // Websocket post
-	wsEndpoint  string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
-	wsWhitelist []string     // Websocket RPC modules to allow through this endpoint
-	wsOrigins   string       // Websocket RPC allowed origin domains
-	wsListener  net.Listener // Websocket RPC listener socket to server API requests
-	wsHandler   *rpc.Server  // Websocket RPC request handler to process the API requests
+	wsEndpoint string       // Websocket endpoint (interface + port) to listen at (empty = websocket disabled)
+	wsListener net.Listener // Websocket RPC listener socket to server API requests
+	wsHandler  *rpc.Server  // Websocket RPC request handler to process the API requests
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -88,54 +83,45 @@ type Node struct {
 
 // New creates a new P2P node, ready for protocol registration.
 func New(conf *Config) (*Node, error) {
-	// Ensure the data directory exists, failing if it cannot be created
+	// Copy config and resolve the datadir so future changes to the current
+	// working directory don't affect the node.
+	confCopy := *conf
+	conf = &confCopy
 	if conf.DataDir != "" {
-		if err := os.MkdirAll(conf.DataDir, 0700); err != nil {
+		absdatadir, err := filepath.Abs(conf.DataDir)
+		if err != nil {
 			return nil, err
 		}
+		conf.DataDir = absdatadir
 	}
+	// Ensure that the instance name doesn't cause weird conflicts with
+	// other files in the data directory.
+	if strings.ContainsAny(conf.Name, `/\`) {
+		return nil, errors.New(`Config.Name must not contain '/' or '\'`)
+	}
+	if conf.Name == datadirDefaultKeyStore {
+		return nil, errors.New(`Config.Name cannot be "` + datadirDefaultKeyStore + `"`)
+	}
+	if strings.HasSuffix(conf.Name, ".ipc") {
+		return nil, errors.New(`Config.Name cannot end in ".ipc"`)
+	}
+	// Ensure that the AccountManager method works before the node has started.
+	// We rely on this in cmd/geth.
 	am, ephemeralKeystore, err := makeAccountManager(conf)
 	if err != nil {
 		return nil, err
 	}
-
-	// Assemble the networking layer and the node itself
-	nodeDbPath := ""
-	if conf.DataDir != "" {
-		nodeDbPath = filepath.Join(conf.DataDir, datadirNodeDatabase)
-	}
+	// Note: any interaction with Config that would create/touch files
+	// in the data directory or instance directory is delayed until Start.
 	return &Node{
-		datadir:           conf.DataDir,
 		accman:            am,
 		ephemeralKeystore: ephemeralKeystore,
-		serverConfig: p2p.Config{
-			PrivateKey:      conf.NodeKey(),
-			Name:            conf.Name,
-			Discovery:       !conf.NoDiscovery,
-			BootstrapNodes:  conf.BootstrapNodes,
-			StaticNodes:     conf.StaticNodes(),
-			TrustedNodes:    conf.TrusterNodes(),
-			NodeDatabase:    nodeDbPath,
-			ListenAddr:      conf.ListenAddr,
-			NAT:             conf.NAT,
-			Dialer:          conf.Dialer,
-			NoDial:          conf.NoDial,
-			MaxPeers:        conf.MaxPeers,
-			MaxPendingPeers: conf.MaxPendingPeers,
-		},
-		serviceFuncs:  []ServiceConstructor{},
-		ipcEndpoint:   conf.IPCEndpoint(),
-		httpHost:      conf.HTTPHost,
-		httpPort:      conf.HTTPPort,
-		httpEndpoint:  conf.HTTPEndpoint(),
-		httpWhitelist: conf.HTTPModules,
-		httpCors:      conf.HTTPCors,
-		wsHost:        conf.WSHost,
-		wsPort:        conf.WSPort,
-		wsEndpoint:    conf.WSEndpoint(),
-		wsWhitelist:   conf.WSModules,
-		wsOrigins:     conf.WSOrigins,
-		eventmux:      new(event.TypeMux),
+		config:            conf,
+		serviceFuncs:      []ServiceConstructor{},
+		ipcEndpoint:       conf.IPCEndpoint(),
+		httpEndpoint:      conf.HTTPEndpoint(),
+		wsEndpoint:        conf.WSEndpoint(),
+		eventmux:          new(event.TypeMux),
 	}, nil
 }
 
@@ -161,13 +147,36 @@ func (n *Node) Start() error {
 	if n.server != nil {
 		return ErrNodeRunning
 	}
-	// Otherwise copy and specialize the P2P configuration
+	if err := n.openDataDir(); err != nil {
+		return err
+	}
+
+	// Initialize the p2p server. This creates the node key and
+	// discovery databases.
+	n.serverConfig = p2p.Config{
+		PrivateKey:      n.config.NodeKey(),
+		Name:            n.config.NodeName(),
+		Discovery:       !n.config.NoDiscovery,
+		BootstrapNodes:  n.config.BootstrapNodes,
+		StaticNodes:     n.config.StaticNodes(),
+		TrustedNodes:    n.config.TrusterNodes(),
+		NodeDatabase:    n.config.NodeDB(),
+		ListenAddr:      n.config.ListenAddr,
+		NAT:             n.config.NAT,
+		Dialer:          n.config.Dialer,
+		NoDial:          n.config.NoDial,
+		MaxPeers:        n.config.MaxPeers,
+		MaxPendingPeers: n.config.MaxPendingPeers,
+	}
 	running := &p2p.Server{Config: n.serverConfig}
+	glog.V(logger.Info).Infoln("instance:", n.serverConfig.Name)
+
+	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
 	for _, constructor := range n.serviceFuncs {
 		// Create a new context for the particular service
 		ctx := &ServiceContext{
-			datadir:        n.datadir,
+			config:         n.config,
 			services:       make(map[reflect.Type]Service),
 			EventMux:       n.eventmux,
 			AccountManager: n.accman,
@@ -227,6 +236,26 @@ func (n *Node) Start() error {
 	return nil
 }
 
+func (n *Node) openDataDir() error {
+	if n.config.DataDir == "" {
+		return nil // ephemeral
+	}
+
+	instdir := filepath.Join(n.config.DataDir, n.config.name())
+	if err := os.MkdirAll(instdir, 0700); err != nil {
+		return err
+	}
+	// Try to open the instance directory as LevelDB storage. This creates a lock file
+	// which prevents concurrent use by another instance as well as accidental use of the
+	// instance directory as a database.
+	storage, err := storage.OpenFile(instdir, true)
+	if err != nil {
+		return err
+	}
+	n.instanceDirLock = storage
+	return nil
+}
+
 // startRPC is a helper method to start all the various RPC endpoint during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
@@ -244,12 +273,12 @@ func (n *Node) startRPC(services map[reflect.Type]Service) error {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startHTTP(n.httpEndpoint, apis, n.httpWhitelist, n.httpCors); err != nil {
+	if err := n.startHTTP(n.httpEndpoint, apis, n.config.HTTPModules, n.config.HTTPCors); err != nil {
 		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, apis, n.wsWhitelist, n.wsOrigins); err != nil {
+	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins); err != nil {
 		n.stopHTTP()
 		n.stopIPC()
 		n.stopInProc()
@@ -381,7 +410,6 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	n.httpEndpoint = endpoint
 	n.httpListener = listener
 	n.httpHandler = handler
-	n.httpCors = cors
 
 	return nil
 }
@@ -436,7 +464,6 @@ func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrig
 	n.wsEndpoint = endpoint
 	n.wsListener = listener
 	n.wsHandler = handler
-	n.wsOrigins = wsOrigins
 
 	return nil
 }
@@ -465,12 +492,12 @@ func (n *Node) Stop() error {
 	if n.server == nil {
 		return ErrNodeStopped
 	}
-	// Otherwise terminate the API, all services and the P2P server too
+
+	// Terminate the API, services and the p2p server.
 	n.stopWS()
 	n.stopHTTP()
 	n.stopIPC()
 	n.rpcAPIs = nil
-
 	failure := &StopError{
 		Services: make(map[reflect.Type]error),
 	}
@@ -480,9 +507,16 @@ func (n *Node) Stop() error {
 		}
 	}
 	n.server.Stop()
-
 	n.services = nil
 	n.server = nil
+
+	// Release instance directory lock.
+	if n.instanceDirLock != nil {
+		n.instanceDirLock.Close()
+		n.instanceDirLock = nil
+	}
+
+	// unblock n.Wait
 	close(n.stop)
 
 	// Remove the keystore if it was created ephemerally.
@@ -566,7 +600,7 @@ func (n *Node) Service(service interface{}) error {
 
 // DataDir retrieves the current datadir used by the protocol stack.
 func (n *Node) DataDir() string {
-	return n.datadir
+	return n.config.DataDir
 }
 
 // AccountManager retrieves the account manager used by the protocol stack.
@@ -593,6 +627,21 @@ func (n *Node) WSEndpoint() string {
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
 	return n.eventmux
+}
+
+// OpenDatabase opens an existing database with the given name (or creates one if no
+// previous can be found) from within the node's instance directory. If the node is
+// ephemeral, a memory database is returned.
+func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, error) {
+	if n.config.DataDir == "" {
+		return ethdb.NewMemDatabase()
+	}
+	return ethdb.NewLDBDatabase(n.config.resolvePath(name), cache, handles)
+}
+
+// ResolvePath returns the absolute path of a resource in the instance directory.
+func (n *Node) ResolvePath(x string) string {
+	return n.config.resolvePath(x)
 }
 
 // apis returns the collection of RPC descriptors this node offers.

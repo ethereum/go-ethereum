@@ -35,7 +35,7 @@ import (
 var (
 	monitorCommandAttachFlag = cli.StringFlag{
 		Name:  "attach",
-		Value: node.DefaultIPCEndpoint(),
+		Value: node.DefaultIPCEndpoint(clientIdentifier),
 		Usage: "API endpoint to attach to",
 	}
 	monitorCommandRowsFlag = cli.IntFlag{

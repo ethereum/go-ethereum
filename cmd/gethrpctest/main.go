@@ -88,7 +88,7 @@ func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
 	stack, err := node.New(&node.Config{
 		UseLightweightKDF: true,
-		IPCPath:           node.DefaultIPCEndpoint(),
+		IPCPath:           node.DefaultIPCEndpoint(""),
 		HTTPHost:          common.DefaultHTTPHost,
 		HTTPPort:          common.DefaultHTTPPort,
 		HTTPModules:       []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
