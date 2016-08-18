@@ -161,9 +161,12 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if peer == nil {
 		return
 	}
-	// Make sure the peer's TD is higher than our own. If not drop.
-	td := pm.blockchain.GetTd(pm.blockchain.CurrentBlock().Hash())
-	if peer.Td().Cmp(td) <= 0 {
+	// Make sure the peer's TD is higher than our own
+	currentBlock := pm.blockchain.CurrentBlock()
+	td := pm.blockchain.GetTd(currentBlock.Hash())
+
+	pHead, pTd := peer.Head()
+	if pTd.Cmp(td) <= 0 {
 		return
 	}
 	// Otherwise try to sync with the downloader
@@ -171,7 +174,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		mode = downloader.FastSync
 	}
-	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode); err != nil {
+	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {
 		return
 	}
 	atomic.StoreUint32(&pm.synced, 1) // Mark initial sync done

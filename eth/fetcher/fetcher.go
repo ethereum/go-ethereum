@@ -48,9 +48,6 @@ var (
 // blockRetrievalFn is a callback type for retrieving a block from the local chain.
 type blockRetrievalFn func(common.Hash) *types.Block
 
-// blockRequesterFn is a callback type for sending a block retrieval request.
-type blockRequesterFn func([]common.Hash) error
-
 // headerRequesterFn is a callback type for sending a header retrieval request.
 type headerRequesterFn func(common.Hash) error
 
@@ -82,7 +79,6 @@ type announce struct {
 
 	origin string // Identifier of the peer originating the notification
 
-	fetch61     blockRequesterFn  // [eth/61] Fetcher function to retrieve an announced block
 	fetchHeader headerRequesterFn // [eth/62] Fetcher function to retrieve the header of an announced block
 	fetchBodies bodyRequesterFn   // [eth/62] Fetcher function to retrieve the body of an announced block
 }
@@ -191,14 +187,12 @@ func (f *Fetcher) Stop() {
 // Notify announces the fetcher of the potential availability of a new block in
 // the network.
 func (f *Fetcher) Notify(peer string, hash common.Hash, number uint64, time time.Time,
-	blockFetcher blockRequesterFn, // eth/61 specific whole block fetcher
 	headerFetcher headerRequesterFn, bodyFetcher bodyRequesterFn) error {
 	block := &announce{
 		hash:        hash,
 		number:      number,
 		time:        time,
 		origin:      peer,
-		fetch61:     blockFetcher,
 		fetchHeader: headerFetcher,
 		fetchBodies: bodyFetcher,
 	}
@@ -221,34 +215,6 @@ func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
 		return nil
 	case <-f.quit:
 		return errTerminated
-	}
-}
-
-// FilterBlocks extracts all the blocks that were explicitly requested by the fetcher,
-// returning those that should be handled differently.
-func (f *Fetcher) FilterBlocks(blocks types.Blocks) types.Blocks {
-	glog.V(logger.Detail).Infof("[eth/61] filtering %d blocks", len(blocks))
-
-	// Send the filter channel to the fetcher
-	filter := make(chan []*types.Block)
-
-	select {
-	case f.blockFilter <- filter:
-	case <-f.quit:
-		return nil
-	}
-	// Request the filtering of the block list
-	select {
-	case filter <- blocks:
-	case <-f.quit:
-		return nil
-	}
-	// Retrieve the blocks remaining after filtering
-	select {
-	case blocks := <-filter:
-		return blocks
-	case <-f.quit:
-		return nil
 	}
 }
 
@@ -413,7 +379,7 @@ func (f *Fetcher) loop() {
 					}
 				}
 			}
-			// Send out all block (eth/61) or header (eth/62) requests
+			// Send out all block header requests
 			for peer, hashes := range request {
 				if glog.V(logger.Detail) && len(hashes) > 0 {
 					list := "["
@@ -421,29 +387,17 @@ func (f *Fetcher) loop() {
 						list += fmt.Sprintf("%x…, ", hash[:4])
 					}
 					list = list[:len(list)-2] + "]"
-
-					if f.fetching[hashes[0]].fetch61 != nil {
-						glog.V(logger.Detail).Infof("[eth/61] Peer %s: fetching blocks %s", peer, list)
-					} else {
-						glog.V(logger.Detail).Infof("[eth/62] Peer %s: fetching headers %s", peer, list)
-					}
+					glog.V(logger.Detail).Infof("[eth/62] Peer %s: fetching headers %s", peer, list)
 				}
 				// Create a closure of the fetch and schedule in on a new thread
-				fetchBlocks, fetchHeader, hashes := f.fetching[hashes[0]].fetch61, f.fetching[hashes[0]].fetchHeader, hashes
+				fetchHeader, hashes := f.fetching[hashes[0]].fetchHeader, hashes
 				go func() {
 					if f.fetchingHook != nil {
 						f.fetchingHook(hashes)
 					}
-					if fetchBlocks != nil {
-						// Use old eth/61 protocol to retrieve whole blocks
-						blockFetchMeter.Mark(int64(len(hashes)))
-						fetchBlocks(hashes)
-					} else {
-						// Use new eth/62 protocol to retrieve headers first
-						for _, hash := range hashes {
-							headerFetchMeter.Mark(1)
-							fetchHeader(hash) // Suboptimal, but protocol doesn't allow batch header retrievals
-						}
+					for _, hash := range hashes {
+						headerFetchMeter.Mark(1)
+						fetchHeader(hash) // Suboptimal, but protocol doesn't allow batch header retrievals
 					}
 				}()
 			}
@@ -485,46 +439,6 @@ func (f *Fetcher) loop() {
 			}
 			// Schedule the next fetch if blocks are still pending
 			f.rescheduleComplete(completeTimer)
-
-		case filter := <-f.blockFilter:
-			// Blocks arrived, extract any explicit fetches, return all else
-			var blocks types.Blocks
-			select {
-			case blocks = <-filter:
-			case <-f.quit:
-				return
-			}
-			blockFilterInMeter.Mark(int64(len(blocks)))
-
-			explicit, download := []*types.Block{}, []*types.Block{}
-			for _, block := range blocks {
-				hash := block.Hash()
-
-				// Filter explicitly requested blocks from hash announcements
-				if f.fetching[hash] != nil && f.queued[hash] == nil {
-					// Discard if already imported by other means
-					if f.getBlock(hash) == nil {
-						explicit = append(explicit, block)
-					} else {
-						f.forgetHash(hash)
-					}
-				} else {
-					download = append(download, block)
-				}
-			}
-
-			blockFilterOutMeter.Mark(int64(len(download)))
-			select {
-			case filter <- download:
-			case <-f.quit:
-				return
-			}
-			// Schedule the retrieved blocks for ordered import
-			for _, block := range explicit {
-				if announce := f.fetching[block.Hash()]; announce != nil {
-					f.enqueue(announce.origin, block)
-				}
-			}
 
 		case filter := <-f.headerFilter:
 			// Headers arrived from a remote peer. Extract those that were explicitly
