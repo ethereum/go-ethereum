@@ -505,7 +505,7 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 	if err != nil {
 		return hashNode{}, n, err
 	}
-	// Cache the hash and RLP blob of the ndoe for later reuse
+	// Cache the hash and RLP blob of the node for later reuse
 	if hash, ok := hashed.(hashNode); ok && !force {
 		switch cached := cached.(type) {
 		case shortNode:
