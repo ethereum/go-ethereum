@@ -57,9 +57,6 @@ func errResp(code errCode, format string, v ...interface{}) error {
 	return fmt.Errorf("%v - %v", code, fmt.Sprintf(format, v...))
 }
 
-type hashFetcherFn func(common.Hash) error
-type blockFetcherFn func([]common.Hash) error
-
 type ProtocolManager struct {
 	networkId int
 
@@ -275,9 +272,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	defer pm.removePeer(p.id)
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(),
-		p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks, p.RequestHeadersByHash,
-		p.RequestHeadersByNumber, p.RequestBodies, p.RequestReceipts, p.RequestNodeData); err != nil {
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head, p.RequestHeadersByHash, p.RequestHeadersByNumber, p.RequestBodies, p.RequestReceipts, p.RequestNodeData); err != nil {
 		return err
 	}
 	// Propagate existing transactions. new transactions appearing
@@ -295,6 +290,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			glog.V(logger.Warn).Infof("%v: timed out DAO fork-check, dropping", p)
 			pm.removePeer(p.id)
 		})
+		// Make sure it's cleaned up if the peer dies off
+		defer func() {
+			if p.forkDrop != nil {
+				p.forkDrop.Stop()
+				p.forkDrop = nil
+			}
+		}()
 	}
 	// main loop. handle incoming messages.
 	for {
@@ -324,108 +326,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
-	case p.version < eth62 && msg.Code == GetBlockHashesMsg:
-		// Retrieve the number of hashes to return and from which origin hash
-		var request getBlockHashesData
-		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		if request.Amount > uint64(downloader.MaxHashFetch) {
-			request.Amount = uint64(downloader.MaxHashFetch)
-		}
-		// Retrieve the hashes from the block chain and return them
-		hashes := pm.blockchain.GetBlockHashesFromHash(request.Hash, request.Amount)
-		if len(hashes) == 0 {
-			glog.V(logger.Debug).Infof("invalid block hash %x", request.Hash.Bytes()[:4])
-		}
-		return p.SendBlockHashes(hashes)
-
-	case p.version < eth62 && msg.Code == GetBlockHashesFromNumberMsg:
-		// Retrieve and decode the number of hashes to return and from which origin number
-		var request getBlockHashesFromNumberData
-		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "%v: %v", msg, err)
-		}
-		if request.Amount > uint64(downloader.MaxHashFetch) {
-			request.Amount = uint64(downloader.MaxHashFetch)
-		}
-		// Calculate the last block that should be retrieved, and short circuit if unavailable
-		last := pm.blockchain.GetBlockByNumber(request.Number + request.Amount - 1)
-		if last == nil {
-			last = pm.blockchain.CurrentBlock()
-			request.Amount = last.NumberU64() - request.Number + 1
-		}
-		if last.NumberU64() < request.Number {
-			return p.SendBlockHashes(nil)
-		}
-		// Retrieve the hashes from the last block backwards, reverse and return
-		hashes := []common.Hash{last.Hash()}
-		hashes = append(hashes, pm.blockchain.GetBlockHashesFromHash(last.Hash(), request.Amount-1)...)
-
-		for i := 0; i < len(hashes)/2; i++ {
-			hashes[i], hashes[len(hashes)-1-i] = hashes[len(hashes)-1-i], hashes[i]
-		}
-		return p.SendBlockHashes(hashes)
-
-	case p.version < eth62 && msg.Code == BlockHashesMsg:
-		// A batch of hashes arrived to one of our previous requests
-		var hashes []common.Hash
-		if err := msg.Decode(&hashes); err != nil {
-			break
-		}
-		// Deliver them all to the downloader for queuing
-		err := pm.downloader.DeliverHashes(p.id, hashes)
-		if err != nil {
-			glog.V(logger.Debug).Infoln(err)
-		}
-
-	case p.version < eth62 && msg.Code == GetBlocksMsg:
-		// Decode the retrieval message
-		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
-		if _, err := msgStream.List(); err != nil {
-			return err
-		}
-		// Gather blocks until the fetch or network limits is reached
-		var (
-			hash   common.Hash
-			bytes  common.StorageSize
-			blocks []*types.Block
-		)
-		for len(blocks) < downloader.MaxBlockFetch && bytes < softResponseLimit {
-			//Retrieve the hash of the next block
-			err := msgStream.Decode(&hash)
-			if err == rlp.EOL {
-				break
-			} else if err != nil {
-				return errResp(ErrDecode, "msg %v: %v", msg, err)
-			}
-			// Retrieve the requested block, stopping if enough was found
-			if block := pm.blockchain.GetBlock(hash); block != nil {
-				blocks = append(blocks, block)
-				bytes += block.Size()
-			}
-		}
-		return p.SendBlocks(blocks)
-
-	case p.version < eth62 && msg.Code == BlocksMsg:
-		// Decode the arrived block message
-		var blocks []*types.Block
-		if err := msg.Decode(&blocks); err != nil {
-			glog.V(logger.Detail).Infoln("Decode error", err)
-			blocks = nil
-		}
-		// Update the receive timestamp of each block
-		for _, block := range blocks {
-			block.ReceivedAt = msg.ReceivedAt
-			block.ReceivedFrom = p
-		}
-		// Filter out any explicitly requested blocks, deliver the rest to the downloader
-		if blocks := pm.fetcher.FilterBlocks(blocks); len(blocks) > 0 {
-			pm.downloader.DeliverBlocks(p.id, blocks)
-		}
-
 	// Block header query, collect the requested headers and reply
-	case p.version >= eth62 && msg.Code == GetBlockHeadersMsg:
+	case msg.Code == GetBlockHeadersMsg:
 		// Decode the complex header query
 		var query getBlockHeadersData
 		if err := msg.Decode(&query); err != nil {
@@ -491,7 +393,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockHeaders(headers)
 
-	case p.version >= eth62 && msg.Code == BlockHeadersMsg:
+	case msg.Code == BlockHeadersMsg:
 		// A batch of headers arrived to one of our previous requests
 		var headers []*types.Header
 		if err := msg.Decode(&headers); err != nil {
@@ -505,7 +407,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// If we already have a DAO header, we can check the peer's TD against it. If
 			// the peer's ahead of this, it too must have a reply to the DAO check
 			if daoHeader := pm.blockchain.GetHeaderByNumber(pm.chainconfig.DAOForkBlock.Uint64()); daoHeader != nil {
-				if p.Td().Cmp(pm.blockchain.GetTd(daoHeader.Hash())) >= 0 {
+				if _, td := p.Head(); td.Cmp(pm.blockchain.GetTd(daoHeader.Hash())) >= 0 {
 					verifyDAO = false
 				}
 			}
@@ -532,6 +434,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 					return err
 				}
 				glog.V(logger.Debug).Infof("%v: verified to be on the same side of the DAO fork", p)
+				return nil
 			}
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
 			headers = pm.fetcher.FilterHeaders(headers, time.Now())
@@ -543,7 +446,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
-	case p.version >= eth62 && msg.Code == GetBlockBodiesMsg:
+	case msg.Code == GetBlockBodiesMsg:
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -570,7 +473,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		return p.SendBlockBodiesRLP(bodies)
 
-	case p.version >= eth62 && msg.Code == BlockBodiesMsg:
+	case msg.Code == BlockBodiesMsg:
 		// A batch of block bodies arrived to one of our previous requests
 		var request blockBodiesData
 		if err := msg.Decode(&request); err != nil {
@@ -711,7 +614,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// Mark the hashes as present at the remote node
 		for _, block := range announces {
 			p.MarkBlock(block.Hash)
-			p.SetHead(block.Hash)
 		}
 		// Schedule all the unknown hashes for retrieval
 		unknown := make([]announce, 0, len(announces))
@@ -721,11 +623,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 		for _, block := range unknown {
-			if p.version < eth62 {
-				pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestBlocks, nil, nil)
-			} else {
-				pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), nil, p.RequestOneHeader, p.RequestBodies)
-			}
+			pm.fetcher.Notify(p.id, block.Hash, block.Number, time.Now(), p.RequestOneHeader, p.RequestBodies)
 		}
 
 	case msg.Code == NewBlockMsg:
@@ -742,15 +640,23 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		// Mark the peer as owning the block and schedule it for import
 		p.MarkBlock(request.Block.Hash())
-		p.SetHead(request.Block.Hash())
-
 		pm.fetcher.Enqueue(p.id, request.Block)
 
-		// Update the peers total difficulty if needed, schedule a download if gapped
-		if request.TD.Cmp(p.Td()) > 0 {
-			p.SetTd(request.TD)
-			td := pm.blockchain.GetTd(pm.blockchain.CurrentBlock().Hash())
-			if request.TD.Cmp(new(big.Int).Add(td, request.Block.Difficulty())) > 0 {
+		// Assuming the block is importable by the peer, but possibly not yet done so,
+		// calculate the head hash and TD that the peer truly must have.
+		var (
+			trueHead = request.Block.ParentHash()
+			trueTD   = new(big.Int).Sub(request.TD, request.Block.Difficulty())
+		)
+		// Update the peers total difficulty if better than the previous
+		if _, td := p.Head(); trueTD.Cmp(td) > 0 {
+			p.SetHead(trueHead, trueTD)
+
+			// Schedule a sync if above ours. Note, this will not fire a sync for a gap of
+			// a singe block (as the true TD is below the propagated block), however this
+			// scenario should easily be covered by the fetcher.
+			currentBlock := pm.blockchain.CurrentBlock()
+			if trueTD.Cmp(pm.blockchain.GetTd(currentBlock.Hash())) > 0 {
 				go pm.synchronise(p)
 			}
 		}
@@ -806,11 +712,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 	// Otherwise if the block is indeed in out own chain, announce it
 	if pm.blockchain.HasBlock(hash) {
 		for _, peer := range peers {
-			if peer.version < eth62 {
-				peer.SendNewBlockHashes61([]common.Hash{hash})
-			} else {
-				peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
-			}
+			peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
 		}
 		glog.V(logger.Detail).Infof("announced block %x to %d peers in %v", hash[:4], len(peers), time.Since(block.ReceivedAt))
 	}

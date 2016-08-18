@@ -19,7 +19,7 @@
   # define BYTE_ORDER    LITTLE_ENDIAN
 #elif defined( __QNXNTO__ ) && defined( __BIGENDIAN__ )
   # define BIG_ENDIAN 1234
-  # define BYTE_ORDER    BIG_ENDIAN
+  # define BYTE_ORDER BIG_ENDIAN
 #else
 # include <endian.h>
 #endif
@@ -59,21 +59,20 @@
 
 #define fix_endian32(dst_, src_) dst_ = ethash_swap_u32(src_)
 #define fix_endian32_same(val_) val_ = ethash_swap_u32(val_)
-#define fix_endian64(dst_, src_) dst_ = ethash_swap_u64(src_
+#define fix_endian64(dst_, src_) dst_ = ethash_swap_u64(src_)
 #define fix_endian64_same(val_) val_ = ethash_swap_u64(val_)
-#define fix_endian_arr32(arr_, size_)			\
-	do {										\
-	for (unsigned i_ = 0; i_ < (size_), ++i_) { \
-		arr_[i_] = ethash_swap_u32(arr_[i_]);	\
-	}											\
-	while (0)
-#define fix_endian_arr64(arr_, size_)			\
-	do {										\
-	for (unsigned i_ = 0; i_ < (size_), ++i_) { \
-		arr_[i_] = ethash_swap_u64(arr_[i_]);	\
-	}											\
-	while (0)									\
-
+#define fix_endian_arr32(arr_, size_) \
+  do { \
+    for (unsigned i_ = 0; i_ < (size_); ++i_) { \
+      arr_[i_] = ethash_swap_u32(arr_[i_]); \
+    } \
+  } while (0)
+#define fix_endian_arr64(arr_, size_) \
+  do { \
+    for (unsigned i_ = 0; i_ < (size_); ++i_) { \
+      arr_[i_] = ethash_swap_u64(arr_[i_]); \
+    } \
+  } while (0)
 #else
 # error "endian not supported"
 #endif // BYTE_ORDER
