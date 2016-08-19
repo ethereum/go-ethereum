@@ -215,3 +215,12 @@ contract PublicResolver is Resolver {
         ContentChanged(node, hash);
     }
 }
+
+contract DeployENS {
+    function DeployENS() {
+        var ens = new ENS(this);
+        var registrar = new FIFSRegistrar(ens, 0);
+        ens.setOwner(0, registrar);
+        selfdestruct(msg.sender);
+    }
+}

@@ -3,6 +3,7 @@
 package ens
 
 import (
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -141,7 +142,9 @@ func (self *ENS) Register(name string) (*types.Transaction, error) {
 		return nil, err
 	}
 
-	return registrar.Register(label, self.TransactOpts.From)
+	opts := self.TransactOpts
+	opts.GasLimit = big.NewInt(200000)
+	return registrar.Contract.Register(&opts, label, self.TransactOpts.From)
 }
 
 // SetContentHash sets the content hash associated with a name. Only works if the caller
@@ -154,5 +157,7 @@ func (self *ENS) SetContentHash(name string, hash common.Hash) (*types.Transacti
 		return nil, err
 	}
 
-	return resolver.SetContent(node, hash)
+	opts := self.TransactOpts
+	opts.GasLimit = big.NewInt(200000)
+	return resolver.Contract.SetContent(&opts, node, hash)
 }
