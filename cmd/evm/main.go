@@ -117,10 +117,13 @@ func run(ctx *cli.Context) error {
 	statedb, _ := state.New(common.Hash{}, db)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 
+	logger := vm.NewStructLogger(nil)
+
 	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), vm.Config{
 		Debug:     ctx.GlobalBool(DebugFlag.Name),
 		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
 		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
+		Tracer:    logger,
 	})
 
 	tstart := time.Now()
@@ -157,7 +160,7 @@ func run(ctx *cli.Context) error {
 		statedb.Commit()
 		fmt.Println(string(statedb.Dump()))
 	}
-	vm.StdErrFormat(vmenv.StructLogs())
+	vm.StdErrFormat(logger.StructLogs())
 
 	if ctx.GlobalBool(SysStatFlag.Name) {
 		var mem runtime.MemStats
@@ -209,7 +212,6 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg
 		value:      value,
 		time:       big.NewInt(time.Now().Unix()),
 	}
-	cfg.Logger.Collector = env
 
 	env.evm = vm.New(env, cfg)
 	return env
@@ -241,12 +243,6 @@ func (self *VMEnv) GetHash(n uint64) common.Hash {
 		return self.block.Hash()
 	}
 	return common.Hash{}
-}
-func (self *VMEnv) AddStructLog(log vm.StructLog) {
-	self.logs = append(self.logs, log)
-}
-func (self *VMEnv) StructLogs() []vm.StructLog {
-	return self.logs
 }
 func (self *VMEnv) AddLog(log *vm.Log) {
 	self.state.AddLog(log)

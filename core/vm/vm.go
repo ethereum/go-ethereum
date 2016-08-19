@@ -33,7 +33,7 @@ type Config struct {
 	Debug     bool
 	EnableJit bool
 	ForceJit  bool
-	Logger    LogConfig
+	Tracer    Tracer
 }
 
 // EVM is used to run Ethereum based contracts and will utilise the
@@ -44,22 +44,14 @@ type EVM struct {
 	env       Environment
 	jumpTable vmJumpTable
 	cfg       Config
-
-	logger *Logger
 }
 
 // New returns a new instance of the EVM.
 func New(env Environment, cfg Config) *EVM {
-	var logger *Logger
-	if cfg.Debug {
-		logger = newLogger(cfg.Logger, env)
-	}
-
 	return &EVM{
 		env:       env,
 		jumpTable: newJumpTable(env.RuleSet(), env.BlockNumber()),
 		cfg:       cfg,
-		logger:    logger,
 	}
 }
 
@@ -149,7 +141,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && evm.cfg.Debug {
-			evm.logger.captureState(pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), err)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), err)
 		}
 	}()
 
@@ -191,7 +183,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 		// Add a log message
 		if evm.cfg.Debug {
-			evm.logger.captureState(pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), nil)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), nil)
 		}
 
 		if opPtr := evm.jumpTable[op]; opPtr.valid {
@@ -241,7 +233,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 // calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef, op OpCode, statedb Database, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
+func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef, op OpCode, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
