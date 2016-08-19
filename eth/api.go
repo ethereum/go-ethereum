@@ -32,12 +32,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	vmlogger "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/robertkrimen/otto"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
@@ -450,12 +452,113 @@ func formatError(err error) string {
 	return err.Error()
 }
 
+// jsLogCollector provides an implementation of StructLogCollector that 
+// evaluates a Javascript function for each VM execution step.
+type jsLogCollector struct {
+	traceobj *otto.Object
+	err error
+}
+
+
+// fakeBig is used to provide an interface to Javascript for 'big.NewInt'
+type fakeBig struct { }
+
+// NewInt creates a new big.Int with the specified int64 value.
+func (self *fakeBig) NewInt(x int64) *big.Int {
+	return big.NewInt(x)
+}
+
+// newJSLogCollector instantiates a new jsLogCollector instance.
+// code specifies a Javascript snippet, which must evaluate to an expression
+// returning an object with 'step' and 'result' functions.
+func newJSLogCollector(code string) (*jsLogCollector, error) {
+	vm := otto.New()
+
+	// Set up builtins for this environment
+	vm.Set("big", &fakeBig{})
+
+	jstracer, err := vm.Object("(" + code + ")")
+	if err != nil {
+		return nil, err
+	}
+
+	// Check the required functions exist
+	step, err := jstracer.Get("step")
+	if err != nil {
+		return nil, err
+	}
+	if !step.IsFunction() {
+		return nil, fmt.Errorf("Trace object must expose a function step()")
+	}
+
+	result, err := jstracer.Get("result")
+	if err != nil {
+		return nil, err
+	}
+	if !result.IsFunction() {
+		return nil, fmt.Errorf("Trace object must expose a function result()")
+	}
+
+	return &jsLogCollector{jstracer, nil}, nil
+}
+
+// callSafely executes a method on a JS object, catching any panics and
+// returning them as error objects.
+func callSafely(obj *otto.Object, method string, argumentList ...interface{}) (ret otto.Value, err error) {
+	defer func() {
+		if caught := recover(); caught != nil {
+			switch caught := caught.(type) {
+			case error:
+				err = caught
+			case string:
+				err = errors.New(caught)
+			case fmt.Stringer:
+				err = errors.New(caught.String())
+			default:
+				panic(caught)
+			}
+		}
+	}()
+
+	return obj.Call(method, argumentList...)
+}
+
+// AddStructLog implements StructLogCollector's interface for collecting a log
+// from an EVM execution step.
+func (self *jsLogCollector) AddStructLog(log vmlogger.StructLog) {
+	if self.err == nil {
+		_, err := callSafely(self.traceobj, "step", log)
+		if err != nil {
+			self.err = err
+		}
+	}
+}
+
+// getResult calls the JS 'result' function and returns its value as a Go object.
+func (self *jsLogCollector) getResult() (result interface{}, err error) {
+	if self.err != nil {
+		return nil, self.err
+	}
+	value, err := callSafely(self.traceobj, "result")
+	result, _ = value.Export()
+	return result, err
+}
+
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogConfig) (*ethapi.ExecutionResult, error) {
-	if logger == nil {
-		logger = new(vm.LogConfig)
+func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, code *string) (interface{}, error) {
+	logger := new(vm.LogConfig)
+
+	var jslogger *jsLogCollector
+	if code != nil {
+		var err error
+		jslogger, err = newJSLogCollector(*code)
+		if err != nil {
+			return nil, err
+		}
+		logger.Collector = jslogger
 	}
+
 	// Retrieve the tx from the chain and the containing block
 	tx, blockHash, _, txIndex := core.GetTransaction(api.eth.ChainDb(), txHash)
 	if tx == nil {
@@ -505,11 +608,15 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogC
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)
 		}
-		return &ethapi.ExecutionResult{
-			Gas:         gas,
-			ReturnValue: fmt.Sprintf("%x", ret),
-			StructLogs:  ethapi.FormatLogs(vmenv.StructLogs()),
-		}, nil
+		if jslogger != nil {
+			return jslogger.getResult()
+		} else {
+			return &ethapi.ExecutionResult{
+				Gas:         gas,
+				ReturnValue: fmt.Sprintf("%x", ret),
+				StructLogs:  ethapi.FormatLogs(vmenv.StructLogs()),
+			}, nil
+		}
 	}
 	return nil, errors.New("database inconsistency")
 }

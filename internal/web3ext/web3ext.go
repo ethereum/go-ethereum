@@ -284,7 +284,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'traceTransaction',
 			call: 'debug_traceTransaction',
-			params: 1
+			params: 2,
+			inputFormatter: [null, null]
 		})
 	],
 	properties: []
