@@ -20,11 +20,14 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/net/context"
 )
@@ -54,27 +57,47 @@ type TransactOpts struct {
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
 
+// SubscribeOpts is the collection of options to fine tune the contract subscription
+// and unsubscription requests.
+type SubscribeOpts struct {
+	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
+}
+
+// EventOpts is a collection of options to fine tune the retrieval of events that
+// happened on a contract.
+type EventOpts struct {
+	FromBlock *big.Int
+	ToBlock   *big.Int
+
+	Context context.Context
+}
+
 // BoundContract is the base wrapper object that reflects a contract on the
 // Ethereum network. It contains a collection of methods that are used by the
 // higher level contract bindings to operate.
 type BoundContract struct {
-	address    common.Address     // Deployment address of the contract on the Ethereum blockchain
-	abi        abi.ABI            // Reflect based ABI to access the correct Ethereum methods
-	caller     ContractCaller     // Read interface to interact with the blockchain
-	transactor ContractTransactor // Write interface to interact with the blockchain
+	address common.Address // Deployment address of the contract on the Ethereum blockchain
+	abi     abi.ABI        // Reflect based ABI to access the correct Ethereum methods
+
+	backend ContractBackend
 
 	latestHasCode  uint32 // Cached verification that the latest state contains code for this contract
 	pendingHasCode uint32 // Cached verification that the pending state contains code for this contract
+
+	subscriptions map[uint32]ethereum.Subscription
+	errors        map[uint32]error
+	nextID        uint32
 }
 
 // NewBoundContract creates a low level contract interface through which calls
 // and transactions may be made through.
-func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller, transactor ContractTransactor) *BoundContract {
+func NewBoundContract(address common.Address, abi abi.ABI, backend ContractBackend) *BoundContract {
 	return &BoundContract{
-		address:    address,
-		abi:        abi,
-		caller:     caller,
-		transactor: transactor,
+		address:       address,
+		abi:           abi,
+		backend:       backend,
+		subscriptions: make(map[uint32]ethereum.Subscription),
+		errors:        make(map[uint32]error),
 	}
 }
 
@@ -82,7 +105,7 @@ func NewBoundContract(address common.Address, abi abi.ABI, caller ContractCaller
 // deployment address with a Go wrapper.
 func DeployContract(opts *TransactOpts, abi abi.ABI, bytecode []byte, backend ContractBackend, params ...interface{}) (common.Address, *types.Transaction, *BoundContract, error) {
 	// Otherwise try to deploy the contract
-	c := NewBoundContract(common.Address{}, abi, backend, backend)
+	c := NewBoundContract(common.Address{}, abi, backend)
 
 	input, err := c.abi.Pack("", params...)
 	if err != nil {
@@ -106,24 +129,40 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		opts = new(CallOpts)
 	}
 	// Make sure we have a contract to operate on, and bail out otherwise
-	if (opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0) || (!opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0) {
-		if code, err := c.caller.HasCode(opts.Context, c.address, opts.Pending); err != nil {
-			return err
-		} else if !code {
-			return ErrNoCode
-		}
-		if opts.Pending {
-			atomic.StoreUint32(&c.pendingHasCode, 1)
-		} else {
-			atomic.StoreUint32(&c.latestHasCode, 1)
-		}
+	var code []byte
+	var err error
+	if opts.Pending && atomic.LoadUint32(&c.pendingHasCode) == 0 {
+		code, err = c.backend.PendingCodeAt(opts.Context, c.address)
+	} else if !opts.Pending && atomic.LoadUint32(&c.latestHasCode) == 0 {
+		code, err = c.backend.CodeAt(opts.Context, c.address, nil)
+	}
+	if err != nil {
+		return err
+	} else if len(code) == 0 {
+		return ErrNoCode
+	}
+	if opts.Pending {
+		atomic.StoreUint32(&c.pendingHasCode, 1)
+	} else {
+		atomic.StoreUint32(&c.latestHasCode, 1)
 	}
 	// Pack the input, call and unpack the results
 	input, err := c.abi.Pack(method, params...)
 	if err != nil {
 		return err
 	}
-	output, err := c.caller.ContractCall(opts.Context, c.address, input, opts.Pending)
+	// Create the call message we use to make the call
+	callMsg := ethereum.CallMsg{
+		To:   c.address,
+		Data: input,
+	}
+	var output []byte
+	// Call pending or not depending on options
+	if opts.Pending {
+		output, err = c.backend.PendingCallContract(opts.Context, callMsg)
+	} else {
+		output, err = c.backend.CallContract(opts.Context, callMsg, nil)
+	}
 	if err != nil {
 		return err
 	}
@@ -158,7 +197,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	}
 	nonce := uint64(0)
 	if opts.Nonce == nil {
-		nonce, err = c.transactor.PendingAccountNonce(opts.Context, opts.From)
+		nonce, err = c.backend.PendingNonceAt(opts.Context, opts.From)
 		if err != nil {
 			return nil, fmt.Errorf("failed to retrieve account nonce: %v", err)
 		}
@@ -168,7 +207,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	// Figure out the gas allowance and gas price values
 	gasPrice := opts.GasPrice
 	if gasPrice == nil {
-		gasPrice, err = c.transactor.SuggestGasPrice(opts.Context)
+		gasPrice, err = c.backend.SuggestGasPrice(opts.Context)
 		if err != nil {
 			return nil, fmt.Errorf("failed to suggest gas price: %v", err)
 		}
@@ -177,17 +216,25 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if gasLimit == nil {
 		// Gas estimation cannot succeed without code for method invocations
 		if contract != nil && atomic.LoadUint32(&c.pendingHasCode) == 0 {
-			if code, err := c.transactor.HasCode(opts.Context, c.address, true); err != nil {
+			var code []byte
+			if code, err = c.backend.CodeAt(opts.Context, c.address, nil); err != nil {
 				return nil, err
-			} else if !code {
+			} else if len(code) == 0 {
 				return nil, ErrNoCode
 			}
 			atomic.StoreUint32(&c.pendingHasCode, 1)
 		}
 		// If the contract surely has code (or code is not needed), estimate the transaction
-		gasLimit, err = c.transactor.EstimateGasLimit(opts.Context, opts.From, contract, value, input)
+		callMsg := ethereum.CallMsg{
+			From:     opts.From,
+			To:       *contract,
+			GasPrice: gasPrice,
+			Value:    value,
+			Data:     input,
+		}
+		gasLimit, err = c.backend.EstimateGas(opts.Context, callMsg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to exstimate gas needed: %v", err)
+			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
 		}
 	}
 	// Create the transaction, sign it and schedule it for execution
@@ -204,8 +251,166 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if err != nil {
 		return nil, err
 	}
-	if err := c.transactor.SendTransaction(opts.Context, signedTx); err != nil {
+	if err := c.backend.SendTransaction(opts.Context, signedTx); err != nil {
 		return nil, err
 	}
 	return signedTx, nil
+}
+
+// Events will return a list of events for this contract for the given topics and
+// the given start & end blocks.
+func (c *BoundContract) Events(opts *EventOpts, name string, output interface{}, topics ...[]common.Hash) error {
+
+	// check that output is a pointer
+	ptr := reflect.ValueOf(output)
+	if ptr.Kind() != reflect.Ptr {
+		return fmt.Errorf("need pointer to slice as output parameter, have %T", output)
+	}
+
+	// check that it points to a slice
+	slice := ptr.Elem()
+	if slice.Kind() != reflect.Slice {
+		return fmt.Errorf("need pointer to slice as output parameter, have %T", output)
+	}
+
+	// get the event so we can encode the name into the first topic
+	event, ok := c.abi.Events[name]
+	if !ok {
+		return fmt.Errorf("unknown event name: %v", name)
+	}
+	names := []common.Hash{event.Id()}
+	topics = append([][]common.Hash{names}, topics...)
+
+	// create the filter query and retrieve the events through the backend
+	filterQuery := ethereum.FilterQuery{
+		FromBlock: opts.FromBlock,
+		ToBlock:   opts.ToBlock,
+		Addresses: []common.Address{c.address},
+		Topics:    topics,
+	}
+	logs, err := c.backend.FilterLogs(opts.Context, filterQuery)
+	if err != nil {
+		return fmt.Errorf("could not retrieve events (%v)", err)
+	}
+
+	// for each log entry, create an event, unpack the data and append it
+	item := slice.Elem()
+	events := reflect.MakeSlice(slice.Type(), 0, len(logs))
+	for _, log := range logs {
+		event := reflect.New(item.Type())
+		err = c.abi.Unpack(item.Interface(), name, log.Data)
+		if err != nil {
+			return fmt.Errorf("could not unpack event data (%v)", err)
+		}
+		if len(log.Topics) > 1 {
+			// TODO: extract indexed parameters from topics 1-3
+		}
+		events = reflect.Append(events, event)
+	}
+
+	// set the output slice to our slice of events
+	slice.Set(events)
+	return nil
+}
+
+// Subscribe subscribes to the contract for the given topics. Subscription events
+// will be submitted to the provided channel. Upon cancelation of the subscription,
+// the channel will be closed. A channel should only be used for one subscription.
+func (c *BoundContract) Subscribe(opts *SubscribeOpts, name string, output interface{}, topics ...[]common.Hash) (uint32, error) {
+
+	// check that output is a pointer
+	channel := reflect.ValueOf(output)
+	if channel.Kind() != reflect.Chan {
+		return 0, fmt.Errorf("need channel as output parameter, have %T", output)
+	}
+	message := channel.Elem()
+
+	// get the event so we can encode the name into the first topic
+	event, ok := c.abi.Events[name]
+	if !ok {
+		return 0, fmt.Errorf("unknown event name: %v", name)
+	}
+	names := []common.Hash{event.Id()}
+	topics = append([][]common.Hash{names}, topics...)
+
+	// create the filter query and retrieve the events through the backend
+	filterQuery := ethereum.FilterQuery{
+		FromBlock: nil,
+		ToBlock:   nil,
+		Addresses: []common.Address{c.address},
+		Topics:    topics,
+	}
+
+	// create a channel of log messages that we can decode into events
+	logs := make(chan vm.Log)
+	subscription, err := c.backend.SubscribeFilterLogs(opts.Context, filterQuery, logs)
+	if err != nil {
+		return 0, fmt.Errorf("could not subscribe (%v)", err)
+	}
+	id := c.nextID
+	c.subscriptions[id] = subscription
+	c.nextID++
+
+	// retrieve logs and transcribe them into typed events
+	go func() {
+	Loop:
+		for {
+			select {
+			case err, ok = <-subscription.Err():
+
+				// error was closed, so we shut down
+				if !ok {
+					break Loop
+				}
+
+				// otherwise just save the error for this subscription
+				c.errors[id] = err
+
+				// receive log and transcribe
+			case log := <-logs:
+				item := reflect.New(message.Type())
+				c.abi.Unpack(item.Interface(), name, log.Data)
+				channel.Send(item)
+			}
+		}
+
+		// drain the logs channel; this might not always work correctly because we
+		// are not sure all logs were put in the channel already
+	Drain:
+		for {
+			select {
+			case log := <-logs:
+				item := reflect.New(message.Type())
+				c.abi.Unpack(item.Interface(), name, log.Data)
+				channel.Send(item)
+			default:
+				break Drain
+			}
+		}
+
+		// close the output channel
+		channel.Close()
+	}()
+
+	return id, nil
+}
+
+// Error returns the error that was encountered for the subscription on the given
+// channel. It will reset the error upon retrieval.
+func (c *BoundContract) Error(id uint32) error {
+	err := c.errors[id]
+	delete(c.errors, id)
+	return err
+}
+
+// Unsubscribe cancels the subscription if one exists on the given channel. The
+// subscription channel will be closed once the subscription was successfully
+// canceled.
+func (c *BoundContract) Unsubscribe(id uint32) error {
+	subscription, ok := c.subscriptions[id]
+	if !ok {
+		return fmt.Errorf("subscription doesn't exist or already closed")
+	}
+	subscription.Unsubscribe()
+	return nil
 }
