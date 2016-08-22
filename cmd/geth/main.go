@@ -143,6 +143,11 @@ This is a destructive action and changes the network in which you will be
 participating.
 `,
 		},
+		{
+			Action: license,
+			Name:   "license",
+			Usage:  "displays geth's license information",
+		},
 	}
 
 	app.Flags = []cli.Flag{
@@ -405,6 +410,24 @@ func version(c *cli.Context) error {
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
+	return nil
+}
+
+func license(c *cli.Context) error {
+	fmt.Println(`Geth is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Geth is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with geth. If not, see <http://www.gnu.org/licenses/>.
+`)
 
 	return nil
 }
