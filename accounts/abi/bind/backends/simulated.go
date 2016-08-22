@@ -17,8 +17,10 @@
 package backends
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -38,12 +40,15 @@ var chainConfig = &core.ChainConfig{HomesteadBlock: big.NewInt(0)}
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
+var errBlockNumberUnsupported = errors.New("SimulatedBackend cannot access blocks other than the latest block")
+
 // SimulatedBackend implements bind.ContractBackend, simulating a blockchain in
 // the background. Its main purpose is to allow easily testing contract bindings.
 type SimulatedBackend struct {
 	database   ethdb.Database   // In memory database to store our testing data
 	blockchain *core.BlockChain // Ethereum blockchain to handle the consensus
 
+	mu           sync.Mutex
 	pendingBlock *types.Block   // Currently pending block that will be imported on request
 	pendingState *state.StateDB // Currently pending state that will be the active on on request
 }
@@ -54,53 +59,109 @@ func NewSimulatedBackend(accounts ...core.GenesisAccount) *SimulatedBackend {
 	database, _ := ethdb.NewMemDatabase()
 	core.WriteGenesisBlockForTesting(database, accounts...)
 	blockchain, _ := core.NewBlockChain(database, chainConfig, new(core.FakePow), new(event.TypeMux))
-
-	backend := &SimulatedBackend{
-		database:   database,
-		blockchain: blockchain,
-	}
-	backend.Rollback()
-
+	backend := &SimulatedBackend{database: database, blockchain: blockchain}
+	backend.rollback()
 	return backend
 }
 
 // Commit imports all the pending transactions as a single block and starts a
 // fresh new state.
 func (b *SimulatedBackend) Commit() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if _, err := b.blockchain.InsertChain([]*types.Block{b.pendingBlock}); err != nil {
 		panic(err) // This cannot happen unless the simulator is wrong, fail in that case
 	}
-	b.Rollback()
+	b.rollback()
 }
 
 // Rollback aborts all pending transactions, reverting to the last committed state.
 func (b *SimulatedBackend) Rollback() {
-	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
+	b.rollback()
+}
+
+func (b *SimulatedBackend) rollback() {
+	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 }
 
-// CodeAt implements ChainStateReader.CodeAt, returning the code associated with
-// a certain account at a given block number in the blockchain.
+// CodeAt returns the code associated with a certain account in the blockchain.
 func (b *SimulatedBackend) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return nil, fmt.Errorf("SimulatedBackend cannot access blocks other than the latest block")
+		return nil, errBlockNumberUnsupported
 	}
 	statedb, _ := b.blockchain.State()
 	return statedb.GetCode(contract), nil
 }
 
-// PendingCodeAt implements PendingStateReader.PendingCodeAt, returning the
-// code associated with a certain account in the pending state of the blockchain.
+// BalanceAt returns the wei balance of a certain account in the blockchain.
+func (b *SimulatedBackend) BalanceAt(ctx context.Context, contract common.Address, blockNumber *big.Int) (*big.Int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+		return nil, errBlockNumberUnsupported
+	}
+	statedb, _ := b.blockchain.State()
+	return statedb.GetBalance(contract), nil
+}
+
+// NonceAt returns the nonce of a certain account in the blockchain.
+func (b *SimulatedBackend) NonceAt(ctx context.Context, contract common.Address, blockNumber *big.Int) (uint64, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+		return 0, errBlockNumberUnsupported
+	}
+	statedb, _ := b.blockchain.State()
+	return statedb.GetNonce(contract), nil
+}
+
+// StorageAt returns the value of key in the storage of an account in the blockchain.
+func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Address, key common.Hash, blockNumber *big.Int) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+		return nil, errBlockNumberUnsupported
+	}
+	statedb, _ := b.blockchain.State()
+	if obj := statedb.GetStateObject(contract); obj != nil {
+		val := obj.GetState(key)
+		return val[:], nil
+	}
+	return nil, nil
+}
+
+// TransactionReceipt returns the receipt of a transaction.
+func (b *SimulatedBackend) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	return core.GetReceipt(b.database, txHash), nil
+}
+
+// PendingCodeAt returns the code associated with an account in the pending state.
 func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	return b.pendingState.GetCode(contract), nil
 }
 
 // CallContract executes a contract call.
 func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
-		return nil, fmt.Errorf("SimulatedBackend cannot access blocks other than the latest block")
+		return nil, errBlockNumberUnsupported
 	}
 	state, err := b.blockchain.State()
 	if err != nil {
@@ -112,6 +173,9 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 
 // PendingCallContract executes a contract call on the pending state.
 func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	rval, _, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
 	return rval, err
 }
@@ -119,6 +183,9 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 // PendingNonceAt implements PendingStateReader.PendingNonceAt, retrieving
 // the nonce currently pending for the account.
 func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
 }
 
@@ -131,6 +198,9 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 // EstimateGas executes the requested code against the currently pending block/state and
 // returns the used amount of gas.
 func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (*big.Int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
 	return gas, err
 }
@@ -162,6 +232,9 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 // SendTransaction updates the pending block to include the given transaction.
 // It panics if the transaction is invalid.
 func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	sender, err := tx.From()
 	if err != nil {
 		panic(fmt.Errorf("invalid transaction: %v", err))

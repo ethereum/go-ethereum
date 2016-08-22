@@ -35,6 +35,10 @@ var (
 	// This error is raised when attempting to perform a pending state action
 	// on a backend that doesn't implement PendingContractCaller.
 	ErrNoPendingState = errors.New("backend does not support pending state")
+
+	// This error is returned by WaitDeployed if contract creation leaves an
+	// empty contract behind.
+	ErrNoCodeAfterDeploy = errors.New("no contract code after deployment")
 )
 
 // ContractCaller defines the methods needed to allow operating with contract on a read
@@ -46,6 +50,12 @@ type ContractCaller interface {
 	// ContractCall executes an Ethereum contract call with the specified data as the
 	// input.
 	CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error)
+}
+
+// DeployBackend wraps the operations needed by WaitMined and WaitDeployed.
+type DeployBackend interface {
+	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+	CodeAt(ctx context.Context, account common.Address, blockNumber *big.Int) ([]byte, error)
 }
 
 // PendingContractCaller defines methods to perform contract calls on the pending state.
