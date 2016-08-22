@@ -584,60 +584,6 @@ func FormatLogs(structLogs []vm.StructLog) []StructLogRes {
 	return formattedStructLogs
 }
 
-// TraceCall executes a call and returns the amount of gas, created logs and optionally returned values.
-func (s *PublicBlockChainAPI) TraceCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (*ExecutionResult, error) {
-	state, header, err := s.b.StateAndHeaderByNumber(blockNr)
-	if state == nil || err != nil {
-		return nil, err
-	}
-
-	var addr common.Address
-	if args.From == (common.Address{}) {
-		accounts := s.b.AccountManager().Accounts()
-		if len(accounts) == 0 {
-			addr = common.Address{}
-		} else {
-			addr = accounts[0].Address
-		}
-	} else {
-		addr = args.From
-	}
-
-	// Assemble the CALL invocation
-	msg := callmsg{
-		addr:     addr,
-		to:       args.To,
-		gas:      args.Gas.BigInt(),
-		gasPrice: args.GasPrice.BigInt(),
-		value:    args.Value.BigInt(),
-		data:     common.FromHex(args.Data),
-	}
-
-	if msg.gas.Cmp(common.Big0) == 0 {
-		msg.gas = big.NewInt(50000000)
-	}
-
-	if msg.gasPrice.Cmp(common.Big0) == 0 {
-		msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
-	}
-
-	// Execute the call and return
-	vmenv, vmError, err := s.b.GetVMEnv(ctx, msg, state, header)
-	if err != nil {
-		return nil, err
-	}
-	gp := new(core.GasPool).AddGas(common.MaxBig)
-	ret, gas, err := core.ApplyMessage(vmenv, msg, gp)
-	if err := vmError(); err != nil {
-		return nil, err
-	}
-	return &ExecutionResult{
-		Gas:         gas,
-		ReturnValue: fmt.Sprintf("%x", ret),
-		StructLogs:  FormatLogs(vmenv.StructLogs()),
-	}, nil
-}
-
 // rpcOutputBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.

@@ -303,7 +303,7 @@ func RunProgram(program *Program, env Environment, contract *Contract, input []b
 	return runProgram(program, 0, NewMemory(), newstack(), env, contract, input)
 }
 
-func runProgram(program *Program, pcstart uint64, mem *Memory, stack *stack, env Environment, contract *Contract, input []byte) ([]byte, error) {
+func runProgram(program *Program, pcstart uint64, mem *Memory, stack *Stack, env Environment, contract *Contract, input []byte) ([]byte, error) {
 	contract.Input = input
 
 	var (
@@ -357,7 +357,7 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 
 // jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *stack) (*big.Int, *big.Int, error) {
+func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -491,7 +491,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 
 // jitBaseCheck is the same as baseCheck except it doesn't do the look up in the
 // gas table. This is done during compilation instead.
-func jitBaseCheck(instr instruction, stack *stack, gas *big.Int) error {
+func jitBaseCheck(instr instruction, stack *Stack, gas *big.Int) error {
 	err := stack.require(instr.spop)
 	if err != nil {
 		return err
