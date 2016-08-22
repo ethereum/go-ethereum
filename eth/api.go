@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
@@ -38,7 +39,10 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/net/context"
 )
+
+const defaultTraceTimeout = 5 * time.Second
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related
 // information.
@@ -317,6 +321,13 @@ type BlockTraceResult struct {
 	Error      string                `json:"error"`
 }
 
+// TraceArgs holds extra parameters to trace functions
+type TraceArgs struct {
+	*vm.LogConfig
+	Tracer  *string
+	Timeout *string
+}
+
 // TraceBlock processes the given block's RLP but does not import the block in to
 // the chain.
 func (api *PrivateDebugAPI) TraceBlock(blockRlp []byte, config *vm.LogConfig) BlockTraceResult {
@@ -439,10 +450,42 @@ func formatError(err error) string {
 	return err.Error()
 }
 
+type timeoutError struct{}
+
+func (t *timeoutError) Error() string {
+	return "Execution time exceeded"
+}
+
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
-func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logConfig *vm.LogConfig) (*ethapi.ExecutionResult, error) {
-	logger := vm.NewStructLogger(logConfig)
+func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.Hash, config *TraceArgs) (interface{}, error) {
+	var tracer vm.Tracer
+	if config != nil && config.Tracer != nil {
+		timeout := defaultTraceTimeout
+		if config.Timeout != nil {
+			var err error
+			if timeout, err = time.ParseDuration(*config.Timeout); err != nil {
+				return nil, err
+			}
+		}
+
+		var err error
+		if tracer, err = ethapi.NewJavascriptTracer(*config.Tracer); err != nil {
+			return nil, err
+		}
+
+		// Handle timeouts and RPC cancellations
+		deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
+		go func() {
+			<-deadlineCtx.Done()
+			tracer.(*ethapi.JavascriptTracer).Stop(&timeoutError{})
+		}()
+		defer cancel()
+	} else if config == nil {
+		tracer = vm.NewStructLogger(nil)
+	} else {
+		tracer = vm.NewStructLogger(config.LogConfig)
+	}
 
 	// Retrieve the tx from the chain and the containing block
 	tx, blockHash, _, txIndex := core.GetTransaction(api.eth.ChainDb(), txHash)
@@ -488,16 +531,22 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logConfig *vm.L
 			continue
 		}
 		// Otherwise trace the transaction and return
-		vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{Debug: true, Tracer: logger})
+		vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{Debug: true, Tracer: tracer})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)
 		}
-		return &ethapi.ExecutionResult{
-			Gas:         gas,
-			ReturnValue: fmt.Sprintf("%x", ret),
-			StructLogs:  ethapi.FormatLogs(logger.StructLogs()),
-		}, nil
+
+		switch tracer := tracer.(type) {
+		case *vm.StructLogger:
+			return &ethapi.ExecutionResult{
+				Gas:         gas,
+				ReturnValue: fmt.Sprintf("%x", ret),
+				StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+			}, nil
+		case *ethapi.JavascriptTracer:
+			return tracer.GetResult()
+		}
 	}
 	return nil, errors.New("database inconsistency")
 }
