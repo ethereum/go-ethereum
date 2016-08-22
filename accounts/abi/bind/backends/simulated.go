@@ -17,8 +17,10 @@
 package backends
 
 import (
+	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -79,58 +81,44 @@ func (b *SimulatedBackend) Rollback() {
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 }
 
-// HasCode implements ContractVerifier.HasCode, checking whether there is any
-// code associated with a certain account in the blockchain.
-func (b *SimulatedBackend) HasCode(ctx context.Context, contract common.Address, pending bool) (bool, error) {
-	if pending {
-		return len(b.pendingState.GetCode(contract)) > 0, nil
+// CodeAt implements ChainStateReader.CodeAt, returning the code associated with
+// a certain account at a given block number in the blockchain.
+func (b *SimulatedBackend) CodeAt(ctx context.Context, contract common.Address, blockNumber *big.Int) ([]byte, error) {
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+		return nil, fmt.Errorf("SimulatedBackend cannot access blocks other than the latest block")
 	}
 	statedb, _ := b.blockchain.State()
-	return len(statedb.GetCode(contract)) > 0, nil
+	return statedb.GetCode(contract), nil
 }
 
-// ContractCall implements ContractCaller.ContractCall, executing the specified
-// contract with the given input data.
-func (b *SimulatedBackend) ContractCall(ctx context.Context, contract common.Address, data []byte, pending bool) ([]byte, error) {
-	// Create a copy of the current state db to screw around with
-	var (
-		block   *types.Block
-		statedb *state.StateDB
-	)
-	if pending {
-		block, statedb = b.pendingBlock, b.pendingState.Copy()
-	} else {
-		block = b.blockchain.CurrentBlock()
-		statedb, _ = b.blockchain.State()
-	}
-	// If there's no code to interact with, respond with an appropriate error
-	if code := statedb.GetCode(contract); len(code) == 0 {
-		return nil, bind.ErrNoCode
-	}
-	// Set infinite balance to the a fake caller account
-	from := statedb.GetOrNewStateObject(common.Address{})
-	from.SetBalance(common.MaxBig)
-
-	// Assemble the call invocation to measure the gas usage
-	msg := callmsg{
-		from:     from,
-		to:       &contract,
-		gasPrice: new(big.Int),
-		gasLimit: common.MaxBig,
-		value:    new(big.Int),
-		data:     data,
-	}
-	// Execute the call and return
-	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
-	gaspool := new(core.GasPool).AddGas(common.MaxBig)
-
-	out, _, err := core.ApplyMessage(vmenv, msg, gaspool)
-	return out, err
+// PendingCodeAt implements PendingStateReader.PendingCodeAt, returning the
+// code associated with a certain account in the pending state of the blockchain.
+func (b *SimulatedBackend) PendingCodeAt(ctx context.Context, contract common.Address) ([]byte, error) {
+	return b.pendingState.GetCode(contract), nil
 }
 
-// PendingAccountNonce implements ContractTransactor.PendingAccountNonce, retrieving
+// CallContract executes a contract call.
+func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
+	if blockNumber != nil && blockNumber.Cmp(b.blockchain.CurrentBlock().Number()) != 0 {
+		return nil, fmt.Errorf("SimulatedBackend cannot access blocks other than the latest block")
+	}
+	state, err := b.blockchain.State()
+	if err != nil {
+		return nil, err
+	}
+	rval, _, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), state)
+	return rval, err
+}
+
+// PendingCallContract executes a contract call on the pending state.
+func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
+	rval, _, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
+	return rval, err
+}
+
+// PendingNonceAt implements PendingStateReader.PendingNonceAt, retrieving
 // the nonce currently pending for the account.
-func (b *SimulatedBackend) PendingAccountNonce(ctx context.Context, account common.Address) (uint64, error) {
+func (b *SimulatedBackend) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
 	return b.pendingState.GetOrNewStateObject(account).Nonce(), nil
 }
 
@@ -140,45 +128,49 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 	return big.NewInt(1), nil
 }
 
-// EstimateGasLimit implements ContractTransactor.EstimateGasLimit, executing the
-// requested code against the currently pending block/state and returning the used
-// gas.
-func (b *SimulatedBackend) EstimateGasLimit(ctx context.Context, sender common.Address, contract *common.Address, value *big.Int, data []byte) (*big.Int, error) {
-	// Create a copy of the currently pending state db to screw around with
-	var (
-		block   = b.pendingBlock
-		statedb = b.pendingState.Copy()
-	)
-	// If there's no code to interact with, respond with an appropriate error
-	if contract != nil {
-		if code := statedb.GetCode(*contract); len(code) == 0 {
-			return nil, bind.ErrNoCode
-		}
-	}
-	// Set infinite balance to the a fake caller account
-	from := statedb.GetOrNewStateObject(sender)
-	from.SetBalance(common.MaxBig)
-
-	// Assemble the call invocation to measure the gas usage
-	msg := callmsg{
-		from:     from,
-		to:       contract,
-		gasPrice: new(big.Int),
-		gasLimit: common.MaxBig,
-		value:    value,
-		data:     data,
-	}
-	// Execute the call and return
-	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
-	gaspool := new(core.GasPool).AddGas(common.MaxBig)
-
-	_, gas, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
+// EstimateGas executes the requested code against the currently pending block/state and
+// returns the used amount of gas.
+func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (*big.Int, error) {
+	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
 	return gas, err
 }
 
-// SendTransaction implements ContractTransactor.SendTransaction, delegating the raw
-// transaction injection to the remote node.
+// callContract implemens common code between normal and pending contract calls.
+// state is modified during execution, make sure to copy it if necessary.
+func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, *big.Int, error) {
+	// Ensure message is initialized properly.
+	if call.GasPrice == nil {
+		call.GasPrice = big.NewInt(1)
+	}
+	if call.Gas == nil || call.Gas.BitLen() == 0 {
+		call.Gas = big.NewInt(50000000)
+	}
+	if call.Value == nil {
+		call.Value = new(big.Int)
+	}
+	// Set infinite balance to the fake caller account.
+	from := statedb.GetOrNewStateObject(call.From)
+	from.SetBalance(common.MaxBig)
+	// Execute the call.
+	msg := callmsg{call}
+	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
+	gaspool := new(core.GasPool).AddGas(common.MaxBig)
+	ret, gasUsed, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
+	return ret, gasUsed, err
+}
+
+// SendTransaction updates the pending block to include the given transaction.
+// It panics if the transaction is invalid.
 func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transaction) error {
+	sender, err := tx.From()
+	if err != nil {
+		panic(fmt.Errorf("invalid transaction: %v", err))
+	}
+	nonce := b.pendingState.GetNonce(sender)
+	if tx.Nonce() != nonce {
+		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
+	}
+
 	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTx(tx)
@@ -187,26 +179,20 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
-
 	return nil
 }
 
 // callmsg implements core.Message to allow passing it as a transaction simulator.
 type callmsg struct {
-	from     *state.StateObject
-	to       *common.Address
-	gasLimit *big.Int
-	gasPrice *big.Int
-	value    *big.Int
-	data     []byte
+	ethereum.CallMsg
 }
 
-func (m callmsg) From() (common.Address, error)         { return m.from.Address(), nil }
-func (m callmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
+func (m callmsg) From() (common.Address, error)         { return m.CallMsg.From, nil }
+func (m callmsg) FromFrontier() (common.Address, error) { return m.CallMsg.From, nil }
 func (m callmsg) Nonce() uint64                         { return 0 }
 func (m callmsg) CheckNonce() bool                      { return false }
-func (m callmsg) To() *common.Address                   { return m.to }
-func (m callmsg) GasPrice() *big.Int                    { return m.gasPrice }
-func (m callmsg) Gas() *big.Int                         { return m.gasLimit }
-func (m callmsg) Value() *big.Int                       { return m.value }
-func (m callmsg) Data() []byte                          { return m.data }
+func (m callmsg) To() *common.Address                   { return m.CallMsg.To }
+func (m callmsg) GasPrice() *big.Int                    { return m.CallMsg.GasPrice }
+func (m callmsg) Gas() *big.Int                         { return m.CallMsg.Gas }
+func (m callmsg) Value() *big.Int                       { return m.CallMsg.Value }
+func (m callmsg) Data() []byte                          { return m.CallMsg.Data }
