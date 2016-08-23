@@ -47,7 +47,7 @@ type dummyEnv struct {
 
 func newDummyEnv(ref *dummyContractRef) *dummyEnv {
 	return &dummyEnv{
-		Env: NewEnv(true, false),
+		Env: NewEnv(&Config{EnableJit: false, ForceJit: false}),
 		ref: ref,
 	}
 }
@@ -57,7 +57,7 @@ func (d dummyEnv) GetAccount(common.Address) Account {
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEnv(true, false)
+		env      = NewEnv(&Config{EnableJit: false, ForceJit: false})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
