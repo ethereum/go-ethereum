@@ -301,7 +301,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 }
 
 // synchronise will select the peer and use it for synchronising. If an empty string is given
-// it will use the best peer possible and synchronize if it's TD is higher than our own. If any of the
+// it will use the best peer possible and synchronise if it's TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
 	// Mock out the synchronisation if testing
@@ -365,7 +365,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	return d.syncWithPeer(p, hash, td)
 }
 
-// syncWithPeer starts a block synchronization based on the hash chain from the
+// syncWithPeer starts a block synchronisation based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err error) {
 	d.mux.Post(StartEvent{})
