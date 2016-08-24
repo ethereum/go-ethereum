@@ -284,8 +284,10 @@ func (jst *JavascriptTracer) CaptureState(env vm.Environment, pc uint64, op vm.O
 		jst.stack.stack = stack
 		jst.db.db = env.Db()
 
+		ocw := &opCodeWrapper{op}
+
 		jst.log["pc"] = pc
-		jst.log["op"] = &opCodeWrapper{op}
+		jst.log["op"] = ocw.toValue(jst.vm)
 		jst.log["gas"] = gas.Int64()
 		jst.log["gasPrice"] = cost.Int64()
 		jst.log["memory"] = jst.memvalue

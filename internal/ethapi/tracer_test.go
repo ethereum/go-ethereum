@@ -19,6 +19,7 @@ package ethapi
 import (
 	"errors"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -140,12 +141,26 @@ func TestStack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	value, ok := ret.([]int)
-	if !ok {
-		t.Errorf("Expected return value to be []int, was %T", ret)
+	expected := []int{0, 1, 2}
+	if !reflect.DeepEqual(ret, expected) {
+		t.Errorf("Expected return value to be %#v, got %#v", expected, ret)
 	}
-	if len(value) != 3 || value[0] != 0 || value[1] != 1 || value[2] != 2 {
-		t.Errorf("Expected return value to be [0 1 2], got %v", value)
+}
+
+func TestOpcodes(t *testing.T) {
+	tracer, err := NewJavascriptTracer("{opcodes: [], step: function(log) { this.opcodes.push(log.op.toString()); }, result: function() { return this.opcodes; }}")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ret, err := runTrace(tracer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := []string{"PUSH1", "PUSH1", "STOP"}
+	if !reflect.DeepEqual(ret, expected) {
+		t.Errorf("Expected return value to be %#v, got %#v", expected, ret)
 	}
 }
 
