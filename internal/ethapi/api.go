@@ -298,6 +298,16 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 	return submitTransaction(ctx, s.b, tx, signature)
 }
 
+// Sign decrypts the private key associated with the given address with the given password.
+// If the key was successful decrypted the given hash is signed and the signature is returned.
+func (s *PrivateAccountAPI) Sign(ctx context.Context, hash common.Hash, addr common.Address, passwd string) (string, error) {
+	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, hash.Bytes())
+	if err != nil {
+		return "0x", err
+	}
+	return "0x" + hex.EncodeToString(signature), nil
+}
+
 // SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
 // and will be removed in the future. It primary goal is to give clients time to update.
 func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args SendTxArgs, passwd string) (common.Hash, error) {
