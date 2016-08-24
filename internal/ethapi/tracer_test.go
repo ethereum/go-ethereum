@@ -161,7 +161,7 @@ func TestHalt(t *testing.T) {
 		tracer.Stop(timeout)
 	}()
 
-	if _, err = runTrace(tracer); err != timeout {
+	if _, err = runTrace(tracer); err.Error() != "stahp    in server-side tracer function 'step'" {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
@@ -180,7 +180,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	tracer.Stop(timeout)
 	tracer.CaptureState(env, 0, 0, big.NewInt(0), big.NewInt(0), nil, nil, contract, 0, nil)
 
-	if _, err := tracer.GetResult(); err != timeout {
+	if _, err := tracer.GetResult(); err.Error() != "stahp    in server-side tracer function 'step'" {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
