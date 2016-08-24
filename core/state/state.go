@@ -133,6 +133,13 @@ func (s *State) CreateStateObject(address common.Address) *StateObject {
 	return stateObject
 }
 
+func (s *State) SubBalance(address common.Address, amount *big.Int) {
+	stateObject := s.GetOrNewStateObject(address)
+	if stateObject != nil {
+		stateObject.SubBalance(amount)
+	}
+}
+
 func (s *State) AddBalance(address common.Address, amount *big.Int) {
 	stateObject := s.GetOrNewStateObject(address)
 	if stateObject != nil {

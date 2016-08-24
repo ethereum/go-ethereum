@@ -99,28 +99,37 @@ func (p *StateProcessor) Process(block *types.Block, st *state.State, cfg vm.Con
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
 func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, st *state.State, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*state.State, *types.Receipt, vm.Logs, *big.Int, error) {
-	env := NewEnv(st, config, bc, tx, header, cfg)
+	//env := NewEnv(st, config, bc, tx, header, cfg)
+
+	backend := &EVMBackend{
+		GetHashFn: GetHashFn(header.ParentHash, bc),
+		State:     st,
+	}
+	context := ToEVMContext(config, tx, header)
+
+	env := vm.NewEnvironment(context, backend, config, cfg)
 
 	_, gas, err := ApplyMessage(env, tx, gp)
 	if err != nil {
-		return env.state, nil, nil, nil, err
+		return env.Db().(*state.State), nil, nil, nil, err
 	}
 
+	st = env.Db().(*state.State)
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
-	receipt := types.NewReceipt(state.IntermediateRoot(env.state).Bytes(), usedGas)
+	receipt := types.NewReceipt(state.IntermediateRoot(st).Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
 	if MessageCreatesContract(tx) {
 		from, _ := tx.From()
 		receipt.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
 	}
-	receipt.Logs = env.state.Logs()
+	receipt.Logs = st.Logs()
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
 
-	return env.state, receipt, receipt.Logs, gas, err
+	return st, receipt, receipt.Logs, gas, err
 }
 
 // AccumulateRewards credits the coinbase of the given block with the

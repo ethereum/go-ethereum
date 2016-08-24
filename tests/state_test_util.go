@@ -236,14 +236,14 @@ func RunState(ruleSet RuleSet, statedb *state.State, env, tx map[string]string) 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(ruleSet, nstatedb, env, tx)
-	vmenv.origin = addr
+	vmenv := NewEVMEnvironment(false, ruleSet, nstatedb, env, tx)
+	//vmenv.origin = addr
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
-		vmenv.SetState(snapshot)
+		vmenv.Backend.Set(snapshot)
 	}
-	statedb.Set(state.Flatten(vmenv.state))
+	statedb.Set(state.Flatten(vmenv.Db().(*state.State)))
 	state.Commit(statedb)
 
-	return ret, statedb.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }

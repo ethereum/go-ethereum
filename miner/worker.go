@@ -620,13 +620,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
 	// this is a bit of a hack to force jit for the miners
-	config := env.config.VmConfig
-	if !(config.EnableJit && config.ForceJit) {
-		config.EnableJit = false
-	}
-	config.ForceJit = false // disable forcing jit
-
-	state, receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	state, receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, env.config.VmConfig)
 	defer func() { env.state = state }()
 
 	if err != nil {

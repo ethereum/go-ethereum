@@ -97,13 +97,21 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, st ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
+func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, st ethapi.State, header *types.Header) (*vm.Environment, func() error, error) {
 	stateDb := state.Fork(st.(EthApiState).state)
 	addr, _ := msg.From()
 	from := stateDb.GetOrNewStateObject(addr)
 	from.SetBalance(common.MaxBig)
 	vmError := func() error { return nil }
-	return core.NewEnv(stateDb, b.eth.chainConfig, b.eth.blockchain, msg, header, b.eth.chainConfig.VmConfig), vmError, nil
+
+	backend := &core.EVMBackend{
+		GetHashFn: core.GetHashFn(header.ParentHash, b.eth.blockchain),
+		State:     stateDb,
+	}
+	context := core.ToEVMContext(b.eth.chainConfig, msg, header)
+
+	return vm.NewEnvironment(context, backend, b.eth.chainConfig, b.eth.chainConfig.VmConfig), vmError, nil
+	//return core.NewEnv(stateDb, b.eth.chainConfig, b.eth.blockchain, msg, header, b.eth.chainConfig.VmConfig), vmError, nil
 }
 
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {

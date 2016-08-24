@@ -65,6 +65,24 @@ func (self *State) RawDump() World {
 		}
 		world.Accounts[common.Bytes2Hex(addr)] = account
 	}
+	for addr, stateObject := range self.StateObjects {
+		account := Account{
+			Balance:  stateObject.balance.String(),
+			Nonce:    stateObject.nonce,
+			Root:     common.Bytes2Hex(stateObject.Root()),
+			CodeHash: common.Bytes2Hex(stateObject.codeHash),
+			Code:     common.Bytes2Hex(stateObject.Code()),
+			Storage:  make(map[string]string),
+		}
+		storageIt := stateObject.trie.Iterator()
+		for storageIt.Next() {
+			account.Storage[common.Bytes2Hex(self.Trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+		}
+		for storageAddr, value := range stateObject.storage {
+			account.Storage[storageAddr.Hex()] = value.Hex()
+		}
+		world.Accounts[addr.Hex()] = account
+	}
 	return world
 }
 

@@ -240,14 +240,11 @@ func RunVm(statedb *state.State, env, exec map[string]string) ([]byte, vm.Logs, 
 
 	caller := statedb.GetOrNewStateObject(from)
 
-	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, statedb, env, exec)
-	vmenv.vmTest = true
-	vmenv.skipTransfer = true
-	vmenv.initial = true
+	vmenv := NewEVMEnvironment(true, RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, statedb, env, exec)
 	ret, err := vmenv.Call(caller, to, data, gas, value)
 
-	statedb.Set(state.Flatten(vmenv.state))
+	statedb.Set(state.Flatten(vmenv.Db().(*state.State)))
 	state.Commit(statedb)
 
-	return ret, statedb.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }

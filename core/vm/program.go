@@ -288,11 +288,9 @@ func CompileProgram(program *Program) {
 			program.addInstr(op, pc, nil, nil)
 		}
 	}
-
-	optimiseProgram(program)
 }
 
-func RunProgram(program *Program, env Environment, contract *Contract, input []byte) ([]byte, error) {
+func RunProgram(program *Program, env *Environment, contract *Contract, input []byte) ([]byte, error) {
 	return New(env, Config{}).Run(contract, input)
 }
 
@@ -310,7 +308,7 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 
 // jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
+func jitCalculateGasAndSize(env *Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
 	var (
 		newMemSize uint64
 		sizeFault  bool
