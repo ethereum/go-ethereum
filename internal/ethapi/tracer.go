@@ -17,6 +17,7 @@
 package ethapi
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -53,6 +54,11 @@ func (ocw *opCodeWrapper) toString() string {
 // isPush returns true if the op is a Push
 func (ocw *opCodeWrapper) isPush() bool {
 	return ocw.op.IsPush()
+}
+
+// MarshalJSON serializes the opcode as JSON
+func (ocw *opCodeWrapper) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ocw.op.String())
 }
 
 // toValue returns an otto.Value for the opCodeWrapper
@@ -165,8 +171,6 @@ type JavascriptTracer struct {
 	traceobj    *otto.Object           // User-supplied object to call
 	log         map[string]interface{} // (Reusable) map for the `log` arg to `step`
 	logvalue    otto.Value             // JS view of `log`
-	opcode      *opCodeWrapper         // Wrapper around the opcode
-	opcodevalue otto.Value             // JS view of 'opcode'
 	memory      *memoryWrapper         // Wrapper around the VM memory
 	memvalue    otto.Value             // JS view of `memory`
 	stack       *stackWrapper          // Wrapper around the VM stack
@@ -213,7 +217,6 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 	logvalue, _ := vm.ToValue(log)
 
 	// Create persistent wrappers for memory and stack
-	opcode := &opCodeWrapper{}
 	mem := &memoryWrapper{}
 	stack := &stackWrapper{}
 	db := &dbWrapper{}
@@ -223,8 +226,6 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 		traceobj:    jstracer,
 		log:         log,
 		logvalue:    logvalue,
-		opcode:      opcode,
-		opcodevalue: opcode.toValue(vm),
 		memory:      mem,
 		memvalue:    mem.toValue(vm),
 		stack:       stack,
@@ -265,16 +266,26 @@ func (jst *JavascriptTracer) callSafely(method string, argumentList ...interface
 	return ret, err
 }
 
+func wrapError(context string, err error) error {
+	var message string
+	switch err := err.(type) {
+	case *otto.Error:
+		message = err.String()
+	default:
+		message = err.Error()
+	}
+	return fmt.Errorf("%v    in server-side tracer function '%v'", message, context)
+}
+
 // CaptureState implements the Tracer interface to trace a single step of VM execution
 func (jst *JavascriptTracer) CaptureState(env vm.Environment, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
 	if jst.err == nil {
-		jst.opcode.op = op
 		jst.memory.memory = memory
 		jst.stack.stack = stack
 		jst.db.db = env.Db()
 
 		jst.log["pc"] = pc
-		jst.log["op"] = jst.opcodevalue
+		jst.log["op"] = &opCodeWrapper{op}
 		jst.log["gas"] = gas.Int64()
 		jst.log["gasPrice"] = cost.Int64()
 		jst.log["memory"] = jst.memvalue
@@ -285,7 +296,7 @@ func (jst *JavascriptTracer) CaptureState(env vm.Environment, pc uint64, op vm.O
 
 		_, err := jst.callSafely("step", jst.logvalue, jst.dbvalue)
 		if err != nil {
-			jst.err = err
+			jst.err = wrapError("step", err)
 		}
 	}
 }
@@ -296,5 +307,9 @@ func (jst *JavascriptTracer) GetResult() (result interface{}, err error) {
 		return nil, jst.err
 	}
 
-	return jst.callSafely("result")
+	result, err = jst.callSafely("result")
+	if err != nil {
+		err = wrapError("result", err)
+	}
+	return
 }
