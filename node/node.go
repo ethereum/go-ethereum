@@ -443,7 +443,7 @@ func (n *Node) stopWS() {
 	}
 }
 
-// Stop terminates a running node along with all it's services. In the node was
+// Stop terminates a running node along with all its services. In the node was
 // not started, an error is returned.
 func (n *Node) Stop() error {
 	n.lock.Lock()

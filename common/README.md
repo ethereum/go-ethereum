@@ -82,7 +82,7 @@ type (e.g. `Slice()` returns []interface{}, `Uint()` return 0, etc).
 
 ### Creating a new Value
 
-`NewEmptyValue()` returns a new \*Value with it's initial value set to a
+`NewEmptyValue()` returns a new \*Value with its initial value set to a
 `[]interface{}`
 
 `AppendList()` appends a list to the current value.

@@ -956,7 +956,7 @@ var SolidityParam = require('./param');
 
 /**
  * Formats input value to byte representation of int
- * If value is negative, return it's two's complement
+ * If value is negative, return its two's complement
  * If the value is floating point, round it down
  *
  * @method formatInputInt
@@ -1058,7 +1058,7 @@ var signedIsNegative = function (value) {
 var formatOutputInt = function (param) {
     var value = param.staticPart() || "0";
 
-    // check if it's negative number
+    // check if it's a negative number
     // it it is, return two's complement
     if (signedIsNegative(value)) {
         return new BigNumber(value, 16).minus(new BigNumber('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', 16)).minus(1);
@@ -1987,7 +1987,7 @@ var padRight = function (string, chars, sign) {
 };
 
 /**
- * Should be called to get utf8 from it's hex representation
+ * Should be called to get utf8 from its hex representation
  *
  * @method toUtf8
  * @param {String} string in hex
@@ -2011,7 +2011,7 @@ var toUtf8 = function(hex) {
 };
 
 /**
- * Should be called to get ascii from it's hex representation
+ * Should be called to get ascii from its hex representation
  *
  * @method toAscii
  * @param {String} string in hex
@@ -2109,7 +2109,7 @@ var extractTypeName = function (name) {
 };
 
 /**
- * Converts value to it's decimal representation in string
+ * Converts value to its decimal representation in string
  *
  * @method toDecimal
  * @param {String|Number|BigNumber}
@@ -2120,7 +2120,7 @@ var toDecimal = function (value) {
 };
 
 /**
- * Converts value to it's hex representation
+ * Converts value to its hex representation
  *
  * @method fromDecimal
  * @param {String|Number|BigNumber}
@@ -2134,7 +2134,7 @@ var fromDecimal = function (value) {
 };
 
 /**
- * Auto converts any given value into it's hex representation.
+ * Auto converts any given value into its hex representation.
  *
  * And even stringifys objects before.
  *
