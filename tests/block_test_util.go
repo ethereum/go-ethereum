@@ -245,7 +245,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 
    Since some tests mix valid and invalid blocks we need to check this for every block.
 
-   If a block is invalid it does not necessarily fail the test, if it's invalidness is
+   If a block is invalid it does not necessarily fail the test, if its invalidness is
    expected we are expected to ignore it and continue processing and then validate the
    post state.
 */
