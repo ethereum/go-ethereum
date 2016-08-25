@@ -105,7 +105,7 @@ func TestTransactionQueue(t *testing.T) {
 	currentState.SetNonce(from, 2)
 	pool.enqueueTx(tx.Hash(), tx)
 	pool.promoteExecutables()
-	if _, ok := pool.pending[from].items[tx.Nonce()]; ok {
+	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
 
@@ -224,7 +224,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
-	if tx := pool.pending[addr].items[0]; tx.Hash() != tx2.Hash() {
+	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
 	// Add the thid transaction and ensure it's not saved (smaller price)
@@ -235,7 +235,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
-	if tx := pool.pending[addr].items[0]; tx.Hash() != tx2.Hash() {
+	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
 	// Ensure the total transaction count is correct
@@ -346,16 +346,16 @@ func TestTransactionDropping(t *testing.T) {
 	state.AddBalance(account, big.NewInt(-750))
 	pool.resetState()
 
-	if _, ok := pool.pending[account].items[tx0.Nonce()]; !ok {
+	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
-	if _, ok := pool.pending[account].items[tx1.Nonce()]; ok {
+	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; ok {
 		t.Errorf("out-of-fund pending transaction present: %v", tx1)
 	}
-	if _, ok := pool.queue[account].items[tx10.Nonce()]; !ok {
+	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
 	}
-	if _, ok := pool.queue[account].items[tx11.Nonce()]; ok {
+	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; ok {
 		t.Errorf("out-of-fund queued transaction present: %v", tx11)
 	}
 	if len(pool.all) != 2 {
@@ -410,25 +410,25 @@ func TestTransactionPostponing(t *testing.T) {
 	state.AddBalance(account, big.NewInt(-750))
 	pool.resetState()
 
-	if _, ok := pool.pending[account].items[txns[0].Nonce()]; !ok {
+	if _, ok := pool.pending[account].txs.items[txns[0].Nonce()]; !ok {
 		t.Errorf("tx %d: valid and funded transaction missing from pending pool: %v", 0, txns[0])
 	}
-	if _, ok := pool.queue[account].items[txns[0].Nonce()]; ok {
+	if _, ok := pool.queue[account].txs.items[txns[0].Nonce()]; ok {
 		t.Errorf("tx %d: valid and funded transaction present in future queue: %v", 0, txns[0])
 	}
 	for i, tx := range txns[1:] {
 		if i%2 == 1 {
-			if _, ok := pool.pending[account].items[tx.Nonce()]; ok {
+			if _, ok := pool.pending[account].txs.items[tx.Nonce()]; ok {
 				t.Errorf("tx %d: valid but future transaction present in pending pool: %v", i+1, tx)
 			}
-			if _, ok := pool.queue[account].items[tx.Nonce()]; !ok {
+			if _, ok := pool.queue[account].txs.items[tx.Nonce()]; !ok {
 				t.Errorf("tx %d: valid but future transaction missing from future queue: %v", i+1, tx)
 			}
 		} else {
-			if _, ok := pool.pending[account].items[tx.Nonce()]; ok {
+			if _, ok := pool.pending[account].txs.items[tx.Nonce()]; ok {
 				t.Errorf("tx %d: out-of-fund transaction present in pending pool: %v", i+1, tx)
 			}
-			if _, ok := pool.queue[account].items[tx.Nonce()]; ok {
+			if _, ok := pool.queue[account].txs.items[tx.Nonce()]; ok {
 				t.Errorf("tx %d: out-of-fund transaction present in future queue: %v", i+1, tx)
 			}
 		}
