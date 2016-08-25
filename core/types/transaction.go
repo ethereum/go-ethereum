@@ -19,6 +19,7 @@ package types
 import (
 	"container/heap"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,12 +29,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var ErrInvalidSig = errors.New("invalid v, r, s values")
+var ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+
+var (
+	errMissingTxSignatureFields = errors.New("missing required JSON transaction signature fields")
+	errMissingTxFields          = errors.New("missing required JSON transaction fields")
+)
 
 type Transaction struct {
 	data txdata
@@ -53,6 +57,20 @@ type txdata struct {
 	R, S            *big.Int // signature
 }
 
+type jsonTransaction struct {
+	Hash         *common.Hash    `json:"hash"`
+	AccountNonce *hexUint64      `json:"nonce"`
+	Price        *hexBig         `json:"gasPrice"`
+	GasLimit     *hexBig         `json:"gas"`
+	Recipient    *common.Address `json:"to"`
+	Amount       *hexBig         `json:"value"`
+	Payload      *hexBytes       `json:"input"`
+	V            *hexUint64      `json:"v"`
+	R            *hexBig         `json:"r"`
+	S            *hexBig         `json:"s"`
+}
+
+// NewContractCreation creates a new transaction with no recipient.
 func NewContractCreation(nonce uint64, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
@@ -69,6 +87,7 @@ func NewContractCreation(nonce uint64, amount, gasLimit, gasPrice *big.Int, data
 	}}
 }
 
+// NewTransaction creates a new transaction with the given fields.
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
@@ -95,10 +114,12 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 	return &Transaction{data: d}
 }
 
+// DecodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
 
+// DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
 	err := s.Decode(&tx.data)
@@ -106,6 +127,42 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
 	}
 	return err
+}
+
+// UnmarshalJSON decodes the web3 RPC transaction format.
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
+	var dec jsonTransaction
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	// Ensure that all fields are set. V, R, S are checked separately because they're a
+	// recent addition to the RPC spec (as of August 2016) and older implementations might
+	// not provide them. Note that Recipient is not checked because it can be missing for
+	// contract creations.
+	if dec.V == nil || dec.R == nil || dec.S == nil {
+		return errMissingTxSignatureFields
+	}
+	if !crypto.ValidateSignatureValues(byte(*dec.V), (*big.Int)(dec.R), (*big.Int)(dec.S), false) {
+		return ErrInvalidSig
+	}
+	if dec.AccountNonce == nil || dec.Price == nil || dec.GasLimit == nil || dec.Amount == nil || dec.Payload == nil {
+		return errMissingTxFields
+	}
+	// Assign the fields. This is not atomic but reusing transactions
+	// for decoding isn't thread safe anyway.
+	*tx = Transaction{}
+	tx.data = txdata{
+		AccountNonce: uint64(*dec.AccountNonce),
+		Recipient:    dec.Recipient,
+		Amount:       (*big.Int)(dec.Amount),
+		GasLimit:     (*big.Int)(dec.GasLimit),
+		Price:        (*big.Int)(dec.Price),
+		Payload:      *dec.Payload,
+		V:            byte(*dec.V),
+		R:            (*big.Int)(dec.R),
+		S:            (*big.Int)(dec.S),
+	}
+	return nil
 }
 
 func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
@@ -215,6 +272,7 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
+// SignatureValues returns the ECDSA signature values contained in the transaction.
 func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
 	return tx.data.V, new(big.Int).Set(tx.data.R), new(big.Int).Set(tx.data.S)
 }
@@ -235,7 +293,6 @@ func (tx *Transaction) publicKey(homestead bool) ([]byte, error) {
 	hash := tx.SigHash()
 	pub, err := crypto.Ecrecover(hash[:], sig)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
 		return nil, err
 	}
 	if len(pub) == 0 || pub[0] != 4 {

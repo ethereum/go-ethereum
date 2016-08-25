@@ -588,24 +588,26 @@ func FormatLogs(structLogs []vm.StructLog) []StructLogRes {
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
 func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+	head := b.Header() // copies the header once
 	fields := map[string]interface{}{
-		"number":           rpc.NewHexNumber(b.Number()),
+		"number":           rpc.NewHexNumber(head.Number),
 		"hash":             b.Hash(),
-		"parentHash":       b.ParentHash(),
-		"nonce":            b.Header().Nonce,
-		"sha3Uncles":       b.UncleHash(),
-		"logsBloom":        b.Bloom(),
-		"stateRoot":        b.Root(),
-		"miner":            b.Coinbase(),
-		"difficulty":       rpc.NewHexNumber(b.Difficulty()),
+		"parentHash":       head.ParentHash,
+		"nonce":            head.Nonce,
+		"mixHash":          head.MixDigest,
+		"sha3Uncles":       head.UncleHash,
+		"logsBloom":        head.Bloom,
+		"stateRoot":        head.Root,
+		"miner":            head.Coinbase,
+		"difficulty":       rpc.NewHexNumber(head.Difficulty),
 		"totalDifficulty":  rpc.NewHexNumber(s.b.GetTd(b.Hash())),
-		"extraData":        fmt.Sprintf("0x%x", b.Extra()),
+		"extraData":        rpc.HexBytes(head.Extra),
 		"size":             rpc.NewHexNumber(b.Size().Int64()),
-		"gasLimit":         rpc.NewHexNumber(b.GasLimit()),
-		"gasUsed":          rpc.NewHexNumber(b.GasUsed()),
-		"timestamp":        rpc.NewHexNumber(b.Time()),
-		"transactionsRoot": b.TxHash(),
-		"receiptRoot":      b.ReceiptHash(),
+		"gasLimit":         rpc.NewHexNumber(head.GasLimit),
+		"gasUsed":          rpc.NewHexNumber(head.GasUsed),
+		"timestamp":        rpc.NewHexNumber(head.Time),
+		"transactionsRoot": head.TxHash,
+		"receiptRoot":      head.ReceiptHash,
 	}
 
 	if inclTx {
@@ -648,26 +650,32 @@ type RPCTransaction struct {
 	Gas              *rpc.HexNumber  `json:"gas"`
 	GasPrice         *rpc.HexNumber  `json:"gasPrice"`
 	Hash             common.Hash     `json:"hash"`
-	Input            string          `json:"input"`
+	Input            rpc.HexBytes    `json:"input"`
 	Nonce            *rpc.HexNumber  `json:"nonce"`
 	To               *common.Address `json:"to"`
 	TransactionIndex *rpc.HexNumber  `json:"transactionIndex"`
 	Value            *rpc.HexNumber  `json:"value"`
+	V                *rpc.HexNumber  `json:"v"`
+	R                *rpc.HexNumber  `json:"r"`
+	S                *rpc.HexNumber  `json:"s"`
 }
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
 func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 	from, _ := tx.FromFrontier()
-
+	v, r, s := tx.SignatureValues()
 	return &RPCTransaction{
 		From:     from,
 		Gas:      rpc.NewHexNumber(tx.Gas()),
 		GasPrice: rpc.NewHexNumber(tx.GasPrice()),
 		Hash:     tx.Hash(),
-		Input:    fmt.Sprintf("0x%x", tx.Data()),
+		Input:    rpc.HexBytes(tx.Data()),
 		Nonce:    rpc.NewHexNumber(tx.Nonce()),
 		To:       tx.To(),
 		Value:    rpc.NewHexNumber(tx.Value()),
+		V:        rpc.NewHexNumber(v),
+		R:        rpc.NewHexNumber(r),
+		S:        rpc.NewHexNumber(s),
 	}
 }
 
@@ -679,7 +687,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex int) (*RPCTransacti
 		if err != nil {
 			return nil, err
 		}
-
+		v, r, s := tx.SignatureValues()
 		return &RPCTransaction{
 			BlockHash:        b.Hash(),
 			BlockNumber:      rpc.NewHexNumber(b.Number()),
@@ -687,11 +695,14 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex int) (*RPCTransacti
 			Gas:              rpc.NewHexNumber(tx.Gas()),
 			GasPrice:         rpc.NewHexNumber(tx.GasPrice()),
 			Hash:             tx.Hash(),
-			Input:            fmt.Sprintf("0x%x", tx.Data()),
+			Input:            rpc.HexBytes(tx.Data()),
 			Nonce:            rpc.NewHexNumber(tx.Nonce()),
 			To:               tx.To(),
 			TransactionIndex: rpc.NewHexNumber(txIndex),
 			Value:            rpc.NewHexNumber(tx.Value()),
+			V:                rpc.NewHexNumber(v),
+			R:                rpc.NewHexNumber(r),
+			S:                rpc.NewHexNumber(s),
 		}, nil
 	}
 
@@ -861,7 +872,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 	}
 
 	fields := map[string]interface{}{
-		"root":              common.Bytes2Hex(receipt.PostState),
+		"root":              rpc.HexBytes(receipt.PostState),
 		"blockHash":         txBlock,
 		"blockNumber":       rpc.NewHexNumber(blockIndex),
 		"transactionHash":   txHash,
@@ -872,17 +883,15 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 		"cumulativeGasUsed": rpc.NewHexNumber(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
 		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom,
 	}
-
 	if receipt.Logs == nil {
 		fields["logs"] = []vm.Logs{}
 	}
-
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if bytes.Compare(receipt.ContractAddress.Bytes(), bytes.Repeat([]byte{0}, 20)) != 0 {
+	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress
 	}
-
 	return fields, nil
 }
 

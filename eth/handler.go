@@ -634,9 +634,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&request); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		if err := request.Block.ValidateFields(); err != nil {
-			return errResp(ErrDecode, "block validation %v: %v", msg, err)
-		}
 		request.Block.ReceivedAt = msg.ReceivedAt
 		request.Block.ReceivedFrom = p
 
