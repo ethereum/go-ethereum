@@ -136,8 +136,11 @@ func (am *Manager) DeleteAccount(a Account, passphrase string) error {
 	return err
 }
 
-// Sign signs hash with an unlocked private key matching the given address.
-func (am *Manager) Sign(addr common.Address, hash []byte) (signature []byte, err error) {
+// Sign calculates a ECDSA signature for the given hash.
+// Note, Ethereum signatures have a particular format as described in the
+// yellow paper. Use the SignEthereum function to calculate a signature
+// in Ethereum format.
+func (am *Manager) Sign(addr common.Address, hash []byte) ([]byte, error) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 	unlockedKey, found := am.unlocked[addr]
@@ -147,8 +150,20 @@ func (am *Manager) Sign(addr common.Address, hash []byte) (signature []byte, err
 	return crypto.Sign(hash, unlockedKey.PrivateKey)
 }
 
-// SignWithPassphrase signs hash if the private key matching the given address can be
-// decrypted with the given passphrase.
+// SignEthereum calculates a ECDSA signature for the given hash.
+// The signature has the format as described in the Ethereum yellow paper.
+func (am *Manager) SignEthereum(addr common.Address, hash []byte) ([]byte, error) {
+	am.mu.RLock()
+	defer am.mu.RUnlock()
+	unlockedKey, found := am.unlocked[addr]
+	if !found {
+		return nil, ErrLocked
+	}
+	return crypto.SignEthereum(hash, unlockedKey.PrivateKey)
+}
+
+// SignWithPassphrase signs hash if the private key matching the given
+// address can be decrypted with the given passphrase.
 func (am *Manager) SignWithPassphrase(addr common.Address, passphrase string, hash []byte) (signature []byte, err error) {
 	_, key, err := am.getDecryptedKey(Account{Address: addr}, passphrase)
 	if err != nil {
@@ -156,7 +171,7 @@ func (am *Manager) SignWithPassphrase(addr common.Address, passphrase string, ha
 	}
 
 	defer zeroKey(key.PrivateKey)
-	return crypto.Sign(hash, key.PrivateKey)
+	return crypto.SignEthereum(hash, key.PrivateKey)
 }
 
 // Unlock unlocks the given account indefinitely.

@@ -436,7 +436,7 @@ web3._extend({
 			inputFormatter: [null, web3._extend.formatters.inputAddressFormatter, null]
 		})
 	]
-});
+})
 `
 
 const RPC_JS = `

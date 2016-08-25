@@ -298,14 +298,18 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 	return submitTransaction(ctx, s.b, tx, signature)
 }
 
-// Sign decrypts the private key associated with the given address with the given password.
-// If the key was successful decrypted the given hash is signed and the signature is returned.
-func (s *PrivateAccountAPI) Sign(ctx context.Context, hash common.Hash, addr common.Address, passwd string) (string, error) {
-	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, hash.Bytes())
+// Sign calculates an ECDSA signature from keccack226(message).
+// The key used to calculate the signature is decrypted with the given password.
+//
+// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
+func (s *PrivateAccountAPI) Sign(ctx context.Context, message string, addr common.Address, passwd string) (string, error) {
+	// always hash, this prevents choosen plaintext attacks that can extract the key
+	hash := crypto.Keccak256(common.FromHex(message))
+	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, hash)
 	if err != nil {
 		return "0x", err
 	}
-	return "0x" + hex.EncodeToString(signature), nil
+	return common.ToHex(signature), nil
 }
 
 // SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
@@ -898,7 +902,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 
 // sign is a helper function that signs a transaction with the private key of the given address.
 func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
-	signature, err := s.b.AccountManager().Sign(addr, tx.SigHash().Bytes())
+	signature, err := s.b.AccountManager().SignEthereum(addr, tx.SigHash().Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -980,7 +984,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 		tx = types.NewTransaction(args.Nonce.Uint64(), *args.To, args.Value.BigInt(), args.Gas.BigInt(), args.GasPrice.BigInt(), common.FromHex(args.Data))
 	}
 
-	signature, err := s.b.AccountManager().Sign(args.From, tx.SigHash().Bytes())
+	signature, err := s.b.AccountManager().SignEthereum(args.From, tx.SigHash().Bytes())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1014,11 +1018,15 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 	return tx.Hash().Hex(), nil
 }
 
-// Sign signs the given hash using the key that matches the address. The key must be
-// unlocked in order to sign the hash.
-func (s *PublicTransactionPoolAPI) Sign(addr common.Address, hash common.Hash) (string, error) {
-	signature, error := s.b.AccountManager().Sign(addr, hash[:])
-	return common.ToHex(signature), error
+// Sign calculates an ECDSA signature from keccack226(message).
+// The account associated with addr must be unlocked.
+//
+// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
+func (s *PublicTransactionPoolAPI) Sign(addr common.Address, message string) (string, error) {
+	// always hash, this prevents choosen plaintext attacks that can extract the key
+	hash := crypto.Keccak256(common.FromHex(message))
+	signature, err := s.b.AccountManager().SignEthereum(addr, hash[:])
+	return common.ToHex(signature), err
 }
 
 // SignTransactionArgs represents the arguments to sign a transaction.

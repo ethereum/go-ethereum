@@ -78,6 +78,12 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
+// Ecrecover returns the public key for the private key that was used
+// to calculate the signature.
+//
+// Note: secp256k1 expects the recover id to be either 0, 1. Ethereum
+// signatures have a recover id with an offset of 27. Callers must take
+// this into account and if "recovering" an Ethereum signature adjust.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return secp256k1.RecoverPubkey(hash, sig)
 }
@@ -192,6 +198,10 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}, nil
 }
 
+// Sign calculates an ECDSA signature.
+// Note: the signature is not Ethereum compliant. The yellow paper dictates
+// Ethereum singature to have a V value with and offset of 27 v in [27,28].
+// Use SignEthereum to get an Ethereum compliant signature.
 func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(hash) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
@@ -201,6 +211,16 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	defer zeroBytes(seckey)
 	sig, err = secp256k1.Sign(hash, seckey)
 	return
+}
+
+// SignEthereum calculates an Ethereum ECDSA signature.
+func SignEthereum(hash []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
+	sig, err := Sign(hash, prv)
+	if err != nil {
+		return nil, err
+	}
+	sig[64] += 27 // as described in the yellow paper
+	return sig, err
 }
 
 func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {

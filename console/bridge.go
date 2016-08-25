@@ -131,19 +131,19 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 // jeth.sign) with it to actually execute the RPC call.
 func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 	var (
-		hash    = call.Argument(0)
+		message = call.Argument(0)
 		account = call.Argument(1)
 		passwd  = call.Argument(2)
 	)
 
-	if !hash.IsString() {
-		throwJSException("first argument must be the hash to sign")
+	if !message.IsString() {
+		throwJSException("first argument must be the message to sign")
 	}
 	if !account.IsString() {
 		throwJSException("second argument must be the account to sign with")
 	}
 
-	// if the password is not given or null ask the user, otherwise ensure it's a string
+	// if the password is not given or null ask the user and ensure password is a string
 	if passwd.IsUndefined() || passwd.IsNull() {
 		fmt.Fprintf(b.printer, "Give password for account %s\n", account)
 		if input, err := b.prompter.PromptPassword("Passphrase: "); err != nil {
@@ -157,7 +157,7 @@ func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 	}
 
 	// Send the request to the backend and return
-	val, err := call.Otto.Call("jeth.sign", nil, hash, account, passwd)
+	val, err := call.Otto.Call("jeth.sign", nil, message, account, passwd)
 	if err != nil {
 		throwJSException(err.Error())
 	}

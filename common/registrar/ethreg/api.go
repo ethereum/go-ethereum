@@ -257,7 +257,7 @@ func (be *registryAPIBackend) Transact(fromStr, toStr, nonceStr, valueStr, gasSt
 		tx = types.NewTransaction(nonce, to, value, gas, price, data)
 	}
 
-	signature, err := be.am.Sign(from, tx.SigHash().Bytes())
+	signature, err := be.am.SignEthereum(from, tx.SigHash().Bytes())
 	if err != nil {
 		return "", err
 	}
