@@ -43,8 +43,10 @@ type CpuAgent struct {
 
 func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
 	miner := &CpuAgent{
-		pow:   pow,
-		index: index,
+		pow:    pow,
+		index:  index,
+		quit:   make(chan struct{}),
+		workCh: make(chan *Work, 1),
 	}
 
 	return miner
@@ -55,24 +57,14 @@ func (self *CpuAgent) Pow() pow.PoW                  { return self.pow }
 func (self *CpuAgent) SetReturnCh(ch chan<- *Result) { self.returnCh = ch }
 
 func (self *CpuAgent) Stop() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
 	close(self.quit)
 }
 
 func (self *CpuAgent) Start() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
 
 	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
 		return // agent already started
 	}
-
-	self.quit = make(chan struct{})
-	// creating current op ch makes sure we're not closing a nil ch
-	// later on
-	self.workCh = make(chan *Work, 1)
 
 	go self.update()
 }
