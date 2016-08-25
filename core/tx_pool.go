@@ -154,7 +154,8 @@ func (pool *TxPool) resetState() {
 
 	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.pending {
-		pool.pendingState.SetNonce(addr, list.last+1)
+		txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
+		pool.pendingState.SetNonce(addr, txs[len(txs)-1].Nonce()+1)
 	}
 	// Check the queue and move transactions over to the pending if possible
 	// or remove those that have become invalid
@@ -366,7 +367,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.beats[addr] = time.Now()
-	pool.pendingState.SetNonce(addr, list.last+1)
+	pool.pendingState.SetNonce(addr, tx.Nonce()+1)
 	go pool.eventMux.Post(TxPreEvent{tx})
 }
 
@@ -439,18 +440,19 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
 		if removed, invalids := pending.Remove(tx); removed {
-			// If no more transactions are left, remove the list and reset the nonce
+			// If no more transactions are left, remove the list
 			if pending.Empty() {
 				delete(pool.pending, addr)
 				delete(pool.beats, addr)
-
-				pool.pendingState.SetNonce(addr, tx.Nonce())
 			} else {
-				// Otherwise update the nonce and postpone any invalidated transactions
-				pool.pendingState.SetNonce(addr, pending.last)
+				// Otherwise postpone any invalidated transactions
 				for _, tx := range invalids {
 					pool.enqueueTx(tx.Hash(), tx)
 				}
+			}
+			// Update the account nonce if needed
+			if nonce := tx.Nonce(); pool.pendingState.GetNonce(addr) > nonce {
+				pool.pendingState.SetNonce(addr, tx.Nonce())
 			}
 		}
 	}

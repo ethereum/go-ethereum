@@ -41,18 +41,12 @@ func TestStrictTxListAdd(t *testing.T) {
 		list.Add(txs[v])
 	}
 	// Verify internal state
-	if list.first != 0 {
-		t.Errorf("lowest nonce mismatch: have %d, want %d", list.first, 0)
-	}
-	if int(list.last) != len(txs)-1 {
-		t.Errorf("highest nonce mismatch: have %d, want %d", list.last, len(txs)-1)
-	}
-	if len(list.items) != len(txs) {
-		t.Errorf("transaction count mismatch: have %d, want %d", len(list.items), len(txs))
+	if len(list.txs.items) != len(txs) {
+		t.Errorf("transaction count mismatch: have %d, want %d", len(list.txs.items), len(txs))
 	}
 	for i, tx := range txs {
-		if list.items[tx.Nonce()] != tx {
-			t.Errorf("item %d: transaction mismatch: have %v, want %v", i, list.items[tx.Nonce()], tx)
+		if list.txs.items[tx.Nonce()] != tx {
+			t.Errorf("item %d: transaction mismatch: have %v, want %v", i, list.txs.items[tx.Nonce()], tx)
 		}
 	}
 }
