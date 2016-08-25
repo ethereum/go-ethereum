@@ -312,6 +312,35 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, message string, addr commo
 	return common.ToHex(signature), nil
 }
 
+// recover returns the address for the account that was used to create the signature.
+//
+// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_recover
+func (s *PrivateAccountAPI) Recover(ctx context.Context, message string, signature string) (common.Address, error) {
+	var (
+		sig  = common.FromHex(signature)
+		hash = crypto.Keccak256(common.FromHex(message))
+	)
+
+	if len(sig) != 65 {
+		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
+	}
+
+	// see crypto.Ecrecover description
+	if sig[64] == 27 || sig[64] == 28 {
+		sig[64] -= 27
+	}
+
+	rpk, err := crypto.Ecrecover(hash, sig)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	pubKey := crypto.ToECDSAPub(rpk)
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+
+	return recoveredAddr, nil
+}
+
 // SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
 // and will be removed in the future. It primary goal is to give clients time to update.
 func (s *PrivateAccountAPI) SignAndSendTransaction(ctx context.Context, args SendTxArgs, passwd string) (common.Hash, error) {

@@ -434,6 +434,11 @@ web3._extend({
 			call: 'personal_sign',
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputAddressFormatter, null]
+		}),
+		new web3._extend.Method({
+			name: 'recover',
+			call: 'personal_recover',
+			params: 2
 		})
 	]
 })
