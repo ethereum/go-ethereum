@@ -865,7 +865,7 @@ var extractTypeName = function (name) {
 };
 
 /**
- * Converts value to it's decimal representation in string
+ * Converts value to its decimal representation in string
  *
  * @method toDecimal
  * @param {String|Number|BigNumber}
