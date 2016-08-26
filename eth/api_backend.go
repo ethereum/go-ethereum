@@ -136,10 +136,7 @@ func (b *EthApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transactio
 }
 
 func (b *EthApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	b.eth.txMu.Lock()
-	defer b.eth.txMu.Unlock()
-
-	return b.eth.txPool.State().GetNonce(addr), nil
+	return b.eth.txPool.State().GetNextNonce(addr), nil
 }
 
 func (b *EthApiBackend) Stats() (pending int, queued int) {

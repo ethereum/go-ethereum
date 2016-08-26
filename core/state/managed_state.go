@@ -82,6 +82,23 @@ func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 	return uint64(len(account.nonces)-1) + account.nstart
 }
 
+// GetNextNonce returns the canonical nonce for the managed or unmanaged account and increments it by one
+func (ms *ManagedState) GetNextNonce(addr common.Address) uint64 {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+
+	var nonce uint64
+
+	if ms.hasAccount(addr) {
+		account := ms.getAccount(addr)
+		nonce = uint64(len(account.nonces)) + account.nstart
+	} else {
+		nonce = ms.StateDB.GetNonce(addr)
+	}
+	ms.StateDB.SetNonce(addr, nonce+1)
+	return nonce
+}
+
 // GetNonce returns the canonical nonce for the managed or unmanaged account
 func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
 	ms.mu.RLock()
