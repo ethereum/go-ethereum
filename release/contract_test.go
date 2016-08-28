@@ -343,7 +343,7 @@ func TestVersionAutoNuke(t *testing.T) {
 		}
 		sim.Commit()
 	}
-	// Make a release proposal and check it's existence
+	// Make a release proposal and check its existence
 	if _, err := oracle.Release(bind.NewKeyedTransactor(keys[0]), 1, 2, 3, [20]byte{4}); err != nil {
 		t.Fatalf("Failed valid proposal attempt: %v", err)
 	}

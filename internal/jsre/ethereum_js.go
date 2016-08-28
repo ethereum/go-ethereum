@@ -956,7 +956,7 @@ var SolidityParam = require('./param');
 
 /**
  * Formats input value to byte representation of int
- * If value is negative, return it's two's complement
+ * If value is negative, return its two's complement
  * If the value is floating point, round it down
  *
  * @method formatInputInt

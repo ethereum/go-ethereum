@@ -36,7 +36,7 @@ type ManagedState struct {
 	accounts map[string]*account
 }
 
-// ManagedState returns a new managed state with the statedb as it's backing layer
+// ManagedState returns a new managed state with the statedb as its backing layer
 func ManageState(statedb *StateDB) *ManagedState {
 	return &ManagedState{
 		StateDB:  statedb.Copy(),
