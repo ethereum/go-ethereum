@@ -10,7 +10,7 @@ type Set struct {
 	l sync.RWMutex // we name it because we don't want to expose it
 }
 
-// New creates and initialize a new Set. It accepts a variable number of
+// New creates and initialize a new Set. It's accept a variable number of
 // arguments to populate the initial set. If nothing passed a Set with zero
 // size is created.
 func New(items ...interface{}) *Set {
