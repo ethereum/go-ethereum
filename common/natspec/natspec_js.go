@@ -37,7 +37,7 @@ require=(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof requ
     You should have received a copy of the GNU Lesser General Public License
     along with ethereum.js.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** 
+/**
  * @file abi.js
  * @author Marek Kotewicz <marek@ethdev.com>
  * @author Gav Wood <g@ethdev.com>
@@ -148,7 +148,7 @@ var dynamicBytesLength = function (type) {
 
 var outputTypes = types.outputTypes();
 
-/** 
+/**
  * Formats output bytes back to param list
  *
  * @method formatOutput
@@ -309,7 +309,7 @@ var c = require('../utils/config');
 
 /**
  * Formats input value to byte representation of int
- * If value is negative, return it's two's complement
+ * If value is negative, return its two's complement
  * If the value is floating point, round it down
  *
  * @method formatInputInt
@@ -353,7 +353,7 @@ var formatInputBool = function (value) {
  * @returns {String} byte representation of real
  */
 var formatInputReal = function (value) {
-    return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128))); 
+    return formatInputInt(new BigNumber(value).times(new BigNumber(2).pow(128)));
 };
 
 /**
@@ -406,7 +406,7 @@ var formatOutputUInt = function (value) {
  * @returns {BigNumber} input bytes formatted to real
  */
 var formatOutputReal = function (value) {
-    return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128)); 
+    return formatOutputInt(value).dividedBy(new BigNumber(2).pow(128));
 };
 
 /**
@@ -417,7 +417,7 @@ var formatOutputReal = function (value) {
  * @returns {BigNumber} input bytes formatted to ureal
  */
 var formatOutputUReal = function (value) {
-    return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128)); 
+    return formatOutputUInt(value).dividedBy(new BigNumber(2).pow(128));
 };
 
 /**
@@ -522,13 +522,13 @@ var namedType = function (name) {
 };
 
 /// Setups input formatters for solidity types
-/// @returns an array of input formatters 
+/// @returns an array of input formatters
 var inputTypes = function () {
-    
+
     return [
         { type: prefixedType('uint'), format: f.formatInputInt },
         { type: prefixedType('int'), format: f.formatInputInt },
-        { type: prefixedType('bytes'), format: f.formatInputString }, 
+        { type: prefixedType('bytes'), format: f.formatInputString },
         { type: prefixedType('real'), format: f.formatInputReal },
         { type: prefixedType('ureal'), format: f.formatInputReal },
         { type: namedType('address'), format: f.formatInputInt },
@@ -605,8 +605,8 @@ var getConstructor = function (abi, numberOfArgs) {
  */
 var filterFunctions = function (json) {
     return json.filter(function (current) {
-        return current.type === 'function'; 
-    }); 
+        return current.type === 'function';
+    });
 };
 
 /**
@@ -654,13 +654,13 @@ module.exports = {
 
 /**
  * Utils
- * 
+ *
  * @module utils
  */
 
 /**
  * Utility functions
- * 
+ *
  * @class [utils] config
  * @constructor
  */
@@ -668,26 +668,26 @@ module.exports = {
 /// required to define ETH_BIGNUMBER_ROUNDING_MODE
 var BigNumber = require('bignumber.js');
 
-var ETH_UNITS = [ 
-    'wei', 
-    'Kwei', 
-    'Mwei', 
-    'Gwei', 
-    'szabo', 
-    'finney', 
-    'ether', 
-    'grand', 
-    'Mether', 
-    'Gether', 
-    'Tether', 
-    'Pether', 
-    'Eether', 
-    'Zether', 
-    'Yether', 
-    'Nether', 
-    'Dether', 
-    'Vether', 
-    'Uether' 
+var ETH_UNITS = [
+    'wei',
+    'Kwei',
+    'Mwei',
+    'Gwei',
+    'szabo',
+    'finney',
+    'ether',
+    'grand',
+    'Mether',
+    'Gether',
+    'Tether',
+    'Pether',
+    'Eether',
+    'Zether',
+    'Yether',
+    'Nether',
+    'Dether',
+    'Vether',
+    'Uether'
 ];
 
 module.exports = {
@@ -725,13 +725,13 @@ module.exports = {
 
 /**
  * Utils
- * 
+ *
  * @module utils
  */
 
 /**
  * Utility functions
- * 
+ *
  * @class [utils] utils
  * @constructor
  */
@@ -786,7 +786,7 @@ var findIndex = function (array, callback) {
     return end ? i - 1 : -1;
 };
 
-/** 
+/**
  * Should be called to get sting from its hex representation
  *
  * @method toAscii
@@ -811,9 +811,9 @@ var toAscii = function(hex) {
 
     return str;
 };
-    
+
 /**
- * Shold be called to get hex representation (prefixed by 0x) of ascii string 
+ * Shold be called to get hex representation (prefixed by 0x) of ascii string
  *
  * @method fromAscii
  * @param {String} string
@@ -830,7 +830,7 @@ var toHexNative = function(str) {
 };
 
 /**
- * Shold be called to get hex representation (prefixed by 0x) of ascii string 
+ * Shold be called to get hex representation (prefixed by 0x) of ascii string
  *
  * @method fromAscii
  * @param {String} string
@@ -847,13 +847,13 @@ var fromAscii = function(str, pad) {
 
 /**
  * Should be called to get display name of contract function
- * 
+ *
  * @method extractDisplayName
  * @param {String} name of function/event
  * @returns {String} display name for function/event eg. multiply(uint256) -> multiply
  */
 var extractDisplayName = function (name) {
-    var length = name.indexOf('('); 
+    var length = name.indexOf('(');
     return length !== -1 ? name.substr(0, length) : name;
 };
 
@@ -961,7 +961,7 @@ var getValueOfUnit = function (unit) {
 var fromWei = function(number, unit) {
     var returnValue = toBigNumber(number).dividedBy(getValueOfUnit(unit));
 
-    return isBigNumber(number) ? returnValue : returnValue.toString(10); 
+    return isBigNumber(number) ? returnValue : returnValue.toString(10);
 };
 
 /**
@@ -987,7 +987,7 @@ var fromWei = function(number, unit) {
 var toWei = function(number, unit) {
     var returnValue = toBigNumber(number).times(getValueOfUnit(unit));
 
-    return isBigNumber(number) ? returnValue : returnValue.toString(10); 
+    return isBigNumber(number) ? returnValue : returnValue.toString(10);
 };
 
 /**
@@ -1006,7 +1006,7 @@ var toBigNumber = function(number) {
     if (isString(number) && (number.indexOf('0x') === 0 || number.indexOf('-0x') === 0)) {
         return new BigNumber(number.replace('0x',''), 16);
     }
-   
+
     return new BigNumber(number.toString(10), 10);
 };
 
@@ -1058,7 +1058,7 @@ var toAddress = function (address) {
     if (isStrictAddress(address)) {
         return address;
     }
-    
+
     if (/^[0-9a-f]{40}$/.test(address)) {
         return '0x' + address;
     }
@@ -1071,7 +1071,7 @@ var toAddress = function (address) {
  *
  * @method isBigNumber
  * @param {Object}
- * @return {Boolean} 
+ * @return {Boolean}
  */
 var isBigNumber = function (object) {
     return object instanceof BigNumber ||
@@ -1080,7 +1080,7 @@ var isBigNumber = function (object) {
 
 /**
  * Returns true if object is string, otherwise false
- * 
+ *
  * @method isString
  * @param {Object}
  * @return {Boolean}
@@ -1131,12 +1131,12 @@ var isBoolean = function (object) {
  * @return {Boolean}
  */
 var isArray = function (object) {
-    return object instanceof Array; 
+    return object instanceof Array;
 };
 
 /**
  * Returns true if given string is valid json object
- * 
+ *
  * @method isJson
  * @param {String}
  * @return {Boolean}
@@ -3884,7 +3884,7 @@ module.exports = {
  * @date 2015
  */
 
-var abi = require('./node_modules/web3/lib/solidity/abi.js'); 
+var abi = require('./node_modules/web3/lib/solidity/abi.js');
 
 /**
  * This object should be used to evaluate natspec expression
@@ -3904,7 +3904,7 @@ var natspec = (function () {
             context[key] = obj[key];
         });
     }
-    
+
     /**
      *  Should be used to generate codes, which will be evaluated
      *
@@ -3943,14 +3943,14 @@ var natspec = (function () {
      */
     var getMethodInputParams = function (method, transaction) {
         // do it with output formatter (cause we have to decode)
-        var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10)); 
+        var params = abi.formatOutput(method.inputs, '0x' + transaction.params[0].data.slice(10));
 
         return method.inputs.reduce(function (acc, current, index) {
             acc[current.name] = params[index];
             return acc;
         }, {});
     };
-    
+
     /**
      * Should be called when we want to evaluate natspec expression
      * Replaces all natspec 'subexpressions' with evaluated value
@@ -3976,17 +3976,17 @@ var natspec = (function () {
                 evaluatedExpression += evaluatedPart;
                 lastIndex = pattern.lastIndex;
             }
-            
+
             evaluatedExpression += expression.slice(lastIndex);
         }
         catch (err) {
             throw new Error("Natspec evaluation failed, wrong input params");
         }
-    
+
         return evaluatedExpression;
     };
 
-    /** 
+    /**
      * Should be called to evaluate single expression
      * Is internally using javascript's 'eval' method
      *
@@ -3996,17 +3996,17 @@ var natspec = (function () {
      * @return {String} evaluated expression
      * @throws exception if method is not found or we are trying to evaluate input params that does not exists
      */
-	
+
 	var utils = require('../utils/utils');
-	
+
     var evaluateExpression = function (expression, call) {
         //var self = this;
         var context = {};
-        
+
         if (!!call) {
             try {
                 var method = getMethodWithName(call.abi, call.method);
-                var params = getMethodInputParams(method, call.transaction); 
+                var params = getMethodInputParams(method, call.transaction);
                 copyToContext(params, context);
             }
             catch (err) {
@@ -4026,9 +4026,9 @@ var natspec = (function () {
         return evaluatedExpression;
     };
 
-    /** 
+    /**
      * Safe version of evaluateExpression
-     * Instead of throwing an exception it returns it as a string 
+     * Instead of throwing an exception it returns it as a string
      *
      * @method evaluateExpressionSafe
      * @param {String} expression which should be evaluated
@@ -4037,7 +4037,7 @@ var natspec = (function () {
      */
     var evaluateExpressionSafe = function (expression, call) {
         try {
-            return evaluateExpression(expression, call);    
+            return evaluateExpression(expression, call);
         }
         catch (err) {
             return err.message;
@@ -4051,7 +4051,7 @@ var natspec = (function () {
 
 })();
 
-module.exports = natspec; 
+module.exports = natspec;
 
 
 },{"./node_modules/web3/lib/solidity/abi.js":2,"../utils/utils":7}]},{},[]);
