@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"golang.org/x/net/context"
 )
 
@@ -408,8 +409,7 @@ func NewOutbox(chbook *Chequebook, beneficiary common.Address) *Outbox {
 }
 
 // Issue creates cheque.
-func (self *Outbox) Issue(amount *big.Int) (interface{}, error) {
-	// TODO(fjl): the return type should be more descriptive.
+func (self *Outbox) Issue(amount *big.Int) (swap.Promise, error) {
 	return self.chequeBook.Issue(self.beneficiary, amount)
 }
 
@@ -546,8 +546,7 @@ func (self *Inbox) autoCash(cashInterval time.Duration) {
 
 // Receive is called to deposit the latest cheque to the incoming Inbox.
 // The given promise must be a *Cheque.
-func (self *Inbox) Receive(promise interface{}) (*big.Int, error) {
-	// TODO(fjl): the type of promise should be safer
+func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	ch := promise.(*Cheque)
 
 	defer self.lock.Unlock()
