@@ -1,0 +1,15 @@
+{
+  "name": "makegenesis",
+  "version": "0.0.0",
+  "dependencies": {
+  	"async": "^2.0.1",
+  	"ethereumjs-account": "^2.0.3",
+    "ethereumjs-block": "^1.2.2",
+    "ethereumjs-tx": "^1.1.2",
+    "ethereumjs-util": "^4.5.0",
+    "ethereumjs-vm": "^1.4.0",
+    "merkle-patricia-tree": "^2.1.2",
+    "rlp": "^2.0.0",
+    "solc": "0.3.5"
+  }
+}

@@ -1,8 +1,9 @@
-//go:generate abigen --sol contract/ens.sol	--pkg contract --out contract/ens.go
+//go:generate abigen --sol contract/ENS.sol --pkg contract --out contract/ens.go
+
 package ens
 
 import (
-	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -13,182 +14,150 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var qtypeChash = [32]byte{0x43, 0x48, 0x41, 0x53, 0x48}
-var rtypeChash = [16]byte{0x43, 0x48, 0x41, 0x53, 0x48}
-
 // swarm domain name registry and resolver
-// the ENS instance can be directly wrapped in rpc.Api
 type ENS struct {
-	transactOpts    *bind.TransactOpts
+	*contract.ENSSession
 	contractBackend bind.ContractBackend
-	rootAddress     common.Address
 }
 
-func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) *ENS {
-	return &ENS{
-		transactOpts:    transactOpts,
-		contractBackend: contractBackend,
-		rootAddress:     contractAddr,
-	}
-}
-
-func (self *ENS) DeployRegistrar() (common.Address, error) {
-	addr, _, _, err := contract.DeployOpenRegistrar(self.transactOpts, self.contractBackend)
-	if err != nil {
-		return common.Address{}, err
-	}
-	return addr, nil
-}
-
-func (self *ENS) DeployResolver() (common.Address, error) {
-	addr, _, _, err := contract.DeployPersonalResolver(self.transactOpts, self.contractBackend)
-	if err != nil {
-		return common.Address{}, err
-	}
-	return addr, nil
-}
-
-func (self *ENS) newResolver(contractAddr common.Address) (*contract.ResolverSession, error) {
-	resolver, err := contract.NewResolver(contractAddr, self.contractBackend)
+// NewENS creates a struct exposing convenient high-level operations for interacting with
+// the Ethereum Name Service.
+func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) (*ENS, error) {
+	ens, err := contract.NewENS(contractAddr, contractBackend)
 	if err != nil {
 		return nil, err
 	}
-	return &contract.ResolverSession{
-		Contract:     resolver,
-		TransactOpts: *self.transactOpts,
+
+	return &ENS{
+		&contract.ENSSession{
+			Contract:     ens,
+			TransactOpts: *transactOpts,
+		},
+		contractBackend,
 	}, nil
 }
 
-// resolve is a non-tranasctional call, returns hash as storage.Key
-func (self *ENS) Resolve(name string) (storage.Key, error) {
-	return self.resolveName(self.rootAddress, name)
-}
-
-func (self *ENS) nextResolver(resolver *contract.ResolverSession, nodeId [12]byte, label string) (*contract.ResolverSession, [12]byte, error) {
-	hash := crypto.Sha3Hash([]byte(label))
-	ret, err := resolver.FindResolver(nodeId, hash)
-	if err != nil {
-		err = fmt.Errorf("error resolving label '%v': %v", label, err)
-		return nil, [12]byte{}, err
-	}
-	if ret.Rcode != 0 {
-		err = fmt.Errorf("error resolving label '%v': got response code %v", label, ret.Rcode)
-		return nil, [12]byte{}, err
-	}
-	nodeId = ret.Rnode
-	resolver, err = self.newResolver(ret.Raddress)
-	if err != nil {
-		return nil, [12]byte{}, err
-	}
-
-	return resolver, nodeId, nil
-}
-
-func (self *ENS) findResolver(rootAddress common.Address, host string) (*contract.ResolverSession, [12]byte, error) {
-	resolver, err := self.newResolver(self.rootAddress)
-	if err != nil {
-		return nil, [12]byte{}, err
-	}
-
-	if len(host) == 0 {
-		return resolver, [12]byte{}, nil
-	}
-
-	labels := strings.Split(host, ".")
-
-	var nodeId [12]byte
-	for i := len(labels) - 1; i >= 0; i-- {
-		var err error
-		resolver, nodeId, err = self.nextResolver(resolver, nodeId, labels[i])
-		if err != nil {
-			return nil, [12]byte{}, err
-		}
-	}
-
-	return resolver, nodeId, nil
-}
-
-func (self *ENS) resolveName(rootAddress common.Address, host string) (storage.Key, error) {
-	resolver, nodeId, err := self.findResolver(rootAddress, host)
+// DeployENS deploys an instance of the ENS nameservice, with a 'first in first served' root registrar.
+func DeployENS(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (*ENS, error) {
+	// Deploy the ENS registry
+	ensAddr, _, _, err := contract.DeployENS(transactOpts, contractBackend, transactOpts.From)
 	if err != nil {
 		return nil, err
 	}
 
-	ret, err := resolver.Resolve(nodeId, qtypeChash, 0)
+	ens, err := NewENS(transactOpts, ensAddr, contractBackend)
 	if err != nil {
-		return nil, fmt.Errorf("error looking up RR on '%v': %v", host, err)
+		return nil, err
 	}
-	if ret.Rcode != 0 {
-		return nil, fmt.Errorf("error looking up RR on '%v': got response code %v", host, ret.Rcode)
+
+	// Deploy the registrar
+	regAddr, _, _, err := contract.DeployFIFSRegistrar(transactOpts, contractBackend, ensAddr, [32]byte{})
+	if err != nil {
+		return nil, err
 	}
-	return storage.Key(ret.Data[:]), nil
+
+	// Set the registrar as owner of the ENS root
+	_, err = ens.SetOwner([32]byte{}, regAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return ens, nil
 }
 
-/**
- * Registers a new domain name for the caller, making them the owner of the new name.
- */
-func (self *ENS) Register(name string, resolverAddress common.Address) (*types.Transaction, error) {
-	// Find the resolver that we should register with (the one that controls the parent domain)
+func ensParentNode(name string) (common.Hash, common.Hash) {
 	parts := strings.SplitN(name, ".", 2)
-
-	baseName := ""
-	if len(parts) > 1 {
-		baseName = parts[1]
-	}
-
-	resolver, nodeId, err := self.findResolver(self.rootAddress, baseName)
-	if err != nil {
-		return nil, err
-	}
-	if nodeId != [12]byte{} {
-		return nil, fmt.Errorf("cannot register domains on %v: not a root node", baseName)
-	}
-
-	// Send it a register transaction
-	hash := crypto.Sha3Hash([]byte(parts[0]))
-	return resolver.Register(hash, resolverAddress, [12]byte{})
-}
-
-/**
- * Steps through name components until it finds a PersonalResolver contract.
- * Returns the resolver, the node ID, and the remaining name components.
- */
-func (self *ENS) findPersonalResolver(name string) (*contract.ResolverSession, [12]byte, string, error) {
-	var nodeId [12]byte
-
-	resolver, err := self.newResolver(self.rootAddress)
-	if err != nil {
-		return nil, [12]byte{}, "", err
-	}
-
-	labels := strings.Split(name, ".")
-
-	for i := len(labels) - 1; i >= 0; i-- {
-		if personal, _ := resolver.IsPersonalResolver(); personal {
-			return resolver, nodeId, strings.Join(labels[0:i+1], "."), nil
-		}
-
-		resolver, nodeId, err = self.nextResolver(resolver, nodeId, labels[i])
-		if err != nil {
-			return nil, [12]byte{}, "", err
-		}
-	}
-
-	if personal, _ := resolver.IsPersonalResolver(); !personal {
-		return nil, [12]byte{}, "", fmt.Errorf("Personal resolver not found in any name component")
+	label := crypto.Keccak256Hash([]byte(parts[0]))
+	if len(parts) == 1 {
+		return [32]byte{}, label
 	} else {
-		return resolver, nodeId, "", nil
+		parentNode, parentLabel := ensParentNode(parts[1])
+		return crypto.Keccak256Hash(parentNode[:], parentLabel[:]), label
 	}
 }
 
-/**
- * Sets the content hash associated with a name.
- */
-func (self *ENS) SetContentHash(name string, hash common.Hash) (*types.Transaction, error) {
-	resolver, nodeId, name, err := self.findPersonalResolver(name)
+func ensNode(name string) common.Hash {
+	parentNode, parentLabel := ensParentNode(name)
+	return crypto.Keccak256Hash(parentNode[:], parentLabel[:])
+}
+
+func (self *ENS) getResolver(node [32]byte) (*contract.PublicResolverSession, error) {
+	resolverAddr, err := self.Resolver(node)
 	if err != nil {
 		return nil, err
 	}
 
-	return resolver.SetRR(nodeId, name, rtypeChash, 3600, 20, [32]byte(hash))
+	resolver, err := contract.NewPublicResolver(resolverAddr, self.contractBackend)
+	if err != nil {
+		return nil, err
+	}
+
+	return &contract.PublicResolverSession{
+		Contract:     resolver,
+		TransactOpts: self.TransactOpts,
+	}, nil
+}
+
+func (self *ENS) getRegistrar(node [32]byte) (*contract.FIFSRegistrarSession, error) {
+	registrarAddr, err := self.Owner(node)
+	if err != nil {
+		return nil, err
+	}
+
+	registrar, err := contract.NewFIFSRegistrar(registrarAddr, self.contractBackend)
+	if err != nil {
+		return nil, err
+	}
+
+	return &contract.FIFSRegistrarSession{
+		Contract:     registrar,
+		TransactOpts: self.TransactOpts,
+	}, nil
+}
+
+// Resolve is a non-transactional call that returns the content hash associated with a name.
+func (self *ENS) Resolve(name string) (storage.Key, error) {
+	node := ensNode(name)
+
+	resolver, err := self.getResolver(node)
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := resolver.Content(node)
+	if err != nil {
+		return nil, err
+	}
+
+	return storage.Key(ret[:]), nil
+}
+
+// Register registers a new domain name for the caller, making them the owner of the new name.
+// Only works if the registrar for the parent domain implements the FIFS registrar protocol.
+func (self *ENS) Register(name string) (*types.Transaction, error) {
+	parentNode, label := ensParentNode(name)
+
+	registrar, err := self.getRegistrar(parentNode)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := self.TransactOpts
+	opts.GasLimit = big.NewInt(200000)
+	return registrar.Contract.Register(&opts, label, self.TransactOpts.From)
+}
+
+// SetContentHash sets the content hash associated with a name. Only works if the caller
+// owns the name, and the associated resolver implements a `setContent` function.
+func (self *ENS) SetContentHash(name string, hash common.Hash) (*types.Transaction, error) {
+	node := ensNode(name)
+
+	resolver, err := self.getResolver(node)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := self.TransactOpts
+	opts.GasLimit = big.NewInt(200000)
+	return resolver.Contract.SetContent(&opts, node, hash)
 }
