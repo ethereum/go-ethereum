@@ -52,6 +52,7 @@ var (
 		"trie/arc.go",
 		// don't license generated files
 		"contracts/ens/contract/",
+		"contracts/release/contract.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
