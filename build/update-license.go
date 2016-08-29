@@ -50,6 +50,8 @@ var (
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
 		"crypto/secp256k1/curve.go",
 		"trie/arc.go",
+		// don't license generated files
+		"contracts/ens/contract/",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
