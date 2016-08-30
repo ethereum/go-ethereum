@@ -23,7 +23,6 @@ package whisper5
 import (
 	crand "crypto/rand"
 	"errors"
-	mrand "math/rand"
 	"time"
 
 	"crypto/aes"
@@ -126,7 +125,10 @@ func (self *Message) Padding() []byte {
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewMessage(payload []byte) *Message {
 	// Construct an initial flag set: no signature, no padding, other bits random
-	flags := byte(mrand.Intn(256))
+	buf := make([]byte, 1)
+	crand.Read(buf)
+
+	flags := buf[0]
 	flags &= ^signatureFlag
 	flags &= ^paddingFlag
 
@@ -158,7 +160,7 @@ func (self *Message) appendPadding(options Options) {
 	if odd > 0 {
 		padSize := maxPadLength - odd
 		buf := make([]byte, padSize)
-		mrand.Read(buf)
+		crand.Read(buf)
 		if options.Pad != nil {
 			copy(buf, options.Pad)
 		}

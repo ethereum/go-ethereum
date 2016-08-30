@@ -58,4 +58,7 @@ const (
 	DefaultPoW = 50 * time.Millisecond
 )
 
+// Topic represents a cryptographically secure, probabilistic partial
+// classifications of a message, determined as the first (left) 4 bytes of the
+// SHA3 hash of some arbitrary data given by the original author of the message.
 type TopicType [4]byte
