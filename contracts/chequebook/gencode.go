@@ -59,9 +59,7 @@ func main() {
 	}
 
 	// Write the output file.
-	content := fmt.Sprintf(`// TODO: insert license header
-
-package contract
+	content := fmt.Sprintf(`package contract
 
 // ContractDeployedCode is used to detect suicides. This constant needs to be
 // updated when the contract code is changed.
