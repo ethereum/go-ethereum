@@ -207,7 +207,9 @@ func (w *Writer) Write(data []byte) (n int, err error) {
 			return n, werr
 		}
 		src = src[nSrc:]
-		if w.n > 0 && len(src) <= n {
+		if w.n == 0 {
+			n += nSrc
+		} else if len(src) <= n {
 			// Enough bytes from w.src have been consumed. We make src point
 			// to data instead to reduce the copying.
 			w.n = 0
@@ -216,35 +218,46 @@ func (w *Writer) Write(data []byte) (n int, err error) {
 			if n < len(data) && (err == nil || err == ErrShortSrc) {
 				continue
 			}
-		} else {
-			n += nSrc
 		}
-		switch {
-		case err == ErrShortDst && (nDst > 0 || nSrc > 0):
-		case err == ErrShortSrc && len(src) < len(w.src):
-			m := copy(w.src, src)
-			// If w.n > 0, bytes from data were already copied to w.src and n
-			// was already set to the number of bytes consumed.
-			if w.n == 0 {
-				n += m
+		switch err {
+		case ErrShortDst:
+			// This error is okay as long as we are making progress.
+			if nDst > 0 || nSrc > 0 {
+				continue
 			}
-			w.n = m
-			return n, nil
-		case err == nil && w.n > 0:
-			return n, errInconsistentByteCount
-		default:
-			return n, err
+		case ErrShortSrc:
+			if len(src) < len(w.src) {
+				m := copy(w.src, src)
+				// If w.n > 0, bytes from data were already copied to w.src and n
+				// was already set to the number of bytes consumed.
+				if w.n == 0 {
+					n += m
+				}
+				w.n = m
+				err = nil
+			} else if nDst > 0 || nSrc > 0 {
+				// Not enough buffer to store the remainder. Keep processing as
+				// long as there is progress. Without this case, transforms that
+				// require a lookahead larger than the buffer may result in an
+				// error. This is not something one may expect to be common in
+				// practice, but it may occur when buffers are set to small
+				// sizes during testing.
+				continue
+			}
+		case nil:
+			if w.n > 0 {
+				err = errInconsistentByteCount
+			}
 		}
+		return n, err
 	}
 }
 
 // Close implements the io.Closer interface.
 func (w *Writer) Close() error {
-	for src := w.src[:w.n]; len(src) > 0; {
+	src := w.src[:w.n]
+	for {
 		nDst, nSrc, err := w.t.Transform(w.dst, src, true)
-		if nDst == 0 {
-			return err
-		}
 		if _, werr := w.w.Write(w.dst[:nDst]); werr != nil {
 			return werr
 		}
@@ -253,7 +266,6 @@ func (w *Writer) Close() error {
 		}
 		src = src[nSrc:]
 	}
-	return nil
 }
 
 type nop struct{ NopResetter }
@@ -493,7 +505,9 @@ func (t removeF) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err err
 // of b to the start of the new slice.
 func grow(b []byte, n int) []byte {
 	m := len(b)
-	if m <= 256 {
+	if m <= 32 {
+		m = 64
+	} else if m <= 256 {
 		m *= 2
 	} else {
 		m += m >> 1
@@ -508,11 +522,14 @@ const initialBufSize = 128
 // String returns a string with the result of converting s[:n] using t, where
 // n <= len(s). If err == nil, n will be len(s). It calls Reset on t.
 func String(t Transformer, s string) (result string, n int, err error) {
-	if s == "" {
-		return "", 0, nil
-	}
-
 	t.Reset()
+	if s == "" {
+		// Fast path for the common case for empty input. Results in about a
+		// 86% reduction of running time for BenchmarkStringLowerEmpty.
+		if _, _, err := t.Transform(nil, nil, true); err == nil {
+			return "", 0, nil
+		}
+	}
 
 	// Allocate only once. Note that both dst and src escape when passed to
 	// Transform.
@@ -520,74 +537,88 @@ func String(t Transformer, s string) (result string, n int, err error) {
 	dst := buf[:initialBufSize:initialBufSize]
 	src := buf[initialBufSize : 2*initialBufSize]
 
-	// Avoid allocation if the transformed string is identical to the original.
-	// After this loop, pDst will point to the furthest point in s for which it
-	// could be detected that t gives equal results, src[:nSrc] will
-	// indicated the last processed chunk of s for which the output is not equal
-	// and dst[:nDst] will be the transform of this chunk.
-	var nDst, nSrc int
-	pDst := 0 // Used as index in both src and dst in this loop.
+	// The input string s is transformed in multiple chunks (starting with a
+	// chunk size of initialBufSize). nDst and nSrc are per-chunk (or
+	// per-Transform-call) indexes, pDst and pSrc are overall indexes.
+	nDst, nSrc := 0, 0
+	pDst, pSrc := 0, 0
+
+	// pPrefix is the length of a common prefix: the first pPrefix bytes of the
+	// result will equal the first pPrefix bytes of s. It is not guaranteed to
+	// be the largest such value, but if pPrefix, len(result) and len(s) are
+	// all equal after the final transform (i.e. calling Transform with atEOF
+	// being true returned nil error) then we don't need to allocate a new
+	// result string.
+	pPrefix := 0
 	for {
-		n := copy(src, s[pDst:])
-		nDst, nSrc, err = t.Transform(dst, src[:n], pDst+n == len(s))
+		// Invariant: pDst == pPrefix && pSrc == pPrefix.
 
-		// Note 1: we will not enter the loop with pDst == len(s) and we will
-		// not end the loop with it either. So if nSrc is 0, this means there is
-		// some kind of error from which we cannot recover given the current
-		// buffer sizes. We will give up in this case.
-		// Note 2: it is not entirely correct to simply do a bytes.Equal as
-		// a Transformer may buffer internally. It will work in most cases,
-		// though, and no harm is done if it doesn't work.
-		// TODO:  let transformers implement an optional Spanner interface, akin
-		// to norm's QuickSpan. This would even allow us to avoid any allocation.
-		if nSrc == 0 || !bytes.Equal(dst[:nDst], src[:nSrc]) {
-			break
-		}
-
-		if pDst += nDst; pDst == len(s) {
-			return s, pDst, nil
-		}
-	}
-
-	// Move the bytes seen so far to dst.
-	pSrc := pDst + nSrc
-	if pDst+nDst <= initialBufSize {
-		copy(dst[pDst:], dst[:nDst])
-	} else {
-		b := make([]byte, len(s)+nDst-nSrc)
-		copy(b[pDst:], dst[:nDst])
-		dst = b
-	}
-	copy(dst, s[:pDst])
-	pDst += nDst
-
-	if err != nil && err != ErrShortDst && err != ErrShortSrc {
-		return string(dst[:pDst]), pSrc, err
-	}
-
-	// Complete the string with the remainder.
-	for {
 		n := copy(src, s[pSrc:])
-		nDst, nSrc, err = t.Transform(dst[pDst:], src[:n], pSrc+n == len(s))
+		nDst, nSrc, err = t.Transform(dst, src[:n], pSrc+n == len(s))
 		pDst += nDst
 		pSrc += nSrc
 
-		switch err {
-		case nil:
-			if pSrc == len(s) {
-				return string(dst[:pDst]), pSrc, nil
+		// TODO:  let transformers implement an optional Spanner interface, akin
+		// to norm's QuickSpan. This would even allow us to avoid any allocation.
+		if !bytes.Equal(dst[:nDst], src[:nSrc]) {
+			break
+		}
+		pPrefix = pSrc
+		if err == ErrShortDst {
+			// A buffer can only be short if a transformer modifies its input.
+			break
+		} else if err == ErrShortSrc {
+			if nSrc == 0 {
+				// No progress was made.
+				break
 			}
-		case ErrShortDst:
-			// Do not grow as long as we can make progress. This may avoid
-			// excessive allocations.
+			// Equal so far and !atEOF, so continue checking.
+		} else if err != nil || pPrefix == len(s) {
+			return string(s[:pPrefix]), pPrefix, err
+		}
+	}
+	// Post-condition: pDst == pPrefix + nDst && pSrc == pPrefix + nSrc.
+
+	// We have transformed the first pSrc bytes of the input s to become pDst
+	// transformed bytes. Those transformed bytes are discontiguous: the first
+	// pPrefix of them equal s[:pPrefix] and the last nDst of them equal
+	// dst[:nDst]. We copy them around, into a new dst buffer if necessary, so
+	// that they become one contiguous slice: dst[:pDst].
+	if pPrefix != 0 {
+		newDst := dst
+		if pDst > len(newDst) {
+			newDst = make([]byte, len(s)+nDst-nSrc)
+		}
+		copy(newDst[pPrefix:pDst], dst[:nDst])
+		copy(newDst[:pPrefix], s[:pPrefix])
+		dst = newDst
+	}
+
+	// Prevent duplicate Transform calls with atEOF being true at the end of
+	// the input. Also return if we have an unrecoverable error.
+	if (err == nil && pSrc == len(s)) ||
+		(err != nil && err != ErrShortDst && err != ErrShortSrc) {
+		return string(dst[:pDst]), pSrc, err
+	}
+
+	// Transform the remaining input, growing dst and src buffers as necessary.
+	for {
+		n := copy(src, s[pSrc:])
+		nDst, nSrc, err := t.Transform(dst[pDst:], src[:n], pSrc+n == len(s))
+		pDst += nDst
+		pSrc += nSrc
+
+		// If we got ErrShortDst or ErrShortSrc, do not grow as long as we can
+		// make progress. This may avoid excessive allocations.
+		if err == ErrShortDst {
 			if nDst == 0 {
 				dst = grow(dst, pDst)
 			}
-		case ErrShortSrc:
+		} else if err == ErrShortSrc {
 			if nSrc == 0 {
 				src = grow(src, 0)
 			}
-		default:
+		} else if err != nil || pSrc == len(s) {
 			return string(dst[:pDst]), pSrc, err
 		}
 	}
