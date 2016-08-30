@@ -51,6 +51,7 @@ var (
 		"crypto/secp256k1/curve.go",
 		"trie/arc.go",
 		// don't license generated files
+		"contracts/chequebook/contract/",
 		"contracts/ens/contract/",
 	}
 

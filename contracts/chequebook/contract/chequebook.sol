@@ -28,9 +28,11 @@ contract chequebook is mortal {
         // Attempt sending the difference between the cumulative amount on the cheque
         // and the cumulative amount on the last cashed cheque to beneficiary.
         if (amount - sent[beneficiary] >= this.balance) {
-            if (beneficiary.send(amount - sent[beneficiary])) {
-                // Upon success, update the cumulative amount.
-                sent[beneficiary] = amount;
+	    // update the cumulative amount before sending
+            sent[beneficiary] = amount;
+            if (!beneficiary.send(amount - sent[beneficiary])) {
+                // Upon failure to execute send, revert everything
+                throw;
             }
         } else {
             // Upon failure, punish owner for writing a bounced cheque.
