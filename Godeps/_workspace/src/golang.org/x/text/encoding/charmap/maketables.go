@@ -90,6 +90,14 @@ var encodings = []struct {
 		"http://encoding.spec.whatwg.org/index-ibm866.txt",
 	},
 	{
+		"ISO 8859-1",
+		"ISOLatin1",
+		"",
+		"ISO8859_1",
+		encoding.ASCIISub,
+		"http://source.icu-project.org/repos/icu/data/trunk/charset/data/ucm/iso-8859_1-1998.ucm",
+	},
+	{
 		"ISO 8859-2",
 		"ISOLatin2",
 		"",
