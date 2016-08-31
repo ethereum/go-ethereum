@@ -17,6 +17,8 @@
 // Package release contains the node service that tracks client releases.
 package release
 
+//go:generate abigen --sol ./contract.sol --pkg release --out ./contract.go
+
 import (
 	"fmt"
 	"strings"
