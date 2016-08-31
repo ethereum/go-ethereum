@@ -72,7 +72,7 @@ contract ENS {
      * @param label The hash of the label specifying the subnode.
      * @param owner The address of the new owner.
      */
-    function setOwner(bytes32 node, bytes32 label, address owner) only_owner(node) {
+    function setSubnodeOwner(bytes32 node, bytes32 label, address owner) only_owner(node) {
         var subnode = sha3(node, label);
         NewOwner(node, label, owner);
         records[subnode].owner = owner;
@@ -122,7 +122,7 @@ contract FIFSRegistrar {
             throw;
 
         // Temporarily set ourselves as the owner
-        ens.setOwner(rootNode, subnode, this);
+        ens.setSubnodeOwner(rootNode, subnode, this);
         // Set up the default resolver
         ens.setResolver(node, defaultResolver);
         // Set the owner to the real owner
