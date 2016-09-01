@@ -43,11 +43,12 @@ type Envelope struct {
 	EnvNonce uint64
 
 	hash common.Hash // Cached hash of the envelope to avoid rehashing every time
+	pow  int         // Message-specific PoW as described in the Whisper specification
 }
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
 // included into an envelope for network forwarding.
-func NewEnvelope(ttl time.Duration, topic TopicType, salt []byte, aesNonce []byte, msg *Message) *Envelope {
+func NewEnvelope(ttl time.Duration, topic TopicType, salt []byte, aesNonce []byte, msg *SentMessage) *Envelope {
 	return &Envelope{
 		Expiry:   uint32(time.Now().Add(ttl).Unix()),
 		TTL:      uint32(ttl.Seconds()),
@@ -59,16 +60,24 @@ func NewEnvelope(ttl time.Duration, topic TopicType, salt []byte, aesNonce []byt
 	}
 }
 
+func (self *Envelope) isSymmetric() bool {
+	return self.AESNonce != nil
+}
+
+func (self *Envelope) isAsymmetric() bool {
+	return !self.isSymmetric()
+}
+
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
-func (self *Envelope) Seal(pow time.Duration) {
-	self.Expiry += uint32(pow.Seconds()) // adjust for the duration of Seal() execution
+func (self *Envelope) Seal(dur time.Duration) {
+	self.Expiry += uint32(dur.Seconds()) // adjust for the duration of Seal() execution
 
 	buf := make([]byte, 64)
 	h := crypto.Keccak256(self.rlpWithoutNonce())
 	copy(buf[:32], h)
 
-	finish, bestBit := time.Now().Add(pow).UnixNano(), 0
+	finish, bestBit := time.Now().Add(dur).UnixNano(), 0
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint64(buf[56:], nonce)
@@ -107,7 +116,8 @@ func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	// The decoding of Envelope uses the struct fields but also needs
 	// to compute the hash of the whole RLP-encoded envelope. This
 	// type has the same structure as Envelope but is not an
-	// rlp.Decoder (does not implement DecodeRLP() function).
+	// rlp.Decoder (does not implement DecodeRLP function).
+	// Only public members will be encoded.
 	type rlpenv Envelope
 	if err := rlp.DecodeBytes(raw, (*rlpenv)(self)); err != nil {
 		return err
@@ -117,39 +127,37 @@ func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 }
 
 // OpenAsymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
-func (self *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*Message, error) {
-	message := &Message{
-		Raw: self.Data,
-		//Sent: time.Unix(int64(self.Expiry-self.TTL), 0),
-		//TTL:  time.Duration(self.TTL) * time.Second,
-		//Hash: self.Hash(),
-	}
-
+func (self *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, error) {
+	message := &ReceivedMessage{Raw: self.Data}
 	err := message.decryptAsymmetric(key)
 	switch err {
 	case nil:
 		return message, nil
-
 	case ecies.ErrInvalidPublicKey: // addressed to somebody else
 		return nil, err
-
 	default:
 		return nil, fmt.Errorf("unable to open envelope, decrypt failed: %v", err)
 	}
 }
 
 // OpenSymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
-func (self *Envelope) OpenSymmetric(key []byte) (msg *Message, err error) {
-	msg = &Message{
-		Raw: self.Data,
-		//Sent: time.Unix(int64(self.Expiry-self.TTL), 0),
-		//TTL:  time.Duration(self.TTL) * time.Second,
-		//Hash: self.Hash(),
-	}
-
+func (self *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
+	msg = &ReceivedMessage{Raw: self.Data}
 	err = msg.decryptSymmetric(key, self.Salt, self.AESNonce)
 	if err != nil {
 		msg = nil
 	}
 	return
+}
+
+// Open tries to decrypt an envelope
+func (self *Envelope) Open(watcher *Filter) *ReceivedMessage {
+	if self.isAsymmetric() {
+		msg, _ := self.OpenAsymmetric(watcher.KeyAsym)
+		return msg
+	} else if self.isSymmetric() {
+		msg, _ := self.OpenSymmetric(watcher.KeySym)
+		return msg
+	}
+	return nil
 }
