@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 	"unicode"
@@ -250,5 +251,13 @@ func NewID() ID {
 			val >>= 8
 		}
 	}
-	return ID("0x" + hex.EncodeToString(id))
+
+	rpcId := hex.EncodeToString(id)
+	// rpc ID's are RPC quantities, no leading zero's and 0 is 0x0
+	rpcId = strings.TrimLeft(rpcId, "0")
+	if rpcId == "" {
+		rpcId = "0"
+	}
+
+	return ID("0x" + rpcId)
 }
