@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -427,49 +426,58 @@ func (s *TxByPrice) Pop() interface{} {
 	return x
 }
 
-// SortByPriceAndNonce sorts the transactions by price in such a way that the
-// nonce orderings within a single account are maintained.
+// TransactionsByPriceAndNonce represents a set of transactions that can return
+// transactions in a profit-maximising sorted order, while supporting removing
+// entire batches of transactions for non-executable accounts.
+type TransactionsByPriceAndNonce struct {
+	txs   map[common.Address]Transactions // Per account nonce-sorted list of transactions
+	heads TxByPrice                       // Next transaction for each unique account (price heap)
+}
+
+// NewTransactionsByPriceAndNonce creates a transaction set that can retrieve
+// price sorted transactions in a nonce-honouring way.
 //
-// Note, this is not as trivial as it seems from the first look as there are three
-// different criteria that need to be taken into account (price, nonce, account
-// match), which cannot be done with any plain sorting method, as certain items
-// cannot be compared without context.
-//
-// This method first sorts the separates the list of transactions into individual
-// sender accounts and sorts them by nonce. After the account nonce ordering is
-// satisfied, the results are merged back together by price, always comparing only
-// the head transaction from each account. This is done via a heap to keep it fast.
-func SortByPriceAndNonce(txs []*Transaction) {
-	// Separate the transactions by account and sort by nonce
-	byNonce := make(map[common.Address][]*Transaction)
-	for _, tx := range txs {
-		acc, _ := tx.From() // we only sort valid txs so this cannot fail
-		byNonce[acc] = append(byNonce[acc], tx)
-	}
-	for _, accTxs := range byNonce {
-		sort.Sort(TxByNonce(accTxs))
-	}
+// Note, the input map is reowned so the caller should not interact any more with
+// if after providng it to the constructor.
+func NewTransactionsByPriceAndNonce(txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
 	// Initialize a price based heap with the head transactions
-	byPrice := make(TxByPrice, 0, len(byNonce))
-	for acc, accTxs := range byNonce {
-		byPrice = append(byPrice, accTxs[0])
-		byNonce[acc] = accTxs[1:]
+	heads := make(TxByPrice, 0, len(txs))
+	for acc, accTxs := range txs {
+		heads = append(heads, accTxs[0])
+		txs[acc] = accTxs[1:]
 	}
-	heap.Init(&byPrice)
+	heap.Init(&heads)
 
-	// Merge by replacing the best with the next from the same account
-	txs = txs[:0]
-	for len(byPrice) > 0 {
-		// Retrieve the next best transaction by price
-		best := heap.Pop(&byPrice).(*Transaction)
-
-		// Push in its place the next transaction from the same account
-		acc, _ := best.From() // we only sort valid txs so this cannot fail
-		if accTxs, ok := byNonce[acc]; ok && len(accTxs) > 0 {
-			heap.Push(&byPrice, accTxs[0])
-			byNonce[acc] = accTxs[1:]
-		}
-		// Accumulate the best priced transaction
-		txs = append(txs, best)
+	// Assemble and return the transaction set
+	return &TransactionsByPriceAndNonce{
+		txs:   txs,
+		heads: heads,
 	}
+}
+
+// Peek returns the next transaction by price.
+func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
+	if len(t.heads) == 0 {
+		return nil
+	}
+	return t.heads[0]
+}
+
+// Shift replaces the current best head with the next one from the same account.
+func (t *TransactionsByPriceAndNonce) Shift() {
+	acc, _ := t.heads[0].From() // we only sort valid txs so this cannot fail
+
+	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
+		t.heads[0], t.txs[acc] = txs[0], txs[1:]
+		heap.Fix(&t.heads, 0)
+	} else {
+		heap.Pop(&t.heads)
+	}
+}
+
+// Pop removes the best transaction, *not* replacing it with the next one from
+// the same account. This should be used when a transaction cannot be executed
+// and hence all subsequent ones should be discarded from the same account.
+func (t *TransactionsByPriceAndNonce) Pop() {
+	heap.Pop(&t.heads)
 }

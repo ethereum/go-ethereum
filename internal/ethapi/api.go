@@ -100,32 +100,26 @@ func NewPublicTxPoolAPI(b Backend) *PublicTxPoolAPI {
 }
 
 // Content returns the transactions contained within the transaction pool.
-func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string][]*RPCTransaction {
-	content := map[string]map[string]map[string][]*RPCTransaction{
-		"pending": make(map[string]map[string][]*RPCTransaction),
-		"queued":  make(map[string]map[string][]*RPCTransaction),
+func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransaction {
+	content := map[string]map[string]map[string]*RPCTransaction{
+		"pending": make(map[string]map[string]*RPCTransaction),
+		"queued":  make(map[string]map[string]*RPCTransaction),
 	}
 	pending, queue := s.b.TxPoolContent()
 
 	// Flatten the pending transactions
-	for account, batches := range pending {
-		dump := make(map[string][]*RPCTransaction)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], newRPCPendingTransaction(tx))
-			}
+	for account, txs := range pending {
+		dump := make(map[string]*RPCTransaction)
+		for nonce, tx := range txs {
+			dump[fmt.Sprintf("%d", nonce)] = newRPCPendingTransaction(tx)
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
-	for account, batches := range queue {
-		dump := make(map[string][]*RPCTransaction)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], newRPCPendingTransaction(tx))
-			}
+	for account, txs := range queue {
+		dump := make(map[string]*RPCTransaction)
+		for nonce, tx := range txs {
+			dump[fmt.Sprintf("%d", nonce)] = newRPCPendingTransaction(tx)
 		}
 		content["queued"][account.Hex()] = dump
 	}
@@ -143,10 +137,10 @@ func (s *PublicTxPoolAPI) Status() map[string]*rpc.HexNumber {
 
 // Inspect retrieves the content of the transaction pool and flattens it into an
 // easily inspectable list.
-func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string][]string {
-	content := map[string]map[string]map[string][]string{
-		"pending": make(map[string]map[string][]string),
-		"queued":  make(map[string]map[string][]string),
+func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
+	content := map[string]map[string]map[string]string{
+		"pending": make(map[string]map[string]string),
+		"queued":  make(map[string]map[string]string),
 	}
 	pending, queue := s.b.TxPoolContent()
 
@@ -158,24 +152,18 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string][]string {
 		return fmt.Sprintf("contract creation: %v wei + %v × %v gas", tx.Value(), tx.Gas(), tx.GasPrice())
 	}
 	// Flatten the pending transactions
-	for account, batches := range pending {
-		dump := make(map[string][]string)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], format(tx))
-			}
+	for account, txs := range pending {
+		dump := make(map[string]string)
+		for nonce, tx := range txs {
+			dump[fmt.Sprintf("%d", nonce)] = format(tx)
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
-	for account, batches := range queue {
-		dump := make(map[string][]string)
-		for nonce, txs := range batches {
-			nonce := fmt.Sprintf("%d", nonce)
-			for _, tx := range txs {
-				dump[nonce] = append(dump[nonce], format(tx))
-			}
+	for account, txs := range queue {
+		dump := make(map[string]string)
+		for nonce, tx := range txs {
+			dump[fmt.Sprintf("%d", nonce)] = format(tx)
 		}
 		content["queued"][account.Hex()] = dump
 	}
