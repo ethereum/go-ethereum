@@ -33,9 +33,15 @@ import (
 // sign the transaction before submission.
 type SignerFn func(common.Address, *types.Transaction) (*types.Transaction, error)
 
+// GasTunerFn is a callback function to modify the gas limit of a transaction
+// estimated by the backend node. It's purpose is to allow providing some wiggle
+// room for approximate estimations and/or concurrent state changes.
+type GasTunerFn func(gas *big.Int) *big.Int
+
 // CallOpts is the collection of options to fine tune a contract call request.
 type CallOpts struct {
-	Pending bool // Whether to operate on the pending state or the last known one
+	Pending  bool     // Whether to operate on the pending state or the last known one
+	GasLimit *big.Int // Gas limit allowance of the call operation (nil = use backend default)
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
@@ -47,9 +53,10 @@ type TransactOpts struct {
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn       // Method to use for signing the transaction (mandatory)
 
-	Value    *big.Int // Funds to transfer along along the transaction (nil = 0 = no funds)
-	GasPrice *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
-	GasLimit *big.Int // Gas limit to set for the transaction execution (nil = estimate + 10%)
+	Value    *big.Int   // Funds to transfer along along the transaction (nil = 0 = no funds)
+	GasPrice *big.Int   // Gas price to use for the transaction execution (nil = gas price oracle)
+	GasLimit *big.Int   // Gas limit to set for the transaction execution (nil = estimate)
+	GasTuner GasTunerFn // Modifier for the gas limit estimated by the node (nil = identity)
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
@@ -108,7 +115,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		return err
 	}
 	var (
-		msg    = ethereum.CallMsg{To: &c.address, Data: input}
+		msg    = ethereum.CallMsg{To: &c.address, Data: input, Gas: opts.GasLimit}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte
@@ -202,6 +209,12 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		gasLimit, err = c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to estimate gas needed: %v", err)
+		}
+		// If custom gas estimation post-processing was requested, execute it
+		if opts.GasTuner != nil {
+			if gasLimit = opts.GasTuner(gasLimit); gasLimit == nil {
+				return nil, fmt.Errorf("gas tuner returned nil")
+			}
 		}
 	}
 	// Create the transaction, sign it and schedule it for execution
