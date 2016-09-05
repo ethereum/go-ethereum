@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -80,13 +79,16 @@ OPTIONS:
 }
 
 // NewApp creates an app with sane defaults.
-func NewApp(version, usage string) *cli.App {
+func NewApp(gitCommit, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
 	//app.Authors = nil
 	app.Email = ""
-	app.Version = version
+	app.Version = Version
+	if gitCommit != "" {
+		app.Version += "-" + gitCommit[:8]
+	}
 	app.Usage = usage
 	return app
 }
@@ -608,13 +610,18 @@ func MakePasswordList(ctx *cli.Context) []string {
 }
 
 // MakeNode configures a node with no services from command line flags.
-func MakeNode(ctx *cli.Context, name, version string) *node.Node {
+func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
+	vsn := Version
+	if gitCommit != "" {
+		vsn += "-" + gitCommit[:8]
+	}
+
 	config := &node.Config{
 		DataDir:           MustMakeDataDir(ctx),
 		KeyStoreDir:       ctx.GlobalString(KeyStoreDirFlag.Name),
 		UseLightweightKDF: ctx.GlobalBool(LightKDFFlag.Name),
 		PrivateKey:        MakeNodeKey(ctx),
-		Name:              MakeNodeName(name, version, ctx),
+		Name:              MakeNodeName(name, vsn, ctx),
 		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name),
 		BootstrapNodes:    MakeBootstrapNodes(ctx),
 		ListenAddr:        MakeListenAddress(ctx),
@@ -648,7 +655,7 @@ func MakeNode(ctx *cli.Context, name, version string) *node.Node {
 
 // RegisterEthService configures eth.Ethereum from command line flags and adds it to the
 // given node.
-func RegisterEthService(ctx *cli.Context, stack *node.Node, relconf release.Config, extra []byte) {
+func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	// Avoid conflicting network flags
 	networks, netFlags := 0, []cli.BoolFlag{DevModeFlag, TestNetFlag, OlympicFlag}
 	for _, flag := range netFlags {
@@ -722,11 +729,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, relconf release.Conf
 		return eth.New(ctx, ethConf)
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
-	}
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return release.NewReleaseService(ctx, relconf)
-	}); err != nil {
-		Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
 }
 
