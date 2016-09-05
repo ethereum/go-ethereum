@@ -168,7 +168,7 @@ nodes.
 )
 
 func accountList(ctx *cli.Context) error {
-	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	for i, acct := range stack.AccountManager().Accounts() {
 		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
 	}
@@ -261,7 +261,7 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	account, err := stack.AccountManager().NewAccount(password)
@@ -278,7 +278,7 @@ func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
-	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	account, oldPassword := unlockAccount(ctx, stack.AccountManager(), ctx.Args().First(), 0, nil)
 	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
 	if err := stack.AccountManager().Update(account, oldPassword, newPassword); err != nil {
@@ -297,7 +297,7 @@ func importWallet(ctx *cli.Context) error {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 	acct, err := stack.AccountManager().ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
@@ -316,7 +316,7 @@ func accountImport(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
-	stack := utils.MakeNode(ctx, clientIdentifier, verString)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 	acct, err := stack.AccountManager().ImportECDSA(key, passphrase)
 	if err != nil {

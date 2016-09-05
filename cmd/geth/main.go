@@ -42,49 +42,24 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
 const (
-	clientIdentifier = "Geth"     // Client identifier to advertise over the network
-	versionMajor     = 1          // Major version component of the current release
-	versionMinor     = 5          // Minor version component of the current release
-	versionPatch     = 0          // Patch version component of the current release
-	versionMeta      = "unstable" // Version metadata to append to the version string
-
-	versionOracle = "0xfa7b9770ca4cb04296cac84f37736d4041251cdf" // Ethereum address of the Geth release oracle
+	clientIdentifier = "Geth" // Client identifier to advertise over the network
 )
 
 var (
-	gitCommit string         // Git SHA1 commit hash of the release (set via linker flags)
-	verString string         // Combined textual representation of all the version components
-	relConfig release.Config // Structured version information and release oracle config
-	app       *cli.App
+	// Git SHA1 commit hash of the release (set via linker flags)
+	gitCommit = ""
+	// Ethereum address of the Geth release oracle.
+	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
+	// The app that holds all commands and flags.
+	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
 )
 
 func init() {
-	// Construct the textual version string from the individual components
-	verString = fmt.Sprintf("%d.%d.%d", versionMajor, versionMinor, versionPatch)
-	if versionMeta != "" {
-		verString += "-" + versionMeta
-	}
-	if gitCommit != "" {
-		verString += "-" + gitCommit[:8]
-	}
-	// Construct the version release oracle configuration
-	relConfig.Oracle = common.HexToAddress(versionOracle)
-
-	relConfig.Major = uint32(versionMajor)
-	relConfig.Minor = uint32(versionMinor)
-	relConfig.Patch = uint32(versionPatch)
-
-	commit, _ := hex.DecodeString(gitCommit)
-	copy(relConfig.Commit[:], commit)
-
 	// Initialize the CLI app and start Geth
-	app = utils.NewApp(verString, "the go-ethereum command line interface")
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -290,35 +265,32 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func makeFullNode(ctx *cli.Context) *node.Node {
-	node := utils.MakeNode(ctx, clientIdentifier, verString)
-	utils.RegisterEthService(ctx, node, relConfig, makeDefaultExtra())
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	utils.RegisterEthService(ctx, stack, utils.MakeDefaultExtraData(clientIdentifier))
+
 	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
 	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
 	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
 	if shhEnabled || shhAutoEnabled {
-		utils.RegisterShhService(node)
-	}
-	return node
-}
-
-func makeDefaultExtra() []byte {
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+		utils.RegisterShhService(stack)
 	}
 
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		return nil
+	// Add the release oracle service so it boots along with node.
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := release.Config{
+			Oracle: relOracle,
+			Major:  uint32(utils.VersionMajor),
+			Minor:  uint32(utils.VersionMinor),
+			Patch:  uint32(utils.VersionPatch),
+		}
+		commit, _ := hex.DecodeString(gitCommit)
+		copy(config.Commit[:], commit)
+		return release.NewReleaseService(ctx, config)
+	}); err != nil {
+		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
-	return extra
+
+	return stack
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -326,7 +298,8 @@ func makeDefaultExtra() []byte {
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Report geth version
-	glog.V(logger.Info).Infof("instance: Geth/%s/%s/%s\n", verString, runtime.Version(), runtime.GOOS)
+	glog.V(logger.Info).Infof("instance: Geth/%s/%s/%s\n", utils.Version, runtime.Version(), runtime.GOOS)
+
 	// Start up the node itself
 	utils.StartNode(stack)
 
@@ -408,7 +381,10 @@ func gpubench(ctx *cli.Context) error {
 
 func version(c *cli.Context) error {
 	fmt.Println(clientIdentifier)
-	fmt.Println("Version:", verString)
+	fmt.Println("Version:", utils.Version)
+	if gitCommit != "" {
+		fmt.Println("Git Commit:", gitCommit)
+	}
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())

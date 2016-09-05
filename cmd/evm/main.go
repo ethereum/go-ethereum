@@ -35,8 +35,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+
 var (
-	app       *cli.App
+	app = utils.NewApp(gitCommit, "the evm command line interface")
+
 	DebugFlag = cli.BoolFlag{
 		Name:  "debug",
 		Usage: "output full trace logs",
@@ -91,7 +94,6 @@ var (
 )
 
 func init() {
-	app = utils.NewApp("0.2", "the evm command line interface")
 	app.Flags = []cli.Flag{
 		CreateFlag,
 		DebugFlag,
