@@ -197,11 +197,7 @@ type autodisc struct {
 
 func startautodisc(what string, doit func() Interface) Interface {
 	// TODO: monitor network configuration and rerun doit when it changes.
-	ad := &autodisc{what: what, doit: doit}
-	// Start the auto discovery as early as possible so it is already
-	// in progress when the rest of the stack calls the methods.
-	go ad.wait()
-	return ad
+	return &autodisc{what: what, doit: doit}
 }
 
 func (n *autodisc) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) error {
