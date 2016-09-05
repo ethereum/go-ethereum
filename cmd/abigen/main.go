@@ -31,14 +31,15 @@ import (
 var (
 	abiFlag = flag.String("abi", "", "Path to the Ethereum contract ABI json to bind")
 	binFlag = flag.String("bin", "", "Path to the Ethereum contract bytecode (generate deploy method)")
-	typFlag = flag.String("type", "", "Go struct name for the binding (default = package name)")
+	typFlag = flag.String("type", "", "Struct name for the binding (default = package name)")
 
 	solFlag  = flag.String("sol", "", "Path to the Ethereum contract Solidity source to build and bind")
 	solcFlag = flag.String("solc", "solc", "Solidity compiler to use if source builds are requested")
 	excFlag  = flag.String("exc", "", "Comma separated types to exclude from binding")
 
-	pkgFlag = flag.String("pkg", "", "Go package name to generate the binding into")
-	outFlag = flag.String("out", "", "Output file for the generated binding (default = stdout)")
+	pkgFlag  = flag.String("pkg", "", "Package name to generate the binding into")
+	outFlag  = flag.String("out", "", "Output file for the generated binding (default = stdout)")
+	langFlag = flag.String("lang", "go", "Destination language for the bindings (go, java, objc)")
 )
 
 func main() {
@@ -53,7 +54,19 @@ func main() {
 		os.Exit(-1)
 	}
 	if *pkgFlag == "" {
-		fmt.Printf("No destination Go package specified (--pkg)\n")
+		fmt.Printf("No destination package specified (--pkg)\n")
+		os.Exit(-1)
+	}
+	var lang bind.Lang
+	switch *langFlag {
+	case "go":
+		lang = bind.LangGo
+	case "java":
+		lang = bind.LangJava
+	case "objc":
+		lang = bind.LangObjC
+	default:
+		fmt.Printf("Unsupported destination language \"%s\" (--lang)\n", *langFlag)
 		os.Exit(-1)
 	}
 	// If the entire solidity code was specified, build and bind based on that
@@ -108,7 +121,7 @@ func main() {
 		types = append(types, kind)
 	}
 	// Generate the contract binding
-	code, err := bind.Bind(types, abis, bins, *pkgFlag)
+	code, err := bind.Bind(types, abis, bins, *pkgFlag, lang)
 	if err != nil {
 		fmt.Printf("Failed to generate ABI binding: %v\n", err)
 		os.Exit(-1)

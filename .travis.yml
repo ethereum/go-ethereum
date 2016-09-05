@@ -62,6 +62,21 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
+    # This builder does the mobile builds (and nothing else)
+    - os: osx
+      go: 1.7
+      script:
+        - brew update
+        - brew install android-sdk
+        - export ANDROID_HOME=/usr/local/opt/android-sdk
+        - echo "y" | android update sdk --no-ui --filter platform
+        - go get github.com/tools/godep
+        - godep restore
+        - go get golang.org/x/mobile/cmd/gomobile
+        - gomobile init
+        - gomobile bind --target=android --javapkg=org.ethereum -v github.com/ethereum/go-ethereum/mobile
+        - gomobile bind --target=ios --tags=ios -v github.com/ethereum/go-ethereum/mobile
+
 install:
   - go get golang.org/x/tools/cmd/cover
 script:

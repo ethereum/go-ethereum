@@ -748,7 +748,7 @@ type NodeInfo struct {
 	Protocols  map[string]interface{} `json:"protocols"`
 }
 
-// Info gathers and returns a collection of metadata known about the host.
+// NodeInfo gathers and returns a collection of metadata known about the host.
 func (srv *Server) NodeInfo() *NodeInfo {
 	node := srv.Self()
 
