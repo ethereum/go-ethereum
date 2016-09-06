@@ -1377,8 +1377,8 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		<-progress
 	}
 	// Retrieve the sync progress and ensure they are zero (pristine sync)
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != 0 {
-		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, 0)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != 0 {
+		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, 0)
 	}
 	// Synchronise half the blocks and check initial progress
 	tester.newPeer("peer-half", protocol, hashes[targetBlocks/2:], headers, blocks, receipts)
@@ -1392,8 +1392,8 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != uint64(targetBlocks/2+1) {
-		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, targetBlocks/2+1)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != uint64(targetBlocks/2+1) {
+		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, targetBlocks/2+1)
 	}
 	progress <- struct{}{}
 	pending.Wait()
@@ -1409,15 +1409,15 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != uint64(targetBlocks/2+1) || current != uint64(targetBlocks/2+1) || latest != uint64(targetBlocks) {
-		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, targetBlocks/2+1, targetBlocks/2+1, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(targetBlocks/2+1) || progress.CurrentBlock != uint64(targetBlocks/2+1) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2+1, targetBlocks/2+1, targetBlocks)
 	}
 	progress <- struct{}{}
 	pending.Wait()
 
 	// Check final progress after successful sync
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != uint64(targetBlocks/2+1) || current != uint64(targetBlocks) || latest != uint64(targetBlocks) {
-		t.Fatalf("Final progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, targetBlocks/2+1, targetBlocks, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(targetBlocks/2+1) || progress.CurrentBlock != uint64(targetBlocks) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Final progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2+1, targetBlocks, targetBlocks)
 	}
 }
 
@@ -1450,8 +1450,8 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		<-progress
 	}
 	// Retrieve the sync progress and ensure they are zero (pristine sync)
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != 0 {
-		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, 0)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != 0 {
+		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, 0)
 	}
 	// Synchronise with one of the forks and check progress
 	tester.newPeer("fork A", protocol, hashesA, headersA, blocksA, receiptsA)
@@ -1465,8 +1465,8 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != uint64(len(hashesA)-1) {
-		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, len(hashesA)-1)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != uint64(len(hashesA)-1) {
+		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, len(hashesA)-1)
 	}
 	progress <- struct{}{}
 	pending.Wait()
@@ -1485,15 +1485,15 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != uint64(common) || current != uint64(len(hashesA)-1) || latest != uint64(len(hashesB)-1) {
-		t.Fatalf("Forking progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, common, len(hashesA)-1, len(hashesB)-1)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(common) || progress.CurrentBlock != uint64(len(hashesA)-1) || progress.HighestBlock != uint64(len(hashesB)-1) {
+		t.Fatalf("Forking progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, common, len(hashesA)-1, len(hashesB)-1)
 	}
 	progress <- struct{}{}
 	pending.Wait()
 
 	// Check final progress after successful sync
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != uint64(common) || current != uint64(len(hashesB)-1) || latest != uint64(len(hashesB)-1) {
-		t.Fatalf("Final progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, common, len(hashesB)-1, len(hashesB)-1)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != uint64(common) || progress.CurrentBlock != uint64(len(hashesB)-1) || progress.HighestBlock != uint64(len(hashesB)-1) {
+		t.Fatalf("Final progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, common, len(hashesB)-1, len(hashesB)-1)
 	}
 }
 
@@ -1526,8 +1526,8 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		<-progress
 	}
 	// Retrieve the sync progress and ensure they are zero (pristine sync)
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != 0 {
-		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, 0)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != 0 {
+		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, 0)
 	}
 	// Attempt a full sync with a faulty peer
 	tester.newPeer("faulty", protocol, hashes, headers, blocks, receipts)
@@ -1546,8 +1546,8 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != uint64(targetBlocks) {
-		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, targetBlocks)
 	}
 	progress <- struct{}{}
 	pending.Wait()
@@ -1563,15 +1563,15 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current > uint64(targetBlocks/2) || latest != uint64(targetBlocks) {
-		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/0-%v/%v", origin, current, latest, 0, targetBlocks/2, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock > uint64(targetBlocks/2) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/0-%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, targetBlocks/2, targetBlocks)
 	}
 	progress <- struct{}{}
 	pending.Wait()
 
 	// Check final progress after successful sync
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin > uint64(targetBlocks/2) || current != uint64(targetBlocks) || latest != uint64(targetBlocks) {
-		t.Fatalf("Final progress mismatch: have %v/%v/%v, want 0-%v/%v/%v", origin, current, latest, targetBlocks/2, targetBlocks, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock > uint64(targetBlocks/2) || progress.CurrentBlock != uint64(targetBlocks) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Final progress mismatch: have %v/%v/%v, want 0-%v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks/2, targetBlocks, targetBlocks)
 	}
 }
 
@@ -1603,8 +1603,8 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		<-progress
 	}
 	// Retrieve the sync progress and ensure they are zero (pristine sync)
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != 0 {
-		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, 0)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != 0 {
+		t.Fatalf("Pristine progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, 0)
 	}
 	//  Create and sync with an attacker that promises a higher chain than available
 	tester.newPeer("attack", protocol, hashes, headers, blocks, receipts)
@@ -1624,8 +1624,8 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current != 0 || latest != uint64(targetBlocks+3) {
-		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", origin, current, latest, 0, 0, targetBlocks+3)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock != 0 || progress.HighestBlock != uint64(targetBlocks+3) {
+		t.Fatalf("Initial progress mismatch: have %v/%v/%v, want %v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, 0, targetBlocks+3)
 	}
 	progress <- struct{}{}
 	pending.Wait()
@@ -1641,15 +1641,15 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 		}
 	}()
 	<-starting
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin != 0 || current > uint64(targetBlocks) || latest != uint64(targetBlocks) {
-		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/0-%v/%v", origin, current, latest, 0, targetBlocks, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock != 0 || progress.CurrentBlock > uint64(targetBlocks) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Completing progress mismatch: have %v/%v/%v, want %v/0-%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, 0, targetBlocks, targetBlocks)
 	}
 	progress <- struct{}{}
 	pending.Wait()
 
 	// Check final progress after successful sync
-	if origin, current, latest, _, _ := tester.downloader.Progress(); origin > uint64(targetBlocks) || current != uint64(targetBlocks) || latest != uint64(targetBlocks) {
-		t.Fatalf("Final progress mismatch: have %v/%v/%v, want 0-%v/%v/%v", origin, current, latest, targetBlocks, targetBlocks, targetBlocks)
+	if progress := tester.downloader.Progress(); progress.StartingBlock > uint64(targetBlocks) || progress.CurrentBlock != uint64(targetBlocks) || progress.HighestBlock != uint64(targetBlocks) {
+		t.Fatalf("Final progress mismatch: have %v/%v/%v, want 0-%v/%v/%v", progress.StartingBlock, progress.CurrentBlock, progress.HighestBlock, targetBlocks, targetBlocks, targetBlocks)
 	}
 }
 

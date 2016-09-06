@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -211,7 +212,7 @@ func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, ha
 // In addition, during the state download phase of fast synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
-func (d *Downloader) Progress() (uint64, uint64, uint64, uint64, uint64) {
+func (d *Downloader) Progress() ethereum.SyncProgress {
 	// Fetch the pending state count outside of the lock to prevent unforeseen deadlocks
 	pendingStates := uint64(d.queue.PendingNodeData())
 
@@ -228,7 +229,13 @@ func (d *Downloader) Progress() (uint64, uint64, uint64, uint64, uint64) {
 	case LightSync:
 		current = d.headHeader().Number.Uint64()
 	}
-	return d.syncStatsChainOrigin, current, d.syncStatsChainHeight, d.syncStatsStateDone, d.syncStatsStateDone + pendingStates
+	return ethereum.SyncProgress{
+		StartingBlock: d.syncStatsChainOrigin,
+		CurrentBlock:  current,
+		HighestBlock:  d.syncStatsChainHeight,
+		PulledStates:  d.syncStatsStateDone,
+		KnownStates:   d.syncStatsStateDone + pendingStates,
+	}
 }
 
 // Synchronising returns whether the downloader is currently retrieving blocks.

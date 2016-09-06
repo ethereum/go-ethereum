@@ -19,6 +19,7 @@ package downloader
 import (
 	"sync"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
@@ -73,9 +74,10 @@ func (api *PublicDownloaderAPI) eventLoop() {
 			var notification interface{}
 			switch event.Data.(type) {
 			case StartEvent:
-				result := &SyncingResult{Syncing: true}
-				result.Status.Origin, result.Status.Current, result.Status.Height, result.Status.Pulled, result.Status.Known = api.d.Progress()
-				notification = result
+				notification = &SyncingResult{
+					Syncing: true,
+					Status:  api.d.Progress(),
+				}
 			case DoneEvent, FailedEvent:
 				notification = false
 			}
@@ -117,19 +119,10 @@ func (api *PublicDownloaderAPI) Syncing(ctx context.Context) (*rpc.Subscription,
 	return rpcSub, nil
 }
 
-// Progress gives progress indications when the node is synchronising with the Ethereum network.
-type Progress struct {
-	Origin  uint64 `json:"startingBlock"`
-	Current uint64 `json:"currentBlock"`
-	Height  uint64 `json:"highestBlock"`
-	Pulled  uint64 `json:"pulledStates"`
-	Known   uint64 `json:"knownStates"`
-}
-
 // SyncingResult provides information about the current synchronisation status for this node.
 type SyncingResult struct {
-	Syncing bool     `json:"syncing"`
-	Status  Progress `json:"status"`
+	Syncing bool                  `json:"syncing"`
+	Status  ethereum.SyncProgress `json:"status"`
 }
 
 // uninstallSyncSubscriptionRequest uninstalles a syncing subscription in the API event loop.

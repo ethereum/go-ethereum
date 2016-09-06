@@ -191,6 +191,39 @@ func toBlockNumArg(number *big.Int) string {
 	return fmt.Sprintf("%#x", number)
 }
 
+type rpcProgress struct {
+	StartingBlock rpc.HexNumber
+	CurrentBlock  rpc.HexNumber
+	HighestBlock  rpc.HexNumber
+	PulledStates  rpc.HexNumber
+	KnownStates   rpc.HexNumber
+}
+
+// SyncProgress retrieves the current progress of the sync algorithm. If there's
+// no sync currently running, it returns nil.
+func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, error) {
+	var raw json.RawMessage
+	if err := ec.c.CallContext(ctx, &raw, "eth_syncing"); err != nil {
+		return nil, err
+	}
+	// Handle the possible response types
+	var syncing bool
+	if err := json.Unmarshal(raw, &syncing); err == nil {
+		return nil, nil // Not syncing (always false)
+	}
+	var progress *rpcProgress
+	if err := json.Unmarshal(raw, &progress); err != nil {
+		return nil, err
+	}
+	return &ethereum.SyncProgress{
+		StartingBlock: progress.StartingBlock.Uint64(),
+		CurrentBlock:  progress.CurrentBlock.Uint64(),
+		HighestBlock:  progress.HighestBlock.Uint64(),
+		PulledStates:  progress.PulledStates.Uint64(),
+		KnownStates:   progress.KnownStates.Uint64(),
+	}, nil
+}
+
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
