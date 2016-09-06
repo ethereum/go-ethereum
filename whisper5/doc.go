@@ -31,7 +31,11 @@ particularly the notion of singular endpoints.
 */
 package whisper5
 
-import "time"
+import (
+	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 const (
 	statusCode   = 0x00
@@ -62,3 +66,21 @@ const (
 // classifications of a message, determined as the first (left) 4 bytes of the
 // SHA3 hash of some arbitrary data given by the original author of the message.
 type TopicType [4]byte
+
+func BytesToTopic(b []byte) (t TopicType) {
+	sz := 4
+	if x := len(b); x < 4 {
+		sz = x
+	}
+	for i := 0; i < sz; i++ {
+		t[i] = b[i]
+	}
+	return t
+}
+
+func HashToTopic(h common.Hash) (t TopicType) {
+	for i := 0; i < 4; i++ {
+		t[i] = h[i]
+	}
+	return t
+}

@@ -70,14 +70,14 @@ func (self *Envelope) isAsymmetric() bool {
 
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
-func (self *Envelope) Seal(dur time.Duration) {
-	self.Expiry += uint32(dur.Seconds()) // adjust for the duration of Seal() execution
+func (self *Envelope) Seal(work time.Duration) {
+	self.Expiry += uint32(work.Seconds()) // adjust for the duration of Seal() execution
 
 	buf := make([]byte, 64)
 	h := crypto.Keccak256(self.rlpWithoutNonce())
 	copy(buf[:32], h)
 
-	finish, bestBit := time.Now().Add(dur).UnixNano(), 0
+	finish, bestBit := time.Now().Add(work).UnixNano(), 0
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint64(buf[56:], nonce)
@@ -150,14 +150,30 @@ func (self *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error
 	return
 }
 
-// Open tries to decrypt an envelope
-func (self *Envelope) Open(watcher *Filter) *ReceivedMessage {
+// Open tries to decrypt an envelope, and populates the message fields in case of success.
+func (self *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 	if self.isAsymmetric() {
-		msg, _ := self.OpenAsymmetric(watcher.KeyAsym)
-		return msg
+		msg, _ = self.OpenAsymmetric(watcher.KeyAsym)
+		if msg != nil {
+			msg.Dst = watcher.Dst
+		}
 	} else if self.isSymmetric() {
-		msg, _ := self.OpenSymmetric(watcher.KeySym)
-		return msg
+		msg, _ = self.OpenSymmetric(watcher.KeySym)
+		if msg != nil {
+			msg.TopicKeyHash = crypto.Keccak256Hash(watcher.KeySym)
+		}
 	}
-	return nil
+
+	if msg != nil {
+		ok := msg.Validate()
+		if !ok {
+			return nil
+		}
+		msg.Topic = self.Topic
+		msg.PoW = self.pow
+		msg.TTL = self.TTL
+		msg.Sent = self.Expiry - self.TTL // todo: review
+		msg.EnvelopeHash = self.hash
+	}
+	return msg
 }

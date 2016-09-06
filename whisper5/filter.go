@@ -1,19 +1,18 @@
 package whisper5
 
 import (
-	"bytes"
 	"crypto/ecdsa"
-)
 
-var empty = TopicType{0, 0, 0, 0}
+	"github.com/ethereum/go-ethereum/common"
+)
 
 type Filter struct {
 	Src          *ecdsa.PublicKey           // Sender of the message
 	Dst          *ecdsa.PublicKey           // Recipient of the message
 	KeyAsym      *ecdsa.PrivateKey          // Private Key of recipient
-	Topic        TopicType                  // Topics to filter messages with
+	Topics       []TopicType                // Topics to filter messages with
 	KeySym       []byte                     // Key associated with the Topic
-	TopicKeyHash []byte                     // The Keccak256Hash of the key, associated with the Topic
+	TopicKeyHash common.Hash                // The Keccak256Hash of the symmetric key
 	PoW          int                        // Proof of work as described in the Whisper spec
 	Fn           func(msg *ReceivedMessage) // Handler in case of a match
 }
@@ -23,13 +22,15 @@ type Filters struct {
 	watchers map[int]*Filter
 	ch       chan Envelope
 	quit     chan struct{}
+	whisper  *Whisper
 }
 
-func NewFilters() *Filters {
+func NewFilters(w *Whisper) *Filters {
 	return &Filters{
 		ch:       make(chan Envelope),
 		watchers: make(map[int]*Filter),
 		quit:     make(chan struct{}),
+		whisper:  w,
 	}
 }
 
@@ -80,7 +81,7 @@ func (self *Filters) processEnvelope(envelope *Envelope) {
 		} else {
 			match = watcher.MatchEnvelope(envelope)
 			if match {
-				msg = envelope.Open(watcher) // todo: fill all the fields & validate
+				msg = envelope.Open(watcher)
 			}
 		}
 
@@ -88,18 +89,23 @@ func (self *Filters) processEnvelope(envelope *Envelope) {
 			watcher.Trigger(msg)
 		}
 	}
+
+	if msg != nil {
+		go self.whisper.addDecryptedMessage(msg)
+	}
 }
 
-func (self Filter) expectsPublicKeyEncryption() bool {
+func (self Filter) expectsAsymmetricEncryption() bool {
 	return self.KeyAsym != nil
 }
 
-func (self Filter) expectsTopicEncryption() bool {
+func (self Filter) expectsSymmetricEncryption() bool {
 	return self.KeySym != nil
 }
 
 func (self Filter) Trigger(msg *ReceivedMessage) {
-	go self.Fn(msg) // todo: review
+	// todo: save msg hash in the filter
+	self.Fn(msg)
 }
 
 func (self Filter) MatchMessage(msg *ReceivedMessage) bool {
@@ -107,14 +113,23 @@ func (self Filter) MatchMessage(msg *ReceivedMessage) bool {
 		return false
 	}
 
-	if self.expectsPublicKeyEncryption() && msg.isAsymmetric() {
+	if self.Src != nil && msg.Src != self.Src {
+		return false
+	}
+
+	if self.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
 		return self.Dst == msg.Dst
-	} else if self.expectsTopicEncryption() && msg.isSymmetric() {
+	} else if self.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
 		// we need to compare the keys (or rather thier hashes), because of
 		// possible collision (different keys can produce the same topic).
 		// we also need to compare the topics, because they could be arbitrary (not related to KeySym).
-		if self.Topic == msg.Topic && bytes.Equal(self.TopicKeyHash, msg.TopicKeyHash) {
-			return true
+		if self.TopicKeyHash == msg.TopicKeyHash {
+			for _, t := range self.Topics {
+				if t == msg.Topic {
+					return true
+				}
+			}
+			return false
 		}
 	}
 	return false
@@ -126,16 +141,22 @@ func (self Filter) MatchEnvelope(envelope *Envelope) bool {
 	}
 
 	encryptionMethodMatch := false
-	if self.expectsPublicKeyEncryption() && envelope.isAsymmetric() {
+	if self.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
 		encryptionMethodMatch = true
-	} else if self.expectsTopicEncryption() && envelope.isSymmetric() {
+		if self.Topics == nil {
+			return true // wildcard
+		}
+	} else if self.expectsSymmetricEncryption() && envelope.isSymmetric() {
 		encryptionMethodMatch = true
 	}
 
 	if encryptionMethodMatch {
-		if self.Topic == empty || self.Topic == envelope.Topic {
-			return true
+		for _, t := range self.Topics {
+			if t == envelope.Topic {
+				return true
+			}
 		}
+		return false
 	}
 	return false
 }

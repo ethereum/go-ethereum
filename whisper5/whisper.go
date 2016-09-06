@@ -31,12 +31,6 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
-//type MessageEvent struct {
-//	To      *ecdsa.PrivateKey
-//	From    *ecdsa.PublicKey
-//	Message *Message
-//}
-
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
 type Whisper struct {
@@ -44,10 +38,10 @@ type Whisper struct {
 	filters  *Filters
 
 	privateKeys map[string]*ecdsa.PrivateKey
-	topicKeys   map[TopicType][]byte // todo: move to the filter. this is not suitable because of possible collisions
+	//topicKeys   map[TopicType][]byte // todo: move to the filter. this is not suitable because of possible collisions
 
-	msgs        map[common.Hash]*ReceivedMessage // Pool of successfully decrypted messages // todo: rename
 	envelopes   map[common.Hash]*Envelope        // Pool of messages currently tracked by this node
+	messages    map[common.Hash]*ReceivedMessage // Pool of successfully decrypted messages
 	expirations map[uint32]*set.SetNonTS         // Message expiration pool (TODO: something lighter)
 	poolMu      sync.RWMutex                     // Mutex to sync the message and expiration pools
 
@@ -60,14 +54,16 @@ type Whisper struct {
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 func NewWhisper() *Whisper {
 	whisper := &Whisper{
-		filters:     NewFilters(),
+		//filters:     NewFilters(),
 		privateKeys: make(map[string]*ecdsa.PrivateKey),
-		topicKeys:   make(map[TopicType][]byte),
+		//topicKeys:   make(map[TopicType][]byte),
 		envelopes:   make(map[common.Hash]*Envelope),
+		messages:    make(map[common.Hash]*ReceivedMessage),
 		expirations: make(map[uint32]*set.SetNonTS),
 		peers:       make(map[*peer]struct{}),
 		quit:        make(chan struct{}),
 	}
+	whisper.filters = NewFilters(whisper)
 	whisper.filters.Start()
 
 	// p2p whisper sub protocol handler
@@ -103,16 +99,15 @@ func (self *Whisper) Version() uint {
 	return self.protocol.Version
 }
 
+// todo: review. maybe we need to delete these identity-related functions, since the key moved to Filter
 // NewIdentity generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption.
 func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
-	// todo: review
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic(err)
 	}
 	self.privateKeys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
-
 	return key
 }
 
@@ -245,27 +240,6 @@ func (self *Whisper) postEvent(envelope *Envelope) {
 	self.filters.Notify(envelope)
 }
 
-/*
-// createFilter creates a message filter to check against installed handlers.
-func createFilter(message *Message, topics []TopicType) filter.Filter {
-	//return Filter{
-	//	Src:    string(crypto.FromECDSAPub(message.Recover())),
-	//	Dst:    string(crypto.FromECDSAPub(message.Dst)),
-	//	Topics: topics,
-	//}
-
-	matcher := make([][]TopicType, len(topics))
-	for i, topic := range topics {
-		matcher[i] = []TopicType{topic}
-	}
-	return filterer{
-		to:      string(crypto.FromECDSAPub(message.To)),
-		from:    string(crypto.FromECDSAPub(message.Recover())),
-		matcher: newTopicMatcher(matcher...),
-	}
-}
-*/
-
 // update loops until the lifetime of the whisper node, updating its internal
 // state by expiring stale messages from the pool.
 func (self *Whisper) update() {
@@ -299,6 +273,7 @@ func (self *Whisper) expire() {
 		// Dump all expired messages and remove timestamp
 		hashSet.Each(func(v interface{}) bool {
 			delete(self.envelopes, v.(common.Hash))
+			delete(self.messages, v.(common.Hash))
 			return true
 		})
 		self.expirations[then].Clear()
@@ -317,33 +292,25 @@ func (self *Whisper) Envelopes() []*Envelope {
 	return all
 }
 
-/*
 // Messages retrieves all the currently pooled messages matching a filter id.
-// todo: review
-//func (self *Whisper) Messages(id int) []*Message {
-//	messages := make([]*Message, 0)
-//	if filter := self.filters.Get(id); filter != nil {
-//		for _, envelope := range self.messages {
-//			if message := self.open(envelope); message != nil {
-//				if self.filters.Match(filter, createFilter(message, envelope.Topic)) {
-//					messages = append(messages, message)
-//				}
-//			}
-//		}
-//	}
-//	return messages
-//}
 func (self *Whisper) Messages(id int) []*ReceivedMessage {
-	messages := make([]*Envelope, 0)
+	self.poolMu.RLock()
+	defer self.poolMu.RUnlock()
+
+	result := make([]*ReceivedMessage, 0)
 	if filter := self.filters.Get(id); filter != nil {
-		for _, envelope := range self.envelopes {
-			//if message := self.open(envelope); message != nil {
-			if self.filters.Match(envelope) {
-				messages = append(messages, envelope)
+		for _, msg := range self.messages {
+			if filter.MatchMessage(msg) {
+				result = append(result, msg)
 			}
-			//}
 		}
 	}
-	return messages
+	return result
 }
-*/
+
+func (self *Whisper) addDecryptedMessage(msg *ReceivedMessage) {
+	self.poolMu.Lock()
+	defer self.poolMu.Unlock()
+
+	self.messages[msg.EnvelopeHash] = msg
+}

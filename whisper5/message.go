@@ -16,7 +16,7 @@
 
 // Contains the Whisper protocol Message element. For formal details please see
 // the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
-// todo: fix the spec link
+// todo: fix the spec link, and move it to doc.go
 
 package whisper5
 
@@ -39,13 +39,14 @@ import (
 
 // Options specifies the exact way a message should be wrapped into an Envelope.
 type Options struct {
-	Topic TopicType
-	TTL   time.Duration
-	Src   *ecdsa.PrivateKey
-	Dst   *ecdsa.PublicKey
-	Key   []byte // must be 32 bytes. todo: review
-	Salt  []byte
-	Pad   []byte
+	TTL    time.Duration
+	Src    *ecdsa.PrivateKey
+	Dst    *ecdsa.PublicKey
+	KeySym []byte // must be 32 bytes. todo: review
+	Topic  TopicType
+	Pad    []byte
+	Work   time.Duration
+	PoW    int
 }
 
 // SentMessage represents an end-user data packet to transmit through the
@@ -65,13 +66,19 @@ type ReceivedMessage struct {
 	Signature []byte
 
 	PoW          int              // Proof of work as described in the Whisper spec
-	Sent         time.Time        // Time when the message was posted into the network
-	TTL          time.Duration    // Maximum time to live allowed for the message
+	Sent         uint32           // Time when the message was posted into the network
+	TTL          uint32           // Maximum time to live allowed for the message
 	Src          *ecdsa.PublicKey // Message recipient (identity used to decode the message)
 	Dst          *ecdsa.PublicKey // Message recipient (identity used to decode the message)
 	Topic        TopicType
-	TopicKeyHash []byte      // The Keccak256Hash of the key, associated with the Topic
+	TopicKeyHash common.Hash // The Keccak256Hash of the key, associated with the Topic
 	EnvelopeHash common.Hash // Message envelope hash to act as a unique id
+}
+
+func DeriveTopicFromSymmetricKey(key []byte) TopicType {
+	// todo: it is not secure enough, use kdf instead
+	hash := crypto.Keccak256Hash(key)
+	return HashToTopic(hash)
 }
 
 func isMessageSigned(flags byte) bool {
@@ -82,11 +89,11 @@ func isMessagePadded(flags byte) bool {
 	return (flags & paddingFlag) != 0
 }
 
-func (self *ReceivedMessage) isSymmetric() bool {
-	return self.TopicKeyHash != nil
+func (self *ReceivedMessage) isSymmetricEncryption() bool {
+	return self.TopicKeyHash != common.Hash{}
 }
 
-func (self *ReceivedMessage) isAsymmetric() bool {
+func (self *ReceivedMessage) isAsymmetricEncryption() bool {
 	return self.Dst != nil
 }
 
@@ -206,11 +213,10 @@ func (self *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte
 //   - options.From != nil && options.To == nil: signed broadcast (known sender)
 //   - options.From == nil && options.To != nil: encrypted anonymous message
 //   - options.From != nil && options.To != nil: encrypted signed message
-func (self *SentMessage) Wrap(pow time.Duration, options Options) (envelope *Envelope, err error) {
+func (self *SentMessage) Wrap(options Options) (envelope *Envelope, err error) {
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
 	}
-	//self.TTL = options.TTL // todo: review
 	self.appendPadding(options)
 	if options.Src != nil {
 		if err = self.sign(options.Src); err != nil {
@@ -225,15 +231,19 @@ func (self *SentMessage) Wrap(pow time.Duration, options Options) (envelope *Env
 	var salt, nonce []byte
 	if options.Dst != nil {
 		err = self.encryptAsymmetric(options.Dst)
-	} else if options.Key != nil {
-		salt, nonce, err = self.encryptSymmetric(options.Key)
+	} else if options.KeySym != nil {
+		salt, nonce, err = self.encryptSymmetric(options.KeySym)
 	} else {
 		err = errors.New("Unable to encrypt the message: neither Dst nor Key")
 	}
 
 	if err == nil {
+		if (options.Topic == TopicType{}) {
+			options.Topic = DeriveTopicFromSymmetricKey(options.KeySym)
+		}
+
 		envelope = NewEnvelope(options.TTL, options.Topic, salt, nonce, self)
-		envelope.Seal(pow)
+		envelope.Seal(options.Work) // todo: use options.pow, review Seal() as well
 	}
 	return
 }
@@ -305,7 +315,7 @@ func (self *ReceivedMessage) Validate() bool {
 	}
 
 	self.Payload = self.Raw[1:cur]
-	if self.isSymmetric() == self.isAsymmetric() {
+	if self.isSymmetricEncryption() == self.isAsymmetricEncryption() {
 		return false
 	}
 	return true
@@ -331,104 +341,3 @@ func (self *ReceivedMessage) hash() []byte {
 	}
 	return crypto.Keccak256(self.Raw)
 }
-
-// todo: delete this stuff
-/*
-// Signature returns the signature part of the raw message.
-func (self *ReceivedMessage) ExtractSignature() {
-	if self.Signature == nil {
-		if sz := len(self.Raw); sz >= signatureLength+1 {
-			if isMessageSigned(self.Raw[0]) {
-				self.Signature = self.Raw[sz-signatureLength:]
-			}
-		}
-	}
-}
-
-// Payload returns the payload part of the raw message.
-func (self *ReceivedMessage) ExtractPayload() {
-	if self.Payload == nil {
-		end := len(self.Raw)
-		if isMessageSigned(self.Raw[0]) {
-			end -= signatureLength
-			if end <= 1 {
-				return
-			}
-		}
-		if isMessagePadded(self.Raw[0]) {
-			paddingSize := int(self.Raw[end-1])
-			end -= paddingSize
-			if end <= 1 {
-				return
-			}
-		}
-		self.Payload = self.Raw[1:end]
-	}
-}
-
-// Padding returns the padding part of the raw message
-// without the last byte (which only contains the padding size).
-func (self *ReceivedMessage) ExtractPadding() {
-	if self.Padding == nil {
-		end := len(self.Raw)
-		if isMessagePadded(self.Raw[0]) {
-			if isMessageSigned(self.Raw[0]) {
-				end -= signatureLength
-				if end <= 1 {
-					return
-				}
-			}
-			paddingSize := int(self.Raw[end-1])
-			beg := end - paddingSize
-			if beg > 1 {
-				self.Padding = self.Raw[beg : end-1]
-			}
-		}
-	}
-}
-*/
-/*
-// Signature returns the signature part of the raw message.
-func (self *ReceivedMessage) ExtractSignature() []byte {
-	sz := len(self.Raw)
-	if self.isSigned() && sz >= signatureLength+1 {
-		return self.Raw[sz-signatureLength:]
-	} else {
-		return nil
-	}
-}
-
-// Payload returns the payload part of the raw message.
-func (self *ReceivedMessage) ExtractPayload() []byte {
-	end := len(self.Raw)
-	if self.isSigned() {
-		end -= signatureLength
-	}
-	if self.isPadded() {
-		paddingSize := int(self.Raw[end-1])
-		end -= paddingSize
-	}
-	if end <= 1 {
-		return nil
-	}
-	return self.Raw[1:end]
-}
-
-// Padding returns the padding part of the raw message
-// without the last byte (which only contains the padding size).
-func (self *ReceivedMessage) ExtractPadding() []byte {
-	if !self.isPadded() {
-		return nil
-	}
-	end := len(self.Raw)
-	if self.isSigned() {
-		end -= signatureLength
-	}
-	paddingSize := int(self.Raw[end-1])
-	beg := end - paddingSize
-	if beg <= 1 {
-		return nil
-	}
-	return self.Raw[beg : end-1]
-}
-*/
