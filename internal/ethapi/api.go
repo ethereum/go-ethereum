@@ -73,19 +73,19 @@ func (s *PublicEthereumAPI) ProtocolVersion() *rpc.HexNumber {
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (s *PublicEthereumAPI) Syncing() (interface{}, error) {
-	origin, current, height, pulled, known := s.b.Downloader().Progress()
+	progress := s.b.Downloader().Progress()
 
 	// Return not syncing if the synchronisation already completed
-	if current >= height {
+	if progress.CurrentBlock >= progress.HighestBlock {
 		return false, nil
 	}
 	// Otherwise gather the block sync stats
 	return map[string]interface{}{
-		"startingBlock": rpc.NewHexNumber(origin),
-		"currentBlock":  rpc.NewHexNumber(current),
-		"highestBlock":  rpc.NewHexNumber(height),
-		"pulledStates":  rpc.NewHexNumber(pulled),
-		"knownStates":   rpc.NewHexNumber(known),
+		"startingBlock": rpc.NewHexNumber(progress.StartingBlock),
+		"currentBlock":  rpc.NewHexNumber(progress.CurrentBlock),
+		"highestBlock":  rpc.NewHexNumber(progress.HighestBlock),
+		"pulledStates":  rpc.NewHexNumber(progress.PulledStates),
+		"knownStates":   rpc.NewHexNumber(progress.KnownStates),
 	}, nil
 }
 

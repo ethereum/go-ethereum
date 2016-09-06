@@ -6,6 +6,7 @@ import "github.com/ethereum/go-ethereum"
 var (
 	_ = ethereum.ChainReader(&Client{})
 	_ = ethereum.ChainStateReader(&Client{})
+	_ = ethereum.ChainSyncReader(&Client{})
 	_ = ethereum.ChainHeadEventer(&Client{})
 	_ = ethereum.ContractCaller(&Client{})
 	_ = ethereum.GasEstimator(&Client{})

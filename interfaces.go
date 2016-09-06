@@ -67,6 +67,22 @@ type ChainStateReader interface {
 	NonceAt(ctx context.Context, account common.Address, blockNumber *big.Int) (uint64, error)
 }
 
+// SyncProgress gives progress indications when the node is synchronising with
+// the Ethereum network.
+type SyncProgress struct {
+	StartingBlock uint64 // Block number where sync began
+	CurrentBlock  uint64 // Current block number where sync is at
+	HighestBlock  uint64 // Highest alleged block number in the chain
+	PulledStates  uint64 // Number of state trie entries already downloaded
+	KnownStates   uint64 // Total number os state trie entries known about
+}
+
+// ChainSyncReader wraps access to the node's current sync status. If there's no
+// sync currently running, it returns nil.
+type ChainSyncReader interface {
+	SyncProgress(ctx context.Context) (*SyncProgress, error)
+}
+
 // A ChainHeadEventer returns notifications whenever the canonical head block is updated.
 type ChainHeadEventer interface {
 	SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (Subscription, error)
