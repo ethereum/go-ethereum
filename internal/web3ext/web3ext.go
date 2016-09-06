@@ -436,8 +436,8 @@ web3._extend({
 			inputFormatter: [null, web3._extend.formatters.inputAddressFormatter, null]
 		}),
 		new web3._extend.Method({
-			name: 'recover',
-			call: 'personal_recover',
+			name: 'ecRecover',
+			call: 'personal_ecRecover',
 			params: 2
 		})
 	]

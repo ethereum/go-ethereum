@@ -298,13 +298,26 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 	return submitTransaction(ctx, s.b, tx, signature)
 }
 
-// Sign calculates an ECDSA signature from keccack226(message).
+// signHash is a helper function that calculates a hash for the given message that can be
+// safely used to calculate a signature from. The hash is calulcated with:
+// keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+func signHash(message string) []byte {
+	data := common.FromHex(message)
+	// Give context to the signed message. This prevents an adversery to sign a tx.
+	// It has no cryptographic purpose.
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	// Always hash, this prevents choosen plaintext attacks that can extract key information
+	return crypto.Keccak256([]byte(msg))
+}
+
+// Sign calculates an Ethereum ECDSA signature for:
+// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
+//
 // The key used to calculate the signature is decrypted with the given password.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
 func (s *PrivateAccountAPI) Sign(ctx context.Context, message string, addr common.Address, passwd string) (string, error) {
-	// always hash, this prevents choosen plaintext attacks that can extract the key
-	hash := crypto.Keccak256(common.FromHex(message))
+	hash := signHash(message)
 	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, hash)
 	if err != nil {
 		return "0x", err
@@ -312,13 +325,17 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, message string, addr commo
 	return common.ToHex(signature), nil
 }
 
-// recover returns the address for the account that was used to create the signature.
+// EcRecover returns the address for the account that was used to create the signature.
+// Note, this function is compatible with eth_sign and personal_sign. As such it recovers
+// the address of:
+// hash = keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
+// addr = ecrecover(hash, signature)
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_recover
-func (s *PrivateAccountAPI) Recover(ctx context.Context, message string, signature string) (common.Address, error) {
+// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
+func (s *PrivateAccountAPI) EcRecover(ctx context.Context, message string, signature string) (common.Address, error) {
 	var (
+		hash = signHash(message)
 		sig  = common.FromHex(signature)
-		hash = crypto.Keccak256(common.FromHex(message))
 	)
 
 	if len(sig) != 65 {
@@ -1047,14 +1064,15 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 	return tx.Hash().Hex(), nil
 }
 
-// Sign calculates an ECDSA signature from keccack226(message).
+// Sign calculates an ECDSA signature for:
+// keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
+//
 // The account associated with addr must be unlocked.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
 func (s *PublicTransactionPoolAPI) Sign(addr common.Address, message string) (string, error) {
-	// always hash, this prevents choosen plaintext attacks that can extract the key
-	hash := crypto.Keccak256(common.FromHex(message))
-	signature, err := s.b.AccountManager().SignEthereum(addr, hash[:])
+	hash := signHash(message)
+	signature, err := s.b.AccountManager().SignEthereum(addr, hash)
 	return common.ToHex(signature), err
 }
 

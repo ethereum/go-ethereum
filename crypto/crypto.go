@@ -78,12 +78,12 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-// Ecrecover returns the public key for the private key that was used
-// to calculate the signature.
+// Ecrecover returns the public key for the private key that was used to
+// calculate the signature.
 //
 // Note: secp256k1 expects the recover id to be either 0, 1. Ethereum
 // signatures have a recover id with an offset of 27. Callers must take
-// this into account and if "recovering" an Ethereum signature adjust.
+// this into account and if "recovering" from an Ethereum signature adjust.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return secp256k1.RecoverPubkey(hash, sig)
 }
@@ -221,8 +221,8 @@ func Sign(data []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 // SignEthereum calculates an Ethereum ECDSA signature.
 // This function is susceptible to choosen plaintext attacks that can leak
 // information about the private key that is used for signing. Callers must
-// be aware that the given hash cannot be choosen by an adversery. Common
-// solution is to hash any input before calculating the signature.
+// be aware that the given hash cannot be freely choosen by an adversery.
+// Common solution is to hash the message before calculating the signature.
 func SignEthereum(data []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
 	sig, err := Sign(data, prv)
 	if err != nil {
