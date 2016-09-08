@@ -84,6 +84,21 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// MarshalJSON encodes receipts into the web3 RPC response block format.
+func (r *Receipt) MarshalJSON() ([]byte, error) {
+	root := common.BytesToHash(r.PostState)
+
+	return json.Marshal(&jsonReceipt{
+		PostState:         &root,
+		CumulativeGasUsed: (*hexBig)(r.CumulativeGasUsed),
+		Bloom:             &r.Bloom,
+		Logs:              &r.Logs,
+		TxHash:            &r.TxHash,
+		ContractAddress:   &r.ContractAddress,
+		GasUsed:           (*hexBig)(r.GasUsed),
+	})
+}
+
 // UnmarshalJSON decodes the web3 RPC receipt format.
 func (r *Receipt) UnmarshalJSON(input []byte) error {
 	var dec jsonReceipt

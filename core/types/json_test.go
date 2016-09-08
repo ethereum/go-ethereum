@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,6 +40,31 @@ func TestUnmarshalHeader(t *testing.T) {
 		}
 		if head.Hash() != test.wantHash {
 			t.Errorf("test %q: got hash %x, want %x", name, head.Hash(), test.wantHash)
+			continue
+		}
+	}
+}
+
+func TestMarshalHeader(t *testing.T) {
+	for name, test := range unmarshalHeaderTests {
+		if test.wantError != nil {
+			continue
+		}
+		var original *Header
+		json.Unmarshal([]byte(test.input), &original)
+
+		blob, err := json.Marshal(original)
+		if err != nil {
+			t.Errorf("test %q: failed to marshal header: %v", name, err)
+			continue
+		}
+		var proced *Header
+		if err := json.Unmarshal(blob, &proced); err != nil {
+			t.Errorf("Test %q: failed to unmarshal marhsalled header: %v", name, err)
+			continue
+		}
+		if !reflect.DeepEqual(original, proced) {
+			t.Errorf("test %q: header mismatch: have %+v, want %+v", name, proced, original)
 			continue
 		}
 	}
@@ -94,6 +120,32 @@ func TestUnmarshalTransaction(t *testing.T) {
 	}
 }
 
+func TestMarshalTransaction(t *testing.T) {
+	for name, test := range unmarshalTransactionTests {
+		if test.wantError != nil {
+			continue
+		}
+		var original *Transaction
+		json.Unmarshal([]byte(test.input), &original)
+
+		blob, err := json.Marshal(original)
+		if err != nil {
+			t.Errorf("test %q: failed to marshal transaction: %v", name, err)
+			continue
+		}
+		var proced *Transaction
+		if err := json.Unmarshal(blob, &proced); err != nil {
+			t.Errorf("Test %q: failed to unmarshal marhsalled transaction: %v", name, err)
+			continue
+		}
+		proced.Hash() // hack private fields to pass deep equal
+		if !reflect.DeepEqual(original, proced) {
+			t.Errorf("test %q: transaction mismatch: have %+v, want %+v", name, proced, original)
+			continue
+		}
+	}
+}
+
 var unmarshalReceiptTests = map[string]struct {
 	input     string
 	wantError error
@@ -116,6 +168,31 @@ func TestUnmarshalReceipt(t *testing.T) {
 		var r *Receipt
 		err := json.Unmarshal([]byte(test.input), &r)
 		checkError(t, name, err, test.wantError)
+	}
+}
+
+func TestMarshalReceipt(t *testing.T) {
+	for name, test := range unmarshalReceiptTests {
+		if test.wantError != nil {
+			continue
+		}
+		var original *Receipt
+		json.Unmarshal([]byte(test.input), &original)
+
+		blob, err := json.Marshal(original)
+		if err != nil {
+			t.Errorf("test %q: failed to marshal receipt: %v", name, err)
+			continue
+		}
+		var proced *Receipt
+		if err := json.Unmarshal(blob, &proced); err != nil {
+			t.Errorf("Test %q: failed to unmarshal marhsalled receipt: %v", name, err)
+			continue
+		}
+		if !reflect.DeepEqual(original, proced) {
+			t.Errorf("test %q: receipt mismatch: have %+v, want %+v", name, proced, original)
+			continue
+		}
 	}
 }
 
