@@ -128,6 +128,24 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
+// MarshalJSON encodes transactions into the web3 RPC response block format.
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	hash, v := tx.Hash(), uint64(tx.data.V)
+
+	return json.Marshal(&jsonTransaction{
+		Hash:         &hash,
+		AccountNonce: (*hexUint64)(&tx.data.AccountNonce),
+		Price:        (*hexBig)(tx.data.Price),
+		GasLimit:     (*hexBig)(tx.data.GasLimit),
+		Recipient:    tx.data.Recipient,
+		Amount:       (*hexBig)(tx.data.Amount),
+		Payload:      (*hexBytes)(&tx.data.Payload),
+		V:            (*hexUint64)(&v),
+		R:            (*hexBig)(tx.data.R),
+		S:            (*hexBig)(tx.data.S),
+	})
+}
+
 // UnmarshalJSON decodes the web3 RPC transaction format.
 func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	var dec jsonTransaction

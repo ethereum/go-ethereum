@@ -26,6 +26,13 @@ import (
 
 type hexBytes []byte
 
+func (b *hexBytes) MarshalJSON() ([]byte, error) {
+	if b != nil {
+		return []byte(fmt.Sprintf(`"0x%x"`, []byte(*b))), nil
+	}
+	return nil, nil
+}
+
 func (b *hexBytes) UnmarshalJSON(input []byte) error {
 	if len(input) < 2 || input[0] != '"' || input[len(input)-1] != '"' {
 		return fmt.Errorf("cannot unmarshal non-string into hexBytes")
@@ -44,6 +51,13 @@ func (b *hexBytes) UnmarshalJSON(input []byte) error {
 
 type hexBig big.Int
 
+func (b *hexBig) MarshalJSON() ([]byte, error) {
+	if b != nil {
+		return []byte(fmt.Sprintf(`"0x%x"`, (*big.Int)(b))), nil
+	}
+	return nil, nil
+}
+
 func (b *hexBig) UnmarshalJSON(input []byte) error {
 	raw, err := checkHexNumber(input)
 	if err != nil {
@@ -58,6 +72,13 @@ func (b *hexBig) UnmarshalJSON(input []byte) error {
 }
 
 type hexUint64 uint64
+
+func (b *hexUint64) MarshalJSON() ([]byte, error) {
+	if b != nil {
+		return []byte(fmt.Sprintf(`"0x%x"`, *(*uint64)(b))), nil
+	}
+	return nil, nil
+}
 
 func (b *hexUint64) UnmarshalJSON(input []byte) error {
 	raw, err := checkHexNumber(input)

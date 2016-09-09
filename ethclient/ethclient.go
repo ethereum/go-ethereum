@@ -227,7 +227,7 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "newBlocks", map[string]struct{}{})
+	return ec.c.EthSubscribe(ctx, ch, "newHeads", map[string]struct{}{})
 }
 
 // State Access
