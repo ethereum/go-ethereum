@@ -28,7 +28,6 @@ import (
 
 // Constants to match up protocol versions and messages
 const (
-	eth61 = 61
 	eth62 = 62
 	eth63 = 63
 )
@@ -37,10 +36,10 @@ const (
 var ProtocolName = "eth"
 
 // Supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth63, eth62, eth61}
+var ProtocolVersions = []uint{eth63, eth62}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{17, 8, 9}
+var ProtocolLengths = []uint64{17, 8}
 
 const (
 	NetworkId          = 1
@@ -49,26 +48,15 @@ const (
 
 // eth protocol message codes
 const (
-	// Protocol messages belonging to eth/61
-	StatusMsg                   = 0x00
-	NewBlockHashesMsg           = 0x01
-	TxMsg                       = 0x02
-	GetBlockHashesMsg           = 0x03
-	BlockHashesMsg              = 0x04
-	GetBlocksMsg                = 0x05
-	BlocksMsg                   = 0x06
-	NewBlockMsg                 = 0x07
-	GetBlockHashesFromNumberMsg = 0x08
-
-	// Protocol messages belonging to eth/62 (new protocol from scratch)
-	// StatusMsg          = 0x00 (uncomment after eth/61 deprecation)
-	// NewBlockHashesMsg  = 0x01 (uncomment after eth/61 deprecation)
-	// TxMsg              = 0x02 (uncomment after eth/61 deprecation)
+	// Protocol messages belonging to eth/62
+	StatusMsg          = 0x00
+	NewBlockHashesMsg  = 0x01
+	TxMsg              = 0x02
 	GetBlockHeadersMsg = 0x03
 	BlockHeadersMsg    = 0x04
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
-	// 	NewBlockMsg       = 0x07 (uncomment after eth/61 deprecation)
+	NewBlockMsg        = 0x07
 
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
@@ -109,18 +97,12 @@ var errorToString = map[int]string{
 }
 
 type txPool interface {
-	// AddTransactions should add the given transactions to the pool.
-	AddTransactions([]*types.Transaction)
+	// AddBatch should add the given transactions to the pool.
+	AddBatch([]*types.Transaction)
 
-	// GetTransactions should return pending transactions.
+	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
-	GetTransactions() types.Transactions
-}
-
-type chainManager interface {
-	GetBlockHashesFromHash(hash common.Hash, amount uint64) (hashes []common.Hash)
-	GetBlock(hash common.Hash) (block *types.Block)
-	Status() (td *big.Int, currentBlock common.Hash, genesisBlock common.Hash)
+	Pending() map[common.Address]types.Transactions
 }
 
 // statusData is the network packet for the status message.
@@ -136,19 +118,6 @@ type statusData struct {
 type newBlockHashesData []struct {
 	Hash   common.Hash // Hash of one particular block being announced
 	Number uint64      // Number of one particular block being announced
-}
-
-// getBlockHashesData is the network packet for the hash based hash retrieval.
-type getBlockHashesData struct {
-	Hash   common.Hash
-	Amount uint64
-}
-
-// getBlockHashesFromNumberData is the network packet for the number based hash
-// retrieval.
-type getBlockHashesFromNumberData struct {
-	Number uint64
-	Amount uint64
 }
 
 // getBlockHeadersData represents a block header query.
@@ -209,8 +178,3 @@ type blockBody struct {
 
 // blockBodiesData is the network packet for block content distribution.
 type blockBodiesData []*blockBody
-
-// nodeDataData is the network response packet for a node data retrieval.
-type nodeDataData []struct {
-	Value []byte
-}

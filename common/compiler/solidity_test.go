@@ -26,10 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const solcVersion = "0.1.1"
-
-var (
-	source = `
+const (
+	supportedSolcVersion = "0.3.5"
+	testSource           = `
 contract test {
    /// @notice Will multiply ` + "`a`" + ` by 7.
    function multiply(uint a) returns(uint d) {
@@ -37,61 +36,57 @@ contract test {
    }
 }
 `
-	code = "0x6060604052606d8060116000396000f30060606040526000357c010000000000000000000000000000000000000000000000000000000090048063c6888fa1146037576035565b005b6046600480359060200150605c565b6040518082815260200191505060405180910390f35b60006007820290506068565b91905056"
-	info = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0.1.1","compilerVersion":"0.1.1","compilerOptions":"--binary file --json-abi file --natspec-user file --natspec-dev file --add-std 1","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
-
-	infohash = common.HexToHash("0x9f3803735e7f16120c5a140ab3f02121fd3533a9655c69b33a10e78752cc49b0")
+	testCode = "0x6060604052602a8060106000396000f3606060405260e060020a6000350463c6888fa18114601a575b005b6007600435026060908152602090f3"
+	testInfo = `{"source":"\ncontract test {\n   /// @notice Will multiply ` + "`a`" + ` by 7.\n   function multiply(uint a) returns(uint d) {\n       return a * 7;\n   }\n}\n","language":"Solidity","languageVersion":"0.1.1","compilerVersion":"0.1.1","compilerOptions":"--binary file --json-abi file --natspec-user file --natspec-dev file --add-std 1","abiDefinition":[{"constant":false,"inputs":[{"name":"a","type":"uint256"}],"name":"multiply","outputs":[{"name":"d","type":"uint256"}],"type":"function"}],"userDoc":{"methods":{"multiply(uint256)":{"notice":"Will multiply ` + "`a`" + ` by 7."}}},"developerDoc":{"methods":{}}}`
 )
 
-func TestCompiler(t *testing.T) {
-	sol, err := New("")
+func skipUnsupported(t *testing.T) {
+	sol, err := SolidityVersion("")
 	if err != nil {
-		t.Skipf("solc not found: %v", err)
-	} else if sol.Version() != solcVersion {
-		t.Skipf("WARNING: a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
-	}
-	contracts, err := sol.Compile(source)
-	if err != nil {
-		t.Errorf("error compiling source. result %v: %v", contracts, err)
+		t.Skip(err)
 		return
 	}
+	if sol.Version != supportedSolcVersion {
+		t.Skipf("unsupported version of solc found (%v, expect %v)", sol.Version, supportedSolcVersion)
+	}
+}
 
+func TestCompiler(t *testing.T) {
+	skipUnsupported(t)
+	contracts, err := CompileSolidityString("", testSource)
+	if err != nil {
+		t.Fatalf("error compiling source. result %v: %v", contracts, err)
+	}
 	if len(contracts) != 1 {
 		t.Errorf("one contract expected, got %d", len(contracts))
 	}
-
-	if contracts["test"].Code != code {
-		t.Errorf("wrong code, expected\n%s, got\n%s", code, contracts["test"].Code)
+	c, ok := contracts["test"]
+	if !ok {
+		t.Fatal("info for contract 'test' not present in result")
 	}
-
+	if c.Code != testCode {
+		t.Errorf("wrong code: expected\n%s, got\n%s", testCode, c.Code)
+	}
+	if c.Info.Source != testSource {
+		t.Error("wrong source")
+	}
+	if c.Info.CompilerVersion != supportedSolcVersion {
+		t.Errorf("wrong version: expected %q, got %q", supportedSolcVersion, c.Info.CompilerVersion)
+	}
 }
 
 func TestCompileError(t *testing.T) {
-	sol, err := New("")
-	if err != nil || sol.version != solcVersion {
-		t.Skip("solc not found: skip")
-	} else if sol.Version() != solcVersion {
-		t.Skip("WARNING: skipping due to a newer version of solc found (%v, expect %v)", sol.Version(), solcVersion)
-	}
-	contracts, err := sol.Compile(source[2:])
+	skipUnsupported(t)
+	contracts, err := CompileSolidityString("", testSource[4:])
 	if err == nil {
 		t.Errorf("error expected compiling source. got none. result %v", contracts)
-		return
 	}
-}
-
-func TestNoCompiler(t *testing.T) {
-	_, err := New("/path/to/solc")
-	if err != nil {
-		t.Logf("solidity quits with error: %v", err)
-	} else {
-		t.Errorf("no solc installed, but got no error")
-	}
+	t.Logf("error: %v", err)
 }
 
 func TestSaveInfo(t *testing.T) {
 	var cinfo ContractInfo
-	err := json.Unmarshal([]byte(info), &cinfo)
+	err := json.Unmarshal([]byte(testInfo), &cinfo)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -105,10 +100,11 @@ func TestSaveInfo(t *testing.T) {
 	if err != nil {
 		t.Errorf("error reading '%v': %v", filename, err)
 	}
-	if string(got) != info {
-		t.Errorf("incorrect info.json extracted, expected:\n%s\ngot\n%s", info, string(got))
+	if string(got) != testInfo {
+		t.Errorf("incorrect info.json extracted, expected:\n%s\ngot\n%s", testInfo, string(got))
 	}
-	if cinfohash != infohash {
-		t.Errorf("content hash for info is incorrect. expected %v, got %v", infohash.Hex(), cinfohash.Hex())
+	wantHash := common.HexToHash("0x9f3803735e7f16120c5a140ab3f02121fd3533a9655c69b33a10e78752cc49b0")
+	if cinfohash != wantHash {
+		t.Errorf("content hash for info is incorrect. expected %v, got %v", wantHash.Hex(), cinfohash.Hex())
 	}
 }

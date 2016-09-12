@@ -347,11 +347,11 @@ func (t *Tag) remakeString() {
 	var buf [max99thPercentileSize]byte // avoid extra memory allocation in most cases.
 	b := buf[:t.genCoreBytes(buf[:])]
 	if extra != "" {
-		diff := uint8(len(b)) - t.pVariant
+		diff := len(b) - int(t.pVariant)
 		b = append(b, '-')
 		b = append(b, extra...)
-		t.pVariant += diff
-		t.pExt += uint16(diff)
+		t.pVariant = uint8(int(t.pVariant) + diff)
+		t.pExt = uint16(int(t.pExt) + diff)
 	} else {
 		t.pVariant = uint8(len(b))
 		t.pExt = uint16(len(b))

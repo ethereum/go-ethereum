@@ -23,6 +23,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
+	"sort"
 	"sync"
 	"testing"
 
@@ -56,7 +57,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		chainConfig   = &core.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
 		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux)
 	)
-	chain, _ := core.GenerateChain(genesis, db, blocks, generator)
+	chain, _ := core.GenerateChain(nil, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
@@ -89,9 +90,9 @@ type testTxPool struct {
 	lock sync.RWMutex // Protects the transaction pool
 }
 
-// AddTransactions appends a batch of transactions to the pool, and notifies any
+// AddBatch appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddTransactions(txs []*types.Transaction) {
+func (p *testTxPool) AddBatch(txs []*types.Transaction) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -101,15 +102,20 @@ func (p *testTxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
-// GetTransactions returns all the transactions known to the pool
-func (p *testTxPool) GetTransactions() types.Transactions {
+// Pending returns all the transactions known to the pool
+func (p *testTxPool) Pending() map[common.Address]types.Transactions {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	txs := make([]*types.Transaction, len(p.pool))
-	copy(txs, p.pool)
-
-	return txs
+	batches := make(map[common.Address]types.Transactions)
+	for _, tx := range p.pool {
+		from, _ := tx.From()
+		batches[from] = append(batches[from], tx)
+	}
+	for _, batch := range batches {
+		sort.Sort(types.TxByNonce(batch))
+	}
+	return batches
 }
 
 // newTestTransaction create a new dummy transaction.

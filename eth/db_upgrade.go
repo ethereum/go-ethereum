@@ -93,6 +93,9 @@ func upgradeSequentialKeys(db ethdb.Database) (stopFn func()) {
 func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (error, bool) {
 	prefix := []byte("block-num-")
 	it := db.(*ethdb.LDBDatabase).NewIterator()
+	defer func() {
+		it.Release()
+	}()
 	it.Seek(prefix)
 	cnt := 0
 	for bytes.HasPrefix(it.Key(), prefix) {
@@ -100,6 +103,9 @@ func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (e
 		if len(keyPtr) < 20 {
 			cnt++
 			if cnt%100000 == 0 {
+				it.Release()
+				it = db.(*ethdb.LDBDatabase).NewIterator()
+				it.Seek(keyPtr)
 				glog.V(logger.Info).Infof("converting %d canonical numbers...", cnt)
 			}
 			number := big.NewInt(0).SetBytes(keyPtr[10:]).Uint64()
@@ -130,6 +136,9 @@ func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (e
 func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool) {
 	prefix := []byte("block-")
 	it := db.(*ethdb.LDBDatabase).NewIterator()
+	defer func() {
+		it.Release()
+	}()
 	it.Seek(prefix)
 	cnt := 0
 	for bytes.HasPrefix(it.Key(), prefix) {
@@ -137,6 +146,9 @@ func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool
 		if len(keyPtr) >= 38 {
 			cnt++
 			if cnt%10000 == 0 {
+				it.Release()
+				it = db.(*ethdb.LDBDatabase).NewIterator()
+				it.Seek(keyPtr)
 				glog.V(logger.Info).Infof("converting %d blocks...", cnt)
 			}
 			// convert header, body, td and block receipts
@@ -175,6 +187,7 @@ func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool
 func upgradeSequentialOrphanedReceipts(db ethdb.Database, stopFn func() bool) (error, bool) {
 	prefix := []byte("receipts-block-")
 	it := db.(*ethdb.LDBDatabase).NewIterator()
+	defer it.Release()
 	it.Seek(prefix)
 	cnt := 0
 	for bytes.HasPrefix(it.Key(), prefix) {

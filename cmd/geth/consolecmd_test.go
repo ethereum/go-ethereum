@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -45,7 +46,7 @@ func TestConsoleWelcome(t *testing.T) {
 	// Gather all the infos the welcome message needs to contain
 	geth.setTemplateFunc("goos", func() string { return runtime.GOOS })
 	geth.setTemplateFunc("gover", runtime.Version)
-	geth.setTemplateFunc("gethver", func() string { return verString })
+	geth.setTemplateFunc("gethver", func() string { return utils.Version })
 	geth.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	geth.setTemplateFunc("apis", func() []string {
 		apis := append(strings.Split(rpc.DefaultIPCApis, ","), rpc.MetadataApi)
@@ -131,7 +132,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
 	// Gather all the infos the welcome message needs to contain
 	attach.setTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.setTemplateFunc("gover", runtime.Version)
-	attach.setTemplateFunc("gethver", func() string { return verString })
+	attach.setTemplateFunc("gethver", func() string { return utils.Version })
 	attach.setTemplateFunc("etherbase", func() string { return geth.Etherbase })
 	attach.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	attach.setTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })

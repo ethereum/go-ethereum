@@ -36,19 +36,12 @@ func (self Storage) Copy() Storage {
 	return cpy
 }
 
-// StructLogCollector is the basic interface to capture emited logs by the EVM logger.
-type StructLogCollector interface {
-	// Adds the structured log to the collector.
-	AddStructLog(StructLog)
-}
-
 // LogConfig are the configuration options for structured logger the EVM
 type LogConfig struct {
-	DisableMemory  bool               // disable memory capture
-	DisableStack   bool               // disable stack capture
-	DisableStorage bool               // disable storage capture
-	FullStorage    bool               // show full storage (slow)
-	Collector      StructLogCollector // the log collector
+	DisableMemory  bool // disable memory capture
+	DisableStack   bool // disable stack capture
+	DisableStorage bool // disable storage capture
+	FullStorage    bool // show full storage (slow)
 }
 
 // StructLog is emitted to the Environment each cycle and lists information about the current internal state
@@ -65,36 +58,42 @@ type StructLog struct {
 	Err     error
 }
 
-// Logger is an EVM state logger and implements VmLogger.
+// Tracer is used to collect execution traces from an EVM transaction
+// execution. CaptureState is called for each step of the VM with the
+// current VM state.
+// Note that reference types are actual VM data structures; make copies
+// if you need to retain them beyond the current call.
+type Tracer interface {
+	CaptureState(env Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error)
+}
+
+// StructLogger is an EVM state logger and implements Tracer.
 //
-// Logger can capture state based on the given Log configuration and also keeps
+// StructLogger can capture state based on the given Log configuration and also keeps
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
-type Logger struct {
+type StructLogger struct {
 	cfg LogConfig
 
-	env           Environment
+	logs          []StructLog
 	changedValues map[common.Address]Storage
 }
 
-// newLogger returns a new logger
-func newLogger(cfg LogConfig, env Environment) *Logger {
-	return &Logger{
-		cfg:           cfg,
-		env:           env,
+// NewLogger returns a new logger
+func NewStructLogger(cfg *LogConfig) *StructLogger {
+	logger := &StructLogger{
 		changedValues: make(map[common.Address]Storage),
 	}
+	if cfg != nil {
+		logger.cfg = *cfg
+	}
+	return logger
 }
 
 // captureState logs a new structured log message and pushes it out to the environment
 //
 // captureState also tracks SSTORE ops to track dirty values.
-func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, contract *Contract, depth int, err error) {
-	// short circuit if no log collector is present
-	if l.cfg.Collector == nil {
-		return
-	}
-
+func (l *StructLogger) CaptureState(env Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) {
 	// initialise new changed values storage container for this contract
 	// if not present.
 	if l.changedValues[contract.Address()] == nil {
@@ -139,7 +138,7 @@ func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *
 			storage = make(Storage)
 			// Get the contract account and loop over each storage entry. This may involve looping over
 			// the trie and is a very expensive process.
-			l.env.Db().GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
+			env.Db().GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
 				storage[key] = value
 				// Return true, indicating we'd like to continue.
 				return true
@@ -150,9 +149,14 @@ func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *
 		}
 	}
 	// create a new snaptshot of the EVM.
-	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, l.env.Depth(), err}
-	// Add the log to the collector
-	l.cfg.Collector.AddStructLog(log)
+	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, env.Depth(), err}
+
+	l.logs = append(l.logs, log)
+}
+
+// StructLogs returns a list of captured log entries
+func (l *StructLogger) StructLogs() []StructLog {
+	return l.logs
 }
 
 // StdErrFormat formats a slice of StructLogs to human readable format

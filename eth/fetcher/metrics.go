@@ -33,12 +33,9 @@ var (
 	propBroadcastDropMeter = metrics.NewMeter("eth/fetcher/prop/broadcasts/drop")
 	propBroadcastDOSMeter  = metrics.NewMeter("eth/fetcher/prop/broadcasts/dos")
 
-	blockFetchMeter  = metrics.NewMeter("eth/fetcher/fetch/blocks")
 	headerFetchMeter = metrics.NewMeter("eth/fetcher/fetch/headers")
 	bodyFetchMeter   = metrics.NewMeter("eth/fetcher/fetch/bodies")
 
-	blockFilterInMeter   = metrics.NewMeter("eth/fetcher/filter/blocks/in")
-	blockFilterOutMeter  = metrics.NewMeter("eth/fetcher/filter/blocks/out")
 	headerFilterInMeter  = metrics.NewMeter("eth/fetcher/filter/headers/in")
 	headerFilterOutMeter = metrics.NewMeter("eth/fetcher/filter/headers/out")
 	bodyFilterInMeter    = metrics.NewMeter("eth/fetcher/filter/bodies/in")

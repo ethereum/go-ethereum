@@ -25,9 +25,6 @@ import (
 // the introduction of some kind of error type for conveying the erroneous code
 // point.
 
-// TODO:
-// - Define UTF-32?
-
 // UTF8 is the UTF-8 encoding.
 var UTF8 encoding.Encoding = utf8enc
 
@@ -290,6 +287,12 @@ func (u *utf16Decoder) Reset() {
 }
 
 func (u *utf16Decoder) Transform(dst, src []byte, atEOF bool) (nDst, nSrc int, err error) {
+	if len(src) == 0 {
+		if atEOF && u.current.bomPolicy&requireBOM != 0 {
+			return 0, 0, ErrMissingBOM
+		}
+		return 0, 0, nil
+	}
 	if u.current.bomPolicy&acceptBOM != 0 {
 		if len(src) < 2 {
 			return 0, 0, transform.ErrShortSrc

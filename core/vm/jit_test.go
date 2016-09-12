@@ -85,7 +85,7 @@ func TestCompiling(t *testing.T) {
 func TestResetInput(t *testing.T) {
 	var sender account
 
-	env := NewEnv(false, true)
+	env := NewEnv(&Config{EnableJit: true, ForceJit: true})
 	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000), big.NewInt(0))
 	contract.CodeAddr = &common.Address{}
 
@@ -144,7 +144,7 @@ func runVmBench(test vmBench, b *testing.B) {
 	if test.precompile && !test.forcejit {
 		NewProgram(test.code)
 	}
-	env := NewEnv(test.nojit, test.forcejit)
+	env := NewEnv(&Config{EnableJit: !test.nojit, ForceJit: test.forcejit})
 
 	b.ResetTimer()
 
@@ -166,12 +166,9 @@ type Env struct {
 	evm      *EVM
 }
 
-func NewEnv(noJit, forceJit bool) *Env {
+func NewEnv(config *Config) *Env {
 	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
-	env.evm = New(env, Config{
-		EnableJit: !noJit,
-		ForceJit:  forceJit,
-	})
+	env.evm = New(env, *config)
 	return env
 }
 
@@ -179,11 +176,6 @@ func (self *Env) RuleSet() RuleSet       { return ruleSet{new(big.Int)} }
 func (self *Env) Vm() Vm                 { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
-func (self *Env) AddStructLog(log StructLog) {
-}
-func (self *Env) StructLogs() []StructLog {
-	return nil
-}
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return common.Address{} }

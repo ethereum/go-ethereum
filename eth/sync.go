@@ -45,7 +45,10 @@ type txsync struct {
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (pm *ProtocolManager) syncTransactions(p *peer) {
-	txs := pm.txpool.GetTransactions()
+	var txs types.Transactions
+	for _, batch := range pm.txpool.Pending() {
+		txs = append(txs, batch...)
+	}
 	if len(txs) == 0 {
 		return
 	}
@@ -161,10 +164,12 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if peer == nil {
 		return
 	}
-	// Make sure the peer's TD is higher than our own. If not drop.
+	// Make sure the peer's TD is higher than our own
 	currentBlock := pm.blockchain.CurrentBlock()
 	td := pm.blockchain.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
-	if peer.Td().Cmp(td) <= 0 {
+
+	pHead, pTd := peer.Head()
+	if pTd.Cmp(td) <= 0 {
 		return
 	}
 	// Otherwise try to sync with the downloader
@@ -172,7 +177,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		mode = downloader.FastSync
 	}
-	if err := pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), mode); err != nil {
+	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {
 		return
 	}
 	atomic.StoreUint32(&pm.synced, 1) // Mark initial sync done

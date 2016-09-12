@@ -19,21 +19,24 @@ package types
 import (
 	"container/heap"
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
-	"sort"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var ErrInvalidSig = errors.New("invalid v, r, s values")
+var ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+
+var (
+	errMissingTxSignatureFields = errors.New("missing required JSON transaction signature fields")
+	errMissingTxFields          = errors.New("missing required JSON transaction fields")
+)
 
 type Transaction struct {
 	data txdata
@@ -53,6 +56,20 @@ type txdata struct {
 	R, S            *big.Int // signature
 }
 
+type jsonTransaction struct {
+	Hash         *common.Hash    `json:"hash"`
+	AccountNonce *hexUint64      `json:"nonce"`
+	Price        *hexBig         `json:"gasPrice"`
+	GasLimit     *hexBig         `json:"gas"`
+	Recipient    *common.Address `json:"to"`
+	Amount       *hexBig         `json:"value"`
+	Payload      *hexBytes       `json:"input"`
+	V            *hexUint64      `json:"v"`
+	R            *hexBig         `json:"r"`
+	S            *hexBig         `json:"s"`
+}
+
+// NewContractCreation creates a new transaction with no recipient.
 func NewContractCreation(nonce uint64, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
@@ -69,6 +86,7 @@ func NewContractCreation(nonce uint64, amount, gasLimit, gasPrice *big.Int, data
 	}}
 }
 
+// NewTransaction creates a new transaction with the given fields.
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
@@ -95,10 +113,12 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 	return &Transaction{data: d}
 }
 
+// DecodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
 
+// DecodeRLP implements rlp.Decoder
 func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	_, size, _ := s.Kind()
 	err := s.Decode(&tx.data)
@@ -108,11 +128,66 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
+// MarshalJSON encodes transactions into the web3 RPC response block format.
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	hash, v := tx.Hash(), uint64(tx.data.V)
+
+	return json.Marshal(&jsonTransaction{
+		Hash:         &hash,
+		AccountNonce: (*hexUint64)(&tx.data.AccountNonce),
+		Price:        (*hexBig)(tx.data.Price),
+		GasLimit:     (*hexBig)(tx.data.GasLimit),
+		Recipient:    tx.data.Recipient,
+		Amount:       (*hexBig)(tx.data.Amount),
+		Payload:      (*hexBytes)(&tx.data.Payload),
+		V:            (*hexUint64)(&v),
+		R:            (*hexBig)(tx.data.R),
+		S:            (*hexBig)(tx.data.S),
+	})
+}
+
+// UnmarshalJSON decodes the web3 RPC transaction format.
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
+	var dec jsonTransaction
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	// Ensure that all fields are set. V, R, S are checked separately because they're a
+	// recent addition to the RPC spec (as of August 2016) and older implementations might
+	// not provide them. Note that Recipient is not checked because it can be missing for
+	// contract creations.
+	if dec.V == nil || dec.R == nil || dec.S == nil {
+		return errMissingTxSignatureFields
+	}
+	if !crypto.ValidateSignatureValues(byte(*dec.V), (*big.Int)(dec.R), (*big.Int)(dec.S), false) {
+		return ErrInvalidSig
+	}
+	if dec.AccountNonce == nil || dec.Price == nil || dec.GasLimit == nil || dec.Amount == nil || dec.Payload == nil {
+		return errMissingTxFields
+	}
+	// Assign the fields. This is not atomic but reusing transactions
+	// for decoding isn't thread safe anyway.
+	*tx = Transaction{}
+	tx.data = txdata{
+		AccountNonce: uint64(*dec.AccountNonce),
+		Recipient:    dec.Recipient,
+		Amount:       (*big.Int)(dec.Amount),
+		GasLimit:     (*big.Int)(dec.GasLimit),
+		Price:        (*big.Int)(dec.Price),
+		Payload:      *dec.Payload,
+		V:            byte(*dec.V),
+		R:            (*big.Int)(dec.R),
+		S:            (*big.Int)(dec.S),
+	}
+	return nil
+}
+
 func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
 func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.GasLimit) }
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
 func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool   { return true }
 
 func (tx *Transaction) To() *common.Address {
 	if tx.data.Recipient == nil {
@@ -214,6 +289,7 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
+// SignatureValues returns the ECDSA signature values contained in the transaction.
 func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int) {
 	return tx.data.V, new(big.Int).Set(tx.data.R), new(big.Int).Set(tx.data.S)
 }
@@ -234,7 +310,6 @@ func (tx *Transaction) publicKey(homestead bool) ([]byte, error) {
 	hash := tx.SigHash()
 	pub, err := crypto.Ecrecover(hash[:], sig)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get pubkey from signature: ", err)
 		return nil, err
 	}
 	if len(pub) == 0 || pub[0] != 4 {
@@ -369,49 +444,58 @@ func (s *TxByPrice) Pop() interface{} {
 	return x
 }
 
-// SortByPriceAndNonce sorts the transactions by price in such a way that the
-// nonce orderings within a single account are maintained.
+// TransactionsByPriceAndNonce represents a set of transactions that can return
+// transactions in a profit-maximising sorted order, while supporting removing
+// entire batches of transactions for non-executable accounts.
+type TransactionsByPriceAndNonce struct {
+	txs   map[common.Address]Transactions // Per account nonce-sorted list of transactions
+	heads TxByPrice                       // Next transaction for each unique account (price heap)
+}
+
+// NewTransactionsByPriceAndNonce creates a transaction set that can retrieve
+// price sorted transactions in a nonce-honouring way.
 //
-// Note, this is not as trivial as it seems from the first look as there are three
-// different criteria that need to be taken into account (price, nonce, account
-// match), which cannot be done with any plain sorting method, as certain items
-// cannot be compared without context.
-//
-// This method first sorts the separates the list of transactions into individual
-// sender accounts and sorts them by nonce. After the account nonce ordering is
-// satisfied, the results are merged back together by price, always comparing only
-// the head transaction from each account. This is done via a heap to keep it fast.
-func SortByPriceAndNonce(txs []*Transaction) {
-	// Separate the transactions by account and sort by nonce
-	byNonce := make(map[common.Address][]*Transaction)
-	for _, tx := range txs {
-		acc, _ := tx.From() // we only sort valid txs so this cannot fail
-		byNonce[acc] = append(byNonce[acc], tx)
-	}
-	for _, accTxs := range byNonce {
-		sort.Sort(TxByNonce(accTxs))
-	}
+// Note, the input map is reowned so the caller should not interact any more with
+// if after providng it to the constructor.
+func NewTransactionsByPriceAndNonce(txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
 	// Initialize a price based heap with the head transactions
-	byPrice := make(TxByPrice, 0, len(byNonce))
-	for acc, accTxs := range byNonce {
-		byPrice = append(byPrice, accTxs[0])
-		byNonce[acc] = accTxs[1:]
+	heads := make(TxByPrice, 0, len(txs))
+	for acc, accTxs := range txs {
+		heads = append(heads, accTxs[0])
+		txs[acc] = accTxs[1:]
 	}
-	heap.Init(&byPrice)
+	heap.Init(&heads)
 
-	// Merge by replacing the best with the next from the same account
-	txs = txs[:0]
-	for len(byPrice) > 0 {
-		// Retrieve the next best transaction by price
-		best := heap.Pop(&byPrice).(*Transaction)
-
-		// Push in its place the next transaction from the same account
-		acc, _ := best.From() // we only sort valid txs so this cannot fail
-		if accTxs, ok := byNonce[acc]; ok && len(accTxs) > 0 {
-			heap.Push(&byPrice, accTxs[0])
-			byNonce[acc] = accTxs[1:]
-		}
-		// Accumulate the best priced transaction
-		txs = append(txs, best)
+	// Assemble and return the transaction set
+	return &TransactionsByPriceAndNonce{
+		txs:   txs,
+		heads: heads,
 	}
+}
+
+// Peek returns the next transaction by price.
+func (t *TransactionsByPriceAndNonce) Peek() *Transaction {
+	if len(t.heads) == 0 {
+		return nil
+	}
+	return t.heads[0]
+}
+
+// Shift replaces the current best head with the next one from the same account.
+func (t *TransactionsByPriceAndNonce) Shift() {
+	acc, _ := t.heads[0].From() // we only sort valid txs so this cannot fail
+
+	if txs, ok := t.txs[acc]; ok && len(txs) > 0 {
+		t.heads[0], t.txs[acc] = txs[0], txs[1:]
+		heap.Fix(&t.heads, 0)
+	} else {
+		heap.Pop(&t.heads)
+	}
+}
+
+// Pop removes the best transaction, *not* replacing it with the next one from
+// the same account. This should be used when a transaction cannot be executed
+// and hence all subsequent ones should be discarded from the same account.
+func (t *TransactionsByPriceAndNonce) Pop() {
+	heap.Pop(&t.heads)
 }

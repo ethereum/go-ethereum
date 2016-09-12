@@ -32,7 +32,9 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -40,50 +42,24 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/release"
-	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
 const (
-	clientIdentifier = "Geth"     // Client identifier to advertise over the network
-	versionMajor     = 1          // Major version component of the current release
-	versionMinor     = 5          // Minor version component of the current release
-	versionPatch     = 0          // Patch version component of the current release
-	versionMeta      = "unstable" // Version metadata to append to the version string
-
-	versionOracle = "0xfa7b9770ca4cb04296cac84f37736d4041251cdf" // Ethereum address of the Geth release oracle
+	clientIdentifier = "Geth" // Client identifier to advertise over the network
 )
 
 var (
-	gitCommit string         // Git SHA1 commit hash of the release (set via linker flags)
-	verString string         // Combined textual representation of all the version components
-	relConfig release.Config // Structured version information and release oracle config
-	app       *cli.App
+	// Git SHA1 commit hash of the release (set via linker flags)
+	gitCommit = ""
+	// Ethereum address of the Geth release oracle.
+	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
+	// The app that holds all commands and flags.
+	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
 )
 
 func init() {
-	// Construct the textual version string from the individual components
-	verString = fmt.Sprintf("%d.%d.%d", versionMajor, versionMinor, versionPatch)
-	if versionMeta != "" {
-		verString += "-" + versionMeta
-	}
-	if gitCommit != "" {
-		verString += "-" + gitCommit[:8]
-	}
-	// Construct the version release oracle configuration
-	relConfig.Oracle = common.HexToAddress(versionOracle)
-
-	relConfig.Major = uint32(versionMajor)
-	relConfig.Minor = uint32(versionMinor)
-	relConfig.Patch = uint32(versionPatch)
-
-	commit, _ := hex.DecodeString(gitCommit)
-	copy(relConfig.Commit[:], commit)
-
 	// Initialize the CLI app and start Geth
-	app = utils.NewApp(verString, "the go-ethereum command line interface")
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
 	app.Commands = []cli.Command{
@@ -143,13 +119,17 @@ This is a destructive action and changes the network in which you will be
 participating.
 `,
 		},
+		{
+			Action: license,
+			Name:   "license",
+			Usage:  "displays geth's license information",
+		},
 	}
 
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.GenesisFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
@@ -164,6 +144,8 @@ participating.
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
+		utils.SupportDAOFork,
+		utils.OpposeDAOFork,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
 		utils.MiningGPUFlag,
@@ -224,12 +206,6 @@ participating.
 		eth.EnableBadBlockReporting = true
 
 		utils.SetupNetwork(ctx)
-
-		// Deprecation warning.
-		if ctx.GlobalIsSet(utils.GenesisFileFlag.Name) {
-			common.PrintDepricationWarning("--genesis is deprecated. Switch to use 'geth init /path/to/file'")
-		}
-
 		return nil
 	}
 
@@ -248,34 +224,13 @@ func main() {
 	}
 }
 
-func makeDefaultExtra() []byte {
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
-	}
-
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		return nil
-	}
-	return extra
-}
-
 // geth is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
-	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
+	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()
-
 	return nil
 }
 
@@ -285,6 +240,10 @@ func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
+	}
+
+	if ctx.GlobalBool(utils.TestNetFlag.Name) {
+		state.StartingNonce = 1048576 // (2**20)
 	}
 
 	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MustMakeDataDir(ctx), "chaindata"), 0, 0)
@@ -305,21 +264,48 @@ func initGenesis(ctx *cli.Context) error {
 	return nil
 }
 
+func makeFullNode(ctx *cli.Context) *node.Node {
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	utils.RegisterEthService(ctx, stack, utils.MakeDefaultExtraData(clientIdentifier))
+
+	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
+	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
+	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
+	if shhEnabled || shhAutoEnabled {
+		utils.RegisterShhService(stack)
+	}
+
+	// Add the release oracle service so it boots along with node.
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := release.Config{
+			Oracle: relOracle,
+			Major:  uint32(utils.VersionMajor),
+			Minor:  uint32(utils.VersionMinor),
+			Patch:  uint32(utils.VersionPatch),
+		}
+		commit, _ := hex.DecodeString(gitCommit)
+		copy(config.Commit[:], commit)
+		return release.NewReleaseService(ctx, config)
+	}); err != nil {
+		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
+	}
+
+	return stack
+}
+
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
+	// Report geth version
+	glog.V(logger.Info).Infof("instance: Geth/%s/%s/%s\n", utils.Version, runtime.Version(), runtime.GOOS)
+
 	// Start up the node itself
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		utils.Fatalf("ethereum service not running: %v", err)
-	}
-	accman := ethereum.AccountManager()
+	accman := stack.AccountManager()
 	passwords := utils.MakePasswordList(ctx)
-
 	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
@@ -328,6 +314,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
+		var ethereum *eth.Ethereum
+		if err := stack.Service(&ethereum); err != nil {
+			utils.Fatalf("ethereum service not running: %v", err)
+		}
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
@@ -391,13 +381,34 @@ func gpubench(ctx *cli.Context) error {
 
 func version(c *cli.Context) error {
 	fmt.Println(clientIdentifier)
-	fmt.Println("Version:", verString)
+	fmt.Println("Version:", utils.Version)
+	if gitCommit != "" {
+		fmt.Println("Git Commit:", gitCommit)
+	}
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+
+	return nil
+}
+
+func license(c *cli.Context) error {
+	fmt.Println(`Geth is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Geth is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with geth. If not, see <http://www.gnu.org/licenses/>.
+`)
 
 	return nil
 }

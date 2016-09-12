@@ -17,68 +17,39 @@
 package rpc
 
 import (
-	"encoding/json"
 	"net"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"golang.org/x/net/context"
 )
 
-// CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on Windows this is a named pipe
+// CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on
+// Windows this is a named pipe
 func CreateIPCListener(endpoint string) (net.Listener, error) {
 	return ipcListen(endpoint)
 }
 
-// ipcClient represent an IPC RPC client. It will connect to a given endpoint and tries to communicate with a node using
-// JSON serialization.
-type ipcClient struct {
-	endpoint string
-	conn     net.Conn
-	out      *json.Encoder
-	in       *json.Decoder
-}
-
-// NewIPCClient create a new IPC client that will connect on the given endpoint. Messages are JSON encoded and encoded.
-// On Unix it assumes the endpoint is the full path to a unix socket, and Windows the endpoint is an identifier for a
-// named pipe.
-func NewIPCClient(endpoint string) (Client, error) {
-	conn, err := newIPCConnection(endpoint)
-	if err != nil {
-		return nil, err
+// ServeListener accepts connections on l, serving JSON-RPC on them.
+func (srv *Server) ServeListener(l net.Listener) error {
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			return err
+		}
+		glog.V(logger.Detail).Infoln("accepted conn", conn.RemoteAddr())
+		go srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 	}
-	return &ipcClient{endpoint: endpoint, conn: conn, in: json.NewDecoder(conn), out: json.NewEncoder(conn)}, nil
 }
 
-// Send will serialize the given message and send it to the server.
-// When sending the message fails it will try to reconnect once and send the message again.
-func (client *ipcClient) Send(msg interface{}) error {
-	if err := client.out.Encode(msg); err == nil {
-		return nil
-	}
-
-	// retry once
-	client.conn.Close()
-
-	conn, err := newIPCConnection(client.endpoint)
-	if err != nil {
-		return err
-	}
-
-	client.conn = conn
-	client.in = json.NewDecoder(conn)
-	client.out = json.NewEncoder(conn)
-
-	return client.out.Encode(msg)
-}
-
-// Recv will read a message from the connection and tries to parse it. It assumes the received message is JSON encoded.
-func (client *ipcClient) Recv(msg interface{}) error {
-	return client.in.Decode(&msg)
-}
-
-// Close will close the underlying IPC connection
-func (client *ipcClient) Close() {
-	client.conn.Close()
-}
-
-// SupportedModules will return the collection of offered RPC modules.
-func (client *ipcClient) SupportedModules() (map[string]string, error) {
-	return SupportedModules(client)
+// DialIPC create a new IPC client that connects to the given endpoint. On Unix it assumes
+// the endpoint is the full path to a unix socket, and Windows the endpoint is an
+// identifier for a named pipe.
+//
+// The context is used for the initial connection establishment. It does not
+// affect subsequent interactions with the client.
+func DialIPC(ctx context.Context, endpoint string) (*Client, error) {
+	return newClient(ctx, func(ctx context.Context) (net.Conn, error) {
+		return newIPCConnection(ctx, endpoint)
+	})
 }

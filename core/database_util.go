@@ -204,7 +204,11 @@ func GetTd(db ethdb.Database, hash common.Hash, number uint64) *big.Int {
 }
 
 // GetBlock retrieves an entire block corresponding to the hash, assembling it
-// back from the stored header and body.
+// back from the stored header and body. If either the header or body could not
+// be retrieved nil is returned.
+//
+// Note, due to concurrent download of header and block body the header and thus
+// canonical hash can be stored in the database but the body data not (yet).
 func GetBlock(db ethdb.Database, hash common.Hash, number uint64) *types.Block {
 	// Retrieve the block header and body contents
 	header := GetHeader(db, hash, number)

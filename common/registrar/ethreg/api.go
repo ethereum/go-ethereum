@@ -128,7 +128,10 @@ func (m callmsg) FromFrontier() (common.Address, error) {
 	return m.from.Address(), nil
 }
 func (m callmsg) Nonce() uint64 {
-	return m.from.Nonce()
+	return 0
+}
+func (m callmsg) CheckNonce() bool {
+	return false
 }
 func (m callmsg) To() *common.Address {
 	return m.to

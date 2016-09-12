@@ -20,6 +20,7 @@ package main
 import (
 	"crypto/ecdsa"
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -32,7 +33,8 @@ import (
 func main() {
 	var (
 		listenAddr  = flag.String("addr", ":30301", "listen address")
-		genKey      = flag.String("genkey", "", "generate a node key and quit")
+		genKey      = flag.String("genkey", "", "generate a node key")
+		writeAddr   = flag.Bool("writeaddress", false, "write out the node's pubkey hash and quit")
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
@@ -45,22 +47,19 @@ func main() {
 	glog.SetToStderr(true)
 	flag.Parse()
 
-	if *genKey != "" {
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			utils.Fatalf("could not generate key: %v", err)
-		}
-		if err := crypto.SaveECDSA(*genKey, key); err != nil {
-			utils.Fatalf("%v", err)
-		}
-		os.Exit(0)
-	}
-
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
 		utils.Fatalf("-nat: %v", err)
 	}
 	switch {
+	case *genKey != "":
+		nodeKey, err = crypto.GenerateKey()
+		if err != nil {
+			utils.Fatalf("could not generate key: %v", err)
+		}
+		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
+			utils.Fatalf("%v", err)
+		}
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
 		utils.Fatalf("Use -nodekey or -nodekeyhex to specify a private key")
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
@@ -73,6 +72,11 @@ func main() {
 		if nodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
 			utils.Fatalf("-nodekeyhex: %v", err)
 		}
+	}
+
+	if *writeAddr {
+		fmt.Printf("%v\n", discover.PubkeyID(&nodeKey.PublicKey))
+		os.Exit(0)
 	}
 
 	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
