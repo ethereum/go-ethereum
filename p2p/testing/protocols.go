@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // a session represents a protocol running on multiple peer connections with single local node
 type Session struct {
+	IDs   []discover.NodeID
 	Peers []*p2p.MsgPipeRW
 	Errs  []error
 	t     *testing.T
@@ -44,16 +46,41 @@ type Expect struct {
 	Timeout time.Duration // timeout duration of receiving
 }
 
+func randomNodeID(t *testing.T) (id discover.NodeID) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("unable to generate key")
+	}
+	pubkey := crypto.FromECDSAPub(&key.PublicKey)
+	copy(id[:], pubkey)
+	return
+}
+
+func RandomNodeIDs(t *testing.T, n int) []discover.NodeID {
+	var ids []discover.NodeID
+	for i := 0; i < 2; i++ {
+		ids = append(ids, randomNodeID(t))
+	}
+	return ids
+}
+
 // NewSession creates a session by setting up a local peer with a prescribed set of peers
 // wg if present allows wg.Wait() be used to block until all peers disconnect
 // disconnect reason errors are written in session.Errs (correcponding to session,Peers)
-func NewSession(t *testing.T, protocol *p2p.Protocol, peerCount int, wg *sync.WaitGroup) *Session {
-	self := &Session{t: t, Errs: make([]error, peerCount)}
+func NewSession(t *testing.T, protocol *p2p.Protocol, ids []discover.NodeID, wg *sync.WaitGroup) *Session {
+	peerCount := len(ids)
+	self := &Session{t: t}
 	caps := []p2p.Cap{p2p.Cap{protocol.Name, protocol.Version}}
 	if wg != nil {
 		wg.Add(peerCount)
 	}
-	var runs []func(int)
+	run := func(j int, rws []p2p.MsgReadWriter) {
+		name := fmt.Sprintf("test-%d", j)
+		self.Errs[j] = protocol.Run(p2p.NewPeer(ids[j], name, caps), rws[j])
+		if wg != nil {
+			wg.Done()
+		}
+	}
 	var rws []p2p.MsgReadWriter
 	// connect peerCount number of peers
 	for i := 0; i < peerCount; i++ {
@@ -61,24 +88,10 @@ func NewSession(t *testing.T, protocol *p2p.Protocol, peerCount int, wg *sync.Wa
 		self.Peers = append(self.Peers, rrw)
 		self.Errs = append(self.Errs, nil)
 		rws = append(rws, rw)
-		key, err := crypto.GenerateKey()
-		if err != nil {
-			t.Fatalf("unable to generate key")
-		}
-		pubkey := crypto.FromECDSAPub(&key.PublicKey)
-		var id discover.NodeID
-		copy(id[:], pubkey)
-		runs = append(runs, func(j int) {
-			name := fmt.Sprintf("test-%d", j)
-			self.Errs[j] = protocol.Run(p2p.NewPeer(id, name, caps), rws[j])
-			if wg != nil {
-				wg.Done()
-			}
-		})
 	}
 	// start protocols on each peer connection
-	for i, f := range runs {
-		go f(i)
+	for i := 0; i < peerCount; i++ {
+		go run(i, rws)
 	}
 	return self
 }
@@ -95,7 +108,7 @@ func (self Session) trigger(trig Trigger) error {
 
 	t := trig.Timeout
 	if t == time.Duration(0) {
-		t = 100 * time.Millisecond
+		t = 1000 * time.Millisecond
 	}
 	alarm := time.NewTimer(t)
 	select {
@@ -119,18 +132,21 @@ func (self Session) expect(exp Expect) error {
 	}
 	errc := make(chan error)
 	go func() {
+		glog.V(6).Infof("waiting for msg, %v", exp.Msg)
 		errc <- p2p.ExpectMsg(self.Peers[exp.Peer], exp.Code, exp.Msg)
 	}()
 
 	t := exp.Timeout
 	if t == time.Duration(0) {
-		t = 100 * time.Millisecond
+		t = 1000 * time.Millisecond
 	}
 	alarm := time.NewTimer(t)
 	select {
 	case err := <-errc:
+		glog.V(6).Infof("expected msg arrives with error %v", err)
 		return err
 	case <-alarm.C:
+		glog.V(6).Infof("caught timeout")
 		return fmt.Errorf("timout expecting %v sent to peer %v", exp.Msg, exp.Peer)
 	}
 	// fatal upon encountering first exchange error
@@ -140,10 +156,8 @@ func (self Session) expect(exp Expect) error {
 func (self Session) TestExchanges(exchanges ...Exchange) {
 	// launch all triggers of this exchanges
 
-	errc := make(chan error)
-	ewg := &sync.WaitGroup{}
 	for i, e := range exchanges {
-		ewg.Add(1)
+		errc := make(chan error)
 		wg := &sync.WaitGroup{}
 		for _, trig := range e.Triggers {
 			wg.Add(1)
@@ -173,32 +187,30 @@ func (self Session) TestExchanges(exchanges ...Exchange) {
 				defer wg.Done()
 				err := self.expect(exp)
 				if err != nil {
+					glog.V(6).Infof("expect msg fails %v", err)
 					errc <- err
 				}
 			}(ex)
 		}
 
 		// wait for all expectations
-		wg.Wait()
-		ewg.Done()
+		go func() {
+			wg.Wait()
+			close(errc)
+		}()
 
-	}
-	// wait for all expectations
-	go func() {
-		ewg.Wait()
-		close(errc)
-	}()
+		// time out globally or finish when all expectations satisfied
+		alarm := time.NewTimer(500 * time.Millisecond)
+		select {
 
-	// time out globally or finish when all expectations satisfied
-	alarm := time.NewTimer(5000 * time.Millisecond)
-	select {
-
-	case err := <-errc:
-		if err != nil {
-			self.t.Fatalf("exchange failed with: %v", err)
+		case err := <-errc:
+			glog.V(6).Infof("expectations finished with %v", err)
+			if err != nil {
+				self.t.Fatalf("exchange failed with: %v", err)
+			}
+		case <-alarm.C:
+			self.t.Fatalf("exchange timed out")
 		}
-	case <-alarm.C:
-		self.t.Fatalf("exchange timed out")
 	}
 }
 
