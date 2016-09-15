@@ -133,7 +133,6 @@ participating.
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.BlockchainVersionFlag,
 		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.CacheFlag,
