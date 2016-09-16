@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package node
 
 import (
+	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 )
@@ -33,7 +35,7 @@ const (
 // persistence requirements.
 func DefaultDataDir() string {
 	// Try to place the data folder in the user's home dir
-	home := HomeDir()
+	home := homeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
 			return filepath.Join(home, "Library", "Ethereum")
@@ -44,5 +46,15 @@ func DefaultDataDir() string {
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later
+	return ""
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
 	return ""
 }

@@ -84,7 +84,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *st
 	}
 
 	if host == nil {
-		h := common.DefaultHTTPHost
+		h := DefaultHTTPHost
 		if api.node.config.HTTPHost != "" {
 			h = api.node.config.HTTPHost
 		}
@@ -133,7 +133,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOr
 	}
 
 	if host == nil {
-		h := common.DefaultWSHost
+		h := DefaultWSHost
 		if api.node.config.WSHost != "" {
 			h = api.node.config.WSHost
 		}

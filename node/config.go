@@ -201,7 +201,7 @@ func DefaultIPCEndpoint(clientIdentifier string) string {
 			panic("empty executable name")
 		}
 	}
-	config := &Config{DataDir: common.DefaultDataDir(), IPCPath: clientIdentifier + ".ipc"}
+	config := &Config{DataDir: DefaultDataDir(), IPCPath: clientIdentifier + ".ipc"}
 	return config.IPCEndpoint()
 }
 
@@ -216,7 +216,7 @@ func (c *Config) HTTPEndpoint() string {
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
-	config := &Config{HTTPHost: common.DefaultHTTPHost, HTTPPort: common.DefaultHTTPPort}
+	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort}
 	return config.HTTPEndpoint()
 }
 
@@ -231,7 +231,7 @@ func (c *Config) WSEndpoint() string {
 
 // DefaultWSEndpoint returns the websocket endpoint used by default.
 func DefaultWSEndpoint() string {
-	config := &Config{WSHost: common.DefaultWSHost, WSPort: common.DefaultWSPort}
+	config := &Config{WSHost: DefaultWSHost, WSPort: DefaultWSPort}
 	return config.WSEndpoint()
 }
 

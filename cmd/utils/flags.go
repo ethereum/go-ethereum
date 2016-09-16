@@ -105,7 +105,7 @@ var (
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
 		Usage: "Data directory for the databases and keystore",
-		Value: DirectoryString{common.DefaultDataDir()},
+		Value: DirectoryString{node.DefaultDataDir()},
 	}
 	KeyStoreDirFlag = DirectoryFlag{
 		Name:  "keystore",
@@ -139,7 +139,7 @@ var (
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
-		Value: DirectoryString{common.HomeDir()},
+		Value: DirectoryString{homeDir()},
 	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
@@ -245,12 +245,12 @@ var (
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
-		Value: common.DefaultHTTPHost,
+		Value: node.DefaultHTTPHost,
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
-		Value: common.DefaultHTTPPort,
+		Value: node.DefaultHTTPPort,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
@@ -268,13 +268,13 @@ var (
 	}
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
-		Usage: "API's offered over the IPC-RPC interface",
+		Usage: "APIs offered over the IPC-RPC interface",
 		Value: rpc.DefaultIPCApis,
 	}
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-		Value: DirectoryString{common.DefaultIPCSocket},
+		Value: DirectoryString{"geth.ipc"},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",
@@ -283,12 +283,12 @@ var (
 	WSListenAddrFlag = cli.StringFlag{
 		Name:  "wsaddr",
 		Usage: "WS-RPC server listening interface",
-		Value: common.DefaultWSHost,
+		Value: node.DefaultWSHost,
 	}
 	WSPortFlag = cli.IntFlag{
 		Name:  "wsport",
 		Usage: "WS-RPC server listening port",
-		Value: common.DefaultWSPort,
+		Value: node.DefaultWSPort,
 	}
 	WSApiFlag = cli.StringFlag{
 		Name:  "wsapi",

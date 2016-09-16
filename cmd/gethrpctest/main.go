@@ -23,7 +23,6 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -89,11 +88,11 @@ func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 	stack, err := node.New(&node.Config{
 		UseLightweightKDF: true,
 		IPCPath:           node.DefaultIPCEndpoint(""),
-		HTTPHost:          common.DefaultHTTPHost,
-		HTTPPort:          common.DefaultHTTPPort,
+		HTTPHost:          node.DefaultHTTPHost,
+		HTTPPort:          node.DefaultHTTPPort,
 		HTTPModules:       []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
-		WSHost:            common.DefaultWSHost,
-		WSPort:            common.DefaultWSPort,
+		WSHost:            node.DefaultWSHost,
+		WSPort:            node.DefaultWSPort,
 		WSModules:         []string{"admin", "db", "eth", "debug", "miner", "net", "shh", "txpool", "personal", "web3"},
 		NoDiscovery:       true,
 	})
