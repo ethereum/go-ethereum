@@ -114,14 +114,14 @@ func (c *Contract) Caller() common.Address {
 
 // Finalise finalises the contract and returning any remaining gas to the original
 // caller.
-func (c *Contract) Finalise() {
+func (c *Contract) Finalise(gasser *Gasser) {
 	c.gas.SetUint64(c.gas64)
 	// Return the remaining gas to the caller
-	c.caller.ReturnGas(c.gas64)
+	gasser.ReturnGas(c.caller, c.gas64)
 }
 
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas uint64) (ok bool) {
+func (c *Contract) useGas(gas uint64) (ok bool) {
 	if c.gas64 < gas {
 		return false
 	}

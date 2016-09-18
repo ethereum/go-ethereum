@@ -25,7 +25,7 @@ type jumpSeg struct {
 }
 
 func (j jumpSeg) do(program *Program, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	if !contract.UseGas(j.gas) {
+	if !env.Gasser.UseGas(contract, j.gas) { //!contract.UseGas(j.gas) {
 		return nil, OutOfGasError
 	}
 	if j.err != nil {
@@ -45,7 +45,7 @@ type pushSeg struct {
 func (s pushSeg) do(program *Program, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// Use the calculated gas. When insufficient gas is present, use all gas and return an
 	// Out Of Gas error
-	if !contract.UseGas(s.gas) {
+	if !env.Gasser.UseGas(contract, s.gas) { //!contract.UseGas(s.gas) {
 		return nil, OutOfGasError
 	}
 

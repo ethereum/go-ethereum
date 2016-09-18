@@ -1280,8 +1280,8 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 }
 
 // SetHead rewinds the head of the blockchain to a previous block.
-func (api *PrivateDebugAPI) SetHead(number uint64) {
-	api.b.SetHead(number)
+func (api *PrivateDebugAPI) SetHead(number string) {
+	api.b.SetHead(common.String2Big(number).Uint64())
 }
 
 // PublicNetAPI offers network related RPC methods

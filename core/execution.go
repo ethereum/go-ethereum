@@ -69,13 +69,13 @@ func (c EVMCallContext) exec(env *vm.Environment, caller vm.ContractRef, address
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if env.Depth > int(params.CallCreateDepth.Int64()) {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
 
 		return nil, common.Address{}, vm.DepthError
 	}
 
 	if !c.CanTransfer(env.Db(), caller.Address(), value) {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
 
 		return nil, common.Address{}, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", value, env.Db().GetBalance(caller.Address()))
 	}
@@ -113,7 +113,9 @@ func (c EVMCallContext) exec(env *vm.Environment, caller vm.ContractRef, address
 	// only.
 	contract := vm.NewContract(caller, to, value, gas)
 	contract.SetCallCode(codeAddr, code)
-	defer contract.Finalise()
+	defer func() {
+		contract.Finalise(env.Gasser)
+	}()
 
 	ret, err = evm.Run(contract, input)
 	// if the contract creation ran successfully and no errors were returned
@@ -123,7 +125,7 @@ func (c EVMCallContext) exec(env *vm.Environment, caller vm.ContractRef, address
 	if err == nil && createAccount {
 		dataGas := big.NewInt(int64(len(ret)))
 		dataGas.Mul(dataGas, params.CreateDataGas)
-		if contract.UseGas(dataGas.Uint64()) {
+		if env.Gasser.UseGas(contract, dataGas.Uint64()) { //contract.UseGas(dataGas.Uint64()) {
 			env.Db().SetCode(*address, ret)
 		} else {
 			err = vm.CodeStoreOutOfGasError
@@ -134,7 +136,7 @@ func (c EVMCallContext) exec(env *vm.Environment, caller vm.ContractRef, address
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil && (env.RuleSet().IsHomestead(env.BlockNumber) || err != vm.CodeStoreOutOfGasError) {
-		contract.UseGas(contract.Gas())
+		env.Gasser.UseGas(contract, contract.Gas()) //contract.UseGas(contract.Gas())
 
 		env.Backend.Set(snapshotPreTransfer)
 	}
@@ -147,7 +149,8 @@ func (c EVMCallContext) execDelegateCall(env *vm.Environment, caller vm.Contract
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if env.Depth > int(params.CallCreateDepth.Int64()) {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
+
 		return nil, common.Address{}, vm.DepthError
 	}
 
@@ -164,11 +167,13 @@ func (c EVMCallContext) execDelegateCall(env *vm.Environment, caller vm.Contract
 	// Iinitialise a new contract and make initialise the delegate values
 	contract := vm.NewContract(caller, to, value, gas).AsDelegate()
 	contract.SetCallCode(codeAddr, code)
-	defer contract.Finalise()
+	defer func() {
+		contract.Finalise(env.Gasser)
+	}()
 
 	ret, err = evm.Run(contract, input)
 	if err != nil {
-		contract.UseGas(contract.Gas())
+		env.Gasser.UseGas(contract, contract.Gas()) //contract.UseGas(contract.Gas())
 
 		env.Backend.Set(snapshot)
 	}

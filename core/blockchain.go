@@ -914,13 +914,16 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			reportBlock(block, err)
 			return i, err
 		}
+		tstart := time.Now()
 		// flatten the state before committing.
 		st = state.Flatten(st)
+		fmt.Println("reduce took", time.Since(tstart))
 		// Write state changes to database
 		_, err = state.Commit(st)
 		if err != nil {
 			return i, err
 		}
+		glog.V(logger.Info).Infoln("state stats:", st)
 
 		// coalesce logs for later processing
 		coalescedLogs = append(coalescedLogs, logs...)
@@ -938,7 +941,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		switch status {
 		case CanonStatTy:
-			if glog.V(logger.Debug) {
+			if glog.V(logger.Info) {
 				glog.Infof("[%v] inserted block #%d (%d TXs %v G %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), block.GasUsed(), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
 			events = append(events, ChainEvent{block, block.Hash(), logs})

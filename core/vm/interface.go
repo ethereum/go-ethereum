@@ -78,6 +78,36 @@ type Account interface {
 	Value() *big.Int
 }
 
+type Gasser struct {
+	highwaterMark uint64
+	slider        uint64
+}
+
+func (g *Gasser) mark(gas uint64) {
+	g.slider += gas
+	if g.slider > g.highwaterMark {
+		g.highwaterMark = g.slider
+	}
+}
+
+func (g *Gasser) UseGas(contract *Contract, gas uint64) bool {
+	ok := contract.useGas(gas)
+
+	if ok {
+		g.mark(gas)
+	}
+	return ok
+}
+
+func (g *Gasser) ReturnGas(contract ContractRef, gas uint64) {
+	g.slider -= gas
+	contract.ReturnGas(gas)
+}
+
+func (g *Gasser) HighwaterMark() uint64 {
+	return g.highwaterMark
+}
+
 // Context provides the EVM with auxilary information. Once provided it shouldn't be modified.
 type Context struct {
 	CallContext
@@ -121,6 +151,7 @@ type Environment struct {
 	Context
 
 	Backend Backend
+	Gasser  *Gasser
 
 	ruleSet  RuleSet
 	vmConfig Config
@@ -133,6 +164,7 @@ type Environment struct {
 func NewEnvironment(context Context, backend Backend, ruleSet RuleSet, vmCfg Config) *Environment {
 	env := &Environment{
 		Context:  context,
+		Gasser:   new(Gasser),
 		Backend:  backend,
 		vmConfig: vmCfg,
 		ruleSet:  ruleSet,
@@ -143,7 +175,7 @@ func NewEnvironment(context Context, backend Backend, ruleSet RuleSet, vmCfg Con
 
 func (env *Environment) Call(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	if env.vmConfig.Test && env.Depth > 0 {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
 
 		return nil, nil
 	}
@@ -154,7 +186,7 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, data []byt
 // Take another's contract code and execute within our own context
 func (env *Environment) CallCode(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
 	if env.vmConfig.Test && env.Depth > 0 {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
 
 		return nil, nil
 	}
@@ -165,7 +197,7 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, data [
 // Same as CallCode except sender and value is propagated from parent to child scope
 func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
 	if env.vmConfig.Test && env.Depth > 0 {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
 
 		return nil, nil
 	}
@@ -176,7 +208,7 @@ func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, da
 // Create a new contract
 func (env *Environment) Create(caller ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
 	if env.vmConfig.Test && env.Depth > 0 {
-		caller.ReturnGas(gas.Uint64())
+		env.Gasser.ReturnGas(caller, gas.Uint64())
 
 		return nil, common.Address{}, nil
 	}

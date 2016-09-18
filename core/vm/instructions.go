@@ -69,9 +69,14 @@ func (instr instruction) do(program *Program, pc *uint64, env *Environment, cont
 
 	// Use the calculated gas. When insufficient gas is present, use all gas and return an
 	// Out Of Gas error
-	if !contract.UseGas(cost) {
+	if !env.Gasser.UseGas(contract, cost) {
 		return nil, OutOfGasError
 	}
+	/*
+		if !contract.UseGas(cost) {
+			return nil, OutOfGasError
+		}
+	*/
 	// Resize the memory calculated previously
 	memory.Resize(newMemSize)
 
@@ -515,10 +520,11 @@ func opCreate(instr instruction, pc *uint64, env *Environment, contract *Contrac
 		value        = stack.pop()
 		offset, size = stack.pop(), stack.pop()
 		input        = memory.Get(offset.Int64(), size.Int64())
-		gas          = new(big.Int).SetUint64(contract.gas64)
+		gas          = contract.gas64
 	)
-	contract.UseGas(contract.gas64)
-	_, addr, suberr := env.Create(contract, input, gas, value)
+
+	contract.useGas(gas)
+	_, addr, suberr := env.Create(contract, input, new(big.Int).SetUint64(gas), value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -530,6 +536,8 @@ func opCreate(instr instruction, pc *uint64, env *Environment, contract *Contrac
 	} else {
 		stack.push(addr.Big())
 	}
+
+	env.Gasser.mark(gas - contract.Gas())
 }
 
 func opCall(instr instruction, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) {

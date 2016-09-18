@@ -61,7 +61,13 @@ func (evm *EVM) Run(contract *Contract, input []byte) ([]byte, error) {
 
 	if contract.CodeAddr != nil {
 		if p, exist := PrecompiledContracts[*contract.CodeAddr]; exist {
-			return RunPrecompiled(p, input, contract)
+			gas := p.RequiredGas(len(input))
+			if evm.env.Gasser.UseGas(contract, gas.Uint64()) { //contract.UseGas(gas.Uint64()) {
+				return p.Run(input), nil
+			} else {
+				return nil, OutOfGasError
+			}
+			//return RunPrecompiled(p, input, contract)
 		}
 	}
 

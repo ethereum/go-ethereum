@@ -27,13 +27,13 @@ func CommitBatch(state *State) (common.Hash, ethdb.Batch) {
 func stateCommit(state *State, db trie.DatabaseWriter) (common.Hash, error) {
 	// make sure the state is flattened before committing
 	state = Flatten(state)
-	for _, stateObject := range state.StateObjects {
+	for address, stateObject := range state.StateObjects {
 		if stateObject.remove {
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
 			stateObject.deleted = true
 			state.Trie.Delete(stateObject.Address().Bytes()[:])
-		} else {
+		} else if state.ownedStateObjects[address] {
 			// Write any contract code associated with the state object
 			if len(stateObject.code) > 0 {
 				if err := db.Put(stateObject.codeHash, stateObject.code); err != nil {

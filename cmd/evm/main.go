@@ -44,6 +44,10 @@ var (
 		Name:  "debug",
 		Usage: "output full trace logs",
 	}
+	VMStatsFlag = cli.BoolFlag{
+		Name:  "vmstats",
+		Usage: "Display EVM statistics",
+	}
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
 		Usage: "EVM code",
@@ -113,14 +117,20 @@ var (
 		Name:  "create",
 		Usage: "indicates the action should be create rather than call",
 	}
+	NoOptimiseFlag = cli.BoolFlag{
+		Name:  "nooptimise",
+		Usage: "disable program optimisations",
+	}
 )
 
 func init() {
 	app.Flags = []cli.Flag{
 		CreateFlag,
+		NoOptimiseFlag,
 		DebugFlag,
 		VerbosityFlag,
 		SysStatFlag,
+		VMStatsFlag,
 		CodeFlag,
 		GasFlag,
 		PriceFlag,
@@ -172,8 +182,9 @@ func run(ctx *cli.Context) error {
 		backend,
 		ruleSet{},
 		vm.Config{
-			Debug:  ctx.GlobalBool(DebugFlag.Name),
-			Tracer: logger,
+			Debug:      ctx.GlobalBool(DebugFlag.Name),
+			Tracer:     logger,
+			NoOptimise: ctx.GlobalBool(NoOptimiseFlag.Name),
 		},
 	)
 
@@ -208,7 +219,10 @@ func run(ctx *cli.Context) error {
 		state.Commit(st)
 		fmt.Println(string(st.Dump()))
 	}
-	vm.StdErrFormat(logger.StructLogs())
+
+	if ctx.GlobalBool(DebugFlag.Name) {
+		vm.StdErrFormat(logger.StructLogs())
+	}
 
 	if ctx.GlobalBool(SysStatFlag.Name) {
 		var mem runtime.MemStats
@@ -223,7 +237,13 @@ num gc:     %d
 `, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
 	}
 
-	fmt.Printf("OUT: 0x%x", ret)
+	if ctx.GlobalBool(VMStatsFlag.Name) {
+		fmt.Printf(`VM Stats
+Gas requirement: %v
+`, vmenv.Gasser.HighwaterMark())
+	}
+
+	fmt.Printf("0x%x", ret)
 	if err != nil {
 		fmt.Printf(" error: %v", err)
 	}

@@ -45,7 +45,7 @@ var PrecompiledContracts = map[common.Address]PrecompiledContract{
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
 func RunPrecompiled(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
 	gas := p.RequiredGas(len(input))
-	if contract.UseGas(gas.Uint64()) {
+	if contract.useGas(gas.Uint64()) {
 		ret = p.Run(input)
 
 		return ret, nil

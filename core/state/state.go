@@ -21,8 +21,9 @@ type State struct {
 
 	parent *State
 
-	StateObjects map[common.Address]*StateObject
-	refund       *big.Int
+	StateObjects      map[common.Address]*StateObject
+	ownedStateObjects map[common.Address]bool
+	refund            *big.Int
 
 	logIdx uint
 	logs   []*vm.Log
@@ -44,10 +45,11 @@ func New(root common.Hash, db ethdb.Database) (*State, error) {
 	}
 
 	return &State{
-		Db:           db,
-		Trie:         tr,
-		StateObjects: make(map[common.Address]*StateObject),
-		refund:       new(big.Int),
+		Db:                db,
+		Trie:              tr,
+		StateObjects:      make(map[common.Address]*StateObject),
+		ownedStateObjects: make(map[common.Address]bool),
+		refund:            new(big.Int),
 	}, nil
 }
 
@@ -90,9 +92,32 @@ func (s *State) Read(address common.Address) (object *StateObject, inCache bool)
 		glog.Errorf("can't decode object at %x: %v", address[:], err)
 		return nil, false
 	}
+
 	return stateObject, false
 }
 
+func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
+	stateObject, inCache := s.Read(address)
+	if stateObject != nil {
+		if !inCache || !s.ownedStateObjects[address] {
+			stateObject = stateObject.Copy()
+			s.StateObjects[address] = stateObject
+			s.ownedStateObjects[address] = true
+		}
+		return stateObject
+	}
+
+	if stateObject == nil || stateObject.deleted {
+		stateObject = NewStateObject(address, s.Db)
+		stateObject.SetNonce(StartingNonce)
+
+		s.StateObjects[address] = stateObject
+		s.ownedStateObjects[address] = true
+	}
+	return stateObject
+}
+
+/*
 func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
 	stateObject := s.GetStateObject(address)
 	if stateObject == nil || stateObject.deleted {
@@ -104,14 +129,15 @@ func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
 
 	return stateObject
 }
+*/
 
 func (s *State) GetStateObject(address common.Address) *StateObject {
 	account, inCache := s.Read(address)
 	if account != nil {
 		if !inCache {
-			s.StateObjects[address] = account.Copy()
+			s.StateObjects[address] = account
 		}
-		return s.StateObjects[address]
+		return account
 	}
 	return nil
 }
@@ -294,6 +320,7 @@ func (s *State) UpdateStateObject(stateObject *StateObject) {
 }
 
 func (s *State) Reset(root common.Hash) error {
+	fmt.Println("reset")
 	var (
 		err error
 		tr  = s.Trie
@@ -304,10 +331,13 @@ func (s *State) Reset(root common.Hash) error {
 		}
 	}
 	*s = State{
-		Db:           s.Db,
-		Trie:         tr,
-		StateObjects: make(map[common.Address]*StateObject),
-		refund:       new(big.Int),
+		Db:                s.Db,
+		Trie:              tr,
+		StateObjects:      s.StateObjects,
+		ownedStateObjects: s.ownedStateObjects,
+		//StateObjects:      make(map[common.Address]*StateObject),
+		//ownedStateObjects: make(map[common.Address]bool),
+		refund: new(big.Int),
 	}
 	return nil
 }
@@ -345,11 +375,12 @@ func Fork(parent *State) *State {
 		Db:   parent.Db,
 		Trie: parent.Trie,
 
-		parent:       parent,
-		StateObjects: make(map[common.Address]*StateObject),
-		refund:       new(big.Int),
-		logIdx:       parent.logIdx,
-		logs:         nil,
+		parent:            parent,
+		StateObjects:      make(map[common.Address]*StateObject),
+		ownedStateObjects: make(map[common.Address]bool),
+		refund:            new(big.Int),
+		logIdx:            parent.logIdx,
+		logs:              nil,
 	}
 }
 
@@ -366,21 +397,29 @@ func Flatten(s *State) *State {
 		flattenedState = Flatten(s.parent)
 	} else {
 		flattenedState = &State{
-			Db:           s.Db,
-			Trie:         s.Trie,
-			refund:       new(big.Int),
-			StateObjects: make(map[common.Address]*StateObject),
+			Db:                s.Db,
+			Trie:              s.Trie,
+			refund:            new(big.Int),
+			StateObjects:      make(map[common.Address]*StateObject),
+			ownedStateObjects: make(map[common.Address]bool),
 		}
 	}
 
 	for address, object := range s.StateObjects {
 		flattenedState.StateObjects[address] = object
+		if s.ownedStateObjects[address] {
+			flattenedState.ownedStateObjects[address] = true
+		}
 	}
 
 	flattenedState.logs = append(flattenedState.logs, s.logs...)
 	flattenedState.refund.Add(flattenedState.refund, s.refund)
 
 	return flattenedState
+}
+
+func (s *State) String() string {
+	return fmt.Sprintf("objects: %d owned: %d", len(s.StateObjects), len(s.ownedStateObjects))
 }
 
 func IntermediateRoot(state *State) common.Hash {
