@@ -324,7 +324,9 @@ func (self *StateDB) Copy() *StateDB {
 	state, _ := New(common.Hash{}, self.db)
 	state.trie = self.trie
 	for k, stateObject := range self.stateObjects {
-		state.stateObjects[k] = stateObject.Copy()
+		if stateObject.dirty {
+			state.stateObjects[k] = stateObject.Copy()
+		}
 	}
 
 	state.refund.Set(self.refund)
@@ -364,7 +366,6 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 				stateObject.Update()
 				s.UpdateStateObject(stateObject)
 			}
-			stateObject.dirty = false
 		}
 	}
 	return s.trie.Hash()
