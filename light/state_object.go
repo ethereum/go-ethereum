@@ -186,7 +186,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
 	stateObject.trie = self.trie
-	stateObject.code = common.CopyBytes(self.code)
+	stateObject.code = self.code
 	stateObject.storage = self.storage.Copy()
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty

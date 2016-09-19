@@ -261,7 +261,9 @@ func (self *LightState) Copy() *LightState {
 	state := NewLightState(common.Hash{}, self.odr)
 	state.trie = self.trie
 	for k, stateObject := range self.stateObjects {
-		state.stateObjects[k] = stateObject.Copy()
+		if stateObject.dirty {
+			state.stateObjects[k] = stateObject.Copy()
+		}
 	}
 
 	return state
