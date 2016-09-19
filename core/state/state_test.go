@@ -200,9 +200,6 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
-	if !bytes.Equal(so0.initCode, so1.initCode) {
-		t.Fatalf("InitCode mismatch: have %v, want %v", so0.initCode, so1.initCode)
-	}
 
 	for k, v := range so1.storage {
 		if so0.storage[k] != v {

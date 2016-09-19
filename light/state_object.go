@@ -79,8 +79,6 @@ type StateObject struct {
 	codeHash []byte
 	// The code for this account
 	code Code
-	// Temporarily initialisation code
-	initCode Code
 	// Cached storage (flushed when updated)
 	storage Storage
 
@@ -189,7 +187,6 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.nonce = self.nonce
 	stateObject.trie = self.trie
 	stateObject.code = common.CopyBytes(self.code)
-	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
