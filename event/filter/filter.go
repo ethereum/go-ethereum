@@ -17,7 +17,10 @@
 // Package filter implements event filters.
 package filter
 
-import "reflect"
+import (
+	"reflect"
+	"sync"
+)
 
 type Filter interface {
 	Compare(Filter) bool
@@ -30,9 +33,10 @@ type FilterEvent struct {
 }
 
 type Filters struct {
-	id       int
-	watchers map[int]Filter
-	ch       chan FilterEvent
+	id        int
+	watchers  map[int]Filter
+	watcherMu sync.RWMutex
+	ch        chan FilterEvent
 
 	quit chan struct{}
 }
@@ -58,14 +62,18 @@ func (self *Filters) Notify(filter Filter, data interface{}) {
 }
 
 func (self *Filters) Install(watcher Filter) int {
+	self.watcherMu.Lock()
 	self.watchers[self.id] = watcher
 	self.id++
+	self.watcherMu.Unlock()
 
 	return self.id - 1
 }
 
 func (self *Filters) Uninstall(id int) {
+	self.watcherMu.Lock()
 	delete(self.watchers, id)
+	self.watcherMu.Unlock()
 }
 
 func (self *Filters) loop() {

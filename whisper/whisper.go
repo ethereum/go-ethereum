@@ -64,7 +64,8 @@ type Whisper struct {
 	protocol p2p.Protocol
 	filters  *filter.Filters
 
-	keys map[string]*ecdsa.PrivateKey
+	keys  map[string]*ecdsa.PrivateKey
+	keyMu sync.RWMutex
 
 	messages    map[common.Hash]*Envelope // Pool of messages currently tracked by this node
 	expirations map[uint32]*set.SetNonTS  // Message expiration pool (TODO: something lighter)
@@ -129,7 +130,9 @@ func (self *Whisper) NewIdentity() *ecdsa.PrivateKey {
 	if err != nil {
 		panic(err)
 	}
+	self.keyMu.Lock()
 	self.keys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
+	self.keyMu.Unlock()
 
 	return key
 }
@@ -300,15 +303,19 @@ func (self *Whisper) open(envelope *Envelope) *Message {
 		}
 	}
 	// Iterate over the keys and try to decrypt the message
+	self.keyMu.Lock()
 	for _, key := range self.keys {
 		message, err := envelope.Open(key)
 		if err == nil {
 			message.To = &key.PublicKey
+			self.keyMu.Unlock()
 			return message
 		} else if err == ecies.ErrInvalidPublicKey {
+			self.keyMu.Unlock()
 			return message
 		}
 	}
+	self.keyMu.Unlock()
 	// Failed to decrypt, don't return anything
 	return nil
 }
