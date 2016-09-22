@@ -57,40 +57,60 @@ func (self Storage) Copy() Storage {
 	return cpy
 }
 
+// StateObject represents an Ethereum account which is being modified.
+//
+// The usage pattern is as follows:
+// First you need to obtain a state object.
+// Account values can be accessed and modified through the object.
+// Finally, call CommitTrie to write the modified storage trie into a database.
 type StateObject struct {
-	trie *trie.SecureTrie
+	address common.Address // Ethereum address of this account
+	data    accountData
 
-	// Address belonging to this account
-	address common.Address
-	// The balance of the account
-	balance *big.Int
-	// The nonce of the account
-	nonce uint64
-	// The code hash if code is present (i.e. a contract)
-	codeHash []byte
-	// The code for this account
-	code Code
-	// Cached storage (flushed when updated)
-	storage Storage
+	// DB error.
+	// State objects are used by the consensus core and VM which are
+	// unable to deal with database-level errors. Any error that occurs
+	// during a database read is memoized here and will eventually be returned
+	// by StateDB.Commit.
+	dbErr error
 
-	// Mark for deletion
+	// Write caches.
+	trie    *trie.SecureTrie // storage trie, which becomes non-nil on first access
+	code    Code             // contract bytecode, which gets set when code is loaded
+	storage Storage          // Cached storage (flushed when updated)
+
+	// Cache flags.
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
+	dirty   bool // true if anything has changed
 	remove  bool
 	deleted bool
-	dirty   bool
+}
+
+// accountData is the Ethereum consensus representation of accounts.
+// These objects are stored in the main account trie.
+type accountData struct {
+	Nonce    uint64
+	Balance  *big.Int
+	Root     common.Hash // merkle root of the storage trie
+	CodeHash []byte
 }
 
 func NewStateObject(address common.Address, db trie.Database) *StateObject {
 	object := &StateObject{
-		address:  address,
-		balance:  new(big.Int),
-		dirty:    true,
-		codeHash: emptyCodeHash,
-		storage:  make(Storage),
+		address: address,
+		data:    accountData{Balance: new(big.Int), CodeHash: emptyCodeHash},
+		storage: make(Storage),
+		dirty:   true,
 	}
-	object.trie, _ = trie.NewSecure(common.Hash{}, db)
 	return object
+}
+
+// setError remembers the first non-nil error it is called with.
+func (self *StateObject) setError(err error) {
+	if self.dbErr == nil {
+		self.dbErr = err
+	}
 }
 
 func (self *StateObject) MarkForDeletion() {
@@ -98,71 +118,99 @@ func (self *StateObject) MarkForDeletion() {
 	self.dirty = true
 
 	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
+		glog.Infof("%x: #%d %v X\n", self.Address(), self.Nonce(), self.Balance())
 	}
 }
 
-func (c *StateObject) getAddr(addr common.Hash) common.Hash {
-	var ret []byte
-	rlp.DecodeBytes(c.trie.Get(addr[:]), &ret)
-	return common.BytesToHash(ret)
-}
-
-func (c *StateObject) setAddr(addr, value common.Hash) {
-	v, err := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
-	if err != nil {
-		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
-		panic(err)
-	}
-	c.trie.Update(addr[:], v)
-}
-
-func (self *StateObject) GetState(key common.Hash) common.Hash {
-	value, exists := self.storage[key]
-	if !exists {
-		value = self.getAddr(key)
-		if (value != common.Hash{}) {
-			self.storage[key] = value
+func (c *StateObject) initTrie(db trie.Database) {
+	if c.trie == nil {
+		var err error
+		c.trie, err = trie.NewSecure(c.data.Root, db)
+		if err != nil {
+			c.trie, _ = trie.NewSecure(common.Hash{}, db)
+			c.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}
+}
 
+// GetState returns a value in account storage.
+func (self *StateObject) GetState(db trie.Database, key common.Hash) common.Hash {
+	value, exists := self.storage[key]
+	if exists {
+		return value
+	}
+	// Load from DB in case it is missing.
+	self.initTrie(db)
+	var ret []byte
+	rlp.DecodeBytes(self.trie.Get(key[:]), &ret)
+	value = common.BytesToHash(ret)
+	if (value != common.Hash{}) {
+		self.storage[key] = value
+	}
 	return value
 }
 
+// SetState updates a value in account storage.
 func (self *StateObject) SetState(key, value common.Hash) {
 	self.storage[key] = value
 	self.dirty = true
 }
 
-// Update updates the current cached storage to the trie
-func (self *StateObject) Update() {
+// updateTrie writes cached storage modifications into the object's storage trie.
+func (self *StateObject) updateTrie(db trie.Database) {
+	self.initTrie(db)
 	for key, value := range self.storage {
 		if (value == common.Hash{}) {
 			self.trie.Delete(key[:])
 			continue
 		}
-		self.setAddr(key, value)
+		// Encoding []byte cannot fail, ok to ignore the error.
+		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+		self.trie.Update(key[:], v)
 	}
 }
 
+// UpdateRoot sets the trie root to the current root hash of
+func (self *StateObject) UpdateRoot(db trie.Database) {
+	self.updateTrie(db)
+	self.data.Root = self.trie.Hash()
+}
+
+// CommitTrie the storage trie of the object to dwb.
+// This updates the trie root.
+func (self *StateObject) CommitTrie(db trie.Database, dbw trie.DatabaseWriter) error {
+	self.updateTrie(db)
+	if self.dbErr != nil {
+		fmt.Println("dbErr:", self.dbErr)
+		return self.dbErr
+	}
+	self.dbErr = nil
+
+	root, err := self.trie.CommitTo(dbw)
+	if err == nil {
+		self.data.Root = root
+	}
+	return err
+}
+
 func (c *StateObject) AddBalance(amount *big.Int) {
-	c.SetBalance(new(big.Int).Add(c.balance, amount))
+	c.SetBalance(new(big.Int).Add(c.Balance(), amount))
 
 	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
+		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
 	}
 }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
-	c.SetBalance(new(big.Int).Sub(c.balance, amount))
+	c.SetBalance(new(big.Int).Sub(c.Balance(), amount))
 
 	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
+		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
 	}
 }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
-	c.balance = amount
+	c.data.Balance = amount
 	c.dirty = true
 }
 
@@ -171,9 +219,8 @@ func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
 func (self *StateObject) Copy(db trie.Database) *StateObject {
 	stateObject := NewStateObject(self.address, db)
-	stateObject.balance.Set(self.balance)
-	stateObject.codeHash = common.CopyBytes(self.codeHash)
-	stateObject.nonce = self.nonce
+	stateObject.data = self.data
+	stateObject.data.Balance.Set(self.data.Balance)
 	stateObject.trie = self.trie
 	stateObject.code = self.code
 	stateObject.storage = self.storage.Copy()
@@ -188,40 +235,48 @@ func (self *StateObject) Copy(db trie.Database) *StateObject {
 // Attribute accessors
 //
 
-func (self *StateObject) Balance() *big.Int {
-	return self.balance
-}
-
 // Returns the address of the contract/account
 func (c *StateObject) Address() common.Address {
 	return c.address
 }
 
-func (self *StateObject) Trie() *trie.SecureTrie {
-	return self.trie
-}
-
-func (self *StateObject) Root() []byte {
-	return self.trie.Root()
-}
-
-func (self *StateObject) Code() []byte {
-	return self.code
+// LoadCode returns the contract code associated with this object, if any.
+func (self *StateObject) Code(db trie.Database) []byte {
+	if self.code != nil {
+		return self.code
+	}
+	if bytes.Equal(self.CodeHash(), emptyCodeHash) {
+		return nil
+	}
+	code, err := db.Get(self.CodeHash())
+	if err != nil {
+		self.setError(fmt.Errorf("can't load code hash %x: %v", self.CodeHash(), err))
+	}
+	self.code = code
+	return code
 }
 
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
-	self.codeHash = crypto.Keccak256(code)
+	self.data.CodeHash = crypto.Keccak256(code)
 	self.dirty = true
 }
 
 func (self *StateObject) SetNonce(nonce uint64) {
-	self.nonce = nonce
+	self.data.Nonce = nonce
 	self.dirty = true
 }
 
+func (self *StateObject) CodeHash() []byte {
+	return self.data.CodeHash
+}
+
+func (self *StateObject) Balance() *big.Int {
+	return self.data.Balance
+}
+
 func (self *StateObject) Nonce() uint64 {
-	return self.nonce
+	return self.data.Nonce
 }
 
 // Never called, but must be present to allow StateObject to be used
@@ -247,38 +302,14 @@ func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
 	}
 }
 
-type extStateObject struct {
-	Nonce    uint64
-	Balance  *big.Int
-	Root     common.Hash
-	CodeHash []byte
-}
-
 // EncodeRLP implements rlp.Encoder.
 func (c *StateObject) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, []interface{}{c.nonce, c.balance, c.Root(), c.codeHash})
+	return rlp.Encode(w, c.data)
 }
 
 // DecodeObject decodes an RLP-encoded state object.
 func DecodeObject(address common.Address, db trie.Database, data []byte) (*StateObject, error) {
-	var (
-		obj = &StateObject{address: address, storage: make(Storage)}
-		ext extStateObject
-		err error
-	)
-	if err = rlp.DecodeBytes(data, &ext); err != nil {
-		return nil, err
-	}
-	if obj.trie, err = trie.NewSecure(ext.Root, db); err != nil {
-		return nil, err
-	}
-	if !bytes.Equal(ext.CodeHash, emptyCodeHash) {
-		if obj.code, err = db.Get(ext.CodeHash); err != nil {
-			return nil, fmt.Errorf("can't get code for hash %x: %v", ext.CodeHash, err)
-		}
-	}
-	obj.nonce = ext.Nonce
-	obj.balance = ext.Balance
-	obj.codeHash = ext.CodeHash
-	return obj, nil
+	obj := StateObject{address: address, storage: make(Storage)}
+	err := rlp.DecodeBytes(data, &obj.data)
+	return &obj, err
 }

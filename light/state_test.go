@@ -62,7 +62,7 @@ func makeTestState() (common.Hash, ethdb.Database) {
 		}
 		so.AddBalance(big.NewInt(int64(i)))
 		so.SetCode([]byte{i, i, i})
-		so.Update()
+		so.UpdateRoot(sdb)
 		st.UpdateStateObject(so)
 	}
 	root, _ := st.Commit()

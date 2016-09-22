@@ -127,7 +127,7 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 		// Always make sure the state account nonce isn't actually higher
 		// than the tracked one.
 		so := ms.StateDB.GetStateObject(addr)
-		if so != nil && uint64(len(account.nonces))+account.nstart < so.nonce {
+		if so != nil && uint64(len(account.nonces))+account.nstart < so.Nonce() {
 			ms.accounts[addr] = newAccount(so)
 		}
 
@@ -137,5 +137,5 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 }
 
 func newAccount(so *StateObject) *account {
-	return &account{so, so.nonce, nil}
+	return &account{so, so.Nonce(), nil}
 }
