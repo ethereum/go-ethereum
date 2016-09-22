@@ -410,11 +410,16 @@ func (t *Trie) resolve(n node, prefix, suffix []byte) (node, error) {
 }
 
 func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
-	if v, ok := globalCache.Get(n); ok {
-		return v, nil
+	var v node = nil
+	var ok bool
+	if v, ok = globalCache.Get(n); !ok {
+		enc, err := t.db.Get(n)
+		if err == nil && enc != nil {
+			v = mustDecodeNode(n, enc)
+		}
+		globalCache.Put(n, v)
 	}
-	enc, err := t.db.Get(n)
-	if err != nil || enc == nil {
+	if v == nil {
 		return nil, &MissingNodeError{
 			RootHash:  t.originalRoot,
 			NodeHash:  common.BytesToHash(n),
@@ -423,11 +428,7 @@ func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
 			SuffixLen: len(suffix),
 		}
 	}
-	dec := mustDecodeNode(n, enc)
-	if dec != nil {
-		globalCache.Put(n, dec)
-	}
-	return dec, nil
+	return v, nil
 }
 
 // Root returns the root hash of the trie.
