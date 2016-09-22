@@ -80,6 +80,7 @@ type StateObject struct {
 	remove  bool
 	deleted bool
 	dirty   bool
+	written bool
 }
 
 func NewStateObject(address common.Address, db trie.Database) *StateObject {
@@ -98,6 +99,7 @@ func NewStateObject(address common.Address, db trie.Database) *StateObject {
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
+	self.written = false
 
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
@@ -138,6 +140,7 @@ func (self *StateObject) GetState(key common.Hash) common.Hash {
 func (self *StateObject) SetState(key, value common.Hash) {
 	self.storage[key] = value
 	self.dirty = true
+	self.written = false
 }
 
 // Update updates the current cached storage to the trie
@@ -157,6 +160,7 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
+	c.written = false
 }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
@@ -165,11 +169,13 @@ func (c *StateObject) SubBalance(amount *big.Int) {
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
+	c.written = false
 }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
 	c.balance = amount
 	c.dirty = true
+	c.written = false
 }
 
 func (c *StateObject) St() Storage {
@@ -223,11 +229,13 @@ func (self *StateObject) SetCode(code []byte) {
 	self.code = code
 	self.codeHash = crypto.Keccak256(code)
 	self.dirty = true
+	self.written = false
 }
 
 func (self *StateObject) SetNonce(nonce uint64) {
 	self.nonce = nonce
 	self.dirty = true
+	self.written = false
 }
 
 func (self *StateObject) Nonce() uint64 {
