@@ -43,7 +43,7 @@ type StateDB struct {
 	db   ethdb.Database
 	trie *trie.SecureTrie
 
-	stateObjects map[string]*StateObject
+	stateObjects map[common.Address]*StateObject
 
 	refund *big.Int
 
@@ -62,7 +62,7 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	return &StateDB{
 		db:           db,
 		trie:         tr,
-		stateObjects: make(map[string]*StateObject),
+		stateObjects: make(map[common.Address]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
 	}, nil
@@ -83,7 +83,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	*self = StateDB{
 		db:           self.db,
 		trie:         tr,
-		stateObjects: make(map[string]*StateObject),
+		stateObjects: make(map[common.Address]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
 	}
@@ -242,12 +242,12 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 
 	addr := stateObject.Address()
 	self.trie.Delete(addr[:])
-	//delete(self.stateObjects, addr.Str())
+	//delete(self.stateObjects, addr)
 }
 
 // Retrieve a state object given my the address. Nil if not found
 func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObject) {
-	stateObject = self.stateObjects[addr.Str()]
+	stateObject = self.stateObjects[addr]
 	if stateObject != nil {
 		if stateObject.deleted {
 			stateObject = nil
@@ -270,7 +270,7 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 }
 
 func (self *StateDB) SetStateObject(object *StateObject) {
-	self.stateObjects[object.Address().Str()] = object
+	self.stateObjects[object.Address()] = object
 }
 
 // Retrieve a state object or create a new state object if nil
@@ -291,7 +291,7 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 
 	stateObject := NewStateObject(addr, self.db)
 	stateObject.SetNonce(StartingNonce)
-	self.stateObjects[addr.Str()] = stateObject
+	self.stateObjects[addr] = stateObject
 
 	return stateObject
 }
@@ -323,9 +323,9 @@ func (self *StateDB) Copy() *StateDB {
 	// ignore error - we assume state-to-be-copied always exists
 	state, _ := New(common.Hash{}, self.db)
 	state.trie = self.trie
-	for k, stateObject := range self.stateObjects {
+	for addr, stateObject := range self.stateObjects {
 		if stateObject.dirty {
-			state.stateObjects[k] = stateObject.Copy()
+			state.stateObjects[addr] = stateObject.Copy(self.db)
 		}
 	}
 

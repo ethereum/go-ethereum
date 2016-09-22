@@ -58,7 +58,6 @@ func (self Storage) Copy() Storage {
 }
 
 type StateObject struct {
-	db   trie.Database // State database for storing state changes
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -84,7 +83,6 @@ type StateObject struct {
 
 func NewStateObject(address common.Address, db trie.Database) *StateObject {
 	object := &StateObject{
-		db:       db,
 		address:  address,
 		balance:  new(big.Int),
 		dirty:    true,
@@ -117,10 +115,6 @@ func (c *StateObject) setAddr(addr, value common.Hash) {
 		panic(err)
 	}
 	c.trie.Update(addr[:], v)
-}
-
-func (self *StateObject) Storage() Storage {
-	return self.storage
 }
 
 func (self *StateObject) GetState(key common.Hash) common.Hash {
@@ -172,15 +166,11 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 	c.dirty = true
 }
 
-func (c *StateObject) St() Storage {
-	return c.storage
-}
-
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
-func (self *StateObject) Copy() *StateObject {
-	stateObject := NewStateObject(self.Address(), self.db)
+func (self *StateObject) Copy(db trie.Database) *StateObject {
+	stateObject := NewStateObject(self.address, db)
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
@@ -272,7 +262,7 @@ func (c *StateObject) EncodeRLP(w io.Writer) error {
 // DecodeObject decodes an RLP-encoded state object.
 func DecodeObject(address common.Address, db trie.Database, data []byte) (*StateObject, error) {
 	var (
-		obj = &StateObject{address: address, db: db, storage: make(Storage)}
+		obj = &StateObject{address: address, storage: make(Storage)}
 		ext extStateObject
 		err error
 	)
