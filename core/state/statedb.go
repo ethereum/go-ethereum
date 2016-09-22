@@ -137,7 +137,7 @@ func (self *StateDB) GetAccount(addr common.Address) vm.Account {
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.balance
+		return stateObject.Balance()
 	}
 
 	return common.Big0
@@ -146,7 +146,7 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.nonce
+		return stateObject.Nonce()
 	}
 
 	return StartingNonce
@@ -155,18 +155,16 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.code
+		return stateObject.Code(self.db)
 	}
-
 	return nil
 }
 
 func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
-		return stateObject.GetState(b)
+		return stateObject.GetState(self.db, b)
 	}
-
 	return common.Hash{}
 }
 
@@ -214,8 +212,7 @@ func (self *StateDB) Delete(addr common.Address) bool {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
-		stateObject.balance = new(big.Int)
-
+		stateObject.data.Balance = new(big.Int)
 		return true
 	}
 
@@ -245,7 +242,7 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 	//delete(self.stateObjects, addr)
 }
 
-// Retrieve a state object given my the address. Nil if not found
+// Retrieve a state object given my the address. Returns nil if not found.
 func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObject) {
 	stateObject = self.stateObjects[addr]
 	if stateObject != nil {
@@ -305,7 +302,7 @@ func (self *StateDB) CreateStateObject(addr common.Address) *StateObject {
 
 	// If it existed set the balance to the new account
 	if so != nil {
-		newSo.balance = so.balance
+		newSo.data.Balance = so.data.Balance
 	}
 
 	return newSo
@@ -363,7 +360,7 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 			if stateObject.remove {
 				s.DeleteStateObject(stateObject)
 			} else {
-				stateObject.Update()
+				stateObject.UpdateRoot(s.db)
 				s.UpdateStateObject(stateObject)
 			}
 		}
@@ -407,7 +404,7 @@ func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
 	return root, batch
 }
 
-func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
+func (s *StateDB) commit(dbw trie.DatabaseWriter) (common.Hash, error) {
 	s.refund = new(big.Int)
 
 	for _, stateObject := range s.stateObjects {
@@ -417,36 +414,24 @@ func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
 			s.DeleteStateObject(stateObject)
 		} else {
 			// Write any contract code associated with the state object
-			if len(stateObject.code) > 0 {
-				if err := db.Put(stateObject.codeHash, stateObject.code); err != nil {
+			if stateObject.code != nil {
+				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {
 					return common.Hash{}, err
 				}
 			}
-			// Write any storage changes in the state object to its trie.
-			stateObject.Update()
 
-			// Commit the trie of the object to the batch.
-			// This updates the trie root internally, so
-			// getting the root hash of the storage trie
-			// through UpdateStateObject is fast.
-			if _, err := stateObject.trie.CommitTo(db); err != nil {
+			// Write any storage changes in the state object to its storage trie.
+			if err := stateObject.CommitTrie(s.db, dbw); err != nil {
 				return common.Hash{}, err
 			}
-			// Update the object in the account trie.
+			// Update the object in the main account trie.
 			s.UpdateStateObject(stateObject)
 		}
 		stateObject.dirty = false
 	}
-	return s.trie.CommitTo(db)
+	return s.trie.CommitTo(dbw)
 }
 
 func (self *StateDB) Refunds() *big.Int {
 	return self.refund
-}
-
-// Debug stuff
-func (self *StateDB) CreateOutputForDiff() {
-	for _, stateObject := range self.stateObjects {
-		stateObject.CreateOutputForDiff()
-	}
 }

@@ -50,15 +50,15 @@ func (self *StateDB) RawDump() World {
 		if err != nil {
 			panic(err)
 		}
-
 		account := Account{
-			Balance:  stateObject.balance.String(),
-			Nonce:    stateObject.nonce,
-			Root:     common.Bytes2Hex(stateObject.Root()),
-			CodeHash: common.Bytes2Hex(stateObject.codeHash),
-			Code:     common.Bytes2Hex(stateObject.Code()),
+			Balance:  stateObject.Balance().String(),
+			Nonce:    stateObject.Nonce(),
+			Root:     common.Bytes2Hex(stateObject.data.Root[:]),
+			CodeHash: common.Bytes2Hex(stateObject.CodeHash()),
+			Code:     common.Bytes2Hex(stateObject.Code(self.db)),
 			Storage:  make(map[string]string),
 		}
+		stateObject.initTrie(self.db)
 		storageIt := stateObject.trie.Iterator()
 		for storageIt.Next() {
 			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
@@ -75,13 +75,4 @@ func (self *StateDB) Dump() []byte {
 	}
 
 	return json
-}
-
-// Debug stuff
-func (self *StateObject) CreateOutputForDiff() {
-	fmt.Printf("%x %x %x %x\n", self.Address(), self.Root(), self.balance.Bytes(), self.nonce)
-	it := self.trie.Iterator()
-	for it.Next() {
-		fmt.Printf("%x %x\n", it.Key, it.Value)
-	}
 }
