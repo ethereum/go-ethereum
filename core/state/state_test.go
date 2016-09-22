@@ -146,23 +146,23 @@ func TestSnapshot2(t *testing.T) {
 
 	// db, trie are already non-empty values
 	so0 := state.GetStateObject(stateobjaddr0)
-	so0.balance = big.NewInt(42)
-	so0.nonce = 43
+	so0.SetBalance(big.NewInt(42))
+	so0.SetNonce(43)
 	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
 	so0.remove = false
 	so0.deleted = false
-	so0.dirty = true
 	state.SetStateObject(so0)
-	state.Commit()
+
+	root, _ := state.Commit()
+	state.Reset(root)
 
 	// and one with deleted == true
 	so1 := state.GetStateObject(stateobjaddr1)
-	so1.balance = big.NewInt(52)
-	so1.nonce = 53
+	so1.SetBalance(big.NewInt(52))
+	so1.SetNonce(53)
 	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
 	so1.remove = true
 	so1.deleted = true
-	so1.dirty = true
 	state.SetStateObject(so1)
 
 	so1 = state.GetStateObject(stateobjaddr1)
@@ -174,41 +174,50 @@ func TestSnapshot2(t *testing.T) {
 	state.Set(snapshot)
 
 	so0Restored := state.GetStateObject(stateobjaddr0)
-	so0Restored.GetState(storageaddr)
-	so1Restored := state.GetStateObject(stateobjaddr1)
+	// Update lazily-loaded values before comparing.
+	so0Restored.GetState(db, storageaddr)
+	so0Restored.Code(db)
 	// non-deleted is equal (restored)
 	compareStateObjects(so0Restored, so0, t)
+
 	// deleted should be nil, both before and after restore of state copy
+	so1Restored := state.GetStateObject(stateobjaddr1)
 	if so1Restored != nil {
-		t.Fatalf("deleted object not nil after restoring snapshot")
+		t.Fatalf("deleted object not nil after restoring snapshot: %+v", so1Restored)
 	}
 }
 
 func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
-	if so0.address != so1.address {
+	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
-	if so0.balance.Cmp(so1.balance) != 0 {
-		t.Fatalf("Balance mismatch: have %v, want %v", so0.balance, so1.balance)
+	if so0.Balance().Cmp(so1.Balance()) != 0 {
+		t.Fatalf("Balance mismatch: have %v, want %v", so0.Balance(), so1.Balance())
 	}
-	if so0.nonce != so1.nonce {
-		t.Fatalf("Nonce mismatch: have %v, want %v", so0.nonce, so1.nonce)
+	if so0.Nonce() != so1.Nonce() {
+		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
 	}
-	if !bytes.Equal(so0.codeHash, so1.codeHash) {
-		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.codeHash, so1.codeHash)
+	if so0.data.Root != so1.data.Root {
+		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
+	}
+	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
+		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
 	}
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
 
+	if len(so1.storage) != len(so0.storage) {
+		t.Errorf("Storage size mismatch: have %d, want %d", len(so1.storage), len(so0.storage))
+	}
 	for k, v := range so1.storage {
 		if so0.storage[k] != v {
-			t.Fatalf("Storage key %s mismatch: have %v, want %v", k, so0.storage[k], v)
+			t.Errorf("Storage key %x mismatch: have %v, want %v", k, so0.storage[k], v)
 		}
 	}
 	for k, v := range so0.storage {
 		if so1.storage[k] != v {
-			t.Fatalf("Storage key %s mismatch: have %v, want none.", k, v)
+			t.Errorf("Storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
 
@@ -217,8 +226,5 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 	}
 	if so0.deleted != so1.deleted {
 		t.Fatalf("Deleted mismatch: have %v, want %v", so0.deleted, so1.deleted)
-	}
-	if so0.dirty != so1.dirty {
-		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
 	}
 }

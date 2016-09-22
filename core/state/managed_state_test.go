@@ -29,11 +29,12 @@ func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
-	so := &StateObject{address: addr, nonce: 100}
-	ms.StateDB.stateObjects[addr.Str()] = so
-	ms.accounts[addr.Str()] = newAccount(so)
+	so := &StateObject{address: addr}
+	so.SetNonce(100)
+	ms.StateDB.stateObjects[addr] = so
+	ms.accounts[addr] = newAccount(so)
 
-	return ms, ms.accounts[addr.Str()]
+	return ms, ms.accounts[addr]
 }
 
 func TestNewNonce(t *testing.T) {
@@ -92,7 +93,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	account.nonces = append(account.nonces, nn...)
 	nonce := ms.NewNonce(addr)
 
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
+	ms.StateDB.stateObjects[addr].data.Nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 200 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
@@ -100,7 +101,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
+	ms.StateDB.stateObjects[addr].data.Nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
 		t.Error("expected nonce after remote update to be", 201, "got", nonce)
