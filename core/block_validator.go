@@ -364,7 +364,6 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	*/
 	gl := new(big.Int).Sub(parent.GasLimit(), decay)
 	gl = gl.Add(gl, contrib)
-	gl.Set(common.BigMax(gl, params.MinGasLimit))
 
 	// however, if we're now below the target (TargetGasLimit) we increase the
 	// limit as much as we can (parentGasLimit / 1024 -1)
@@ -372,5 +371,15 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 		gl.Add(parent.GasLimit(), decay)
 		gl.Set(common.BigMin(gl, params.TargetGasLimit))
 	}
+	// If the gas limit performance ceiling is exceeded, mandatorilly decrease
+	params.CurrentGasCeilLock.Lock()
+	if gl.Cmp(params.CurrentGasCeil) > 0 {
+		gl.Sub(parent.GasLimit(), decay)
+		gl.Set(common.BigMax(gl, params.CurrentGasCeil))
+	}
+	params.CurrentGasCeilLock.Unlock()
+
+	// Make sure we never go below the minimum gas limit
+	gl.Set(common.BigMax(gl, params.MinGasLimit))
 	return gl
 }

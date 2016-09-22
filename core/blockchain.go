@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -977,12 +978,24 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			events = append(events, ChainSplitEvent{block, logs})
 		}
 		stats.processed++
+
+		// Update the current gas limit (mining only) based on import times
+		params.CurrentGasCeilLock.Lock()
+		if time.Since(bstart) > params.BlockTimeLimit {
+			ceil := new(big.Int).Div(params.CurrentGasCeil, params.CurrentGasCeilCutDiv)
+			params.CurrentGasCeil.Set(common.BigMax(ceil, params.MinGasLimit))
+		} else {
+			ceil := new(big.Int).Add(params.CurrentGasCeil, new(big.Int).Div(params.CurrentGasCeil, params.CurrentGasCeilIncDiv))
+			limit := new(big.Int).Mul(chain[i].GasLimit(), big.NewInt(2))
+			params.CurrentGasCeil.Set(common.BigMin(ceil, limit))
+		}
+		glog.V(logger.Debug).Infof("block gas ceiling changed to %v", params.CurrentGasCeil)
+		params.CurrentGasCeilLock.Unlock()
 	}
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {
-		tend := time.Since(tstart)
 		start, end := chain[0], chain[len(chain)-1]
-		glog.Infof("imported %d block(s) (%d queued %d ignored) including %d txs in %v. #%v [%x / %x]\n", stats.processed, stats.queued, stats.ignored, txcount, tend, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		glog.Infof("imported %d block(s) (%d queued %d ignored) including %d txs in %v. #%v [%x / %x]\n", stats.processed, stats.queued, stats.ignored, txcount, time.Since(tstart), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 	}
 	go self.postChainEvents(events, coalescedLogs)
 
