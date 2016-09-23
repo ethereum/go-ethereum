@@ -17,7 +17,7 @@
 // Contains the Whisper protocol Topic element. For formal details please see
 // the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#topics.
 
-package whisper05
+package whisperv5
 
 import (
 	"fmt"
@@ -29,11 +29,11 @@ import (
 // Topic represents a cryptographically secure, probabilistic partial
 // classifications of a message, determined as the first (left) 4 bytes of the
 // SHA3 hash of some arbitrary data given by the original author of the message.
-type TopicType [topicLength]byte
+type TopicType [TopicLength]byte
 
 func BytesToTopic(b []byte) (t TopicType) {
-	sz := topicLength
-	if x := len(b); x < topicLength {
+	sz := TopicLength
+	if x := len(b); x < TopicLength {
 		sz = x
 	}
 	for i := 0; i < sz; i++ {
@@ -43,7 +43,7 @@ func BytesToTopic(b []byte) (t TopicType) {
 }
 
 func HashToTopic(h common.Hash) (t TopicType) {
-	for i := 0; i < topicLength; i++ {
+	for i := 0; i < TopicLength; i++ {
 		t[i] = h[i]
 	}
 	return t
@@ -65,12 +65,12 @@ func (t *TopicType) UnmarshalJSON(input []byte) error {
 		input = input[2:]
 	}
 	// validate the length of the input
-	if len(input) != topicLength*2 {
-		return fmt.Errorf("whisper: unmarshalJSON failed: topic must be exactly %d bytes", topicLength)
+	if len(input) != TopicLength*2 {
+		return fmt.Errorf("unmarshalJSON failed: topic must be exactly %d bytes", TopicLength)
 	}
 	b := common.FromHex(string(input))
 	if b == nil {
-		return fmt.Errorf("whisper: unmarshalJSON failed: wrong topic format")
+		return fmt.Errorf("unmarshalJSON failed: wrong topic format")
 	}
 	*t = BytesToTopic(b)
 	return nil

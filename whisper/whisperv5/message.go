@@ -18,23 +18,21 @@
 // the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
 // todo: fix the spec link, and move it to doc.go
 
-package whisper05
+package whisperv5
 
 import (
-	"errors"
-	"fmt"
-
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -95,13 +93,13 @@ func (self *ReceivedMessage) isAsymmetricEncryption() bool {
 	return self.Dst != nil
 }
 
-func DeriveOneTimeKey(key []byte, salt []byte, version uint64) (derivedKey []byte, err error) {
+func DeriveOneTimeKey(key []byte, salt []byte, version uint64) ([]byte, error) {
 	if version == 0 {
-		derivedKey = pbkdf2.Key(key, salt, 16, aesKeyLength, sha256.New)
+		derivedKey := pbkdf2.Key(key, salt, 16, aesKeyLength, sha256.New)
+		return derivedKey, nil
 	} else {
-		err = fmt.Errorf("DeriveKey: invalid envelope version: %d", version)
+		return nil, unknownVersionError(version)
 	}
-	return
 }
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
@@ -137,7 +135,7 @@ func (self *SentMessage) appendPadding(params *MessageParams) {
 		padSize := padChunk - odd
 		if padSize > 255 {
 			// this algorithm is only valid if padSizeLimitUpper <= 256.
-			// if padSizeLimitUpper will every change, please fix the algorithm
+			// if padSizeLimitUpper will ever change, please fix the algorithm
 			// (for more information see ReceivedMessage.extractPadding() function).
 			panic("please fix the padding algorithm before releasing new version")
 		}
@@ -154,24 +152,25 @@ func (self *SentMessage) appendPadding(params *MessageParams) {
 
 // sign calculates and sets the cryptographic signature for the message,
 // also setting the sign flag.
-func (self *SentMessage) sign(key *ecdsa.PrivateKey) (err error) {
+func (self *SentMessage) sign(key *ecdsa.PrivateKey) error {
 	if isMessageSigned(self.Raw[0]) {
 		// this should not happen, but no reason to panic
 		glog.V(logger.Error).Infof("Trying to sign a message which was already signed")
-		return
+		return nil
 	}
 	hash := crypto.Keccak256(self.Raw)
 	signature, err := crypto.Sign(hash, key)
 	if err != nil {
 		self.Raw = append(self.Raw, signature...)
 		self.Raw[0] |= signatureFlag
+		return err
 	}
-	return
+	return nil
 }
 
 // encryptAsymmetric encrypts a message with a public key.
 func (self *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
-	if !validatePublicKey(key) {
+	if !ValidatePublicKey(key) {
 		return fmt.Errorf("Invalid public key provided for asymmetric encryption")
 	}
 	encrypted, err := crypto.Encrypt(key, self.Raw)
@@ -185,44 +184,41 @@ func (self *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
 func (self *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte, err error) {
 	if !validateSymmetricKey(key) {
-		err = fmt.Errorf("encryptSymmetric: invalid key provided for symmetric encryption")
-		return
+		return nil, nil, errors.New("invalid key provided for symmetric encryption")
 	}
 
 	salt = make([]byte, saltLength)
 	_, err = crand.Read(salt)
 	if err != nil {
-		return
+		return nil, nil, err
 	} else if !validateSymmetricKey(salt) {
-		err = fmt.Errorf("encryptSymmetric: failed to generate salt")
-		return
+		return nil, nil, errors.New("crypto/rand failed to generate salt")
 	}
 
 	derivedKey, err := DeriveOneTimeKey(key, salt, EnvelopeVersion)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 	if !validateSymmetricKey(derivedKey) {
-		err = fmt.Errorf("encryptSymmetric: invalid key derived")
-		return
+		return nil, nil, errors.New("failed to derive one-time key")
 	}
 	block, err := aes.NewCipher(derivedKey)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 
 	// never use more than 2^32 random nonces with a given key
 	nonce = make([]byte, aesgcm.NonceSize())
 	_, err = crand.Read(nonce)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
 	self.Raw = aesgcm.Seal(nil, nonce, self.Raw, nil)
-	return
+	return salt, nonce, nil
 }
 
 // Wrap bundles the message into an Envelope to transmit over the network.
@@ -243,13 +239,12 @@ func (self *SentMessage) Wrap(options MessageParams) (envelope *Envelope, err er
 	}
 	if options.Src != nil {
 		if err = self.sign(options.Src); err != nil {
-			return
+			return nil, err
 		}
 	}
-	if len(self.Raw) > msgMaxLength {
-		glog.V(logger.Error).Infof("Message size must not exceed %d bytes", msgMaxLength)
-		err = errors.New("Oversized message")
-		return
+	if len(self.Raw) > MaxMessageLength {
+		glog.V(logger.Error).Infof("Message size must not exceed %d bytes", MaxMessageLength)
+		return nil, errors.New("Oversized message")
 	}
 	var salt, nonce []byte
 	if options.Dst != nil {
@@ -260,11 +255,13 @@ func (self *SentMessage) Wrap(options MessageParams) (envelope *Envelope, err er
 		err = errors.New("Unable to encrypt the message: neither Dst nor Key")
 	}
 
-	if err == nil {
-		envelope = NewEnvelope(options.TTL, options.Topic, salt, nonce, self)
-		envelope.Seal(options)
+	if err != nil {
+		return nil, err
 	}
-	return
+
+	envelope = NewEnvelope(options.TTL, options.Topic, salt, nonce, self)
+	envelope.Seal(options)
+	return envelope, nil
 }
 
 // decryptSymmetric decrypts a message with a topic key, using AES-GCM-256.

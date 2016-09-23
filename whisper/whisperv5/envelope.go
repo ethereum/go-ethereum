@@ -17,7 +17,7 @@
 // Contains the Whisper protocol Envelope element. For formal details please see
 // the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#envelopes.
 
-package whisper05
+package whisperv5
 
 import (
 	"crypto/ecdsa"
@@ -62,20 +62,21 @@ func NewEnvelope(ttl uint32, topic TopicType, salt []byte, aesNonce []byte, msg 
 		EnvNonce: 0,
 	}
 
-	if EnvelopeVersion > 255 {
-		panic("please fix Envelope.Version size before releasing this version")
+	if EnvelopeVersion < 256 {
+		env.Version[0] = byte(EnvelopeVersion)
+	} else {
+		panic("please increase the size of Envelope.Version before releasing this version")
 	}
 
-	env.Version[0] = byte(EnvelopeVersion)
 	return &env
 }
 
-func (self *Envelope) isSymmetric() bool {
+func (self *Envelope) IsSymmetric() bool {
 	return self.AESNonce != nil
 }
 
 func (self *Envelope) isAsymmetric() bool {
-	return !self.isSymmetric()
+	return !self.IsSymmetric()
 }
 
 func (self *Envelope) Ver() uint64 {
@@ -194,7 +195,7 @@ func (self *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error
 	if err != nil {
 		msg = nil
 	}
-	return
+	return msg, err
 }
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
@@ -204,7 +205,7 @@ func (self *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		if msg != nil {
 			msg.Dst = watcher.Dst
 		}
-	} else if self.isSymmetric() {
+	} else if self.IsSymmetric() {
 		msg, _ = self.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.TopicKeyHash = crypto.Keccak256Hash(watcher.KeySym)

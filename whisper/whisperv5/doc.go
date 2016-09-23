@@ -29,31 +29,35 @@ Whisper is a pure identity-based messaging system. Whisper provides a low-level
 or prejudiced by the low-level hardware attributes and characteristics,
 particularly the notion of singular endpoints.
 */
-package whisper05
+package whisperv5
 
 import (
+	"fmt"
 	"time"
 )
 
 const (
 	EnvelopeVersion    = uint64(0)
-	protocolVersion    = uint64(5)
-	protocolVersionStr = "5.0"
-	protocolName       = "shh"
+	ProtocolVersion    = uint64(5)
+	ProtocolVersionStr = "5.0"
+	ProtocolName       = "shh"
 
-	statusCode      = 0
-	messagesCode    = 1
-	p2pCode         = 2
-	mailRequestCode = 3
+	statusCode           = 0
+	messagesCode         = 1
+	p2pCode              = 2
+	mailRequestCode      = 3
+	NumberOfMessageCodes = 4
 
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
 
-	topicLength     = 4
+	TopicLength     = 4
 	signatureLength = 65
 	aesKeyLength    = 32
 	saltLength      = 12
-	msgMaxLength    = 0xFFFF
+
+	MaxMessageLength = 0xFFFF // todo: remove this restriction after testing in morden and analizing stats. this should be regulated by MinimumPoW.
+	MinimumPoW       = 50.0   // todo: review
 
 	padSizeLimitLower = 128 // it can not be less - we don't want to reveal the absence of signature
 	padSizeLimitUpper = 256 // just an arbitrary number, could be changed without losing compatibility
@@ -63,16 +67,12 @@ const (
 
 	DefaultTTL     = 50 // seconds
 	SynchAllowance = 10 // seconds
-
-	MinimumPoW = 50.0 // todo: review
 )
 
-type whisperOfflineError struct{}
+type unknownVersionError uint64
 
-var whisperOffLineErr = new(whisperOfflineError)
-
-func (e *whisperOfflineError) Error() string {
-	return "whisper is offline"
+func (e unknownVersionError) Error() string {
+	return fmt.Sprintf("invalid envelope version %d", uint64(e))
 }
 
 // MailServer represents a mail server, capable of
@@ -83,5 +83,5 @@ func (e *whisperOfflineError) Error() string {
 // in order to bypass the expiry checks.
 type MailServer interface {
 	Archive(env *Envelope)
-	DeliverMail(whisperPeer *WhisperPeer, data []byte)
+	DeliverMail(whisperPeer *Peer, data []byte)
 }

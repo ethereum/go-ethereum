@@ -16,7 +16,7 @@
 
 // Contains the message filter for fine grained subscriptions.
 
-package whisper02
+package whisperv2
 
 import (
 	"crypto/ecdsa"

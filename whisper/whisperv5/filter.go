@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package whisper05
+package whisperv5
 
 import (
 	"crypto/ecdsa"
-
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -32,10 +31,9 @@ type Filter struct {
 	KeySym       []byte            // Key associated with the Topic
 	TopicKeyHash common.Hash       // The Keccak256Hash of the symmetric key
 	PoW          float64           // Proof of work as described in the Whisper spec
-	acceptP2P    bool              // Indicates whether this filter is interested in direct peer-to-peer messages
-
-	messages map[common.Hash]*ReceivedMessage
-	mutex    sync.RWMutex
+	AcceptP2P    bool              // Indicates whether this filter is interested in direct peer-to-peer messages
+	Messages     map[common.Hash]*ReceivedMessage
+	Mutex        sync.RWMutex
 }
 
 type Filters struct {
@@ -78,7 +76,7 @@ func (self *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
 	self.mutex.RLock()
 	var msg *ReceivedMessage
 	for _, watcher := range self.watchers {
-		if messageCode == p2pCode && !watcher.acceptP2P {
+		if messageCode == p2pCode && !watcher.AcceptP2P {
 			continue
 		}
 
@@ -112,23 +110,23 @@ func (self *Filter) expectsSymmetricEncryption() bool {
 }
 
 func (self *Filter) Trigger(msg *ReceivedMessage) {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+	self.Mutex.Lock()
+	defer self.Mutex.Unlock()
 
-	if _, exist := self.messages[msg.EnvelopeHash]; !exist {
-		self.messages[msg.EnvelopeHash] = msg
+	if _, exist := self.Messages[msg.EnvelopeHash]; !exist {
+		self.Messages[msg.EnvelopeHash] = msg
 	}
 }
 
-func (self *Filter) retrieve() (all []*ReceivedMessage) {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+func (self *Filter) Retrieve() (all []*ReceivedMessage) {
+	self.Mutex.Lock()
+	defer self.Mutex.Unlock()
 
-	all = make([]*ReceivedMessage, 0, len(self.messages))
-	for _, msg := range self.messages {
+	all = make([]*ReceivedMessage, 0, len(self.Messages))
+	for _, msg := range self.Messages {
 		all = append(all, msg)
 	}
-	self.messages = make(map[common.Hash]*ReceivedMessage) // delete old messages
+	self.Messages = make(map[common.Hash]*ReceivedMessage) // delete old messages
 	return all
 }
 
@@ -169,7 +167,7 @@ func (self *Filter) MatchEnvelope(envelope *Envelope) bool {
 		if self.Topics == nil {
 			return true // wildcard
 		}
-	} else if self.expectsSymmetricEncryption() && envelope.isSymmetric() {
+	} else if self.expectsSymmetricEncryption() && envelope.IsSymmetric() {
 		encryptionMethodMatch = true
 	}
 
@@ -185,9 +183,9 @@ func (self *Filter) MatchEnvelope(envelope *Envelope) bool {
 }
 
 func isEqual(a, b *ecdsa.PublicKey) bool {
-	if !validatePublicKey(a) {
+	if !ValidatePublicKey(a) {
 		return false
-	} else if !validatePublicKey(b) {
+	} else if !ValidatePublicKey(b) {
 		return false
 	}
 	// the Curve is always the same, just compare the points

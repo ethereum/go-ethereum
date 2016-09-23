@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package whisper05
+package whisperv5
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ import (
 )
 
 // peer represents a whisper protocol peer connection.
-type WhisperPeer struct {
+type Peer struct {
 	host    *Whisper
 	peer    *p2p.Peer
 	ws      p2p.MsgReadWriter
@@ -41,8 +41,8 @@ type WhisperPeer struct {
 }
 
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
-func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *WhisperPeer {
-	return &WhisperPeer{
+func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
+	return &Peer{
 		host:    host,
 		peer:    remote,
 		ws:      rw,
@@ -54,24 +54,24 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *WhisperPeer
 
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
-func (self *WhisperPeer) start() {
+func (self *Peer) start() {
 	go self.update()
 	glog.V(logger.Debug).Infof("%v: whisper started", self.peer)
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
-func (self *WhisperPeer) stop() {
+func (self *Peer) stop() {
 	close(self.quit)
 	glog.V(logger.Debug).Infof("%v: whisper stopped", self.peer)
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
 // verifies the remote status too.
-func (self *WhisperPeer) handshake() error {
+func (self *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	go func() {
-		errc <- p2p.Send(self.ws, statusCode, protocolVersion)
+		errc <- p2p.Send(self.ws, statusCode, ProtocolVersion)
 	}()
 	// Fetch the remote status packet and verify protocol match
 	packet, err := self.ws.ReadMsg()
@@ -89,8 +89,8 @@ func (self *WhisperPeer) handshake() error {
 	if err != nil {
 		return fmt.Errorf("bad status message: %v", err)
 	}
-	if peerVersion != protocolVersion {
-		return fmt.Errorf("protocol version mismatch %d != %d", peerVersion, protocolVersion)
+	if peerVersion != ProtocolVersion {
+		return fmt.Errorf("protocol version mismatch %d != %d", peerVersion, ProtocolVersion)
 	}
 	// Wait until out own status is consumed too
 	if err := <-errc; err != nil {
@@ -101,7 +101,7 @@ func (self *WhisperPeer) handshake() error {
 
 // update executes periodic operations on the peer, including message transmission
 // and expiration.
-func (self *WhisperPeer) update() {
+func (self *Peer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
 	transmit := time.NewTicker(transmissionCycle)
@@ -125,18 +125,18 @@ func (self *WhisperPeer) update() {
 }
 
 // mark marks an envelope known to the peer so that it won't be sent back.
-func (self *WhisperPeer) mark(envelope *Envelope) {
+func (self *Peer) mark(envelope *Envelope) {
 	self.known.Add(envelope.Hash())
 }
 
 // marked checks if an envelope is already known to the remote peer.
-func (self *WhisperPeer) marked(envelope *Envelope) bool {
+func (self *Peer) marked(envelope *Envelope) bool {
 	return self.known.Has(envelope.Hash())
 }
 
 // expire iterates over all the known envelopes in the host and removes all
 // expired (unknown) ones from the known list.
-func (self *WhisperPeer) expire() {
+func (self *Peer) expire() {
 	// Assemble the list of available envelopes
 	available := set.NewNonTS()
 	for _, envelope := range self.host.Envelopes() {
@@ -158,7 +158,7 @@ func (self *WhisperPeer) expire() {
 
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
-func (self *WhisperPeer) broadcast() error {
+func (self *Peer) broadcast() error {
 	// Fetch the envelopes and collect the unknown ones
 	envelopes := self.host.Envelopes()
 	transmit := make([]*Envelope, 0, len(envelopes))

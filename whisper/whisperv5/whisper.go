@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package whisper05
+package whisperv5
 
 import (
 	"bytes"
@@ -30,11 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
-
-	"golang.org/x/crypto/pbkdf2"
-
 	"github.com/ethereum/go-ethereum/rlp"
+	"golang.org/x/crypto/pbkdf2"
 	set "gopkg.in/fatih/set.v0"
 )
 
@@ -53,50 +50,38 @@ type Whisper struct {
 	expirations map[uint32]*set.SetNonTS         // Message expiration pool
 	poolMu      sync.RWMutex                     // Mutex to sync the message and expiration pools
 
-	peers  map[*WhisperPeer]struct{} // Set of currently active peers
-	peerMu sync.RWMutex              // Mutex to sync the active peer set
+	peers  map[*Peer]struct{} // Set of currently active peers
+	peerMu sync.RWMutex       // Mutex to sync the active peer set
 
-	mailServer *MailServer
+	mailServer MailServer
 
 	quit chan struct{}
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 // Param s should be passed if you want to implement mail server, otherwise nil.
-func New(s *MailServer) *Whisper {
+func New(server MailServer) *Whisper {
 	whisper := &Whisper{
 		privateKeys: make(map[string]*ecdsa.PrivateKey),
 		topicKeys:   make(map[string][]byte),
 		envelopes:   make(map[common.Hash]*Envelope),
 		messages:    make(map[common.Hash]*ReceivedMessage),
 		expirations: make(map[uint32]*set.SetNonTS),
-		peers:       make(map[*WhisperPeer]struct{}),
-		mailServer:  s,
+		peers:       make(map[*Peer]struct{}),
+		mailServer:  server,
 		quit:        make(chan struct{}),
 	}
 	whisper.filters = NewFilters(whisper)
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
-		Name:    protocolName,
-		Version: uint(protocolVersion),
-		Length:  2,
-		Run:     whisper.handlePeer,
+		Name:    ProtocolName,
+		Version: uint(ProtocolVersion),
+		Length:  NumberOfMessageCodes,
+		Run:     whisper.HandlePeer,
 	}
 
 	return whisper
-}
-
-// APIs returns the RPC descriptors the Whisper implementation offers
-func (s *Whisper) APIs() []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: protocolName,
-			Version:   protocolVersionStr,
-			Service:   NewPublicWhisperAPI(s),
-			Public:    true,
-		},
-	}
 }
 
 // Protocols returns the whisper sub-protocols ran by this particular client.
@@ -109,58 +94,47 @@ func (self *Whisper) Version() uint {
 	return self.protocol.Version
 }
 
-// MarkPeerTrusted marks specific peer trusted, which will allow it
-// to send historic (expired) messages.
-func (self *Whisper) MarkPeerTrusted(peerID *rpc.HexBytes) error {
+func (self *Whisper) GetFilter(id int) *Filter {
+	return self.filters.Get(id)
+}
+
+func (self *Whisper) getPeer(peerID []byte) (*Peer, error) {
 	self.peerMu.Lock()
 	defer self.peerMu.Unlock()
 	for p, _ := range self.peers {
 		id := p.peer.ID()
-		if bytes.Equal(*peerID, id[:]) {
-			p.trusted = true
-			return nil
+		if bytes.Equal(peerID, id[:]) {
+			return p, nil
 		}
 	}
-	return fmt.Errorf("Could not find peer with ID: %x", peerID)
+	return nil, fmt.Errorf("Could not find peer with ID: %x", peerID)
 }
 
-func (self *Whisper) RequestHistoricMessages(peerID *rpc.HexBytes, data *rpc.HexBytes) error {
-	var wp *WhisperPeer
-	self.peerMu.Lock()
-	for p, _ := range self.peers {
-		id := p.peer.ID()
-		if bytes.Equal(*peerID, id[:]) {
-			p.trusted = true
-			wp = p
-			break
-		}
+// MarkPeerTrusted marks specific peer trusted, which will allow it
+// to send historic (expired) messages.
+func (self *Whisper) MarkPeerTrusted(peerID []byte) error {
+	p, err := self.getPeer(peerID)
+	if err != nil {
+		return err
 	}
-	self.peerMu.Unlock()
+	p.trusted = true
+	return nil
+}
 
-	if wp == nil {
-		return fmt.Errorf("RequestHistoricMessages: Could not find peer with ID: %x", peerID)
+func (self *Whisper) RequestHistoricMessages(peerID []byte, data []byte) error {
+	wp, err := self.getPeer(peerID)
+	if err != nil {
+		return err
 	}
-
+	wp.trusted = true
 	return p2p.Send(wp.ws, mailRequestCode, data)
 }
 
-func (self *Whisper) SendP2PMessage(peerID *rpc.HexBytes, envelope *Envelope) error {
-	var wp *WhisperPeer
-	self.peerMu.Lock()
-	for p, _ := range self.peers {
-		id := p.peer.ID()
-		if bytes.Equal(*peerID, id[:]) {
-			p.trusted = true
-			wp = p
-			break
-		}
+func (self *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
+	wp, err := self.getPeer(peerID)
+	if err != nil {
+		return err
 	}
-	self.peerMu.Unlock()
-
-	if wp == nil {
-		return fmt.Errorf("SendP2PMessage: Could not find peer with ID: %x", peerID)
-	}
-
 	return p2p.Send(wp.ws, p2pCode, envelope)
 }
 
@@ -207,7 +181,7 @@ func (self *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 
 func (self *Whisper) GenerateTopicKey(name string) error {
 	if self.HasTopicKey(name) {
-		return fmt.Errorf("GenerateTopicKey: key with name [%s] already exists", name)
+		return fmt.Errorf("Key with name [%s] already exists", name)
 	}
 
 	key := make([]byte, aesKeyLength)
@@ -215,7 +189,7 @@ func (self *Whisper) GenerateTopicKey(name string) error {
 	if err != nil {
 		return err
 	} else if !validateSymmetricKey(key) {
-		return fmt.Errorf("GenerateTopicKey: failed to generate valid key")
+		return fmt.Errorf("crypto/rand failed to generate valid key")
 	}
 
 	self.keyMu.Lock()
@@ -226,10 +200,10 @@ func (self *Whisper) GenerateTopicKey(name string) error {
 
 func (self *Whisper) AddTopicKey(name string, key []byte) error {
 	if self.HasTopicKey(name) {
-		return fmt.Errorf("AddTopicKey: key with name [%s] already exists", name)
+		return fmt.Errorf("Key with name [%s] already exists", name)
 	}
 
-	derived, err := DeriveKeyMaterial(key, EnvelopeVersion)
+	derived, err := deriveKeyMaterial(key, EnvelopeVersion)
 	if err != nil {
 		return err
 	}
@@ -293,7 +267,7 @@ func (self *Whisper) Stop() error {
 
 // handlePeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.
-func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (self *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	// Create the new peer and start tracking it
 	whisperPeer := newPeer(self, peer, rw)
 
@@ -318,7 +292,7 @@ func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 }
 
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
-func (self *Whisper) runMessageLoop(p *WhisperPeer, rw p2p.MsgReadWriter) error {
+func (self *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 	for {
 		// fetch the next packet
 		packet, err := rw.ReadMsg()
@@ -345,7 +319,7 @@ func (self *Whisper) runMessageLoop(p *WhisperPeer, rw p2p.MsgReadWriter) error 
 				}
 				p.mark(envelope)
 				if self.mailServer != nil {
-					(*self.mailServer).Archive(envelope)
+					self.mailServer.Archive(envelope)
 				}
 			}
 		case p2pCode:
@@ -369,7 +343,7 @@ func (self *Whisper) runMessageLoop(p *WhisperPeer, rw p2p.MsgReadWriter) error 
 				s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 				data, err := s.Bytes()
 				if err == nil {
-					(*self.mailServer).DeliverMail(p, data)
+					self.mailServer.DeliverMail(p, data)
 				} else {
 					glog.V(logger.Error).Infof("%v: bad requestHistoricMessages received: [%v]", p.peer, err)
 				}
@@ -378,6 +352,8 @@ func (self *Whisper) runMessageLoop(p *WhisperPeer, rw p2p.MsgReadWriter) error 
 			// New message types might be implemented in the future versions of Whisper.
 			// For forward compatibility, just ignore.
 		}
+
+		packet.Discard()
 	}
 }
 
@@ -405,7 +381,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 		}
 	}
 
-	if len(envelope.Data) > msgMaxLength {
+	if len(envelope.Data) > MaxMessageLength {
 		return fmt.Errorf("huge messages are not allowed")
 	}
 
@@ -524,7 +500,7 @@ func (self *Whisper) addDecryptedMessage(msg *ReceivedMessage) {
 	self.messages[msg.EnvelopeHash] = msg
 }
 
-func validatePublicKey(k *ecdsa.PublicKey) bool {
+func ValidatePublicKey(k *ecdsa.PublicKey) bool {
 	return k != nil && k.X != nil && k.Y != nil && k.X.Sign() != 0 && k.Y.Sign() != 0
 }
 
@@ -532,16 +508,12 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 	if k == nil || k.D == nil || k.D.Sign() == 0 {
 		return false
 	}
-	return validatePublicKey(&k.PublicKey)
+	return ValidatePublicKey(&k.PublicKey)
 }
 
 // validateSymmetricKey returns false if the key contains all zeros
 func validateSymmetricKey(k []byte) bool {
-	if len(k) == 0 {
-		return false
-	}
-	empty := containsOnlyZeros(k)
-	return !empty
+	return len(k) > 0 && !containsOnlyZeros(k)
 }
 
 func containsOnlyZeros(data []byte) bool {
@@ -559,25 +531,25 @@ func bytesToIntLittleEndian(b []byte) (res uint64) {
 		res += uint64(b[i]) * mul
 		mul *= 256
 	}
-	return
+	return res
 }
 
-func bytesToIntBigEndian(b []byte) (res uint64) {
+func BytesToIntBigEndian(b []byte) (res uint64) {
 	for i := 0; i < len(b); i++ {
 		res *= 256
 		res += uint64(b[i])
 	}
-	return
+	return res
 }
 
 // DeriveSymmetricKey derives symmetric key material from the key or password.
 // pbkdf2 is used for security, in case people use password instead of randomly generated keys.
-func DeriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error) {
+func deriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error) {
 	if version == 0 {
 		// todo: review: kdf should run no less than 1 sec, because it's a once in a session experience
-		derivedKey = pbkdf2.Key(key, nil, 65356, aesKeyLength, sha256.New)
+		derivedKey := pbkdf2.Key(key, nil, 65356, aesKeyLength, sha256.New)
+		return derivedKey, nil
 	} else {
-		err = fmt.Errorf("DeriveSymmetricKey: invalid envelope version: %d", version)
+		return nil, unknownVersionError(version)
 	}
-	return
 }
