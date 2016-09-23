@@ -94,6 +94,9 @@ type Account struct {
 	Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
+
+	// TODO(fjl): track code size here to get it into the cache
+	// codeSize int
 }
 
 // NewObject creates a state object.
