@@ -136,6 +136,7 @@ participating.
 		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.CacheFlag,
+		utils.StateCacheFlag,
 		utils.LightKDFFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,

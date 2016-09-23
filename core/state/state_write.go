@@ -27,7 +27,9 @@ func CommitBatch(state *State) (common.Hash, ethdb.Batch) {
 func stateCommit(state *State, db trie.DatabaseWriter) (common.Hash, error) {
 	// make sure the state is flattened before committing
 	state = Flatten(state)
-	for _, stateObject := range state.StateObjects {
+	for address, _ := range state.localStateObjects {
+		stateObject := state.StateObjects[address]
+		//for _, stateObject := range state.StateObjects {
 		if stateObject.remove {
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.

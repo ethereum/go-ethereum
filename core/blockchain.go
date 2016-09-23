@@ -107,6 +107,8 @@ type BlockChain struct {
 	pow       pow.PoW
 	processor Processor // block processor interface
 	validator Validator // block and state validator interface
+
+	canonState *state.State
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -205,19 +207,23 @@ func (self *BlockChain) loadLastState() error {
 	glog.V(logger.Info).Infof("Last block: #%d [%x…] TD=%v", self.currentBlock.Number(), self.currentBlock.Hash().Bytes()[:4], blockTd)
 	glog.V(logger.Info).Infof("Fast block: #%d [%x…] TD=%v", self.currentFastBlock.Number(), self.currentFastBlock.Hash().Bytes()[:4], fastTd)
 
-	/*
-		st, err := state.New(currentHeader.Root, self.chainDb)
-		if err != nil {
-			return err
-		}
-		glog.V(logger.Info).Infoln("caching state accounts...")
-		tstart := time.Now()
-		if err := st.LoadAll(); err != nil {
-			return fmt.Errorf("core: could not pre-load account data: %v", err)
-		}
-		self.canonState = st
-		glog.V(logger.Info).Infoln("cached", len(st.StateObjects), "in", time.Since(tstart))
-	*/
+	return nil
+}
+
+func (bc *BlockChain) PreloadState() error {
+	currentHeader := bc.currentBlock.Header()
+
+	st, err := state.New(currentHeader.Root, bc.chainDb)
+	if err != nil {
+		return err
+	}
+	glog.V(logger.Info).Infoln("caching state accounts...")
+	tstart := time.Now()
+	if err := st.LoadAll(); err != nil {
+		return fmt.Errorf("core: could not pre-load account data: %v", err)
+	}
+	bc.canonState = st
+	glog.V(logger.Info).Infoln("cached", len(st.StateObjects), "in", time.Since(tstart))
 
 	return nil
 }
@@ -905,12 +911,17 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 
+		parent := self.GetBlock(block.ParentHash(), block.NumberU64()-1)
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
 		if st == nil {
-			st, err = state.New(self.GetBlock(block.ParentHash(), block.NumberU64()-1).Root(), self.chainDb)
+			if self.canonState != nil && parent.Root() == common.BytesToHash(self.canonState.Trie.Root()) {
+				st = self.canonState
+			} else {
+				st, err = state.New(parent.Root(), self.chainDb)
+			}
 		} else {
-			err = st.Reset(chain[i-1].Root())
+			err = st.Reset(parent.Root())
 		}
 		if err != nil {
 			reportBlock(block, err)
@@ -928,10 +939,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			reportBlock(block, err)
 			return i, err
 		}
-		tstart := time.Now()
 		// flatten the state before committing.
 		st = state.Flatten(st)
-		fmt.Println("reduce took", time.Since(tstart))
 		// Write state changes to database
 		_, err = state.Commit(st)
 		if err != nil {
@@ -972,6 +981,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
 				return i, err
 			}
+			self.canonState = st
 		case SideStatTy:
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))

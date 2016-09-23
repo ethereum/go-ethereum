@@ -144,6 +144,10 @@ var (
 		Usage: "Megabytes of memory allocated to internal caching (min 16MB / database forced)",
 		Value: 128,
 	}
+	StateCacheFlag = cli.BoolFlag{
+		Name:  "statecache",
+		Usage: "Caches the last known state before syncing with the network. Uses significantly more memory.",
+	}
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
 		Usage: "Enable fast syncing through state downloads",

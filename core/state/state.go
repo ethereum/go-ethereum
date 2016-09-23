@@ -23,7 +23,7 @@ type State struct {
 	parent *State
 
 	StateObjects      map[common.Address]*StateObject
-	ownedStateObjects map[common.Address]bool
+	localStateObjects map[common.Address]bool
 	refund            *big.Int
 
 	logIdx uint
@@ -49,7 +49,7 @@ func New(root common.Hash, db ethdb.Database) (*State, error) {
 		Db:                db,
 		Trie:              tr,
 		StateObjects:      make(map[common.Address]*StateObject),
-		ownedStateObjects: make(map[common.Address]bool),
+		localStateObjects: make(map[common.Address]bool),
 		refund:            new(big.Int),
 	}, nil
 }
@@ -128,10 +128,10 @@ func (s *State) loadStateObject(stateObject *StateObject) {
 func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
 	stateObject, inCache := s.Read(address)
 	if stateObject != nil {
-		if !inCache || !s.ownedStateObjects[address] {
+		if !inCache || !s.localStateObjects[address] {
 			stateObject = stateObject.Copy()
 			s.StateObjects[address] = stateObject
-			s.ownedStateObjects[address] = true
+			s.localStateObjects[address] = true
 		}
 		return stateObject
 	}
@@ -141,7 +141,7 @@ func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
 		stateObject.SetNonce(StartingNonce)
 
 		s.StateObjects[address] = stateObject
-		s.ownedStateObjects[address] = true
+		s.localStateObjects[address] = true
 	}
 	return stateObject
 }
@@ -372,9 +372,8 @@ func (s *State) Reset(root common.Hash) error {
 		Db:                s.Db,
 		Trie:              tr,
 		StateObjects:      s.StateObjects,
-		ownedStateObjects: s.ownedStateObjects,
+		localStateObjects: make(map[common.Address]bool),
 		//StateObjects:      make(map[common.Address]*StateObject),
-		//ownedStateObjects: make(map[common.Address]bool),
 		refund: new(big.Int),
 	}
 	return nil
@@ -415,7 +414,7 @@ func Fork(parent *State) *State {
 
 		parent:            parent,
 		StateObjects:      make(map[common.Address]*StateObject),
-		ownedStateObjects: make(map[common.Address]bool),
+		localStateObjects: make(map[common.Address]bool),
 		refund:            new(big.Int),
 		logIdx:            parent.logIdx,
 		logs:              nil,
@@ -435,8 +434,8 @@ func Flatten(s *State) *State {
 
 	for address, object := range s.StateObjects {
 		flattenedState.StateObjects[address] = object
-		if s.ownedStateObjects[address] {
-			flattenedState.ownedStateObjects[address] = true
+		if s.localStateObjects[address] {
+			flattenedState.localStateObjects[address] = true
 		}
 	}
 
@@ -447,7 +446,7 @@ func Flatten(s *State) *State {
 }
 
 func (s *State) String() string {
-	return fmt.Sprintf("objects: %d owned: %d", len(s.StateObjects), len(s.ownedStateObjects))
+	return fmt.Sprintf("objects: %d owned: %d", len(s.StateObjects), len(s.localStateObjects))
 }
 
 func IntermediateRoot(state *State) common.Hash {

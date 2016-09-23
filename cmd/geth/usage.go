@@ -74,6 +74,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.FastSyncFlag,
 			utils.LightKDFFlag,
 			utils.CacheFlag,
+			utils.StateCacheFlag,
 		},
 	},
 	{
