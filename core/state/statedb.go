@@ -445,7 +445,7 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) 
 			// and just mark it for deletion in the trie.
 			s.DeleteStateObject(stateObject)
 			delete(s.all, addr)
-		} else {
+		} else if stateObject.dirty {
 			// Write any contract code associated with the state object
 			if stateObject.code != nil {
 				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {
