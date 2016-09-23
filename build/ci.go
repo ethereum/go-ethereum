@@ -28,6 +28,7 @@ Available commands are:
    archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
+   nsis                                                                                      -- creates a Windows NSIS installer
    xgo        [ options ]                                                                    -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -122,6 +123,8 @@ func main() {
 		doArchive(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
+	case "nsis":
+		doWindowsInstaller(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
 	default:
@@ -557,6 +560,29 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	}
 
 	return pkgdir
+}
+
+// Create Windows installer.
+func doWindowsInstaller(cmdline []string) {
+	// Create binaries that user are embedded in installer.
+	// The installer depends on the following packages.
+	cmdline = append(cmdline, "./cmd/geth", "./cmd/bootnode", "./cmd/abigen", "./cmd/disasm", "./cmd/evm", "./cmd/rlpdump")
+	doInstall(cmdline)
+
+	// create NSIS package
+	outputFile := "/DOUTPUTFILE=geth-" + makeArchiveBasename()
+
+	version := strings.Split(build.VERSION(), ".")
+	if len(version) != 3 {
+		panic("Expected major.minor.build version string, got " + build.VERSION())
+	}
+	majorVersion := "/DMAJORVERSION=" + version[0]
+	minorVersion := "/DMINORVERSION=" + version[1]
+	buildId := "/DBUILDVERSION=" + version[2]
+
+	cmd := exec.Command("makensis.exe", outputFile, majorVersion, minorVersion, buildId, `.\build\nsis\geth.nsi`)
+
+	build.MustRun(cmd)
 }
 
 // Cross compilation
