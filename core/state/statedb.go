@@ -427,8 +427,14 @@ func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
 	return root, batch
 }
 
-func (s *StateDB) commit(dbw trie.DatabaseWriter) (common.Hash, error) {
+func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) {
 	s.refund = new(big.Int)
+	defer func() {
+		if err != nil {
+			// Committing failed, any updates to the canon state are invalid.
+			s.all = make(map[common.Address]Account)
+		}
+	}()
 
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
@@ -444,7 +450,6 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (common.Hash, error) {
 					return common.Hash{}, err
 				}
 			}
-
 			// Write any storage changes in the state object to its storage trie.
 			if err := stateObject.CommitTrie(s.db, dbw); err != nil {
 				return common.Hash{}, err
@@ -455,14 +460,8 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (common.Hash, error) {
 		}
 		stateObject.dirty = false
 	}
-
 	// Write trie changes.
-	root, err := s.trie.CommitTo(dbw)
-	if err != nil {
-		// Committing failed, any updates to the canon state are invalid.
-		s.all = make(map[common.Address]Account)
-	}
-	return root, err
+	return s.trie.CommitTo(dbw)
 }
 
 func (self *StateDB) Refunds() *big.Int {
