@@ -23,7 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type Account struct {
+type DumpAccount struct {
 	Balance  string            `json:"balance"`
 	Nonce    uint64            `json:"nonce"`
 	Root     string            `json:"root"`
@@ -32,15 +32,15 @@ type Account struct {
 	Storage  map[string]string `json:"storage"`
 }
 
-type World struct {
-	Root     string             `json:"root"`
-	Accounts map[string]Account `json:"accounts"`
+type Dump struct {
+	Root     string                 `json:"root"`
+	Accounts map[string]DumpAccount `json:"accounts"`
 }
 
-func (self *StateDB) RawDump() World {
-	world := World{
+func (self *StateDB) RawDump() Dump {
+	dump := Dump{
 		Root:     common.Bytes2Hex(self.trie.Root()),
-		Accounts: make(map[string]Account),
+		Accounts: make(map[string]DumpAccount),
 	}
 
 	it := self.trie.Iterator()
@@ -50,7 +50,7 @@ func (self *StateDB) RawDump() World {
 		if err != nil {
 			panic(err)
 		}
-		account := Account{
+		account := DumpAccount{
 			Balance:  stateObject.Balance().String(),
 			Nonce:    stateObject.Nonce(),
 			Root:     common.Bytes2Hex(stateObject.data.Root[:]),
@@ -63,9 +63,9 @@ func (self *StateDB) RawDump() World {
 		for storageIt.Next() {
 			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}
-		world.Accounts[common.Bytes2Hex(addr)] = account
+		dump.Accounts[common.Bytes2Hex(addr)] = account
 	}
-	return world
+	return dump
 }
 
 func (self *StateDB) Dump() []byte {
