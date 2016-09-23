@@ -82,9 +82,10 @@ type StateObject struct {
 	// Cache flags.
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
-	dirty   bool // true if anything has changed
-	remove  bool
-	deleted bool
+	dirty     bool // true if anything has changed
+	dirtyCode bool // true if the code was updated
+	remove    bool
+	deleted   bool
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -238,6 +239,7 @@ func (self *StateObject) Copy(db trie.Database) *StateObject {
 	stateObject.storage = self.storage.Copy()
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
+	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
 	return stateObject
 }
@@ -270,7 +272,7 @@ func (self *StateObject) Code(db trie.Database) []byte {
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
 	self.data.CodeHash = crypto.Keccak256(code)
-	self.dirty = true
+	self.dirty, self.dirtyCode = true, true
 }
 
 func (self *StateObject) SetNonce(nonce uint64) {

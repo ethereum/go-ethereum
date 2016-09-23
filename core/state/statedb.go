@@ -447,10 +447,11 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) 
 			delete(s.all, addr)
 		} else if stateObject.dirty {
 			// Write any contract code associated with the state object
-			if stateObject.code != nil {
+			if stateObject.code != nil && stateObject.dirtyCode {
 				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {
 					return common.Hash{}, err
 				}
+				stateObject.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie.
 			if err := stateObject.CommitTrie(s.db, dbw); err != nil {
