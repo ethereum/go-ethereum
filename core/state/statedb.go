@@ -265,7 +265,9 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 
 	// Use cached account data from the canon state if possible.
 	if data, ok := self.all[addr]; ok {
-		return NewObject(addr, data)
+		obj := NewObject(addr, data)
+		self.SetStateObject(obj)
+		return obj
 	}
 
 	// Load the object from the database.

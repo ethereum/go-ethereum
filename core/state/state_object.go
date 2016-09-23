@@ -193,8 +193,6 @@ func (self *StateObject) CommitTrie(db trie.Database, dbw trie.DatabaseWriter) e
 		fmt.Println("dbErr:", self.dbErr)
 		return self.dbErr
 	}
-	self.dbErr = nil
-
 	root, err := self.trie.CommitTo(dbw)
 	if err == nil {
 		self.data.Root = root
@@ -253,7 +251,7 @@ func (c *StateObject) Address() common.Address {
 	return c.address
 }
 
-// LoadCode returns the contract code associated with this object, if any.
+// Code returns the contract code associated with this object, if any.
 func (self *StateObject) Code(db trie.Database) []byte {
 	if self.code != nil {
 		return self.code
