@@ -171,6 +171,14 @@ func (self *StateDB) GetCode(addr common.Address) []byte {
 	return nil
 }
 
+func (self *StateDB) GetCodeSize(addr common.Address) int {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		return stateObject.CodeSize(self.db)
+	}
+	return 0
+}
+
 func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {

@@ -96,8 +96,7 @@ type Account struct {
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 
-	// TODO(fjl): track code size here to get it into the cache
-	// codeSize int
+	codeSize *int
 }
 
 // NewObject creates a state object.
@@ -269,9 +268,20 @@ func (self *StateObject) Code(db trie.Database) []byte {
 	return code
 }
 
+// CodeSize returns the size of the contract code associated with this object.
+func (self *StateObject) CodeSize(db trie.Database) int {
+	if self.data.codeSize == nil {
+		self.data.codeSize = new(int)
+		*self.data.codeSize = len(self.Code(db))
+	}
+	return *self.data.codeSize
+}
+
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
 	self.data.CodeHash = crypto.Keccak256(code)
+	self.data.codeSize = new(int)
+	*self.data.codeSize = len(code)
 	self.dirty, self.dirtyCode = true, true
 }
 
