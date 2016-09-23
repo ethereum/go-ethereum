@@ -23,12 +23,13 @@ Usage: go run ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ packages... ]                          -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ packages... ]   -- runs the tests
-   archive    [ -type zip|tar ]                        -- archives build artefacts
-   importkeys                                          -- imports signing keys from env
-   debsrc     [ -sign key-id ] [ -upload dest ]        -- creates a debian source package
-   xgo        [ options ]                              -- cross builds according to options
+   install      [ packages... ]                          -- builds packages and executables
+   test         [ -coverage ] [ -vet ] [ packages... ]   -- runs the tests
+   archive      [ -type zip|tar ]                        -- archives build artefacts
+   importkeys                                            -- imports signing keys from env
+   debsrc       [ -sign key-id ] [ -upload dest ]        -- creates a debian source package
+   xgo          [ options ]                              -- cross builds according to options
+   wininstaller                                          -- creates a Windows installer
 
 For all commands, -n prevents execution of external programs (dry run mode).
 
@@ -122,6 +123,8 @@ func main() {
 		doDebianSource(os.Args[2:])
 	case "travis-debsrc":
 		doTravisDebianSource(os.Args[2:])
+	case "wininstaller":
+		doWindowsInstaller(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
 	default:
@@ -130,7 +133,6 @@ func main() {
 }
 
 // Compiling
-
 func doInstall(cmdline []string) {
 	commitHash := flag.String("gitcommit", "", "Git commit hash embedded into binary.")
 	flag.CommandLine.Parse(cmdline)
@@ -154,6 +156,29 @@ func doInstall(cmdline []string) {
 	goinstall.Args = append(goinstall.Args, "-v")
 	goinstall.Args = append(goinstall.Args, packages...)
 	build.MustRun(goinstall)
+}
+
+// Create Windows installer.
+func doWindowsInstaller(cmdline []string) {
+	// Create binaries that user are embedded in installer.
+	// The installer depends on the following packages.
+	cmdline = append(cmdline, "./cmd/geth", "./cmd/bootnode", "./cmd/abigen", "./cmd/disasm", "./cmd/evm", "./cmd/rlpdump")
+	doInstall(cmdline)
+
+	// create NSIS package
+	outputFile := "/DOUTPUTFILE=geth-" + makeArchiveBasename()
+
+	version := strings.Split(build.VERSION(), ".")
+	if len(version) != 3 {
+		panic("Expected major.minor.build version string, got " + build.VERSION())
+	}
+	majorVersion := "/DMAJORVERSION=" + version[0]
+	minorVersion := "/DMINORVERSION=" + version[1]
+	buildId := "/DBUILDVERSION=" + version[2]
+
+	cmd := exec.Command("makensis.exe", outputFile, majorVersion, minorVersion, buildId, `.\build\nsis\geth.nsi`)
+
+	build.MustRun(cmd)
 }
 
 func makeBuildFlags(commitHash string) (flags []string) {
@@ -235,7 +260,6 @@ func doTest(cmdline []string) {
 }
 
 // Release Packaging
-
 func doArchive(cmdline []string) {
 	var (
 		atype = flag.String("type", "zip", "Type of archive to write (zip|tar)")
