@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type DumpAccount struct {
@@ -46,20 +47,22 @@ func (self *StateDB) RawDump() Dump {
 	it := self.trie.Iterator()
 	for it.Next() {
 		addr := self.trie.GetKey(it.Key)
-		stateObject, err := DecodeObject(common.BytesToAddress(addr), self.db, it.Value)
-		if err != nil {
+		var data Account
+		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
 		}
+
+		obj := NewObject(common.BytesToAddress(addr), data)
 		account := DumpAccount{
-			Balance:  stateObject.Balance().String(),
-			Nonce:    stateObject.Nonce(),
-			Root:     common.Bytes2Hex(stateObject.data.Root[:]),
-			CodeHash: common.Bytes2Hex(stateObject.CodeHash()),
-			Code:     common.Bytes2Hex(stateObject.Code(self.db)),
+			Balance:  data.Balance.String(),
+			Nonce:    data.Nonce,
+			Root:     common.Bytes2Hex(data.Root[:]),
+			CodeHash: common.Bytes2Hex(data.CodeHash),
+			Code:     common.Bytes2Hex(obj.Code(self.db)),
 			Storage:  make(map[string]string),
 		}
-		stateObject.initTrie(self.db)
-		storageIt := stateObject.trie.Iterator()
+		obj.initTrie(self.db)
+		storageIt := obj.trie.Iterator()
 		for storageIt.Next() {
 			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}

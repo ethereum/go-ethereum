@@ -65,7 +65,7 @@ func (self Storage) Copy() Storage {
 // Finally, call CommitTrie to write the modified storage trie into a database.
 type StateObject struct {
 	address common.Address // Ethereum address of this account
-	data    accountData
+	data    Account
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -87,23 +87,29 @@ type StateObject struct {
 	deleted bool
 }
 
-// accountData is the Ethereum consensus representation of accounts.
+// Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
-type accountData struct {
+type Account struct {
 	Nonce    uint64
 	Balance  *big.Int
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 }
 
-func NewStateObject(address common.Address, db trie.Database) *StateObject {
-	object := &StateObject{
-		address: address,
-		data:    accountData{Balance: new(big.Int), CodeHash: emptyCodeHash},
-		storage: make(Storage),
-		dirty:   true,
+// NewObject creates a state object.
+func NewObject(address common.Address, data Account) *StateObject {
+	if data.Balance == nil {
+		data.Balance = new(big.Int)
 	}
-	return object
+	if data.CodeHash == nil {
+		data.CodeHash = emptyCodeHash
+	}
+	return &StateObject{address: address, data: data, storage: make(Storage)}
+}
+
+// EncodeRLP implements rlp.Encoder.
+func (c *StateObject) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, c.data)
 }
 
 // setError remembers the first non-nil error it is called with.
@@ -218,8 +224,7 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
 func (self *StateObject) Copy(db trie.Database) *StateObject {
-	stateObject := NewStateObject(self.address, db)
-	stateObject.data = self.data
+	stateObject := NewObject(self.address, self.data)
 	stateObject.data.Balance.Set(self.data.Balance)
 	stateObject.trie = self.trie
 	stateObject.code = self.code
@@ -227,7 +232,6 @@ func (self *StateObject) Copy(db trie.Database) *StateObject {
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
 	stateObject.deleted = self.deleted
-
 	return stateObject
 }
 
@@ -300,16 +304,4 @@ func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
 			cb(key, common.BytesToHash(it.Value))
 		}
 	}
-}
-
-// EncodeRLP implements rlp.Encoder.
-func (c *StateObject) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, c.data)
-}
-
-// DecodeObject decodes an RLP-encoded state object.
-func DecodeObject(address common.Address, db trie.Database, data []byte) (*StateObject, error) {
-	obj := StateObject{address: address, storage: make(Storage)}
-	err := rlp.DecodeBytes(data, &obj.data)
-	return &obj, err
 }
