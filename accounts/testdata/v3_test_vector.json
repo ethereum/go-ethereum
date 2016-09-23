@@ -45,5 +45,53 @@
         },
         "password": "testpassword",
         "priv": "7a28b5ba57c53603b0b07b56bba752f7784bf506fa95edc395f5cf6c7514fe9d"
+    },
+    "31_byte_key": {
+        "json": {
+            "crypto" : {
+                "cipher" : "aes-128-ctr",
+                "cipherparams" : {
+                    "iv" : "e0c41130a323adc1446fc82f724bca2f"
+                },
+                "ciphertext" : "9517cd5bdbe69076f9bf5057248c6c050141e970efa36ce53692d5d59a3984",
+                "kdf" : "scrypt",
+                "kdfparams" : {
+                    "dklen" : 32,
+                    "n" : 2,
+                    "r" : 8,
+                    "p" : 1,
+                    "salt" : "711f816911c92d649fb4c84b047915679933555030b3552c1212609b38208c63"
+                },
+                "mac" : "d5e116151c6aa71470e67a7d42c9620c75c4d23229847dcc127794f0732b0db5"
+            },
+            "id" : "fecfc4ce-e956-48fd-953b-30f8b52ed66c",
+            "version" : 3
+        },
+        "password": "foo",
+        "priv": "fa7b3db73dc7dfdf8c5fbdb796d741e4488628c41fc4febd9160a866ba0f35"
+    },
+    "30_byte_key": {
+        "json": {
+            "crypto" : {
+                "cipher" : "aes-128-ctr",
+                "cipherparams" : {
+                    "iv" : "3ca92af36ad7c2cd92454c59cea5ef00"
+                },
+                "ciphertext" : "108b7d34f3442fc26ab1ab90ca91476ba6bfa8c00975a49ef9051dc675aa",
+                "kdf" : "scrypt",
+                "kdfparams" : {
+                    "dklen" : 32,
+                    "n" : 2,
+                    "r" : 8,
+                    "p" : 1,
+                    "salt" : "d0769e608fb86cda848065642a9c6fa046845c928175662b8e356c77f914cd3b"
+                },
+                "mac" : "75d0e6759f7b3cefa319c3be41680ab6beea7d8328653474bd06706d4cc67420"
+            },
+            "id" : "a37e1559-5955-450d-8075-7b8931b392b2",
+            "version" : 3
+        },
+        "password": "foo",
+        "priv": "81c29e8142bb6a81bef5a92bda7a8328a5c85bb2f9542e76f9b0f94fc018"
     }
 }

@@ -107,7 +107,8 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 		return nil, err
 	}
 	encryptKey := derivedKey[:16]
-	keyBytes := crypto.FromECDSA(key.PrivateKey)
+	keyBytes0 := crypto.FromECDSA(key.PrivateKey)
+	keyBytes := common.LeftPadBytes(keyBytes0, 32)
 
 	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
 	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
