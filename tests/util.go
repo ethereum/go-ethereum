@@ -104,15 +104,16 @@ func (self Log) Topics() [][]byte {
 }
 
 func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.HexToAddress(addr), db)
-	obj.SetBalance(common.Big(account.Balance))
-
 	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.SetCode(common.Hex2Bytes(account.Code))
-	obj.SetNonce(common.Big(account.Nonce).Uint64())
-
+	code := common.Hex2Bytes(account.Code)
+	obj := state.NewObject(common.HexToAddress(addr), state.Account{
+		Balance:  common.Big(account.Balance),
+		CodeHash: crypto.Keccak256(code),
+		Nonce:    common.Big(account.Nonce).Uint64(),
+	})
+	obj.SetCode(code)
 	return obj
 }
 

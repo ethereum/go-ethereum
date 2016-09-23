@@ -288,14 +288,14 @@ func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
-func (api *PublicDebugAPI) DumpBlock(number uint64) (state.World, error) {
+func (api *PublicDebugAPI) DumpBlock(number uint64) (state.Dump, error) {
 	block := api.eth.BlockChain().GetBlockByNumber(number)
 	if block == nil {
-		return state.World{}, fmt.Errorf("block #%d not found", number)
+		return state.Dump{}, fmt.Errorf("block #%d not found", number)
 	}
 	stateDb, err := state.New(block.Root(), api.eth.ChainDb())
 	if err != nil {
-		return state.World{}, err
+		return state.Dump{}, err
 	}
 	return stateDb.RawDump(), nil
 }

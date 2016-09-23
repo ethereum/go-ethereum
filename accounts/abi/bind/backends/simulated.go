@@ -135,11 +135,8 @@ func (b *SimulatedBackend) StorageAt(ctx context.Context, contract common.Addres
 		return nil, errBlockNumberUnsupported
 	}
 	statedb, _ := b.blockchain.State()
-	if obj := statedb.GetStateObject(contract); obj != nil {
-		val := obj.GetState(key)
-		return val[:], nil
-	}
-	return nil, nil
+	val := statedb.GetState(contract, key)
+	return val[:], nil
 }
 
 // TransactionReceipt returns the receipt of a transaction.

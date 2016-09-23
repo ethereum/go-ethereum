@@ -43,8 +43,14 @@ type StateDB struct {
 	db   ethdb.Database
 	trie *trie.SecureTrie
 
-	stateObjects map[string]*StateObject
+	// This map caches canon state accounts.
+	all map[common.Address]Account
 
+	// This map holds 'live' objects, which will get modified
+	// while processing a state transition.
+	stateObjects map[common.Address]*StateObject
+
+	// The refund counter, also used by state transitioning.
 	refund *big.Int
 
 	thash, bhash common.Hash
@@ -62,7 +68,8 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	return &StateDB{
 		db:           db,
 		trie:         tr,
-		stateObjects: make(map[string]*StateObject),
+		all:          make(map[common.Address]Account),
+		stateObjects: make(map[common.Address]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
 	}, nil
@@ -74,16 +81,20 @@ func (self *StateDB) Reset(root common.Hash) error {
 	var (
 		err error
 		tr  = self.trie
+		all = self.all
 	)
 	if self.trie.Hash() != root {
+		// The root has changed, invalidate canon state.
 		if tr, err = trie.NewSecure(root, self.db); err != nil {
 			return err
 		}
+		all = make(map[common.Address]Account)
 	}
 	*self = StateDB{
 		db:           self.db,
 		trie:         tr,
-		stateObjects: make(map[string]*StateObject),
+		all:          all,
+		stateObjects: make(map[common.Address]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
 	}
@@ -137,7 +148,7 @@ func (self *StateDB) GetAccount(addr common.Address) vm.Account {
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.balance
+		return stateObject.Balance()
 	}
 
 	return common.Big0
@@ -146,7 +157,7 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.nonce
+		return stateObject.Nonce()
 	}
 
 	return StartingNonce
@@ -155,18 +166,16 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.code
+		return stateObject.Code(self.db)
 	}
-
 	return nil
 }
 
 func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	stateObject := self.GetStateObject(a)
 	if stateObject != nil {
-		return stateObject.GetState(b)
+		return stateObject.GetState(self.db, b)
 	}
-
 	return common.Hash{}
 }
 
@@ -214,8 +223,7 @@ func (self *StateDB) Delete(addr common.Address) bool {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
 		stateObject.MarkForDeletion()
-		stateObject.balance = new(big.Int)
-
+		stateObject.data.Balance = new(big.Int)
 		return true
 	}
 
@@ -242,35 +250,46 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 
 	addr := stateObject.Address()
 	self.trie.Delete(addr[:])
-	//delete(self.stateObjects, addr.Str())
+	//delete(self.stateObjects, addr)
 }
 
-// Retrieve a state object given my the address. Nil if not found
+// Retrieve a state object given my the address. Returns nil if not found.
 func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObject) {
-	stateObject = self.stateObjects[addr.Str()]
-	if stateObject != nil {
-		if stateObject.deleted {
-			stateObject = nil
+	// Prefer 'live' objects.
+	if obj := self.stateObjects[addr]; obj != nil {
+		if obj.deleted {
+			return nil
 		}
-
-		return stateObject
+		return obj
 	}
 
-	data := self.trie.Get(addr[:])
-	if len(data) == 0 {
+	// Use cached account data from the canon state if possible.
+	if data, ok := self.all[addr]; ok {
+		return NewObject(addr, data)
+	}
+
+	// Load the object from the database.
+	enc := self.trie.Get(addr[:])
+	if len(enc) == 0 {
 		return nil
 	}
-	stateObject, err := DecodeObject(addr, self.db, data)
-	if err != nil {
+	var data Account
+	if err := rlp.DecodeBytes(enc, &data); err != nil {
 		glog.Errorf("can't decode object at %x: %v", addr[:], err)
 		return nil
 	}
-	self.SetStateObject(stateObject)
-	return stateObject
+	// Update the all cache. Content in DB always corresponds
+	// to the current head state so this is ok to do here.
+	// The object we just loaded has no storage trie and code yet.
+	self.all[addr] = data
+	// Insert into the live set.
+	obj := NewObject(addr, data)
+	self.SetStateObject(obj)
+	return obj
 }
 
 func (self *StateDB) SetStateObject(object *StateObject) {
-	self.stateObjects[object.Address().Str()] = object
+	self.stateObjects[object.Address()] = object
 }
 
 // Retrieve a state object or create a new state object if nil
@@ -288,15 +307,14 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 	if glog.V(logger.Core) {
 		glog.Infof("(+) %x\n", addr)
 	}
-
-	stateObject := NewStateObject(addr, self.db)
-	stateObject.SetNonce(StartingNonce)
-	self.stateObjects[addr.Str()] = stateObject
-
-	return stateObject
+	obj := NewObject(addr, Account{})
+	obj.dirty = true
+	obj.SetNonce(StartingNonce)
+	self.stateObjects[addr] = obj
+	return obj
 }
 
-// Creates creates a new state object and takes ownership. This is different from "NewStateObject"
+// Creates creates a new state object and takes ownership.
 func (self *StateDB) CreateStateObject(addr common.Address) *StateObject {
 	// Get previous (if any)
 	so := self.GetStateObject(addr)
@@ -305,7 +323,7 @@ func (self *StateDB) CreateStateObject(addr common.Address) *StateObject {
 
 	// If it existed set the balance to the new account
 	if so != nil {
-		newSo.balance = so.balance
+		newSo.data.Balance = so.data.Balance
 	}
 
 	return newSo
@@ -323,9 +341,10 @@ func (self *StateDB) Copy() *StateDB {
 	// ignore error - we assume state-to-be-copied always exists
 	state, _ := New(common.Hash{}, self.db)
 	state.trie = self.trie
-	for k, stateObject := range self.stateObjects {
+	state.all = self.all
+	for addr, stateObject := range self.stateObjects {
 		if stateObject.dirty {
-			state.stateObjects[k] = stateObject.Copy()
+			state.stateObjects[addr] = stateObject.Copy(self.db)
 		}
 	}
 
@@ -343,6 +362,7 @@ func (self *StateDB) Copy() *StateDB {
 func (self *StateDB) Set(state *StateDB) {
 	self.trie = state.trie
 	self.stateObjects = state.stateObjects
+	self.all = state.all
 
 	self.refund = state.refund
 	self.logs = state.logs
@@ -363,7 +383,7 @@ func (s *StateDB) IntermediateRoot() common.Hash {
 			if stateObject.remove {
 				s.DeleteStateObject(stateObject)
 			} else {
-				stateObject.Update()
+				stateObject.UpdateRoot(s.db)
 				s.UpdateStateObject(stateObject)
 			}
 		}
@@ -407,46 +427,43 @@ func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
 	return root, batch
 }
 
-func (s *StateDB) commit(db trie.DatabaseWriter) (common.Hash, error) {
+func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) {
 	s.refund = new(big.Int)
+	defer func() {
+		if err != nil {
+			// Committing failed, any updates to the canon state are invalid.
+			s.all = make(map[common.Address]Account)
+		}
+	}()
 
-	for _, stateObject := range s.stateObjects {
+	// Commit objects to the trie.
+	for addr, stateObject := range s.stateObjects {
 		if stateObject.remove {
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
 			s.DeleteStateObject(stateObject)
+			delete(s.all, addr)
 		} else {
 			// Write any contract code associated with the state object
-			if len(stateObject.code) > 0 {
-				if err := db.Put(stateObject.codeHash, stateObject.code); err != nil {
+			if stateObject.code != nil {
+				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {
 					return common.Hash{}, err
 				}
 			}
-			// Write any storage changes in the state object to its trie.
-			stateObject.Update()
-
-			// Commit the trie of the object to the batch.
-			// This updates the trie root internally, so
-			// getting the root hash of the storage trie
-			// through UpdateStateObject is fast.
-			if _, err := stateObject.trie.CommitTo(db); err != nil {
+			// Write any storage changes in the state object to its storage trie.
+			if err := stateObject.CommitTrie(s.db, dbw); err != nil {
 				return common.Hash{}, err
 			}
-			// Update the object in the account trie.
+			// Update the object in the main account trie.
 			s.UpdateStateObject(stateObject)
+			s.all[addr] = stateObject.data
 		}
 		stateObject.dirty = false
 	}
-	return s.trie.CommitTo(db)
+	// Write trie changes.
+	return s.trie.CommitTo(dbw)
 }
 
 func (self *StateDB) Refunds() *big.Int {
 	return self.refund
-}
-
-// Debug stuff
-func (self *StateDB) CreateOutputForDiff() {
-	for _, stateObject := range self.stateObjects {
-		stateObject.CreateOutputForDiff()
-	}
 }
