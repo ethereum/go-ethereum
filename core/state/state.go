@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 
@@ -53,6 +54,19 @@ func New(root common.Hash, db ethdb.Database) (*State, error) {
 	}, nil
 }
 
+func (s *State) LoadAll() error {
+	it := s.Trie.Iterator()
+	for it.Next() {
+		addr := s.Trie.GetKey(it.Key)
+		obj, err := DecodeObjectLazily(common.BytesToAddress(addr), s.Db, it.Value)
+		if err != nil {
+			return err
+		}
+		s.StateObjects[common.BytesToAddress(addr)] = obj
+	}
+	return nil
+}
+
 func (s *State) PrepareIntermediate(txHash, blockHash common.Hash, txIdx int) {
 	if s.parent != nil {
 		s.parent.MarkedTransition = true
@@ -79,6 +93,7 @@ func (s *State) Read(address common.Address) (object *StateObject, inCache bool)
 		if stateObject.deleted {
 			return nil, false
 		}
+		s.loadStateObject(stateObject)
 		return stateObject, inCache
 	}
 
@@ -94,6 +109,20 @@ func (s *State) Read(address common.Address) (object *StateObject, inCache bool)
 	}
 
 	return stateObject, false
+}
+
+func (s *State) loadStateObject(stateObject *StateObject) {
+	if stateObject.trie == nil {
+		var err error
+		if stateObject.trie, err = trie.NewSecure(stateObject.root, s.Db); err != nil {
+			panic(err)
+		}
+		if !bytes.Equal(stateObject.codeHash, emptyCodeHash) {
+			if stateObject.code, err = s.Db.Get(stateObject.codeHash); err != nil {
+				panic(fmt.Sprintf("can't get code for hash %x: %v", stateObject.codeHash, err))
+			}
+		}
+	}
 }
 
 func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
@@ -150,6 +179,7 @@ func (s *State) CreateStateObject(address common.Address) *StateObject {
 	stateObject.SetNonce(StartingNonce)
 
 	s.StateObjects[address] = stateObject
+	s.localStateObjects[address] = true
 
 	// If it existed set the balance to the new account
 	if so != nil {
@@ -247,8 +277,15 @@ func (s *State) SetState(address common.Address, stateAddress common.Hash, value
 func (s *State) Delete(address common.Address) bool {
 	stateObject := s.GetStateObject(address)
 	if stateObject != nil {
-		stateObject.MarkForDeletion()
+		if !s.localStateObjects[address] {
+			stateObject = stateObject.Copy()
+			s.StateObjects[address] = stateObject
+			s.localStateObjects[address] = true
+		}
+
+		stateObject.remove = true
 		stateObject.balance = new(big.Int)
+		stateObject.dirty = true
 
 		return true
 	}
@@ -311,6 +348,8 @@ func (s *State) DeleteStateObject(stateObject *StateObject) {
 }
 
 func (s *State) UpdateStateObject(stateObject *StateObject) {
+	s.loadStateObject(stateObject)
+
 	addr := stateObject.Address()
 	data, err := rlp.EncodeToBytes(stateObject)
 	if err != nil {
@@ -320,7 +359,6 @@ func (s *State) UpdateStateObject(stateObject *StateObject) {
 }
 
 func (s *State) Reset(root common.Hash) error {
-	fmt.Println("reset")
 	var (
 		err error
 		tr  = s.Trie
@@ -390,20 +428,10 @@ func (s *State) Set(o *State) {
 
 // Flatten flattens the state in to a single new state, including all changes of all ancestors.
 func Flatten(s *State) *State {
-	// first commit the parent so we can overwrite changes
-	// later.
-	var flattenedState *State
-	if s.parent != nil {
-		flattenedState = Flatten(s.parent)
-	} else {
-		flattenedState = &State{
-			Db:                s.Db,
-			Trie:              s.Trie,
-			refund:            new(big.Int),
-			StateObjects:      make(map[common.Address]*StateObject),
-			ownedStateObjects: make(map[common.Address]bool),
-		}
+	if s.parent == nil {
+		return s
 	}
+	flattenedState := Flatten(s.parent)
 
 	for address, object := range s.StateObjects {
 		flattenedState.StateObjects[address] = object
@@ -425,7 +453,8 @@ func (s *State) String() string {
 func IntermediateRoot(state *State) common.Hash {
 	s := Flatten(state)
 
-	for _, stateObject := range s.StateObjects {
+	for address, _ := range s.localStateObjects {
+		stateObject := s.StateObjects[address]
 		if stateObject.dirty {
 			if stateObject.remove {
 				s.DeleteStateObject(stateObject)

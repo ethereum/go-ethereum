@@ -205,6 +205,20 @@ func (self *BlockChain) loadLastState() error {
 	glog.V(logger.Info).Infof("Last block: #%d [%x…] TD=%v", self.currentBlock.Number(), self.currentBlock.Hash().Bytes()[:4], blockTd)
 	glog.V(logger.Info).Infof("Fast block: #%d [%x…] TD=%v", self.currentFastBlock.Number(), self.currentFastBlock.Hash().Bytes()[:4], fastTd)
 
+	/*
+		st, err := state.New(currentHeader.Root, self.chainDb)
+		if err != nil {
+			return err
+		}
+		glog.V(logger.Info).Infoln("caching state accounts...")
+		tstart := time.Now()
+		if err := st.LoadAll(); err != nil {
+			return fmt.Errorf("core: could not pre-load account data: %v", err)
+		}
+		self.canonState = st
+		glog.V(logger.Info).Infoln("cached", len(st.StateObjects), "in", time.Since(tstart))
+	*/
+
 	return nil
 }
 

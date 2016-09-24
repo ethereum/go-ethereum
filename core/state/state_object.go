@@ -80,7 +80,8 @@ type StateObject struct {
 	remove  bool
 	deleted bool
 	dirty   bool
-	written bool
+
+	root common.Hash
 }
 
 func NewStateObject(address common.Address, db trie.Database) *StateObject {
@@ -99,7 +100,6 @@ func NewStateObject(address common.Address, db trie.Database) *StateObject {
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
-	self.written = false
 
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
@@ -140,7 +140,6 @@ func (self *StateObject) GetState(key common.Hash) common.Hash {
 func (self *StateObject) SetState(key, value common.Hash) {
 	self.storage[key] = value
 	self.dirty = true
-	self.written = false
 }
 
 // Update updates the current cached storage to the trie
@@ -160,7 +159,6 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
-	c.written = false
 }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
@@ -169,13 +167,11 @@ func (c *StateObject) SubBalance(amount *big.Int) {
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
-	c.written = false
 }
 
 func (c *StateObject) SetBalance(amount *big.Int) {
 	c.balance = amount
 	c.dirty = true
-	c.written = false
 }
 
 func (c *StateObject) St() Storage {
@@ -229,13 +225,11 @@ func (self *StateObject) SetCode(code []byte) {
 	self.code = code
 	self.codeHash = crypto.Keccak256(code)
 	self.dirty = true
-	self.written = false
 }
 
 func (self *StateObject) SetNonce(nonce uint64) {
 	self.nonce = nonce
 	self.dirty = true
-	self.written = false
 }
 
 func (self *StateObject) Nonce() uint64 {
@@ -295,6 +289,23 @@ func DecodeObject(address common.Address, db trie.Database, data []byte) (*State
 			return nil, fmt.Errorf("can't get code for hash %x: %v", ext.CodeHash, err)
 		}
 	}
+	obj.nonce = ext.Nonce
+	obj.balance = ext.Balance
+	obj.codeHash = ext.CodeHash
+	return obj, nil
+}
+
+// DecodeObjectLazily decodes an RLP-encoded state object.
+func DecodeObjectLazily(address common.Address, db trie.Database, data []byte) (*StateObject, error) {
+	var (
+		obj = &StateObject{address: address, db: db, storage: make(Storage)}
+		ext extStateObject
+		err error
+	)
+	if err = rlp.DecodeBytes(data, &ext); err != nil {
+		return nil, err
+	}
+	obj.root = ext.Root
 	obj.nonce = ext.Nonce
 	obj.balance = ext.Balance
 	obj.codeHash = ext.CodeHash
