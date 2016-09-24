@@ -226,8 +226,10 @@ func (self *StateObject) SetCode(code []byte) {
 }
 
 func (self *StateObject) SetNonce(nonce uint64) {
-	self.nonce = nonce
-	self.dirty = true
+	if nonce > self.nonce {
+		self.nonce = nonce
+		self.dirty = true
+	}
 }
 
 func (self *StateObject) Nonce() uint64 {
