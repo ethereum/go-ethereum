@@ -18,8 +18,10 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -28,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	boom "github.com/tylertreat/BoomFilters"
 )
 
 // The starting nonce determines the default nonce when new accounts are being
@@ -45,6 +48,11 @@ type StateDB struct {
 
 	// This map caches canon state accounts.
 	all map[common.Address]Account
+
+	// This filter is used to quickly check if an account exists,
+	// avoiding expensive database lookups.
+	accountBloom      *boom.ScalableBloomFilter
+	accountBloomDirty bool
 
 	// This map holds 'live' objects, which will get modified
 	// while processing a state transition.
@@ -94,6 +102,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 		db:           self.db,
 		trie:         tr,
 		all:          all,
+		accountBloom: self.accountBloom,
 		stateObjects: make(map[common.Address]*StateObject),
 		refund:       new(big.Int),
 		logs:         make(map[common.Hash]vm.Logs),
@@ -270,14 +279,16 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 		}
 		return obj
 	}
-
 	// Use cached account data from the canon state if possible.
 	if data, ok := self.all[addr]; ok {
 		obj := NewObject(addr, data)
 		self.SetStateObject(obj)
 		return obj
 	}
-
+	// Avoid surely non-existing accounts
+	if !self.getAccountBloom().Test(self.trie.HashKey(addr[:])) {
+		return nil
+	}
 	// Load the object from the database.
 	enc := self.trie.Get(addr[:])
 	if len(enc) == 0 {
@@ -321,6 +332,9 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 	obj.dirty = true
 	obj.SetNonce(StartingNonce)
 	self.stateObjects[addr] = obj
+	if !self.getAccountBloom().TestAndAdd(self.trie.HashKey(addr[:])) {
+		self.accountBloomDirty = true
+	}
 	return obj
 }
 
@@ -335,7 +349,6 @@ func (self *StateDB) CreateStateObject(addr common.Address) *StateObject {
 	if so != nil {
 		newSo.data.Balance = so.data.Balance
 	}
-
 	return newSo
 }
 
@@ -352,6 +365,8 @@ func (self *StateDB) Copy() *StateDB {
 	state, _ := New(common.Hash{}, self.db)
 	state.trie = self.trie
 	state.all = self.all
+	state.accountBloom = self.accountBloom
+	state.accountBloomDirty = self.accountBloomDirty
 	for addr, stateObject := range self.stateObjects {
 		if stateObject.dirty {
 			state.stateObjects[addr] = stateObject.Copy(self.db)
@@ -373,6 +388,8 @@ func (self *StateDB) Set(state *StateDB) {
 	self.trie = state.trie
 	self.stateObjects = state.stateObjects
 	self.all = state.all
+	self.accountBloom = state.accountBloom
+	self.accountBloomDirty = state.accountBloomDirty
 
 	self.refund = state.refund
 	self.logs = state.logs
@@ -471,10 +488,67 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) 
 		}
 		stateObject.dirty = false
 	}
-	// Write trie changes.
+	// Write account bloom and trie changes
+	if s.accountBloomDirty {
+		if err := s.writeAccountsBloom(dbw); err != nil {
+			return common.Hash{}, err
+		}
+		s.accountBloomDirty = false
+	}
 	return s.trie.CommitTo(dbw)
 }
 
 func (self *StateDB) Refunds() *big.Int {
 	return self.refund
+}
+
+var accountBloomKey = []byte("accounts-bloom")
+
+// getAccountBloom returns the account existential bloom filter, lazy loading it
+// from disk if needed.
+func (self *StateDB) getAccountBloom() *boom.ScalableBloomFilter {
+	// Short circuit lookup if already loaded from the database
+	if self.accountBloom != nil {
+		return self.accountBloom
+	}
+	// If the filter's not yet cached, load it from the database
+	bloom, _ := self.db.Get(accountBloomKey)
+	if len(bloom) > 0 {
+		filter := new(boom.ScalableBloomFilter)
+		if _, err := filter.ReadFrom(bytes.NewReader(bloom)); err != nil {
+			return nil
+		}
+		self.accountBloom = filter
+		return self.accountBloom
+	}
+	// If the database does not yet contain a bloom filter, generate a new one
+	glog.V(logger.Info).Infof("generating accounts bloom, please wait...")
+
+	filter := boom.NewDefaultScalableBloomFilter(0.01)
+	start, pref := time.Now(), byte(0x00)
+
+	it := self.trie.Iterator()
+	for it.Next() {
+		if pref != it.Key[0] {
+			pref = it.Key[0]
+			glog.V(logger.Info).Infof("generating accounts bloom, at %.2f%%, please wait...", float64(pref)/2.56)
+		}
+		filter.Add(it.Key)
+	}
+	glog.V(logger.Info).Infof("accounts bloom generated in %v", time.Since(start))
+
+	self.accountBloom, self.accountBloomDirty = filter, true
+	return self.accountBloom
+}
+
+// writeAccountsBloom serializes the account bloom filter used for existence checks.
+func (self *StateDB) writeAccountsBloom(db trie.DatabaseWriter) error {
+	if self.accountBloom == nil {
+		return nil
+	}
+	buffer := new(bytes.Buffer)
+	if _, err := self.accountBloom.WriteTo(buffer); err != nil {
+		return err
+	}
+	return db.Put(accountBloomKey, buffer.Bytes())
 }

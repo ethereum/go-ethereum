@@ -50,6 +50,9 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		if bytes.HasPrefix(key, []byte("secure-key-")) {
 			continue
 		}
+		if bytes.HasPrefix(key, []byte("accounts-bloom")) {
+			continue
+		}
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {
 			t.Errorf("state entry not reported %x", key)
 		}

@@ -46,7 +46,7 @@ type SecureTrie struct {
 	secKeyCache map[string][]byte
 }
 
-// NewSecure creates a trie with an existing root node from db.
+// NewSecure creFGetates a trie with an existing root node from db.
 //
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
@@ -136,6 +136,11 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	}
 	key, _ := t.Trie.db.Get(t.secKey(shaKey))
 	return key
+}
+
+// HashKey returns the sha3 image of a key.
+func (t *SecureTrie) HashKey(key []byte) []byte {
+	return common.CopyBytes(t.hashKey(key))
 }
 
 // Commit writes all nodes and the secure hash pre-images to the trie's database.
