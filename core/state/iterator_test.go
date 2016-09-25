@@ -50,7 +50,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		if bytes.HasPrefix(key, []byte("secure-key-")) {
 			continue
 		}
-		if bytes.HasPrefix(key, []byte("accounts-bloom")) {
+		if bytes.Equal(key, []byte("accounts-bloom")) {
 			continue
 		}
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {

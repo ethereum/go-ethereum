@@ -54,9 +54,9 @@ type StateDB struct {
 	accountBloom      *boom.ScalableBloomFilter
 	accountBloomDirty bool
 
-	// This map holds 'live' objects, which will get modified
-	// while processing a state transition.
-	stateObjects map[common.Address]*StateObject
+	// This map holds 'live' objects, which will get modified while processing a state transition.
+	stateObjects      map[common.Address]*StateObject
+	stateObjectsDirty map[common.Address]struct{}
 
 	// The refund counter, also used by state transitioning.
 	refund *big.Int
@@ -74,12 +74,13 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 		return nil, err
 	}
 	return &StateDB{
-		db:           db,
-		trie:         tr,
-		all:          make(map[common.Address]Account),
-		stateObjects: make(map[common.Address]*StateObject),
-		refund:       new(big.Int),
-		logs:         make(map[common.Hash]vm.Logs),
+		db:                db,
+		trie:              tr,
+		all:               make(map[common.Address]Account),
+		stateObjects:      make(map[common.Address]*StateObject),
+		stateObjectsDirty: make(map[common.Address]struct{}),
+		refund:            new(big.Int),
+		logs:              make(map[common.Hash]vm.Logs),
 	}, nil
 }
 
@@ -99,13 +100,14 @@ func (self *StateDB) Reset(root common.Hash) error {
 		all = make(map[common.Address]Account)
 	}
 	*self = StateDB{
-		db:           self.db,
-		trie:         tr,
-		all:          all,
-		accountBloom: self.accountBloom,
-		stateObjects: make(map[common.Address]*StateObject),
-		refund:       new(big.Int),
-		logs:         make(map[common.Hash]vm.Logs),
+		db:                self.db,
+		trie:              tr,
+		all:               all,
+		accountBloom:      self.accountBloom,
+		stateObjects:      make(map[common.Address]*StateObject),
+		stateObjectsDirty: make(map[common.Address]struct{}),
+		refund:            new(big.Int),
+		logs:              make(map[common.Hash]vm.Logs),
 	}
 	return nil
 }
@@ -267,7 +269,6 @@ func (self *StateDB) DeleteStateObject(stateObject *StateObject) {
 
 	addr := stateObject.Address()
 	self.trie.Delete(addr[:])
-	//delete(self.stateObjects, addr)
 }
 
 // Retrieve a state object given my the address. Returns nil if not found.
@@ -281,7 +282,7 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 	}
 	// Use cached account data from the canon state if possible.
 	if data, ok := self.all[addr]; ok {
-		obj := NewObject(addr, data)
+		obj := NewObject(addr, data, self.MarkStateObjectDirty)
 		self.SetStateObject(obj)
 		return obj
 	}
@@ -304,7 +305,7 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 	// The object we just loaded has no storage trie and code yet.
 	self.all[addr] = data
 	// Insert into the live set.
-	obj := NewObject(addr, data)
+	obj := NewObject(addr, data, self.MarkStateObjectDirty)
 	self.SetStateObject(obj)
 	return obj
 }
@@ -328,14 +329,19 @@ func (self *StateDB) newStateObject(addr common.Address) *StateObject {
 	if glog.V(logger.Core) {
 		glog.Infof("(+) %x\n", addr)
 	}
-	obj := NewObject(addr, Account{})
-	obj.dirty = true
-	obj.SetNonce(StartingNonce)
+	obj := NewObject(addr, Account{}, self.MarkStateObjectDirty)
+	obj.SetNonce(StartingNonce) // sets the object to dirty
 	self.stateObjects[addr] = obj
 	if !self.getAccountBloom().TestAndAdd(self.trie.HashKey(addr[:])) {
 		self.accountBloomDirty = true
 	}
 	return obj
+}
+
+// MarkStateObjectDirty adds the specified object to the dirty map to avoid costly
+// state object cache iteration to find a handful of modified ones.
+func (self *StateDB) MarkStateObjectDirty(addr common.Address) {
+	self.stateObjectsDirty[addr] = struct{}{}
 }
 
 // Creates creates a new state object and takes ownership.
@@ -361,32 +367,35 @@ func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
 //
 
 func (self *StateDB) Copy() *StateDB {
-	// ignore error - we assume state-to-be-copied always exists
-	state, _ := New(common.Hash{}, self.db)
-	state.trie = self.trie
-	state.all = self.all
-	state.accountBloom = self.accountBloom
-	state.accountBloomDirty = self.accountBloomDirty
-	for addr, stateObject := range self.stateObjects {
-		if stateObject.dirty {
-			state.stateObjects[addr] = stateObject.Copy(self.db)
-		}
+	// Copy all the basic fields, initialize the memory ones
+	state := &StateDB{
+		db:                self.db,
+		trie:              self.trie,
+		all:               self.all,
+		accountBloom:      self.accountBloom,
+		accountBloomDirty: self.accountBloomDirty,
+		stateObjects:      make(map[common.Address]*StateObject, len(self.stateObjectsDirty)),
+		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
+		refund:            new(big.Int).Set(self.refund),
+		logs:              make(map[common.Hash]vm.Logs, len(self.logs)),
+		logSize:           self.logSize,
 	}
-
-	state.refund.Set(self.refund)
-
+	// Copy the dirty states and logs
+	for addr, _ := range self.stateObjectsDirty {
+		state.stateObjects[addr] = self.stateObjects[addr].Copy(self.db, state.MarkStateObjectDirty)
+		state.stateObjectsDirty[addr] = struct{}{}
+	}
 	for hash, logs := range self.logs {
 		state.logs[hash] = make(vm.Logs, len(logs))
 		copy(state.logs[hash], logs)
 	}
-	state.logSize = self.logSize
-
 	return state
 }
 
 func (self *StateDB) Set(state *StateDB) {
 	self.trie = state.trie
 	self.stateObjects = state.stateObjects
+	self.stateObjectsDirty = state.stateObjectsDirty
 	self.all = state.all
 	self.accountBloom = state.accountBloom
 	self.accountBloomDirty = state.accountBloomDirty
@@ -405,14 +414,13 @@ func (self *StateDB) GetRefund() *big.Int {
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot() common.Hash {
 	s.refund = new(big.Int)
-	for _, stateObject := range s.stateObjects {
-		if stateObject.dirty {
-			if stateObject.remove {
-				s.DeleteStateObject(stateObject)
-			} else {
-				stateObject.UpdateRoot(s.db)
-				s.UpdateStateObject(stateObject)
-			}
+	for addr, _ := range s.stateObjectsDirty {
+		stateObject := s.stateObjects[addr]
+		if stateObject.remove {
+			s.DeleteStateObject(stateObject)
+		} else {
+			stateObject.UpdateRoot(s.db)
+			s.UpdateStateObject(stateObject)
 		}
 	}
 	return s.trie.Hash()
@@ -427,15 +435,15 @@ func (s *StateDB) DeleteSuicides() {
 	// Reset refund so that any used-gas calculations can use
 	// this method.
 	s.refund = new(big.Int)
-	for _, stateObject := range s.stateObjects {
-		if stateObject.dirty {
-			// If the object has been removed by a suicide
-			// flag the object as deleted.
-			if stateObject.remove {
-				stateObject.deleted = true
-			}
-			stateObject.dirty = false
+	for addr, _ := range s.stateObjectsDirty {
+		stateObject := s.stateObjects[addr]
+
+		// If the object has been removed by a suicide
+		// flag the object as deleted.
+		if stateObject.remove {
+			stateObject.deleted = true
 		}
+		delete(s.stateObjectsDirty, addr)
 	}
 }
 
@@ -470,7 +478,7 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) 
 			// and just mark it for deletion in the trie.
 			s.DeleteStateObject(stateObject)
 			delete(s.all, addr)
-		} else if stateObject.dirty {
+		} else if _, ok := s.stateObjectsDirty[addr]; ok {
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
 				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {
@@ -486,7 +494,7 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) 
 			s.UpdateStateObject(stateObject)
 			s.all[addr] = stateObject.data
 		}
-		stateObject.dirty = false
+		delete(s.stateObjectsDirty, addr)
 	}
 	// Write account bloom and trie changes
 	if s.accountBloomDirty {
@@ -522,7 +530,7 @@ func (self *StateDB) getAccountBloom() *boom.ScalableBloomFilter {
 		return self.accountBloom
 	}
 	// If the database does not yet contain a bloom filter, generate a new one
-	glog.V(logger.Info).Infof("generating accounts bloom, please wait...")
+	glog.V(logger.Info).Infof("generating account bloom, please wait...")
 
 	filter := boom.NewDefaultScalableBloomFilter(0.01)
 	start, pref := time.Now(), byte(0x00)
@@ -531,13 +539,17 @@ func (self *StateDB) getAccountBloom() *boom.ScalableBloomFilter {
 	for it.Next() {
 		if pref != it.Key[0] {
 			pref = it.Key[0]
-			glog.V(logger.Info).Infof("generating accounts bloom, at %.2f%%, please wait...", float64(pref)/2.56)
+			glog.V(logger.Info).Infof("generating account bloom, at %.2f%%, please wait...", float64(pref)/2.56)
 		}
 		filter.Add(it.Key)
 	}
-	glog.V(logger.Info).Infof("accounts bloom generated in %v", time.Since(start))
+	glog.V(logger.Info).Infof("account bloom generated in %v", time.Since(start))
 
-	self.accountBloom, self.accountBloomDirty = filter, true
+	self.accountBloom = filter
+	if err := self.writeAccountsBloom(self.db); err != nil {
+		glog.V(logger.Error).Infof("failed to write initial account bloom filter: %v", err)
+		return nil
+	}
 	return self.accountBloom
 }
 

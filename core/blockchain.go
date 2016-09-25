@@ -197,7 +197,15 @@ func (self *BlockChain) loadLastState() error {
 			self.currentFastBlock = block
 		}
 	}
-	// Issue a status log and return
+	// Initialize a statedb cache to ensure singleton account bloom filter generation
+	statedb, err := state.New(self.currentBlock.Root(), self.chainDb)
+	if err != nil {
+		return err
+	}
+	self.stateCache = statedb
+	self.stateCache.GetAccount(common.Address{})
+
+	// Issue a status log for the user
 	headerTd := self.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())
 	blockTd := self.GetTd(self.currentBlock.Hash(), self.currentBlock.NumberU64())
 	fastTd := self.GetTd(self.currentFastBlock.Hash(), self.currentFastBlock.NumberU64())
@@ -894,8 +902,6 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
 		switch {
-		case self.stateCache == nil:
-			self.stateCache, err = state.New(self.GetBlock(block.ParentHash(), block.NumberU64()-1).Root(), self.chainDb)
 		case i == 0:
 			err = self.stateCache.Reset(self.GetBlock(block.ParentHash(), block.NumberU64()-1).Root())
 		default:

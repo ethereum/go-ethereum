@@ -151,9 +151,10 @@ func TestSnapshot2(t *testing.T) {
 	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
 	so0.remove = false
 	so0.deleted = false
-	so0.dirty = true
 	state.SetStateObject(so0)
-	state.Commit()
+
+	root, _ := state.Commit()
+	state.Reset(root)
 
 	// and one with deleted == true
 	so1 := state.GetStateObject(stateobjaddr1)
@@ -162,7 +163,6 @@ func TestSnapshot2(t *testing.T) {
 	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
 	so1.remove = true
 	so1.deleted = true
-	so1.dirty = true
 	state.SetStateObject(so1)
 
 	so1 = state.GetStateObject(stateobjaddr1)
@@ -183,7 +183,7 @@ func TestSnapshot2(t *testing.T) {
 	// deleted should be nil, both before and after restore of state copy
 	so1Restored := state.GetStateObject(stateobjaddr1)
 	if so1Restored != nil {
-		t.Fatalf("deleted object not nil after restoring snapshot")
+		t.Fatalf("deleted object not nil after restoring snapshot: %+v", so1Restored)
 	}
 }
 
@@ -226,8 +226,5 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 	}
 	if so0.deleted != so1.deleted {
 		t.Fatalf("Deleted mismatch: have %v, want %v", so0.deleted, so1.deleted)
-	}
-	if so0.dirty != so1.dirty {
-		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
 	}
 }

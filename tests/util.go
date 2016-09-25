@@ -103,7 +103,7 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
+func StateObjectFromAccount(db ethdb.Database, addr string, account Account, onDirty func(common.Address)) *state.StateObject {
 	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
@@ -112,7 +112,7 @@ func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *st
 		Balance:  common.Big(account.Balance),
 		CodeHash: crypto.Keccak256(code),
 		Nonce:    common.Big(account.Nonce).Uint64(),
-	})
+	}, onDirty)
 	obj.SetCode(code)
 	return obj
 }

@@ -82,10 +82,10 @@ type StateObject struct {
 	// Cache flags.
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
-	dirty     bool // true if anything has changed
 	dirtyCode bool // true if the code was updated
 	remove    bool
 	deleted   bool
+	onDirty   func(addr common.Address) // Callback method to mark a state object newly dirty
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -100,14 +100,14 @@ type Account struct {
 }
 
 // NewObject creates a state object.
-func NewObject(address common.Address, data Account) *StateObject {
+func NewObject(address common.Address, data Account, onDirty func(addr common.Address)) *StateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
 	}
-	return &StateObject{address: address, data: data, storage: make(Storage)}
+	return &StateObject{address: address, data: data, storage: make(Storage), onDirty: onDirty}
 }
 
 // EncodeRLP implements rlp.Encoder.
@@ -124,8 +124,10 @@ func (self *StateObject) setError(err error) {
 
 func (self *StateObject) MarkForDeletion() {
 	self.remove = true
-	self.dirty = true
-
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v X\n", self.Address(), self.Nonce(), self.Balance())
 	}
@@ -162,7 +164,10 @@ func (self *StateObject) GetState(db trie.Database, key common.Hash) common.Hash
 // SetState updates a value in account storage.
 func (self *StateObject) SetState(key, value common.Hash) {
 	self.storage[key] = value
-	self.dirty = true
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
@@ -222,22 +227,23 @@ func (c *StateObject) SubBalance(amount *big.Int) {
 	}
 }
 
-func (c *StateObject) SetBalance(amount *big.Int) {
-	c.data.Balance = amount
-	c.dirty = true
+func (self *StateObject) SetBalance(amount *big.Int) {
+	self.data.Balance = amount
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
-func (self *StateObject) Copy(db trie.Database) *StateObject {
-	stateObject := NewObject(self.address, self.data)
-	stateObject.data.Balance.Set(self.data.Balance)
+func (self *StateObject) Copy(db trie.Database, onDirty func(addr common.Address)) *StateObject {
+	stateObject := NewObject(self.address, self.data, onDirty)
 	stateObject.trie = self.trie
 	stateObject.code = self.code
 	stateObject.storage = self.storage.Copy()
 	stateObject.remove = self.remove
-	stateObject.dirty = self.dirty
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
 	return stateObject
@@ -282,12 +288,19 @@ func (self *StateObject) SetCode(code []byte) {
 	self.data.CodeHash = crypto.Keccak256(code)
 	self.data.codeSize = new(int)
 	*self.data.codeSize = len(code)
-	self.dirty, self.dirtyCode = true, true
+	self.dirtyCode = true
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
 
 func (self *StateObject) SetNonce(nonce uint64) {
 	self.data.Nonce = nonce
-	self.dirty = true
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
 
 func (self *StateObject) CodeHash() []byte {
