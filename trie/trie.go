@@ -72,7 +72,6 @@ type Trie struct {
 	root         node
 	db           Database
 	originalRoot common.Hash
-	*hasher
 }
 
 // New creates a trie with an existing root node from db.
@@ -474,10 +473,8 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	if t.hasher == nil {
-		t.hasher = newHasher()
-	}
-	return t.hasher.hash(t.root, db, true)
+	hasher := newHasher()
+	return hasher.hash(t.root, db, true)
 }
 
 type hasher struct {
