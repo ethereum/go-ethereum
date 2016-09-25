@@ -76,8 +76,6 @@ func TestMissingNode(t *testing.T) {
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit()
 
-	ClearGlobalCache()
-
 	trie, _ = New(root, db)
 	_, err := trie.TryGet([]byte("120000"))
 	if err != nil {
@@ -109,7 +107,6 @@ func TestMissingNode(t *testing.T) {
 	}
 
 	db.Delete(common.FromHex("e1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9"))
-	ClearGlobalCache()
 
 	trie, _ = New(root, db)
 	_, err = trie.TryGet([]byte("120000"))
@@ -360,44 +357,6 @@ func TestLargeValue(t *testing.T) {
 	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
 	trie.Hash()
 
-}
-
-type kv struct {
-	k, v []byte
-	t    bool
-}
-
-func TestLargeData(t *testing.T) {
-	trie := newEmpty()
-	vals := make(map[string]*kv)
-
-	for i := byte(0); i < 255; i++ {
-		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
-		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
-		trie.Update(value.k, value.v)
-		trie.Update(value2.k, value2.v)
-		vals[string(value.k)] = value
-		vals[string(value2.k)] = value2
-	}
-
-	it := NewIterator(trie)
-	for it.Next() {
-		vals[string(it.Key)].t = true
-	}
-
-	var untouched []*kv
-	for _, value := range vals {
-		if !value.t {
-			untouched = append(untouched, value)
-		}
-	}
-
-	if len(untouched) > 0 {
-		t.Errorf("Missed %d nodes", len(untouched))
-		for _, value := range untouched {
-			t.Error(value)
-		}
-	}
 }
 
 func BenchmarkGet(b *testing.B)      { benchGet(b, false) }
