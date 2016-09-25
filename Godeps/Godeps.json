@@ -81,6 +81,11 @@
 			"Rev": "46523a463303c6ede3ddfe45bde1c7ed52ebaacd"
 		},
 		{
+			"ImportPath": "github.com/jbrukh/bayesian",
+			"Comment": "1.0-29-ga65fd1e",
+			"Rev": "a65fd1effddb7bd71c6bb6ca1876e045a7aeac6e"
+		},
+		{
 			"ImportPath": "github.com/mattn/go-colorable",
 			"Rev": "9fdad7c47650b7d2e1da50644c1f4ba7f172f252"
 		},
@@ -197,6 +202,10 @@
 		{
 			"ImportPath": "github.com/syndtr/goleveldb/leveldb/util",
 			"Rev": "ab8b5dcf1042e818ab68e770d465112a899b668e"
+		},
+		{
+			"ImportPath": "github.com/tylertreat/BoomFilters",
+			"Rev": "ae0b9585d4b87b2fe0b49ee09270abae7aaad179"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/pbkdf2",

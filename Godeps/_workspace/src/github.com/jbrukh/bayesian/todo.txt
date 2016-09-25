@@ -1,0 +1,3 @@
+- revisit underflow detection
+- add optional smoothing for frequencies
+- test with drone.io
