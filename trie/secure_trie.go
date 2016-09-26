@@ -174,12 +174,7 @@ func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 		}
 		t.secKeyCache = make(map[string][]byte)
 	}
-	n, clean, err := t.trie.hashRoot(db)
-	if err != nil {
-		return (common.Hash{}), err
-	}
-	t.trie.root = clean
-	return common.BytesToHash(n.(hashNode)), nil
+	return t.trie.CommitTo(db)
 }
 
 func (t *SecureTrie) secKey(key []byte) []byte {
