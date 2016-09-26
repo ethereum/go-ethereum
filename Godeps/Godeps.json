@@ -11,6 +11,15 @@
 			"Rev": "593e01cfc4f3353585015321e01951d4a907d3ef"
 		},
 		{
+			"ImportPath": "github.com/btcsuite/btcd/btcec",
+			"Comment": "BTCD_0_12_0_BETA-101-gff4ada0",
+			"Rev": "ff4ada0b0e1ebffa3f9c15cadc96ab0d08a11034"
+		},
+		{
+			"ImportPath": "github.com/btcsuite/fastsha256",
+			"Rev": "302ad4db268b46f9ebda3078f6f7397f96047735"
+		},
+		{
 			"ImportPath": "github.com/cespare/cp",
 			"Rev": "165db2f241fd235aec29ba6d9b1ccd5f1c14637c"
 		},

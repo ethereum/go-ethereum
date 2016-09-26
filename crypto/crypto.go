@@ -21,21 +21,24 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"fmt"
+	"encoding/hex"
+	"errors"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
 
-	"encoding/hex"
-	"errors"
-
+	"github.com/btcsuite/btcd/btcec"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/ripemd160"
+)
+
+var (
+	secp256k1N, _     = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+	secp256k1HalfN, _ = new(big.Int).SetString("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0", 16)
 )
 
 func Keccak256(data ...[]byte) []byte {
@@ -78,21 +81,13 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
-func Ecrecover(hash, sig []byte) ([]byte, error) {
-	return secp256k1.RecoverPubkey(hash, sig)
-}
-
 // New methods using proper ecdsa keys from the stdlib
-func ToECDSA(prv []byte) *ecdsa.PrivateKey {
-	if len(prv) == 0 {
+func ToECDSA(key []byte) *ecdsa.PrivateKey {
+	if len(key) == 0 {
 		return nil
 	}
-
-	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = secp256k1.S256()
-	priv.D = common.BigD(prv)
-	priv.PublicKey.X, priv.PublicKey.Y = secp256k1.S256().ScalarBaseMult(prv)
-	return priv
+	priv, _ := btcec.PrivKeyFromBytes(btcec.S256(), key)
+	return priv.ToECDSA()
 }
 
 func FromECDSA(prv *ecdsa.PrivateKey) []byte {
@@ -106,15 +101,15 @@ func ToECDSAPub(pub []byte) *ecdsa.PublicKey {
 	if len(pub) == 0 {
 		return nil
 	}
-	x, y := elliptic.Unmarshal(secp256k1.S256(), pub)
-	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}
+	x, y := elliptic.Unmarshal(btcec.S256(), pub)
+	return &ecdsa.PublicKey{Curve: btcec.S256(), X: x, Y: y}
 }
 
 func FromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
 	}
-	return elliptic.Marshal(secp256k1.S256(), pub.X, pub.Y)
+	return elliptic.Marshal(btcec.S256(), pub.X, pub.Y)
 }
 
 // HexToECDSA parses a secp256k1 private key.
@@ -158,7 +153,7 @@ func SaveECDSA(file string, key *ecdsa.PrivateKey) error {
 }
 
 func GenerateKey() (*ecdsa.PrivateKey, error) {
-	return ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+	return ecdsa.GenerateKey(btcec.S256(), rand.Reader)
 }
 
 func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
@@ -168,39 +163,18 @@ func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	vint := uint32(v)
 	// reject upper range of s values (ECDSA malleability)
 	// see discussion in secp256k1/libsecp256k1/include/secp256k1.h
-	if homestead && s.Cmp(secp256k1.HalfN) > 0 {
+	if homestead && s.Cmp(secp256k1HalfN) > 0 {
 		return false
 	}
 	// Frontier: allow s to be in full N range
-	if s.Cmp(secp256k1.N) >= 0 {
+	if s.Cmp(secp256k1N) >= 0 {
 		return false
 	}
-	if r.Cmp(secp256k1.N) < 0 && (vint == 27 || vint == 28) {
+	if r.Cmp(secp256k1N) < 0 && (vint == 27 || vint == 28) {
 		return true
 	} else {
 		return false
 	}
-}
-
-func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
-	s, err := Ecrecover(hash, sig)
-	if err != nil {
-		return nil, err
-	}
-
-	x, y := elliptic.Unmarshal(secp256k1.S256(), s)
-	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}, nil
-}
-
-func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
-	if len(hash) != 32 {
-		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
-	}
-
-	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
-	defer zeroBytes(seckey)
-	sig, err = secp256k1.Sign(hash, seckey)
-	return
 }
 
 func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {

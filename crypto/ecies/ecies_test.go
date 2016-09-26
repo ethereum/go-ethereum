@@ -42,7 +42,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	"github.com/btcsuite/btcd/btcec"
 )
 
 var dumpEnc bool
@@ -354,7 +354,7 @@ func BenchmarkGenSharedKeyP256(b *testing.B) {
 
 // Benchmark the generation of S256 shared keys.
 func BenchmarkGenSharedKeyS256(b *testing.B) {
-	prv, err := GenerateKey(rand.Reader, secp256k1.S256(), nil)
+	prv, err := GenerateKey(rand.Reader, btcec.S256(), nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		b.FailNow()
@@ -631,8 +631,8 @@ func TestSharedKeyStatic(t *testing.T) {
 // TODO: remove after refactoring packages crypto and crypto/ecies
 func hexKey(prv string) *PrivateKey {
 	priv := new(ecdsa.PrivateKey)
-	priv.PublicKey.Curve = secp256k1.S256()
+	priv.PublicKey.Curve = btcec.S256()
 	priv.D, _ = new(big.Int).SetString(prv, 16)
-	priv.PublicKey.X, priv.PublicKey.Y = secp256k1.S256().ScalarBaseMult(priv.D.Bytes())
+	priv.PublicKey.X, priv.PublicKey.Y = btcec.S256().ScalarBaseMult(priv.D.Bytes())
 	return ImportECDSA(priv)
 }
