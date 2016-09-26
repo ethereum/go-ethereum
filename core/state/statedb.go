@@ -28,15 +28,21 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 // The starting nonce determines the default nonce when new accounts are being
 // created.
 var StartingNonce uint64
 
-// Number of past tries to keep. The arbitrarily chosen value here
-// is max uncle depth + 1.
-const maxJournalLength = 8
+const (
+	// Number of past tries to keep. The arbitrarily chosen value here
+	// is max uncle depth + 1.
+	maxJournalLength = 8
+
+	// Number of codehash->size associations to keep.
+	codeSizeCacheSize = 100000
+)
 
 // StateDBs within the ethereum protocol are used to store anything
 // within the merkle trie. StateDBs take care of caching and storing
@@ -44,9 +50,10 @@ const maxJournalLength = 8
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db        ethdb.Database
-	trie      *trie.SecureTrie
-	pastTries []*trie.SecureTrie
+	db            ethdb.Database
+	trie          *trie.SecureTrie
+	pastTries     []*trie.SecureTrie
+	codeSizeCache *lru.Cache
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects      map[common.Address]*StateObject
@@ -67,9 +74,11 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
+	csc, _ := lru.New(codeSizeCacheSize)
 	return &StateDB{
 		db:                db,
 		trie:              tr,
+		codeSizeCache:     csc,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
@@ -88,6 +97,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 		db:                self.db,
 		trie:              tr,
 		pastTries:         self.pastTries,
+		codeSizeCache:     self.codeSizeCache,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
@@ -193,17 +203,28 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
-		return stateObject.Code(self.db)
+		code := stateObject.Code(self.db)
+		key := common.BytesToHash(stateObject.CodeHash())
+		self.codeSizeCache.Add(key, len(code))
+		return code
 	}
 	return nil
 }
 
 func (self *StateDB) GetCodeSize(addr common.Address) int {
 	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		return stateObject.CodeSize(self.db)
+	if stateObject == nil {
+		return 0
 	}
-	return 0
+	key := common.BytesToHash(stateObject.CodeHash())
+	if cached, ok := self.codeSizeCache.Get(key); ok {
+		return cached.(int)
+	}
+	size := len(stateObject.Code(self.db))
+	if stateObject.dbErr == nil {
+		self.codeSizeCache.Add(key, size)
+	}
+	return size
 }
 
 func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
@@ -373,6 +394,7 @@ func (self *StateDB) Copy() *StateDB {
 		db:                self.db,
 		trie:              self.trie,
 		pastTries:         self.pastTries,
+		codeSizeCache:     self.codeSizeCache,
 		stateObjects:      make(map[common.Address]*StateObject, len(self.stateObjectsDirty)),
 		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
 		refund:            new(big.Int).Set(self.refund),
@@ -397,6 +419,7 @@ func (self *StateDB) Set(state *StateDB) {
 	self.pastTries = state.pastTries
 	self.stateObjects = state.stateObjects
 	self.stateObjectsDirty = state.stateObjectsDirty
+	self.codeSizeCache = state.codeSizeCache
 	self.refund = state.refund
 	self.logs = state.logs
 	self.logSize = state.logSize
