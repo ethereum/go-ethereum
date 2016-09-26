@@ -33,14 +33,14 @@ type ManagedState struct {
 
 	mu sync.RWMutex
 
-	accounts map[string]*account
+	accounts map[common.Address]*account
 }
 
 // ManagedState returns a new managed state with the statedb as it's backing layer
 func ManageState(statedb *StateDB) *ManagedState {
 	return &ManagedState{
 		StateDB:  statedb.Copy(),
-		accounts: make(map[string]*account),
+		accounts: make(map[common.Address]*account),
 	}
 }
 
@@ -103,7 +103,7 @@ func (ms *ManagedState) SetNonce(addr common.Address, nonce uint64) {
 	so := ms.GetOrNewStateObject(addr)
 	so.SetNonce(nonce)
 
-	ms.accounts[addr.Str()] = newAccount(so)
+	ms.accounts[addr] = newAccount(so)
 }
 
 // HasAccount returns whether the given address is managed or not
@@ -114,29 +114,28 @@ func (ms *ManagedState) HasAccount(addr common.Address) bool {
 }
 
 func (ms *ManagedState) hasAccount(addr common.Address) bool {
-	_, ok := ms.accounts[addr.Str()]
+	_, ok := ms.accounts[addr]
 	return ok
 }
 
 // populate the managed state
 func (ms *ManagedState) getAccount(addr common.Address) *account {
-	straddr := addr.Str()
-	if account, ok := ms.accounts[straddr]; !ok {
+	if account, ok := ms.accounts[addr]; !ok {
 		so := ms.GetOrNewStateObject(addr)
-		ms.accounts[straddr] = newAccount(so)
+		ms.accounts[addr] = newAccount(so)
 	} else {
 		// Always make sure the state account nonce isn't actually higher
 		// than the tracked one.
 		so := ms.StateDB.GetStateObject(addr)
-		if so != nil && uint64(len(account.nonces))+account.nstart < so.nonce {
-			ms.accounts[straddr] = newAccount(so)
+		if so != nil && uint64(len(account.nonces))+account.nstart < so.Nonce() {
+			ms.accounts[addr] = newAccount(so)
 		}
 
 	}
 
-	return ms.accounts[straddr]
+	return ms.accounts[addr]
 }
 
 func newAccount(so *StateObject) *account {
-	return &account{so, so.nonce, nil}
+	return &account{so, so.Nonce(), nil}
 }

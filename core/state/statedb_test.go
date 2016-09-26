@@ -17,6 +17,7 @@
 package state
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 
@@ -47,6 +48,9 @@ func TestUpdateLeaks(t *testing.T) {
 	// Ensure that no data was leaked into the database
 	for _, key := range db.Keys() {
 		value, _ := db.Get(key)
+		if bytes.Equal(key, []byte("accounts-bloom")) {
+			continue // This is written on first read
+		}
 		t.Errorf("State leaked into database: %x -> %x", key, value)
 	}
 }

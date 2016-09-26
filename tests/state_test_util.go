@@ -97,7 +97,7 @@ func benchStateTest(ruleSet RuleSet, test VmTest, env map[string]string, b *test
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
-		obj := StateObjectFromAccount(db, addr, account)
+		obj := StateObjectFromAccount(db, addr, account, statedb.MarkStateObjectDirty)
 		statedb.SetStateObject(obj)
 		for a, v := range account.Storage {
 			obj.SetState(common.HexToHash(a), common.HexToHash(v))
@@ -136,7 +136,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, db)
 	for addr, account := range test.Pre {
-		obj := StateObjectFromAccount(db, addr, account)
+		obj := StateObjectFromAccount(db, addr, account, statedb.MarkStateObjectDirty)
 		statedb.SetStateObject(obj)
 		for a, v := range account.Storage {
 			obj.SetState(common.HexToHash(a), common.HexToHash(v))
@@ -187,7 +187,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 		}
 
 		for addr, value := range account.Storage {
-			v := obj.GetState(common.HexToHash(addr))
+			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
 			vexp := common.HexToHash(value)
 
 			if v != vexp {
