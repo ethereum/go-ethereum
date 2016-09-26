@@ -94,6 +94,7 @@ type Database interface {
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
 
+	GetCodeSize(common.Address) int
 	GetCode(common.Address) []byte
 	SetCode(common.Address, []byte)
 
