@@ -76,8 +76,6 @@ func TestMissingNode(t *testing.T) {
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit()
 
-	ClearGlobalCache()
-
 	trie, _ = New(root, db)
 	_, err := trie.TryGet([]byte("120000"))
 	if err != nil {
@@ -109,7 +107,6 @@ func TestMissingNode(t *testing.T) {
 	}
 
 	db.Delete(common.FromHex("e1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9"))
-	ClearGlobalCache()
 
 	trie, _ = New(root, db)
 	_, err = trie.TryGet([]byte("120000"))

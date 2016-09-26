@@ -30,23 +30,13 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const defaultCacheCapacity = 800
-
 var (
-	// The global cache stores decoded trie nodes by hash as they get loaded.
-	globalCache = newARC(defaultCacheCapacity)
-
 	// This is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 	// This is the known hash of an empty state trie entry.
 	emptyState = crypto.Keccak256Hash(nil)
 )
-
-// ClearGlobalCache clears the global trie cache
-func ClearGlobalCache() {
-	globalCache.Clear()
-}
 
 // Database must be implemented by backing stores for the trie.
 type Database interface {
@@ -427,9 +417,6 @@ func (t *Trie) resolve(n node, prefix, suffix []byte) (node, error) {
 }
 
 func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
-	if v, ok := globalCache.Get(n); ok {
-		return v, nil
-	}
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
 		return nil, &MissingNodeError{
@@ -441,9 +428,6 @@ func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
 		}
 	}
 	dec := mustDecodeNode(n, enc)
-	if dec != nil {
-		globalCache.Put(n, dec)
-	}
 	return dec, nil
 }
 
