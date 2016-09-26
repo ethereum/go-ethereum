@@ -79,7 +79,7 @@ func ExampleGenerateChain() {
 	evmux := &event.TypeMux{}
 	blockchain, _ := NewBlockChain(db, MakeChainConfig(), FakePow{}, evmux)
 	if i, err := blockchain.InsertChain(chain); err != nil {
-		fmt.Printf("insert error (block %d): %v\n", i, err)
+		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return
 	}
 
