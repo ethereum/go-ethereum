@@ -355,7 +355,6 @@ func (self *StateDB) Copy() *StateDB {
 	state := &StateDB{
 		db:                self.db,
 		trie:              self.trie,
-		all:               self.all,
 		stateObjects:      make(map[common.Address]*StateObject, len(self.stateObjectsDirty)),
 		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
 		refund:            new(big.Int).Set(self.refund),

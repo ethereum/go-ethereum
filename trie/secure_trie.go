@@ -18,7 +18,6 @@ package trie
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -38,7 +37,7 @@ var secureKeyPrefix = []byte("secure-key-")
 type SecureTrie struct {
 	trie        Trie
 	hashKeyBuf  []byte
-	secKeyBuf   [64]byte
+	secKeyBuf   [200]byte
 	secKeyCache map[string][]byte
 }
 
@@ -177,16 +176,23 @@ func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 	return t.trie.CommitTo(db)
 }
 
+// secKey returns the database key for the preimage of key, as an ephemeral buffer.
+// The caller must not hold onto the return value because it will become
+// invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) secKey(key []byte) []byte {
 	buf := append(t.secKeyBuf[:0], secureKeyPrefix...)
 	buf = append(buf, key...)
 	return buf
 }
 
+// hashKey returns the hash of key as an ephemeral buffer.
+// The caller must not hold onto the return value because it will become
+// invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
-	hash := sha3.NewKeccak256()
-	hash.Reset()
-	hash.Write(key)
-	buf := hash.Sum(t.hashKeyBuf[:0])
+	h := newHasher()
+	h.sha.Reset()
+	h.sha.Write(key)
+	buf := h.sha.Sum(t.hashKeyBuf[:0])
+	returnHasherToPool(h)
 	return buf
 }
