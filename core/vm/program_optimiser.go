@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -85,6 +86,8 @@ func OptimiseProgram(program *Program) {
 			statsJump++
 
 			load = nil
+		case instr.op == EXTCODESIZE:
+			program.instructions[i] = codesize{}
 		default:
 			// create a new N pushes segment
 			if len(load) > 1 {
@@ -96,6 +99,22 @@ func OptimiseProgram(program *Program) {
 		}
 	}
 }
+
+type codesize struct {
+	size *big.Int
+}
+
+func (instr codesize) do(program *Program, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	if instr.size == nil {
+		addr := common.BigToAddress(stack.pop())
+		instr.size = big.NewInt(int64(len(env.Db().GetCode(addr))))
+	}
+	stack.push(instr.size)
+	return nil, nil
+}
+
+func (codesize) Op() OpCode  { return EXTCODESIZE }
+func (codesize) halts() bool { return false }
 
 // makePushSeg creates a new push segment from N amount of push instructions
 func makePushSeg(instrs []instruction) (pushSeg, int) {
