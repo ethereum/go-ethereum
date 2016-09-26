@@ -77,7 +77,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return append(method.Id(), arguments...), nil
 }
 
-// toGoSliceType prses the input and casts it to the proper slice defined by the ABI
+// toGoSliceType parses the input and casts it to the proper slice defined by the ABI
 // argument in T.
 func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	index := i * 32
