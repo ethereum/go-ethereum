@@ -117,32 +117,50 @@ func (t *Trie) Get(key []byte) []byte {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	key = compactHexDecode(key)
-	pos := 0
-	tn := t.root
-	for pos < len(key) {
-		switch n := tn.(type) {
-		case shortNode:
-			if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
-				return nil, nil
-			}
-			tn = n.Val
-			pos += len(n.Key)
-		case fullNode:
-			tn = n.Children[key[pos]]
-			pos++
-		case nil:
-			return nil, nil
-		case hashNode:
-			var err error
-			tn, err = t.resolveHash(n, key[:pos], key[pos:])
-			if err != nil {
-				return nil, err
-			}
-		default:
-			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
-		}
+	value, newroot, didResolve, err := t.tryGet(t.root, key, 0)
+	if err == nil && didResolve {
+		t.root = newroot
 	}
-	return tn.(valueNode), nil
+	return value, err
+}
+
+func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+	switch n := (origNode).(type) {
+	case nil:
+		return nil, nil, false, nil
+	case valueNode:
+		return n, n, false, nil
+	case shortNode:
+		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
+			// key not found in trie
+			return nil, n, false, nil
+		}
+		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
+		if err == nil && didResolve {
+			n.Val = newnode
+			return value, n, didResolve, err
+		} else {
+			return value, origNode, didResolve, err
+		}
+	case fullNode:
+		child := n.Children[key[pos]]
+		value, newnode, didResolve, err = t.tryGet(child, key, pos+1)
+		if err == nil && didResolve {
+			n.Children[key[pos]] = newnode
+			return value, n, didResolve, err
+		} else {
+			return value, origNode, didResolve, err
+		}
+	case hashNode:
+		child, err := t.resolveHash(n, key[:pos], key[pos:])
+		if err != nil {
+			return nil, n, true, err
+		}
+		value, newnode, _, err := t.tryGet(child, key, pos)
+		return value, newnode, true, err
+	default:
+		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
+	}
 }
 
 // Update associates key with value in the trie. Subsequent calls to
