@@ -152,6 +152,9 @@ func (self *StateObject) Update() {
 }
 
 func (c *StateObject) AddBalance(amount *big.Int) {
+	if amount.Cmp(common.Big0) == 0 {
+		return
+	}
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
 	if glog.V(logger.Core) {
@@ -160,6 +163,9 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 }
 
 func (c *StateObject) SubBalance(amount *big.Int) {
+	if amount.Cmp(common.Big0) == 0 {
+		return
+	}
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
 	if glog.V(logger.Core) {
