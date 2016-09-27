@@ -30,13 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-type WhisperOfflineError struct{}
-
-var whisperOffLineErr = new(WhisperOfflineError)
-
-func (e *WhisperOfflineError) Error() string {
-	return "whisper is offline"
-}
+var whisperOffLineErr = errors.New("whisper is offline")
 
 // PublicWhisperAPI provides the whisper RPC service.
 type PublicWhisperAPI struct {
