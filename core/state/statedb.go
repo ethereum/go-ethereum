@@ -106,7 +106,8 @@ func (self *StateDB) Reset(root common.Hash) error {
 	return nil
 }
 
-// openTrie creates a trie. If a trie is available from the journal.
+// openTrie creates a trie. It uses an existing trie if one is available
+// from the journal if available.
 func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 	if self.trie != nil && self.trie.Hash() == root {
 		return self.trie, nil
@@ -121,15 +122,6 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 }
 
 func (self *StateDB) pushTrie(t *trie.SecureTrie) {
-	// Remove t's equivalent if it's already in the journal.
-	root := t.Hash()
-	for i := len(self.pastTries) - 1; i >= 0; i-- {
-		if self.pastTries[i].Hash() == root {
-			self.pastTries = append(self.pastTries[i:i], self.pastTries[i+1:]...)
-			break
-		}
-	}
-	// Insert.
 	if len(self.pastTries) >= maxJournalLength {
 		copy(self.pastTries, self.pastTries[1:])
 		self.pastTries[len(self.pastTries)-1] = t
