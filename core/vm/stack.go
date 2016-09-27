@@ -25,7 +25,8 @@ import (
 // expected to be changed and modified. stack does not take care of adding newly
 // initialised objects.
 type Stack struct {
-	data []*big.Int
+	data  []*big.Int
+	count int
 }
 
 func newstack() *Stack {
@@ -40,16 +41,21 @@ func (st *Stack) push(d *big.Int) {
 	// NOTE push limit (1024) is checked in baseCheck
 	//stackItem := new(big.Int).Set(d)
 	//st.data = append(st.data, stackItem)
-	st.data = append(st.data, d)
+	//st.data = append(st.data, d)
+	st.data = append(st.data[:st.count], d)
+	st.count++
 }
 func (st *Stack) pushN(ds ...*big.Int) {
-	st.data = append(st.data, ds...)
+	st.data = append(st.data[:st.count], ds...)
+	st.count += len(ds)
 }
 
-func (st *Stack) pop() (ret *big.Int) {
-	ret = st.data[len(st.data)-1]
-	st.data = st.data[:len(st.data)-1]
-	return
+func (st *Stack) pop() *big.Int {
+	//ret = st.data[len(st.data)-1]
+	//st.data = st.data[:len(st.data)-1]
+
+	st.count--
+	return st.data[st.count]
 }
 
 func (st *Stack) len() int {

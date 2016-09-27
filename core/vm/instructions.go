@@ -142,7 +142,7 @@ func opMul(instr instruction, pc *uint64, env *Environment, contract *Contract, 
 
 func opDiv(instr instruction, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) {
 	x, y := stack.pop(), stack.pop()
-	if y.Cmp(common.Big0) != 0 {
+	if y.BitLen() != 0 {
 		stack.push(U256(x.Div(x, y)))
 	} else {
 		stack.push(new(big.Int))

@@ -18,6 +18,7 @@ package common
 
 import (
 	"bytes"
+	"math/big"
 	"testing"
 )
 
@@ -85,5 +86,39 @@ func TestBigCopy(t *testing.T) {
 
 	if bytes.Compare(z, zbytes) != 0 {
 		t.Error("Got", zbytes)
+	}
+}
+
+var benchSize = 1000
+
+func BenchmarkBitLen(b *testing.B) {
+	tests := make([]*big.Int, 0, benchSize)
+	for i := 0; i < benchSize; i++ {
+		tests = append(tests, big.NewInt(int64(i)))
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < benchSize; j++ {
+			_ = tests[j].BitLen()
+		}
+	}
+}
+
+var bigzero = new(big.Int)
+
+func BenchmarkCmp(b *testing.B) {
+	tests := make([]*big.Int, 0, benchSize)
+	for i := 0; i < benchSize; i++ {
+		tests = append(tests, big.NewInt(int64(i)))
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		for j := 0; j < benchSize; j++ {
+			_ = tests[j].Cmp(bigzero)
+		}
 	}
 }

@@ -85,6 +85,7 @@ func (s *State) Read(address common.Address) (object *StateObject, inCache bool)
 	stateObject := s.StateObjects[address]
 	if stateObject == nil && s.parent != nil {
 		stateObject, _ = s.parent.Read(address)
+		s.StateObjects[address] = stateObject
 	} else if stateObject != nil {
 		inCache = true
 	}
@@ -107,6 +108,7 @@ func (s *State) Read(address common.Address) (object *StateObject, inCache bool)
 		glog.Errorf("can't decode object at %x: %v", address[:], err)
 		return nil, false
 	}
+	s.StateObjects[address] = stateObject
 
 	return stateObject, false
 }
@@ -126,9 +128,9 @@ func (s *State) loadStateObject(stateObject *StateObject) {
 }
 
 func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
-	stateObject, inCache := s.Read(address)
+	stateObject, _ := s.Read(address)
 	if stateObject != nil {
-		if !inCache || !s.localStateObjects[address] {
+		if !s.localStateObjects[address] {
 			stateObject = stateObject.Copy()
 			s.StateObjects[address] = stateObject
 			s.localStateObjects[address] = true
@@ -161,9 +163,10 @@ func (s *State) GetOrNewStateObject(address common.Address) *StateObject {
 */
 
 func (s *State) GetStateObject(address common.Address) *StateObject {
-	account, inCache := s.Read(address)
+	account, _ := s.Read(address)
 	if account != nil {
-		if !inCache {
+		if s.StateObjects[address] == nil {
+			//if !inCache {
 			s.StateObjects[address] = account
 		}
 		return account
@@ -189,7 +192,13 @@ func (s *State) CreateStateObject(address common.Address) *StateObject {
 	return stateObject
 }
 
+var bigzero = new(big.Int)
+
 func (s *State) SubBalance(address common.Address, amount *big.Int) {
+	if amount.Cmp(bigzero) == 0 {
+		return
+	}
+
 	stateObject := s.GetOrNewStateObject(address)
 	if stateObject != nil {
 		stateObject.SubBalance(amount)
@@ -197,6 +206,10 @@ func (s *State) SubBalance(address common.Address, amount *big.Int) {
 }
 
 func (s *State) AddBalance(address common.Address, amount *big.Int) {
+	if amount.Cmp(bigzero) == 0 {
+		return
+	}
+
 	stateObject := s.GetOrNewStateObject(address)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)

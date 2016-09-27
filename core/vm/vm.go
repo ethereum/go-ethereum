@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -103,6 +104,18 @@ func (evm *EVM) Run(contract *Contract, input []byte) ([]byte, error) {
 	return nil, fmt.Errorf("Unexpected return using program %x", codehash)
 }
 
+type stats struct {
+	op        OpCode
+	dura      time.Duration
+	callCount uint64
+}
+
+type statsList []stats
+
+func (sl statsList) Len() int           { return len(sl) }
+func (sl statsList) Less(i, j int) bool { return sl[i].dura < sl[j].dura }
+func (sl statsList) Swap(i, j int)      { sl[i], sl[j] = sl[j], sl[i] }
+
 func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) ([]byte, error) {
 	contract.Input = input
 
@@ -112,7 +125,23 @@ func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) (
 		mem               = NewMemory()
 		stack             = newstack()
 		env               = evm.env
+		stats             = make(map[OpCode]stats)
 	)
+	defer func() {
+		fmt.Println("stats for program")
+		i := 0
+		sl := make(statsList, len(stats))
+		for op, stat := range stats {
+			stat.op = op
+			sl[i] = stat
+			i++
+		}
+
+		sort.Sort(sort.Reverse(sl))
+		for _, stat := range sl {
+			fmt.Printf("%v: call count: %d duration: %v\n", stat.op, stat.callCount, stat.dura)
+		}
+	}()
 
 	if glog.V(logger.Debug) {
 		glog.Infof("running JIT program %x\n", program.Id[:4])
@@ -127,11 +156,19 @@ func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) (
 		instrCount++
 
 		instr := program.instructions[pc]
+
+		tstart := time.Now()
+		stat := stats[instr.Op()]
+
+		stat.callCount++
 		if instr.Op() == DELEGATECALL && !homestead {
 			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.Op())
 		}
 
 		ret, err := instr.do(program, &pc, env, contract, mem, stack)
+		stat.dura += time.Since(tstart)
+
+		stats[instr.Op()] = stat
 		if err != nil {
 			//gas := new(big.Int).SetUint64(contract.gas64)
 			//evm.cfg.Tracer.CaptureState(evm.env, pc, instr.Op(), gas, cost, mem, stack, contract, evm.env.Depth(), err)
