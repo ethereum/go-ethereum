@@ -20,6 +20,7 @@ package state
 import (
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -66,6 +67,8 @@ type StateDB struct {
 	txIndex      int
 	logs         map[common.Hash]vm.Logs
 	logSize      uint
+
+	lock sync.Mutex
 }
 
 // Create a new state from a given trie
@@ -86,32 +89,53 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	}, nil
 }
 
-// Reset clears out all emphemeral state objects from the state db, but keeps
-// the underlying state trie to avoid reloading data for the next operations.
-func (self *StateDB) Reset(root common.Hash) error {
+// New creates a new statedb by reusing any journalled tries to avoid costly
+// disk io.
+func (self *StateDB) New(root common.Hash) (*StateDB, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
 	tr, err := self.openTrie(root)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	*self = StateDB{
+	return &StateDB{
 		db:                self.db,
 		trie:              tr,
-		pastTries:         self.pastTries,
 		codeSizeCache:     self.codeSizeCache,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
+	}, nil
+}
+
+// Reset clears out all emphemeral state objects from the state db, but keeps
+// the underlying state trie to avoid reloading data for the next operations.
+func (self *StateDB) Reset(root common.Hash) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
+	tr, err := self.openTrie(root)
+	if err != nil {
+		return err
 	}
+	self.trie = tr
+	self.stateObjects = make(map[common.Address]*StateObject)
+	self.stateObjectsDirty = make(map[common.Address]struct{})
+	self.refund = new(big.Int)
+	self.thash = common.Hash{}
+	self.bhash = common.Hash{}
+	self.txIndex = 0
+	self.logs = make(map[common.Hash]vm.Logs)
+	self.logSize = 0
+
 	return nil
 }
 
 // openTrie creates a trie. It uses an existing trie if one is available
 // from the journal if available.
 func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
-	if self.trie != nil && self.trie.Hash() == root {
-		return self.trie, nil
-	}
 	for i := len(self.pastTries) - 1; i >= 0; i-- {
 		if self.pastTries[i].Hash() == root {
 			tr := *self.pastTries[i]
@@ -122,6 +146,9 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 }
 
 func (self *StateDB) pushTrie(t *trie.SecureTrie) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
 	if len(self.pastTries) >= maxJournalLength {
 		copy(self.pastTries, self.pastTries[1:])
 		self.pastTries[len(self.pastTries)-1] = t
@@ -381,6 +408,9 @@ func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
 //
 
 func (self *StateDB) Copy() *StateDB {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                self.db,
@@ -406,6 +436,9 @@ func (self *StateDB) Copy() *StateDB {
 }
 
 func (self *StateDB) Set(state *StateDB) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+
 	self.db = state.db
 	self.trie = state.trie
 	self.pastTries = state.pastTries
