@@ -105,7 +105,7 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 		glog.V(logger.Debug).Infof("deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 		m.DeleteMapping(protocol, extport, intport)
 	}()
-	if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
+	if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
 		glog.V(logger.Debug).Infof("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
 	} else {
 		glog.V(logger.Info).Infof("mapped network port %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
@@ -118,7 +118,7 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 			}
 		case <-refresh.C:
 			glog.V(logger.Detail).Infof("refresh port mapping %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
-			if err := m.AddMapping(protocol, intport, extport, name, mapTimeout); err != nil {
+			if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
 				glog.V(logger.Debug).Infof("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
 			}
 			refresh.Reset(mapUpdateInterval)
