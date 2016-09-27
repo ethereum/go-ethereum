@@ -86,6 +86,25 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	}, nil
 }
 
+// New creates a new statedb by reusing any journalled tries to avoid costly
+// disk io.
+func (self *StateDB) New(root common.Hash) (*StateDB, error) {
+	tr, err := self.openTrie(root)
+	if err != nil {
+		return nil, err
+	}
+	csc, _ := lru.New(codeSizeCacheSize)
+	return &StateDB{
+		db:                self.db,
+		trie:              tr,
+		codeSizeCache:     csc,
+		stateObjects:      make(map[common.Address]*StateObject),
+		stateObjectsDirty: make(map[common.Address]struct{}),
+		refund:            new(big.Int),
+		logs:              make(map[common.Hash]vm.Logs),
+	}, nil
+}
+
 // Reset clears out all emphemeral state objects from the state db, but keeps
 // the underlying state trie to avoid reloading data for the next operations.
 func (self *StateDB) Reset(root common.Hash) error {
@@ -110,7 +129,8 @@ func (self *StateDB) Reset(root common.Hash) error {
 // from the journal if available.
 func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 	if self.trie != nil && self.trie.Hash() == root {
-		return self.trie, nil
+		cpy := *self.trie
+		return &cpy, nil
 	}
 	for i := len(self.pastTries) - 1; i >= 0; i-- {
 		if self.pastTries[i].Hash() == root {
