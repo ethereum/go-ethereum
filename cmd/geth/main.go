@@ -150,7 +150,7 @@ participating.
 		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
-		utils.BlockTimeLimitFlag,
+		utils.GasPerSecondFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,

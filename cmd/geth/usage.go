@@ -126,7 +126,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.AutoDAGFlag,
 			utils.EtherbaseFlag,
 			utils.TargetGasLimitFlag,
-			utils.BlockTimeLimitFlag,
+			utils.GasPerSecondFlag,
 			utils.GasPriceFlag,
 			utils.ExtraDataFlag,
 		},

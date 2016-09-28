@@ -980,17 +980,19 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		stats.processed++
 
 		// Update the current gas limit (mining only) based on import times
-		params.CurrentGasCeilLock.Lock()
-		if time.Since(bstart) > params.BlockTimeLimit {
-			ceil := new(big.Int).Div(params.CurrentGasCeil, params.CurrentGasCeilCutDiv)
-			params.CurrentGasCeil.Set(common.BigMax(ceil, params.MinGasLimit))
-		} else {
-			ceil := new(big.Int).Add(params.CurrentGasCeil, new(big.Int).Div(params.CurrentGasCeil, params.CurrentGasCeilIncDiv))
-			limit := new(big.Int).Mul(chain[i].GasLimit(), big.NewInt(2))
-			params.CurrentGasCeil.Set(common.BigMin(ceil, limit))
+		if gasUsed := chain[i].GasUsed(); gasUsed.Cmp(common.Big0) > 0 {
+			params.CurrentGasCeilLock.Lock()
+			if gasPerSecond := gasUsed.Uint64() * uint64(time.Second) / uint64(time.Since(bstart)); gasPerSecond < params.GasPerSecondThreshold.Uint64() {
+				ceil := new(big.Int).Div(params.CurrentGasCeil, params.CurrentGasCeilCutDiv)
+				params.CurrentGasCeil.Set(common.BigMax(ceil, params.MinGasLimit))
+			} else {
+				ceil := new(big.Int).Add(params.CurrentGasCeil, new(big.Int).Div(params.CurrentGasCeil, params.CurrentGasCeilIncDiv))
+				limit := new(big.Int).Mul(chain[i].GasLimit(), big.NewInt(2))
+				params.CurrentGasCeil.Set(common.BigMin(ceil, limit))
+			}
+			glog.V(logger.Debug).Infof("block gas ceiling changed to %v", params.CurrentGasCeil)
+			params.CurrentGasCeilLock.Unlock()
 		}
-		glog.V(logger.Debug).Infof("block gas ceiling changed to %v", params.CurrentGasCeil)
-		params.CurrentGasCeilLock.Unlock()
 	}
 
 	if (stats.queued > 0 || stats.processed > 0 || stats.ignored > 0) && bool(glog.V(logger.Info)) {

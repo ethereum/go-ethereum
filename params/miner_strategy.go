@@ -19,13 +19,12 @@ package params
 import (
 	"math/big"
 	"sync"
-	"time"
 )
 
 var (
-	GenesisGasLimit = big.NewInt(4712388)               // Gas limit of the Genesis block.
-	TargetGasLimit  = new(big.Int).Set(GenesisGasLimit) // The artificial target
-	BlockTimeLimit  = 5 * time.Second                   // Block processing time limit to reduce gas after
+	GenesisGasLimit       = big.NewInt(4712388)               // Gas limit of the Genesis block.
+	TargetGasLimit        = new(big.Int).Set(GenesisGasLimit) // The artificial target
+	GasPerSecondThreshold = big.NewInt(4712388 / 2)           // Threshold below which to start reducing block gas limits
 
 	// Temp hack to get a dynamic gas limit in palace (clean up!!!)
 	CurrentGasCeil       = new(big.Int).Set(GenesisGasLimit)

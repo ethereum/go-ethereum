@@ -183,10 +183,10 @@ var (
 		Usage: "Sets the artificial target gas floor for the blocks to mine",
 		Value: params.GenesisGasLimit.String(),
 	}
-	BlockTimeLimitFlag = cli.IntFlag{
-		Name:  "blocktimelimit",
-		Usage: "Time limit for processing a block after which to halve the hard gas limit",
-		Value: 5,
+	GasPerSecondFlag = cli.StringFlag{
+		Name:  "gaspersec",
+		Usage: "Gas consumption per second below which to tighten the block limits",
+		Value: params.GasPerSecondThreshold.String(),
 	}
 	AutoDAGFlag = cli.BoolFlag{
 		Name:  "autodag",
@@ -752,7 +752,7 @@ func SetupNetwork(ctx *cli.Context) {
 	}
 	params.TargetGasLimit = common.String2Big(ctx.GlobalString(TargetGasLimitFlag.Name))
 	params.CurrentGasCeil.Set(params.TargetGasLimit)
-	params.BlockTimeLimit = time.Duration(ctx.GlobalInt(BlockTimeLimitFlag.Name)) * time.Second
+	params.GasPerSecondThreshold = common.String2Big(ctx.GlobalString(GasPerSecondFlag.Name))
 }
 
 // MustMakeChainConfig reads the chain configuration from the database in ctx.Datadir.
