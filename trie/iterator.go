@@ -16,18 +16,13 @@
 
 package trie
 
-import (
-	"bytes"
-	"fmt"
+import "github.com/ethereum/go-ethereum/common"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-)
-
-// Iterator is a key-value trie iterator to traverse the data contents.
+// Iterator is a key-value trie iterator that traverses a Trie.
 type Iterator struct {
-	trie *Trie
+	trie   *Trie
+	nodeIt *NodeIterator
+	keyBuf []byte
 
 	Key   []byte // Current data key on which the iterator is positioned on
 	Value []byte // Current data value on which the iterator is positioned on
@@ -35,119 +30,45 @@ type Iterator struct {
 
 // NewIterator creates a new key-value iterator.
 func NewIterator(trie *Trie) *Iterator {
-	return &Iterator{trie: trie, Key: nil}
+	return &Iterator{
+		trie:   trie,
+		nodeIt: NewNodeIterator(trie),
+		keyBuf: make([]byte, 0, 64),
+		Key:    nil,
+	}
 }
 
-// Next moves the iterator forward with one key-value entry.
-func (self *Iterator) Next() bool {
-	isIterStart := false
-	if self.Key == nil {
-		isIterStart = true
-		self.Key = make([]byte, 32)
+// Next moves the iterator forward one key-value entry.
+func (it *Iterator) Next() bool {
+	for it.nodeIt.Next() {
+		if it.nodeIt.Leaf {
+			it.Key = it.makeKey()
+			it.Value = it.nodeIt.LeafBlob
+			return true
+		}
 	}
-
-	key := remTerm(compactHexDecode(self.Key))
-	k := self.next(self.trie.root, key, isIterStart)
-
-	self.Key = []byte(decodeCompact(k))
-
-	return len(k) > 0
+	it.Key = nil
+	it.Value = nil
+	return false
 }
 
-func (self *Iterator) next(node interface{}, key []byte, isIterStart bool) []byte {
-	if node == nil {
-		return nil
+func (it *Iterator) makeKey() []byte {
+	key := it.keyBuf[:0]
+	for _, se := range it.nodeIt.stack {
+		switch node := se.node.(type) {
+		case fullNode:
+			if se.child <= 16 {
+				key = append(key, byte(se.child))
+			}
+		case shortNode:
+			if hasTerm(node.Key) {
+				key = append(key, node.Key[:len(node.Key)-1]...)
+			} else {
+				key = append(key, node.Key...)
+			}
+		}
 	}
-
-	switch node := node.(type) {
-	case fullNode:
-		if len(key) > 0 {
-			k := self.next(node.Children[key[0]], key[1:], isIterStart)
-			if k != nil {
-				return append([]byte{key[0]}, k...)
-			}
-		}
-
-		var r byte
-		if len(key) > 0 {
-			r = key[0] + 1
-		}
-
-		for i := r; i < 16; i++ {
-			k := self.key(node.Children[i])
-			if k != nil {
-				return append([]byte{i}, k...)
-			}
-		}
-
-	case shortNode:
-		k := remTerm(node.Key)
-		if vnode, ok := node.Val.(valueNode); ok {
-			switch bytes.Compare([]byte(k), key) {
-			case 0:
-				if isIterStart {
-					self.Value = vnode
-					return k
-				}
-			case 1:
-				self.Value = vnode
-				return k
-			}
-		} else {
-			cnode := node.Val
-
-			var ret []byte
-			skey := key[len(k):]
-			if bytes.HasPrefix(key, k) {
-				ret = self.next(cnode, skey, isIterStart)
-			} else if bytes.Compare(k, key[:len(k)]) > 0 {
-				return self.key(node)
-			}
-
-			if ret != nil {
-				return append(k, ret...)
-			}
-		}
-
-	case hashNode:
-		rn, err := self.trie.resolveHash(node, nil, nil)
-		if err != nil && glog.V(logger.Error) {
-			glog.Errorf("Unhandled trie error: %v", err)
-		}
-		return self.next(rn, key, isIterStart)
-	}
-	return nil
-}
-
-func (self *Iterator) key(node interface{}) []byte {
-	switch node := node.(type) {
-	case shortNode:
-		// Leaf node
-		k := remTerm(node.Key)
-		if vnode, ok := node.Val.(valueNode); ok {
-			self.Value = vnode
-			return k
-		}
-		return append(k, self.key(node.Val)...)
-	case fullNode:
-		if node.Children[16] != nil {
-			self.Value = node.Children[16].(valueNode)
-			return []byte{16}
-		}
-		for i := 0; i < 16; i++ {
-			k := self.key(node.Children[i])
-			if k != nil {
-				return append([]byte{byte(i)}, k...)
-			}
-		}
-	case hashNode:
-		rn, err := self.trie.resolveHash(node, nil, nil)
-		if err != nil && glog.V(logger.Error) {
-			glog.Errorf("Unhandled trie error: %v", err)
-		}
-		return self.key(rn)
-	}
-	return nil
+	return decodeCompact(key)
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -199,25 +120,27 @@ func (it *NodeIterator) Next() bool {
 
 // step moves the iterator to the next node of the trie.
 func (it *NodeIterator) step() error {
-	// Abort if we reached the end of the iteration
 	if it.trie == nil {
+		// Abort if we reached the end of the iteration
 		return nil
 	}
-	// Initialize the iterator if we've just started, or pop off the old node otherwise
 	if len(it.stack) == 0 {
-		// Always start with a collapsed root
+		// Initialize the iterator if we've just started.
 		root := it.trie.Hash()
-		it.stack = append(it.stack, &nodeIteratorState{node: hashNode(root[:]), child: -1})
-		if it.stack[0].node == nil {
-			return fmt.Errorf("root node missing: %x", it.trie.Hash())
+		state := &nodeIteratorState{node: it.trie.root, child: -1}
+		if root != emptyRoot {
+			state.hash = root
 		}
+		it.stack = append(it.stack, state)
 	} else {
+		// Continue iterating at the previous node otherwise.
 		it.stack = it.stack[:len(it.stack)-1]
 		if len(it.stack) == 0 {
 			it.trie = nil
 			return nil
 		}
 	}
+
 	// Continue iteration to the next child
 	for {
 		parent := it.stack[len(it.stack)-1]
@@ -232,7 +155,12 @@ func (it *NodeIterator) step() error {
 			}
 			for parent.child++; parent.child < len(node.Children); parent.child++ {
 				if current := node.Children[parent.child]; current != nil {
-					it.stack = append(it.stack, &nodeIteratorState{node: current, parent: ancestor, child: -1})
+					it.stack = append(it.stack, &nodeIteratorState{
+						hash:   common.BytesToHash(node.hash),
+						node:   current,
+						parent: ancestor,
+						child:  -1,
+					})
 					break
 				}
 			}
@@ -242,7 +170,12 @@ func (it *NodeIterator) step() error {
 				break
 			}
 			parent.child++
-			it.stack = append(it.stack, &nodeIteratorState{node: node.Val, parent: ancestor, child: -1})
+			it.stack = append(it.stack, &nodeIteratorState{
+				hash:   common.BytesToHash(node.hash),
+				node:   node.Val,
+				parent: ancestor,
+				child:  -1,
+			})
 		} else if hash, ok := parent.node.(hashNode); ok {
 			// Hash node, resolve the hash child from the database, then the node itself
 			if parent.child >= 0 {
@@ -254,7 +187,12 @@ func (it *NodeIterator) step() error {
 			if err != nil {
 				return err
 			}
-			it.stack = append(it.stack, &nodeIteratorState{hash: common.BytesToHash(hash), node: node, parent: ancestor, child: -1})
+			it.stack = append(it.stack, &nodeIteratorState{
+				hash:   common.BytesToHash(hash),
+				node:   node,
+				parent: ancestor,
+				child:  -1,
+			})
 		} else {
 			break
 		}

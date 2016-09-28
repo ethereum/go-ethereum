@@ -62,9 +62,6 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 	}
 	root, _ := state.Commit()
 
-	// Remove any potentially cached data from the test state creation
-	trie.ClearGlobalCache()
-
 	// Return the generated state
 	return db, root, accounts
 }
@@ -72,9 +69,6 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
-	// Remove any potentially cached data from the state synchronisation
-	trie.ClearGlobalCache()
-
 	// Check root availability and state contents
 	state, err := New(root, db)
 	if err != nil {
@@ -98,9 +92,6 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 
 // checkStateConsistency checks that all nodes in a state trie are indeed present.
 func checkStateConsistency(db ethdb.Database, root common.Hash) error {
-	// Remove any potentially cached data from the test state creation or previous checks
-	trie.ClearGlobalCache()
-
 	// Create and iterate a state trie rooted in a sub-node
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent

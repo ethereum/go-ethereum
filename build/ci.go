@@ -227,6 +227,9 @@ func doTest(cmdline []string) {
 
 	// Run the actual tests.
 	gotest := goTool("test")
+	// Test a single package at a time. CI builders are slow
+	// and some tests run into timeouts under load.
+	gotest.Args = append(gotest.Args, "-p", "1")
 	if *coverage {
 		gotest.Args = append(gotest.Args, "-covermode=atomic", "-cover")
 	}
