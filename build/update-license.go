@@ -49,7 +49,6 @@ var (
 		// don't relicense vendored sources
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
 		"crypto/secp256k1/curve.go",
-		"trie/arc.go",
 		// don't license generated files
 		"contracts/chequebook/contract/",
 		"contracts/ens/contract/",
