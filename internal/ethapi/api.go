@@ -454,6 +454,8 @@ type CallArgs struct {
 }
 
 func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (string, *big.Int, error) {
+	defer func(start time.Time) { glog.V(logger.Debug).Infof("call took %v", time.Since(start)) }(time.Now())
+
 	state, header, err := s.b.StateAndHeaderByNumber(blockNr)
 	if state == nil || err != nil {
 		return "0x", common.Big0, err
