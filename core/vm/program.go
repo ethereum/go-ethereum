@@ -308,15 +308,15 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 	return ok
 }
 
-// jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
+// calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(gasTable params.GasTable, env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
+func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
 	var (
 		newMemSize, memGas uint64
 		sizeFault          bool
 	)
 
-	gas, err := jitBaseCalc(instr, stack)
+	gas, err := baseCalc(instr, stack)
 	if err != nil {
 		return 0, 0, err
 	}

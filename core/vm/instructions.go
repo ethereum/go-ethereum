@@ -60,7 +60,7 @@ func jump(mapping map[uint64]uint64, destinations map[uint64]struct{}, contract 
 
 func (instr instruction) do(vm *EVM, program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// calculate the new memory size and gas price for the current executing opcode
-	newMemSize, cost, err := jitCalculateGasAndSize(vm.gasTable, env, contract, instr, env.Db(), memory, stack)
+	newMemSize, cost, err := calculateGasAndSize(vm.gasTable, env, contract, instr, env.Db(), memory, stack)
 	if err != nil {
 		return nil, err
 	}

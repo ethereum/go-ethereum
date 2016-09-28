@@ -96,9 +96,9 @@ func calcQuadMemGas(mem *Memory, newMemSize uint64) (uint64, bool) {
 	return 0, false
 }
 
-// jitBaseCalc is the same as baseCheck except it doesn't do the look up in the
+// baseCalc is the same as baseCheck except it doesn't do the look up in the
 // gas table. This is done during compilation instead.
-func jitBaseCalc(instr instruction, stack *Stack) (uint64, error) {
+func baseCalc(instr instruction, stack *Stack) (uint64, error) {
 	err := stack.require(instr.spop)
 	if err != nil {
 		return 0, err
