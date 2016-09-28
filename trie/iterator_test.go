@@ -34,21 +34,60 @@ func TestIterator(t *testing.T) {
 		{"dog", "puppy"},
 		{"somethingveryoddindeedthis is", "myothernodedata"},
 	}
-	v := make(map[string]bool)
+	all := make(map[string]string)
 	for _, val := range vals {
-		v[val.k] = false
+		all[val.k] = val.v
 		trie.Update([]byte(val.k), []byte(val.v))
 	}
 	trie.Commit()
 
+	found := make(map[string]string)
 	it := NewIterator(trie)
 	for it.Next() {
-		v[string(it.Key)] = true
+		found[string(it.Key)] = string(it.Value)
 	}
 
-	for k, found := range v {
-		if !found {
-			t.Error("iterator didn't find", k)
+	for k, v := range all {
+		if found[k] != v {
+			t.Errorf("iterator value mismatch for %s: got %q want %q", k, found[k], v)
+		}
+	}
+}
+
+type kv struct {
+	k, v []byte
+	t    bool
+}
+
+func TestIteratorLargeData(t *testing.T) {
+	trie := newEmpty()
+	vals := make(map[string]*kv)
+
+	for i := byte(0); i < 255; i++ {
+		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
+		trie.Update(value.k, value.v)
+		trie.Update(value2.k, value2.v)
+		vals[string(value.k)] = value
+		vals[string(value2.k)] = value2
+	}
+
+	it := NewIterator(trie)
+	for it.Next() {
+		vals[string(it.Key)].t = true
+	}
+
+	var untouched []*kv
+	for _, value := range vals {
+		if !value.t {
+			untouched = append(untouched, value)
+		}
+	}
+
+	if len(untouched) > 0 {
+		t.Errorf("Missed %d nodes", len(untouched))
+		for _, value := range untouched {
+			t.Error(value)
 		}
 	}
 }
