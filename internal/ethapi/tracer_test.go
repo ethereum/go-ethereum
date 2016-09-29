@@ -24,8 +24,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 type ruleSet struct{}
@@ -40,7 +43,7 @@ type Env struct {
 
 func NewEnv(config *vm.Config) *Env {
 	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
-	env.evm = vm.New(env, *config)
+	//env.evm = vm.New(env, *config)
 	return env
 }
 
@@ -92,14 +95,20 @@ func (account) SetBalance(*big.Int)                                 {}
 func (account) SetNonce(uint64)                                     {}
 func (account) Balance() *big.Int                                   { return nil }
 func (account) Address() common.Address                             { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int)                        {}
+func (account) ReturnGas(uint64)                                    {}
 func (account) SetCode(common.Hash, []byte)                         {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
 func runTrace(tracer *JavascriptTracer) (interface{}, error) {
-	env := NewEnv(&vm.Config{Debug: true, Tracer: tracer})
+	db, _ := ethdb.NewMemDatabase()
+	st, _ := state.New(common.Hash{}, db)
+	backend := &core.EVMBackend{
+		GetHashFn: nil,
+		State:     st,
+	}
+	env := vm.NewEnvironment(vm.Context{GasLimit: big.NewInt(1000000)}, backend, &ruleSet{}, vm.Config{Debug: true, Tracer: tracer})
 
-	contract := vm.NewContract(account{}, account{}, big.NewInt(0), env.GasLimit(), big.NewInt(1))
+	contract := vm.NewContract(account{}, account{}, big.NewInt(0), env.GasLimit)
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	_, err := env.Vm().Run(contract, []byte{})
@@ -176,7 +185,7 @@ func TestHalt(t *testing.T) {
 		tracer.Stop(timeout)
 	}()
 
-	if _, err = runTrace(tracer); err.Error() != "stahp    in server-side tracer function 'step'" {
+	if _, err = runTrace(tracer); err == nil || (err != nil && err.Error() != "stahp    in server-side tracer function 'step'") {
 		t.Errorf("Expected timeout error, got %v", err)
 	}
 }
@@ -187,8 +196,14 @@ func TestHaltBetweenSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env := NewEnv(&vm.Config{Debug: true, Tracer: tracer})
-	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0), big.NewInt(0))
+	db, _ := ethdb.NewMemDatabase()
+	st, _ := state.New(common.Hash{}, db)
+	backend := &core.EVMBackend{
+		GetHashFn: nil,
+		State:     st,
+	}
+	env := vm.NewEnvironment(vm.Context{GasLimit: big.NewInt(1000000)}, backend, &ruleSet{}, vm.Config{Debug: true, Tracer: tracer})
+	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0))
 
 	tracer.CaptureState(env, 0, 0, big.NewInt(0), big.NewInt(0), nil, nil, contract, 0, nil)
 	timeout := errors.New("stahp")

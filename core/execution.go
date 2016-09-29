@@ -25,31 +25,36 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+type EVMCallContext struct {
+	CanTransfer func(db vm.Database, addr common.Address, amount *big.Int) bool
+	Transfer    func(db vm.Database, sender, recipient common.Address, amount *big.Int)
+}
+
 // Call executes within the given contract
-func Call(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	ret, _, err = exec(env, caller, &addr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, value)
+func (c EVMCallContext) Call(env *vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
+	ret, _, err = c.exec(env, caller, &addr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, value)
 	return ret, err
 }
 
 // CallCode executes the given address' code as the given contract address
-func CallCode(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
+func (c EVMCallContext) CallCode(env *vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
 	callerAddr := caller.Address()
-	ret, _, err = exec(env, caller, &callerAddr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, value)
+	ret, _, err = c.exec(env, caller, &callerAddr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, value)
 	return ret, err
 }
 
 // DelegateCall is equivalent to CallCode except that sender and value propagates from parent scope to child scope
-func DelegateCall(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
+func (c EVMCallContext) DelegateCall(env *vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
 	callerAddr := caller.Address()
-	originAddr := env.Origin()
+	originAddr := env.Origin
 	callerValue := caller.Value()
-	ret, _, err = execDelegateCall(env, caller, &originAddr, &callerAddr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, callerValue)
+	ret, _, err = c.execDelegateCall(env, caller, &originAddr, &callerAddr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, callerValue)
 	return ret, err
 }
 
 // Create creates a new contract with the given code
-func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, value *big.Int) (ret []byte, address common.Address, err error) {
-	ret, address, err = exec(env, caller, nil, nil, crypto.Keccak256Hash(code), nil, code, gas, value)
+func (c EVMCallContext) Create(env *vm.Environment, caller vm.ContractRef, code []byte, gas, value *big.Int) (ret []byte, address common.Address, err error) {
+	ret, address, err = c.exec(env, caller, nil, nil, crypto.Keccak256Hash(code), nil, code, gas, value)
 	// Here we get an error if we run into maximum stack depth,
 	// See: https://github.com/ethereum/yellowpaper/pull/131
 	// and YP definitions for CREATE instruction
@@ -59,17 +64,17 @@ func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, value *
 	return ret, address, err
 }
 
-func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.Address, codeHash common.Hash, input, code []byte, gas, value *big.Int) (ret []byte, addr common.Address, err error) {
+func (c EVMCallContext) exec(env *vm.Environment, caller vm.ContractRef, address, codeAddr *common.Address, codeHash common.Hash, input, code []byte, gas, value *big.Int) (ret []byte, addr common.Address, err error) {
 	evm := env.Vm()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if env.Depth() > int(params.CallCreateDepth.Int64()) {
+	if env.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas.Uint64())
 
 		return nil, common.Address{}, vm.DepthError
 	}
 
-	if !env.CanTransfer(caller.Address(), value) {
+	if !c.CanTransfer(env.Db(), caller.Address(), value) {
 		caller.ReturnGas(gas.Uint64())
 
 		return nil, common.Address{}, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", value, env.Db().GetBalance(caller.Address()))
@@ -85,7 +90,7 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		createAccount = true
 	}
 
-	snapshotPreTransfer := env.SnapshotDatabase()
+	snapshotPreTransfer := env.Backend.SnapshotDatabase()
 	var (
 		from = env.Db().GetAccount(caller.Address())
 		to   vm.Account
@@ -99,7 +104,7 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 			to = env.Db().GetAccount(*address)
 		}
 	}
-	env.Transfer(from, to, value)
+	c.Transfer(env.Db(), from.Address(), to.Address(), value)
 
 	// initialise a new contract and set the code that is to be used by the
 	// EVM. The contract is a scoped environment for this execution context
@@ -126,25 +131,25 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil && (env.RuleSet().IsHomestead(env.BlockNumber()) || err != vm.CodeStoreOutOfGasError) {
+	if err != nil && (env.RuleSet().IsHomestead(env.BlockNumber) || err != vm.CodeStoreOutOfGasError) {
 		contract.UseGas(contract.Gas())
 
-		env.RevertToSnapshot(snapshotPreTransfer)
+		env.Backend.RevertToSnapshot(snapshotPreTransfer)
 	}
 
 	return ret, addr, err
 }
 
-func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toAddr, codeAddr *common.Address, codeHash common.Hash, input, code []byte, gas, value *big.Int) (ret []byte, addr common.Address, err error) {
+func (c EVMCallContext) execDelegateCall(env *vm.Environment, caller vm.ContractRef, originAddr, toAddr, codeAddr *common.Address, codeHash common.Hash, input, code []byte, gas, value *big.Int) (ret []byte, addr common.Address, err error) {
 	evm := env.Vm()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if env.Depth() > int(params.CallCreateDepth.Int64()) {
+	if env.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas.Uint64())
 		return nil, common.Address{}, vm.DepthError
 	}
 
-	snapshot := env.SnapshotDatabase()
+	snapshot := env.Backend.SnapshotDatabase()
 
 	var to vm.Account
 	if !env.Db().Exist(*toAddr) {
@@ -162,14 +167,8 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 	if err != nil {
 		contract.UseGas(contract.Gas())
 
-		env.RevertToSnapshot(snapshot)
+		env.Backend.RevertToSnapshot(snapshot)
 	}
 
 	return ret, addr, err
-}
-
-// generic transfer method
-func Transfer(from, to vm.Account, amount *big.Int) {
-	from.SubBalance(amount)
-	to.AddBalance(amount)
 }

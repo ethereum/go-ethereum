@@ -90,7 +90,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 // ApplyTransactions returns the generated receipts and vm logs during the
 // execution of the state transition phase.
 func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
-	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, tx, header, cfg), tx, gp)
+	backend := &EVMBackend{
+		GetHashFn: GetHashFn(header.ParentHash, bc),
+		State:     statedb,
+	}
+	context := ToEVMContext(config, tx, header)
+
+	env := vm.NewEnvironment(context, backend, config, cfg)
+
+	_, gas, err := ApplyMessage(env, tx, gp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -105,13 +113,12 @@ func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb 
 		receipt.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
 	}
 
-	logs := statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
+	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
 
-	return receipt, logs, gas, err
+	return receipt, receipt.Logs, gas, err
 }
 
 // AccumulateRewards credits the coinbase of the given block with the

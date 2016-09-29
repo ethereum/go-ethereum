@@ -104,13 +104,16 @@ func benchStateTest(ruleSet RuleSet, test VmTest, env map[string]string, b *test
 }
 
 func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string) error {
+	//glog.SetToStderr(true)
+	//glog.SetV(6)
+
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "TestInputLimitsLight"*/ {
+		if skipTest[name] /*|| name != "gasPrice0"*/ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -230,13 +233,12 @@ func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(ruleSet, statedb, env, tx)
-	vmenv.origin = addr
+	vmenv := NewEVMEnvironment(false, ruleSet, statedb, env, tx)
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	statedb.Commit()
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }

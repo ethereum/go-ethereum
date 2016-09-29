@@ -294,6 +294,13 @@ func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	}
 }
 
+func (self *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubBalance(amount)
+	}
+}
+
 func (self *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {

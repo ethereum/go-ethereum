@@ -17,10 +17,12 @@
 package runtime
 
 import (
+	"math"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -41,7 +43,7 @@ type Config struct {
 	Coinbase    common.Address
 	BlockNumber *big.Int
 	Time        *big.Int
-	GasLimit    *big.Int
+	GasLimit    uint64
 	GasPrice    *big.Int
 	Value       *big.Int
 	DisableJit  bool // "disable" so it's enabled by default
@@ -63,8 +65,8 @@ func setDefaults(cfg *Config) {
 	if cfg.Time == nil {
 		cfg.Time = big.NewInt(time.Now().Unix())
 	}
-	if cfg.GasLimit == nil {
-		cfg.GasLimit = new(big.Int).Set(common.MaxBig)
+	if cfg.GasLimit == 0 {
+		cfg.GasLimit = math.MaxUint64
 	}
 	if cfg.GasPrice == nil {
 		cfg.GasPrice = new(big.Int)
@@ -98,8 +100,26 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		db, _ := ethdb.NewMemDatabase()
 		cfg.State, _ = state.New(common.Hash{}, db)
 	}
+
+	var chainConfig = &core.ChainConfig{}
+	backend := &core.EVMBackend{
+		GetHashFn: cfg.GetHashFn,
+		State:     cfg.State,
+	}
+
+	context := vm.Context{
+		CallContext: core.EVMCallContext{core.CanTransfer, core.Transfer},
+		Origin:      cfg.Origin,
+		Coinbase:    cfg.Coinbase,
+		BlockNumber: cfg.BlockNumber,
+		Time:        cfg.Time,
+		Difficulty:  cfg.Difficulty,
+		GasLimit:    new(big.Int).SetUint64(cfg.GasLimit),
+		GasPrice:    cfg.GasPrice,
+	}
+	vmenv := vm.NewEnvironment(context, backend, chainConfig, chainConfig.VmConfig)
+
 	var (
-		vmenv    = NewEnv(cfg, cfg.State)
 		sender   = cfg.State.CreateAccount(cfg.Origin)
 		receiver = cfg.State.CreateAccount(common.StringToAddress("contract"))
 	)
@@ -111,7 +131,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		sender,
 		receiver.Address(),
 		input,
-		cfg.GasLimit,
+		new(big.Int).SetUint64(cfg.GasLimit),
 		cfg.Value,
 	)
 
@@ -126,7 +146,23 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 	setDefaults(cfg)
 
-	vmenv := NewEnv(cfg, cfg.State)
+	var chainConfig = &core.ChainConfig{}
+	backend := &core.EVMBackend{
+		GetHashFn: cfg.GetHashFn,
+		State:     cfg.State,
+	}
+
+	context := vm.Context{
+		CallContext: core.EVMCallContext{core.CanTransfer, core.Transfer},
+		Origin:      cfg.Origin,
+		Coinbase:    cfg.Coinbase,
+		BlockNumber: cfg.BlockNumber,
+		Time:        cfg.Time,
+		Difficulty:  cfg.Difficulty,
+		GasLimit:    new(big.Int).SetUint64(cfg.GasLimit),
+		GasPrice:    cfg.GasPrice,
+	}
+	vmenv := vm.NewEnvironment(context, backend, chainConfig, chainConfig.VmConfig)
 
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	// Call the code with the given configuration.
@@ -134,7 +170,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 		sender,
 		address,
 		input,
-		cfg.GasLimit,
+		new(big.Int).SetUint64(cfg.GasLimit),
 		cfg.Value,
 	)
 

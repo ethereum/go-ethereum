@@ -26,7 +26,7 @@ import (
 
 // optimeProgram optimises a JIT program creating segments out of program
 // instructions. Currently covered are multi-pushes and static jumps
-func optimiseProgram(program *Program) {
+func OptimiseProgram(program *Program) {
 	var load []instruction
 
 	var (

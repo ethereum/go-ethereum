@@ -211,7 +211,7 @@ func runVmTest(test VmTest) error {
 	return nil
 }
 
-func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
@@ -222,13 +222,10 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, 
 	// Reset the pre-compiled contracts for VM tests.
 	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
-	caller := state.GetOrNewStateObject(from)
+	caller := statedb.GetOrNewStateObject(from)
 
-	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, state, env, exec)
-	vmenv.vmTest = true
-	vmenv.skipTransfer = true
-	vmenv.initial = true
+	vmenv := NewEVMEnvironment(true, RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, statedb, env, exec)
 	ret, err := vmenv.Call(caller, to, data, gas, value)
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }

@@ -16,20 +16,14 @@
 
 package vm
 
-import (
-	"math/big"
-	"testing"
-	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-)
+import "testing"
 
 const maxRun = 1000
 
 func TestSegmenting(t *testing.T) {
 	prog := NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, 0x0})
 	CompileProgram(prog)
+	OptimiseProgram(prog)
 
 	if instr, ok := prog.instructions[0].(pushSeg); ok {
 		if len(instr.data) != 2 {
@@ -41,6 +35,7 @@ func TestSegmenting(t *testing.T) {
 
 	prog = NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(JUMP)})
 	CompileProgram(prog)
+	OptimiseProgram(prog)
 
 	if _, ok := prog.instructions[1].(jumpSeg); ok {
 	} else {
@@ -49,6 +44,7 @@ func TestSegmenting(t *testing.T) {
 
 	prog = NewProgram([]byte{byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(PUSH1), 0x1, byte(JUMP)})
 	CompileProgram(prog)
+	OptimiseProgram(prog)
 
 	if instr, ok := prog.instructions[0].(pushSeg); ok {
 		if len(instr.data) != 2 {
@@ -72,8 +68,9 @@ func TestCompiling(t *testing.T) {
 	}
 }
 
+/*
 func TestResetInput(t *testing.T) {
-	var sender account
+	var sender Account
 
 	env := NewEnv(&Config{})
 	contract := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000))
@@ -85,6 +82,7 @@ func TestResetInput(t *testing.T) {
 		t.Errorf("expected input to be nil, got %x", contract.Input)
 	}
 }
+*/
 
 func TestPcMappingToInstruction(t *testing.T) {
 	program := NewProgram([]byte{byte(PUSH2), 0xbe, 0xef, byte(ADD)})
@@ -92,111 +90,4 @@ func TestPcMappingToInstruction(t *testing.T) {
 	if program.mapping[3] != 1 {
 		t.Error("expected mapping PC 4 to me instr no. 2, got", program.mapping[4])
 	}
-}
-
-var benchmarks = map[string]vmBench{
-	"pushes": vmBench{
-		false, false, false,
-		common.Hex2Bytes("600a600a01600a600a01600a600a01600a600a01600a600a01600a600a01600a600a01600a600a01600a600a01600a600a01"), nil,
-	},
-}
-
-func BenchmarkPushes(b *testing.B) {
-	runVmBench(benchmarks["pushes"], b)
-}
-
-type vmBench struct {
-	precompile bool // compile prior to executing
-	nojit      bool // ignore jit (sets DisbaleJit = true
-	forcejit   bool // forces the jit, precompile is ignored
-
-	code  []byte
-	input []byte
-}
-
-type account struct{}
-
-func (account) SubBalance(amount *big.Int)                          {}
-func (account) AddBalance(amount *big.Int)                          {}
-func (account) SetAddress(common.Address)                           {}
-func (account) Value() *big.Int                                     { return nil }
-func (account) SetBalance(*big.Int)                                 {}
-func (account) SetNonce(uint64)                                     {}
-func (account) Balance() *big.Int                                   { return nil }
-func (account) Address() common.Address                             { return common.Address{} }
-func (account) ReturnGas(uint64)                                    {}
-func (account) SetCode(common.Hash, []byte)                         {}
-func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
-
-func runVmBench(test vmBench, b *testing.B) {
-	var sender account
-
-	if test.precompile && !test.forcejit {
-		NewProgram(test.code)
-	}
-	env := NewEnv(&Config{EnableJit: !test.nojit, ForceJit: test.forcejit})
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		context := NewContract(sender, sender, big.NewInt(100), big.NewInt(10000))
-		context.Code = test.code
-		context.CodeAddr = &common.Address{}
-		_, err := env.Vm().Run(context, test.input)
-		if err != nil {
-			b.Error(err)
-			b.FailNow()
-		}
-	}
-}
-
-type Env struct {
-	gasLimit *big.Int
-	depth    int
-	evm      *EVM
-}
-
-func NewEnv(config *Config) *Env {
-	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
-	env.evm = New(env, *config)
-	return env
-}
-
-func (self *Env) RuleSet() RuleSet       { return ruleSet{new(big.Int)} }
-func (self *Env) Vm() Vm                 { return self.evm }
-func (self *Env) GasPrice() *big.Int     { return new(big.Int) }
-func (self *Env) Origin() common.Address { return common.Address{} }
-func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
-
-//func (self *Env) PrevHash() []byte      { return self.parent }
-func (self *Env) Coinbase() common.Address { return common.Address{} }
-func (self *Env) SnapshotDatabase() int    { return 0 }
-func (self *Env) RevertToSnapshot(int)     {}
-func (self *Env) Time() *big.Int           { return big.NewInt(time.Now().Unix()) }
-func (self *Env) Difficulty() *big.Int     { return big.NewInt(0) }
-func (self *Env) Db() Database             { return nil }
-func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
-func (self *Env) VmType() Type             { return StdVmTy }
-func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
-}
-func (self *Env) AddLog(log *Log) {
-}
-func (self *Env) Depth() int     { return self.depth }
-func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
-	return true
-}
-func (self *Env) Transfer(from, to Account, amount *big.Int) {}
-func (self *Env) Call(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
-	return nil, nil
-}
-func (self *Env) CallCode(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
-	return nil, nil
-}
-func (self *Env) Create(caller ContractRef, data []byte, gas, price *big.Int) ([]byte, common.Address, error) {
-	return nil, common.Address{}, nil
-}
-func (self *Env) DelegateCall(me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
-	return nil, nil
 }
