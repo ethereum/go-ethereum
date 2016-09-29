@@ -96,57 +96,55 @@ func TestIPCPathResolution(t *testing.T) {
 // ephemeral.
 func TestNodeKeyPersistency(t *testing.T) {
 	// Create a temporary folder and make sure no key is present
-	dir, err := ioutil.TempDir("", "")
+	dir, err := ioutil.TempDir("", "node-test")
 	if err != nil {
 		t.Fatalf("failed to create temporary data directory: %v", err)
 	}
 	defer os.RemoveAll(dir)
 
-	if _, err := os.Stat(filepath.Join(dir, datadirPrivateKey)); err == nil {
-		t.Fatalf("non-created node key already exists")
-	}
+	keyfile := filepath.Join(dir, "unit-test", datadirPrivateKey)
+
 	// Configure a node with a preset key and ensure it's not persisted
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to generate one-shot node key: %v", err)
 	}
-	if _, err := New(&Config{DataDir: dir, PrivateKey: key}); err != nil {
-		t.Fatalf("failed to create empty stack: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, datadirPrivateKey)); err == nil {
+	config := &Config{Name: "unit-test", DataDir: dir, PrivateKey: key}
+	config.NodeKey()
+	if _, err := os.Stat(filepath.Join(keyfile)); err == nil {
 		t.Fatalf("one-shot node key persisted to data directory")
 	}
+
 	// Configure a node with no preset key and ensure it is persisted this time
-	if _, err := New(&Config{DataDir: dir}); err != nil {
-		t.Fatalf("failed to create newly keyed stack: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, datadirPrivateKey)); err != nil {
+	config = &Config{Name: "unit-test", DataDir: dir}
+	config.NodeKey()
+	if _, err := os.Stat(keyfile); err != nil {
 		t.Fatalf("node key not persisted to data directory: %v", err)
 	}
-	key, err = crypto.LoadECDSA(filepath.Join(dir, datadirPrivateKey))
+	key, err = crypto.LoadECDSA(keyfile)
 	if err != nil {
 		t.Fatalf("failed to load freshly persisted node key: %v", err)
 	}
-	blob1, err := ioutil.ReadFile(filepath.Join(dir, datadirPrivateKey))
+	blob1, err := ioutil.ReadFile(keyfile)
 	if err != nil {
 		t.Fatalf("failed to read freshly persisted node key: %v", err)
 	}
+
 	// Configure a new node and ensure the previously persisted key is loaded
-	if _, err := New(&Config{DataDir: dir}); err != nil {
-		t.Fatalf("failed to create previously keyed stack: %v", err)
-	}
-	blob2, err := ioutil.ReadFile(filepath.Join(dir, datadirPrivateKey))
+	config = &Config{Name: "unit-test", DataDir: dir}
+	config.NodeKey()
+	blob2, err := ioutil.ReadFile(filepath.Join(keyfile))
 	if err != nil {
 		t.Fatalf("failed to read previously persisted node key: %v", err)
 	}
 	if bytes.Compare(blob1, blob2) != 0 {
 		t.Fatalf("persisted node key mismatch: have %x, want %x", blob2, blob1)
 	}
+
 	// Configure ephemeral node and ensure no key is dumped locally
-	if _, err := New(&Config{DataDir: ""}); err != nil {
-		t.Fatalf("failed to create ephemeral stack: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(".", datadirPrivateKey)); err == nil {
+	config = &Config{Name: "unit-test", DataDir: ""}
+	config.NodeKey()
+	if _, err := os.Stat(filepath.Join(".", "unit-test", datadirPrivateKey)); err == nil {
 		t.Fatalf("ephemeral node key persisted to disk")
 	}
 }

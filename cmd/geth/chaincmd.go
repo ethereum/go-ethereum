@@ -79,7 +79,8 @@ func importChain(ctx *cli.Context) error {
 	if ctx.GlobalBool(utils.TestNetFlag.Name) {
 		state.StartingNonce = 1048576 // (2**20)
 	}
-	chain, chainDb := utils.MakeChain(ctx)
+	stack := makeFullNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, stack)
 	start := time.Now()
 	err := utils.ImportChain(chain, ctx.Args().First())
 	chainDb.Close()
@@ -94,7 +95,8 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	chain, _ := utils.MakeChain(ctx)
+	stack := makeFullNode(ctx)
+	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
 	var err error
@@ -122,20 +124,25 @@ func exportChain(ctx *cli.Context) error {
 }
 
 func removeDB(ctx *cli.Context) error {
-	confirm, err := console.Stdin.PromptConfirm("Remove local database?")
-	if err != nil {
-		utils.Fatalf("%v", err)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	dbdir := stack.ResolvePath("chaindata")
+	if !common.FileExist(dbdir) {
+		fmt.Println(dbdir, "does not exist")
+		return nil
 	}
 
-	if confirm {
-		fmt.Println("Removing chaindata...")
-		start := time.Now()
-
-		os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "chaindata"))
-
-		fmt.Printf("Removed in %v\n", time.Since(start))
-	} else {
+	fmt.Println(dbdir)
+	confirm, err := console.Stdin.PromptConfirm("Remove this database?")
+	switch {
+	case err != nil:
+		utils.Fatalf("%v", err)
+	case !confirm:
 		fmt.Println("Operation aborted")
+	default:
+		fmt.Println("Removing...")
+		start := time.Now()
+		os.RemoveAll(dbdir)
+		fmt.Printf("Removed in %v\n", time.Since(start))
 	}
 	return nil
 }
@@ -143,7 +150,8 @@ func removeDB(ctx *cli.Context) error {
 func upgradeDB(ctx *cli.Context) error {
 	glog.Infoln("Upgrading blockchain database")
 
-	chain, chainDb := utils.MakeChain(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	chain, chainDb := utils.MakeChain(ctx, stack)
 	bcVersion := core.GetBlockChainVersion(chainDb)
 	if bcVersion == 0 {
 		bcVersion = core.BlockChainVersion
@@ -156,10 +164,12 @@ func upgradeDB(ctx *cli.Context) error {
 		utils.Fatalf("Unable to export chain for reimport %s", err)
 	}
 	chainDb.Close()
-	os.RemoveAll(filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "chaindata"))
+	if dir := dbDirectory(chainDb); dir != "" {
+		os.RemoveAll(dir)
+	}
 
 	// Import the chain file.
-	chain, chainDb = utils.MakeChain(ctx)
+	chain, chainDb = utils.MakeChain(ctx, stack)
 	core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	err := utils.ImportChain(chain, exportFile)
 	chainDb.Close()
@@ -172,8 +182,17 @@ func upgradeDB(ctx *cli.Context) error {
 	return nil
 }
 
+func dbDirectory(db ethdb.Database) string {
+	ldb, ok := db.(*ethdb.LDBDatabase)
+	if !ok {
+		return ""
+	}
+	return ldb.Path()
+}
+
 func dump(ctx *cli.Context) error {
-	chain, chainDb := utils.MakeChain(ctx)
+	stack := makeFullNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, stack)
 	for _, arg := range ctx.Args() {
 		var block *types.Block
 		if hashish(arg) {

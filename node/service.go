@@ -17,7 +17,6 @@
 package node
 
 import (
-	"path/filepath"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -31,7 +30,7 @@ import (
 // the protocol stack, that is passed to all constructors to be optionally used;
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
-	datadir        string                   // Data directory for protocol persistence
+	config         *Config
 	services       map[reflect.Type]Service // Index of the already constructed services
 	EventMux       *event.TypeMux           // Event multiplexer used for decoupled notifications
 	AccountManager *accounts.Manager        // Account manager created by the node.
@@ -41,10 +40,10 @@ type ServiceContext struct {
 // if no previous can be found) from within the node's data directory. If the
 // node is an ephemeral one, a memory database is returned.
 func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (ethdb.Database, error) {
-	if ctx.datadir == "" {
+	if ctx.config.DataDir == "" {
 		return ethdb.NewMemDatabase()
 	}
-	return ethdb.NewLDBDatabase(filepath.Join(ctx.datadir, name), cache, handles)
+	return ethdb.NewLDBDatabase(ctx.config.resolvePath(name), cache, handles)
 }
 
 // Service retrieves a currently running service registered of a specific type.
@@ -64,11 +63,13 @@ type ServiceConstructor func(ctx *ServiceContext) (Service, error)
 // Service is an individual protocol that can be registered into a node.
 //
 // Notes:
-//  - Service life-cycle management is delegated to the node. The service is
-//    allowed to initialize itself upon creation, but no goroutines should be
-//    spun up outside of the Start method.
-//  - Restart logic is not required as the node will create a fresh instance
-//    every time a service is started.
+//
+// • Service life-cycle management is delegated to the node. The service is allowed to
+// initialize itself upon creation, but no goroutines should be spun up outside of the
+// Start method.
+//
+// • Restart logic is not required as the node will create a fresh instance
+// every time a service is started.
 type Service interface {
 	// Protocols retrieves the P2P protocols the service wishes to start.
 	Protocols() []p2p.Protocol

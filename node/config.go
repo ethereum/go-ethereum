@@ -18,7 +18,6 @@ package node
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -48,6 +47,18 @@ var (
 // P2P network layer of a protocol stack. These values can be further extended by
 // all registered services.
 type Config struct {
+	// Name sets the instance name of the node. It must not contain the / character and is
+	// used in the devp2p node identifier. The instance name of geth is "geth". If no
+	// value is specified, the basename of the current executable is used.
+	Name string
+
+	// UserIdent, if set, is used as an additional component in the devp2p node identifier.
+	UserIdent string
+
+	// Version should be set to the version number of the program. It is used
+	// in the devp2p node identifier.
+	Version string
+
 	// DataDir is the file system folder the node should use for any data storage
 	// requirements. The configured data directory will not be directly shared with
 	// registered services, instead those can use utility methods to create/access
@@ -79,10 +90,6 @@ type Config struct {
 	// is configured, the preset one is loaded from the data dir, generating it if
 	// needed.
 	PrivateKey *ecdsa.PrivateKey
-
-	// Name sets the node name of this server. Use common.MakeName to create a name
-	// that follows existing conventions.
-	Name string
 
 	// NoDiscovery specifies whether the peer discovery mechanism should be started
 	// or not. Disabling is usually useful for protocol debugging (manual topology).
@@ -178,9 +185,23 @@ func (c *Config) IPCEndpoint() string {
 	return c.IPCPath
 }
 
+// NodeDB returns the path to the discovery node database.
+func (c *Config) NodeDB() string {
+	if c.DataDir == "" {
+		return "" // ephemeral
+	}
+	return c.resolvePath("nodes")
+}
+
 // DefaultIPCEndpoint returns the IPC path used by default.
-func DefaultIPCEndpoint() string {
-	config := &Config{DataDir: common.DefaultDataDir(), IPCPath: common.DefaultIPCSocket}
+func DefaultIPCEndpoint(clientIdentifier string) string {
+	if clientIdentifier == "" {
+		clientIdentifier = strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
+		if clientIdentifier == "" {
+			panic("empty executable name")
+		}
+	}
+	config := &Config{DataDir: DefaultDataDir(), IPCPath: clientIdentifier + ".ipc"}
 	return config.IPCEndpoint()
 }
 
@@ -195,7 +216,7 @@ func (c *Config) HTTPEndpoint() string {
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
-	config := &Config{HTTPHost: common.DefaultHTTPHost, HTTPPort: common.DefaultHTTPPort}
+	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort}
 	return config.HTTPEndpoint()
 }
 
@@ -210,19 +231,80 @@ func (c *Config) WSEndpoint() string {
 
 // DefaultWSEndpoint returns the websocket endpoint used by default.
 func DefaultWSEndpoint() string {
-	config := &Config{WSHost: common.DefaultWSHost, WSPort: common.DefaultWSPort}
+	config := &Config{WSHost: DefaultWSHost, WSPort: DefaultWSPort}
 	return config.WSEndpoint()
+}
+
+// NodeName returns the devp2p node identifier.
+func (c *Config) NodeName() string {
+	name := c.name()
+	// Backwards compatibility: previous versions used title-cased "Geth", keep that.
+	if name == "geth" || name == "geth-testnet" {
+		name = "Geth"
+	}
+	if c.UserIdent != "" {
+		name += "/" + c.UserIdent
+	}
+	if c.Version != "" {
+		name += "/v" + c.Version
+	}
+	name += "/" + runtime.GOOS
+	name += "/" + runtime.Version()
+	return name
+}
+
+func (c *Config) name() string {
+	if c.Name == "" {
+		progname := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
+		if progname == "" {
+			panic("empty executable name, set Config.Name")
+		}
+		return progname
+	}
+	return c.Name
+}
+
+// These resources are resolved differently for the "geth" and "geth-testnet" instances.
+var isOldGethResource = map[string]bool{
+	"chaindata":          true,
+	"nodes":              true,
+	"nodekey":            true,
+	"static-nodes.json":  true,
+	"trusted-nodes.json": true,
+}
+
+// resolvePath resolves path in the instance directory.
+func (c *Config) resolvePath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	if c.DataDir == "" {
+		return ""
+	}
+	// Backwards-compatibility: ensure that data directory files created
+	// by geth 1.4 are used if they exist.
+	if c.name() == "geth" && isOldGethResource[path] {
+		oldpath := ""
+		if c.Name == "geth" {
+			oldpath = filepath.Join(c.DataDir, path)
+		}
+		if oldpath != "" && common.FileExist(oldpath) {
+			// TODO: print warning
+			return oldpath
+		}
+	}
+	return filepath.Join(c.DataDir, c.name(), path)
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking
 // first any manually set key, falling back to the one found in the configured
 // data folder. If no key can be found, a new one is generated.
 func (c *Config) NodeKey() *ecdsa.PrivateKey {
-	// Use any specifically configured key
+	// Use any specifically configured key.
 	if c.PrivateKey != nil {
 		return c.PrivateKey
 	}
-	// Generate ephemeral key if no datadir is being used
+	// Generate ephemeral key if no datadir is being used.
 	if c.DataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
@@ -230,16 +312,22 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		}
 		return key
 	}
-	// Fall back to persistent key from the data directory
-	keyfile := filepath.Join(c.DataDir, datadirPrivateKey)
+
+	keyfile := c.resolvePath(datadirPrivateKey)
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
 		return key
 	}
-	// No persistent key found, generate and store a new one
+	// No persistent key found, generate and store a new one.
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		glog.Fatalf("Failed to generate node key: %v", err)
 	}
+	instanceDir := filepath.Join(c.DataDir, c.name())
+	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
+		return key
+	}
+	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
 	}
@@ -248,12 +336,12 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
 func (c *Config) StaticNodes() []*discover.Node {
-	return c.parsePersistentNodes(datadirStaticNodes)
+	return c.parsePersistentNodes(c.resolvePath(datadirStaticNodes))
 }
 
 // TrusterNodes returns a list of node enode URLs configured as trusted nodes.
 func (c *Config) TrusterNodes() []*discover.Node {
-	return c.parsePersistentNodes(datadirTrustedNodes)
+	return c.parsePersistentNodes(c.resolvePath(datadirTrustedNodes))
 }
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
@@ -267,15 +355,10 @@ func (c *Config) parsePersistentNodes(file string) []*discover.Node {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	// Load the nodes from the config file
-	blob, err := ioutil.ReadFile(path)
-	if err != nil {
-		glog.V(logger.Error).Infof("Failed to access nodes: %v", err)
-		return nil
-	}
-	nodelist := []string{}
-	if err := json.Unmarshal(blob, &nodelist); err != nil {
-		glog.V(logger.Error).Infof("Failed to load nodes: %v", err)
+	// Load the nodes from the config file.
+	var nodelist []string
+	if err := common.LoadJSON(path, &nodelist); err != nil {
+		glog.V(logger.Error).Infof("Can't load node file %s: %v", path, err)
 		return nil
 	}
 	// Interpret the list as a discovery node array

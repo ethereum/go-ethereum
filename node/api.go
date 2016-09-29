@@ -84,17 +84,17 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *st
 	}
 
 	if host == nil {
-		h := common.DefaultHTTPHost
-		if api.node.httpHost != "" {
-			h = api.node.httpHost
+		h := DefaultHTTPHost
+		if api.node.config.HTTPHost != "" {
+			h = api.node.config.HTTPHost
 		}
 		host = &h
 	}
 	if port == nil {
-		port = rpc.NewHexNumber(api.node.httpPort)
+		port = rpc.NewHexNumber(api.node.config.HTTPPort)
 	}
 	if cors == nil {
-		cors = &api.node.httpCors
+		cors = &api.node.config.HTTPCors
 	}
 
 	modules := api.node.httpWhitelist
@@ -133,20 +133,20 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOr
 	}
 
 	if host == nil {
-		h := common.DefaultWSHost
-		if api.node.wsHost != "" {
-			h = api.node.wsHost
+		h := DefaultWSHost
+		if api.node.config.WSHost != "" {
+			h = api.node.config.WSHost
 		}
 		host = &h
 	}
 	if port == nil {
-		port = rpc.NewHexNumber(api.node.wsPort)
+		port = rpc.NewHexNumber(api.node.config.WSPort)
 	}
 	if allowedOrigins == nil {
-		allowedOrigins = &api.node.wsOrigins
+		allowedOrigins = &api.node.config.WSOrigins
 	}
 
-	modules := api.node.wsWhitelist
+	modules := api.node.config.WSModules
 	if apis != nil {
 		modules = nil
 		for _, m := range strings.Split(*apis, ",") {

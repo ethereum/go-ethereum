@@ -137,9 +137,19 @@ func (self *DirectoryFlag) Set(value string) {
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
-		if user, err := user.Current(); err == nil {
-			p = user.HomeDir + p[1:]
+		if home := homeDir(); home != "" {
+			p = home + p[1:]
 		}
 	}
 	return path.Clean(os.ExpandEnv(p))
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
 }
