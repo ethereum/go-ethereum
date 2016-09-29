@@ -288,11 +288,9 @@ func CompileProgram(program *Program) {
 			program.addInstr(op, pc, nil, nil)
 		}
 	}
-
-	optimiseProgram(program)
 }
 
-func RunProgram(program *Program, env Environment, contract *Contract, input []byte) ([]byte, error) {
+func RunProgram(program *Program, env *Environment, contract *Contract, input []byte) ([]byte, error) {
 	return New(env, Config{}).Run(contract, input)
 }
 
@@ -310,7 +308,7 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 
 // calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
+func calculateGasAndSize(gasTable params.GasTable, env *Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
 	var (
 		newMemSize, memGas uint64
 		sizeFault          bool
@@ -329,7 +327,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 			gas += gasTable.Suicide
 			var (
 				address = common.BigToAddress(stack.data[len(stack.data)-1])
-				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
+				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber)
 			)
 
 			switch {
@@ -558,7 +556,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 		if op == CALL {
 			var (
 				address = common.BigToAddress(stack.data[len(stack.data)-2])
-				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
+				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber)
 			)
 
 			switch {

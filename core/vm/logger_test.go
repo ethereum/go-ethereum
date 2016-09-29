@@ -21,7 +21,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
 )
+
+type ruleset struct{}
+
+func (ruleset) IsHomestead(*big.Int) bool { return true }
 
 type dummyContractRef struct {
 	calledForEach bool
@@ -41,14 +46,14 @@ func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
 type dummyEnv struct {
-	*Env
+	*Environment
 	ref *dummyContractRef
 }
 
 func newDummyEnv(ref *dummyContractRef) *dummyEnv {
 	return &dummyEnv{
-		Env: NewEnv(&Config{EnableJit: false, ForceJit: false}),
-		ref: ref,
+		Environment: NewEnvironment(Context{}, nil, params.TestChainConfig, Config{}),
+		ref:         ref,
 	}
 }
 func (d dummyEnv) GetAccount(common.Address) Account {
@@ -57,7 +62,7 @@ func (d dummyEnv) GetAccount(common.Address) Account {
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEnv(&Config{EnableJit: false, ForceJit: false})
+		env      = NewEnvironment(Context{}, nil, params.TestChainConfig, Config{})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
@@ -90,13 +95,13 @@ func TestStorageCapture(t *testing.T) {
 		stack    = newstack()
 	)
 
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env.Environment, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
 	if ref.calledForEach {
 		t.Error("didn't expect for each to be called")
 	}
 
 	logger = NewStructLogger(&LogConfig{FullStorage: true})
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env.Environment, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
 	if !ref.calledForEach {
 		t.Error("expected for each to be called")
 	}

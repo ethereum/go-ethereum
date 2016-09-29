@@ -18,6 +18,7 @@ package tests
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
@@ -148,141 +149,60 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-type Env struct {
-	chainConfig   *params.ChainConfig
-	depth         int
-	state         *state.StateDB
-	skipTransfer  bool
-	initial       bool
-	Gas, gasPrice *big.Int
-
-	origin   common.Address
-	parent   common.Hash
-	coinbase common.Address
-
-	number     *big.Int
-	time       *big.Int
-	difficulty *big.Int
-	gasLimit   *big.Int
-
-	vmTest bool
-
-	evm vm.VirtualMachine
+type RuleSet struct {
+	HomesteadBlock *big.Int
+	DAOForkBlock   *big.Int
+	DAOForkSupport bool
 }
 
-func NewEnv(chainConfig *params.ChainConfig, state *state.StateDB) *Env {
-	env := &Env{
-		chainConfig: chainConfig,
-		state:       state,
+func (r RuleSet) IsHomestead(n *big.Int) bool {
+	return n.Cmp(r.HomesteadBlock) >= 0
+}
+
+func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *vm.Environment {
+	origin := common.HexToAddress(exeValues["caller"])
+	if len(exeValues["secretKey"]) > 0 {
+		key, _ := hex.DecodeString(exeValues["secretKey"])
+		origin = crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	}
-	return env
-}
 
-func NewEnvFromMap(chainConfig *params.ChainConfig, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
-	env := NewEnv(chainConfig, state)
+	context := vm.Context{
+		Origin:      origin,
+		Coinbase:    common.HexToAddress(envValues["currentCoinbase"]),
+		BlockNumber: common.Big(envValues["currentNumber"]),
+		Time:        common.Big(envValues["currentTimestamp"]),
+		Difficulty:  common.Big(envValues["currentDifficulty"]),
+		GasLimit:    common.Big(envValues["currentGasLimit"]),
+		GasPrice:    common.Big(exeValues["gasPrice"]),
+	}
 
-	env.origin = common.HexToAddress(exeValues["caller"])
-	env.parent = common.HexToHash(envValues["previousHash"])
-	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
-	env.number = common.Big(envValues["currentNumber"])
-	env.time = common.Big(envValues["currentTimestamp"])
-	env.difficulty = common.Big(envValues["currentDifficulty"])
-	env.gasLimit = common.Big(envValues["currentGasLimit"])
-	env.Gas = new(big.Int)
-	env.gasPrice = common.Big(exeValues["gasPrice"])
-
-	env.evm = vm.New(env, vm.Config{
-		EnableJit: EnableJit,
-		ForceJit:  ForceJit,
-	})
-
-	return env
-}
-
-func (self *Env) ChainConfig() *params.ChainConfig { return self.chainConfig }
-func (self *Env) Vm() vm.Vm                        { return self.evm }
-func (self *Env) Origin() common.Address           { return self.origin }
-func (self *Env) BlockNumber() *big.Int            { return self.number }
-func (self *Env) Coinbase() common.Address         { return self.coinbase }
-func (self *Env) Time() *big.Int                   { return self.time }
-func (self *Env) Difficulty() *big.Int             { return self.difficulty }
-func (self *Env) Db() vm.Database                  { return self.state }
-func (self *Env) GasLimit() *big.Int               { return self.gasLimit }
-func (self *Env) GasPrice() *big.Int               { return self.gasPrice }
-func (self *Env) VmType() vm.Type                  { return vm.StdVmTy }
-func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
-}
-func (self *Env) AddLog(log *vm.Log) {
-	self.state.AddLog(log)
-}
-func (self *Env) Depth() int     { return self.depth }
-func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
-	if self.skipTransfer {
-		if self.initial {
-			self.initial = false
-			return true
+	//var initialCall bool
+	backend := &core.EVMBackend{
+		GetHashFn: func(n uint64) common.Hash {
+			return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
+		},
+		State: state,
+	}
+	initialCall := true
+	canTransfer := func(db vm.Database, address common.Address, amount *big.Int) bool {
+		if vmTest {
+			if initialCall {
+				initialCall = false
+				return true
+			}
 		}
+		return db.GetBalance(address).Cmp(amount) >= 0
 	}
-
-	return self.state.GetBalance(from).Cmp(balance) >= 0
-}
-func (self *Env) SnapshotDatabase() int {
-	return self.state.Snapshot()
-}
-func (self *Env) RevertToSnapshot(snapshot int) {
-	self.state.RevertToSnapshot(snapshot)
-}
-
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
-	if self.skipTransfer {
-		return
+	transfer := func(db vm.Database, sender, recipient common.Address, amount *big.Int) {
+		if vmTest {
+			return
+		}
+		core.Transfer(db, sender, recipient, amount)
 	}
-	core.Transfer(from, to, amount)
-}
+	context.CallContext = core.EVMCallContext{canTransfer, transfer}
 
-func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
-	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas.Uint64())
-
-		return nil, nil
-	}
-	ret, err := core.Call(self, caller, addr, data, gas, value)
-	self.Gas = gas
-
-	return ret, err
-
-}
-func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
-	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas.Uint64())
-
-		return nil, nil
-	}
-	return core.CallCode(self, caller, addr, data, gas, value)
-}
-
-func (self *Env) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
-	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas.Uint64())
-
-		return nil, nil
-	}
-	return core.DelegateCall(self, caller, addr, data, gas)
-}
-
-func (self *Env) Create(caller vm.ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
-	if self.vmTest {
-		caller.ReturnGas(gas.Uint64())
-
-		nonce := self.state.GetNonce(caller.Address())
-		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
-
-		return nil, obj.Address(), nil
-	} else {
-		return core.Create(self, caller, data, gas, value)
-	}
+	env := vm.NewEnvironment(context, backend, chainConfig, vm.Config{Test: vmTest})
+	return env
 }
 
 type Message struct {

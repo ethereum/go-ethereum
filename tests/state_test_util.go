@@ -105,6 +105,8 @@ func benchStateTest(chainConfig *params.ChainConfig, test VmTest, env map[string
 }
 
 func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, skipTests []string) error {
+	//glog.SetToStderr(true)
+	//glog.SetV(6)
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
@@ -225,25 +227,23 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx m
 		to = &t
 	}
 	// Set pre compiled contracts
-	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(chainConfig, statedb, env, tx)
-	vmenv.origin = addr
-
 	root, _ := statedb.Commit(false)
 	statedb.Reset(root)
 
 	snapshot := statedb.Snapshot()
 
+	vmenv := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
+
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.RevertToSnapshot(snapshot)
 	}
-	statedb.Commit(chainConfig.IsEIP158(vmenv.BlockNumber()))
+	statedb.Commit(chainConfig.IsEIP158(vmenv.BlockNumber))
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }

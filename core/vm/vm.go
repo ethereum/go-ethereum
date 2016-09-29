@@ -29,10 +29,12 @@ import (
 
 // Config are the configuration options for the EVM
 type Config struct {
-	Debug     bool
-	EnableJit bool
-	ForceJit  bool
-	Tracer    Tracer
+	Test bool // boolean to indicate this is a VM Test
+
+	ForceCompile bool
+	NoOptimise   bool // skip optimising the program if it hasn't been compiled
+	Debug        bool
+	Tracer       Tracer
 }
 
 // EVM is used to run Ethereum based contracts and will utilise the
@@ -40,26 +42,26 @@ type Config struct {
 // The EVM will run the byte code VM or JIT VM based on the passed
 // configuration.
 type EVM struct {
-	env       Environment
+	env       *Environment
 	jumpTable vmJumpTable
 	cfg       Config
 	gasTable  params.GasTable
 }
 
 // New returns a new instance of the EVM.
-func New(env Environment, cfg Config) *EVM {
+func New(env *Environment, cfg Config) *EVM {
 	return &EVM{
 		env:       env,
-		jumpTable: newJumpTable(env.ChainConfig(), env.BlockNumber()),
+		jumpTable: newJumpTable(env.ChainConfig(), env.BlockNumber),
 		cfg:       cfg,
-		gasTable:  env.ChainConfig().GasTable(env.BlockNumber()),
+		gasTable:  env.ChainConfig().GasTable(env.BlockNumber),
 	}
 }
 
 // Run loops and evaluates the contract's code with the given input data
 func (evm *EVM) Run(contract *Contract, input []byte) ([]byte, error) {
-	evm.env.SetDepth(evm.env.Depth() + 1)
-	defer evm.env.SetDepth(evm.env.Depth() - 1)
+	evm.env.Depth++
+	defer func() { evm.env.Depth-- }()
 
 	if contract.CodeAddr != nil {
 		if p, exist := PrecompiledContracts[*contract.CodeAddr]; exist {
@@ -87,6 +89,9 @@ func (evm *EVM) Run(contract *Contract, input []byte) ([]byte, error) {
 		// Create and compile program
 		program := NewProgram(contract.Code)
 		CompileProgram(program)
+		if !evm.cfg.NoOptimise {
+			OptimiseProgram(program)
+		}
 
 		return evm.runProgram(program, contract, input)
 	case progCompile:
@@ -118,7 +123,7 @@ func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) (
 		}()
 	}
 
-	homestead := env.ChainConfig().IsHomestead(env.BlockNumber())
+	homestead := env.ChainConfig().IsHomestead(env.BlockNumber)
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
