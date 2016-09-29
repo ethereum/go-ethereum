@@ -377,6 +377,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// n still contains at least two values and cannot be reduced.
 		return true, n, nil
 
+	case valueNode:
+		return true, nil, nil
+
 	case nil:
 		return false, nil, nil
 
