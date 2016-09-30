@@ -29,9 +29,7 @@ import (
 	"text/template"
 )
 
-var (
-	DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
-)
+var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 
 // MustRun executes the given command and exits the host process for
 // any error.
@@ -69,6 +67,7 @@ func GOPATH() string {
 	return strings.Join(newpath, string(filepath.ListSeparator))
 }
 
+// VERSION returns the content of the VERSION file.
 func VERSION() string {
 	version, err := ioutil.ReadFile("VERSION")
 	if err != nil {
@@ -77,10 +76,8 @@ func VERSION() string {
 	return string(bytes.TrimSpace(version))
 }
 
-func GitCommit() string {
-	return RunGit("rev-parse", "HEAD")
-}
-
+// RunGit runs a git subcommand and returns its output.
+// The command must complete successfully.
 func RunGit(args ...string) string {
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
@@ -94,12 +91,13 @@ func RunGit(args ...string) string {
 	return strings.TrimSpace(stdout.String())
 }
 
-// Render renders the given template file.
+// Render renders the given template file into outputFile.
 func Render(templateFile, outputFile string, outputPerm os.FileMode, x interface{}) {
 	tpl := template.Must(template.ParseFiles(templateFile))
 	render(tpl, outputFile, outputPerm, x)
 }
 
+// RenderString renders the given template string into outputFile.
 func RenderString(templateContent, outputFile string, outputPerm os.FileMode, x interface{}) {
 	tpl := template.Must(template.New("").Parse(templateContent))
 	render(tpl, outputFile, outputPerm, x)
