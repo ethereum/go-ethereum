@@ -1,5 +1,5 @@
 {{.Name}} ({{.VersionString}}) {{.Distro}}; urgency=low
 
-  * git build of {{.Commit}}
+  * git build of {{.Env.Commit}}
 
  -- {{.Author}}  {{.Time}}

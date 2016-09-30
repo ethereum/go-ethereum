@@ -27,7 +27,7 @@ matrix:
             - debhelper
             - dput
       script:
-        - go run build/ci.go travis-debsrc
+        - go run build/ci.go debsrc -signer "Felix Lange (Geth CI Testing Key) <fjl@twurst.com>" -upload ppa:lp-fjl/geth-ci-testing
 
 install:
   - go get golang.org/x/tools/cmd/cover
