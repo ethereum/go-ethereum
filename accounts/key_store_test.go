@@ -239,3 +239,15 @@ func TestKeyForDirectICAP(t *testing.T) {
 		t.Errorf("Expected first address byte to be zero, have: %s", key.Address.Hex())
 	}
 }
+
+func TestV3_31_Byte_Key(t *testing.T) {
+	t.Parallel()
+	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
+	testDecryptV3(tests["31_byte_key"], t)
+}
+
+func TestV3_30_Byte_Key(t *testing.T) {
+	t.Parallel()
+	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
+	testDecryptV3(tests["30_byte_key"], t)
+}
