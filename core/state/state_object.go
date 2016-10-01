@@ -273,9 +273,9 @@ func (self *StateObject) Code(db trie.Database) []byte {
 	return code
 }
 
-func (self *StateObject) SetCode(code []byte) {
+func (self *StateObject) SetCode(codeHash common.Hash, code []byte) {
 	self.code = code
-	self.data.CodeHash = crypto.Keccak256(code)
+	self.data.CodeHash = codeHash[:]
 	self.dirtyCode = true
 	if self.onDirty != nil {
 		self.onDirty(self.Address())

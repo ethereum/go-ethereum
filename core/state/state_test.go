@@ -24,6 +24,7 @@ import (
 	checker "gopkg.in/check.v1"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -40,7 +41,7 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}))
-	obj2.SetCode([]byte{3, 3, 3, 3, 3, 3, 3})
+	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
@@ -148,7 +149,7 @@ func TestSnapshot2(t *testing.T) {
 	so0 := state.GetStateObject(stateobjaddr0)
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
-	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
+	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
 	so0.remove = false
 	so0.deleted = false
 	state.SetStateObject(so0)
@@ -160,7 +161,7 @@ func TestSnapshot2(t *testing.T) {
 	so1 := state.GetStateObject(stateobjaddr1)
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
-	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
+	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
 	so1.remove = true
 	so1.deleted = true
 	state.SetStateObject(so1)
