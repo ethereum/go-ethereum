@@ -71,10 +71,11 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		return nil, nil
 	}
 
-	var (
-		codehash = crypto.Keccak256Hash(contract.Code) // codehash is used when doing jump dest caching
-		program  *Program
-	)
+	codehash := contract.CodeHash // codehash is used when doing jump dest caching
+	if codehash == (common.Hash{}) {
+		codehash = crypto.Keccak256Hash(contract.Code)
+	}
+	var program *Program
 	if evm.cfg.EnableJit {
 		// If the JIT is enabled check the status of the JIT program,
 		// if it doesn't exist compile a new program in a separate
