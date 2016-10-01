@@ -267,6 +267,7 @@ func (self *StateDB) GetCodeSize(addr common.Address) int {
 	return size
 }
 
+// GetCodeHash returns the hash of the code associated with the address.
 func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	stateObject := self.GetStateObject(addr)
 	if stateObject == nil {
