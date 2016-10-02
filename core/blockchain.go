@@ -929,7 +929,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Write state changes to database
-		_, err = self.stateCache.Commit()
+		_, err = state.Commit(self.stateCache)
+		//_, err = self.stateCache.Commit()
 		if err != nil {
 			return i, err
 		}

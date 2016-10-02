@@ -105,8 +105,8 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
+	b.statedb.TransitionState(tx.Hash(), common.Hash{}, len(b.txs))
+	_, receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -203,7 +203,8 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 			gen(i, b)
 		}
 		AccumulateRewards(statedb, h, b.uncles)
-		root, err := statedb.Commit()
+		//root, err := statedb.Commit()
+		root, err := state.Commit(statedb)
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}

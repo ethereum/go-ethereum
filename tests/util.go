@@ -229,18 +229,22 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
+
 func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+	pstate := self.state
+	self.state = state.Fork(pstate)
+	return pstate
 }
+
 func (self *Env) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+	self.state = copy.(*state.StateDB)
 }
 
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
 	if self.skipTransfer {
 		return
 	}
-	core.Transfer(from, to, amount)
+	core.Transfer(self.state, from.Address(), to.Address(), amount)
 }
 
 func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {

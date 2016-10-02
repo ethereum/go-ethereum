@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -169,7 +170,7 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 }
 
 // generic transfer method
-func Transfer(from, to vm.Account, amount *big.Int) {
-	from.SubBalance(amount)
-	to.AddBalance(amount)
+func Transfer(statedb *state.StateDB, from, to common.Address, amount *big.Int) {
+	statedb.SubBalance(from, amount)
+	statedb.AddBalance(to, amount)
 }

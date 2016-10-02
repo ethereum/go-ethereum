@@ -90,15 +90,17 @@ func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
 }
 
 func (self *VMEnv) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+	pstate := self.state
+	self.state = state.Fork(pstate)
+	return pstate
 }
 
 func (self *VMEnv) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+	self.state = copy.(*state.StateDB)
 }
 
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {
-	Transfer(from, to, amount)
+	Transfer(self.state, from.Address(), to.Address(), amount)
 }
 
 func (self *VMEnv) Call(me vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {

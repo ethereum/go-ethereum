@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -273,24 +274,24 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 
 	requiredGas = new(big.Int).Set(self.gasUsed())
 
-	self.refundGas()
-	self.state.AddBalance(self.env.Coinbase(), new(big.Int).Mul(self.gasUsed(), self.gasPrice))
+	self.refundGas(vmenv.Db().(*state.StateDB))
+	vmenv.Db().AddBalance(self.env.Coinbase(), new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 
 	return ret, requiredGas, self.gasUsed(), err
 }
 
-func (self *StateTransition) refundGas() {
+func (self *StateTransition) refundGas(state *state.StateDB) {
 	// Return eth for remaining gas to the sender account,
 	// exchanged at the original rate.
 	sender, _ := self.from() // err already checked
 	remaining := new(big.Int).Mul(self.gas, self.gasPrice)
-	sender.AddBalance(remaining)
+	state.AddBalance(sender.Address(), remaining)
 
 	// Apply refund counter, capped to half of the used gas.
 	uhalf := remaining.Div(self.gasUsed(), common.Big2)
-	refund := common.BigMin(uhalf, self.state.GetRefund())
+	refund := common.BigMin(uhalf, state.GetRefund())
 	self.gas.Add(self.gas, refund)
-	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
+	state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
