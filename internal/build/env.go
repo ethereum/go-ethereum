@@ -65,7 +65,7 @@ func Env() Environment {
 			Repo:          os.Getenv("APPVEYOR_REPO_NAME"),
 			Commit:        os.Getenv("APPVEYOR_REPO_COMMIT"),
 			Branch:        os.Getenv("APPVEYOR_REPO_BRANCH"),
-			Tag:           os.Getenv("APPVEYOR_REPO_TAG"),
+			Tag:           os.Getenv("APPVEYOR_REPO_TAG_NAME"),
 			Buildnum:      os.Getenv("APPVEYOR_BUILD_NUMBER"),
 			IsPullRequest: os.Getenv("APPVEYOR_PULL_REQUEST_NUMBER") != "",
 		}
