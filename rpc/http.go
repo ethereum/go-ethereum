@@ -170,6 +170,7 @@ func newCorsHandler(srv *Server, corsString string) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"POST", "GET"},
+		MaxAge: 600,
 	})
 	return c.Handler(srv)
 }
