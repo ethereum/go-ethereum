@@ -84,7 +84,9 @@ func LocalEnv() Environment {
 		env.Commit = RunGit("rev-parse", "HEAD")
 	}
 	if env.Branch == "" {
-		env.Branch = RunGit("symbolic-ref", "-q", "--short", "HEAD")
+		if b := RunGit("rev-parse", "--abbrev-ref", "HEAD"); b != "HEAD" {
+			env.Branch = b
+		}
 	}
 	// Note that we don't get the current git tag. It would slow down
 	// builds and isn't used by anything.
