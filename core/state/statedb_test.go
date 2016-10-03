@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
@@ -40,7 +41,7 @@ func TestUpdateLeaks(t *testing.T) {
 			obj.SetState(common.BytesToHash([]byte{i, i, i}), common.BytesToHash([]byte{i, i, i, i}))
 		}
 		if i%3 == 0 {
-			obj.SetCode([]byte{i, i, i, i, i})
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i})
 		}
 		state.UpdateStateObject(obj)
 	}
@@ -70,7 +71,7 @@ func TestIntermediateLeaks(t *testing.T) {
 			obj.SetState(common.BytesToHash([]byte{i, i, i, 0}), common.BytesToHash([]byte{i, i, i, i, 0}))
 		}
 		if i%3 == 0 {
-			obj.SetCode([]byte{i, i, i, i, i, 0})
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i, 0}), []byte{i, i, i, i, i, 0})
 		}
 		transState.UpdateStateObject(obj)
 
@@ -82,7 +83,7 @@ func TestIntermediateLeaks(t *testing.T) {
 			obj.SetState(common.BytesToHash([]byte{i, i, i, 1}), common.BytesToHash([]byte{i, i, i, i, 1}))
 		}
 		if i%3 == 0 {
-			obj.SetCode([]byte{i, i, i, i, i, 1})
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i, 1}), []byte{i, i, i, i, i, 1})
 		}
 		transState.UpdateStateObject(obj)
 
@@ -94,7 +95,7 @@ func TestIntermediateLeaks(t *testing.T) {
 			obj.SetState(common.BytesToHash([]byte{i, i, i, 1}), common.BytesToHash([]byte{i, i, i, i, 1}))
 		}
 		if i%3 == 0 {
-			obj.SetCode([]byte{i, i, i, i, i, 1})
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i, 1}), []byte{i, i, i, i, i, 1})
 		}
 		finalState.UpdateStateObject(obj)
 	}

@@ -94,6 +94,7 @@ type Database interface {
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
 
+	GetCodeHash(common.Address) common.Hash
 	GetCodeSize(common.Address) int
 	GetCode(common.Address) []byte
 	SetCode(common.Address, []byte)
@@ -118,7 +119,7 @@ type Account interface {
 	Balance() *big.Int
 	Address() common.Address
 	ReturnGas(*big.Int, *big.Int)
-	SetCode([]byte)
+	SetCode(common.Hash, []byte)
 	ForEachStorage(cb func(key, value common.Hash) bool)
 	Value() *big.Int
 }

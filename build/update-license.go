@@ -49,7 +49,6 @@ var (
 		// don't relicense vendored sources
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
 		"crypto/secp256k1/curve.go",
-		"trie/arc.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.

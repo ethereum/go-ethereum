@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/net/context"
@@ -42,7 +43,6 @@ func (odr *testOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	case *TrieRequest:
 		t, _ := trie.New(req.root, odr.sdb)
 		req.proof = t.Prove(req.key)
-		trie.ClearGlobalCache()
 	case *NodeDataRequest:
 		req.data, _ = odr.sdb.Get(req.hash[:])
 	}
@@ -61,7 +61,7 @@ func makeTestState() (common.Hash, ethdb.Database) {
 			so.SetNonce(100)
 		}
 		so.AddBalance(big.NewInt(int64(i)))
-		so.SetCode([]byte{i, i, i})
+		so.SetCode(crypto.Keccak256Hash([]byte{i, i, i}), []byte{i, i, i})
 		so.UpdateRoot(sdb)
 		st.UpdateStateObject(so)
 	}
@@ -75,7 +75,6 @@ func TestLightStateOdr(t *testing.T) {
 	odr := &testOdr{sdb: sdb, ldb: ldb}
 	ls := NewLightState(root, odr)
 	ctx := context.Background()
-	trie.ClearGlobalCache()
 
 	for i := byte(0); i < 100; i++ {
 		addr := common.Address{i}
@@ -160,7 +159,6 @@ func TestLightStateSetCopy(t *testing.T) {
 	odr := &testOdr{sdb: sdb, ldb: ldb}
 	ls := NewLightState(root, odr)
 	ctx := context.Background()
-	trie.ClearGlobalCache()
 
 	for i := byte(0); i < 100; i++ {
 		addr := common.Address{i}
@@ -237,7 +235,6 @@ func TestLightStateDelete(t *testing.T) {
 	odr := &testOdr{sdb: sdb, ldb: ldb}
 	ls := NewLightState(root, odr)
 	ctx := context.Background()
-	trie.ClearGlobalCache()
 
 	addr := common.Address{42}
 
