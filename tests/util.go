@@ -108,12 +108,13 @@ func StateObjectFromAccount(db ethdb.Database, addr string, account Account, onD
 		account.Code = account.Code[2:]
 	}
 	code := common.Hex2Bytes(account.Code)
+	codeHash := crypto.Keccak256Hash(code)
 	obj := state.NewObject(common.HexToAddress(addr), state.Account{
 		Balance:  common.Big(account.Balance),
-		CodeHash: crypto.Keccak256(code),
+		CodeHash: codeHash[:],
 		Nonce:    common.Big(account.Nonce).Uint64(),
 	}, onDirty)
-	obj.SetCode(code)
+	obj.SetCode(codeHash, code)
 	return obj
 }
 

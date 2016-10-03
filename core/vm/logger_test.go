@@ -30,7 +30,7 @@ type dummyContractRef struct {
 func (dummyContractRef) ReturnGas(*big.Int, *big.Int) {}
 func (dummyContractRef) Address() common.Address      { return common.Address{} }
 func (dummyContractRef) Value() *big.Int              { return new(big.Int) }
-func (dummyContractRef) SetCode([]byte)               {}
+func (dummyContractRef) SetCode(common.Hash, []byte)  {}
 func (d *dummyContractRef) ForEachStorage(callback func(key, value common.Hash) bool) {
 	d.calledForEach = true
 }
