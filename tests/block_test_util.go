@@ -144,7 +144,7 @@ func runBlockTests(homesteadBlock, daoForkBlock *big.Int, bt map[string]*BlockTe
 	}
 
 	for name, test := range bt {
-		if skipTest[name] {
+		if skipTest[name] || name != "OOGStateCopyContainingDeletedContract" {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}

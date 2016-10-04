@@ -84,8 +84,11 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 		forkState = state.Fork(txPostState)
 	}
+	//fmt.Printf("before %x\n", state.IntermediateRoot(state.Reduce(forkState)))
+	//fmt.Println(string(forkState.Dump()))
 	AccumulateRewards(forkState, header, block.Uncles())
-
+	//fmt.Println(string(forkState.Dump()))
+	//fmt.Printf("after %x\n", state.IntermediateRoot(state.Reduce(forkState)))
 	statedb.Set(state.Reduce(forkState))
 
 	return receipts, allLogs, totalUsedGas, err

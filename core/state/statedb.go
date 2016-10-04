@@ -624,6 +624,10 @@ func Reduce(s *StateDB) *StateDB {
 		} else {
 			state.SetStateObject(object)
 		}
+
+		if _, isDirty := s.stateObjectsDirty[address]; isDirty {
+			state.stateObjectsDirty[address] = struct{}{}
+		}
 	}
 
 	state.logs = append(state.logs, s.logs...)
