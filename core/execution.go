@@ -17,7 +17,6 @@
 package core
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -72,7 +71,8 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 	}
 
 	if !env.CanTransfer(caller.Address(), value) {
-		fmt.Println("insuf", value)
+		caller.ReturnGas(gas, gasPrice)
+
 		return nil, common.Address{}, ValueTransferErr("insufficient funds to transfer value. Req %v, has %v", value, env.Db().GetBalance(caller.Address()))
 	}
 
