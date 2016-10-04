@@ -35,12 +35,12 @@ import (
 // Envelope represents a clear-text data packet to transmit through the Whisper
 // network. Its contents may or may not be encrypted and signed.
 type Envelope struct {
+	Version  []byte
 	Expiry   uint32
 	TTL      uint32
 	Topic    TopicType
 	Salt     []byte
 	AESNonce []byte
-	Version  []byte
 	Data     []byte
 	EnvNonce uint64
 
@@ -52,13 +52,13 @@ type Envelope struct {
 // included into an envelope for network forwarding.
 func NewEnvelope(ttl uint32, topic TopicType, salt []byte, aesNonce []byte, msg *SentMessage) *Envelope {
 	env := Envelope{
+		Version:  make([]byte, 1),
 		Expiry:   uint32(time.Now().Add(time.Second * time.Duration(ttl)).Unix()),
 		TTL:      ttl,
 		Topic:    topic,
 		Salt:     salt,
 		AESNonce: aesNonce,
 		Data:     msg.Raw,
-		Version:  make([]byte, 1),
 		EnvNonce: 0,
 	}
 
@@ -71,31 +71,31 @@ func NewEnvelope(ttl uint32, topic TopicType, salt []byte, aesNonce []byte, msg 
 	return &env
 }
 
-func (self *Envelope) IsSymmetric() bool {
-	return self.AESNonce != nil
+func (e *Envelope) IsSymmetric() bool {
+	return e.AESNonce != nil
 }
 
-func (self *Envelope) isAsymmetric() bool {
-	return !self.IsSymmetric()
+func (e *Envelope) isAsymmetric() bool {
+	return !e.IsSymmetric()
 }
 
-func (self *Envelope) Ver() uint64 {
-	return bytesToIntLittleEndian(self.Version)
+func (e *Envelope) Ver() uint64 {
+	return bytesToIntLittleEndian(e.Version)
 }
 
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
-func (self *Envelope) Seal(options MessageParams) {
+func (e *Envelope) Seal(options MessageParams) {
 	var target int
 	if options.PoW == 0 {
 		// adjust for the duration of Seal() execution only if execution time is predefined unconditionally
-		self.Expiry += options.WorkTime
+		e.Expiry += options.WorkTime
 	} else {
-		target = self.powToFirstBit(options.PoW)
+		target = e.powToFirstBit(options.PoW)
 	}
 
 	buf := make([]byte, 64)
-	h := crypto.Keccak256(self.rlpWithoutNonce())
+	h := crypto.Keccak256(e.rlpWithoutNonce())
 	copy(buf[:32], h)
 
 	finish, bestBit := time.Now().Add(time.Duration(options.WorkTime)*time.Second).UnixNano(), 0
@@ -105,7 +105,7 @@ func (self *Envelope) Seal(options MessageParams) {
 			h = crypto.Keccak256(buf)
 			firstBit := common.FirstBitSet(common.BigD(h))
 			if firstBit > bestBit {
-				self.EnvNonce, bestBit = nonce, firstBit
+				e.EnvNonce, bestBit = nonce, firstBit
 				if target > 0 && bestBit >= target {
 					return
 				}
@@ -115,48 +115,48 @@ func (self *Envelope) Seal(options MessageParams) {
 	}
 }
 
-func (self *Envelope) PoW() float64 {
-	if self.pow == 0 {
-		self.calculatePoW(0)
+func (e *Envelope) PoW() float64 {
+	if e.pow == 0 {
+		e.calculatePoW(0)
 	}
-	return self.pow
+	return e.pow
 }
 
-func (self *Envelope) calculatePoW(diff uint32) {
-	h := self.Hash()
+func (e *Envelope) calculatePoW(diff uint32) {
+	h := e.Hash()
 	firstBit := common.FirstBitSet(common.BigD(h.Bytes()))
 	x := math.Pow(2, float64(firstBit))
-	x /= float64(len(self.Data))
-	x /= float64(self.TTL + diff)
-	self.pow = x
+	x /= float64(len(e.Data))
+	x /= float64(e.TTL + diff)
+	e.pow = x
 }
 
-func (self *Envelope) powToFirstBit(pow float64) int {
+func (e *Envelope) powToFirstBit(pow float64) int {
 	x := pow
-	x *= float64(len(self.Data))
-	x *= float64(self.TTL)
+	x *= float64(len(e.Data))
+	x *= float64(e.TTL)
 	bits := math.Log2(x)
 	bits = math.Ceil(bits)
 	return int(bits)
 }
 
 // rlpWithoutNonce returns the RLP encoded envelope contents, except the nonce.
-func (self *Envelope) rlpWithoutNonce() []byte {
-	enc, _ := rlp.EncodeToBytes([]interface{}{self.Expiry, self.TTL, self.Topic, self.Salt, self.AESNonce, self.Data})
-	return enc
+func (e *Envelope) rlpWithoutNonce() []byte {
+	res, _ := rlp.EncodeToBytes([]interface{}{e.Expiry, e.TTL, e.Topic, e.Salt, e.AESNonce, e.Data})
+	return res
 }
 
 // Hash returns the SHA3 hash of the envelope, calculating it if not yet done.
-func (self *Envelope) Hash() common.Hash {
-	if (self.hash == common.Hash{}) {
-		enc, _ := rlp.EncodeToBytes(self)
-		self.hash = crypto.Keccak256Hash(enc)
+func (e *Envelope) Hash() common.Hash {
+	if (e.hash == common.Hash{}) {
+		encoded, _ := rlp.EncodeToBytes(e)
+		e.hash = crypto.Keccak256Hash(encoded)
 	}
-	return self.hash
+	return e.hash
 }
 
 // DecodeRLP decodes an Envelope from an RLP data stream.
-func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
+func (e *Envelope) DecodeRLP(s *rlp.Stream) error {
 	raw, err := s.Raw()
 	if err != nil {
 		return err
@@ -167,16 +167,16 @@ func (self *Envelope) DecodeRLP(s *rlp.Stream) error {
 	// rlp.Decoder (does not implement DecodeRLP function).
 	// Only public members will be encoded.
 	type rlpenv Envelope
-	if err := rlp.DecodeBytes(raw, (*rlpenv)(self)); err != nil {
+	if err := rlp.DecodeBytes(raw, (*rlpenv)(e)); err != nil {
 		return err
 	}
-	self.hash = crypto.Keccak256Hash(raw)
+	e.hash = crypto.Keccak256Hash(raw)
 	return nil
 }
 
 // OpenAsymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
-func (self *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, error) {
-	message := &ReceivedMessage{Raw: self.Data}
+func (e *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, error) {
+	message := &ReceivedMessage{Raw: e.Data}
 	err := message.decryptAsymmetric(key)
 	switch err {
 	case nil:
@@ -189,9 +189,9 @@ func (self *Envelope) OpenAsymmetric(key *ecdsa.PrivateKey) (*ReceivedMessage, e
 }
 
 // OpenSymmetric tries to decrypt an envelope, potentially encrypted with a particular key.
-func (self *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
-	msg = &ReceivedMessage{Raw: self.Data}
-	err = msg.decryptSymmetric(key, self.Salt, self.AESNonce)
+func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
+	msg = &ReceivedMessage{Raw: e.Data}
+	err = msg.decryptSymmetric(key, e.Salt, e.AESNonce)
 	if err != nil {
 		msg = nil
 	}
@@ -199,14 +199,14 @@ func (self *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error
 }
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
-func (self *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
-	if self.isAsymmetric() {
-		msg, _ = self.OpenAsymmetric(watcher.KeyAsym)
+func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
+	if e.isAsymmetric() {
+		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {
 			msg.Dst = watcher.Dst
 		}
-	} else if self.IsSymmetric() {
-		msg, _ = self.OpenSymmetric(watcher.KeySym)
+	} else if e.IsSymmetric() {
+		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
 			msg.TopicKeyHash = crypto.Keccak256Hash(watcher.KeySym)
 		}
@@ -217,12 +217,12 @@ func (self *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		if !ok {
 			return nil
 		}
-		msg.Topic = self.Topic
-		msg.PoW = self.PoW()
-		msg.TTL = self.TTL
-		msg.Sent = self.Expiry - self.TTL
-		msg.EnvelopeHash = self.hash
-		msg.EnvelopeVersion = self.Ver()
+		msg.Topic = e.Topic
+		msg.PoW = e.PoW()
+		msg.TTL = e.TTL
+		msg.Sent = e.Expiry - e.TTL
+		msg.EnvelopeHash = e.hash
+		msg.EnvelopeVersion = e.Ver()
 	}
 	return msg
 }

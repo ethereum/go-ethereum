@@ -50,8 +50,8 @@ func HashToTopic(h common.Hash) (t TopicType) {
 }
 
 // String converts a topic byte array to a string representation.
-func (self *TopicType) String() string {
-	return string(common.ToHex(self[:]))
+func (topic *TopicType) String() string {
+	return string(common.ToHex(topic[:]))
 }
 
 // UnmarshalJSON parses a hex representation to a topic.

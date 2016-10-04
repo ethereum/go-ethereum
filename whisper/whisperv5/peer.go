@@ -54,27 +54,27 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
-func (self *Peer) start() {
-	go self.update()
-	glog.V(logger.Debug).Infof("%v: whisper started", self.peer)
+func (p *Peer) start() {
+	go p.update()
+	glog.V(logger.Debug).Infof("%v: whisper started", p.peer)
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
-func (self *Peer) stop() {
-	close(self.quit)
-	glog.V(logger.Debug).Infof("%v: whisper stopped", self.peer)
+func (p *Peer) stop() {
+	close(p.quit)
+	glog.V(logger.Debug).Infof("%v: whisper stopped", p.peer)
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
 // verifies the remote status too.
-func (self *Peer) handshake() error {
+func (p *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
 	go func() {
-		errc <- p2p.Send(self.ws, statusCode, ProtocolVersion)
+		errc <- p2p.Send(p.ws, statusCode, ProtocolVersion)
 	}()
 	// Fetch the remote status packet and verify protocol match
-	packet, err := self.ws.ReadMsg()
+	packet, err := p.ws.ReadMsg()
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (self *Peer) handshake() error {
 
 // update executes periodic operations on the peer, including message transmission
 // and expiration.
-func (self *Peer) update() {
+func (p *Peer) update() {
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
 	transmit := time.NewTicker(transmissionCycle)
@@ -110,41 +110,41 @@ func (self *Peer) update() {
 	for {
 		select {
 		case <-expire.C:
-			self.expire()
+			p.expire()
 
 		case <-transmit.C:
-			if err := self.broadcast(); err != nil {
-				glog.V(logger.Info).Infof("%v: broadcast failed: %v", self.peer, err)
+			if err := p.broadcast(); err != nil {
+				glog.V(logger.Info).Infof("%v: broadcast failed: %v", p.peer, err)
 				return
 			}
 
-		case <-self.quit:
+		case <-p.quit:
 			return
 		}
 	}
 }
 
 // mark marks an envelope known to the peer so that it won't be sent back.
-func (self *Peer) mark(envelope *Envelope) {
-	self.known.Add(envelope.Hash())
+func (peer *Peer) mark(envelope *Envelope) {
+	peer.known.Add(envelope.Hash())
 }
 
 // marked checks if an envelope is already known to the remote peer.
-func (self *Peer) marked(envelope *Envelope) bool {
-	return self.known.Has(envelope.Hash())
+func (peer *Peer) marked(envelope *Envelope) bool {
+	return peer.known.Has(envelope.Hash())
 }
 
 // expire iterates over all the known envelopes in the host and removes all
 // expired (unknown) ones from the known list.
-func (self *Peer) expire() {
+func (peer *Peer) expire() {
 	// Assemble the list of available envelopes
 	available := set.NewNonTS()
-	for _, envelope := range self.host.Envelopes() {
+	for _, envelope := range peer.host.Envelopes() {
 		available.Add(envelope.Hash())
 	}
 	// Cross reference availability with known status
 	unmark := make(map[common.Hash]struct{})
-	self.known.Each(func(v interface{}) bool {
+	peer.known.Each(func(v interface{}) bool {
 		if !available.Has(v.(common.Hash)) {
 			unmark[v.(common.Hash)] = struct{}{}
 		}
@@ -152,26 +152,26 @@ func (self *Peer) expire() {
 	})
 	// Dump all known but unavailable
 	for hash, _ := range unmark {
-		self.known.Remove(hash)
+		peer.known.Remove(hash)
 	}
 }
 
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
-func (self *Peer) broadcast() error {
+func (p *Peer) broadcast() error {
 	// Fetch the envelopes and collect the unknown ones
-	envelopes := self.host.Envelopes()
+	envelopes := p.host.Envelopes()
 	transmit := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
-		if !self.marked(envelope) {
+		if !p.marked(envelope) {
 			transmit = append(transmit, envelope)
-			self.mark(envelope)
+			p.mark(envelope)
 		}
 	}
 	// Transmit the unknown batch (potentially empty)
-	if err := p2p.Send(self.ws, messagesCode, transmit); err != nil {
+	if err := p2p.Send(p.ws, messagesCode, transmit); err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infoln(self.peer, "broadcasted", len(transmit), "message(s)")
+	glog.V(logger.Detail).Infoln(p.peer, "broadcasted", len(transmit), "message(s)")
 	return nil
 }

@@ -24,16 +24,17 @@ import (
 )
 
 type Filter struct {
-	Src          *ecdsa.PublicKey  // Sender of the message
-	Dst          *ecdsa.PublicKey  // Recipient of the message
-	KeyAsym      *ecdsa.PrivateKey // Private Key of recipient
-	Topics       []TopicType       // Topics to filter messages with
-	KeySym       []byte            // Key associated with the Topic
-	TopicKeyHash common.Hash       // The Keccak256Hash of the symmetric key
-	PoW          float64           // Proof of work as described in the Whisper spec
-	AcceptP2P    bool              // Indicates whether this filter is interested in direct peer-to-peer messages
-	Messages     map[common.Hash]*ReceivedMessage
-	Mutex        sync.RWMutex
+	Src        *ecdsa.PublicKey  // Sender of the message
+	Dst        *ecdsa.PublicKey  // Recipient of the message
+	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
+	KeySym     []byte            // Key associated with the Topic
+	Topics     []TopicType       // Topics to filter messages with
+	PoW        float64           // Proof of work as described in the Whisper spec
+	AcceptP2P  bool              // Indicates whether this filter is interested in direct peer-to-peer messages
+	SymKeyHash common.Hash       // The Keccak256Hash of the symmetric key, needed for optimization
+
+	Messages map[common.Hash]*ReceivedMessage
+	mutex    sync.RWMutex
 }
 
 type Filters struct {
@@ -50,32 +51,32 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
-func (self *Filters) Install(watcher *Filter) int {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
+func (fs *Filters) Install(watcher *Filter) int {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
 
-	self.watchers[self.id] = watcher
-	ret := self.id
-	self.id++
+	fs.watchers[fs.id] = watcher
+	ret := fs.id
+	fs.id++
 	return ret
 }
 
-func (self *Filters) Uninstall(id int) {
-	self.mutex.Lock()
-	defer self.mutex.Unlock()
-	delete(self.watchers, id)
+func (fs *Filters) Uninstall(id int) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	delete(fs.watchers, id)
 }
 
-func (self *Filters) Get(i int) *Filter {
-	self.mutex.RLock()
-	defer self.mutex.RUnlock()
-	return self.watchers[i]
+func (fs *Filters) Get(i int) *Filter {
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+	return fs.watchers[i]
 }
 
-func (self *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
-	self.mutex.RLock()
+func (fs *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
+	fs.mutex.RLock()
 	var msg *ReceivedMessage
-	for _, watcher := range self.watchers {
+	for _, watcher := range fs.watchers {
 		if messageCode == p2pCode && !watcher.AcceptP2P {
 			continue
 		}
@@ -94,58 +95,58 @@ func (self *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
 			watcher.Trigger(msg)
 		}
 	}
-	self.mutex.RUnlock() // we need to unlock before calling addDecryptedMessage
+	fs.mutex.RUnlock() // we need to unlock before calling addDecryptedMessage
 
 	if msg != nil {
-		self.whisper.addDecryptedMessage(msg)
+		fs.whisper.addDecryptedMessage(msg)
 	}
 }
 
-func (self *Filter) expectsAsymmetricEncryption() bool {
-	return self.KeyAsym != nil
+func (f *Filter) expectsAsymmetricEncryption() bool {
+	return f.KeyAsym != nil
 }
 
-func (self *Filter) expectsSymmetricEncryption() bool {
-	return self.KeySym != nil
+func (f *Filter) expectsSymmetricEncryption() bool {
+	return f.KeySym != nil
 }
 
-func (self *Filter) Trigger(msg *ReceivedMessage) {
-	self.Mutex.Lock()
-	defer self.Mutex.Unlock()
+func (f *Filter) Trigger(msg *ReceivedMessage) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 
-	if _, exist := self.Messages[msg.EnvelopeHash]; !exist {
-		self.Messages[msg.EnvelopeHash] = msg
+	if _, exist := f.Messages[msg.EnvelopeHash]; !exist {
+		f.Messages[msg.EnvelopeHash] = msg
 	}
 }
 
-func (self *Filter) Retrieve() (all []*ReceivedMessage) {
-	self.Mutex.Lock()
-	defer self.Mutex.Unlock()
+func (f *Filter) Retrieve() (all []*ReceivedMessage) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
 
-	all = make([]*ReceivedMessage, 0, len(self.Messages))
-	for _, msg := range self.Messages {
+	all = make([]*ReceivedMessage, 0, len(f.Messages))
+	for _, msg := range f.Messages {
 		all = append(all, msg)
 	}
-	self.Messages = make(map[common.Hash]*ReceivedMessage) // delete old messages
+	f.Messages = make(map[common.Hash]*ReceivedMessage) // delete old messages
 	return all
 }
 
-func (self *Filter) MatchMessage(msg *ReceivedMessage) bool {
-	if self.PoW > 0 && msg.PoW < self.PoW {
+func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
+	if f.PoW > 0 && msg.PoW < f.PoW {
 		return false
 	}
 
-	if self.Src != nil && !isEqual(msg.Src, self.Src) {
+	if f.Src != nil && !isEqual(msg.Src, f.Src) {
 		return false
 	}
 
-	if self.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
+	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
 		// if Dst match, ignore the topic
-		return isEqual(self.Dst, msg.Dst)
-	} else if self.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
+		return isEqual(f.Dst, msg.Dst)
+	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
 		// check if that both the key and the topic match
-		if self.TopicKeyHash == msg.TopicKeyHash {
-			for _, t := range self.Topics {
+		if f.SymKeyHash == msg.TopicKeyHash {
+			for _, t := range f.Topics {
 				if t == msg.Topic {
 					return true
 				}
@@ -156,23 +157,23 @@ func (self *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	return false
 }
 
-func (self *Filter) MatchEnvelope(envelope *Envelope) bool {
-	if self.PoW > 0 && envelope.pow < self.PoW {
+func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
+	if f.PoW > 0 && envelope.pow < f.PoW {
 		return false
 	}
 
 	encryptionMethodMatch := false
-	if self.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
+	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
 		encryptionMethodMatch = true
-		if self.Topics == nil {
+		if f.Topics == nil {
 			return true // wildcard
 		}
-	} else if self.expectsSymmetricEncryption() && envelope.IsSymmetric() {
+	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
 		encryptionMethodMatch = true
 	}
 
 	if encryptionMethodMatch {
-		for _, t := range self.Topics {
+		for _, t := range f.Topics {
 			if t == envelope.Topic {
 				return true
 			}

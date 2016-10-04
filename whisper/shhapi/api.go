@@ -56,110 +56,115 @@ func APIs() []rpc.API {
 }
 
 // Version returns the Whisper version this node offers.
-func (self *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
-	if self.whisper == nil {
+func (api *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
+	if api.whisper == nil {
 		return rpc.NewHexNumber(0), whisperOffLineErr
 	}
-	return rpc.NewHexNumber(self.whisper.Version()), nil
+	return rpc.NewHexNumber(api.whisper.Version()), nil
 }
 
 // MarkPeerTrusted marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
-func (self *PublicWhisperAPI) MarkPeerTrusted(peerID *rpc.HexBytes) error {
-	if self.whisper == nil {
+func (api *PublicWhisperAPI) MarkPeerTrusted(peerID rpc.HexBytes) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return self.whisper.MarkPeerTrusted(*peerID)
+	return api.whisper.MarkPeerTrusted(peerID)
 }
 
 // RequestHistoricMessages requests the peer to deliver the old (expired) messages.
 // data contains parameters (time frame, payment details, etc.), required
 // by the remote email-like server. Whisper is not aware about the data format,
 // it will just forward the raw data to the server.
-func (self *PublicWhisperAPI) RequestHistoricMessages(peerID *rpc.HexBytes, data *rpc.HexBytes) error {
-	if self.whisper == nil {
+func (api *PublicWhisperAPI) RequestHistoricMessages(peerID rpc.HexBytes, data rpc.HexBytes) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return self.whisper.RequestHistoricMessages(*peerID, *data)
+	return api.whisper.RequestHistoricMessages(peerID, data)
 }
 
-// HasIdentity checks if the the whisper node is configured with the private key
+// HasIdentity checks if the whisper node is configured with the private key
 // of the specified public pair.
-func (self *PublicWhisperAPI) HasIdentity(identity string) (bool, error) {
-	if self.whisper == nil {
+func (api *PublicWhisperAPI) HasIdentity(identity string) (bool, error) {
+	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	return self.whisper.HasIdentity(crypto.ToECDSAPub(common.FromHex(identity))), nil
+	return api.whisper.HasIdentity(crypto.ToECDSAPub(common.FromHex(identity))), nil
 }
 
 // DeleteIdentity deletes the specifies key if it exists.
-func (self *PublicWhisperAPI) DeleteIdentity(identity string) error {
-	if self.whisper == nil {
+func (api *PublicWhisperAPI) DeleteIdentity(identity string) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	self.whisper.DeleteIdentity(identity)
+	api.whisper.DeleteIdentity(identity)
 	return nil
 }
 
 // NewIdentity generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption.
-func (self *PublicWhisperAPI) NewIdentity() (string, error) {
-	if self.whisper == nil {
+func (api *PublicWhisperAPI) NewIdentity() (string, error) {
+	if api.whisper == nil {
 		return "", whisperOffLineErr
 	}
-	identity := self.whisper.NewIdentity()
+	identity := api.whisper.NewIdentity()
 	return common.ToHex(crypto.FromECDSAPub(&identity.PublicKey)), nil
 }
 
-// GenerateTopicKey generates a random key and stores it under the 'name' id.
-// Will be used in the future for session key exchange.
-func (self *PublicWhisperAPI) GenerateTopicKey(name string) error {
-	if self.whisper == nil {
+// GenerateTopicKey generates a random symmetric key and stores it under
+// the 'name' id. Will be used in the future for session key exchange.
+func (api *PublicWhisperAPI) GenerateTopicKey(name string) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return self.whisper.GenerateTopicKey(name)
+	return api.whisper.GenerateTopicKey(name)
 }
 
-func (self *PublicWhisperAPI) AddTopicKey(name string, key []byte) error {
-	if self.whisper == nil {
+// AddTopicKey stores the key under the 'name' id.
+func (api *PublicWhisperAPI) AddTopicKey(name string, key []byte) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return self.whisper.AddTopicKey(name, key)
+	return api.whisper.AddTopicKey(name, key)
 }
 
-func (self *PublicWhisperAPI) HasTopicKey(name string) (bool, error) {
-	if self.whisper == nil {
+// HasTopicKey returns true if there is a key associated with the name string.
+// Otherwise returns false.
+func (api *PublicWhisperAPI) HasTopicKey(name string) (bool, error) {
+	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	res := self.whisper.HasTopicKey(name)
+	res := api.whisper.HasTopicKey(name)
 	return res, nil
 }
 
-func (self *PublicWhisperAPI) DeleteTopicKey(name string) error {
-	if self.whisper == nil {
+// DeleteTopicKey deletes the key associated with the name string if it exists.
+func (api *PublicWhisperAPI) DeleteTopicKey(name string) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	self.whisper.DeleteTopicKey(name)
+	api.whisper.DeleteTopicKey(name)
 	return nil
 }
 
 // NewWhisperFilter creates and registers a new message filter to watch for inbound whisper messages.
-func (self *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, error) {
-	if self.whisper == nil {
+// Returns the ID of the newly created Filter.
+func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, error) {
+	if api.whisper == nil {
 		return nil, whisperOffLineErr
 	}
 
 	filter := whisperv5.Filter{
 		Src:       crypto.ToECDSAPub(args.From),
 		Dst:       crypto.ToECDSAPub(args.To),
-		KeySym:    self.whisper.GetTopicKey(args.KeyName),
+		KeySym:    api.whisper.GetTopicKey(args.KeyName),
 		PoW:       args.PoW,
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
 		AcceptP2P: args.AcceptP2P,
 	}
 
 	if len(filter.KeySym) > 0 {
-		filter.TopicKeyHash = crypto.Keccak256Hash(filter.KeySym)
+		filter.SymKeyHash = crypto.Keccak256Hash(filter.KeySym)
 	}
 
 	for _, t := range args.Topics {
@@ -196,7 +201,7 @@ func (self *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber,
 			glog.V(logger.Error).Infof(info)
 			return nil, errors.New(info)
 		}
-		filter.KeyAsym = self.whisper.GetIdentity(filter.Dst)
+		filter.KeyAsym = api.whisper.GetIdentity(filter.Dst)
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)
@@ -212,18 +217,18 @@ func (self *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber,
 		}
 	}
 
-	id := self.whisper.Watch(&filter)
+	id := api.whisper.Watch(&filter)
 	return rpc.NewHexNumber(id), nil
 }
 
 // UninstallFilter disables and removes an existing filter.
-func (self *PublicWhisperAPI) UninstallFilter(filterId rpc.HexNumber) {
-	self.whisper.Unwatch(filterId.Int())
+func (api *PublicWhisperAPI) UninstallFilter(filterId rpc.HexNumber) {
+	api.whisper.Unwatch(filterId.Int())
 }
 
 // GetFilterChanges retrieves all the new messages matched by a filter since the last retrieval.
-func (self *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []WhisperMessage {
-	f := self.whisper.GetFilter(filterId.Int())
+func (api *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []WhisperMessage {
+	f := api.whisper.GetFilter(filterId.Int())
 	if f != nil {
 		newMail := f.Retrieve()
 		return toWhisperMessages(newMail)
@@ -232,8 +237,8 @@ func (self *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []Whisper
 }
 
 // GetMessages retrieves all the known messages that match a specific filter.
-func (self *PublicWhisperAPI) GetMessages(filterId rpc.HexNumber) []WhisperMessage {
-	all := self.whisper.Messages(filterId.Int())
+func (api *PublicWhisperAPI) GetMessages(filterId rpc.HexNumber) []WhisperMessage {
+	all := api.whisper.Messages(filterId.Int())
 	return toWhisperMessages(all)
 }
 
@@ -246,16 +251,16 @@ func toWhisperMessages(messages []*whisperv5.ReceivedMessage) []WhisperMessage {
 	return msgs
 }
 
-// Post injects a message into the whisper network for distribution.
-func (self *PublicWhisperAPI) Post(args PostArgs) error {
-	if self.whisper == nil {
+// Post creates a whisper message and injects it into the network for distribution.
+func (api *PublicWhisperAPI) Post(args PostArgs) error {
+	if api.whisper == nil {
 		return whisperOffLineErr
 	}
 
 	params := whisperv5.MessageParams{
 		TTL:      args.TTL,
 		Dst:      crypto.ToECDSAPub(args.To),
-		KeySym:   self.whisper.GetTopicKey(args.KeyName),
+		KeySym:   api.whisper.GetTopicKey(args.KeyName),
 		Topic:    args.Topic,
 		Payload:  args.Payload,
 		Padding:  args.Padding,
@@ -270,7 +275,7 @@ func (self *PublicWhisperAPI) Post(args PostArgs) error {
 			glog.V(logger.Error).Infof(info)
 			return errors.New(info)
 		}
-		params.Src = self.whisper.GetIdentity(pub)
+		params.Src = api.whisper.GetIdentity(pub)
 		if params.Src == nil {
 			info := "Post: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)
@@ -278,7 +283,7 @@ func (self *PublicWhisperAPI) Post(args PostArgs) error {
 		}
 	}
 
-	filter := self.whisper.GetFilter(args.FilterID)
+	filter := api.whisper.GetFilter(args.FilterID)
 	if filter == nil && args.FilterID > -1 {
 		info := fmt.Sprintf("Post: wrong filter id %d", args.FilterID)
 		glog.V(logger.Error).Infof(info)
@@ -358,10 +363,10 @@ func (self *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	if args.PeerID != nil {
-		return self.whisper.SendP2PMessage(args.PeerID, envelope)
+		return api.whisper.SendP2PMessage(args.PeerID, envelope)
 	}
 
-	return self.whisper.Send(envelope)
+	return api.whisper.Send(envelope)
 }
 
 type PostArgs struct {
