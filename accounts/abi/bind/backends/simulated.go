@@ -172,8 +172,9 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereum.CallMsg) ([]byte, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	rval, _, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
+	rval, _, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
 	return rval, err
 }
 
@@ -197,8 +198,9 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (*big.Int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState.Copy())
+	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
 	return gas, err
 }
 
