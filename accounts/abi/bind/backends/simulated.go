@@ -97,7 +97,8 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		statedb *state.StateDB
 	)
 	if pending {
-		block, statedb = b.pendingBlock, b.pendingState.Copy()
+		block, statedb = b.pendingBlock, b.pendingState
+		defer statedb.RevertToSnapshot(statedb.Snapshot())
 	} else {
 		block = b.blockchain.CurrentBlock()
 		statedb, _ = b.blockchain.State()
@@ -119,6 +120,7 @@ func (b *SimulatedBackend) ContractCall(contract common.Address, data []byte, pe
 		value:    new(big.Int),
 		data:     data,
 	}
+
 	// Execute the call and return
 	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
@@ -146,8 +148,10 @@ func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *com
 	// Create a copy of the currently pending state db to screw around with
 	var (
 		block   = b.pendingBlock
-		statedb = b.pendingState.Copy()
+		statedb = b.pendingState
 	)
+	defer statedb.RevertToSnapshot(statedb.Snapshot())
+
 	// If there's no code to interact with, respond with an appropriate error
 	if contract != nil {
 		if code := statedb.GetCode(*contract); len(code) == 0 {

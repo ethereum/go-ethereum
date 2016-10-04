@@ -46,8 +46,8 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	obj3.SetBalance(big.NewInt(44))
 
 	// write some of them to the trie
-	s.state.UpdateStateObject(obj1)
-	s.state.UpdateStateObject(obj2)
+	s.state.updateStateObject(obj1)
+	s.state.updateStateObject(obj2)
 	s.state.Commit()
 
 	// check that dump contains the state objects that are in trie
@@ -116,17 +116,23 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	// set initial state object value
 	s.state.SetState(stateobjaddr, storageaddr, data1)
 	// get snapshot of current state
-	snapshot := s.state.Copy()
+	snapshot := s.state.Snapshot()
 
 	// set new state object value
 	s.state.SetState(stateobjaddr, storageaddr, data2)
 	// restore snapshot
-	s.state.Set(snapshot)
+	s.state.RevertToSnapshot(snapshot)
 
 	// get state storage value
 	res := s.state.GetState(stateobjaddr, storageaddr)
 
 	c.Assert(data1, checker.DeepEquals, res)
+}
+
+func TestSnapshotEmpty(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+	state.RevertToSnapshot(state.Snapshot())
 }
 
 // use testing instead of checker because checker does not support
@@ -152,7 +158,7 @@ func TestSnapshot2(t *testing.T) {
 	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
 	so0.remove = false
 	so0.deleted = false
-	state.SetStateObject(so0)
+	state.setStateObject(so0)
 
 	root, _ := state.Commit()
 	state.Reset(root)
@@ -164,15 +170,15 @@ func TestSnapshot2(t *testing.T) {
 	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
 	so1.remove = true
 	so1.deleted = true
-	state.SetStateObject(so1)
+	state.setStateObject(so1)
 
 	so1 = state.GetStateObject(stateobjaddr1)
 	if so1 != nil {
 		t.Fatalf("deleted object not nil when getting")
 	}
 
-	snapshot := state.Copy()
-	state.Set(snapshot)
+	snapshot := state.Snapshot()
+	state.RevertToSnapshot(snapshot)
 
 	so0Restored := state.GetStateObject(stateobjaddr0)
 	// Update lazily-loaded values before comparing.
