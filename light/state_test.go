@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/net/context"
@@ -54,16 +53,13 @@ func makeTestState() (common.Hash, ethdb.Database) {
 	sdb, _ := ethdb.NewMemDatabase()
 	st, _ := state.New(common.Hash{}, sdb)
 	for i := byte(0); i < 100; i++ {
-		so := st.GetOrNewStateObject(common.Address{i})
+		addr := common.Address{i}
 		for j := byte(0); j < 100; j++ {
-			val := common.Hash{i, j}
-			so.SetState(common.Hash{j}, val)
-			so.SetNonce(100)
+			st.SetState(addr, common.Hash{j}, common.Hash{i, j})
 		}
-		so.AddBalance(big.NewInt(int64(i)))
-		so.SetCode(crypto.Keccak256Hash([]byte{i, i, i}), []byte{i, i, i})
-		so.UpdateRoot(sdb)
-		st.UpdateStateObject(so)
+		st.SetNonce(addr, 100)
+		st.AddBalance(addr, big.NewInt(int64(i)))
+		st.SetCode(addr, []byte{i, i, i})
 	}
 	root, _ := st.Commit()
 	return root, sdb
