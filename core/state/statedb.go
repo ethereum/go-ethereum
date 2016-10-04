@@ -40,7 +40,7 @@ var StartingNonce uint64
 const (
 	// Number of past tries to keep. The arbitrarily chosen value here
 	// is max uncle depth + 1.
-	maxJournalLength = 8
+	maxTrieCacheLength = 8
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
@@ -154,7 +154,7 @@ func (self *StateDB) pushTrie(t *trie.SecureTrie) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	if len(self.pastTries) >= maxJournalLength {
+	if len(self.pastTries) >= maxTrieCacheLength {
 		copy(self.pastTries, self.pastTries[1:])
 		self.pastTries[len(self.pastTries)-1] = t
 	} else {
