@@ -198,7 +198,9 @@ func (self *StateTransition) buyGas() error {
 	}
 	self.addGas(mgas)
 	self.initialGas.Set(mgas)
-	sender.SubBalance(mgval)
+
+	self.state.(*state.StateDB).SubBalance(sender.Address(), mgval)
+	//	sender.SubBalance(mgval)
 	return nil
 }
 

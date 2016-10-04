@@ -410,8 +410,6 @@ func (s *StateDB) GetOrNewStateObject(address common.Address) *StateObject {
 		if !s.localStateObjects[address] {
 			stateObject = stateObject.Copy(s.db, s.MarkStateObjectDirty)
 			s.SetOwnedStateObject(address, stateObject)
-			//s.stateObjects[address] = stateObject
-			//s.localStateObjects[address] = true
 		}
 		return stateObject
 	}
@@ -421,8 +419,6 @@ func (s *StateDB) GetOrNewStateObject(address common.Address) *StateObject {
 		stateObject.SetNonce(StartingNonce)
 
 		s.SetOwnedStateObject(address, stateObject)
-		//s.stateObjects[address] = stateObject
-		//s.localStateObjects[address] = true
 	}
 	return stateObject
 }
@@ -432,7 +428,6 @@ func (s *StateDB) GetStateObject(address common.Address) *StateObject {
 	if account != nil {
 		if s.stateObjects[address] == nil {
 			s.SetStateObject(account)
-			//s.stateObjects[address] = account
 		}
 		return account
 	}
@@ -477,8 +472,8 @@ func (self *StateDB) CreateAccount(addr common.Address) vm.Account {
 }
 
 func (self *StateDB) Set(state *StateDB) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	//self.lock.Lock()
+	//defer self.lock.Unlock()
 
 	*self = *state
 	/*
@@ -641,7 +636,7 @@ func IntermediateRoot(state *StateDB) common.Hash {
 			}
 		}
 	}
-	state.stateObjectsDirty = make(map[common.Address]struct{})
+	//state.stateObjectsDirty = make(map[common.Address]struct{})
 	return state.trie.Hash()
 }
 
