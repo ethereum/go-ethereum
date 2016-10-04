@@ -64,15 +64,17 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		header       = block.Header()
 		allLogs      vm.Logs
 		gp           = new(GasPool).AddGas(block.GasLimit())
-		forkState    = state.Fork(statedb)
 	)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		ApplyDAOHardFork(statedb)
 	}
+
+	forkState := state.Fork(statedb)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		forkState.TransitionState(tx.Hash(), block.Hash(), i)
+
 		txPostState, receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, forkState, header, tx, totalUsedGas, cfg)
 		if err != nil {
 			return nil, nil, totalUsedGas, err
@@ -82,7 +84,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 		forkState = state.Fork(txPostState)
 	}
-	AccumulateRewards(statedb, header, block.Uncles())
+	AccumulateRewards(forkState, header, block.Uncles())
 
 	statedb.Set(state.Reduce(forkState))
 
