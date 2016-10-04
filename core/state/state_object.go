@@ -260,16 +260,16 @@ func (self *StateObject) setBalance(amount *big.Int) {
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
-func (self *StateObject) Copy(db trie.Database, onDirty func(addr common.Address)) *StateObject {
-	// stateObject := NewObject(self.address, self.data, onDirty)
-	// stateObject.trie = self.trie
-	// stateObject.code = self.code
-	// stateObject.dirtyStorage = self.dirtyStorage.Copy()
-	// stateObject.cachedStorage = self.dirtyStorage.Copy()
-	// stateObject.remove = self.remove
-	// stateObject.dirtyCode = self.dirtyCode
-	// stateObject.deleted = self.deleted
-	return self
+func (self *StateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *StateObject {
+	stateObject := newObject(db, self.address, self.data, onDirty)
+	stateObject.trie = self.trie
+	stateObject.code = self.code
+	stateObject.dirtyStorage = self.dirtyStorage.Copy()
+	stateObject.cachedStorage = self.dirtyStorage.Copy()
+	stateObject.remove = self.remove
+	stateObject.dirtyCode = self.dirtyCode
+	stateObject.deleted = self.deleted
+	return stateObject
 }
 
 //
