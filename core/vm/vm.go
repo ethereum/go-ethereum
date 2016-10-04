@@ -113,10 +113,9 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		code       = contract.Code
 		instrCount = 0
 
-		op      OpCode         // current opcode
-		mem     = NewMemory()  // bound memory
-		stack   = newstack()   // local stack
-		statedb = evm.env.Db() // current state
+		op    OpCode        // current opcode
+		mem   = NewMemory() // bound memory
+		stack = newstack()  // local stack
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
 		pc = uint64(0) // program counter
@@ -169,7 +168,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
 		// calculate the new memory size and gas price for the current executing opcode
-		newMemSize, cost, err = calculateGasAndSize(evm.env, contract, caller, op, statedb, mem, stack)
+		newMemSize, cost, err = calculateGasAndSize(evm.env, contract, caller, op, evm.env.Db(), mem, stack)
 		if err != nil {
 			return nil, err
 		}
