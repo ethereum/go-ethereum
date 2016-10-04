@@ -235,6 +235,18 @@ func (self *StateDB) AddRefund(gas *big.Int) {
 	self.refund.Add(self.refund, gas)
 }
 
+func (s *StateDB) GetRefund() *big.Int {
+	var refund *big.Int
+	if s.MarkedTransition {
+		return new(big.Int)
+	} else if s.parent == nil {
+		refund = new(big.Int)
+	} else {
+		refund = s.parent.GetRefund()
+	}
+	return refund.Add(refund, s.refund)
+}
+
 func (self *StateDB) HasAccount(addr common.Address) bool {
 	return self.GetStateObject(addr) != nil
 }
@@ -486,10 +498,6 @@ func (self *StateDB) Set(state *StateDB) {
 		self.refund = state.refund
 		self.logs = state.logs
 	*/
-}
-
-func (self *StateDB) GetRefund() *big.Int {
-	return self.refund
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
