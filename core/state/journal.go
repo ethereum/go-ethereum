@@ -34,7 +34,7 @@ type (
 		account *common.Address
 	}
 	deleteAccountChange struct {
-		account *common.Address
+		object *StateObject
 	}
 
 	// Changes to individual accounts.
@@ -65,7 +65,8 @@ type (
 )
 
 func (ch deleteAccountChange) undo(s *StateDB) {
-	s.createStateObject(*ch.account)
+	ch.object.remove = false
+	s.SetStateObject(ch.object)
 }
 
 func (ch createAccountChange) undo(s *StateDB) {

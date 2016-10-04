@@ -212,9 +212,11 @@ func (self *StateDB) GetAccount(addr common.Address) vm.Account {
 func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
+		if stateObject.remove {
+			return new(big.Int)
+		}
 		return stateObject.Balance()
 	}
-
 	return common.Big0
 }
 
@@ -318,18 +320,19 @@ func (self *StateDB) SetState(addr common.Address, key common.Hash, value common
 }
 
 func (self *StateDB) Delete(addr common.Address) bool {
-	self.journal = append(self.journal, deleteAccountChange{account: &addr})
-	return self.delete(addr)
-}
-
-func (self *StateDB) delete(addr common.Address) bool {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		stateObject.markForDeletion()
-		stateObject.data.Balance = new(big.Int)
+	if object := self.delete(addr); object != nil {
+		self.journal = append(self.journal, deleteAccountChange{object: object})
 		return true
 	}
 	return false
+}
+
+func (self *StateDB) delete(addr common.Address) *StateObject {
+	stateObject := self.GetStateObject(addr)
+	if stateObject != nil {
+		stateObject.markForDeletion()
+	}
+	return stateObject
 }
 
 //
