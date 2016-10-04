@@ -51,6 +51,63 @@ func TestUpdateLeaks(t *testing.T) {
 	}
 }
 
+type action struct {
+	typ string
+
+	address common.Address
+	amount  *big.Int
+}
+
+type scriptedTest struct {
+	actions    []action
+	finalState []action
+
+	revisions []int
+}
+
+func TestDelete(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+
+	test := scriptedTest{
+		actions: []action{
+			{typ: "add", address: common.Address{1}, amount: big.NewInt(1)},
+			{typ: "snapshot"},
+			{typ: "delete", address: common.Address{1}},
+			{typ: "revert"},
+		},
+		finalState: []action{
+			{typ: "add", address: common.Address{1}, amount: big.NewInt(1)},
+		},
+	}
+	for _, action := range test.actions {
+		applyAction(state, action, &test)
+	}
+
+	expectedState, _ := New(common.Hash{}, db)
+	for _, action := range test.finalState {
+		applyAction(expectedState, action, &test)
+	}
+	if expectedState.IntermediateRoot() != state.IntermediateRoot() {
+		t.Errorf("state does not match expected state")
+	}
+}
+
+func applyAction(st *StateDB, action action, test *scriptedTest) {
+	switch action.typ {
+	case "add":
+		st.AddBalance(action.address, action.amount)
+	case "snapshot":
+		test.revisions = append(test.revisions, st.Snapshot())
+	case "delete":
+		st.Delete(action.address)
+	case "revert":
+		st.RevertToSnapshot(test.revisions[len(test.revisions)-1])
+
+		test.revisions = test.revisions[:len(test.revisions)-1]
+	}
+}
+
 // Tests that no intermediate state of an object is stored into the database,
 // only the one right before the commit.
 // func TestIntermediateLeaks(t *testing.T) {
