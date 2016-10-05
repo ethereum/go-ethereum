@@ -29,11 +29,8 @@ func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
-	so := &StateObject{address: addr}
-	so.SetNonce(100)
-	ms.StateDB.stateObjects[addr] = so
-	ms.accounts[addr] = newAccount(so)
-
+	ms.StateDB.SetNonce(addr, 100)
+	ms.accounts[addr] = newAccount(ms.StateDB.GetStateObject(addr))
 	return ms, ms.accounts[addr]
 }
 

@@ -89,12 +89,12 @@ func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
 
-func (self *VMEnv) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+func (self *VMEnv) SnapshotDatabase() int {
+	return self.state.Snapshot()
 }
 
-func (self *VMEnv) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+func (self *VMEnv) RevertToSnapshot(snapshot int) {
+	self.state.RevertToSnapshot(snapshot)
 }
 
 func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {
