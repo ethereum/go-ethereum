@@ -3,7 +3,7 @@
         "env" : {
             "currentCoinbase" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
             "currentDifficulty" : "0x051d6a3cd647",
-            "currentGasLimit" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "currentGasLimit" : "0x7fffffffffffffff",
             "currentNumber" : "0x00",
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -17,7 +17,7 @@
                 "code" : "0x7f000000000000000000000000945304eb96065b2a98b57a48a06ae28d285a71b57f000000000000000000000000000000000000000000000000000000000000c3507f000000000000000000000000945304eb96065b2a98b57a48a06ae28d285a71b57f00000000000000000000000000000000000000000000000000000000000000017f000000000000000000000000945304eb96065b2a98b57a48a06ae28d285a71b57f000000000000000000000000000000000000000000000000000000000000c3507f00000000000000000000000000000000000000000000000000000000000000004560005155",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x00" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    "0x00" : "0x7fffffffffffffff"
                 }
             },
             "945304eb96065b2a98b57a48a06ae28d285a71b5" : {
@@ -35,7 +35,7 @@
                 }
             }
         },
-        "postStateRoot" : "89a31aea399e1cdfed3e8749b53b15f3045d5243a20ef62d26bc7c1722a18e22",
+        "postStateRoot" : "7183e605a39b0bb03e629f510e4bff48e9e676076d919f3792fd572048740b02",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "0x00",
