@@ -597,7 +597,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		"gasUsed":          rpc.NewHexNumber(head.GasUsed),
 		"timestamp":        rpc.NewHexNumber(head.Time),
 		"transactionsRoot": head.TxHash,
-		"receiptRoot":      head.ReceiptHash,
+		"receiptsRoot":      head.ReceiptHash,
 	}
 
 	if inclTx {
