@@ -219,3 +219,22 @@ func TestDAOBcTheDao(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestHomesteadBcExploit(t *testing.T) {
+	err := RunBlockTest(big.NewInt(0), nil, filepath.Join(blockTestDir, "Homestead", "bcExploitTest.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestHomesteadBcShanghaiLove(t *testing.T) {
+	err := RunBlockTest(big.NewInt(0), nil, filepath.Join(blockTestDir, "Homestead", "bcShanghaiLove.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+func TestHomesteadBcSuicideIssue(t *testing.T) {
+	err := RunBlockTest(big.NewInt(0), nil, filepath.Join(blockTestDir, "Homestead", "bcSuicideIssue.json"), BlockSkipTests)
+	if err != nil {
+		t.Fatal(err)
+	}
+}

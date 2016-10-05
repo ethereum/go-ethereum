@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/big"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -166,7 +167,13 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 	ret, logs, _, _ = RunState(ruleSet, statedb, env, test.Transaction)
 
 	// Compare expected and actual return
-	rexp := common.FromHex(test.Out)
+	var rexp []byte
+	if strings.HasPrefix(test.Out, "#") {
+		n, _ := strconv.Atoi(test.Out[1:])
+		rexp = make([]byte, n)
+	} else {
+		rexp = common.FromHex(test.Out)
+	}
 	if bytes.Compare(rexp, ret) != 0 {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
 	}

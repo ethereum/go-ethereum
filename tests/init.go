@@ -45,6 +45,9 @@ var (
 
 		"ChainAtoChainB_blockorder2",
 		"ChainAtoChainB_blockorder1",
+
+		"GasLimitHigherThan2p63m1", // not yet ;)
+		"SuicideIssue",             // fails genesis check
 	}
 
 	/* Go client does not support transaction (account) nonces above 2^64. This
@@ -52,7 +55,9 @@ var (
 	engineering constraint" as accounts cannot easily reach such high
 	nonce values in practice
 	*/
-	TransSkipTests = []string{"TransactionWithHihghNonce256"}
+	TransSkipTests = []string{
+		"TransactionWithHihghNonce256",
+	}
 	StateSkipTests = []string{}
 	VmSkipTests    = []string{}
 )

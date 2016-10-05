@@ -32,7 +32,7 @@ func BenchmarkStateCall1024(b *testing.B) {
 
 func TestStateSystemOperations(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stSystemOperationsTest.json")
@@ -43,7 +43,7 @@ func TestStateSystemOperations(t *testing.T) {
 
 func TestStateExample(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stExample.json")
@@ -54,7 +54,7 @@ func TestStateExample(t *testing.T) {
 
 func TestStatePreCompiledContracts(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stPreCompiledContracts.json")
@@ -65,7 +65,7 @@ func TestStatePreCompiledContracts(t *testing.T) {
 
 func TestStateRecursiveCreate(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stRecursiveCreate.json")
@@ -76,7 +76,7 @@ func TestStateRecursiveCreate(t *testing.T) {
 
 func TestStateSpecial(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stSpecialTest.json")
@@ -87,7 +87,7 @@ func TestStateSpecial(t *testing.T) {
 
 func TestStateRefund(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stRefundTest.json")
@@ -98,7 +98,7 @@ func TestStateRefund(t *testing.T) {
 
 func TestStateBlockHash(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stBlockHashTest.json")
@@ -109,7 +109,7 @@ func TestStateBlockHash(t *testing.T) {
 
 func TestStateInitCode(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stInitCodeTest.json")
@@ -120,7 +120,7 @@ func TestStateInitCode(t *testing.T) {
 
 func TestStateLog(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stLogTests.json")
@@ -131,7 +131,7 @@ func TestStateLog(t *testing.T) {
 
 func TestStateTransaction(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stTransactionTest.json")
@@ -142,7 +142,7 @@ func TestStateTransaction(t *testing.T) {
 
 func TestStateTransition(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stTransitionTest.json")
@@ -153,7 +153,7 @@ func TestStateTransition(t *testing.T) {
 
 func TestCallCreateCallCode(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stCallCreateCallCodeTest.json")
@@ -164,7 +164,7 @@ func TestCallCreateCallCode(t *testing.T) {
 
 func TestCallCodes(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stCallCodes.json")
@@ -175,7 +175,7 @@ func TestCallCodes(t *testing.T) {
 
 func TestDelegateCall(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stDelegatecallTest.json")
@@ -186,7 +186,7 @@ func TestDelegateCall(t *testing.T) {
 
 func TestMemory(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stMemoryTest.json")
@@ -197,7 +197,7 @@ func TestMemory(t *testing.T) {
 
 func TestMemoryStress(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
@@ -211,7 +211,7 @@ func TestMemoryStress(t *testing.T) {
 
 func TestQuadraticComplexity(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
@@ -225,7 +225,7 @@ func TestQuadraticComplexity(t *testing.T) {
 
 func TestSolidity(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stSolidityTest.json")
@@ -236,7 +236,7 @@ func TestSolidity(t *testing.T) {
 
 func TestWallet(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fn := filepath.Join(stateTestDir, "stWalletTest.json")
@@ -247,13 +247,13 @@ func TestWallet(t *testing.T) {
 
 func TestStateTestsRandom(t *testing.T) {
 	ruleSet := RuleSet{
-		HomesteadBlock: big.NewInt(1000000),
+		HomesteadBlock: big.NewInt(1150000),
 	}
 
 	fns, _ := filepath.Glob("./files/StateTests/RandomTests/*")
 	for _, fn := range fns {
 		if err := RunStateTest(ruleSet, fn, StateSkipTests); err != nil {
-			t.Error(err)
+			t.Error(fn, err)
 		}
 	}
 }
@@ -425,6 +425,17 @@ func TestHomesteadDelegateCodesCallCode(t *testing.T) {
 	}
 
 	fn := filepath.Join(stateTestDir, "Homestead", "stCallDelegateCodesCallCode.json")
+	if err := RunStateTest(ruleSet, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestHomesteadBounds(t *testing.T) {
+	ruleSet := RuleSet{
+		HomesteadBlock: new(big.Int),
+	}
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stBoundsTest.json")
 	if err := RunStateTest(ruleSet, fn, StateSkipTests); err != nil {
 		t.Error(err)
 	}
