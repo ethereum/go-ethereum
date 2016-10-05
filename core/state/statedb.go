@@ -421,9 +421,9 @@ func (self *StateDB) createStateObject(addr common.Address) *StateObject {
 	// Create a new one
 	newSo := self.newStateObject(addr)
 
-	// If it existed set the balance to the new account. This also creates a journal entry.
+	// If it existed set the balance to the new account.
 	if so != nil {
-		newSo.SetBalance(so.data.Balance)
+		newSo.setBalance(so.data.Balance)
 	} else {
 		self.journal = append(self.journal, createAccountChange{account: &addr})
 	}
