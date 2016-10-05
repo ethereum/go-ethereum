@@ -153,10 +153,13 @@ func (self *StateObject) GetState(db trie.Database, key common.Hash) common.Hash
 		return value
 	}
 	// Load from DB in case it is missing.
-	tr := self.getTrie(db)
-	var ret []byte
-	rlp.DecodeBytes(tr.Get(key[:]), &ret)
-	value = common.BytesToHash(ret)
+	if enc := self.getTrie(db).Get(key[:]); len(enc) > 0 {
+		_, content, _, err := rlp.Split(enc)
+		if err != nil {
+			self.setError(err)
+		}
+		value.SetBytes(content)
+	}
 	if (value != common.Hash{}) {
 		self.cachedStorage[key] = value
 	}
@@ -209,7 +212,6 @@ func (self *StateObject) updateRoot(db trie.Database) {
 func (self *StateObject) CommitTrie(db trie.Database, dbw trie.DatabaseWriter) error {
 	self.updateTrie(db)
 	if self.dbErr != nil {
-		fmt.Println("dbErr:", self.dbErr)
 		return self.dbErr
 	}
 	root, err := self.trie.CommitTo(dbw)
