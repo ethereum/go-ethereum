@@ -156,7 +156,7 @@ func TestSnapshot2(t *testing.T) {
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
 	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
-	so0.remove = false
+	so0.suicided = false
 	so0.deleted = false
 	state.setStateObject(so0)
 
@@ -168,7 +168,7 @@ func TestSnapshot2(t *testing.T) {
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
 	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
-	so1.remove = true
+	so1.suicided = true
 	so1.deleted = true
 	state.setStateObject(so1)
 
@@ -228,8 +228,8 @@ func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
 		}
 	}
 
-	if so0.remove != so1.remove {
-		t.Fatalf("Remove mismatch: have %v, want %v", so0.remove, so1.remove)
+	if so0.suicided != so1.suicided {
+		t.Fatalf("suicided mismatch: have %v, want %v", so0.suicided, so1.suicided)
 	}
 	if so0.deleted != so1.deleted {
 		t.Fatalf("Deleted mismatch: have %v, want %v", so0.deleted, so1.deleted)
