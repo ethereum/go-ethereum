@@ -36,7 +36,7 @@ type (
 	resetObjectChange struct {
 		prev *StateObject
 	}
-	deleteAccountChange struct {
+	suicideChange struct {
 		account     *common.Address
 		prev        bool // whether account had already suicided
 		prevbalance *big.Int
@@ -79,10 +79,10 @@ func (ch resetObjectChange) undo(s *StateDB) {
 	s.setStateObject(ch.prev)
 }
 
-func (ch deleteAccountChange) undo(s *StateDB) {
+func (ch suicideChange) undo(s *StateDB) {
 	obj := s.GetStateObject(*ch.account)
 	if obj != nil {
-		obj.remove = ch.prev
+		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
 	}
 }

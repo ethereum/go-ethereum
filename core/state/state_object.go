@@ -83,10 +83,10 @@ type StateObject struct {
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
 
 	// Cache flags.
-	// When an object is marked for deletion it will be delete from the trie
-	// during the "update" phase of the state transition
+	// When an object is marked suicided it will be delete from the trie
+	// during the "update" phase of the state transition.
 	dirtyCode bool // true if the code was updated
-	remove    bool
+	suicided  bool
 	deleted   bool
 	onDirty   func(addr common.Address) // Callback method to mark a state object newly dirty
 }
@@ -123,8 +123,8 @@ func (self *StateObject) setError(err error) {
 	}
 }
 
-func (self *StateObject) markForDeletion() {
-	self.remove = true
+func (self *StateObject) markSuicided() {
+	self.suicided = true
 	if self.onDirty != nil {
 		self.onDirty(self.Address())
 		self.onDirty = nil
@@ -266,7 +266,7 @@ func (self *StateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
-	stateObject.remove = self.remove
+	stateObject.suicided = self.suicided
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
 	return stateObject
