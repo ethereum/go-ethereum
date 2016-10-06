@@ -276,7 +276,7 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
-				work.state.Commit()
+				state.Commit(work.state)
 				parent := self.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 				if parent == nil {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
@@ -583,7 +583,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			continue
 		}
 		// Start executing the transaction
-		env.state.StartRecord(tx.Hash(), common.Hash{}, env.tcount)
+		env.state.TransitionState(tx.Hash(), common.Hash{}, env.tcount)
 
 		err, logs := env.commitTransaction(tx, bc, gp)
 		switch {
@@ -618,8 +618,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 }
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
-	snap := env.state.Copy()
-
 	// this is a bit of a hack to force jit for the miners
 	config := env.config.VmConfig
 	if !(config.EnableJit && config.ForceJit) {
@@ -627,9 +625,10 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, g
 	}
 	config.ForceJit = false // disable forcing jit
 
-	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	state, receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	defer func() { env.state = state }()
+
 	if err != nil {
-		env.state.Set(snap)
 		return err, nil
 	}
 	env.txs = append(env.txs, tx)

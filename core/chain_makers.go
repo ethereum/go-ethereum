@@ -105,8 +105,8 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 	if b.gasPool == nil {
 		b.SetCoinbase(common.Address{})
 	}
-	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
+	b.statedb.TransitionState(tx.Hash(), common.Hash{}, len(b.txs))
+	_, receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -203,7 +203,8 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 			gen(i, b)
 		}
 		AccumulateRewards(statedb, h, b.uncles)
-		root, err := statedb.Commit()
+		//root, err := statedb.Commit()
+		root, err := state.Commit(statedb)
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -224,7 +225,7 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 	return blocks, receipts
 }
 
-func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
+func makeHeader(parent *types.Block, st *state.StateDB) *types.Header {
 	var time *big.Int
 	if parent.Time() == nil {
 		time = big.NewInt(10)
@@ -232,7 +233,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
 	return &types.Header{
-		Root:       state.IntermediateRoot(),
+		Root:       state.IntermediateRoot(st),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: CalcDifficulty(MakeChainConfig(), time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),

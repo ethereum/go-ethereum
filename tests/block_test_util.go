@@ -144,7 +144,7 @@ func runBlockTests(homesteadBlock, daoForkBlock *big.Int, bt map[string]*BlockTe
 	}
 
 	for name, test := range bt {
-		if skipTest[name] {
+		if skipTest[name] || name != "OOGStateCopyContainingDeletedContract" {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}
@@ -228,7 +228,8 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 		}
 	}
 
-	root, err := statedb.Commit()
+	//root, err := statedb.Commit()
+	root, err := state.Commit(statedb)
 	if err != nil {
 		return nil, fmt.Errorf("error writing state: %v", err)
 	}
