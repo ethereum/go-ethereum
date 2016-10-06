@@ -171,7 +171,7 @@ func (self *worker) pending() (*types.Block, *state.StateDB) {
 			self.current.receipts,
 		), self.current.state
 	}
-	return self.current.Block, self.current.state
+	return self.current.Block, self.current.state.Copy()
 }
 
 func (self *worker) start() {
@@ -618,7 +618,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 }
 
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
-	snap := env.state.Copy()
+	snap := env.state.Snapshot()
 
 	// this is a bit of a hack to force jit for the miners
 	config := env.config.VmConfig
@@ -629,7 +629,7 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, g
 
 	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
 	if err != nil {
-		env.state.Set(snap)
+		env.state.RevertToSnapshot(snap)
 		return err, nil
 	}
 	env.txs = append(env.txs, tx)

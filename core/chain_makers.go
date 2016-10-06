@@ -131,7 +131,7 @@ func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	if !b.statedb.HasAccount(addr) {
+	if !b.statedb.Exist(addr) {
 		panic("account does not exist")
 	}
 	return b.statedb.GetNonce(addr)

@@ -103,19 +103,25 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db ethdb.Database, addr string, account Account, onDirty func(common.Address)) *state.StateObject {
+func makePreState(db ethdb.Database, accounts map[string]Account) *state.StateDB {
+	statedb, _ := state.New(common.Hash{}, db)
+	for addr, account := range accounts {
+		insertAccount(statedb, addr, account)
+	}
+	return statedb
+}
+
+func insertAccount(state *state.StateDB, saddr string, account Account) {
 	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	code := common.Hex2Bytes(account.Code)
-	codeHash := crypto.Keccak256Hash(code)
-	obj := state.NewObject(common.HexToAddress(addr), state.Account{
-		Balance:  common.Big(account.Balance),
-		CodeHash: codeHash[:],
-		Nonce:    common.Big(account.Nonce).Uint64(),
-	}, onDirty)
-	obj.SetCode(codeHash, code)
-	return obj
+	addr := common.HexToAddress(saddr)
+	state.SetCode(addr, common.Hex2Bytes(account.Code))
+	state.SetNonce(addr, common.Big(account.Nonce).Uint64())
+	state.SetBalance(addr, common.Big(account.Balance))
+	for a, v := range account.Storage {
+		state.SetState(addr, common.HexToHash(a), common.HexToHash(v))
+	}
 }
 
 type VmEnv struct {
@@ -229,11 +235,11 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
-func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+func (self *Env) SnapshotDatabase() int {
+	return self.state.Snapshot()
 }
-func (self *Env) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+func (self *Env) RevertToSnapshot(snapshot int) {
+	self.state.RevertToSnapshot(snapshot)
 }
 
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
