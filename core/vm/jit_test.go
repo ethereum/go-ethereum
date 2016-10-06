@@ -187,8 +187,8 @@ func (self *Env) StructLogs() []StructLog {
 
 //func (self *Env) PrevHash() []byte      { return self.parent }
 func (self *Env) Coinbase() common.Address { return common.Address{} }
-func (self *Env) MakeSnapshot() Database   { return nil }
-func (self *Env) SetSnapshot(Database)     {}
+func (self *Env) SnapshotDatabase() int    { return 0 }
+func (self *Env) RevertToSnapshot(int)     {}
 func (self *Env) Time() *big.Int           { return big.NewInt(time.Now().Unix()) }
 func (self *Env) Difficulty() *big.Int     { return big.NewInt(0) }
 func (self *Env) Db() Database             { return nil }
