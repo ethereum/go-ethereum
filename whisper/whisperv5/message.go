@@ -28,6 +28,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -106,7 +107,7 @@ func DeriveOneTimeKey(key []byte, salt []byte, version uint64) ([]byte, error) {
 func NewSentMessage(params *MessageParams) *SentMessage {
 	// Construct an initial flag set: no signature, no padding, other bits random
 	buf := make([]byte, 1)
-	crand.Read(buf)
+	mrand.Read(buf)
 	flags := buf[0]
 	flags &= ^paddingMask
 	flags &= ^signatureFlag
@@ -140,7 +141,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		crand.Read(buf[1:])
+		mrand.Read(buf[1:])
 		buf[0] = byte(padSize)
 		if params.Padding != nil {
 			copy(buf[1:], params.Padding)

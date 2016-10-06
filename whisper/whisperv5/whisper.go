@@ -385,6 +385,20 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		return fmt.Errorf("huge messages are not allowed")
 	}
 
+	if len(envelope.Version) > 4 {
+		return fmt.Errorf("oversized Version")
+	}
+
+	if len(envelope.AESNonce) > 12 {
+		// the standard AES GSM nonce size is 12,
+		// but const gcmStandardNonceSize cannot be accessed directly
+		return fmt.Errorf("oversized AESNonce")
+	}
+
+	if len(envelope.Salt) > saltLength {
+		return fmt.Errorf("oversized Salt")
+	}
+
 	if envelope.PoW() < MinimumPoW {
 		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f", envelope.PoW())
 		return nil // drop envelope without error
