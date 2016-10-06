@@ -104,7 +104,7 @@ type jsonHeader struct {
 	Coinbase    *common.Address `json:"miner"`
 	Root        *common.Hash    `json:"stateRoot"`
 	TxHash      *common.Hash    `json:"transactionsRoot"`
-	ReceiptHash *common.Hash    `json:"receiptRoot"`
+	ReceiptHash *common.Hash    `json:"receiptsRoot"`
 	Bloom       *Bloom          `json:"logsBloom"`
 	Difficulty  *hexBig         `json:"difficulty"`
 	Number      *hexBig         `json:"number"`
