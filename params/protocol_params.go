@@ -71,4 +71,5 @@ var (
 	SuicideRefundGas     = big.NewInt(24000)  // Refunded following a suicide operation.
 	MemoryGas            = big.NewInt(3)      // Times the address of the (highest referenced byte in memory + 1). NOTE: referencing happens on read, write and in instructions such as RETURN and CALL.
 	TxDataNonZeroGas     = big.NewInt(68)     // Per byte of data attached to a transaction that is not equal to zero. NOTE: Not payable on data of calls between transactions.
+
 )
