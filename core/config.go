@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error
@@ -35,6 +36,8 @@ type ChainConfig struct {
 	DAOForkBlock   *big.Int `json:"daoForkBlock"`   // TheDAO hard-fork switch block (nil = no fork)
 	DAOForkSupport bool     `json:"daoForkSupport"` // Whether the nodes supports or opposes the DAO hard-fork
 
+	HomesteadGasRepriceBlock *big.Int `json:"homesteadGasRepriceBlock"` // Homestead gas reprice switch block (nil = no fork)
+
 	VmConfig vm.Config `json:"-"`
 }
 
@@ -44,4 +47,15 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 		return false
 	}
 	return num.Cmp(c.HomesteadBlock) >= 0
+}
+
+// GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
+//
+// The returned GasTable's fields shouldn't, under any circumstances, be changed.
+func (c *ChainConfig) GasTable(num *big.Int) params.GasTable {
+	if c.HomesteadGasRepriceBlock == nil || num == nil || num.Cmp(c.HomesteadGasRepriceBlock) < 0 {
+		return params.GasTableHomestead
+	}
+
+	return params.GasTableHomesteadGasRepriceFork
 }
