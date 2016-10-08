@@ -1,40 +1,25 @@
 language: go
-go_import_path: github.com/expanse-project/go-expanse
-sudo: false
-matrix:
-  include:
-    - os: linux
-      dist: trusty
-      go: 1.4.2
-    - os: linux
-      dist: trusty
-      go: 1.5.4
-    - os: linux
-      dist: trusty
-      go: 1.6.2
-    - os: osx
-      go: 1.6.2
-
-    # This builder does the PPA upload (and nothing else).
-    - os: linux
-      dist: trusty
-      go: 1.6.2
-      env: PPA
-      addons:
-        apt:
-          packages:
-            - devscripts
-            - debhelper
-            - dput
-      script:
-        - go run build/ci.go debsrc -signer "Felix Lange ( CI Testing Key) <fjl@twurst.com>" -upload ppa:lp-fjl/geth-ci-testing
-
+go:
+  - 1.4.2
+  - 1.5.4
+  - 1.6.2
 install:
+  # - go get code.google.com/p/go.tools/cmd/goimports
+  # - go get github.com/golang/lint/golint
+  # - go get golang.org/x/tools/cmd/vet
   - go get golang.org/x/tools/cmd/cover
+before_script:
+  # - gofmt -l -w .
+  # - goimports -l -w .
+  # - golint .
+  # - go vet ./...
+  # - go test -race ./...
 script:
-  - go run build/ci.go install
-  - go run build/ci.go test -coverage -vet
+  - make gexp
 after_success:
-  # - go run build/ci.go archive -type tar
-
+  - bash <(curl -s https://codecov.io/bash)
+env:
+  global:
+    - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
+sudo: false
 notifications:
