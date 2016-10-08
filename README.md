@@ -58,7 +58,7 @@ Go Expanse comes with several wrappers/executables found in
 Going through all the possible command line flags is out of scope here (please consult our
 [CLI Wiki page](https://github.com/expanse-project/go-expanse/wiki/Command-Line-Options)), but we've
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
-own Geth instance.
+own  instance.
 
 ### Full node on the main Ethereum network
 
@@ -78,10 +78,10 @@ This command will:
  * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
    sync times especially for HDD users. This flag is optional and you can set it as high or as low as
    you'd like, though we'd recommend the 512MB - 2GB range.
- * Start up Geth's built-in interactive [JavaScript console](https://github.com/expanse-project/go-expanse/wiki/JavaScript-Console),
+ * Start up 's built-in interactive [JavaScript console](https://github.com/expanse-project/go-expanse/wiki/JavaScript-Console),
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
-   as well as Geth's own [management APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs).
-   This too is optional and if you leave it out you can always attach to an already running Geth instance
+   as well as 's own [management APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs).
+   This too is optional and if you leave it out you can always attach to an already running  instance
    with `geth --attach`.
 
 ### Full node on the Ethereum test network
@@ -99,28 +99,28 @@ The `--fast`, `--cache` flags and `console` subcommand have the exact same meani
 are equially useful on the testnet too. Please see above for their explanations if you've skipped to
 here.
 
-Specifying the `--testnet` flag however will reconfigure your Geth instance a bit:
+Specifying the `--testnet` flag however will reconfigure your  instance a bit:
 
- * Instead of using the default data directory (`~/.ethereum` on Linux for example), Geth will nest
+ * Instead of using the default data directory (`~/.ethereum` on Linux for example),  will nest
    itself one level deeper into a `testnet` subfolder (`~/.ethereum/testnet` on Linux).
  * Instead of connecting the main Ethereum network, the client will connect to the test network,
    which uses different P2P bootnodes, different network IDs and genesis states.
 
 *Note: Although there are some internal protective measures to prevent transactions from crossing
 over between the main network and test network (different starting nonces), you should make sure to
-always use separate accounts for play-money and real-money. Unless you manually move accounts, Geth
+always use separate accounts for play-money and real-money. Unless you manually move accounts, 
 will by default correctly separate the two networks and will not make any accounts available between
 them.*
 
-### Programatically interfacing Geth nodes
+### Programatically interfacing  nodes
 
-As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
-network via your own programs and not manually through the console. To aid this, Geth has built in
+As a developer, sooner rather than later you'll want to start interacting with  and the Ethereum
+network via your own programs and not manually through the console. To aid this,  has built in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
-[Geth specific APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs)). These can be
+[ specific APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platroms, and named pipes on Windows).
 
-The IPC interface is enabled by default and exposes all the APIs supported by Geth, whereas the HTTP
+The IPC interface is enabled by default and exposes all the APIs supported by , whereas the HTTP
 and WS interfaces need to manually be enabled and only expose a subset of APIs due to security reasons.
 These can be turned on/off and configured as you'd expect.
 
@@ -141,7 +141,7 @@ HTTP based JSON-RPC API options:
   * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
 You'll need to use your own programming environments' capabilities (libraries, tools, etc) to connect
-via HTTP, WS or IPC to a Geth node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
+via HTTP, WS or IPC to a  node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
 on all transports. You can reuse the same connection for multiple requests!
 
 **Note: Please understand the security implications of opening up an HTTP/WS based transport before
@@ -185,7 +185,7 @@ configs:
 }
 ```
 
-With the genesis state defined in the above JSON file, you'll need to initialize **every** Geth node
+With the genesis state defined in the above JSON file, you'll need to initialize **every**  node
 with it prior to starting it up to ensure all blockchain parameters are correctly set:
 
 ```
@@ -208,12 +208,12 @@ that other nodes can use to connect to it and exchange peer information. Make su
 displayed IP address information (most probably `[::]`) with your externally accessible IP to get the
 actual `enode` URL.
 
-*Note: You could also use a full fledged Geth node as a bootnode, but it's the less recommended way.*
+*Note: You could also use a full fledged  node as a bootnode, but it's the less recommended way.*
 
 #### Starting up your member nodes
 
 With the bootnode operational and externally reachable (you can try `telnet <ip> <port>` to ensure
-it's indeed reachable), start every subsequent Geth node pointed to the bootnode for peer discovery
+it's indeed reachable), start every subsequent  node pointed to the bootnode for peer discovery
 via the `--bootnodes` flag. It will probably also be desirable to keep the data directory of your
 private network separated, so do also specify a custom `--datadir` flag.
 
@@ -233,7 +233,7 @@ repository.
 
 In a private network setting however, a single CPU miner instance is more than enough for practical
 purposes as it can produce a stable stream of blocks at the correct intervals without needing heavy
-resources (consider running on a single thread, no need for multiple ones either). To start a Geth
+resources (consider running on a single thread, no need for multiple ones either). To start a 
 instance for mining, run it with all your usual flags, extended by:
 
 ```

@@ -822,7 +822,7 @@ func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainC
 		if !config.DAOForkSupport {
 			choice = "OPPOSE"
 		}
-		current := fmt.Sprintf("Geth is currently configured to %s the DAO hard-fork!", choice)
+		current := fmt.Sprintf(" is currently configured to %s the DAO hard-fork!", choice)
 		howtoswap := fmt.Sprintf("You can change your choice prior to block #%v with --support-dao-fork or --oppose-dao-fork.", config.DAOForkBlock)
 		howtosync := fmt.Sprintf("After the hard-fork block #%v passed, changing chains requires a resync from scratch!", config.DAOForkBlock)
 		separator := strings.Repeat("-", len(howtoswap))
