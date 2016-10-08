@@ -56,7 +56,7 @@ Go Expanse comes with several wrappers/executables found in
 ## Running geth
 
 Going through all the possible command line flags is out of scope here (please consult our
-[CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)), but we've
+[CLI Wiki page](https://github.com/expanse-project/go-expanse/wiki/Command-Line-Options)), but we've
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
 own Geth instance.
 
@@ -78,9 +78,9 @@ This command will:
  * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
    sync times especially for HDD users. This flag is optional and you can set it as high or as low as
    you'd like, though we'd recommend the 512MB - 2GB range.
- * Start up Geth's built-in interactive [JavaScript console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console),
+ * Start up Geth's built-in interactive [JavaScript console](https://github.com/expanse-project/go-expanse/wiki/JavaScript-Console),
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
-   as well as Geth's own [management APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
+   as well as Geth's own [management APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs).
    This too is optional and if you leave it out you can always attach to an already running Geth instance
    with `geth --attach`.
 
@@ -117,7 +117,7 @@ them.*
 As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
 network via your own programs and not manually through the console. To aid this, Geth has built in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
-[Geth specific APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)). These can be
+[Geth specific APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platroms, and named pipes on Windows).
 
 The IPC interface is enabled by default and exposes all the APIs supported by Geth, whereas the HTTP
@@ -250,7 +250,7 @@ limit blocks converge to (`--targetgaslimit`) and the price transactions are acc
 
 If you'd like to contribute to go-expanse, please fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit more
-complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/ethereum/go-ethereum)
+complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/expanse-project/go-expanse)
 to ensure those changes are in line with the general philosophy of the project and/or get some
 early feedback which can make both your efforts much lighter as well as our review and merge
 procedures quick and simple.
