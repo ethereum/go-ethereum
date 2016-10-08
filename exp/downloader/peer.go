@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"sort"
 	"strings"
 	"sync"
@@ -37,10 +38,8 @@ const (
 	measurementImpact = 0.1  // The impact a single measurement has on a peer's final throughput value.
 )
 
-// Hash and block fetchers belonging to eth/61 and below
-type relativeHashFetcherFn func(common.Hash) error
-type absoluteHashFetcherFn func(uint64, int) error
-type blockFetcherFn func([]common.Hash) error
+// Head hash and total difficulty retriever for
+type currentHeadRetrievalFn func() (common.Hash, *big.Int)
 
 // Block header and body fetchers belonging to eth/62 and above
 type relativeHeaderFetcherFn func(common.Hash, int, int, bool) error
@@ -57,8 +56,7 @@ var (
 
 // peer represents an active peer from which hashes and blocks are retrieved.
 type peer struct {
-	id   string      // Unique identifier of the peer
-	head common.Hash // Hash of the peers latest known block
+	id string // Unique identifier of the peer
 
 	headerIdle  int32 // Current header activity state of the peer (idle = 0, active = 1)
 	blockIdle   int32 // Current block activity state of the peer (idle = 0, active = 1)
@@ -79,9 +77,7 @@ type peer struct {
 
 	lacking map[common.Hash]struct{} // Set of hashes not to request (didn't have previously)
 
-	getRelHashes relativeHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an origin hash
-	getAbsHashes absoluteHashFetcherFn // [eth/61] Method to retrieve a batch of hashes from an absolute position
-	getBlocks    blockFetcherFn        // [eth/61] Method to retrieve a batch of blocks
+	currentHead currentHeadRetrievalFn // Method to fetch the currently known head of the peer
 
 	getRelHeaders  relativeHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an origin hash
 	getAbsHeaders  absoluteHeaderFetcherFn // [eth/62] Method to retrieve a batch of headers from an absolute position
@@ -96,19 +92,14 @@ type peer struct {
 
 // newPeer create a new downloader peer, with specific hash and block retrieval
 // mechanisms.
-func newPeer(id string, version int, head common.Hash,
-	getRelHashes relativeHashFetcherFn, getAbsHashes absoluteHashFetcherFn, getBlocks blockFetcherFn, // eth/61 callbacks, remove when upgrading
+func newPeer(id string, version int, currentHead currentHeadRetrievalFn,
 	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn,
 	getReceipts receiptFetcherFn, getNodeData stateFetcherFn) *peer {
 	return &peer{
 		id:      id,
-		head:    head,
 		lacking: make(map[common.Hash]struct{}),
 
-		getRelHashes: getRelHashes,
-		getAbsHashes: getAbsHashes,
-		getBlocks:    getBlocks,
-
+		currentHead:    currentHead,
 		getRelHeaders:  getRelHeaders,
 		getAbsHeaders:  getAbsHeaders,
 		getBlockBodies: getBlockBodies,
@@ -136,28 +127,6 @@ func (p *peer) Reset() {
 	p.stateThroughput = 0
 
 	p.lacking = make(map[common.Hash]struct{})
-}
-
-// Fetch61 sends a block retrieval request to the remote peer.
-func (p *peer) Fetch61(request *fetchRequest) error {
-	// Sanity check the protocol version
-	if p.version != 61 {
-		panic(fmt.Sprintf("block fetch [eth/61] requested on eth/%d", p.version))
-	}
-	// Short circuit if the peer is already fetching
-	if !atomic.CompareAndSwapInt32(&p.blockIdle, 0, 1) {
-		return errAlreadyFetching
-	}
-	p.blockStarted = time.Now()
-
-	// Convert the hash set to a retrievable slice
-	hashes := make([]common.Hash, 0, len(request.Hashes))
-	for hash, _ := range request.Hashes {
-		hashes = append(hashes, hash)
-	}
-	go p.getBlocks(hashes)
-
-	return nil
 }
 
 // FetchHeaders sends a header retrieval request to the remote peer.
@@ -479,20 +448,6 @@ func (ps *peerSet) AllPeers() []*peer {
 		list = append(list, p)
 	}
 	return list
-}
-
-// BlockIdlePeers retrieves a flat list of all the currently idle peers within the
-// active peer set, ordered by their reputation.
-func (ps *peerSet) BlockIdlePeers() ([]*peer, int) {
-	idle := func(p *peer) bool {
-		return atomic.LoadInt32(&p.blockIdle) == 0
-	}
-	throughput := func(p *peer) float64 {
-		p.lock.RLock()
-		defer p.lock.RUnlock()
-		return p.blockThroughput
-	}
-	return ps.idlePeers(61, 61, idle, throughput)
 }
 
 // HeaderIdlePeers retrieves a flat list of all the currently header-idle peers

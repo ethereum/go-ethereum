@@ -95,7 +95,7 @@ func ecrecoverFunc(in []byte) []byte {
 
 	// tighter sig s values in homestead only apply to tx sigs
 	if !crypto.ValidateSignatureValues(v, r, s, false) {
-		glog.V(logger.Debug).Infof("EC RECOVER FAIL: v, r or s value invalid")
+		glog.V(logger.Detail).Infof("ECRECOVER error: v, r or s value invalid")
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func ecrecoverFunc(in []byte) []byte {
 	pubKey, err := crypto.Ecrecover(in[:32], rsv)
 	// make sure the public key is a valid one
 	if err != nil {
-		glog.V(logger.Error).Infof("EC RECOVER FAIL: ", err)
+		glog.V(logger.Detail).Infoln("ECRECOVER error: ", err)
 		return nil
 	}
 

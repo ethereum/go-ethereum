@@ -73,26 +73,6 @@ type dataPack interface {
 	Stats() string
 }
 
-// hashPack is a batch of block hashes returned by a peer (eth/61).
-type hashPack struct {
-	peerId string
-	hashes []common.Hash
-}
-
-func (p *hashPack) PeerId() string { return p.peerId }
-func (p *hashPack) Items() int     { return len(p.hashes) }
-func (p *hashPack) Stats() string  { return fmt.Sprintf("%d", len(p.hashes)) }
-
-// blockPack is a batch of blocks returned by a peer (eth/61).
-type blockPack struct {
-	peerId string
-	blocks []*types.Block
-}
-
-func (p *blockPack) PeerId() string { return p.peerId }
-func (p *blockPack) Items() int     { return len(p.blocks) }
-func (p *blockPack) Stats() string  { return fmt.Sprintf("%d", len(p.blocks)) }
-
 // headerPack is a batch of block headers returned by a peer.
 type headerPack struct {
 	peerId  string

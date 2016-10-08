@@ -31,6 +31,7 @@ import (
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-project/go-expanse/crypto"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/logger/glog"
@@ -103,7 +104,7 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTestWithReader(homesteadBlock *big.Int, r io.Reader, skipTests []string) error {
+func RunBlockTestWithReader(homesteadBlock, daoForkBlock *big.Int, r io.Reader, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJson(r, &btjs); err != nil {
 		return err
@@ -114,13 +115,13 @@ func RunBlockTestWithReader(homesteadBlock *big.Int, r io.Reader, skipTests []st
 		return err
 	}
 
-	if err := runBlockTests(homesteadBlock, bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, daoForkBlock, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RunBlockTest(homesteadBlock *big.Int, file string, skipTests []string) error {
+func RunBlockTest(homesteadBlock, daoForkBlock *big.Int, file string, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJsonFile(file, &btjs); err != nil {
 		return err
@@ -130,13 +131,13 @@ func RunBlockTest(homesteadBlock *big.Int, file string, skipTests []string) erro
 	if err != nil {
 		return err
 	}
-	if err := runBlockTests(homesteadBlock, bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, daoForkBlock, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runBlockTests(homesteadBlock *big.Int, bt map[string]*BlockTest, skipTests []string) error {
+func runBlockTests(homesteadBlock, daoForkBlock *big.Int, bt map[string]*BlockTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
@@ -148,7 +149,7 @@ func runBlockTests(homesteadBlock *big.Int, bt map[string]*BlockTest, skipTests 
 			continue
 		}
 		// test the block
-		if err := runBlockTest(homesteadBlock, test); err != nil {
+		if err := runBlockTest(homesteadBlock, daoForkBlock, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
 		glog.Infoln("Block test passed: ", name)
@@ -157,7 +158,7 @@ func runBlockTests(homesteadBlock *big.Int, bt map[string]*BlockTest, skipTests 
 	return nil
 }
 
-func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
+func runBlockTest(homesteadBlock, daoForkBlock *big.Int, test *BlockTest) error {
 	// import pre accounts & construct test genesis block & state root
 	db, _ := ethdb.NewMemDatabase()
 	if _, err := test.InsertPreState(db); err != nil {
@@ -169,7 +170,7 @@ func runBlockTest(homesteadBlock *big.Int, test *BlockTest) error {
 	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
 	core.WriteHeadBlockHash(db, test.Genesis.Hash())
 	evmux := new(event.TypeMux)
-	config := &core.ChainConfig{HomesteadBlock: homesteadBlock}
+	config := &core.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true}
 	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux)
 	if err != nil {
 		return err
@@ -220,7 +221,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 			return nil, err
 		}
 		obj := statedb.CreateAccount(common.HexToAddress(addrString))
-		obj.SetCode(code)
+		obj.SetCode(crypto.Keccak256Hash(code), code)
 		obj.SetBalance(balance)
 		obj.SetNonce(nonce)
 		for k, v := range acct.Storage {

@@ -28,14 +28,14 @@ import (
 
 // Call executes within the given contract
 func Call(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, gasPrice, value *big.Int) (ret []byte, err error) {
-	ret, _, err = exec(env, caller, &addr, &addr, input, env.Db().GetCode(addr), gas, gasPrice, value)
+	ret, _, err = exec(env, caller, &addr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, gasPrice, value)
 	return ret, err
 }
 
 // CallCode executes the given address' code as the given contract address
 func CallCode(env vm.Environment, caller vm.ContractRef, addr common.Address, input []byte, gas, gasPrice, value *big.Int) (ret []byte, err error) {
 	callerAddr := caller.Address()
-	ret, _, err = exec(env, caller, &callerAddr, &addr, input, env.Db().GetCode(addr), gas, gasPrice, value)
+	ret, _, err = exec(env, caller, &callerAddr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, gasPrice, value)
 	return ret, err
 }
 
@@ -44,13 +44,13 @@ func DelegateCall(env vm.Environment, caller vm.ContractRef, addr common.Address
 	callerAddr := caller.Address()
 	originAddr := env.Origin()
 	callerValue := caller.Value()
-	ret, _, err = execDelegateCall(env, caller, &originAddr, &callerAddr, &addr, input, env.Db().GetCode(addr), gas, gasPrice, callerValue)
+	ret, _, err = execDelegateCall(env, caller, &originAddr, &callerAddr, &addr, env.Db().GetCodeHash(addr), input, env.Db().GetCode(addr), gas, gasPrice, callerValue)
 	return ret, err
 }
 
 // Create creates a new contract with the given code
 func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, gasPrice, value *big.Int) (ret []byte, address common.Address, err error) {
-	ret, address, err = exec(env, caller, nil, nil, nil, code, gas, gasPrice, value)
+	ret, address, err = exec(env, caller, nil, nil, crypto.Keccak256Hash(code), nil, code, gas, gasPrice, value)
 	// Here we get an error if we run into maximum stack depth,
 	// See: https://github.com/expanse-project/yellowpaper/pull/131
 	// and YP definitions for CREATE instruction
@@ -60,7 +60,7 @@ func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, gasPric
 	return ret, address, err
 }
 
-func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.Address, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
+func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.Address, codeHash common.Hash, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
 	evm := env.Vm()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -86,7 +86,7 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 		createAccount = true
 	}
 
-	snapshotPreTransfer := env.MakeSnapshot()
+	snapshotPreTransfer := env.SnapshotDatabase()
 	var (
 		from = env.Db().GetAccount(caller.Address())
 		to   vm.Account
@@ -106,7 +106,7 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 	// EVM. The contract is a scoped environment for this execution context
 	// only.
 	contract := vm.NewContract(caller, to, value, gas, gasPrice)
-	contract.SetCallCode(codeAddr, code)
+	contract.SetCallCode(codeAddr, codeHash, code)
 	defer contract.Finalise()
 
 	ret, err = evm.Run(contract, input)
@@ -130,13 +130,13 @@ func exec(env vm.Environment, caller vm.ContractRef, address, codeAddr *common.A
 	if err != nil && (env.RuleSet().IsHomestead(env.BlockNumber()) || err != vm.CodeStoreOutOfGasError) {
 		contract.UseGas(contract.Gas)
 
-		env.SetSnapshot(snapshotPreTransfer)
+		env.RevertToSnapshot(snapshotPreTransfer)
 	}
 
 	return ret, addr, err
 }
 
-func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toAddr, codeAddr *common.Address, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
+func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toAddr, codeAddr *common.Address, codeHash common.Hash, input, code []byte, gas, gasPrice, value *big.Int) (ret []byte, addr common.Address, err error) {
 	evm := env.Vm()
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
@@ -145,7 +145,7 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 		return nil, common.Address{}, vm.DepthError
 	}
 
-	snapshot := env.MakeSnapshot()
+	snapshot := env.SnapshotDatabase()
 
 	var to vm.Account
 	if !env.Db().Exist(*toAddr) {
@@ -156,14 +156,14 @@ func execDelegateCall(env vm.Environment, caller vm.ContractRef, originAddr, toA
 
 	// Iinitialise a new contract and make initialise the delegate values
 	contract := vm.NewContract(caller, to, value, gas, gasPrice).AsDelegate()
-	contract.SetCallCode(codeAddr, code)
+	contract.SetCallCode(codeAddr, codeHash, code)
 	defer contract.Finalise()
 
 	ret, err = evm.Run(contract, input)
 	if err != nil {
 		contract.UseGas(contract.Gas)
 
-		env.SetSnapshot(snapshot)
+		env.RevertToSnapshot(snapshot)
 	}
 
 	return ret, addr, err

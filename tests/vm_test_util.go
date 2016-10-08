@@ -102,14 +102,7 @@ func BenchVmTest(p string, conf bconf, b *testing.B) error {
 func benchVmTest(test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
-	for addr, account := range test.Pre {
-		obj := StateObjectFromAccount(db, addr, account)
-		statedb.SetStateObject(obj)
-		for a, v := range account.Storage {
-			obj.SetState(common.HexToHash(a), common.HexToHash(v))
-		}
-	}
+	statedb := makePreState(db, test.Pre)
 	b.StartTimer()
 
 	RunVm(statedb, env, test.Exec)
@@ -153,14 +146,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 func runVmTest(test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
-	statedb, _ := state.New(common.Hash{}, db)
-	for addr, account := range test.Pre {
-		obj := StateObjectFromAccount(db, addr, account)
-		statedb.SetStateObject(obj)
-		for a, v := range account.Storage {
-			obj.SetState(common.HexToHash(a), common.HexToHash(v))
-		}
-	}
+	statedb := makePreState(db, test.Pre)
 
 	// XXX Yeah, yeah...
 	env := make(map[string]string)
@@ -206,11 +192,9 @@ func runVmTest(test VmTest) error {
 		if obj == nil {
 			continue
 		}
-
 		for addr, value := range account.Storage {
-			v := obj.GetState(common.HexToHash(addr))
+			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
 			vexp := common.HexToHash(value)
-
 			if v != vexp {
 				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
@@ -242,7 +226,7 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, 
 
 	caller := state.GetOrNewStateObject(from)
 
-	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock}, state, env, exec)
+	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, state, env, exec)
 	vmenv.vmTest = true
 	vmenv.skipTransfer = true
 	vmenv.initial = true

@@ -24,6 +24,7 @@ import (
 	checker "gopkg.in/check.v1"
 
 	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-project/go-expanse/crypto"
 	"github.com/expanse-project/go-expanse/ethdb"
 )
 
@@ -40,13 +41,13 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	obj1 := s.state.GetOrNewStateObject(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 	obj2 := s.state.GetOrNewStateObject(toAddr([]byte{0x01, 0x02}))
-	obj2.SetCode([]byte{3, 3, 3, 3, 3, 3, 3})
+	obj2.SetCode(crypto.Keccak256Hash([]byte{3, 3, 3, 3, 3, 3, 3}), []byte{3, 3, 3, 3, 3, 3, 3})
 	obj3 := s.state.GetOrNewStateObject(toAddr([]byte{0x02}))
 	obj3.SetBalance(big.NewInt(44))
 
 	// write some of them to the trie
-	s.state.UpdateStateObject(obj1)
-	s.state.UpdateStateObject(obj2)
+	s.state.updateStateObject(obj1)
+	s.state.updateStateObject(obj2)
 	s.state.Commit()
 
 	// check that dump contains the state objects that are in trie
@@ -115,17 +116,23 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	// set initial state object value
 	s.state.SetState(stateobjaddr, storageaddr, data1)
 	// get snapshot of current state
-	snapshot := s.state.Copy()
+	snapshot := s.state.Snapshot()
 
 	// set new state object value
 	s.state.SetState(stateobjaddr, storageaddr, data2)
 	// restore snapshot
-	s.state.Set(snapshot)
+	s.state.RevertToSnapshot(snapshot)
 
 	// get state storage value
 	res := s.state.GetState(stateobjaddr, storageaddr)
 
 	c.Assert(data1, checker.DeepEquals, res)
+}
+
+func TestSnapshotEmpty(t *testing.T) {
+	db, _ := ethdb.NewMemDatabase()
+	state, _ := New(common.Hash{}, db)
+	state.RevertToSnapshot(state.Snapshot())
 }
 
 // use testing instead of checker because checker does not support
@@ -146,80 +153,85 @@ func TestSnapshot2(t *testing.T) {
 
 	// db, trie are already non-empty values
 	so0 := state.GetStateObject(stateobjaddr0)
-	so0.balance = big.NewInt(42)
-	so0.nonce = 43
-	so0.SetCode([]byte{'c', 'a', 'f', 'e'})
-	so0.remove = true
+	so0.SetBalance(big.NewInt(42))
+	so0.SetNonce(43)
+	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
+	so0.suicided = false
 	so0.deleted = false
-	so0.dirty = false
-	state.SetStateObject(so0)
+	state.setStateObject(so0)
+
+	root, _ := state.Commit()
+	state.Reset(root)
 
 	// and one with deleted == true
 	so1 := state.GetStateObject(stateobjaddr1)
-	so1.balance = big.NewInt(52)
-	so1.nonce = 53
-	so1.SetCode([]byte{'c', 'a', 'f', 'e', '2'})
-	so1.remove = true
+	so1.SetBalance(big.NewInt(52))
+	so1.SetNonce(53)
+	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
+	so1.suicided = true
 	so1.deleted = true
-	so1.dirty = true
-	state.SetStateObject(so1)
+	state.setStateObject(so1)
 
 	so1 = state.GetStateObject(stateobjaddr1)
 	if so1 != nil {
 		t.Fatalf("deleted object not nil when getting")
 	}
 
-	snapshot := state.Copy()
-	state.Set(snapshot)
+	snapshot := state.Snapshot()
+	state.RevertToSnapshot(snapshot)
 
 	so0Restored := state.GetStateObject(stateobjaddr0)
-	so1Restored := state.GetStateObject(stateobjaddr1)
+	// Update lazily-loaded values before comparing.
+	so0Restored.GetState(db, storageaddr)
+	so0Restored.Code(db)
 	// non-deleted is equal (restored)
 	compareStateObjects(so0Restored, so0, t)
+
 	// deleted should be nil, both before and after restore of state copy
+	so1Restored := state.GetStateObject(stateobjaddr1)
 	if so1Restored != nil {
-		t.Fatalf("deleted object not nil after restoring snapshot")
+		t.Fatalf("deleted object not nil after restoring snapshot: %+v", so1Restored)
 	}
 }
 
 func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
-	if so0.address != so1.address {
+	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}
-	if so0.balance.Cmp(so1.balance) != 0 {
-		t.Fatalf("Balance mismatch: have %v, want %v", so0.balance, so1.balance)
+	if so0.Balance().Cmp(so1.Balance()) != 0 {
+		t.Fatalf("Balance mismatch: have %v, want %v", so0.Balance(), so1.Balance())
 	}
-	if so0.nonce != so1.nonce {
-		t.Fatalf("Nonce mismatch: have %v, want %v", so0.nonce, so1.nonce)
+	if so0.Nonce() != so1.Nonce() {
+		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
 	}
-	if !bytes.Equal(so0.codeHash, so1.codeHash) {
-		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.codeHash, so1.codeHash)
+	if so0.data.Root != so1.data.Root {
+		t.Errorf("Root mismatch: have %x, want %x", so0.data.Root[:], so1.data.Root[:])
+	}
+	if !bytes.Equal(so0.CodeHash(), so1.CodeHash()) {
+		t.Fatalf("CodeHash mismatch: have %v, want %v", so0.CodeHash(), so1.CodeHash())
 	}
 	if !bytes.Equal(so0.code, so1.code) {
 		t.Fatalf("Code mismatch: have %v, want %v", so0.code, so1.code)
 	}
-	if !bytes.Equal(so0.initCode, so1.initCode) {
-		t.Fatalf("InitCode mismatch: have %v, want %v", so0.initCode, so1.initCode)
-	}
 
-	for k, v := range so1.storage {
-		if so0.storage[k] != v {
-			t.Fatalf("Storage key %s mismatch: have %v, want %v", k, so0.storage[k], v)
+	if len(so1.cachedStorage) != len(so0.cachedStorage) {
+		t.Errorf("Storage size mismatch: have %d, want %d", len(so1.cachedStorage), len(so0.cachedStorage))
+	}
+	for k, v := range so1.cachedStorage {
+		if so0.cachedStorage[k] != v {
+			t.Errorf("Storage key %x mismatch: have %v, want %v", k, so0.cachedStorage[k], v)
 		}
 	}
-	for k, v := range so0.storage {
-		if so1.storage[k] != v {
-			t.Fatalf("Storage key %s mismatch: have %v, want none.", k, v)
+	for k, v := range so0.cachedStorage {
+		if so1.cachedStorage[k] != v {
+			t.Errorf("Storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
 
-	if so0.remove != so1.remove {
-		t.Fatalf("Remove mismatch: have %v, want %v", so0.remove, so1.remove)
+	if so0.suicided != so1.suicided {
+		t.Fatalf("suicided mismatch: have %v, want %v", so0.suicided, so1.suicided)
 	}
 	if so0.deleted != so1.deleted {
 		t.Fatalf("Deleted mismatch: have %v, want %v", so0.deleted, so1.deleted)
-	}
-	if so0.dirty != so1.dirty {
-		t.Fatalf("Dirty mismatch: have %v, want %v", so0.dirty, so1.dirty)
 	}
 }

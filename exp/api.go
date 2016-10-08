@@ -1575,14 +1575,14 @@ func NewPublicDebugAPI(exp *Expanse) *PublicDebugAPI {
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
-func (api *PublicDebugAPI) DumpBlock(number uint64) (state.World, error) {
+func (api *PublicDebugAPI) DumpBlock(number uint64) (state.Dump, error) {
 	block := api.exp.BlockChain().GetBlockByNumber(number)
 	if block == nil {
-		return state.World{}, fmt.Errorf("block #%d not found", number)
+		return state.Dump{}, fmt.Errorf("block #%d not found", number)
 	}
-	stateDb, err := state.New(block.Root(), api.exp.ChainDb())
+	stateDb, err := api.exp.BlockChain().StateAt(block.Root())
 	if err != nil {
-		return state.World{}, err
+		return state.Dump{}, err
 	}
 	return stateDb.RawDump(), nil
 }
@@ -1748,7 +1748,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, config *vm.Config) (b
 	if err := core.ValidateHeader(api.config, blockchain.AuxValidator(), block.Header(), blockchain.GetHeader(block.ParentHash()), true, false); err != nil {
 		return false, collector.traces, err
 	}
-	statedb, err := state.New(blockchain.GetBlock(block.ParentHash()).Root(), api.exp.ChainDb())
+	statedb, err := blockchain.StateAt(blockchain.GetBlock(block.ParentHash()).Root())
 	if err != nil {
 		return false, collector.traces, err
 	}
@@ -1850,7 +1850,7 @@ func (api *PrivateDebugAPI) TraceTransaction(txHash common.Hash, logger *vm.LogC
 	if parent == nil {
 		return nil, fmt.Errorf("block parent %x not found", block.ParentHash())
 	}
-	stateDb, err := state.New(parent.Root(), api.exp.ChainDb())
+	stateDb, err := api.exp.BlockChain().StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}

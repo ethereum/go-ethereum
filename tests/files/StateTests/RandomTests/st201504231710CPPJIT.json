@@ -3,7 +3,7 @@
         "env" : {
             "currentCoinbase" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
             "currentDifficulty" : "0x051d6a3cd647",
-            "currentGasLimit" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "currentGasLimit" : "0x7fffffffffffffff",
             "currentNumber" : "0x00",
             "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
@@ -17,7 +17,7 @@
                 "code" : "0x7f00000000000000000000000000000000000000000000000000000000000000017fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000945304eb96065b2a98b57a48a06ae28d285a71b57f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff7f0000000000000000000000000000000000000000000000000000000000000001847f00000000000000000000000100000000000000000000000000000000000000003a0761525560005155",
                 "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0x5255"
+                    "0x00" : "0x5255"
                 }
             },
             "945304eb96065b2a98b57a48a06ae28d285a71b5" : {

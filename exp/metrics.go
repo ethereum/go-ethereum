@@ -34,14 +34,6 @@ var (
 	propBlockInTrafficMeter   = metrics.NewMeter("eth/prop/blocks/in/traffic")
 	propBlockOutPacketsMeter  = metrics.NewMeter("eth/prop/blocks/out/packets")
 	propBlockOutTrafficMeter  = metrics.NewMeter("eth/prop/blocks/out/traffic")
-	reqHashInPacketsMeter     = metrics.NewMeter("eth/req/hashes/in/packets")
-	reqHashInTrafficMeter     = metrics.NewMeter("eth/req/hashes/in/traffic")
-	reqHashOutPacketsMeter    = metrics.NewMeter("eth/req/hashes/out/packets")
-	reqHashOutTrafficMeter    = metrics.NewMeter("eth/req/hashes/out/traffic")
-	reqBlockInPacketsMeter    = metrics.NewMeter("eth/req/blocks/in/packets")
-	reqBlockInTrafficMeter    = metrics.NewMeter("eth/req/blocks/in/traffic")
-	reqBlockOutPacketsMeter   = metrics.NewMeter("eth/req/blocks/out/packets")
-	reqBlockOutTrafficMeter   = metrics.NewMeter("eth/req/blocks/out/traffic")
 	reqHeaderInPacketsMeter   = metrics.NewMeter("eth/req/headers/in/packets")
 	reqHeaderInTrafficMeter   = metrics.NewMeter("eth/req/headers/in/traffic")
 	reqHeaderOutPacketsMeter  = metrics.NewMeter("eth/req/headers/out/packets")
@@ -95,14 +87,9 @@ func (rw *meteredMsgReadWriter) ReadMsg() (p2p.Msg, error) {
 	// Account for the data traffic
 	packets, traffic := miscInPacketsMeter, miscInTrafficMeter
 	switch {
-	case rw.version < eth62 && msg.Code == BlockHashesMsg:
-		packets, traffic = reqHashInPacketsMeter, reqHashInTrafficMeter
-	case rw.version < eth62 && msg.Code == BlocksMsg:
-		packets, traffic = reqBlockInPacketsMeter, reqBlockInTrafficMeter
-
-	case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
+	case msg.Code == BlockHeadersMsg:
 		packets, traffic = reqHeaderInPacketsMeter, reqHeaderInTrafficMeter
-	case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
+	case msg.Code == BlockBodiesMsg:
 		packets, traffic = reqBodyInPacketsMeter, reqBodyInTrafficMeter
 
 	case rw.version >= eth63 && msg.Code == NodeDataMsg:
@@ -127,14 +114,9 @@ func (rw *meteredMsgReadWriter) WriteMsg(msg p2p.Msg) error {
 	// Account for the data traffic
 	packets, traffic := miscOutPacketsMeter, miscOutTrafficMeter
 	switch {
-	case rw.version < eth62 && msg.Code == BlockHashesMsg:
-		packets, traffic = reqHashOutPacketsMeter, reqHashOutTrafficMeter
-	case rw.version < eth62 && msg.Code == BlocksMsg:
-		packets, traffic = reqBlockOutPacketsMeter, reqBlockOutTrafficMeter
-
-	case rw.version >= eth62 && msg.Code == BlockHeadersMsg:
+	case msg.Code == BlockHeadersMsg:
 		packets, traffic = reqHeaderOutPacketsMeter, reqHeaderOutTrafficMeter
-	case rw.version >= eth62 && msg.Code == BlockBodiesMsg:
+	case msg.Code == BlockBodiesMsg:
 		packets, traffic = reqBodyOutPacketsMeter, reqBodyOutTrafficMeter
 
 	case rw.version >= eth63 && msg.Code == NodeDataMsg:

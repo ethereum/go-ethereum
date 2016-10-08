@@ -104,7 +104,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		receiver = cfg.State.CreateAccount(common.StringToAddress("contract"))
 	)
 	// set the receiver's (the executing contract) code for execution.
-	receiver.SetCode(code)
+	receiver.SetCode(crypto.Keccak256Hash(code), code)
 
 	// Call the code with the given configuration.
 	ret, err := vmenv.Call(

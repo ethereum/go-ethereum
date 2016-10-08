@@ -250,6 +250,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Expanse, error) {
 	if config.ChainConfig == nil {
 		return nil, errors.New("missing chain config")
 	}
+	core.WriteChainConfig(chainDb, genesis.Hash(), config.ChainConfig)
+
 	exp.chainConfig = config.ChainConfig
 	exp.chainConfig.VmConfig = vm.Config{
 		EnableJit: config.EnableJit,
