@@ -365,7 +365,7 @@ func opCalldataCopy(instr instruction, pc *uint64, env Environment, contract *Co
 
 func opExtCodeSize(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *stack) {
 	addr := common.BigToAddress(stack.pop())
-	l := big.NewInt(int64(len(env.Db().GetCode(addr))))
+	l := big.NewInt(int64(env.Db().GetCodeSize(addr)))
 	stack.push(l)
 }
 
@@ -616,7 +616,7 @@ func opSuicide(instr instruction, pc *uint64, env Environment, contract *Contrac
 	balance := env.Db().GetBalance(contract.Address())
 	env.Db().AddBalance(common.BigToAddress(stack.pop()), balance)
 
-	env.Db().Delete(contract.Address())
+	env.Db().Suicide(contract.Address())
 }
 
 // following functions are used by the instruction jump  table

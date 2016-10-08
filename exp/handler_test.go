@@ -15,17 +15,20 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 package exp
 import (
+	"math"
 	"math/big"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/exp/downloader"
+	"github.com/expanse-project/go-expanse/eth/downloader"
 	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-project/go-expanse/event"
 	"github.com/expanse-project/go-expanse/p2p"
 	"github.com/expanse-project/go-expanse/params"
 )
@@ -55,160 +58,6 @@ func TestProtocolCompatibility(t *testing.T) {
 		}
 		if (err == nil && !tt.compatible) || (err != nil && tt.compatible) {
 			t.Errorf("test %d: compatibility mismatch: have error %v, want compatibility %v", i, err, tt.compatible)
-		}
-	}
-}
-
-// Tests that hashes can be retrieved from a remote chain by hashes in reverse
-// order.
-func TestGetBlockHashes61(t *testing.T) { testGetBlockHashes(t, 61) }
-
-func testGetBlockHashes(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
-
-	// Create a batch of tests for various scenarios
-	limit := downloader.MaxHashFetch
-	tests := []struct {
-		origin common.Hash
-		number int
-		result int
-	}{
-		{common.Hash{}, 1, 0},                                   // Make sure non existent hashes don't return results
-		{pm.blockchain.Genesis().Hash(), 1, 0},                  // There are no hashes to retrieve up from the genesis
-		{pm.blockchain.GetBlockByNumber(5).Hash(), 5, 5},        // All the hashes including the genesis requested
-		{pm.blockchain.GetBlockByNumber(5).Hash(), 10, 5},       // More hashes than available till the genesis requested
-		{pm.blockchain.GetBlockByNumber(100).Hash(), 10, 10},    // All hashes available from the middle of the chain
-		{pm.blockchain.CurrentBlock().Hash(), 10, 10},           // All hashes available from the head of the chain
-		{pm.blockchain.CurrentBlock().Hash(), limit, limit},     // Request the maximum allowed hash count
-		{pm.blockchain.CurrentBlock().Hash(), limit + 1, limit}, // Request more than the maximum allowed hash count
-	}
-	// Run each of the tests and verify the results against the chain
-	for i, tt := range tests {
-		// Assemble the hash response we would like to receive
-		resp := make([]common.Hash, tt.result)
-		if len(resp) > 0 {
-			from := pm.blockchain.GetBlock(tt.origin).NumberU64() - 1
-			for j := 0; j < len(resp); j++ {
-				resp[j] = pm.blockchain.GetBlockByNumber(uint64(int(from) - j)).Hash()
-			}
-		}
-		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x03, getBlockHashesData{tt.origin, uint64(tt.number)})
-		if err := p2p.ExpectMsg(peer.app, 0x04, resp); err != nil {
-			t.Errorf("test %d: block hashes mismatch: %v", i, err)
-		}
-	}
-}
-
-// Tests that hashes can be retrieved from a remote chain by numbers in forward
-// order.
-func TestGetBlockHashesFromNumber61(t *testing.T) { testGetBlockHashesFromNumber(t, 61) }
-
-func testGetBlockHashesFromNumber(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
-
-	// Create a batch of tests for various scenarios
-	limit := downloader.MaxHashFetch
-	tests := []struct {
-		origin uint64
-		number int
-		result int
-	}{
-		{pm.blockchain.CurrentBlock().NumberU64() + 1, 1, 0},     // Out of bounds requests should return empty
-		{pm.blockchain.CurrentBlock().NumberU64(), 1, 1},         // Make sure the head hash can be retrieved
-		{pm.blockchain.CurrentBlock().NumberU64() - 4, 5, 5},     // All hashes, including the head hash requested
-		{pm.blockchain.CurrentBlock().NumberU64() - 4, 10, 5},    // More hashes requested than available till the head
-		{pm.blockchain.CurrentBlock().NumberU64() - 100, 10, 10}, // All hashes available from the middle of the chain
-		{0, 10, 10},           // All hashes available from the root of the chain
-		{0, limit, limit},     // Request the maximum allowed hash count
-		{0, limit + 1, limit}, // Request more than the maximum allowed hash count
-		{0, 1, 1},             // Make sure the genesis hash can be retrieved
-	}
-	// Run each of the tests and verify the results against the chain
-	for i, tt := range tests {
-		// Assemble the hash response we would like to receive
-		resp := make([]common.Hash, tt.result)
-		for j := 0; j < len(resp); j++ {
-			resp[j] = pm.blockchain.GetBlockByNumber(tt.origin + uint64(j)).Hash()
-		}
-		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x08, getBlockHashesFromNumberData{tt.origin, uint64(tt.number)})
-		if err := p2p.ExpectMsg(peer.app, 0x04, resp); err != nil {
-			t.Errorf("test %d: block hashes mismatch: %v", i, err)
-		}
-	}
-}
-
-// Tests that blocks can be retrieved from a remote chain based on their hashes.
-func TestGetBlocks61(t *testing.T) { testGetBlocks(t, 61) }
-
-func testGetBlocks(t *testing.T, protocol int) {
-	pm := newTestProtocolManagerMust(t, false, downloader.MaxHashFetch+15, nil, nil)
-	peer, _ := newTestPeer("peer", protocol, pm, true)
-	defer peer.close()
-
-	// Create a batch of tests for various scenarios
-	limit := downloader.MaxBlockFetch
-	tests := []struct {
-		random    int           // Number of blocks to fetch randomly from the chain
-		explicit  []common.Hash // Explicitly requested blocks
-		available []bool        // Availability of explicitly requested blocks
-		expected  int           // Total number of existing blocks to expect
-	}{
-		{1, nil, nil, 1},                                                         // A single random block should be retrievable
-		{10, nil, nil, 10},                                                       // Multiple random blocks should be retrievable
-		{limit, nil, nil, limit},                                                 // The maximum possible blocks should be retrievable
-		{limit + 1, nil, nil, limit},                                             // No more than the possible block count should be returned
-		{0, []common.Hash{pm.blockchain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
-		{0, []common.Hash{pm.blockchain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                      // A non existent block should not be returned
-
-		// Existing and non-existing blocks interleaved should not cause problems
-		{0, []common.Hash{
-			common.Hash{},
-			pm.blockchain.GetBlockByNumber(1).Hash(),
-			common.Hash{},
-			pm.blockchain.GetBlockByNumber(10).Hash(),
-			common.Hash{},
-			pm.blockchain.GetBlockByNumber(100).Hash(),
-			common.Hash{},
-		}, []bool{false, true, false, true, false, true, false}, 3},
-	}
-	// Run each of the tests and verify the results against the chain
-	for i, tt := range tests {
-		// Collect the hashes to request, and the response to expect
-		hashes, seen := []common.Hash{}, make(map[int64]bool)
-		blocks := []*types.Block{}
-
-		for j := 0; j < tt.random; j++ {
-			for {
-				num := rand.Int63n(int64(pm.blockchain.CurrentBlock().NumberU64()))
-				if !seen[num] {
-					seen[num] = true
-
-					block := pm.blockchain.GetBlockByNumber(uint64(num))
-					hashes = append(hashes, block.Hash())
-					if len(blocks) < tt.expected {
-						blocks = append(blocks, block)
-					}
-					break
-				}
-			}
-		}
-		for j, hash := range tt.explicit {
-			hashes = append(hashes, hash)
-			if tt.available[j] && len(blocks) < tt.expected {
-				blocks = append(blocks, pm.blockchain.GetBlock(hash))
-			}
-		}
-		// Send the hash request and verify the response
-		p2p.Send(peer.app, 0x05, hashes)
-		if err := p2p.ExpectMsg(peer.app, 0x06, blocks); err != nil {
-			t.Errorf("test %d: blocks mismatch: %v", i, err)
 		}
 	}
 }
@@ -321,6 +170,20 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 				pm.blockchain.GetBlockByNumber(2).Hash(),
 				pm.blockchain.GetBlockByNumber(1).Hash(),
 				pm.blockchain.GetBlockByNumber(0).Hash(),
+			},
+		},
+		// Check a corner case where skipping overflow loops back into the chain start
+		{
+			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(3).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64 - 1},
+			[]common.Hash{
+				pm.blockchain.GetBlockByNumber(3).Hash(),
+			},
+		},
+		// Check a corner case where skipping overflow loops back to the same header
+		{
+			&getBlockHeadersData{Origin: hashOrNumber{Hash: pm.blockchain.GetBlockByNumber(1).Hash()}, Amount: 2, Reverse: false, Skip: math.MaxUint64},
+			[]common.Hash{
+				pm.blockchain.GetBlockByNumber(1).Hash(),
 			},
 		},
 		// Check that non existing headers aren't returned
@@ -576,5 +439,77 @@ func testGetReceipt(t *testing.T, protocol int) {
 	p2p.Send(peer.app, 0x0f, hashes)
 	if err := p2p.ExpectMsg(peer.app, 0x10, receipts); err != nil {
 		t.Errorf("receipts mismatch: %v", err)
+	}
+}
+
+// Tests that post eth protocol handshake, DAO fork-enabled clients also execute
+// a DAO "challenge" verifying each others' DAO fork headers to ensure they're on
+// compatible chains.
+func TestDAOChallengeNoVsNo(t *testing.T)       { testDAOChallenge(t, false, false, false) }
+func TestDAOChallengeNoVsPro(t *testing.T)      { testDAOChallenge(t, false, true, false) }
+func TestDAOChallengeProVsNo(t *testing.T)      { testDAOChallenge(t, true, false, false) }
+func TestDAOChallengeProVsPro(t *testing.T)     { testDAOChallenge(t, true, true, false) }
+func TestDAOChallengeNoVsTimeout(t *testing.T)  { testDAOChallenge(t, false, false, true) }
+func TestDAOChallengeProVsTimeout(t *testing.T) { testDAOChallenge(t, true, true, true) }
+
+func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool) {
+	// Reduce the DAO handshake challenge timeout
+	if timeout {
+		defer func(old time.Duration) { daoChallengeTimeout = old }(daoChallengeTimeout)
+		daoChallengeTimeout = 500 * time.Millisecond
+	}
+	// Create a DAO aware protocol manager
+	var (
+		evmux         = new(event.TypeMux)
+		pow           = new(core.FakePow)
+		db, _         = ethdb.NewMemDatabase()
+		genesis       = core.WriteGenesisBlockForTesting(db)
+		config        = &core.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
+		blockchain, _ = core.NewBlockChain(db, config, pow, evmux)
+	)
+	pm, err := NewProtocolManager(config, false, NetworkId, evmux, new(testTxPool), pow, blockchain, db)
+	if err != nil {
+		t.Fatalf("failed to start test protocol manager: %v", err)
+	}
+	pm.Start()
+	defer pm.Stop()
+
+	// Connect a new peer and check that we receive the DAO challenge
+	peer, _ := newTestPeer("peer", eth63, pm, true)
+	defer peer.close()
+
+	challenge := &getBlockHeadersData{
+		Origin:  hashOrNumber{Number: config.DAOForkBlock.Uint64()},
+		Amount:  1,
+		Skip:    0,
+		Reverse: false,
+	}
+	if err := p2p.ExpectMsg(peer.app, GetBlockHeadersMsg, challenge); err != nil {
+		t.Fatalf("challenge mismatch: %v", err)
+	}
+	// Create a block to reply to the challenge if no timeout is simualted
+	if !timeout {
+		blocks, _ := core.GenerateChain(nil, genesis, db, 1, func(i int, block *core.BlockGen) {
+			if remoteForked {
+				block.SetExtra(params.DAOForkBlockExtra)
+			}
+		})
+		if err := p2p.Send(peer.app, BlockHeadersMsg, []*types.Header{blocks[0].Header()}); err != nil {
+			t.Fatalf("failed to answer challenge: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond) // Sleep to avoid the verification racing with the drops
+	} else {
+		// Otherwise wait until the test timeout passes
+		time.Sleep(daoChallengeTimeout + 500*time.Millisecond)
+	}
+	// Verify that depending on fork side, the remote peer is maintained or dropped
+	if localForked == remoteForked && !timeout {
+		if peers := pm.peers.Len(); peers != 1 {
+			t.Fatalf("peer count mismatch: have %d, want %d", peers, 1)
+		}
+	} else {
+		if peers := pm.peers.Len(); peers != 0 {
+			t.Fatalf("peer count mismatch: have %d, want %d", peers, 0)
+		}
 	}
 }

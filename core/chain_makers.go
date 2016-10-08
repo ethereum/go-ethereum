@@ -19,13 +19,13 @@ package core
 import (
 	"fmt"
 	"math/big"
-
 	"github.com/expanse-project/go-expanse/common"
 	"github.com/expanse-project/go-expanse/core/state"
 	"github.com/expanse-project/go-expanse/core/types"
 	"github.com/expanse-project/go-expanse/core/vm"
 	"github.com/expanse-project/go-expanse/ethdb"
 	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-project/go-expanse/params"
 	"github.com/expanse-project/go-expanse/pow"
 )
 
@@ -35,7 +35,11 @@ import (
 
 // MakeChainConfig returns a new ChainConfig with the expanse default chain settings.
 func MakeChainConfig() *ChainConfig {
-	return &ChainConfig{HomesteadBlock: big.NewInt(0)}
+	return &ChainConfig{
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock:   nil,
+		DAOForkSupport: true,
+	}
 }
 
 // FakePow is a non-validating proof of work implementation.
@@ -126,7 +130,7 @@ func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 // TxNonce returns the next valid transaction nonce for the
 // account at addr. It panics if the account does not exist.
 func (b *BlockGen) TxNonce(addr common.Address) uint64 {
-	if !b.statedb.HasAccount(addr) {
+	if !b.statedb.Exist(addr) {
 		panic("account does not exist")
 	}
 	return b.statedb.GetNonce(addr)
@@ -173,10 +177,27 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
+
+		// Mutate the state and block according to any hard-fork specs
+		if config == nil {
+			config = MakeChainConfig()
+		}
+		if daoBlock := config.DAOForkBlock; daoBlock != nil {
+			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
+			if h.Number.Cmp(daoBlock) >= 0 && h.Number.Cmp(limit) < 0 {
+				if config.DAOForkSupport {
+					h.Extra = common.CopyBytes(params.DAOForkBlockExtra)
+				}
+			}
+		}
+		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(h.Number) == 0 {
+			ApplyDAOHardFork(statedb)
+		}
+		// Execute any user modifications to the block and finalize it
 		if gen != nil {
 			gen(i, b)
 		}
@@ -261,7 +282,7 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
 func makeBlockChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
-	blocks, _ := GenerateChain(parent, db, n, func(i int, b *BlockGen) {
+	blocks, _ := GenerateChain(nil, parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	return blocks

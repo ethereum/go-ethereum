@@ -2,7 +2,7 @@ FROM alpine:3.3
 
 RUN \
   apk add --update go git make gcc musl-dev         && \
-  git clone https://github.com/ethereum/go-ethereum && \
+  git clone https://github.com/expanse-project/go-expanse && \
   (cd go-ethereum && git checkout develop)          && \
   (cd go-ethereum && make gexp)                     && \
   cp go-ethereum/build/bin/gexp /gexp               && \

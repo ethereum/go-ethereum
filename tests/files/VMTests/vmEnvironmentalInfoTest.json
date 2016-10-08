@@ -2081,21 +2081,21 @@
         "exec" : {
             "address" : "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6",
             "caller" : "cd1722f3947def4cf144679da39c4c32bdc35681",
-            "code" : "0x",
+            "code" : "0x600060006000333c600051600055",
             "data" : "0x01234567890abcdef01234567890abcdef",
             "gas" : "0x174876e800",
             "gasPrice" : "0x075bcd15",
             "origin" : "cd1722f3947def4cf144679da39c4c32bdc35681",
             "value" : "0x0de0b6b3a7640000"
         },
-        "gas" : "0x174876e800",
+        "gas" : "0x174876d44d",
         "logs" : [
         ],
         "out" : "0x",
         "post" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "0x152d02c7e14af6800000",
-                "code" : "0x",
+                "code" : "0x600060006000333c600051600055",
                 "nonce" : "0x00",
                 "storage" : {
                 }
@@ -2111,7 +2111,7 @@
         "pre" : {
             "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6" : {
                 "balance" : "0x152d02c7e14af6800000",
-                "code" : "0x",
+                "code" : "0x600060006000333c600051600055",
                 "nonce" : "0x00",
                 "storage" : {
                 }
