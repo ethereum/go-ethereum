@@ -974,6 +974,12 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 
 		stats.processed++
+		if time.Since(bstart) > 1200*time.Millisecond {
+			glog.Infof("#### inserted slow block ####")
+			glog.Infof("[%v] inserted block #%d (%d TXs %v G %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), block.GasUsed(), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
+			glog.Infof("#############################")
+		}
+
 		if glog.V(logger.Info) {
 			stats.report(chain, i)
 		}
