@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -624,6 +625,8 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		WSOrigins:         ctx.GlobalString(WSAllowedOriginsFlag.Name),
 		WSModules:         MakeRPCModules(ctx.GlobalString(WSApiFlag.Name)),
 	}
+	vm.SetJITCacheSize(ctx.GlobalInt(VMCacheFlag.Name))
+
 	if ctx.GlobalBool(DevModeFlag.Name) {
 		if !ctx.GlobalIsSet(DataDirFlag.Name) {
 			config.DataDir = filepath.Join(os.TempDir(), "/ethereum_dev_mode")
