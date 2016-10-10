@@ -40,20 +40,28 @@ const (
 
 type txsync struct {
 	p   *peer
-	txs []*types.Transaction
+	txs map[common.Hash]*types.Transaction
 }
 
 // syncTransactions starts sending all currently pending transactions to the given peer.
 func (pm *ProtocolManager) syncTransactions(p *peer) {
-	var txs types.Transactions
-	for _, batch := range pm.txpool.Pending() {
-		txs = append(txs, batch...)
-	}
+	txs := pm.txpool.PendingTransactions()
 	if len(txs) == 0 {
 		return
 	}
 	select {
-	case pm.txsyncCh <- &txsync{p, txs}:
+	case pm.txsyncInit <- &txsync{p, txs}:
+	case <-pm.quitSync:
+	}
+}
+
+func (pm *ProtocolManager) removeSyncTransactions(p *peer, txs []*types.Transaction) {
+	set := make(map[common.Hash]*types.Transaction, len(txs))
+	for _, tx := range txs {
+		set[tx.Hash()] = tx
+	}
+	select {
+	case pm.txsyncRemove <- &txsync{p, set}:
 	case <-pm.quitSync:
 	}
 }
@@ -65,30 +73,31 @@ func (pm *ProtocolManager) syncTransactions(p *peer) {
 func (pm *ProtocolManager) txsyncLoop() {
 	var (
 		pending = make(map[discover.NodeID]*txsync)
-		sending = false               // whether a send is active
-		pack    = new(txsync)         // the pack that is being sent
-		done    = make(chan error, 1) // result of the send
+		pack    []*types.Transaction  // the pack that is being sent
+		sending *peer                 // peer that pack is being sent to
+		done    = make(chan error, 1) // send error
 	)
 
 	// send starts a sending a pack of transactions from the sync.
 	send := func(s *txsync) {
 		// Fill pack with transactions up to the target size.
 		size := common.StorageSize(0)
-		pack.p = s.p
-		pack.txs = pack.txs[:0]
-		for i := 0; i < len(s.txs) && size < txsyncPackSize; i++ {
-			pack.txs = append(pack.txs, s.txs[i])
-			size += s.txs[i].Size()
+		pack = pack[:0]
+		for hash, tx := range s.txs {
+			if size > txsyncPackSize {
+				break
+			}
+			pack = append(pack, tx)
+			size += tx.Size()
+			delete(s.txs, hash)
 		}
-		// Remove the transactions that will be sent.
-		s.txs = s.txs[:copy(s.txs, s.txs[len(pack.txs):])]
 		if len(s.txs) == 0 {
 			delete(pending, s.p.ID())
 		}
 		// Send the pack in the background.
-		glog.V(logger.Detail).Infof("%v: sending %d transactions (%v)", s.p.Peer, len(pack.txs), size)
-		sending = true
-		go func() { done <- pack.p.SendTransactions(pack.txs) }()
+		glog.V(logger.Detail).Infof("%v: sending %d transactions (%v)", s.p.Peer, len(pack), size)
+		sending = s.p
+		go func() { done <- s.p.SendTransactions(pack) }()
 	}
 
 	// pick chooses the next pending sync.
@@ -107,18 +116,29 @@ func (pm *ProtocolManager) txsyncLoop() {
 
 	for {
 		select {
-		case s := <-pm.txsyncCh:
+		case s := <-pm.txsyncInit:
 			pending[s.p.ID()] = s
-			if !sending {
+			if sending == nil {
 				send(s)
 			}
+		case s := <-pm.txsyncRemove:
+			// The peer has sent us a pack of transactions, remove
+			// them from the set txs that we have yet to send to them.
+			if set, ok := pending[s.p.ID()]; ok {
+				for _, tx := range s.txs {
+					delete(set.txs, tx.Hash())
+				}
+				if len(set.txs) == 0 {
+					delete(pending, s.p.ID())
+				}
+			}
 		case err := <-done:
-			sending = false
 			// Stop tracking peers that cause send failures.
 			if err != nil {
-				glog.V(logger.Debug).Infof("%v: tx send failed: %v", pack.p.Peer, err)
-				delete(pending, pack.p.ID())
+				glog.V(logger.Debug).Infof("%v: tx send failed: %v", sending.Peer, err)
+				delete(pending, sending.ID())
 			}
+			sending = nil
 			// Schedule the next send.
 			if s := pick(); s != nil {
 				send(s)

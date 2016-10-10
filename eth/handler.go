@@ -80,10 +80,11 @@ type ProtocolManager struct {
 	minedBlockSub event.Subscription
 
 	// channels for fetcher, syncer, txsyncLoop
-	newPeerCh   chan *peer
-	txsyncCh    chan *txsync
-	quitSync    chan struct{}
-	noMorePeers chan struct{}
+	newPeerCh    chan *peer
+	txsyncInit   chan *txsync
+	txsyncRemove chan *txsync
+	quitSync     chan struct{}
+	noMorePeers  chan struct{}
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
@@ -97,17 +98,18 @@ type ProtocolManager struct {
 func NewProtocolManager(config *core.ChainConfig, fastSync bool, networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkId:   networkId,
-		eventMux:    mux,
-		txpool:      txpool,
-		blockchain:  blockchain,
-		chaindb:     chaindb,
-		chainconfig: config,
-		peers:       newPeerSet(),
-		newPeerCh:   make(chan *peer),
-		noMorePeers: make(chan struct{}),
-		txsyncCh:    make(chan *txsync),
-		quitSync:    make(chan struct{}),
+		networkId:    networkId,
+		eventMux:     mux,
+		txpool:       txpool,
+		blockchain:   blockchain,
+		chaindb:      chaindb,
+		chainconfig:  config,
+		peers:        newPeerSet(),
+		newPeerCh:    make(chan *peer),
+		noMorePeers:  make(chan struct{}),
+		txsyncInit:   make(chan *txsync),
+		txsyncRemove: make(chan *txsync),
+		quitSync:     make(chan struct{}),
 	}
 	// Figure out whether to allow fast sync or not
 	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -689,6 +691,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 		pm.txpool.AddBatch(txs)
+		pm.removeSyncTransactions(p, txs)
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)

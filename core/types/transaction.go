@@ -448,8 +448,8 @@ func (s *TxByPrice) Pop() interface{} {
 // transactions in a profit-maximising sorted order, while supporting removing
 // entire batches of transactions for non-executable accounts.
 type TransactionsByPriceAndNonce struct {
-	txs   map[common.Address]Transactions // Per account nonce-sorted list of transactions
-	heads TxByPrice                       // Next transaction for each unique account (price heap)
+	txs   map[common.Address][]*Transaction // Per account nonce-sorted list of transactions
+	heads TxByPrice                         // Next transaction for each unique account (price heap)
 }
 
 // NewTransactionsByPriceAndNonce creates a transaction set that can retrieve
@@ -457,7 +457,7 @@ type TransactionsByPriceAndNonce struct {
 //
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providng it to the constructor.
-func NewTransactionsByPriceAndNonce(txs map[common.Address]Transactions) *TransactionsByPriceAndNonce {
+func NewTransactionsByPriceAndNonce(txs map[common.Address][]*Transaction) *TransactionsByPriceAndNonce {
 	// Initialize a price based heap with the head transactions
 	heads := make(TxByPrice, 0, len(txs))
 	for acc, accTxs := range txs {

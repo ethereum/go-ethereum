@@ -236,7 +236,7 @@ func (self *worker) update() {
 				self.currentMu.Lock()
 
 				acc, _ := ev.Tx.From()
-				txs := map[common.Address]types.Transactions{acc: types.Transactions{ev.Tx}}
+				txs := map[common.Address][]*types.Transaction{acc: types.Transactions{ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
 
 				self.current.commitTransactions(self.mux, txset, self.gasPrice, self.chain)
@@ -495,7 +495,7 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		core.ApplyDAOHardFork(work.state)
 	}
-	txs := types.NewTransactionsByPriceAndNonce(self.eth.TxPool().Pending())
+	txs := types.NewTransactionsByPriceAndNonce(self.eth.TxPool().PendingTransactionsByAccount())
 	work.commitTransactions(self.mux, txs, self.gasPrice, self.chain)
 
 	self.eth.TxPool().RemoveBatch(work.lowGasTxs)

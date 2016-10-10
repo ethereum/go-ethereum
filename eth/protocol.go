@@ -100,9 +100,9 @@ type txPool interface {
 	// AddBatch should add the given transactions to the pool.
 	AddBatch([]*types.Transaction)
 
-	// Pending should return pending transactions.
-	// The slice should be modifiable by the caller.
-	Pending() map[common.Address]types.Transactions
+	// PendingTransactions should return all processable transactions.
+	// The map should be modifiable by the caller.
+	PendingTransactions() map[common.Hash]*types.Transaction
 }
 
 // statusData is the network packet for the status message.

@@ -208,10 +208,9 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	return pending, queued
 }
 
-// Pending retrieves all currently processable transactions, groupped by origin
-// account and sorted by nonce. The returned transaction set is a copy and can be
-// freely modified by calling code.
-func (pool *TxPool) Pending() map[common.Address]types.Transactions {
+// Pending retrieves all currently processable transactions The returned map is a copy and
+// can be modified by calling code.
+func (pool *TxPool) PendingTransactions() map[common.Hash]*types.Transaction {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
@@ -221,7 +220,29 @@ func (pool *TxPool) Pending() map[common.Address]types.Transactions {
 	// invalidate any txs
 	pool.demoteUnexecutables()
 
-	pending := make(map[common.Address]types.Transactions)
+	pending := make(map[common.Hash]*types.Transaction)
+	for _, list := range pool.pending {
+		for _, tx := range list.txs.items {
+			pending[tx.Hash()] = tx
+		}
+	}
+	return pending
+}
+
+// PendingTransactionsByAccount retrieves all currently processable transactions, grouped
+// by origin account and sorted by nonce. The returned transaction set is a copy and can
+// be modified by the caller.
+func (pool *TxPool) PendingTransactionsByAccount() map[common.Address][]*types.Transaction {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	// check queue first
+	pool.promoteExecutables()
+
+	// invalidate any txs
+	pool.demoteUnexecutables()
+
+	pending := make(map[common.Address][]*types.Transaction)
 	for addr, list := range pool.pending {
 		pending[addr] = list.Flatten()
 	}
