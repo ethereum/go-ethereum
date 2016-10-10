@@ -47,7 +47,7 @@ var (
 
 var (
 	maxQueuedPerAccount = uint64(64)    // Max limit of queued transactions per address
-	maxQueuedInTotal    = uint64(65536) // Max limit of queued transactions from all accounts
+	maxQueuedInTotal    = uint64(8192)  // Max limit of queued transactions from all accounts
 	maxQueuedLifetime   = 3 * time.Hour // Max amount of time transactions from idle accounts are queued
 	evictionInterval    = time.Minute   // Time interval to check for evictable transactions
 )
