@@ -1007,7 +1007,7 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 	duration := now.Sub(st.startTime)
 	if duration > statsReportTimeLimit || st.queued > limit || st.processed > limit || st.ignored > limit {
 		start, end := chain[st.lastIndex], chain[index]
-		txcount := countTransactions(chain[st.lastIndex:index])
+		txcount := countTransactions(chain[st.lastIndex : index+1])
 		glog.Infof("imported %d block(s) (%d queued %d ignored) including %d txs in %v. #%v [%x / %x]\n", st.processed, st.queued, st.ignored, txcount, duration, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 		*st = insertStats{startTime: now, lastIndex: index}
 	}
