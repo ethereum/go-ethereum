@@ -178,10 +178,14 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 		// leaf nodes -> content chunks
 		chunkData := make([]byte, size+8)
 		binary.LittleEndian.PutUint64(chunkData[0:8], uint64(size))
-		_, err := data.Read(chunkData[8:])
-		if err != nil {
-			errC <- err
-			return
+		var readBytes int64
+		for readBytes < size {
+			n, err := data.Read(chunkData[8+readBytes:])
+			readBytes += int64(n)
+			if err != nil && !(err == io.EOF && readBytes == size) {
+				errC <- err
+				return
+			}
 		}
 		select {
 		case jobC <- &hashJob{key, chunkData, size, parentWg}:
@@ -370,7 +374,6 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
 	// return NewDPA(&LocalStore{})
-
 
 	// chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
