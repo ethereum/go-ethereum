@@ -82,8 +82,6 @@ type Program struct {
 	Id     common.Hash // Id of the program
 	status int32       // status should be accessed atomically
 
-	contract *Contract
-
 	instructions []programInstruction // instruction set
 	mapping      map[uint64]uint64    // real PC mapping to array indices
 	destinations map[uint64]struct{}  // cached jump destinations
@@ -288,6 +286,8 @@ func CompileProgram(program *Program) {
 			program.addInstr(op, pc, nil, nil)
 		}
 	}
+	// reset the program code. It's no longer required by the program itself.
+	//program.code = nil
 }
 
 func RunProgram(program *Program, env *Environment, contract *Contract, input []byte) ([]byte, error) {

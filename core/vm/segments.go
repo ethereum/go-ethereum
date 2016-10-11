@@ -16,7 +16,10 @@
 
 package vm
 
-import "math/big"
+import (
+	"fmt"
+	"math/big"
+)
 
 type jumpSeg struct {
 	pos uint64
@@ -34,8 +37,9 @@ func (j jumpSeg) do(vm *EVM, program *Program, pc *uint64, env *Environment, con
 	*pc = j.pos
 	return nil, nil
 }
-func (s jumpSeg) halts() bool { return false }
-func (s jumpSeg) Op() OpCode  { return 0 }
+func (s jumpSeg) halts() bool    { return false }
+func (s jumpSeg) Op() OpCode     { return OPTIMISED }
+func (s jumpSeg) String() string { return fmt.Sprintf("JUMP_SEG->%d", s.pos) }
 
 type pushSeg struct {
 	data []*big.Int
@@ -56,5 +60,29 @@ func (s pushSeg) do(vm *EVM, program *Program, pc *uint64, env *Environment, con
 	return nil, nil
 }
 
-func (s pushSeg) halts() bool { return false }
-func (s pushSeg) Op() OpCode  { return 0 }
+func (s pushSeg) halts() bool    { return false }
+func (s pushSeg) Op() OpCode     { return OPTIMISED }
+func (s pushSeg) String() string { return fmt.Sprintf("PUSH_SEG(%d)", len(s.data)) }
+
+//CALLDATASIZE, ISZERO, PUSH2, JUMPI
+//if len(calldata) > 0 {
+//	*pc = T.pos
+//}
+
+//PUSH 224, PUSH 2, EXP, PUSH 0, CALLDATALOAD, DIV
+//calldata[:4]
+
+//PUSH4, DUP2, EQ, PUSH2, JUMP
+/*
+if calldata[:4] == (PUSH4)
+else if calldata[:4] == (PUSH2) ????
+else if calldata[:4] == (PUSH2) ????
+
+type programJumpTable map[funcId]dest
+
+if len(calldata) > 0 {
+	if ppc, exist := programJumpTable[string(calldata[:4])]; exit {
+		*pc = ppc
+	}
+}
+*/

@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -116,24 +117,28 @@ func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) (
 	)
 
 	if glog.V(logger.Debug) {
-		glog.Infof("running JIT program %x\n", program.Id[:4])
+		glog.Infof("running EVM program %x\n", program.Id[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("JIT program %x done. time: %v instrc: %v\n", program.Id[:4], time.Since(tstart), instrCount)
+			glog.Infof("EVM program %x done. time: %v instrc: %v\n", program.Id[:4], time.Since(tstart), instrCount)
+			os.Exit(1)
 		}()
 	}
 
+	fmt.Printf("%x\n", input)
 	homestead := env.ChainConfig().IsHomestead(env.BlockNumber)
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
 		instr := program.instructions[pc]
+		//fmt.Println(instr)
 		if instr.Op() == DELEGATECALL && !homestead {
 			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.Op())
 		}
 
 		ret, err := instr.do(evm, program, &pc, env, contract, mem, stack)
 		if err != nil {
+			glog.Infoln("error executing EVM program for: '", instr.Op(), "' with: ", err)
 			//gas := new(big.Int).SetUint64(contract.gas64)
 			//evm.cfg.Tracer.CaptureState(evm.env, pc, instr.Op(), gas, cost, mem, stack, contract, evm.env.Depth(), err)
 

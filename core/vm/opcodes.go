@@ -195,6 +195,8 @@ const (
 )
 
 const (
+	OPTIMISED OpCode = 0xd0 + iota
+
 	// 0xf0 range - closures
 	CREATE OpCode = 0xf0 + iota
 	CALL
@@ -360,6 +362,8 @@ var opCodeToString = map[OpCode]string{
 	PUSH: "PUSH",
 	DUP:  "DUP",
 	SWAP: "SWAP",
+
+	OPTIMISED: "OPTIMISED",
 }
 
 func (o OpCode) String() string {

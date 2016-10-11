@@ -34,6 +34,8 @@ type programInstruction interface {
 	Op() OpCode
 }
 
+//[static memory], if calldata goto jump table
+
 type instrFn func(instr instruction, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack)
 
 type instruction struct {
@@ -47,6 +49,13 @@ type instruction struct {
 	spush int
 
 	returns bool
+}
+
+func (instr instruction) String() string {
+	if instr.op == PUSH1 {
+		return fmt.Sprintf("PUSH %v", instr.data)
+	}
+	return fmt.Sprintf("%v", instr.op)
 }
 
 func jump(mapping map[uint64]uint64, destinations map[uint64]struct{}, contract *Contract, to *big.Int) (uint64, error) {
