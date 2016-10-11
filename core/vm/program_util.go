@@ -16,23 +16,28 @@
 
 package vm
 
+type parsedOp struct {
+	op OpCode
+	pc uint64
+}
+
 // Parse parses all opcodes from the given code byte slice. This function
 // performs no error checking and may return non-existing opcodes.
-func Parse(code []byte) (opcodes []OpCode) {
+func Parse(code []byte) (opcodes []parsedOp) {
 	for pc := uint64(0); pc < uint64(len(code)); pc++ {
 		op := OpCode(code[pc])
 
 		switch op {
 		case PUSH1, PUSH2, PUSH3, PUSH4, PUSH5, PUSH6, PUSH7, PUSH8, PUSH9, PUSH10, PUSH11, PUSH12, PUSH13, PUSH14, PUSH15, PUSH16, PUSH17, PUSH18, PUSH19, PUSH20, PUSH21, PUSH22, PUSH23, PUSH24, PUSH25, PUSH26, PUSH27, PUSH28, PUSH29, PUSH30, PUSH31, PUSH32:
 			a := uint64(op) - uint64(PUSH1) + 1
+			opcodes = append(opcodes, parsedOp{PUSH, pc})
 			pc += a
-			opcodes = append(opcodes, PUSH)
 		case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
-			opcodes = append(opcodes, DUP)
+			opcodes = append(opcodes, parsedOp{DUP, pc})
 		case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
-			opcodes = append(opcodes, SWAP)
+			opcodes = append(opcodes, parsedOp{SWAP, pc})
 		default:
-			opcodes = append(opcodes, op)
+			opcodes = append(opcodes, parsedOp{op, pc})
 		}
 	}
 
@@ -43,7 +48,7 @@ func Parse(code []byte) (opcodes []OpCode) {
 // an appropriate match. matcherFn yields the starting position in the input.
 // MatchFn will continue to search for a match until it reaches the end of the
 // buffer or if matcherFn return false.
-func MatchFn(input, match []OpCode, matcherFn func(int) bool) {
+func MatchFn(input []parsedOp, match []OpCode, matcherFn func(int) bool) {
 	// short circuit if either input or match is empty or if the match is
 	// greater than the input
 	if len(input) == 0 || len(match) == 0 || len(match) > len(input) {
@@ -51,11 +56,11 @@ func MatchFn(input, match []OpCode, matcherFn func(int) bool) {
 	}
 
 main:
-	for i, op := range input[:len(input)+1-len(match)] {
+	for i, parsedOp := range input[:len(input)+1-len(match)] {
 		// match first opcode and continue search
-		if op == match[0] {
+		if parsedOp.op == match[0] {
 			for j := 1; j < len(match); j++ {
-				if input[i+j] != match[j] {
+				if input[i+j].op != match[j] {
 					continue main
 				}
 			}

@@ -17,12 +17,16 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
+
+type fnId string
 
 // optimeProgram optimises a JIT program creating segments out of program
 // instructions. Currently covered are multi-pushes and static jumps
@@ -43,22 +47,34 @@ func OptimiseProgram(program *Program) {
 		}()
 	}
 
-	/*
-		code := Parse(program.code)
-		for _, test := range [][]OpCode{
-			[]OpCode{PUSH, PUSH, ADD},
-			[]OpCode{PUSH, PUSH, SUB},
-			[]OpCode{PUSH, PUSH, MUL},
-			[]OpCode{PUSH, PUSH, DIV},
-		} {
-			matchCount := 0
-			MatchFn(code, test, func(i int) bool {
-				matchCount++
-				return true
-			})
-			fmt.Printf("found %d match count on: %v\n", matchCount, test)
-		}
-	*/
+	code := Parse(program.code)
+	for _, test := range [][]OpCode{
+		[]OpCode{PUSH, DUP, EQ, PUSH, JUMPI},
+	} {
+		matchCount := 0
+		fmt.Printf("found %d match count on: %v\n", matchCount, test)
+	}
+
+	MatchFn(code, []OpCode{PUSH, PUSH, EXP}, func(i int) bool {
+		// TODO optimise this instruction
+		return true
+	})
+
+	funcTable := make(map[fnId]uint64)
+	MatchFn(code, []OpCode{DUP, PUSH, EQ, PUSH, JUMPI}, func(i int) bool {
+		pushOp := code[i+1]
+		size := int64(program.code[pushOp.pc]) - int64(PUSH1) + 1
+		funcId := fnId(getData([]byte(program.code), big.NewInt(int64(pushOp.pc+1)), big.NewInt(size)))
+
+		pushOp = code[i+3]
+		size = int64(program.code[pushOp.pc]) - int64(PUSH1) + 1
+		position := common.Bytes2Big(getData([]byte(program.code), big.NewInt(int64(pushOp.pc+1)), big.NewInt(size))).Uint64()
+		glog.Infof("jumpTable entry: %x => %d\n", funcId, position)
+
+		funcTable[funcId] = position
+
+		return true
+	})
 
 	for i := 0; i < len(program.instructions); i++ {
 		instr := program.instructions[i].(instruction)

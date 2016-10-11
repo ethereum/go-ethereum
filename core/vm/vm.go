@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -120,11 +121,21 @@ func (evm *EVM) runProgram(program *Program, contract *Contract, input []byte) (
 		}()
 	}
 
+	var ops []OpCode
+	defer func() {
+		if len(ops) > 0 {
+			fmt.Printf("%x\n", input)
+			fmt.Printf("%d\n", ops)
+			os.Exit(1)
+		}
+	}()
 	homestead := env.RuleSet().IsHomestead(env.BlockNumber)
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
 		instr := program.instructions[pc]
+		//fmt.Println(instr)
+		ops = append(ops, instr.Op())
 		if instr.Op() == DELEGATECALL && !homestead {
 			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.Op())
 		}
