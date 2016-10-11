@@ -50,7 +50,7 @@ const (
 	clientIdentifier = "Gexp"   // Client identifier to advertise over the network
 	versionMajor     = 1        // Major version component of the current release
 	versionMinor     = 4        // Minor version component of the current release
-	versionPatch     = 16       // Patch version component of the current release
+	versionPatch     = 17       // Patch version component of the current release
 	versionMeta      = "stable" // Version metadata to append to the version string
 	versionOracle = "0x926d69cc3bbf81d52cba6886d788df007a15a3cd" // Expanse address of the Gexp release oracle
 )
