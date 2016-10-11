@@ -3,13 +3,13 @@ FROM alpine:3.3
 RUN \
   apk add --update go git make gcc musl-dev         && \
   git clone https://github.com/expanse-project/go-expanse && \
-  (cd go-ethereum && git checkout develop)          && \
-  (cd go-ethereum && make gexp)                     && \
-  cp go-ethereum/build/bin/gexp /gexp               && \
+  (cd go-expanse && git checkout develop)          && \
+  (cd go-expanse && make gexp)                     && \
+  cp go-expanse/build/bin/gexp /gexp               && \
   apk del go git make gcc musl-dev                  && \
-  rm -rf /go-ethereum && rm -rf /var/cache/apk/*
+  rm -rf /go-expanse && rm -rf /var/cache/apk/*
 
-EXPOSE 8545
-EXPOSE 30303
+EXPOSE 9656
+EXPOSE 42786
 
 ENTRYPOINT ["/gexp"]
