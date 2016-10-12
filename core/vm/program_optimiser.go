@@ -17,47 +17,64 @@
 package vm
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+type fnId string
+
 // optimeProgram optimises a JIT program creating segments out of program
 // instructions. Currently covered are multi-pushes and static jumps
-func optimiseProgram(program *Program) {
+func OptimiseProgram(program *Program) {
 	var load []instruction
 
 	var (
-		statsJump = 0
-		statsPush = 0
+		statsJump    = 0
+		statsOldPush = 0
+		statsNewPush = 0
 	)
 
 	if glog.V(logger.Debug) {
 		glog.Infof("optimising %x\n", program.Id[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("optimised %x done in %v with JMP: %d PSH: %d\n", program.Id[:4], time.Since(tstart), statsJump, statsPush)
+			glog.Infof("optimised %x done in %v with JMP: %d PSH: %d/%d\n", program.Id[:4], time.Since(tstart), statsJump, statsNewPush, statsOldPush)
 		}()
 	}
 
-	/*
-		code := Parse(program.code)
-		for _, test := range [][]OpCode{
-			[]OpCode{PUSH, PUSH, ADD},
-			[]OpCode{PUSH, PUSH, SUB},
-			[]OpCode{PUSH, PUSH, MUL},
-			[]OpCode{PUSH, PUSH, DIV},
-		} {
-			matchCount := 0
-			MatchFn(code, test, func(i int) bool {
-				matchCount++
-				return true
-			})
-			fmt.Printf("found %d match count on: %v\n", matchCount, test)
-		}
-	*/
+	code := Parse(program.code)
+	for _, test := range [][]OpCode{
+		[]OpCode{PUSH, DUP, EQ, PUSH, JUMPI},
+	} {
+		matchCount := 0
+		fmt.Printf("found %d match count on: %v\n", matchCount, test)
+	}
+
+	MatchFn(code, []OpCode{PUSH, PUSH, EXP}, func(i int) bool {
+		// TODO optimise this instruction
+		return true
+	})
+
+	funcTable := make(map[fnId]uint64)
+	MatchFn(code, []OpCode{DUP, PUSH, EQ, PUSH, JUMPI}, func(i int) bool {
+		pushOp := code[i+1]
+		size := int64(program.code[pushOp.pc]) - int64(PUSH1) + 1
+		funcId := fnId(getData([]byte(program.code), big.NewInt(int64(pushOp.pc+1)), big.NewInt(size)))
+
+		pushOp = code[i+3]
+		size = int64(program.code[pushOp.pc]) - int64(PUSH1) + 1
+		position := common.Bytes2Big(getData([]byte(program.code), big.NewInt(int64(pushOp.pc+1)), big.NewInt(size))).Uint64()
+		glog.Infof("jumpTable entry: %x => %d\n", funcId, position)
+
+		funcTable[funcId] = position
+
+		return true
+	})
 
 	for i := 0; i < len(program.instructions); i++ {
 		instr := program.instructions[i].(instruction)
@@ -65,6 +82,7 @@ func optimiseProgram(program *Program) {
 		switch {
 		case instr.op.IsPush():
 			load = append(load, instr)
+			statsOldPush++
 		case instr.op.IsStaticJump():
 			if len(load) == 0 {
 				continue
@@ -74,7 +92,7 @@ func optimiseProgram(program *Program) {
 			if len(load) > 2 {
 				seg, size := makePushSeg(load[:len(load)-1])
 				program.instructions[i-size-1] = seg
-				statsPush++
+				statsNewPush++
 			}
 			// create a segment consisting of a pre determined
 			// jump, destination and validity.
@@ -88,7 +106,7 @@ func optimiseProgram(program *Program) {
 			if len(load) > 1 {
 				seg, size := makePushSeg(load)
 				program.instructions[i-size] = seg
-				statsPush++
+				statsNewPush++
 			}
 			load = nil
 		}
@@ -99,12 +117,12 @@ func optimiseProgram(program *Program) {
 func makePushSeg(instrs []instruction) (pushSeg, int) {
 	var (
 		data []*big.Int
-		gas  = new(big.Int)
+		gas  uint64
 	)
 
 	for _, instr := range instrs {
 		data = append(data, instr.data)
-		gas.Add(gas, instr.gas)
+		gas += instr.gas
 	}
 
 	return pushSeg{data, gas}, len(instrs)
@@ -113,9 +131,7 @@ func makePushSeg(instrs []instruction) (pushSeg, int) {
 // makeStaticJumpSeg creates a new static jump segment from a predefined
 // destination (PUSH, JUMP).
 func makeStaticJumpSeg(to *big.Int, program *Program) jumpSeg {
-	gas := new(big.Int)
-	gas.Add(gas, _baseCheck[PUSH1].gas)
-	gas.Add(gas, _baseCheck[JUMP].gas)
+	gas := _baseCheck[PUSH1].gas + _baseCheck[JUMP].gas
 
 	contract := &Contract{Code: program.code}
 	pos, err := jump(program.mapping, program.destinations, contract, to)

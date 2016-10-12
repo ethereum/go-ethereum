@@ -259,6 +259,7 @@ func (self *StateDB) GetCodeSize(addr common.Address) int {
 	return size
 }
 
+// GetCodeHash returns the hash of the code associated with the address.
 func (self *StateDB) GetCodeHash(addr common.Address) common.Hash {
 	stateObject := self.GetStateObject(addr)
 	if stateObject == nil {
@@ -291,6 +292,13 @@ func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
+	}
+}
+
+func (self *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubBalance(amount)
 	}
 }
 

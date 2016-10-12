@@ -167,17 +167,17 @@ func (dw *dbWrapper) toValue(vm *otto.Otto) otto.Value {
 // JavascriptTracer provides an implementation of Tracer that evaluates a
 // Javascript function for each VM execution step.
 type JavascriptTracer struct {
-	vm          *otto.Otto             // Javascript VM instance
-	traceobj    *otto.Object           // User-supplied object to call
-	log         map[string]interface{} // (Reusable) map for the `log` arg to `step`
-	logvalue    otto.Value             // JS view of `log`
-	memory      *memoryWrapper         // Wrapper around the VM memory
-	memvalue    otto.Value             // JS view of `memory`
-	stack       *stackWrapper          // Wrapper around the VM stack
-	stackvalue  otto.Value             // JS view of `stack`
-	db          *dbWrapper             // Wrapper around the VM environment
-	dbvalue     otto.Value             // JS view of `db`
-	err         error                  // Error, if one has occurred
+	vm         *otto.Otto             // Javascript VM instance
+	traceobj   *otto.Object           // User-supplied object to call
+	log        map[string]interface{} // (Reusable) map for the `log` arg to `step`
+	logvalue   otto.Value             // JS view of `log`
+	memory     *memoryWrapper         // Wrapper around the VM memory
+	memvalue   otto.Value             // JS view of `memory`
+	stack      *stackWrapper          // Wrapper around the VM stack
+	stackvalue otto.Value             // JS view of `stack`
+	db         *dbWrapper             // Wrapper around the VM environment
+	dbvalue    otto.Value             // JS view of `db`
+	err        error                  // Error, if one has occurred
 }
 
 // NewJavascriptTracer instantiates a new JavascriptTracer instance.
@@ -222,17 +222,17 @@ func NewJavascriptTracer(code string) (*JavascriptTracer, error) {
 	db := &dbWrapper{}
 
 	return &JavascriptTracer{
-		vm:          vm,
-		traceobj:    jstracer,
-		log:         log,
-		logvalue:    logvalue,
-		memory:      mem,
-		memvalue:    mem.toValue(vm),
-		stack:       stack,
-		stackvalue:  stack.toValue(vm),
-		db:          db,
-		dbvalue:     db.toValue(vm),
-		err:         nil,
+		vm:         vm,
+		traceobj:   jstracer,
+		log:        log,
+		logvalue:   logvalue,
+		memory:     mem,
+		memvalue:   mem.toValue(vm),
+		stack:      stack,
+		stackvalue: stack.toValue(vm),
+		db:         db,
+		dbvalue:    db.toValue(vm),
+		err:        nil,
 	}, nil
 }
 
@@ -278,7 +278,7 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution
-func (jst *JavascriptTracer) CaptureState(env vm.Environment, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
+func (jst *JavascriptTracer) CaptureState(env *vm.Environment, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) {
 	if jst.err == nil {
 		jst.memory.memory = memory
 		jst.stack.stack = stack

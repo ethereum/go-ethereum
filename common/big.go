@@ -16,7 +16,10 @@
 
 package common
 
-import "math/big"
+import (
+	"math"
+	"math/big"
+)
 
 // Common big integers often used
 var (
@@ -33,6 +36,7 @@ var (
 	Big256   = big.NewInt(0xff)
 	Big257   = big.NewInt(257)
 	MaxBig   = String2Big("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	Max64Bit = new(big.Int).SetUint64(math.MaxUint64)
 )
 
 // Big pow

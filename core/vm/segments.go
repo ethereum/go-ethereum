@@ -16,15 +16,22 @@
 
 package vm
 
-import "math/big"
+import (
+	"fmt"
+	"math/big"
+)
 
 type jumpSeg struct {
 	pos uint64
 	err error
-	gas *big.Int
+	gas uint64
 }
 
-func (j jumpSeg) do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func (js jumpSeg) String() string {
+	return fmt.Sprintf("[JUMP SEG: %d]", js.pos)
+}
+
+func (j jumpSeg) do(program *Program, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	if !contract.UseGas(j.gas) {
 		return nil, OutOfGasError
 	}
@@ -39,10 +46,18 @@ func (s jumpSeg) Op() OpCode  { return 0 }
 
 type pushSeg struct {
 	data []*big.Int
-	gas  *big.Int
+	gas  uint64
 }
 
-func (s pushSeg) do(program *Program, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func (ps pushSeg) String() string {
+	var ret string
+	for _, num := range ps.data {
+		ret += fmt.Sprintf("PUSH %v\n", num)
+	}
+	return ret
+}
+
+func (s pushSeg) do(program *Program, pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// Use the calculated gas. When insufficient gas is present, use all gas and return an
 	// Out Of Gas error
 	if !contract.UseGas(s.gas) {
@@ -58,3 +73,26 @@ func (s pushSeg) do(program *Program, pc *uint64, env Environment, contract *Con
 
 func (s pushSeg) halts() bool { return false }
 func (s pushSeg) Op() OpCode  { return 0 }
+
+//CALLDATASIZE, ISZERO, PUSH2, JUMPI
+//if len(calldata) > 0 {
+//	*pc = T.pos
+//}
+
+//PUSH 224, PUSH 2, EXP, PUSH 0, CALLDATALOAD, DIV
+//calldata[:4]
+
+//PUSH4, DUP2, EQ, PUSH2, JUMP
+/*
+if calldata[:4] == (PUSH4)
+else if calldata[:4] == (PUSH2) ????
+else if calldata[:4] == (PUSH2) ????
+
+type programJumpTable map[funcId]dest
+
+if len(calldata) > 0 {
+	if ppc, exist := programJumpTable[string(calldata[:4])]; exit {
+		*pc = ppc
+	}
+}
+*/

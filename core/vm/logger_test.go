@@ -23,14 +23,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+type ruleset struct{}
+
+func (ruleset) IsHomestead(*big.Int) bool { return true }
+
 type dummyContractRef struct {
 	calledForEach bool
 }
 
-func (dummyContractRef) ReturnGas(*big.Int, *big.Int) {}
-func (dummyContractRef) Address() common.Address      { return common.Address{} }
-func (dummyContractRef) Value() *big.Int              { return new(big.Int) }
-func (dummyContractRef) SetCode(common.Hash, []byte)  {}
+func (dummyContractRef) ReturnGas(uint64)            {}
+func (dummyContractRef) Address() common.Address     { return common.Address{} }
+func (dummyContractRef) Value() *big.Int             { return new(big.Int) }
+func (dummyContractRef) SetCode(common.Hash, []byte) {}
 func (d *dummyContractRef) ForEachStorage(callback func(key, value common.Hash) bool) {
 	d.calledForEach = true
 }
@@ -41,14 +45,14 @@ func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
 type dummyEnv struct {
-	*Env
+	*Environment
 	ref *dummyContractRef
 }
 
 func newDummyEnv(ref *dummyContractRef) *dummyEnv {
 	return &dummyEnv{
-		Env: NewEnv(&Config{EnableJit: false, ForceJit: false}),
-		ref: ref,
+		Environment: NewEnvironment(Context{}, nil, ruleset{}, Config{}),
+		ref:         ref,
 	}
 }
 func (d dummyEnv) GetAccount(common.Address) Account {
@@ -57,11 +61,11 @@ func (d dummyEnv) GetAccount(common.Address) Account {
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEnv(&Config{EnableJit: false, ForceJit: false})
+		env      = NewEnvironment(Context{}, nil, ruleset{}, Config{})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
-		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), new(big.Int), new(big.Int))
+		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), new(big.Int))
 	)
 	stack.push(big.NewInt(1))
 	stack.push(big.NewInt(0))
@@ -83,20 +87,20 @@ func TestStorageCapture(t *testing.T) {
 	t.Skip("implementing this function is difficult. it requires all sort of interfaces to be implemented which isn't trivial. The value (the actual test) isn't worth it")
 	var (
 		ref      = &dummyContractRef{}
-		contract = NewContract(ref, ref, new(big.Int), new(big.Int), new(big.Int))
+		contract = NewContract(ref, ref, new(big.Int), new(big.Int))
 		env      = newDummyEnv(ref)
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
 	)
 
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env.Environment, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
 	if ref.calledForEach {
 		t.Error("didn't expect for each to be called")
 	}
 
 	logger = NewStructLogger(&LogConfig{FullStorage: true})
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env.Environment, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
 	if !ref.calledForEach {
 		t.Error("expected for each to be called")
 	}

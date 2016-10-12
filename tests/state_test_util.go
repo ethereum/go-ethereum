@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -103,13 +104,16 @@ func benchStateTest(ruleSet RuleSet, test VmTest, env map[string]string, b *test
 }
 
 func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string) error {
+	//glog.SetToStderr(true)
+	//glog.SetV(6)
+
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "callcodecallcode_11" */ {
+		if skipTest[name] /*|| name != "gasPrice0"*/ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -149,6 +153,10 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 		// err  error
 		logs vm.Logs
 	)
+	if common.Big(test.Transaction["gasLimit"]).Cmp(new(big.Int).SetUint64(math.MaxUint64)) > 0 {
+		fmt.Println("skipping a test because of unsupported high gas")
+		return nil
+	}
 
 	ret, logs, _, _ = RunState(ruleSet, statedb, env, test.Transaction)
 
@@ -219,20 +227,18 @@ func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string
 		to = &t
 	}
 	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
 	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(ruleSet, statedb, env, tx)
-	vmenv.origin = addr
+	vmenv := NewEVMEnvironment(false, ruleSet, statedb, env, tx)
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.RevertToSnapshot(snapshot)
 	}
 	statedb.Commit()
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }

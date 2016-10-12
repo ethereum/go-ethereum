@@ -621,13 +621,7 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, g
 	snap := env.state.Snapshot()
 
 	// this is a bit of a hack to force jit for the miners
-	config := env.config.VmConfig
-	if !(config.EnableJit && config.ForceJit) {
-		config.EnableJit = false
-	}
-	config.ForceJit = false // disable forcing jit
-
-	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, env.config.VmConfig)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil

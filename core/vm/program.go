@@ -17,12 +17,13 @@
 package vm
 
 import (
-	"fmt"
+	gmath "math"
 	"math/big"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -39,7 +40,7 @@ const (
 	progReady                     // ready for use status
 	progError                     // error status (usually caused during compilation)
 
-	defaultJitMaxCache int = 64 // maximum amount of jit cached programs
+	defaultJitMaxCache int = 1024 // maximum amount of jit cached programs
 )
 
 var MaxProgSize int // Max cache size for JIT programs
@@ -80,8 +81,6 @@ func GetProgramStatus(id common.Hash) progStatus {
 type Program struct {
 	Id     common.Hash // Id of the program
 	status int32       // status should be accessed atomically
-
-	contract *Contract
 
 	instructions []programInstruction // instruction set
 	mapping      map[uint64]uint64    // real PC mapping to array indices
@@ -124,17 +123,13 @@ func (p *Program) addInstr(op OpCode, pc uint64, fn instrFn, data *big.Int) {
 }
 
 // CompileProgram compiles the given program and return an error when it fails
-func CompileProgram(program *Program) (err error) {
+func CompileProgram(program *Program) {
 	if progStatus(atomic.LoadInt32(&program.status)) == progCompile {
-		return nil
+		return
 	}
 	atomic.StoreInt32(&program.status, int32(progCompile))
 	defer func() {
-		if err != nil {
-			atomic.StoreInt32(&program.status, int32(progError))
-		} else {
-			atomic.StoreInt32(&program.status, int32(progReady))
-		}
+		atomic.StoreInt32(&program.status, int32(progReady))
 	}()
 	if glog.V(logger.Debug) {
 		glog.Infof("compiling %x\n", program.Id[:4])
@@ -291,56 +286,12 @@ func CompileProgram(program *Program) (err error) {
 			program.addInstr(op, pc, nil, nil)
 		}
 	}
-
-	optimiseProgram(program)
-
-	return nil
+	// reset the program code. It's no longer required by the program itself.
+	//program.code = nil
 }
 
-// RunProgram runs the program given the environment and contract and returns an
-// error if the execution failed (non-consensus)
-func RunProgram(program *Program, env Environment, contract *Contract, input []byte) ([]byte, error) {
-	return runProgram(program, 0, NewMemory(), newstack(), env, contract, input)
-}
-
-func runProgram(program *Program, pcstart uint64, mem *Memory, stack *Stack, env Environment, contract *Contract, input []byte) ([]byte, error) {
-	contract.Input = input
-
-	var (
-		pc         uint64 = program.mapping[pcstart]
-		instrCount        = 0
-	)
-
-	if glog.V(logger.Debug) {
-		glog.Infof("running JIT program %x\n", program.Id[:4])
-		tstart := time.Now()
-		defer func() {
-			glog.Infof("JIT program %x done. time: %v instrc: %v\n", program.Id[:4], time.Since(tstart), instrCount)
-		}()
-	}
-
-	homestead := env.RuleSet().IsHomestead(env.BlockNumber())
-	for pc < uint64(len(program.instructions)) {
-		instrCount++
-
-		instr := program.instructions[pc]
-		if instr.Op() == DELEGATECALL && !homestead {
-			return nil, fmt.Errorf("Invalid opcode 0x%x", instr.Op())
-		}
-
-		ret, err := instr.do(program, &pc, env, contract, mem, stack)
-		if err != nil {
-			return nil, err
-		}
-
-		if instr.halts() {
-			return ret, nil
-		}
-	}
-
-	contract.Input = nil
-
-	return nil, nil
+func RunProgram(program *Program, env *Environment, contract *Contract, input []byte) ([]byte, error) {
+	return New(env, Config{}).Run(contract, input)
 }
 
 // validDest checks if the given destination is a valid one given the
@@ -355,16 +306,17 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 	return ok
 }
 
-// jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
+// calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
+func calculateGasAndSize(env *Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (uint64, uint64, error) {
 	var (
-		gas                 = new(big.Int)
-		newMemSize *big.Int = new(big.Int)
+		newMemSize uint64
+		sizeFault  bool
 	)
-	err := jitBaseCheck(instr, stack, gas)
+
+	gas, err := baseCalc(instr, stack)
 	if err != nil {
-		return nil, nil, err
+		return 0, 0, err
 	}
 
 	// stack Check, memory resize & gas phase
@@ -373,40 +325,57 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		n := int(op - SWAP1 + 2)
 		err := stack.require(n)
 		if err != nil {
-			return nil, nil, err
+			return 0, 0, err
 		}
-		gas.Set(GasFastestStep)
+		gas = GasFastestStep64
 	case DUP1, DUP2, DUP3, DUP4, DUP5, DUP6, DUP7, DUP8, DUP9, DUP10, DUP11, DUP12, DUP13, DUP14, DUP15, DUP16:
 		n := int(op - DUP1 + 1)
 		err := stack.require(n)
 		if err != nil {
-			return nil, nil, err
+			return 0, 0, err
 		}
-		gas.Set(GasFastestStep)
+		gas = GasFastestStep64
 	case LOG0, LOG1, LOG2, LOG3, LOG4:
 		n := int(op - LOG0)
 		err := stack.require(n + 2)
 		if err != nil {
-			return nil, nil, err
+			return 0, 0, err
 		}
 
 		mSize, mStart := stack.data[stack.len()-2], stack.data[stack.len()-1]
+		if mSize.BitLen() > 64 {
+			return 0, 0, OutOfGasError
+		}
+		msize64 := mSize.Uint64()
 
-		add := new(big.Int)
-		gas.Add(gas, params.LogGas)
-		gas.Add(gas, add.Mul(big.NewInt(int64(n)), params.LogTopicGas))
-		gas.Add(gas, add.Mul(mSize, params.LogDataGas))
+		gas = (gas + LogGas64) + (uint64(n) * LogTopicGas64)
+		if !math.IsMulSafe(msize64, LogDataGas64) {
+			return 0, 0, OutOfGasError
+		}
+		gasLogData := msize64 * LogDataGas64
 
-		newMemSize = calcMemSize(mStart, mSize)
+		if !math.IsAddSafe(gas, gasLogData) {
+			return 0, 0, OutOfGasError
+		}
+		gas += gasLogData
+
+		newMemSize, sizeFault = calcMemSize(mStart, mSize)
 	case EXP:
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), params.ExpByteGas))
+		x := uint64(len(stack.data[stack.len()-2].Bytes()))
+		if !math.IsMulSafe(x, ExpByteGas64) {
+			return 0, 0, OutOfGasError
+		}
+		x *= ExpByteGas64
+		if !math.IsAddSafe(gas, x) {
+			return 0, 0, OutOfGasError
+		}
+		gas += x
 	case SSTORE:
 		err := stack.require(2)
 		if err != nil {
-			return nil, nil, err
+			return 0, 0, err
 		}
 
-		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
 		val := statedb.GetState(contract.Address(), common.BigToHash(x))
 
@@ -415,98 +384,166 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		// 2. From a non-zero value address to a zero-value address (DELETE)
 		// 3. From a non-zero to a non-zero                         (CHANGE)
 		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
-			g = params.SstoreSetGas
+			gas = SstoreSetGas64
 		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
 			statedb.AddRefund(params.SstoreRefundGas)
 
-			g = params.SstoreClearGas
+			gas = SstoreClearGas64
 		} else {
-			g = params.SstoreResetGas
+			gas = SstoreResetGas64
 		}
-		gas.Set(g)
 	case SUICIDE:
 		if !statedb.HasSuicided(contract.Address()) {
 			statedb.AddRefund(params.SuicideRefundGas)
 		}
 	case MLOAD:
-		newMemSize = calcMemSize(stack.peek(), u256(32))
+		newMemSize, sizeFault = calcMemSize(stack.peek(), u256(32))
 	case MSTORE8:
-		newMemSize = calcMemSize(stack.peek(), u256(1))
+		newMemSize, sizeFault = calcMemSize(stack.peek(), u256(1))
 	case MSTORE:
-		newMemSize = calcMemSize(stack.peek(), u256(32))
+		newMemSize, sizeFault = calcMemSize(stack.peek(), u256(32))
 	case RETURN:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
+		newMemSize, sizeFault = calcMemSize(stack.peek(), stack.data[stack.len()-2])
 	case SHA3:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
+		newMemSize, sizeFault = calcMemSize(stack.peek(), stack.data[stack.len()-2])
+		if sizeFault {
+			return 0, 0, OutOfGasError
+		}
 
-		words := toWordSize(stack.data[stack.len()-2])
-		gas.Add(gas, words.Mul(words, params.Sha3WordGas))
+		if stack.data[stack.len()-2].BitLen() > 64 {
+			return 0, 0, OutOfGasError
+		}
+		words := toWordSize(stack.data[stack.len()-2].Uint64())
+		if !math.IsMulSafe(words, KeccakWordGas64) {
+			return 0, 0, OutOfGasError
+		}
+		wordsGas := words * KeccakWordGas64
+		if !math.IsAddSafe(gas, wordsGas) {
+			return 0, 0, OutOfGasError
+		}
+		gas += wordsGas
 	case CALLDATACOPY:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
+		newMemSize, sizeFault = calcMemSize(stack.peek(), stack.data[stack.len()-3])
+		if sizeFault {
+			return 0, 0, OutOfGasError
+		}
 
-		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, params.CopyGas))
+		words := toWordSize(stack.data[stack.len()-3].Uint64())
+		if !math.IsMulSafe(words, CopyGas64) {
+			return 0, 0, OutOfGasError
+		}
+		wordsGas := words * CopyGas64
+		if !math.IsAddSafe(gas, wordsGas) {
+			return 0, 0, OutOfGasError
+		}
+		gas += wordsGas
 	case CODECOPY:
-		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
+		newMemSize, sizeFault = calcMemSize(stack.peek(), stack.data[stack.len()-3])
+		if sizeFault {
+			return 0, 0, OutOfGasError
+		}
 
-		words := toWordSize(stack.data[stack.len()-3])
-		gas.Add(gas, words.Mul(words, params.CopyGas))
+		words := toWordSize(stack.data[stack.len()-3].Uint64())
+		if !math.IsMulSafe(words, CopyGas64) {
+			return 0, 0, OutOfGasError
+		}
+		wordsGas := words * CopyGas64
+		if !math.IsAddSafe(gas, wordsGas) {
+			return 0, 0, OutOfGasError
+		}
+		gas += wordsGas
 	case EXTCODECOPY:
-		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
+		newMemSize, sizeFault = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
+		if sizeFault {
+			return 0, 0, OutOfGasError
+		}
 
-		words := toWordSize(stack.data[stack.len()-4])
-		gas.Add(gas, words.Mul(words, params.CopyGas))
-
+		words := toWordSize(stack.data[stack.len()-4].Uint64())
+		if !math.IsMulSafe(words, CopyGas64) {
+			return 0, 0, OutOfGasError
+		}
+		wordsGas := words * CopyGas64
+		if !math.IsAddSafe(gas, wordsGas) {
+			return 0, 0, OutOfGasError
+		}
+		gas += wordsGas
 	case CREATE:
-		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
+		newMemSize, sizeFault = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
 	case CALL, CALLCODE:
-		gas.Add(gas, stack.data[stack.len()-1])
+		callGas := stack.data[stack.len()-1]
+		if callGas.BitLen() > 64 {
+			return 0, 0, OutOfGasError
+		}
+		gas += callGas.Uint64()
 
 		if op == CALL {
 			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
-				gas.Add(gas, params.CallNewAccountGas)
+				if !math.IsAddSafe(gas, CallNewAccountGas64) {
+					return 0, 0, OutOfGasError
+				}
+				gas += CallNewAccountGas64
 			}
 		}
 
 		if len(stack.data[stack.len()-3].Bytes()) > 0 {
-			gas.Add(gas, params.CallValueTransferGas)
+			if !math.IsAddSafe(gas, CallValueTransferGas64) {
+				return 0, 0, OutOfGasError
+			}
+			gas += CallValueTransferGas64
 		}
 
-		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
-		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
+		x, xSizeFault := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
+		if xSizeFault {
+			return 0, 0, OutOfGasError
+		}
+		y, ySizeFault := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
+		if ySizeFault {
+			return 0, 0, OutOfGasError
+		}
 
-		newMemSize = common.BigMax(x, y)
+		newMemSize = x
+		if y > newMemSize {
+			newMemSize = y
+		}
 	case DELEGATECALL:
-		gas.Add(gas, stack.data[stack.len()-1])
+		callGas := stack.data[stack.len()-1]
+		if callGas.BitLen() > 64 {
+			return 0, 0, OutOfGasError
+		}
+		gas += callGas.Uint64()
 
-		x := calcMemSize(stack.data[stack.len()-5], stack.data[stack.len()-6])
-		y := calcMemSize(stack.data[stack.len()-3], stack.data[stack.len()-4])
+		x, xSizeFault := calcMemSize(stack.data[stack.len()-5], stack.data[stack.len()-6])
+		if xSizeFault {
+			return 0, 0, OutOfGasError
+		}
+		y, ySizeFault := calcMemSize(stack.data[stack.len()-3], stack.data[stack.len()-4])
+		if ySizeFault {
+			return 0, 0, OutOfGasError
+		}
 
-		newMemSize = common.BigMax(x, y)
+		newMemSize = uint64(gmath.Max(float64(x), float64(y)))
 	}
-	quadMemGas(mem, newMemSize, gas)
+	if sizeFault {
+		return 0, 0, OutOfGasError
+	}
 
-	return newMemSize, gas, nil
+	memGas, _ := calcQuadMemGas(mem, newMemSize)
+	if !math.IsAddSafe(gas, memGas) {
+		return 0, 0, OutOfGasError
+	}
+	return toWordSize(newMemSize) * 32, gas + memGas, nil
 }
 
-// jitBaseCheck is the same as baseCheck except it doesn't do the look up in the
-// gas table. This is done during compilation instead.
-func jitBaseCheck(instr instruction, stack *Stack, gas *big.Int) error {
-	err := stack.require(instr.spop)
-	if err != nil {
-		return err
-	}
-
-	if instr.spush > 0 && stack.len()-instr.spop+instr.spush > int(params.StackLimit.Int64()) {
-		return fmt.Errorf("stack limit reached %d (%d)", stack.len(), params.StackLimit.Int64())
-	}
-
-	// nil on gas means no base calculation
-	if instr.gas == nil {
-		return nil
-	}
-
-	gas.Add(gas, instr.gas)
-
-	return nil
+// waitCompile returns a new channel to broadcast the new result after
+// a compilation has started.
+func WaitCompile(id common.Hash) chan progStatus {
+	ch := make(chan progStatus)
+	go func() {
+		defer close(ch)
+		for GetProgramStatus(id) == progCompile {
+			time.Sleep(time.Microsecond * 10)
+		}
+		ch <- GetProgramStatus(id)
+	}()
+	return ch
 }

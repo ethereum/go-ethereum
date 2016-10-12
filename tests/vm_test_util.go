@@ -128,9 +128,9 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
-		if skipTest[name] {
+		if skipTest[name] /*|| name != "57a9a2fbfe21a848e8d83379562a8513417c73d127495cf4abc5a44a5fe08e92"*/ {
 			glog.Infoln("Skipping VM test", name)
-			return nil
+			continue
 		}
 
 		if err := runVmTest(test); err != nil {
@@ -211,25 +211,21 @@ func runVmTest(test VmTest) error {
 	return nil
 }
 
-func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
 		data  = common.FromHex(exec["data"])
 		gas   = common.Big(exec["gas"])
-		price = common.Big(exec["gasPrice"])
 		value = common.Big(exec["value"])
 	)
 	// Reset the pre-compiled contracts for VM tests.
-	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
+	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
-	caller := state.GetOrNewStateObject(from)
+	caller := statedb.GetOrNewStateObject(from)
 
-	vmenv := NewEnvFromMap(RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, state, env, exec)
-	vmenv.vmTest = true
-	vmenv.skipTransfer = true
-	vmenv.initial = true
-	ret, err := vmenv.Call(caller, to, data, gas, price, value)
+	vmenv := NewEVMEnvironment(true, RuleSet{params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, true}, statedb, env, exec)
+	ret, err := vmenv.Call(caller, to, data, gas, value)
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gas, err
 }
