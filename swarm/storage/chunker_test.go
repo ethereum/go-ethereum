@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 	"testing"
 	"time"
 )
+
 
 /*
 Tests TreeChunker by splitting and joining a random byte slice
@@ -49,7 +51,7 @@ func (self *chunkerTester) checkChunks(t *testing.T, want int) {
 	}
 }
 
-func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup) (key Key) {
+func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, chunkC chan *Chunk, swg *sync.WaitGroup, expectedError error) (key Key) {
 	// reset
 	self.chunks = make(map[string]*Chunk)
 
@@ -65,14 +67,9 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 				select {
 				case <-timeout:
 					self.t.Fatalf("Join timeout error")
-
-				case chunk, ok := <-chunkC:
-					if !ok {
-						// glog.V(logger.Info).Infof("chunkC closed quitting")
-						close(quitC)
-						return
-					}
-					// glog.V(logger.Info).Infof("chunk %v received", len(self.chunks))
+				case <-quitC:
+					return
+				case chunk := <-chunkC:
 					// self.chunks = append(self.chunks, chunk)
 					self.chunks[chunk.Key.String()] = chunk
 					if chunk.wg != nil {
@@ -83,21 +80,16 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 		}()
 	}
 	key, err := chunker.Split(data, size, chunkC, swg, nil)
-	if err != nil {
+	if err != nil && expectedError == nil {
 		self.t.Fatalf("Split error: %v", err)
+	} else if expectedError != nil && (err == nil || err.Error() != expectedError.Error()) {
+		self.t.Fatalf("Not receiving the correct error! Expected %v, received %v", expectedError, err)
 	}
 	if chunkC != nil {
 		if swg != nil {
-			// glog.V(logger.Info).Infof("Waiting for storage to finish")
 			swg.Wait()
-			// glog.V(logger.Info).Infof("Storage finished")
 		}
-		close(chunkC)
-	}
-	if chunkC != nil {
-		// glog.V(logger.Info).Infof("waiting for splitter finished")
-		<-quitC
-		// glog.V(logger.Info).Infof("Splitter finished")
+		close(quitC)
 	}
 	return
 }
@@ -105,11 +97,9 @@ func (self *chunkerTester) Split(chunker Splitter, data io.Reader, size int64, c
 func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Chunk, quitC chan bool) LazySectionReader {
 	// reset but not the chunks
 
-	// glog.V(logger.Info).Infof("Splitter finished")
 	reader := chunker.Join(key, chunkC)
 
 	timeout := time.After(600 * time.Second)
-	// glog.V(logger.Info).Infof("Splitter finished")
 	i := 0
 	go func() {
 		for {
@@ -122,15 +112,12 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 					close(quitC)
 					return
 				}
-				// glog.V(logger.Info).Infof("chunk %v: %v", i, chunk.Key.String())
 				// this just mocks the behaviour of a chunk store retrieval
 				stored, success := self.chunks[chunk.Key.String()]
-				// glog.V(logger.Info).Infof("chunk %v, success: %v", chunk.Key.String(), success)
 				if !success {
 					self.t.Fatalf("not found")
 					return
 				}
-				// glog.V(logger.Info).Infof("chunk %v: %v", i, chunk.Key.String())
 				chunk.SData = stored.SData
 				chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 				close(chunk.C)
@@ -139,6 +126,26 @@ func (self *chunkerTester) Join(chunker Chunker, key Key, c int, chunkC chan *Ch
 		}
 	}()
 	return reader
+}
+
+func testRandomBrokenData(splitter Splitter, n int, tester *chunkerTester) {
+	data := io.LimitReader(rand.Reader, int64(n))
+	brokendata := brokenLimitReader(data, n, n/2)
+
+	buf := make([]byte, n)
+	_, err := brokendata.Read(buf)
+	if err == nil || err.Error() != "Broken reader" {
+		tester.t.Fatalf("Broken reader is not broken, hence broken. Returns: %v", err)
+	}
+
+	data = io.LimitReader(rand.Reader, int64(n))
+	brokendata = brokenLimitReader(data, n, n/2)
+
+	chunkC := make(chan *Chunk, 1000)
+	swg := &sync.WaitGroup{}
+
+	key := tester.Split(splitter, brokendata, int64(n), chunkC, swg, fmt.Errorf("Broken reader"))
+	tester.t.Logf(" Key = %v\n", key)
 }
 
 func testRandomData(splitter Splitter, n int, tester *chunkerTester) {
@@ -151,13 +158,13 @@ func testRandomData(splitter Splitter, n int, tester *chunkerTester) {
 		data, input = testDataReaderAndSlice(n)
 		tester.inputs[uint64(n)] = input
 	} else {
-		data = limitReader(bytes.NewReader(input), n)
+		data = io.LimitReader(bytes.NewReader(input), int64(n))
 	}
 
 	chunkC := make(chan *Chunk, 1000)
 	swg := &sync.WaitGroup{}
 
-	key := tester.Split(splitter, data, int64(n), chunkC, swg)
+	key := tester.Split(splitter, data, int64(n), chunkC, swg, nil)
 	tester.t.Logf(" Key = %v\n", key)
 
 	chunkC = make(chan *Chunk, 1000)
@@ -166,9 +173,7 @@ func testRandomData(splitter Splitter, n int, tester *chunkerTester) {
 	chunker := NewTreeChunker(NewChunkerParams())
 	reader := tester.Join(chunker, key, 0, chunkC, quitC)
 	output := make([]byte, n)
-	// glog.V(logger.Info).Infof(" Key = %v\n", key)
 	r, err := reader.Read(output)
-	// glog.V(logger.Info).Infof(" read = %v  %v\n", r, err)
 	if r != n || err != io.EOF {
 		tester.t.Fatalf("read error  read: %v  n = %v  err = %v\n", r, n, err)
 	}
@@ -183,7 +188,7 @@ func testRandomData(splitter Splitter, n int, tester *chunkerTester) {
 
 func TestRandomData(t *testing.T) {
 	// sizes := []int{123456}
-	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 123456}
+	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 123456, 2345678}
 	tester := &chunkerTester{t: t}
 	chunker := NewTreeChunker(NewChunkerParams())
 	for _, s := range sizes {
@@ -192,6 +197,16 @@ func TestRandomData(t *testing.T) {
 	pyramid := NewPyramidChunker(NewChunkerParams())
 	for _, s := range sizes {
 		testRandomData(pyramid, s, tester)
+	}
+}
+
+func TestRandomBrokenData(t *testing.T) {
+	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 123456, 2345678}
+	tester := &chunkerTester{t: t}
+	chunker := NewTreeChunker(NewChunkerParams())
+	for _, s := range sizes {
+		testRandomBrokenData(chunker, s, tester)
+		t.Logf("done size: %v", s)
 	}
 }
 
@@ -227,7 +242,7 @@ func benchmarkJoin(n int, t *testing.B) {
 		chunkC := make(chan *Chunk, 1000)
 		swg := &sync.WaitGroup{}
 
-		key := tester.Split(chunker, data, int64(n), chunkC, swg)
+		key := tester.Split(chunker, data, int64(n), chunkC, swg, nil)
 		// t.StartTimer()
 		chunkC = make(chan *Chunk, 1000)
 		quitC := make(chan bool)
@@ -248,8 +263,7 @@ func benchmarkSplitTree(n int, t *testing.B) {
 		chunker := NewTreeChunker(NewChunkerParams())
 		tester := &chunkerTester{t: t}
 		data := testDataReader(n)
-		// glog.V(logger.Info).Infof("splitting data of length %v", n)
-		tester.Split(chunker, data, int64(n), nil, nil)
+		tester.Split(chunker, data, int64(n), nil, nil, nil)
 	}
 	stats := new(runtime.MemStats)
 	runtime.ReadMemStats(stats)
@@ -262,8 +276,7 @@ func benchmarkSplitPyramid(n int, t *testing.B) {
 		splitter := NewPyramidChunker(NewChunkerParams())
 		tester := &chunkerTester{t: t}
 		data := testDataReader(n)
-		// glog.V(logger.Info).Infof("splitting data of length %v", n)
-		tester.Split(splitter, data, int64(n), nil, nil)
+		tester.Split(splitter, data, int64(n), nil, nil, nil)
 	}
 	stats := new(runtime.MemStats)
 	runtime.ReadMemStats(stats)
