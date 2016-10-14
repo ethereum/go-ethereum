@@ -22,5 +22,5 @@ var (
 	TestNetHomesteadBlock           = big.NewInt(494000)  // Testnet homestead block
 	MainNetHomesteadBlock           = big.NewInt(1150000) // Mainnet homestead block
 	TestNetHomesteadGasRepriceBlock = big.NewInt(1783000) // Test net gas reprice block
-	MainNetHomesteadGasRepriceBlock = big.NewInt(2457000) // Main net gas reprice block
+	MainNetHomesteadGasRepriceBlock = big.NewInt(2463000) // Main net gas reprice block
 )
