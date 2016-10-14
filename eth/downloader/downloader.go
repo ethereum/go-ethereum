@@ -277,7 +277,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	d.cancelLock.RUnlock()
 
 	if master {
-		d.cancel()
+		d.Cancel()
 	}
 	return nil
 }
@@ -357,7 +357,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	d.cancelPeer = id
 	d.cancelLock.Unlock()
 
-	defer d.cancel() // No matter what, we can't leave the cancel channel open
+	defer d.Cancel() // No matter what, we can't leave the cancel channel open
 
 	// Set the requested sync mode, unless it's forbidden
 	d.mode = mode
@@ -478,14 +478,13 @@ func (d *Downloader) spawnSync(origin uint64, fetchers ...func() error) error {
 		}
 	}
 	d.queue.Close()
-	d.cancel()
+	d.Cancel()
 	wg.Wait()
 	return err
 }
 
-// cancel cancels all of the operations and resets the queue. It returns true
-// if the cancel operation was completed.
-func (d *Downloader) cancel() {
+// Cancel cancels all of the operations and resets the queue.
+func (d *Downloader) Cancel() {
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
@@ -512,7 +511,7 @@ func (d *Downloader) Terminate() {
 	d.quitLock.Unlock()
 
 	// Cancel any pending download requests
-	d.cancel()
+	d.Cancel()
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
@@ -935,7 +934,7 @@ func (d *Downloader) fetchNodeData() error {
 				if err != nil {
 					// If the node data processing failed, the root hash is very wrong, abort
 					glog.V(logger.Error).Infof("peer %d: state processing failed: %v", packet.PeerId(), err)
-					d.cancel()
+					d.Cancel()
 					return
 				}
 				// Processing succeeded, notify state fetcher of continuation
