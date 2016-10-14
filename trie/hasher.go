@@ -27,8 +27,9 @@ import (
 )
 
 type hasher struct {
-	tmp *bytes.Buffer
-	sha hash.Hash
+	tmp                  *bytes.Buffer
+	sha                  hash.Hash
+	cachegen, cachelimit uint16
 }
 
 // hashers live in a global pool.
@@ -38,8 +39,10 @@ var hasherPool = sync.Pool{
 	},
 }
 
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
+func newHasher(cachegen, cachelimit uint16) *hasher {
+	h := hasherPool.Get().(*hasher)
+	h.cachegen, h.cachelimit = cachegen, cachelimit
+	return h
 }
 
 func returnHasherToPool(h *hasher) {
@@ -50,8 +53,16 @@ func returnHasherToPool(h *hasher) {
 // original node initialzied with the computed hash to replace the original one.
 func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use avaialble cached data
-	if hash, dirty := n.cache(); hash != nil && (db == nil || !dirty) {
-		return hash, n, nil
+	if hash, dirty := n.cache(); hash != nil {
+		if db == nil {
+			return hash, n, nil
+		}
+		if n.canUnload(h.cachegen, h.cachelimit) {
+			return hash, hash, nil
+		}
+		if !dirty {
+			return hash, n, nil
+		}
 	}
 	// Trie not processed yet or needs storage, walk the children
 	collapsed, cached, err := h.hashChildren(n, db)
@@ -110,8 +121,7 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 
 	case *fullNode:
 		// Hash the full node's children, caching the newly hashed subtrees
-		collapsed := n.copy()
-		cached := &fullNode{dirty: n.dirty}
+		collapsed, cached := n.copy(), n.copy()
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {

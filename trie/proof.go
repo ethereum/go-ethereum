@@ -70,7 +70,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	hasher := newHasher()
+	hasher := newHasher(0, 0)
 	proof := make([]rlp.RawValue, 0, len(nodes))
 	for i, n := range nodes {
 		// Don't bother checking for errors here since hasher panics
