@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics/exp"
 )
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
@@ -44,6 +45,7 @@ func init() {
 			Enabled = true
 		}
 	}
+	exp.Exp(metrics.DefaultRegistry)
 }
 
 // NewMeter create a new metrics Meter, either a real one of a NOP stub depending
