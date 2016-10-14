@@ -56,11 +56,11 @@ func (it *Iterator) makeKey() []byte {
 	key := it.keyBuf[:0]
 	for _, se := range it.nodeIt.stack {
 		switch node := se.node.(type) {
-		case fullNode:
+		case *fullNode:
 			if se.child <= 16 {
 				key = append(key, byte(se.child))
 			}
-		case shortNode:
+		case *shortNode:
 			if hasTerm(node.Key) {
 				key = append(key, node.Key[:len(node.Key)-1]...)
 			} else {
@@ -148,7 +148,7 @@ func (it *NodeIterator) step() error {
 		if (ancestor == common.Hash{}) {
 			ancestor = parent.parent
 		}
-		if node, ok := parent.node.(fullNode); ok {
+		if node, ok := parent.node.(*fullNode); ok {
 			// Full node, traverse all children, then the node itself
 			if parent.child >= len(node.Children) {
 				break
@@ -164,7 +164,7 @@ func (it *NodeIterator) step() error {
 					break
 				}
 			}
-		} else if node, ok := parent.node.(shortNode); ok {
+		} else if node, ok := parent.node.(*shortNode); ok {
 			// Short node, traverse the pointer singleton child, then the node itself
 			if parent.child >= 0 {
 				break

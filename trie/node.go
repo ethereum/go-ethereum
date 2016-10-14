@@ -49,23 +49,26 @@ type (
 )
 
 // EncodeRLP encodes a full node into the consensus RLP format.
-func (n fullNode) EncodeRLP(w io.Writer) error {
+func (n *fullNode) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, n.Children)
 }
 
+func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
+func (n *shortNode) copy() *shortNode { copy := *n; return &copy }
+
 // Cache accessors to retrieve precalculated values (avoid lengthy type switches).
-func (n fullNode) cache() (hashNode, bool)  { return n.hash, n.dirty }
-func (n shortNode) cache() (hashNode, bool) { return n.hash, n.dirty }
-func (n hashNode) cache() (hashNode, bool)  { return nil, true }
-func (n valueNode) cache() (hashNode, bool) { return nil, true }
+func (n *fullNode) cache() (hashNode, bool)  { return n.hash, n.dirty }
+func (n *shortNode) cache() (hashNode, bool) { return n.hash, n.dirty }
+func (n hashNode) cache() (hashNode, bool)   { return nil, true }
+func (n valueNode) cache() (hashNode, bool)  { return nil, true }
 
 // Pretty printing.
-func (n fullNode) String() string  { return n.fstring("") }
-func (n shortNode) String() string { return n.fstring("") }
-func (n hashNode) String() string  { return n.fstring("") }
-func (n valueNode) String() string { return n.fstring("") }
+func (n *fullNode) String() string  { return n.fstring("") }
+func (n *shortNode) String() string { return n.fstring("") }
+func (n hashNode) String() string   { return n.fstring("") }
+func (n valueNode) String() string  { return n.fstring("") }
 
-func (n fullNode) fstring(ind string) string {
+func (n *fullNode) fstring(ind string) string {
 	resp := fmt.Sprintf("[\n%s  ", ind)
 	for i, node := range n.Children {
 		if node == nil {
@@ -76,7 +79,7 @@ func (n fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
-func (n shortNode) fstring(ind string) string {
+func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
 func (n hashNode) fstring(ind string) string {
@@ -127,17 +130,17 @@ func decodeShort(hash, buf, elems []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return shortNode{key, valueNode(val), hash, false}, nil
+		return &shortNode{key, valueNode(val), hash, false}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
 		return nil, wrapError(err, "val")
 	}
-	return shortNode{key, r, hash, false}, nil
+	return &shortNode{key, r, hash, false}, nil
 }
 
-func decodeFull(hash, buf, elems []byte) (fullNode, error) {
-	n := fullNode{hash: hash}
+func decodeFull(hash, buf, elems []byte) (*fullNode, error) {
+	n := &fullNode{hash: hash}
 	for i := 0; i < 16; i++ {
 		cld, rest, err := decodeRef(elems)
 		if err != nil {

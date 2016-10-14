@@ -212,12 +212,12 @@ func (s *TrieSync) children(req *request) ([]*request, error) {
 	children := []child{}
 
 	switch node := (*req.object).(type) {
-	case shortNode:
+	case *shortNode:
 		children = []child{{
 			node:  &node.Val,
 			depth: req.depth + len(node.Key),
 		}}
-	case fullNode:
+	case *fullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
