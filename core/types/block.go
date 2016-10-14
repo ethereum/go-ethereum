@@ -116,6 +116,15 @@ type jsonHeader struct {
 	Nonce       *BlockNonce     `json:"nonce"`
 }
 
+func (h *Header) GetNumber() *big.Int     { return new(big.Int).Set(h.Number) }
+func (h *Header) GetGasLimit() *big.Int   { return new(big.Int).Set(h.GasLimit) }
+func (h *Header) GetGasUsed() *big.Int    { return new(big.Int).Set(h.GasUsed) }
+func (h *Header) GetDifficulty() *big.Int { return new(big.Int).Set(h.Difficulty) }
+func (h *Header) GetTime() *big.Int       { return new(big.Int).Set(h.Time) }
+func (h *Header) GetNumberU64() uint64    { return h.Number.Uint64() }
+func (h *Header) GetNonce() uint64        { return binary.BigEndian.Uint64(h.Nonce[:]) }
+func (h *Header) GetExtra() []byte        { return common.CopyBytes(h.Extra) }
+
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
 func (h *Header) Hash() common.Hash {
