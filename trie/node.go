@@ -64,17 +64,11 @@ type nodeFlag struct {
 
 // canUnload tells whether a node can be unloaded.
 func (n *nodeFlag) canUnload(cachegen, cachelimit uint16) bool {
-	var dist uint16
-	if n.gen > cachegen {
-		dist = n.gen - cachegen
-	} else {
-		dist = cachegen - n.gen
-	}
-	return !n.dirty && dist > cachelimit
+	return !n.dirty && cachegen-n.gen >= cachelimit
 }
 
-func (n *fullNode) canUnload(gen, limit uint16) bool  { return (&n.flags).canUnload(gen, limit) }
-func (n *shortNode) canUnload(gen, limit uint16) bool { return (&n.flags).canUnload(gen, limit) }
+func (n *fullNode) canUnload(gen, limit uint16) bool  { return n.flags.canUnload(gen, limit) }
+func (n *shortNode) canUnload(gen, limit uint16) bool { return n.flags.canUnload(gen, limit) }
 func (n hashNode) canUnload(uint16, uint16) bool      { return false }
 func (n valueNode) canUnload(uint16, uint16) bool     { return false }
 
