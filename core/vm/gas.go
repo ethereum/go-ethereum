@@ -35,7 +35,26 @@ var (
 	GasStop   = big.NewInt(0)
 
 	GasContractByte = big.NewInt(200)
+
+	n64 = big.NewInt(64)
 )
+
+// calcGas returns the actual gas cost of the call.
+//
+// The cost of gas was changed during the homestead price change HF. To allow for EIP150
+// to be implemented. The returned gas is gas - base * 63 / 64.
+func callGas(gasTable params.GasTable, availableGas, base, callCost *big.Int) *big.Int {
+	if gasTable.CreateBySuicide != nil {
+		availableGas = new(big.Int).Sub(availableGas, base)
+		g := new(big.Int).Div(availableGas, n64)
+		g.Sub(availableGas, g)
+
+		if g.Cmp(callCost) < 0 {
+			return g
+		}
+	}
+	return callCost
+}
 
 // baseCheck checks for any stack error underflows
 func baseCheck(op OpCode, stack *Stack, gas *big.Int) error {
@@ -127,18 +146,19 @@ var _baseCheck = map[OpCode]req{
 	MSIZE:        {0, GasQuickStep, 1},
 	GAS:          {0, GasQuickStep, 1},
 	BLOCKHASH:    {1, GasExtStep, 1},
-	BALANCE:      {1, GasExtStep, 1},
-	EXTCODESIZE:  {1, GasExtStep, 1},
-	EXTCODECOPY:  {4, GasExtStep, 0},
+	BALANCE:      {1, Zero, 1},
+	EXTCODESIZE:  {1, Zero, 1},
+	EXTCODECOPY:  {4, Zero, 0},
 	SLOAD:        {1, params.SloadGas, 1},
 	SSTORE:       {2, Zero, 0},
 	SHA3:         {2, params.Sha3Gas, 1},
 	CREATE:       {3, params.CreateGas, 1},
-	CALL:         {7, params.CallGas, 1},
-	CALLCODE:     {7, params.CallGas, 1},
-	DELEGATECALL: {6, params.CallGas, 1},
-	JUMPDEST:     {0, params.JumpdestGas, 0},
+	// Zero is calculated in the gasSwitch
+	CALL:         {7, Zero, 1},
+	CALLCODE:     {7, Zero, 1},
+	DELEGATECALL: {6, Zero, 1},
 	SUICIDE:      {1, Zero, 0},
+	JUMPDEST:     {0, params.JumpdestGas, 0},
 	RETURN:       {2, Zero, 0},
 	PUSH1:        {0, GasFastestStep, 1},
 	DUP1:         {0, Zero, 1},

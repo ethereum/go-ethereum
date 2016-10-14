@@ -44,6 +44,7 @@ type EVM struct {
 	env       Environment
 	jumpTable vmJumpTable
 	cfg       Config
+	gasTable  params.GasTable
 }
 
 // New returns a new instance of the EVM.
@@ -52,6 +53,7 @@ func New(env Environment, cfg Config) *EVM {
 		env:       env,
 		jumpTable: newJumpTable(env.RuleSet(), env.BlockNumber()),
 		cfg:       cfg,
+		gasTable:  env.RuleSet().GasTable(env.BlockNumber()),
 	}
 }
 
@@ -169,7 +171,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
 		// calculate the new memory size and gas price for the current executing opcode
-		newMemSize, cost, err = calculateGasAndSize(evm.env, contract, caller, op, statedb, mem, stack)
+		newMemSize, cost, err = calculateGasAndSize(evm.gasTable, evm.env, contract, caller, op, statedb, mem, stack)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +236,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 // calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef, op OpCode, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
+func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Contract, caller ContractRef, op OpCode, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -246,6 +248,24 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 
 	// stack Check, memory resize & gas phase
 	switch op {
+	case SUICIDE:
+		// if suicide is not nil: homestead gas fork
+		if gasTable.CreateBySuicide != nil {
+			gas.Set(gasTable.Suicide)
+			if !env.Db().Exist(common.BigToAddress(stack.data[len(stack.data)-1])) {
+				gas.Add(gas, gasTable.CreateBySuicide)
+			}
+		}
+
+		if !statedb.HasSuicided(contract.Address()) {
+			statedb.AddRefund(params.SuicideRefundGas)
+		}
+	case EXTCODESIZE:
+		gas.Set(gasTable.ExtcodeSize)
+	case BALANCE:
+		gas.Set(gasTable.Balance)
+	case SLOAD:
+		gas.Set(gasTable.SLoad)
 	case SWAP1, SWAP2, SWAP3, SWAP4, SWAP5, SWAP6, SWAP7, SWAP8, SWAP9, SWAP10, SWAP11, SWAP12, SWAP13, SWAP14, SWAP15, SWAP16:
 		n := int(op - SWAP1 + 2)
 		err := stack.require(n)
@@ -274,6 +294,8 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 		gas.Add(gas, new(big.Int).Mul(mSize, params.LogDataGas))
 
 		newMemSize = calcMemSize(mStart, mSize)
+
+		quadMemGas(mem, newMemSize, gas)
 	case EXP:
 		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), params.ExpByteGas))
 	case SSTORE:
@@ -302,67 +324,100 @@ func calculateGasAndSize(env Environment, contract *Contract, caller ContractRef
 			g = params.SstoreResetGas
 		}
 		gas.Set(g)
-	case SUICIDE:
-		if !statedb.HasSuicided(contract.Address()) {
-			statedb.AddRefund(params.SuicideRefundGas)
-		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
+		quadMemGas(mem, newMemSize, gas)
 	case MSTORE8:
 		newMemSize = calcMemSize(stack.peek(), u256(1))
+		quadMemGas(mem, newMemSize, gas)
 	case MSTORE:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
+		quadMemGas(mem, newMemSize, gas)
 	case RETURN:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
+		quadMemGas(mem, newMemSize, gas)
 	case SHA3:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-2])
 
 		words := toWordSize(stack.data[stack.len()-2])
 		gas.Add(gas, words.Mul(words, params.Sha3WordGas))
+
+		quadMemGas(mem, newMemSize, gas)
 	case CALLDATACOPY:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
 		words := toWordSize(stack.data[stack.len()-3])
 		gas.Add(gas, words.Mul(words, params.CopyGas))
+
+		quadMemGas(mem, newMemSize, gas)
 	case CODECOPY:
 		newMemSize = calcMemSize(stack.peek(), stack.data[stack.len()-3])
 
 		words := toWordSize(stack.data[stack.len()-3])
 		gas.Add(gas, words.Mul(words, params.CopyGas))
+
+		quadMemGas(mem, newMemSize, gas)
 	case EXTCODECOPY:
+		gas.Set(gasTable.ExtcodeCopy)
+
 		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-4])
 
 		words := toWordSize(stack.data[stack.len()-4])
 		gas.Add(gas, words.Mul(words, params.CopyGas))
 
+		quadMemGas(mem, newMemSize, gas)
 	case CREATE:
 		newMemSize = calcMemSize(stack.data[stack.len()-2], stack.data[stack.len()-3])
+
+		quadMemGas(mem, newMemSize, gas)
 	case CALL, CALLCODE:
-		gas.Add(gas, stack.data[stack.len()-1])
+		gas.Set(gasTable.Calls)
 
 		if op == CALL {
 			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
 				gas.Add(gas, params.CallNewAccountGas)
 			}
 		}
-
 		if len(stack.data[stack.len()-3].Bytes()) > 0 {
 			gas.Add(gas, params.CallValueTransferGas)
 		}
-
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])
 		y := calcMemSize(stack.data[stack.len()-4], stack.data[stack.len()-5])
 
 		newMemSize = common.BigMax(x, y)
+
+		quadMemGas(mem, newMemSize, gas)
+
+		cg := callGas(gasTable, contract.Gas, gas, stack.data[stack.len()-1])
+		// Replace the stack item with the new gas calculation. This means that
+		// either the original item is left on the stack or the item is replaced by:
+		// (availableGas - gas) * 63 / 64
+		// We replace the stack item so that it's available when the opCall instruction is
+		// called. This information is otherwise lost due to the dependency on *current*
+		// available gas.
+		stack.data[stack.len()-1] = cg
+		gas.Add(gas, cg)
+
 	case DELEGATECALL:
-		gas.Add(gas, stack.data[stack.len()-1])
+		gas.Set(gasTable.Calls)
 
 		x := calcMemSize(stack.data[stack.len()-5], stack.data[stack.len()-6])
 		y := calcMemSize(stack.data[stack.len()-3], stack.data[stack.len()-4])
 
 		newMemSize = common.BigMax(x, y)
+
+		quadMemGas(mem, newMemSize, gas)
+
+		cg := callGas(gasTable, contract.Gas, gas, stack.data[stack.len()-1])
+		// Replace the stack item with the new gas calculation. This means that
+		// either the original item is left on the stack or the item is replaced by:
+		// (availableGas - gas) * 63 / 64
+		// We replace the stack item so that it's available when the opCall instruction is
+		// called.
+		stack.data[stack.len()-1] = cg
+		gas.Add(gas, cg)
+
 	}
-	quadMemGas(mem, newMemSize, gas)
 
 	return newMemSize, gas, nil
 }

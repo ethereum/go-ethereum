@@ -26,11 +26,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type ruleSet struct{}
 
-func (self *ruleSet) IsHomestead(*big.Int) bool { return true }
+func (self *ruleSet) IsHomestead(*big.Int) bool    { return true }
+func (*ruleSet) GasTable(*big.Int) params.GasTable { return params.GasTableHomesteadGasRepriceFork }
 
 type Env struct {
 	gasLimit *big.Int
