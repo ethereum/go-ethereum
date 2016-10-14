@@ -618,6 +618,96 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	}
 }
 
+// Tests that if the transaction count belonging to multiple accounts go above
+// some hard threshold, the higher transactions are dropped to prevent DOS
+// attacks.
+func TestTransactionPendingGlobalLimiting(t *testing.T) {
+	// Reduce the queue limits to shorten test time
+	defer func(old uint64) { maxPendingTotal = old }(maxPendingTotal)
+	maxPendingTotal = minPendingPerAccount * 10
+
+	// Create the pool to test the limit enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+
+	pool := NewTxPool(testChainConfig(), new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool.resetState()
+
+	// Create a number of test accounts and fund them
+	state, _ := pool.currentState()
+
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		state.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+	// Generate and queue a batch of transactions
+	nonces := make(map[common.Address]uint64)
+
+	txs := types.Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		for j := 0; j < int(maxPendingTotal)/len(keys)*2; j++ {
+			txs = append(txs, transaction(nonces[addr], big.NewInt(100000), key))
+			nonces[addr]++
+		}
+	}
+	// Import the batch and verify that limits have been enforced
+	pool.AddBatch(txs)
+
+	pending := 0
+	for _, list := range pool.pending {
+		pending += list.Len()
+	}
+	if pending > int(maxPendingTotal) {
+		t.Fatalf("total pending transactions overflow allowance: %d > %d", pending, maxPendingTotal)
+	}
+}
+
+// Tests that if the transaction count belonging to multiple accounts go above
+// some hard threshold, if they are under the minimum guaranteed slot count then
+// the transactions are still kept.
+func TestTransactionPendingMinimumAllowance(t *testing.T) {
+	// Reduce the queue limits to shorten test time
+	defer func(old uint64) { maxPendingTotal = old }(maxPendingTotal)
+	maxPendingTotal = 0
+
+	// Create the pool to test the limit enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+
+	pool := NewTxPool(testChainConfig(), new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool.resetState()
+
+	// Create a number of test accounts and fund them
+	state, _ := pool.currentState()
+
+	keys := make([]*ecdsa.PrivateKey, 5)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		state.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+	// Generate and queue a batch of transactions
+	nonces := make(map[common.Address]uint64)
+
+	txs := types.Transactions{}
+	for _, key := range keys {
+		addr := crypto.PubkeyToAddress(key.PublicKey)
+		for j := 0; j < int(minPendingPerAccount)*2; j++ {
+			txs = append(txs, transaction(nonces[addr], big.NewInt(100000), key))
+			nonces[addr]++
+		}
+	}
+	// Import the batch and verify that limits have been enforced
+	pool.AddBatch(txs)
+
+	for addr, list := range pool.pending {
+		if list.Len() != int(minPendingPerAccount) {
+			t.Errorf("addr %x: total pending transactions mismatch: have %d, want %d", addr, list.Len(), minPendingPerAccount)
+		}
+	}
+}
+
 // Benchmarks the speed of validating the contents of the pending queue of the
 // transaction pool.
 func BenchmarkPendingDemotion100(b *testing.B)   { benchmarkPendingDemotion(b, 100) }
