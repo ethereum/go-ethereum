@@ -130,7 +130,7 @@ func decodeShort(hash, buf, elems []byte) (node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid value node: %v", err)
 		}
-		return &shortNode{key, valueNode(val), hash, false}, nil
+		return &shortNode{key, append(valueNode{}, val...), hash, false}, nil
 	}
 	r, _, err := decodeRef(rest)
 	if err != nil {
@@ -153,7 +153,7 @@ func decodeFull(hash, buf, elems []byte) (*fullNode, error) {
 		return n, err
 	}
 	if len(val) > 0 {
-		n.Children[16] = valueNode(val)
+		n.Children[16] = append(valueNode{}, val...)
 	}
 	return n, nil
 }
@@ -179,7 +179,7 @@ func decodeRef(buf []byte) (node, []byte, error) {
 		// empty node
 		return nil, rest, nil
 	case kind == rlp.String && len(val) == 32:
-		return hashNode(val), rest, nil
+		return append(hashNode{}, val...), rest, nil
 	default:
 		return nil, nil, fmt.Errorf("invalid RLP string size %d (want 0 or 32)", len(val))
 	}
