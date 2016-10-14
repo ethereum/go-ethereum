@@ -286,7 +286,7 @@ func (dl *downloadTester) headFastBlock() *types.Block {
 func (dl *downloadTester) commitHeadBlock(hash common.Hash) error {
 	// For now only check that the state trie is correct
 	if block := dl.getBlock(hash); block != nil {
-		_, err := trie.NewSecure(block.Root(), dl.stateDb)
+		_, err := trie.NewSecure(block.Root(), dl.stateDb, 0)
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])

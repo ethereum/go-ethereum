@@ -44,7 +44,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 	tn := t.root
 	for len(key) > 0 && tn != nil {
 		switch n := tn.(type) {
-		case shortNode:
+		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				// The trie doesn't contain the key.
 				tn = nil
@@ -53,7 +53,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 				key = key[len(n.Key):]
 			}
 			nodes = append(nodes, n)
-		case fullNode:
+		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
 			nodes = append(nodes, n)
@@ -70,7 +70,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	hasher := newHasher()
+	hasher := newHasher(0, 0)
 	proof := make([]rlp.RawValue, 0, len(nodes))
 	for i, n := range nodes {
 		// Don't bother checking for errors here since hasher panics
@@ -130,13 +130,13 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 func get(tn node, key []byte) ([]byte, node) {
 	for len(key) > 0 {
 		switch n := tn.(type) {
-		case shortNode:
+		case *shortNode:
 			if len(key) < len(n.Key) || !bytes.Equal(n.Key, key[:len(n.Key)]) {
 				return nil, nil
 			}
 			tn = n.Val
 			key = key[len(n.Key):]
-		case fullNode:
+		case *fullNode:
 			tn = n.Children[key[0]]
 			key = key[1:]
 		case hashNode:

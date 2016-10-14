@@ -460,8 +460,7 @@ const benchElemCount = 20000
 func benchGet(b *testing.B, commit bool) {
 	trie := new(Trie)
 	if commit {
-		dir, tmpdb := tempDB()
-		defer os.RemoveAll(dir)
+		_, tmpdb := tempDB()
 		trie, _ = New(common.Hash{}, tmpdb)
 	}
 	k := make([]byte, 32)
@@ -477,6 +476,13 @@ func benchGet(b *testing.B, commit bool) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		trie.Get(k)
+	}
+	b.StopTimer()
+
+	if commit {
+		ldb := trie.db.(*ethdb.LDBDatabase)
+		ldb.Close()
+		os.RemoveAll(ldb.Path())
 	}
 }
 
