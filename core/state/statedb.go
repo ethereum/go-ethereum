@@ -41,7 +41,7 @@ var StartingNonce uint64
 const (
 	// Number of past tries to keep. The arbitrarily chosen value here
 	// is max uncle depth + 1.
-	maxTrieCacheLength = 8
+	maxPastTries = 8
 
 	// Trie cache generation limit.
 	maxTrieCacheGen = 100
@@ -165,7 +165,7 @@ func (self *StateDB) pushTrie(t *trie.SecureTrie) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	if len(self.pastTries) >= maxTrieCacheLength {
+	if len(self.pastTries) >= maxPastTries {
 		copy(self.pastTries, self.pastTries[1:])
 		self.pastTries[len(self.pastTries)-1] = t
 	} else {
