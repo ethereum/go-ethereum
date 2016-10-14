@@ -207,11 +207,15 @@ Logs:
 	return ret
 }
 
-func (f *Filter) bloomFilter(block *types.Block) bool {
-	if len(f.addresses) > 0 {
+func (f *Filter) bloomFilter(bloom types.Bloom) bool {
+	return bloomFilter(bloom, f.addresses, f.topics)
+}
+
+func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
+	if len(addresses) > 0 {
 		var included bool
-		for _, addr := range f.addresses {
-			if types.BloomLookup(block.Bloom(), addr) {
+		for _, addr := range addresses {
+			if types.BloomLookup(bloom, addr) {
 				included = true
 				break
 			}
@@ -222,7 +226,7 @@ func (f *Filter) bloomFilter(block *types.Block) bool {
 		}
 	}
 
-	for _, sub := range f.topics {
+	for _, sub := range topics {
 		var included bool
 		for _, topic := range sub {
 			if (topic == common.Hash{}) || types.BloomLookup(block.Bloom(), topic) {

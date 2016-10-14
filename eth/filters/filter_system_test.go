@@ -32,9 +32,10 @@ import (
 )
 
 var (
-	mux   = new(event.TypeMux)
-	db, _ = ethdb.NewMemDatabase()
-	api   = NewPublicFilterAPI(db, mux)
+	mux     = new(event.TypeMux)
+	db, _   = ethdb.NewMemDatabase()
+	backend = &testBackend{mux, db}
+	api     = NewPublicFilterAPI(backend, false)
 )
 
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.

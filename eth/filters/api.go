@@ -61,12 +61,14 @@ type PublicFilterAPI struct {
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(chainDb ethdb.Database, mux *event.TypeMux) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool) *PublicFilterAPI {
 	api := &PublicFilterAPI{
-		mux:     mux,
-		chainDb: chainDb,
-		events:  NewEventSystem(mux),
-		filters: make(map[rpc.ID]*filter),
+		backend:   backend,
+		useMipMap: !lightMode,
+		mux:       backend.EventMux(),
+		chainDb:   backend.ChainDb(),
+		events:    NewEventSystem(backend.EventMux(), backend, lightMode),
+		filters:   make(map[rpc.ID]*filter),
 	}
 
 	go api.timeoutLoop()

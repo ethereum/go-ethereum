@@ -44,9 +44,9 @@ type Backend interface {
 	AccountManager() *accounts.Manager
 	// BlockChain API
 	SetHead(number uint64)
-	HeaderByNumber(blockNr rpc.BlockNumber) *types.Header
+	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error)
-	StateAndHeaderByNumber(blockNr rpc.BlockNumber) (State, *types.Header, error)
+	StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (State, *types.Header, error)
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetTd(blockHash common.Hash) *big.Int
