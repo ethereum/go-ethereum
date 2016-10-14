@@ -41,7 +41,10 @@ var StartingNonce uint64
 const (
 	// Number of past tries to keep. The arbitrarily chosen value here
 	// is max uncle depth + 1.
-	maxTrieCacheLength = 8
+	maxPastTries = 8
+
+	// Trie cache generation limit.
+	maxTrieCacheGen = 100
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
@@ -86,7 +89,7 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
-	tr, err := trie.NewSecure(root, db)
+	tr, err := trie.NewSecure(root, db, maxTrieCacheGen)
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +158,14 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 			return &tr, nil
 		}
 	}
-	return trie.NewSecure(root, self.db)
+	return trie.NewSecure(root, self.db, maxTrieCacheGen)
 }
 
 func (self *StateDB) pushTrie(t *trie.SecureTrie) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	if len(self.pastTries) >= maxTrieCacheLength {
+	if len(self.pastTries) >= maxPastTries {
 		copy(self.pastTries, self.pastTries[1:])
 		self.pastTries[len(self.pastTries)-1] = t
 	} else {
