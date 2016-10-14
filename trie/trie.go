@@ -226,7 +226,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
 		}
 		// Otherwise branch out at the index where they differ.
-		branch := &fullNode{nodeFlag: t.newFlag()}
+		branch := &fullNode{flags: t.newFlag()}
 		var err error
 		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
 		if err != nil {
@@ -249,7 +249,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return false, n, err
 		}
 		n = n.copy()
-		n.Children[key[0]], n.hash, n.dirty = nn, nil, true
+		n.Children[key[0]], n.flags.hash, n.flags.dirty = nn, nil, true
 		return true, n, nil
 
 	case nil:
@@ -333,7 +333,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, n, err
 		}
 		n = n.copy()
-		n.Children[key[0]], n.hash, n.dirty = nn, nil, true
+		n.Children[key[0]], n.flags.hash, n.flags.dirty = nn, nil, true
 
 		// Check how many non-nil entries are left after deleting and
 		// reduce the full node to a short node if only one entry is

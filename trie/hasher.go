@@ -78,16 +78,16 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 		switch cached := cached.(type) {
 		case *shortNode:
 			cached = cached.copy()
-			cached.hash = hash
+			cached.flags.hash = hash
 			if db != nil {
-				cached.dirty = false
+				cached.flags.dirty = false
 			}
 			return hashed, cached, nil
 		case *fullNode:
 			cached = cached.copy()
-			cached.hash = hash
+			cached.flags.hash = hash
 			if db != nil {
-				cached.dirty = false
+				cached.flags.dirty = false
 			}
 			return hashed, cached, nil
 		}

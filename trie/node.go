@@ -36,12 +36,12 @@ type node interface {
 type (
 	fullNode struct {
 		Children [17]node // Actual trie node data to encode/decode (needs custom encoder)
-		nodeFlag
+		flags    nodeFlag
 	}
 	shortNode struct {
-		Key []byte
-		Val node
-		nodeFlag
+		Key   []byte
+		Val   node
+		flags nodeFlag
 	}
 	hashNode  []byte
 	valueNode []byte
@@ -63,7 +63,7 @@ type nodeFlag struct {
 }
 
 // canUnload tells whether a node can be unloaded.
-func (n nodeFlag) canUnload(cachegen, cachelimit uint16) bool {
+func (n *nodeFlag) canUnload(cachegen, cachelimit uint16) bool {
 	var dist uint16
 	if n.gen > cachegen {
 		dist = n.gen - cachegen
@@ -73,12 +73,15 @@ func (n nodeFlag) canUnload(cachegen, cachelimit uint16) bool {
 	return !n.dirty && dist > cachelimit
 }
 
-func (n hashNode) canUnload(uint16, uint16) bool  { return false }
-func (n valueNode) canUnload(uint16, uint16) bool { return false }
+func (n *fullNode) canUnload(gen, limit uint16) bool  { return (&n.flags).canUnload(gen, limit) }
+func (n *shortNode) canUnload(gen, limit uint16) bool { return (&n.flags).canUnload(gen, limit) }
+func (n hashNode) canUnload(uint16, uint16) bool      { return false }
+func (n valueNode) canUnload(uint16, uint16) bool     { return false }
 
-func (n nodeFlag) cache() (hashNode, bool)  { return n.hash, n.dirty }
-func (n hashNode) cache() (hashNode, bool)  { return nil, true }
-func (n valueNode) cache() (hashNode, bool) { return nil, true }
+func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
+func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
+func (n hashNode) cache() (hashNode, bool)   { return nil, true }
+func (n valueNode) cache() (hashNode, bool)  { return nil, true }
 
 // Pretty printing.
 func (n *fullNode) String() string  { return n.fstring("") }
@@ -159,7 +162,7 @@ func decodeShort(hash, buf, elems []byte) (node, error) {
 }
 
 func decodeFull(hash, buf, elems []byte) (*fullNode, error) {
-	n := &fullNode{nodeFlag: nodeFlag{hash: hash}}
+	n := &fullNode{flags: nodeFlag{hash: hash}}
 	for i := 0; i < 16; i++ {
 		cld, rest, err := decodeRef(elems)
 		if err != nil {

@@ -156,7 +156,7 @@ func (it *NodeIterator) step() error {
 			for parent.child++; parent.child < len(node.Children); parent.child++ {
 				if current := node.Children[parent.child]; current != nil {
 					it.stack = append(it.stack, &nodeIteratorState{
-						hash:   common.BytesToHash(node.hash),
+						hash:   common.BytesToHash(node.flags.hash),
 						node:   current,
 						parent: ancestor,
 						child:  -1,
@@ -171,7 +171,7 @@ func (it *NodeIterator) step() error {
 			}
 			parent.child++
 			it.stack = append(it.stack, &nodeIteratorState{
-				hash:   common.BytesToHash(node.hash),
+				hash:   common.BytesToHash(node.flags.hash),
 				node:   node.Val,
 				parent: ancestor,
 				child:  -1,
