@@ -145,7 +145,7 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 		return isEqual(f.Dst, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
 		// check if that both the key and the topic match
-		if f.SymKeyHash == msg.TopicKeyHash {
+		if f.SymKeyHash == msg.SymKeyHash {
 			for _, t := range f.Topics {
 				if t == msg.Topic {
 					return true

@@ -42,13 +42,6 @@ func BytesToTopic(b []byte) (t TopicType) {
 	return t
 }
 
-func HashToTopic(h common.Hash) (t TopicType) {
-	for i := 0; i < TopicLength; i++ {
-		t[i] = h[i]
-	}
-	return t
-}
-
 // String converts a topic byte array to a string representation.
 func (topic *TopicType) String() string {
 	return string(common.ToHex(topic[:]))

@@ -111,39 +111,39 @@ func (api *PublicWhisperAPI) NewIdentity() (string, error) {
 	return common.ToHex(crypto.FromECDSAPub(&identity.PublicKey)), nil
 }
 
-// GenerateTopicKey generates a random symmetric key and stores it under
+// GenerateSymKey generates a random symmetric key and stores it under
 // the 'name' id. Will be used in the future for session key exchange.
-func (api *PublicWhisperAPI) GenerateTopicKey(name string) error {
+func (api *PublicWhisperAPI) GenerateSymKey(name string) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return api.whisper.GenerateTopicKey(name)
+	return api.whisper.GenerateSymKey(name)
 }
 
-// AddTopicKey stores the key under the 'name' id.
-func (api *PublicWhisperAPI) AddTopicKey(name string, key []byte) error {
+// AddSymKey stores the key under the 'name' id.
+func (api *PublicWhisperAPI) AddSymKey(name string, key []byte) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return api.whisper.AddTopicKey(name, key)
+	return api.whisper.AddSymKey(name, key)
 }
 
-// HasTopicKey returns true if there is a key associated with the name string.
+// HasSymKey returns true if there is a key associated with the name string.
 // Otherwise returns false.
-func (api *PublicWhisperAPI) HasTopicKey(name string) (bool, error) {
+func (api *PublicWhisperAPI) HasSymKey(name string) (bool, error) {
 	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	res := api.whisper.HasTopicKey(name)
+	res := api.whisper.HasSymKey(name)
 	return res, nil
 }
 
-// DeleteTopicKey deletes the key associated with the name string if it exists.
-func (api *PublicWhisperAPI) DeleteTopicKey(name string) error {
+// DeleteSymKey deletes the key associated with the name string if it exists.
+func (api *PublicWhisperAPI) DeleteSymKey(name string) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	api.whisper.DeleteTopicKey(name)
+	api.whisper.DeleteSymKey(name)
 	return nil
 }
 
@@ -157,7 +157,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 	filter := whisperv5.Filter{
 		Src:       crypto.ToECDSAPub(args.From),
 		Dst:       crypto.ToECDSAPub(args.To),
-		KeySym:    api.whisper.GetTopicKey(args.KeyName),
+		KeySym:    api.whisper.GetSymKey(args.KeyName),
 		PoW:       args.PoW,
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
 		AcceptP2P: args.AcceptP2P,
@@ -260,7 +260,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	params := whisperv5.MessageParams{
 		TTL:      args.TTL,
 		Dst:      crypto.ToECDSAPub(args.To),
-		KeySym:   api.whisper.GetTopicKey(args.KeyName),
+		KeySym:   api.whisper.GetSymKey(args.KeyName),
 		Topic:    args.Topic,
 		Payload:  args.Payload,
 		Padding:  args.Padding,

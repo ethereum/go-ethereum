@@ -42,7 +42,7 @@ type Whisper struct {
 	filters  *Filters
 
 	privateKeys map[string]*ecdsa.PrivateKey
-	topicKeys   map[string][]byte
+	symKeys     map[string][]byte
 	keyMu       sync.RWMutex
 
 	envelopes   map[common.Hash]*Envelope        // Pool of messages currently tracked by this node
@@ -63,7 +63,7 @@ type Whisper struct {
 func New(server MailServer) *Whisper {
 	whisper := &Whisper{
 		privateKeys: make(map[string]*ecdsa.PrivateKey),
-		topicKeys:   make(map[string][]byte),
+		symKeys:     make(map[string][]byte),
 		envelopes:   make(map[common.Hash]*Envelope),
 		messages:    make(map[common.Hash]*ReceivedMessage),
 		expirations: make(map[uint32]*set.SetNonTS),
@@ -179,8 +179,8 @@ func (w *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
 	return w.privateKeys[string(crypto.FromECDSAPub(key))]
 }
 
-func (w *Whisper) GenerateTopicKey(name string) error {
-	if w.HasTopicKey(name) {
+func (w *Whisper) GenerateSymKey(name string) error {
+	if w.HasSymKey(name) {
 		return fmt.Errorf("Key with name [%s] already exists", name)
 	}
 
@@ -194,12 +194,12 @@ func (w *Whisper) GenerateTopicKey(name string) error {
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	w.topicKeys[name] = key
+	w.symKeys[name] = key
 	return nil
 }
 
-func (w *Whisper) AddTopicKey(name string, key []byte) error {
-	if w.HasTopicKey(name) {
+func (w *Whisper) AddSymKey(name string, key []byte) error {
+	if w.HasSymKey(name) {
 		return fmt.Errorf("Key with name [%s] already exists", name)
 	}
 
@@ -210,26 +210,26 @@ func (w *Whisper) AddTopicKey(name string, key []byte) error {
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	w.topicKeys[name] = derived
+	w.symKeys[name] = derived
 	return nil
 }
 
-func (w *Whisper) HasTopicKey(name string) bool {
+func (w *Whisper) HasSymKey(name string) bool {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.topicKeys[name] != nil
+	return w.symKeys[name] != nil
 }
 
-func (w *Whisper) DeleteTopicKey(name string) {
+func (w *Whisper) DeleteSymKey(name string) {
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	delete(w.topicKeys, name)
+	delete(w.symKeys, name)
 }
 
-func (w *Whisper) GetTopicKey(name string) []byte {
+func (w *Whisper) GetSymKey(name string) []byte {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.topicKeys[name]
+	return w.symKeys[name]
 }
 
 // Watch installs a new message handler to run in case a matching packet arrives

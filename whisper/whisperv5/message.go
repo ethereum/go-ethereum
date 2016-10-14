@@ -73,7 +73,7 @@ type ReceivedMessage struct {
 	Dst   *ecdsa.PublicKey // Message recipient (identity used to decode the message)
 	Topic TopicType
 
-	TopicKeyHash    common.Hash // The Keccak256Hash of the key, associated with the Topic
+	SymKeyHash      common.Hash // The Keccak256Hash of the key, associated with the Topic
 	EnvelopeHash    common.Hash // Message envelope hash to act as a unique id
 	EnvelopeVersion uint64
 }
@@ -82,12 +82,8 @@ func isMessageSigned(flags byte) bool {
 	return (flags & signatureFlag) != 0
 }
 
-func isMessagePadded(flags byte) bool {
-	return (flags & paddingMask) != 0
-}
-
 func (msg *ReceivedMessage) isSymmetricEncryption() bool {
-	return msg.TopicKeyHash != common.Hash{}
+	return msg.SymKeyHash != common.Hash{}
 }
 
 func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
@@ -105,16 +101,9 @@ func DeriveOneTimeKey(key []byte, salt []byte, version uint64) ([]byte, error) {
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewSentMessage(params *MessageParams) *SentMessage {
-	// Construct an initial flag set: no signature, no padding, other bits random
-	buf := make([]byte, 1)
-	mrand.Read(buf)
-	flags := buf[0]
-	flags &= ^paddingMask
-	flags &= ^signatureFlag
-
 	msg := SentMessage{}
 	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimitUpper)
-	msg.Raw[0] = flags
+	msg.Raw[0] = 0 // set all the flags to zero
 	msg.appendPadding(params)
 	msg.Raw = append(msg.Raw, params.Payload...)
 	return &msg

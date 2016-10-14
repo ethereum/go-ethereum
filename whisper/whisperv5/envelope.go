@@ -208,7 +208,7 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 	} else if e.IsSymmetric() {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
 		if msg != nil {
-			msg.TopicKeyHash = crypto.Keccak256Hash(watcher.KeySym)
+			msg.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)
 		}
 	}
 
