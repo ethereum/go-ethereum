@@ -27,8 +27,9 @@ import (
 )
 
 type hasher struct {
-	tmp *bytes.Buffer
-	sha hash.Hash
+	tmp                  *bytes.Buffer
+	sha                  hash.Hash
+	cachegen, cachelimit uint16
 }
 
 // hashers live in a global pool.
@@ -38,8 +39,10 @@ var hasherPool = sync.Pool{
 	},
 }
 
-func newHasher() *hasher {
-	return hasherPool.Get().(*hasher)
+func newHasher(cachegen, cachelimit uint16) *hasher {
+	h := hasherPool.Get().(*hasher)
+	h.cachegen, h.cachelimit = cachegen, cachelimit
+	return h
 }
 
 func returnHasherToPool(h *hasher) {
@@ -50,8 +53,18 @@ func returnHasherToPool(h *hasher) {
 // original node initialzied with the computed hash to replace the original one.
 func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error) {
 	// If we're not storing the node, just hashing, use avaialble cached data
-	if hash, dirty := n.cache(); hash != nil && (db == nil || !dirty) {
-		return hash, n, nil
+	if hash, dirty := n.cache(); hash != nil {
+		if db == nil {
+			return hash, n, nil
+		}
+		if n.canUnload(h.cachegen, h.cachelimit) {
+			// Evict the node from cache. All of its subnodes will have a lower or equal
+			// cache generation number.
+			return hash, hash, nil
+		}
+		if !dirty {
+			return hash, n, nil
+		}
 	}
 	// Trie not processed yet or needs storage, walk the children
 	collapsed, cached, err := h.hashChildren(n, db)
@@ -62,19 +75,21 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 	if err != nil {
 		return hashNode{}, n, err
 	}
-	// Cache the hash and RLP blob of the ndoe for later reuse
+	// Cache the hash of the ndoe for later reuse.
 	if hash, ok := hashed.(hashNode); ok && !force {
 		switch cached := cached.(type) {
-		case shortNode:
-			cached.hash = hash
+		case *shortNode:
+			cached = cached.copy()
+			cached.flags.hash = hash
 			if db != nil {
-				cached.dirty = false
+				cached.flags.dirty = false
 			}
 			return hashed, cached, nil
-		case fullNode:
-			cached.hash = hash
+		case *fullNode:
+			cached = cached.copy()
+			cached.flags.hash = hash
 			if db != nil {
-				cached.dirty = false
+				cached.flags.dirty = false
 			}
 			return hashed, cached, nil
 		}
@@ -89,40 +104,42 @@ func (h *hasher) hashChildren(original node, db DatabaseWriter) (node, node, err
 	var err error
 
 	switch n := original.(type) {
-	case shortNode:
+	case *shortNode:
 		// Hash the short node's child, caching the newly hashed subtree
-		cached := n
-		cached.Key = common.CopyBytes(cached.Key)
+		collapsed, cached := n.copy(), n.copy()
+		collapsed.Key = compactEncode(n.Key)
+		cached.Key = common.CopyBytes(n.Key)
 
-		n.Key = compactEncode(n.Key)
 		if _, ok := n.Val.(valueNode); !ok {
-			if n.Val, cached.Val, err = h.hash(n.Val, db, false); err != nil {
-				return n, original, err
+			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false)
+			if err != nil {
+				return original, original, err
 			}
 		}
-		if n.Val == nil {
-			n.Val = valueNode(nil) // Ensure that nil children are encoded as empty strings.
+		if collapsed.Val == nil {
+			collapsed.Val = valueNode(nil) // Ensure that nil children are encoded as empty strings.
 		}
-		return n, cached, nil
+		return collapsed, cached, nil
 
-	case fullNode:
+	case *fullNode:
 		// Hash the full node's children, caching the newly hashed subtrees
-		cached := fullNode{dirty: n.dirty}
+		collapsed, cached := n.copy(), n.copy()
 
 		for i := 0; i < 16; i++ {
 			if n.Children[i] != nil {
-				if n.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false); err != nil {
-					return n, original, err
+				collapsed.Children[i], cached.Children[i], err = h.hash(n.Children[i], db, false)
+				if err != nil {
+					return original, original, err
 				}
 			} else {
-				n.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
+				collapsed.Children[i] = valueNode(nil) // Ensure that nil children are encoded as empty strings.
 			}
 		}
 		cached.Children[16] = n.Children[16]
-		if n.Children[16] == nil {
-			n.Children[16] = valueNode(nil)
+		if collapsed.Children[16] == nil {
+			collapsed.Children[16] = valueNode(nil)
 		}
-		return n, cached, nil
+		return collapsed, cached, nil
 
 	default:
 		// Value and hash nodes don't have children so they're left as were
@@ -140,6 +157,7 @@ func (h *hasher) store(n node, db DatabaseWriter, force bool) (node, error) {
 	if err := rlp.Encode(h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
+
 	if h.tmp.Len() < 32 && !force {
 		return n, nil // Nodes smaller than 32 bytes are stored inside their parent
 	}

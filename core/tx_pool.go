@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 var (
@@ -46,10 +47,12 @@ var (
 )
 
 var (
-	maxQueuedPerAccount = uint64(64)    // Max limit of queued transactions per address
-	maxQueuedInTotal    = uint64(8192)  // Max limit of queued transactions from all accounts
-	maxQueuedLifetime   = 3 * time.Hour // Max amount of time transactions from idle accounts are queued
-	evictionInterval    = time.Minute   // Time interval to check for evictable transactions
+	minPendingPerAccount = uint64(16)    // Min number of guaranteed transaction slots per address
+	maxPendingTotal      = uint64(4096)  // Max limit of pending transactions from all accounts (soft)
+	maxQueuedPerAccount  = uint64(64)    // Max limit of queued transactions per address
+	maxQueuedInTotal     = uint64(1024)  // Max limit of queued transactions from all accounts
+	maxQueuedLifetime    = 3 * time.Hour // Max amount of time transactions from idle accounts are queued
+	evictionInterval     = time.Minute   // Time interval to check for evictable transactions
 )
 
 type stateFn func() (*state.StateDB, error)
@@ -481,7 +484,6 @@ func (pool *TxPool) promoteExecutables() {
 	}
 	// Iterate over all accounts and promote any executable transactions
 	queued := uint64(0)
-
 	for addr, list := range pool.queue {
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(state.GetNonce(addr)) {
@@ -517,6 +519,59 @@ func (pool *TxPool) promoteExecutables() {
 		// Delete the entire queue entry if it became empty.
 		if list.Empty() {
 			delete(pool.queue, addr)
+		}
+	}
+	// If the pending limit is overflown, start equalizing allowances
+	pending := uint64(0)
+	for _, list := range pool.pending {
+		pending += uint64(list.Len())
+	}
+	if pending > maxPendingTotal {
+		// Assemble a spam order to penalize large transactors first
+		spammers := prque.New()
+		for addr, list := range pool.pending {
+			// Only evict transactions from high rollers
+			if uint64(list.Len()) > minPendingPerAccount {
+				// Skip local accounts as pools should maintain backlogs for themselves
+				for _, tx := range list.txs.items {
+					if !pool.localTx.contains(tx.Hash()) {
+						spammers.Push(addr, float32(list.Len()))
+					}
+					break // Checking on transaction for locality is enough
+				}
+			}
+		}
+		// Gradually drop transactions from offenders
+		offenders := []common.Address{}
+		for pending > maxPendingTotal && !spammers.Empty() {
+			// Retrieve the next offender if not local address
+			offender, _ := spammers.Pop()
+			offenders = append(offenders, offender.(common.Address))
+
+			// Equalize balances until all the same or below threshold
+			if len(offenders) > 1 {
+				// Calculate the equalization threshold for all current offenders
+				threshold := pool.pending[offender.(common.Address)].Len()
+
+				// Iteratively reduce all offenders until below limit or threshold reached
+				for pending > maxPendingTotal && pool.pending[offenders[len(offenders)-2]].Len() > threshold {
+					for i := 0; i < len(offenders)-1; i++ {
+						list := pool.pending[offenders[i]]
+						list.Cap(list.Len() - 1)
+						pending--
+					}
+				}
+			}
+		}
+		// If still above threshold, reduce to limit or min allowance
+		if pending > maxPendingTotal && len(offenders) > 0 {
+			for pending > maxPendingTotal && uint64(pool.pending[offenders[len(offenders)-1]].Len()) > minPendingPerAccount {
+				for _, addr := range offenders {
+					list := pool.pending[addr]
+					list.Cap(list.Len() - 1)
+					pending--
+				}
+			}
 		}
 	}
 	// If we've queued more transactions than the hard limit, drop oldest ones
