@@ -137,9 +137,9 @@ func (self *StateObject) markSuicided() {
 func (c *StateObject) getTrie(db trie.Database) *trie.SecureTrie {
 	if c.trie == nil {
 		var err error
-		c.trie, err = trie.NewSecure(c.data.Root, db)
+		c.trie, err = trie.NewSecure(c.data.Root, db, 0)
 		if err != nil {
-			c.trie, _ = trie.NewSecure(common.Hash{}, db)
+			c.trie, _ = trie.NewSecure(common.Hash{}, db, 0)
 			c.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}
