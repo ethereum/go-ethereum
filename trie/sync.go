@@ -213,11 +213,13 @@ func (s *TrieSync) children(req *request) ([]*request, error) {
 
 	switch node := (*req.object).(type) {
 	case *shortNode:
+		node = node.copy() // Prevents linking all downloaded nodes together.
 		children = []child{{
 			node:  &node.Val,
 			depth: req.depth + len(node.Key),
 		}}
 	case *fullNode:
+		node = node.copy()
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
