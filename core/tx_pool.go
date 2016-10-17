@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -53,6 +54,15 @@ var (
 	maxQueuedInTotal     = uint64(1024)  // Max limit of queued transactions from all accounts
 	maxQueuedLifetime    = 3 * time.Hour // Max amount of time transactions from idle accounts are queued
 	evictionInterval     = time.Minute   // Time interval to check for evictable transactions
+)
+
+var (
+	// Metrics
+	pendingDiscardMeter    = metrics.NewMeter("core/txpool/transactions/pending/discard")
+	pendingReplaceMeter    = metrics.NewMeter("core/txpool/transactions/pending/replace")
+	queuedDiscardMeter     = metrics.NewMeter("core/txpool/transactions/queued/discard")
+	queuedReplaceMeter     = metrics.NewMeter("core/txpool/transactions/queued/replace")
+	invalidTxMeter         = metrics.NewMeter("core/txpool/transactions/invalid")
 )
 
 type stateFn func() (*state.StateDB, error)
@@ -306,6 +316,7 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 	}
 	// Otherwise ensure basic validation passes and queue it up
 	if err := pool.validateTx(tx); err != nil {
+		invalidTxMeter.Mark(1)
 		return err
 	}
 	pool.enqueueTx(hash, tx)
@@ -333,11 +344,13 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 	}
 	inserted, old := pool.queue[from].Add(tx)
 	if !inserted {
+		queuedDiscardMeter.Mark(1)
 		return // An older transaction was better, discard this
 	}
 	// Discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
+		queuedReplaceMeter.Mark(1)
 	}
 	pool.all[hash] = tx
 }
@@ -360,11 +373,13 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	if !inserted {
 		// An older transaction was better, discard this
 		delete(pool.all, hash)
+		pendingDiscardMeter.Mark(1)
 		return
 	}
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
+		pendingReplaceMeter.Mark(1)
 	}
 	pool.all[hash] = tx // Failsafe to work around direct pending inserts (tests)
 
