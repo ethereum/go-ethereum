@@ -93,13 +93,11 @@ func New(root common.Hash, db Database) (*Trie, error) {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		if v, _ := trie.db.Get(root[:]); len(v) == 0 {
-			return nil, &MissingNodeError{
-				RootHash: root,
-				NodeHash: root,
-			}
+		rootnode, err := trie.resolveHash(root[:], nil, nil)
+		if err != nil {
+			return nil, err
 		}
-		trie.root = hashNode(root.Bytes())
+		trie.root = rootnode
 	}
 	return trie, nil
 }
