@@ -346,7 +346,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 
 	// encrypt and send
 	message := whisperv5.NewSentMessage(&params)
-	envelope, err := message.Wrap(params)
+	envelope, err := message.Wrap(&params)
 	if err != nil {
 		glog.V(logger.Error).Infof(err.Error())
 		return err
@@ -497,7 +497,7 @@ func NewWhisperMessage(message *whisperv5.ReceivedMessage) WhisperMessage {
 	return WhisperMessage{
 		Payload: common.ToHex(message.Payload),
 		Padding: common.ToHex(message.Padding),
-		From:    common.ToHex(crypto.FromECDSAPub(message.Recover())),
+		From:    common.ToHex(crypto.FromECDSAPub(message.SigToPubKey())),
 		To:      common.ToHex(crypto.FromECDSAPub(message.Dst)),
 		Sent:    message.Sent,
 		TTL:     message.TTL,

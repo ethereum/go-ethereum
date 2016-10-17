@@ -148,13 +148,15 @@ func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 		glog.V(logger.Error).Infof("Trying to sign a message which was already signed")
 		return nil
 	}
+
+	msg.Raw[0] |= signatureFlag
 	hash := crypto.Keccak256(msg.Raw)
 	signature, err := crypto.Sign(hash, key)
 	if err != nil {
-		msg.Raw = append(msg.Raw, signature...)
-		msg.Raw[0] |= signatureFlag
+		msg.Raw[0] &= ^signatureFlag // clear the flag
 		return err
 	}
+	msg.Raw = append(msg.Raw, signature...)
 	return nil
 }
 
@@ -223,12 +225,13 @@ func (msg *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte,
 //   - options.From != nil && options.To == nil: signed broadcast (known sender)
 //   - options.From == nil && options.To != nil: encrypted anonymous message
 //   - options.From != nil && options.To != nil: encrypted signed message
-func (msg *SentMessage) Wrap(options MessageParams) (envelope *Envelope, err error) {
+func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err error) {
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
 	}
 	if options.Src != nil {
-		if err = msg.sign(options.Src); err != nil {
+		err = msg.sign(options.Src)
+		if err != nil {
 			return nil, err
 		}
 	}
@@ -305,7 +308,7 @@ func (msg *ReceivedMessage) Validate() bool {
 			return false
 		}
 		msg.Signature = msg.Raw[end:]
-		msg.Src = msg.Recover()
+		msg.Src = msg.SigToPubKey()
 		if msg.Src == nil {
 			return false
 		}
@@ -317,7 +320,7 @@ func (msg *ReceivedMessage) Validate() bool {
 	}
 
 	msg.Payload = msg.Raw[1+padSize : end]
-	return msg.isSymmetricEncryption() != msg.isAsymmetricEncryption()
+	return true
 }
 
 // extractPadding extracts the padding from raw message.
@@ -338,7 +341,7 @@ func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
 }
 
 // Recover retrieves the public key of the message signer.
-func (msg *ReceivedMessage) Recover() *ecdsa.PublicKey {
+func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 	defer func() { recover() }() // in case of invalid signature
 
 	pub, err := crypto.SigToPub(msg.hash(), msg.Signature)

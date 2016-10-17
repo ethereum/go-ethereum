@@ -85,7 +85,7 @@ func (e *Envelope) Ver() uint64 {
 
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
-func (e *Envelope) Seal(options MessageParams) {
+func (e *Envelope) Seal(options *MessageParams) {
 	var target int
 	if options.PoW == 0 {
 		// adjust for the duration of Seal() execution only if execution time is predefined unconditionally

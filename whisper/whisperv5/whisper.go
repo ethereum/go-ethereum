@@ -533,10 +533,10 @@ func validateSymmetricKey(k []byte) bool {
 func containsOnlyZeros(data []byte) bool {
 	for _, b := range data {
 		if b != 0 {
-			return true
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func bytesToIntLittleEndian(b []byte) (res uint64) {

@@ -136,13 +136,13 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 		return false
 	}
 
-	if f.Src != nil && !isEqual(msg.Src, f.Src) {
+	if f.Src != nil && !isPubKeyEqual(msg.Src, f.Src) {
 		return false
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
 		// if Dst match, ignore the topic
-		return isEqual(f.Dst, msg.Dst)
+		return isPubKeyEqual(f.Dst, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
 		// check if that both the key and the topic match
 		if f.SymKeyHash == msg.SymKeyHash {
@@ -183,7 +183,7 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	return false
 }
 
-func isEqual(a, b *ecdsa.PublicKey) bool {
+func isPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	if !ValidatePublicKey(a) {
 		return false
 	} else if !ValidatePublicKey(b) {
