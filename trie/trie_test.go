@@ -300,25 +300,6 @@ func TestReplication(t *testing.T) {
 	}
 }
 
-// Not an actual test
-func TestOutput(t *testing.T) {
-	t.Skip()
-
-	base := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	trie := newEmpty()
-	for i := 0; i < 50; i++ {
-		updateString(trie, fmt.Sprintf("%s%d", base, i), "valueeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-	}
-	fmt.Println("############################## FULL ################################")
-	fmt.Println(trie.root)
-
-	trie.Commit()
-	fmt.Println("############################## SMALL ################################")
-	trie2, _ := New(trie.Hash(), trie.db)
-	getString(trie2, base+"20")
-	fmt.Println(trie2.root)
-}
-
 func TestLargeValue(t *testing.T) {
 	trie := newEmpty()
 	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
@@ -326,13 +307,55 @@ func TestLargeValue(t *testing.T) {
 	trie.Hash()
 }
 
+type countingDB struct {
+	Database
+	gets map[string]int
+}
+
+func (db *countingDB) Get(key []byte) ([]byte, error) {
+	db.gets[string(key)]++
+	return db.Database.Get(key)
+}
+
+// TestCacheUnload checks that decoded nodes are unloaded after a
+// certain number of commit operations.
+func TestCacheUnload(t *testing.T) {
+	// Create test trie with two branches.
+	trie := newEmpty()
+	key1 := "---------------------------------"
+	key2 := "---some other branch"
+	updateString(trie, key1, "this is the branch of key1.")
+	updateString(trie, key2, "this is the branch of key2.")
+	root, _ := trie.Commit()
+
+	// Commit the trie repeatedly and access key1.
+	// The branch containing it is loaded from DB exactly two times:
+	// in the 0th and 6th iteration.
+	db := &countingDB{Database: trie.db, gets: make(map[string]int)}
+	trie, _ = New(root, db)
+	trie.SetCacheLimit(5)
+	for i := 0; i < 12; i++ {
+		getString(trie, key1)
+		trie.Commit()
+	}
+
+	// Check that it got loaded two times.
+	for dbkey, count := range db.gets {
+		if count != 2 {
+			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
+		}
+	}
+}
+
+// randTest performs random trie operations.
+// Instances of this test are created by Generate.
+type randTest []randTestStep
+
 type randTestStep struct {
 	op    int
 	key   []byte // for opUpdate, opDelete, opGet
 	value []byte // for opUpdate
 }
-
-type randTest []randTestStep
 
 const (
 	opUpdate = iota
@@ -342,6 +365,7 @@ const (
 	opHash
 	opReset
 	opItercheckhash
+	opCheckCacheInvariant
 	opMax // boundary value, not an actual op
 )
 
@@ -437,7 +461,32 @@ func runRandTest(rt randTest) bool {
 				fmt.Println("hashes not equal")
 				return false
 			}
+		case opCheckCacheInvariant:
+			return checkCacheInvariant(tr.root, tr.cachegen, 0)
 		}
+	}
+	return true
+}
+
+func checkCacheInvariant(n node, parentCachegen uint16, depth int) bool {
+	switch n := n.(type) {
+	case *shortNode:
+		if n.flags.gen > parentCachegen {
+			fmt.Printf("cache invariant violation: %d > %d\nat depth %d node %s", n.flags.gen, parentCachegen, depth, spew.Sdump(n))
+			return false
+		}
+		return checkCacheInvariant(n.Val, n.flags.gen, depth+1)
+	case *fullNode:
+		if n.flags.gen > parentCachegen {
+			fmt.Printf("cache invariant violation: %d > %d\nat depth %d node %s", n.flags.gen, parentCachegen, depth, spew.Sdump(n))
+			return false
+		}
+		for _, child := range n.Children {
+			if !checkCacheInvariant(child, n.flags.gen, depth+1) {
+				return false
+			}
+		}
+		return true
 	}
 	return true
 }
