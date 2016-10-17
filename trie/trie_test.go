@@ -462,31 +462,44 @@ func runRandTest(rt randTest) bool {
 				return false
 			}
 		case opCheckCacheInvariant:
-			return checkCacheInvariant(tr.root, tr.cachegen, 0)
+			return checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
 		}
 	}
 	return true
 }
 
-func checkCacheInvariant(n node, parentCachegen uint16, depth int) bool {
+func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) bool {
+	var children []node
+	var flag nodeFlag
 	switch n := n.(type) {
 	case *shortNode:
-		if n.flags.gen > parentCachegen {
-			fmt.Printf("cache invariant violation: %d > %d\nat depth %d node %s", n.flags.gen, parentCachegen, depth, spew.Sdump(n))
-			return false
-		}
-		return checkCacheInvariant(n.Val, n.flags.gen, depth+1)
+		flag = n.flags
+		children = []node{n.Val}
 	case *fullNode:
-		if n.flags.gen > parentCachegen {
-			fmt.Printf("cache invariant violation: %d > %d\nat depth %d node %s", n.flags.gen, parentCachegen, depth, spew.Sdump(n))
+		flag = n.flags
+		children = n.Children[:]
+	default:
+		return true
+	}
+
+	showerror := func() {
+		fmt.Printf("at depth %d node %s", depth, spew.Sdump(n))
+		fmt.Printf("parent: %s", spew.Sdump(parent))
+	}
+	if flag.gen > parentCachegen {
+		fmt.Printf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
+		showerror()
+		return false
+	}
+	if depth > 0 && !parentDirty && flag.dirty {
+		fmt.Printf("cache invariant violation: child is dirty but parent isn't\n")
+		showerror()
+		return false
+	}
+	for _, child := range children {
+		if !checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1) {
 			return false
 		}
-		for _, child := range n.Children {
-			if !checkCacheInvariant(child, n.flags.gen, depth+1) {
-				return false
-			}
-		}
-		return true
 	}
 	return true
 }

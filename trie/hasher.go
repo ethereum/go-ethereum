@@ -75,23 +75,20 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 	if err != nil {
 		return hashNode{}, n, err
 	}
-	// Cache the hash of the ndoe for later reuse.
-	if hash, ok := hashed.(hashNode); ok && !force {
-		switch cached := cached.(type) {
-		case *shortNode:
-			cached = cached.copy()
-			cached.flags.hash = hash
-			if db != nil {
-				cached.flags.dirty = false
-			}
-			return hashed, cached, nil
-		case *fullNode:
-			cached = cached.copy()
-			cached.flags.hash = hash
-			if db != nil {
-				cached.flags.dirty = false
-			}
-			return hashed, cached, nil
+	// Cache the hash of the ndoe for later reuse and remove
+	// the dirty flag in commit mode. It's fine to assign these values directly
+	// without copying the node first because hashChildren copies it.
+	cachedHash, _ := hashed.(hashNode)
+	switch cn := cached.(type) {
+	case *shortNode:
+		cn.flags.hash = cachedHash
+		if db != nil {
+			cn.flags.dirty = false
+		}
+	case *fullNode:
+		cn.flags.hash = cachedHash
+		if db != nil {
+			cn.flags.dirty = false
 		}
 	}
 	return hashed, cached, nil
