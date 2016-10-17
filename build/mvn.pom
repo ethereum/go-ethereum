@@ -1,0 +1,57 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                      http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.ethereum</groupId>
+  <artifactId>geth</artifactId>
+  <version>{{.VersionString}}</version>
+  <packaging>aar</packaging>
+
+  <name>Android Ethereum Client</name>
+  <description>Android port of the go-ethereum libraries and node</description>
+  <url>https://github.com/ethereum/go-ethereum</url>
+  <inceptionYear>2015</inceptionYear>
+
+  <licenses>
+    <license>
+      <name>GNU Lesser General Public License, Version 3.0</name>
+      <url>https://www.gnu.org/licenses/lgpl-3.0.en.html</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <organization>
+    <name>Ethereum</name>
+    <url>https://ethereum.org</url>
+  </organization>
+
+  <developers>
+    <developer>
+      <id>karalabe</id>
+      <name>Péter Szilágyi</name>
+      <email>peterke@gmail.com</email>
+      <url>https://github.com/karalabe</url>
+      <properties>
+        <picUrl>https://www.gravatar.com/avatar/2ecbf0f5b4b79eebf8c193e5d324357f?s=256</picUrl>
+      </properties>
+    </developer>
+  </developers>
+
+  <contributors>{{range .Contributors}}
+    <contributor>
+      <name>{{.Name}}</name>
+      <email>{{.Email}}</email>
+    </contributor>{{end}}
+  </contributors>
+
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/ethereum/go-ethereum/issues/</url>
+  </issueManagement>
+
+  <scm>
+    <url>https://github.com/ethereum/go-ethereum</url>
+  </scm>
+</project>

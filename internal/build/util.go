@@ -56,7 +56,7 @@ func GOPATH() string {
 	if len(path) == 0 {
 		log.Fatal("GOPATH is not set")
 	}
-	// Ensure that our internal vendor folder in on GOPATH
+	// Ensure that our internal vendor folder is on GOPATH
 	vendor, _ := filepath.Abs(filepath.Join("build", "_vendor"))
 	for _, dir := range path {
 		if dir == vendor {

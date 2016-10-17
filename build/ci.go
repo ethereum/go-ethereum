@@ -29,6 +29,7 @@ Available commands are:
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
    nsis                                                                                      -- creates a Windows NSIS installer
+   aar        [ -sign key-id ] [ -upload dest ]                                              -- creates an android archive
    xgo        [ options ]                                                                    -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -37,6 +38,7 @@ For all commands, -n prevents execution of external programs (dry run mode).
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/base64"
 	"flag"
@@ -48,6 +50,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -125,6 +128,8 @@ func main() {
 		doDebianSource(os.Args[2:])
 	case "nsis":
 		doWindowsInstaller(os.Args[2:])
+	case "aar":
+		doAndroidArchive(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
 	default:
@@ -330,6 +335,9 @@ func archiveBasename(arch string, env build.Environment) string {
 	platform := runtime.GOOS + "-" + arch
 	if arch == "arm" {
 		platform += os.Getenv("GOARM")
+	}
+	if arch == "android" {
+		platform = "android-all"
 	}
 	archive := platform + "-" + build.VERSION()
 	if isUnstableBuild(env) {
@@ -630,6 +638,125 @@ func doWindowsInstaller(cmdline []string) {
 	if err := archiveUpload(installer, *upload, *signer); err != nil {
 		log.Fatal(err)
 	}
+
+// Android archives
+
+func doAndroidArchive(cmdline []string) {
+	var (
+		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. ANDROID_SIGNING_KEY)`)
+		deploy = flag.String("deploy", "", `Where to upload the deploy the archive (usually "https://oss.sonatype.org")`)
+		upload = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+	)
+	flag.CommandLine.Parse(cmdline)
+	env := build.Env()
+
+	// Build the Android archive and Maven resources
+	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
+	build.MustRun(gomobileTool("init"))
+	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
+
+	meta := newMavenMetadata(env)
+	build.Render("build/mvn.pom", meta.PackageString()+".pom", 0755, meta)
+
+	// Skip Maven deploy and Azure upload for PR builds
+	maybeSkipArchive(env)
+
+	// Sign and upload all the artifacts to Maven Central
+	os.Rename("geth.aar", meta.PackageString()+".aar")
+	if *signer != "" && *deploy != "" {
+		// Import the signing key into the local GPG instance
+		if b64key := os.Getenv(*signer); b64key != "" {
+			key, err := base64.StdEncoding.DecodeString(b64key)
+			if err != nil {
+				log.Fatalf("invalid base64 %s", *signer)
+			}
+			gpg := exec.Command("gpg", "--import")
+			gpg.Stdin = bytes.NewReader(key)
+			build.MustRun(gpg)
+		}
+		// Upload the artifacts to Sonatype and/or Maven Central
+		repo := *deploy + "/service/local/staging/deploy/maven2"
+		if meta.Unstable {
+			repo = *deploy + "/content/repositories/snapshots"
+		}
+		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file",
+			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
+			"-DpomFile="+meta.PackageString()+".pom", "-Dfile="+meta.PackageString()+".aar")
+	}
+	// Sign and upload the archive to Azure
+	archive := "geth-" + archiveBasename("android", env) + ".aar"
+	os.Rename(meta.PackageString()+".aar", archive)
+
+	if err := archiveUpload(archive, *upload, *signer); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func gomobileTool(subcmd string, args ...string) *exec.Cmd {
+	cmd := exec.Command(filepath.Join(GOBIN, "gomobile"), subcmd)
+	cmd.Args = append(cmd.Args, args...)
+	cmd.Env = []string{
+		"GOPATH=" + build.GOPATH(),
+	}
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "GOPATH=") {
+			continue
+		}
+		cmd.Env = append(cmd.Env, e)
+	}
+	return cmd
+}
+
+type mavenMetadata struct {
+	Env          build.Environment
+	Version      string
+	Unstable     bool
+	Contributors []mavenContributor
+}
+
+type mavenContributor struct {
+	Name  string
+	Email string
+}
+
+func newMavenMetadata(env build.Environment) mavenMetadata {
+	// Collect the list of authors from the repo root
+	contribs := []mavenContributor{}
+	if authors, err := os.Open("AUTHORS"); err == nil {
+		defer authors.Close()
+
+		scanner := bufio.NewScanner(authors)
+		for scanner.Scan() {
+			// Skip any whitespace from the authors list
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || line[0] == '#' {
+				continue
+			}
+			// Split the author and insert as a contributor
+			re := regexp.MustCompile("([^<]+) <(.+>)")
+			parts := re.FindStringSubmatch(line)
+			if len(parts) == 3 {
+				contribs = append(contribs, mavenContributor{Name: parts[1], Email: parts[2]})
+			}
+		}
+	}
+	return mavenMetadata{
+		Env:          env,
+		Version:      build.VERSION(),
+		Unstable:     isUnstableBuild(env),
+		Contributors: contribs,
+	}
+}
+
+func (meta mavenMetadata) VersionString() string {
+	if meta.Unstable {
+		return meta.Version + "-SNAPSHOT"
+	}
+	return meta.Version
+}
+
+func (meta mavenMetadata) PackageString() string {
+	return "geth-" + meta.VersionString()
 }
 
 // Cross compilation

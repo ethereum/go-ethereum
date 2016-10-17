@@ -53,29 +53,22 @@ matrix:
         - CC=aarch64-linux-gnu-gcc go run build/ci.go install -arch arm64
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
-    # This builder does the OSX Azure uploads
+    # This builder does the OSX Azure, Android Maven and Azure and iOS CocoaPods and Azure uploads
     - os: osx
       go: 1.7
       env:
         - azure-osx
+        - mobile
       script:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
-    # This builder does the mobile builds (and nothing else)
-    - os: osx
-      go: 1.7
-      script:
+        # Build the Android archives and upload them to Maven Central
         - brew update
-        - brew install android-sdk
+        - brew install android-sdk maven
         - export ANDROID_HOME=/usr/local/opt/android-sdk
         - echo "y" | android update sdk --no-ui --filter platform
-        - go get github.com/tools/godep
-        - godep restore
-        - go get golang.org/x/mobile/cmd/gomobile
-        - gomobile init
-        - gomobile bind --target=android --javapkg=org.ethereum -v github.com/ethereum/go-ethereum/mobile
-        - gomobile bind --target=ios --tags=ios -v github.com/ethereum/go-ethereum/mobile
+        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
 install:
   - go get golang.org/x/tools/cmd/cover
