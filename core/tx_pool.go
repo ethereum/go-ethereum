@@ -58,11 +58,11 @@ var (
 
 var (
 	// Metrics
-	pendingDiscardMeter    = metrics.NewMeter("core/txpool/transactions/pending/discard")
-	pendingReplaceMeter    = metrics.NewMeter("core/txpool/transactions/pending/replace")
-	queuedDiscardMeter     = metrics.NewMeter("core/txpool/transactions/queued/discard")
-	queuedReplaceMeter     = metrics.NewMeter("core/txpool/transactions/queued/replace")
-	invalidTxMeter         = metrics.NewMeter("core/txpool/transactions/invalid")
+	pendingDiscardMeter    = metrics.NewMeter("txpool/pending/discard")
+	pendingReplaceMeter    = metrics.NewMeter("txpool/pending/replace")
+	queuedDiscardMeter     = metrics.NewMeter("txpool/queued/discard")
+	queuedReplaceMeter     = metrics.NewMeter("txpool/queued/replace")
+	invalidTxMeter         = metrics.NewMeter("txpool/invalid")
 )
 
 type stateFn func() (*state.StateDB, error)
