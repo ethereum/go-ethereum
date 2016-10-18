@@ -79,6 +79,10 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	}
 	var program *Program
 	if evm.cfg.EnableJit {
+		// JIT support has fallen off; gas calculations are no longer in consensus
+		// with the network.
+		panic("JIT not supported in this release")
+
 		// If the JIT is enabled check the status of the JIT program,
 		// if it doesn't exist compile a new program in a separate
 		// goroutine or wait for compilation to finish if the JIT is
