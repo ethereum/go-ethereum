@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -81,13 +82,29 @@ func importChain(ctx *cli.Context) error {
 	}
 	stack := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
+
+	// Import the chain
 	start := time.Now()
-	err := utils.ImportChain(chain, ctx.Args().First())
-	chainDb.Close()
-	if err != nil {
+	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v", err)
 	}
-	fmt.Printf("Import done in %v", time.Since(start))
+	fmt.Printf("Import done in %v, compacting...\n", time.Since(start))
+
+	// Compact the entire database to more accurately measure disk io and print the stats
+	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
+		start = time.Now()
+		if err := db.LDB().CompactRange(util.Range{}); err != nil {
+			utils.Fatalf("Compaction failed: %v", err)
+		}
+		fmt.Printf("Compaction done in %v.\n", time.Since(start))
+
+		stats, err := db.LDB().GetProperty("leveldb.stats")
+		if err != nil {
+			utils.Fatalf("Failed to read database stats: %v", err)
+		}
+		fmt.Println(stats)
+	}
 	return nil
 }
 
