@@ -949,6 +949,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			if glog.V(logger.Debug) {
 				glog.Infof("[%v] inserted block #%d (%d TXs %v G %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), block.GasUsed(), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
+			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
 			// This puts transactions in a extra db for rpc
@@ -967,6 +968,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			if glog.V(logger.Detail) {
 				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
 			}
+			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainSideEvent{block, logs})
 
 		case SplitStatTy:
