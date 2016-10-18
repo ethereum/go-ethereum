@@ -123,8 +123,12 @@ func (e *Envelope) PoW() float64 {
 }
 
 func (e *Envelope) calculatePoW(diff uint32) {
-	h := e.Hash()
-	firstBit := common.FirstBitSet(common.BigD(h.Bytes()))
+	buf := make([]byte, 64)
+	h := crypto.Keccak256(e.rlpWithoutNonce())
+	copy(buf[:32], h)
+	binary.BigEndian.PutUint64(buf[56:], e.EnvNonce)
+	h = crypto.Keccak256(buf)
+	firstBit := common.FirstBitSet(common.BigD(h))
 	x := math.Pow(2, float64(firstBit))
 	x /= float64(len(e.Data))
 	x /= float64(e.TTL + diff)

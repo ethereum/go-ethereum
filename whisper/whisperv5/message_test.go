@@ -18,12 +18,10 @@ package whisperv5
 
 import (
 	"bytes"
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -121,6 +119,10 @@ func singleMessageTest(x *testing.T, seed int64, symmetric bool) {
 		x.Errorf("failed with seed %d: compare payload.", seed)
 		return
 	}
+	if !isMessageSigned(decrypted.Raw[0]) {
+		x.Errorf("failed with seed %d: unsigned.", seed)
+		return
+	}
 	if len(decrypted.Signature) != signatureLength {
 		x.Errorf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 		return
@@ -142,85 +144,36 @@ func TestMessageEncryption(x *testing.T) {
 	}
 }
 
-func DebugSingleMessageTest(x *testing.T) {
-	seed := int64(1476726903)
-	symmetric := seed%2 != 0
-
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		x.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
-	}
+func TestMessageWrap(x *testing.T) {
+	seed := int64(1777444222)
+	rand.Seed(seed)
+	target := 128.0
 
 	params, err := generateMessageParams(seed)
 	if err != nil {
 		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
 		return
 	}
+
 	msg := NewSentMessage(params)
-
-	text := make([]byte, 0, 512)
-	steg := make([]byte, 0, 512)
-	raw := make([]byte, 0, 1024)
-	text = append(text, params.Payload...)
-	steg = append(steg, params.Padding...)
-	raw = append(raw, params.Padding...)
-
-	if !symmetric {
-		params.KeySym = nil
-		params.Dst = &key.PublicKey
-	}
-
-	if len(params.KeySym) == 0 {
-		x.Errorf("failed key 12 with seed %d.", seed)
-		return
-	}
-
+	params.TTL = 1
+	params.WorkTime = 12
+	params.PoW = target
 	env, err := msg.Wrap(params)
 	if err != nil {
 		x.Errorf("failed Wrap with seed %d: %s.", seed, err)
 		return
 	}
 
-	var decrypted *ReceivedMessage
-	if symmetric {
-		decrypted, err = env.OpenSymmetric(params.KeySym)
-	} else {
-		decrypted, err = env.OpenAsymmetric(key)
-	}
-
-	if err != nil {
-		x.Errorf("failed to encrypt with seed %d: %s.", seed, err)
-		return
-	}
-
-	ok := decrypted.Validate()
-	if !ok {
-		x.Errorf("failed to validate with seed %d.", seed)
-		return
-	}
-
-	sz := len(decrypted.Padding)
-	if bytes.Compare(steg[:sz], decrypted.Padding) != 0 {
-		x.Errorf("failed with seed %d: compare padding.", seed)
-		return
-	}
-	if bytes.Compare(text, decrypted.Payload) != 0 {
-		x.Errorf("failed with seed %d: compare payload.", seed)
-		return
-	}
-	if len(decrypted.Signature) != signatureLength {
-		x.Errorf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
-		return
-	}
-	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
-		x.Errorf("failed with seed %d: signature mismatch:\n%v and \n%v.", seed, *decrypted.Src, params.Src.PublicKey)
+	pow := env.PoW()
+	if pow < target {
+		x.Errorf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
 		return
 	}
 }
 
 func TestMessageSeal(x *testing.T) {
-	seed := int64(1476726903)
+	seed := int64(1976726903)
 	rand.Seed(seed)
 
 	params, err := generateMessageParams(seed)
@@ -231,16 +184,46 @@ func TestMessageSeal(x *testing.T) {
 
 	msg := NewSentMessage(params)
 	params.TTL = 1
-	params.WorkTime = 3
-	env, err := msg.Wrap(params)
+	aesnonce := make([]byte, 12)
+	salt := make([]byte, 12)
+	_, err = rand.Read(aesnonce)
+	if err != nil {
+		x.Errorf("failed generate aesnonce with seed %d: %s.", seed, err)
+		return
+	}
+	_, err = rand.Read(salt)
+	if err != nil {
+		x.Errorf("failed generate salt with seed %d: %s.", seed, err)
+		return
+	}
+
+	env := NewEnvelope(params.TTL, params.Topic, salt, aesnonce, msg)
 	if err != nil {
 		x.Errorf("failed Wrap with seed %d: %s.", seed, err)
 		return
 	}
 
-	pow := env.PoW()
-	h := env.Hash()
-	bits := common.FirstBitSet(common.BigD(h.Bytes()))
-	fmt.Printf("pow = %f, bits = %d, datalen = %d, hash = %x \n", pow, bits, len(env.Data), h)
+	env.Expiry = uint32(seed) // make it deterministic
+	target := 32.0
+	params.WorkTime = 4
+	params.PoW = target
+	env.Seal(params)
 
+	env.calculatePoW(0)
+	pow := env.PoW()
+	if pow < target {
+		x.Errorf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
+		return
+	}
+
+	params.WorkTime = 1
+	params.PoW = 1000000000.0
+	env.Seal(params)
+	env.calculatePoW(0)
+	pow = env.PoW()
+	if pow < 1000 {
+		// this depends on deterministic choice of seed (1976726903)
+		x.Errorf("failed Wrap with seed %d: pow too small %f.", seed, pow)
+		return
+	}
 }
