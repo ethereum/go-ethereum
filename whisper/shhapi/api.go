@@ -156,7 +156,6 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 
 	filter := whisperv5.Filter{
 		Src:       crypto.ToECDSAPub(args.From),
-		Dst:       crypto.ToECDSAPub(args.To),
 		KeySym:    api.whisper.GetSymKey(args.KeyName),
 		PoW:       args.PoW,
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
@@ -196,12 +195,13 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 	}
 
 	if len(args.To) > 0 {
-		if !whisperv5.ValidatePublicKey(filter.Dst) {
+		dst := crypto.ToECDSAPub(args.To)
+		if !whisperv5.ValidatePublicKey(dst) {
 			info := "NewFilter: Invalid 'To' address"
 			glog.V(logger.Error).Infof(info)
 			return nil, errors.New(info)
 		}
-		filter.KeyAsym = api.whisper.GetIdentity(filter.Dst)
+		filter.KeyAsym = api.whisper.GetIdentity(dst)
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)
@@ -294,9 +294,6 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		// get the missing fields from the filter
 		if params.KeySym == nil && filter.KeySym != nil {
 			params.KeySym = filter.KeySym
-		}
-		if params.Dst == nil && filter.Dst != nil {
-			params.Dst = filter.Dst
 		}
 		if params.Src == nil && filter.Src != nil {
 			params.Src = filter.KeyAsym

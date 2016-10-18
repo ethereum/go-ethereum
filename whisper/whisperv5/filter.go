@@ -25,7 +25,6 @@ import (
 
 type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
-	Dst        *ecdsa.PublicKey  // Recipient of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
 	KeySym     []byte            // Key associated with the Topic
 	Topics     []TopicType       // Topics to filter messages with
@@ -142,7 +141,7 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
 		// if Dst match, ignore the topic
-		return isPubKeyEqual(f.Dst, msg.Dst)
+		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
 		// check if that both the key and the topic match
 		if f.SymKeyHash == msg.SymKeyHash {

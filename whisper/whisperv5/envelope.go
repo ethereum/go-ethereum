@@ -207,7 +207,7 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 	if e.isAsymmetric() {
 		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {
-			msg.Dst = watcher.Dst
+			msg.Dst = &watcher.KeyAsym.PublicKey
 		}
 	} else if e.IsSymmetric() {
 		msg, _ = e.OpenSymmetric(watcher.KeySym)
