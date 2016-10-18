@@ -769,8 +769,12 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 
 	// Report some public statistics so the user has a clue what's going on
 	first, last := blockChain[0], blockChain[len(blockChain)-1]
-	glog.V(logger.Info).Infof("imported %d receipt(s) (%d ignored) in %v. #%d [%x… / %x…]", stats.processed, stats.ignored,
-		time.Since(start), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+
+	ignored := ""
+	if stats.ignored > 0 {
+		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
+	}
+	glog.V(logger.Info).Infof("imported %d receipts%s in %9v. #%d [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
 
 	return 0, nil
 }
@@ -947,7 +951,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		switch status {
 		case CanonStatTy:
 			if glog.V(logger.Debug) {
-				glog.Infof("[%v] inserted block #%d (%d TXs %v G %d UNCs) (%x...). Took %v\n", time.Now().UnixNano(), block.Number(), len(block.Transactions()), block.GasUsed(), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
+				glog.Infof("inserted block #%d [%x…] in %9v: %3d txs %7v gas %d uncles.", block.Number(), block.Hash().Bytes()[0:4], common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), block.GasUsed(), len(block.Uncles()))
 			}
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
@@ -965,7 +969,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			}
 		case SideStatTy:
 			if glog.V(logger.Detail) {
-				glog.Infof("inserted forked block #%d (TD=%v) (%d TXs %d UNCs) (%x...). Took %v\n", block.Number(), block.Difficulty(), len(block.Transactions()), len(block.Uncles()), block.Hash().Bytes()[0:4], time.Since(bstart))
+				glog.Infof("inserted forked block #%d [%x…] (TD=%v) in %9v: %3d txs %d uncles.", block.Number(), block.Hash().Bytes()[0:4], block.Difficulty(), common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), len(block.Uncles()))
 			}
 			events = append(events, ChainSideEvent{block, logs})
 
@@ -991,24 +995,27 @@ type insertStats struct {
 	startTime                  time.Time
 }
 
-const (
-	statsReportLimit     = 1024
-	statsReportTimeLimit = 8 * time.Second
-)
+// statsReportLimit is the time limit during import after which we always print
+// out progress. This avoids the user wondering what's going on.
+const statsReportLimit = 8 * time.Second
 
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
 func (st *insertStats) report(chain []*types.Block, index int) {
-	limit := statsReportLimit
-	if index == len(chain)-1 {
-		limit = 0 // Always print a message for the last block.
-	}
-	now := time.Now()
-	duration := now.Sub(st.startTime)
-	if duration > statsReportTimeLimit || st.queued > limit || st.processed > limit || st.ignored > limit {
+	var (
+		now     = time.Now()
+		elapsed = now.Sub(st.startTime)
+	)
+	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		start, end := chain[st.lastIndex], chain[index]
 		txcount := countTransactions(chain[st.lastIndex : index+1])
-		glog.Infof("imported %d block(s) (%d queued %d ignored) including %d txs in %v. #%v [%x / %x]\n", st.processed, st.queued, st.ignored, txcount, duration, end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+
+		extra := ""
+		if st.queued > 0 || st.ignored > 0 {
+			extra = fmt.Sprintf(" (%d queued %d ignored)", st.queued, st.ignored)
+		}
+		glog.Infof("imported %d blocks%s, %5d txs in %9v. #%v [%x… / %x…]\n", st.processed, extra, txcount, common.PrettyDuration(elapsed), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+
 		*st = insertStats{startTime: now, lastIndex: index}
 	}
 }
