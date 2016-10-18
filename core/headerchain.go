@@ -18,6 +18,7 @@ package core
 
 import (
 	crand "crypto/rand"
+	"fmt"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -321,8 +322,12 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, w
 	}
 	// Report some public statistics so the user has a clue what's going on
 	first, last := chain[0], chain[len(chain)-1]
-	glog.V(logger.Info).Infof("imported %d header(s) (%d ignored) in %v. #%v [%x… / %x…]", stats.processed, stats.ignored,
-		time.Since(start), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+
+	ignored := ""
+	if stats.ignored > 0 {
+		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
+	}
+	glog.V(logger.Info).Infof("imported %d headers%s in %9v. #%v [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
 
 	return 0, nil
 }

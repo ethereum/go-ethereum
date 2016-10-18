@@ -952,7 +952,7 @@ func (d *Downloader) fetchNodeData() error {
 
 				// Log a message to the user and return
 				if delivered > 0 {
-					glog.V(logger.Info).Infof("imported %d state entries in %v: processed %d, pending at least %d", delivered, time.Since(start), d.syncStatsStateDone, pending)
+					glog.V(logger.Info).Infof("imported %d state entries in %9v: processed %d, pending at least %d", delivered, common.PrettyDuration(time.Since(start)), d.syncStatsStateDone, pending)
 				}
 			})
 		}
