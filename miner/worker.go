@@ -169,7 +169,7 @@ func (self *worker) pending() (*types.Block, *state.StateDB) {
 			self.current.txs,
 			nil,
 			self.current.receipts,
-		), self.current.state
+		), self.current.state.Copy()
 	}
 	return self.current.Block, self.current.state.Copy()
 }
