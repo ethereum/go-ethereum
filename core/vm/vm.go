@@ -88,6 +88,10 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 			return RunProgram(GetProgram(codehash), evm.env, contract, input)
 		case progUnknown:
 			if evm.cfg.ForceJit {
+				// JIT support has fallen off; gas calculations are no longer in consensus
+				// with the network.
+				panic("JIT not supported in this release")
+
 				// Create and compile program
 				program = NewProgram(contract.Code)
 				perr := CompileProgram(program)
