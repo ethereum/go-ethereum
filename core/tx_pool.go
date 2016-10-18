@@ -62,11 +62,14 @@ var (
 	pendingReplaceMeter    = metrics.NewMeter("txpool/pending/replace")
 	pendingRLMeter         = metrics.NewMeter("txpool/pending/ratelimit") // Dropped due to rate limiting
 	pendingNofundsMeter    = metrics.NewMeter("txpool/pending/nofunds")   // Dropped due to out-of-funds
+	pendingTooOldMeter     = metrics.NewMeter("txpool/pending/oldnonce")   // Dropped due to old nonce
 	// Metrics for the queued pool
 	queuedDiscardMeter     = metrics.NewMeter("txpool/queued/discard")
 	queuedReplaceMeter     = metrics.NewMeter("txpool/queued/replace")
 	queuedRLMeter          = metrics.NewMeter("txpool/queued/ratelimit")  // Dropped due to rate limiting
 	queuedNofundsMeter     = metrics.NewMeter("txpool/queued/nofunds")    // Dropped due to out-of-funds
+	queuedTooOldMeter      = metrics.NewMeter("txpool/queued/oldnonce")   // Dropped due to old nonce
+	// Metrics for the queued pool
 	// General tx metrics
 	invalidTxMeter         = metrics.NewMeter("txpool/invalid")
 
@@ -513,6 +516,7 @@ func (pool *TxPool) promoteExecutables() {
 				glog.Infof("Removed old queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			queuedTooOldMeter.Mark(1)
 		}
 		// Drop all transactions that are too costly (low balance)
 		drops, _ := list.Filter(state.GetBalance(addr))
@@ -521,6 +525,7 @@ func (pool *TxPool) promoteExecutables() {
 				glog.Infof("Removed unpayable queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			queuedNofundsMeter.Mark(1)
 		}
 		// Gather all executable transactions and promote them
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
@@ -535,6 +540,7 @@ func (pool *TxPool) promoteExecutables() {
 				glog.Infof("Removed cap-exceeding queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			queuedRLMeter.Mark(1)
 		}
 		queued += uint64(list.Len())
 
@@ -549,6 +555,7 @@ func (pool *TxPool) promoteExecutables() {
 		pending += uint64(list.Len())
 	}
 	if pending > maxPendingTotal {
+		pendingBeforeCap := pending
 		// Assemble a spam order to penalize large transactors first
 		spammers := prque.New()
 		for addr, list := range pool.pending {
@@ -595,6 +602,7 @@ func (pool *TxPool) promoteExecutables() {
 				}
 			}
 		}
+		pendingRLMeter.Mark(int64(pendingBeforeCap - pending))
 	}
 	// If we've queued more transactions than the hard limit, drop oldest ones
 	if queued > maxQueuedInTotal {
@@ -618,6 +626,7 @@ func (pool *TxPool) promoteExecutables() {
 					pool.removeTx(tx.Hash())
 				}
 				drop -= size
+				queuedRLMeter.Mark(int64(size))
 				continue
 			}
 			// Otherwise drop only last few transactions
@@ -625,6 +634,7 @@ func (pool *TxPool) promoteExecutables() {
 			for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
 				pool.removeTx(txs[i].Hash())
 				drop--
+				queuedRLMeter.Mark(1)
 			}
 		}
 	}
