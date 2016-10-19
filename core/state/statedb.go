@@ -564,6 +564,8 @@ func (s *StateDB) Commit() (root common.Hash, err error) {
 func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
 	batch = s.db.NewBatch()
 	root, _ = s.commit(batch)
+
+	glog.V(logger.Debug).Infof("Trie cache stats: %d misses, %d unloads", trie.CacheMisses(), trie.CacheUnloads())
 	return root, batch
 }
 
