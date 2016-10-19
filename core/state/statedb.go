@@ -39,12 +39,12 @@ import (
 var StartingNonce uint64
 
 const (
-	// Number of past tries to keep. The arbitrarily chosen value here
-	// is max uncle depth + 1.
-	maxPastTries = 8
+	// Number of past tries to keep. This value is chosen such that
+	// reasonable chain reorg depths will hit an existing trie.
+	maxPastTries = 12
 
 	// Trie cache generation limit.
-	maxTrieCacheGen = 100
+	maxTrieCacheGen = 120
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000

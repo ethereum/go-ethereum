@@ -101,7 +101,7 @@ func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value 
 		if !bytes.Equal(sha.Sum(nil), wantHash) {
 			return nil, fmt.Errorf("bad proof node %d: hash mismatch", i)
 		}
-		n, err := decodeNode(wantHash, buf)
+		n, err := decodeNode(wantHash, buf, 0)
 		if err != nil {
 			return nil, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
