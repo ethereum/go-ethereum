@@ -99,7 +99,8 @@ func importChain(ctx *cli.Context) error {
 			utils.Fatalf("Failed to read database stats: %v", err)
 		}
 		fmt.Println(stats)
-		fmt.Printf("Trie cache misses: %d\n\n", trie.CacheMisses())
+		fmt.Printf("Trie cache misses: %d\n", trie.CacheMisses())
+		fmt.Printf("Trie cache unloads: %d\n\n", trie.CacheUnloads())
 
 		// Compact the entire database to more accurately measure disk io and print the stats
 		start = time.Now()
