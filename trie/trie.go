@@ -290,11 +290,7 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		if err != nil {
 			return false, nil, err
 		}
-		dirty, nn, err := t.insert(rn, prefix, key, value)
-		if !dirty || err != nil {
-			return false, rn, err
-		}
-		return true, nn, nil
+		return t.insert(rn, prefix, key, value)
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", n, n))
@@ -421,11 +417,7 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		if err != nil {
 			return false, nil, err
 		}
-		dirty, nn, err := t.delete(rn, prefix, key)
-		if !dirty || err != nil {
-			return false, rn, err
-		}
-		return true, nn, nil
+		return t.delete(rn, prefix, key)
 
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v (%v)", n, n, key))
