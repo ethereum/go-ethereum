@@ -21,8 +21,8 @@ import "testing"
 func TestFilters(x *testing.T) {
 	filters := NewFilters(nil)
 	f := Filter{}
-	filters.Install(f)
-	i := filters.Install(f)
+	filters.Install(&f)
+	i := filters.Install(&f)
 	if i == 0 {
 		x.Errorf("failed install")
 		return
