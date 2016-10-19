@@ -495,5 +495,5 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	}
 	h := newHasher(t.cachegen, t.cachelimit)
 	defer returnHasherToPool(h)
-	return h.hash(t.root, db, true)
+	return h.hash(t.root, db, true, 0)
 }

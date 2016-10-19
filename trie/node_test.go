@@ -51,7 +51,7 @@ func TestCanUnload(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if got := test.flag.canUnload(test.cachegen, test.cachelimit); got != test.want {
+		if got := test.flag.canUnload(test.cachegen, test.cachelimit, 0); got != test.want {
 			t.Errorf("%+v\n   got %t, want %t", test, got, test.want)
 		}
 	}

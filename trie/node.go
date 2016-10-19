@@ -30,7 +30,7 @@ var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b
 type node interface {
 	fstring(string) string
 	cache() (hashNode, bool)
-	canUnload(cachegen, cachelimit uint16) bool
+	canUnload(cachegen, cachelimit uint16, depth int) bool
 }
 
 type (
@@ -62,15 +62,14 @@ type nodeFlag struct {
 	dirty bool     // whether the node has changes that must be written to the database
 }
 
-// canUnload tells whether a node can be unloaded.
-func (n *nodeFlag) canUnload(cachegen, cachelimit uint16) bool {
-	return !n.dirty && cachegen-n.gen >= cachelimit
+func (n *fullNode) canUnload(gen, limit uint16, depth int) bool {
+	return n.flags.canUnload(gen, limit, depth)
 }
-
-func (n *fullNode) canUnload(gen, limit uint16) bool  { return n.flags.canUnload(gen, limit) }
-func (n *shortNode) canUnload(gen, limit uint16) bool { return n.flags.canUnload(gen, limit) }
-func (n hashNode) canUnload(uint16, uint16) bool      { return false }
-func (n valueNode) canUnload(uint16, uint16) bool     { return false }
+func (n *shortNode) canUnload(gen, limit uint16, depth int) bool {
+	return n.flags.canUnload(gen, limit, depth)
+}
+func (n hashNode) canUnload(uint16, uint16, int) bool  { return false }
+func (n valueNode) canUnload(uint16, uint16, int) bool { return false }
 
 func (n *fullNode) cache() (hashNode, bool)  { return n.flags.hash, n.flags.dirty }
 func (n *shortNode) cache() (hashNode, bool) { return n.flags.hash, n.flags.dirty }
