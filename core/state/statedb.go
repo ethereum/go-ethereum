@@ -44,7 +44,7 @@ const (
 	maxPastTries = 12
 
 	// Trie cache generation limit.
-	maxTrieCacheGen = 120
+	maxTrieCacheGen = 10000
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
