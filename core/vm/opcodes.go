@@ -248,7 +248,7 @@ var opCodeToString = map[OpCode]string{
 	CALLDATACOPY: "CALLDATACOPY",
 	CODESIZE:     "CODESIZE",
 	CODECOPY:     "CODECOPY",
-	GASPRICE:     "TXGASPRICE",
+	GASPRICE:     "GASPRICE",
 
 	// 0x40 range - block operations
 	BLOCKHASH:   "BLOCKHASH",
