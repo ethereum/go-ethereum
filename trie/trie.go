@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/rcrowley/go-metrics"
@@ -453,6 +454,9 @@ func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
 		}
 	}
 	dec := mustDecodeNode(n, enc, t.cachegen)
+	if edb, ok := t.db.(*ethdb.LDBDatabase); ok {
+		edb.ReturnBuffer(enc)
+	}
 	return dec, nil
 }
 

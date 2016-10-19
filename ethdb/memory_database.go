@@ -62,6 +62,9 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return nil, errors.New("not found")
 }
 
+func (db *MemDatabase) ReturnBuffer(b []byte) {
+}
+
 func (db *MemDatabase) Keys() [][]byte {
 	db.lock.RLock()
 	defer db.lock.RUnlock()

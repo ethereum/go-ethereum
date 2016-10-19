@@ -142,6 +142,10 @@ func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
 	//return rle.Decompress(dat)
 }
 
+func (self *LDBDatabase) ReturnBuffer(b []byte) {
+	self.db.ReturnBuffer(b)
+}
+
 // Delete deletes the key from the queue and database
 func (self *LDBDatabase) Delete(key []byte) error {
 	// Measure the database delete latency, if requested
