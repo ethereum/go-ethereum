@@ -38,13 +38,13 @@ import (
 // created.
 var StartingNonce uint64
 
+// Trie cache generation limit after which to evic trie nodes from memory.
+var MaxTrieCacheGen = uint16(120)
+
 const (
 	// Number of past tries to keep. This value is chosen such that
 	// reasonable chain reorg depths will hit an existing trie.
 	maxPastTries = 12
-
-	// Trie cache generation limit.
-	maxTrieCacheGen = 120
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
@@ -89,7 +89,7 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
-	tr, err := trie.NewSecure(root, db, maxTrieCacheGen)
+	tr, err := trie.NewSecure(root, db, MaxTrieCacheGen)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 			return &tr, nil
 		}
 	}
-	return trie.NewSecure(root, self.db, maxTrieCacheGen)
+	return trie.NewSecure(root, self.db, MaxTrieCacheGen)
 }
 
 func (self *StateDB) pushTrie(t *trie.SecureTrie) {
