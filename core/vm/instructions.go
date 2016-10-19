@@ -192,8 +192,18 @@ func opSmod(instr instruction, pc *uint64, env Environment, contract *Contract, 
 }
 
 func opExp(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) {
-	x, y := stack.pop(), stack.pop()
-	stack.push(U256(x.Exp(x, y, Pow256)))
+	base, exponent := stack.pop(), stack.pop()
+	result := big.NewInt(1)
+	for exponent.Cmp(common.Big0) != 0 {
+		if exponent.Bit(0) == 1 {
+			result.Mul(result, base)
+			U256(result)
+		}
+		base.Mul(base, base)
+		U256(base)
+		exponent.Rsh(exponent, 1)
+	}
+	stack.push(result)
 }
 
 func opSignExtend(instr instruction, pc *uint64, env Environment, contract *Contract, memory *Memory, stack *Stack) {
