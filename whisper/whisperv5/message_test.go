@@ -30,16 +30,13 @@ func copyFromBuf(dst []byte, src []byte, beg int) int {
 	return beg + len(dst)
 }
 
-func generateMessageParams() (*MessageParams, error) {
+func generateMessageParams() (*MessageParams, err error) {
 	buf := make([]byte, 1024)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return nil, err
-	}
+	randomize(buf)
+	sz := rand.Intn(400)
 
 	var p MessageParams
 	p.TTL = uint32(rand.Intn(1024))
-	sz := rand.Intn(400)
 	p.Payload = make([]byte, sz)
 	p.Padding = make([]byte, padSizeLimitUpper)
 	p.KeySym = make([]byte, aesKeyLength)
@@ -49,7 +46,6 @@ func generateMessageParams() (*MessageParams, error) {
 	b = copyFromBuf(p.Padding, buf, b)
 	b = copyFromBuf(p.KeySym, buf, b)
 	p.Topic = BytesToTopic(buf[b:])
-
 	p.Src, err = crypto.GenerateKey()
 	if err != nil {
 		return nil, err
@@ -184,16 +180,8 @@ func TestMessageSeal(x *testing.T) {
 	params.TTL = 1
 	aesnonce := make([]byte, 12)
 	salt := make([]byte, 12)
-	_, err = rand.Read(aesnonce)
-	if err != nil {
-		x.Errorf("failed generate aesnonce with seed %d: %s.", seed, err)
-		return
-	}
-	_, err = rand.Read(salt)
-	if err != nil {
-		x.Errorf("failed generate salt with seed %d: %s.", seed, err)
-		return
-	}
+	randomize(aesnonce)
+	randomize(salt)
 
 	env := NewEnvelope(params.TTL, params.Topic, salt, aesnonce, msg)
 	if err != nil {
@@ -219,7 +207,7 @@ func TestMessageSeal(x *testing.T) {
 	env.Seal(params)
 	env.calculatePoW(0)
 	pow = env.PoW()
-	if pow < 1000 {
+	if pow < 2*target {
 		// this depends on deterministic choice of seed (1976726903)
 		x.Errorf("failed Wrap with seed %d: pow too small %f.", seed, pow)
 		return

@@ -96,7 +96,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
 	}
 	fs.mutex.RUnlock() // we need to unlock before calling addDecryptedMessage
 
-	if msg != nil {
+	if msg != nil && fs.whisper != nil {
 		fs.whisper.addDecryptedMessage(msg)
 	}
 }

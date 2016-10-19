@@ -130,7 +130,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		mrand.Read(buf[1:])
+		randomize(buf[1:]) // change to: err = mrand.Read(buf[1:])
 		buf[0] = byte(padSize)
 		if params.Padding != nil {
 			copy(buf[1:], params.Padding)
@@ -359,4 +359,20 @@ func (msg *ReceivedMessage) hash() []byte {
 		return crypto.Keccak256(msg.Raw[:sz])
 	}
 	return crypto.Keccak256(msg.Raw)
+}
+
+// rand.Rand provides a Read method in Go 1.7 and later,
+// but we can't use it yet.
+func randomize(b []byte) {
+	cnt := 0
+	val := mrand.Int63()
+	for n := 0; n < len(b); n++ {
+		b[n] = byte(val)
+		val >>= 8
+		cnt++
+		if cnt >= 7 {
+			cnt = 0
+			val = mrand.Int63()
+		}
+	}
 }
