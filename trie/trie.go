@@ -20,12 +20,12 @@ package trie
 import (
 	"bytes"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/rcrowley/go-metrics"
 )
 
 var (
@@ -35,15 +35,13 @@ var (
 	emptyState common.Hash
 )
 
-// cacheMisses maintains the number of times a trie node was loaded from disk.
-// Always use atomic operations when accessing this global variable.
-var cacheMisses uint64
+var cacheMissCounter = metrics.NewRegisteredCounter("trie/cachemiss", nil)
 
 // CacheMisses retrieves a global counter measuring the number of cache misses
 // the trie did since process startup. This isn't useful for anything apart from
 // trie debugging purposes.
-func CacheMisses() uint64 {
-	return atomic.LoadUint64(&cacheMisses)
+func CacheMisses() int64 {
+	return cacheMissCounter.Count()
 }
 
 func init() {
@@ -432,7 +430,7 @@ func (t *Trie) resolve(n node, prefix, suffix []byte) (node, error) {
 }
 
 func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
-	atomic.AddUint64(&cacheMisses, 1)
+	cacheMissCounter.Inc(1)
 
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
