@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -89,21 +90,30 @@ func importChain(ctx *cli.Context) error {
 	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v", err)
 	}
-	fmt.Printf("Import done in %v, compacting...\n", time.Since(start))
+	fmt.Printf("Import done in %v.\n", time.Since(start))
 
-	// Compact the entire database to more accurately measure disk io and print the stats
 	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		start = time.Now()
-		if err := db.LDB().CompactRange(util.Range{}); err != nil {
-			utils.Fatalf("Compaction failed: %v", err)
-		}
-		fmt.Printf("Compaction done in %v.\n", time.Since(start))
-
+		// Output pre-compaction stats mostly to see the import trashing
 		stats, err := db.LDB().GetProperty("leveldb.stats")
 		if err != nil {
 			utils.Fatalf("Failed to read database stats: %v", err)
 		}
 		fmt.Println(stats)
+
+		// Compact the entire database to more accurately measure disk io and print the stats
+		start = time.Now()
+		fmt.Println("Compacting entire database...")
+		if err = db.LDB().CompactRange(util.Range{}); err != nil {
+			utils.Fatalf("Compaction failed: %v", err)
+		}
+		fmt.Printf("Compaction done in %v.\n", time.Since(start))
+
+		stats, err = db.LDB().GetProperty("leveldb.stats")
+		if err != nil {
+			utils.Fatalf("Failed to read database stats: %v", err)
+		}
+		fmt.Println(stats)
+		fmt.Println("Trie cache misses:", trie.CacheMisses())
 	}
 	return nil
 }
