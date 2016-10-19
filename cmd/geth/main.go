@@ -41,7 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -120,11 +119,9 @@ participating.
 		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
-		utils.NoDefSrvFlag,
 		utils.LightServFlag,
 		utils.LightPeersFlag,
 		utils.LightKDFFlag,
-		utils.CacheFlag,
 		utils.TrieCacheGenFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
@@ -141,6 +138,7 @@ participating.
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,
+		utils.DiscoveryV5Flag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.RPCEnabledFlag,
@@ -284,31 +282,6 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
 	utils.StartNode(stack)
-
-	if ctx.GlobalBool(utils.LightModeFlag.Name) && !ctx.GlobalBool(utils.NoDefSrvFlag.Name) {
-		// add default light server; test phase only
-		addPeer := func(url string) {
-			node, err := discover.ParseNode(url)
-			if err == nil {
-				stack.Server().AddPeer(node)
-			}
-		}
-
-		if ctx.GlobalBool(utils.TestNetFlag.Name) {
-			// TestNet (John Gerryts @phonikg)
-			addPeer("enode://d72af45ba9b60851a8077a4eb07700484b585e5f2e55024e0c93b7ec7d114f2e3fa3c8f3a3358f89da00a609f5a062415deb857ada863b8cdad02b0b0bc90da3@50.112.52.169:30301")
-		} else {
-			if ctx.GlobalBool(utils.OpposeDAOFork.Name) {
-				// Classic (Azure)
-				addPeer("enode://fc3d7b57e5d317946bf421411632ec98d5ffcbf94548cd7bc10088e4fef176670f8ec70280d301a9d0b22fe498203f62b323da15b3acc18b02a1fee2a06b7d3f@40.118.3.223:30305")
-			} else {
-				// MainNet (Azure)
-				addPeer("enode://feaf206a308a669a789be45f4dadcb351246051727f12415ad69e44f8080daf0569c10fe1d9944d245dd1f3e1c89cedda8ce03d7e3d5ed8975a35cad4b4f7ec1@40.118.3.223:30303")
-				// MainNet (John Gerryts @phonikg)
-				addPeer("enode://02b80f0d47c7c157c069d0584067a284cdf188b9267666234b872e70d936a803ad20ea27f78ef1fd6425ae4b7108907e1875adbca96b038004114ac4d1e529a3@50.112.52.169:30300")
-			}
-		}
-	}
 
 	// Unlock any account specifically requested
 	accman := stack.AccountManager()

@@ -151,10 +151,6 @@ var (
 		Name:  "light",
 		Usage: "Enable light client mode",
 	}
-	NoDefSrvFlag = cli.BoolFlag{
-		Name:  "nodefsrv",
-		Usage: "Don't add default LES server (only for test version)",
-	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
@@ -368,6 +364,10 @@ var (
 		Name:  "nodiscover",
 		Usage: "Disables the peer discovery mechanism (manual peer addition)",
 	}
+	DiscoveryV5Flag = cli.BoolFlag{
+		Name:  "v5disc",
+		Usage: "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
+	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
 		Usage: "Enable Whisper",
@@ -511,6 +511,10 @@ func MakeListenAddress(ctx *cli.Context) string {
 	return fmt.Sprintf(":%d", ctx.GlobalInt(ListenPortFlag.Name))
 }
 
+func MakeListenAddressV5(ctx *cli.Context) string {
+	return fmt.Sprintf(":%d", ctx.GlobalInt(ListenPortFlag.Name)+1)
+}
+
 // MakeNAT creates a port mapper from set command line flags.
 func MakeNAT(ctx *cli.Context) nat.Interface {
 	natif, err := nat.Parse(ctx.GlobalString(NATFlag.Name))
@@ -641,9 +645,11 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		Name:              name,
 		Version:           vsn,
 		UserIdent:         makeNodeUserIdent(ctx),
-		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name),
+		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name),
+		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0,
 		BootstrapNodes:    MakeBootstrapNodes(ctx),
 		ListenAddr:        MakeListenAddress(ctx),
+		ListenAddrV5:      MakeListenAddressV5(ctx),
 		NAT:               MakeNAT(ctx),
 		MaxPeers:          ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:   ctx.GlobalInt(MaxPendingPeersFlag.Name),
@@ -701,7 +707,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		ChainConfig:             MakeChainConfig(ctx, stack),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
-		NoDefSrv:                ctx.GlobalBool(NoDefSrvFlag.Name),
 		LightServ:               ctx.GlobalInt(LightServFlag.Name),
 		LightPeers:              ctx.GlobalInt(LightPeersFlag.Name),
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),

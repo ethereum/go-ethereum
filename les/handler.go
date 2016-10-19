@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -36,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -98,6 +100,10 @@ type ProtocolManager struct {
 	chainDb     ethdb.Database
 	odr         *LesOdr
 	server      *LesServer
+
+	topicDisc *discv5.Network
+	lesTopic  discv5.Topic
+	p2pServer *p2p.Server
 
 	downloader *downloader.Downloader
 	fetcher    *lightFetcher
@@ -229,11 +235,52 @@ func (pm *ProtocolManager) removePeer(id string) {
 	}
 }
 
-func (pm *ProtocolManager) Start() {
+func (pm *ProtocolManager) findServers() {
+	if pm.p2pServer == nil {
+		return
+	}
+	enodes := make(chan string, 100)
+	stop := make(chan struct{})
+	go pm.topicDisc.SearchTopic(pm.lesTopic, stop, enodes)
+	go func() {
+		added := make(map[string]bool)
+		for {
+			select {
+			case enode := <-enodes:
+				if !added[enode] {
+					fmt.Println("Found LES server:", enode)
+					added[enode] = true
+					if node, err := discover.ParseNode(enode); err == nil {
+						pm.p2pServer.AddPeer(node)
+					}
+				}
+			case <-stop:
+				return
+			}
+		}
+	}()
+	time.Sleep(time.Second * 20)
+	close(stop)
+}
+
+func (pm *ProtocolManager) Start(srvr *p2p.Server) {
+	pm.p2pServer = srvr
+	if srvr != nil {
+		pm.topicDisc = srvr.DiscV5
+	}
+	pm.lesTopic = discv5.Topic("LES@" + common.Bytes2Hex(pm.blockchain.Genesis().Hash().Bytes()[0:8]))
 	if pm.lightSync {
 		// start sync handler
+		go pm.findServers()
 		go pm.syncer()
 	} else {
+		if pm.topicDisc != nil {
+			go func() {
+				fmt.Println("Starting topic register")
+				pm.topicDisc.RegisterTopic(pm.lesTopic, pm.quitSync)
+				fmt.Println("Stopped topic register")
+			}()
+		}
 		go func() {
 			for range pm.newPeerCh {
 			}

@@ -66,8 +66,9 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 	return s.protocolManager.SubProtocols
 }
 
-func (s *LesServer) Start() {
-	s.protocolManager.Start()
+func (s *LesServer) Start(srvr *p2p.Server) {
+	s.protocolManager.Start(srvr)
+
 }
 
 func (s *LesServer) Stop() {

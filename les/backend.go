@@ -196,7 +196,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 // Ethereum protocol implementation.
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.netVersionId)
-	s.protocolManager.Start()
+	s.protocolManager.Start(srvr)
 	return nil
 }
 

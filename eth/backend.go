@@ -70,7 +70,6 @@ type Config struct {
 	Genesis    string // Genesis JSON to seed the chain database with
 	FastSync   bool   // Enables the state download based fast synchronisation algorithm
 	LightMode  bool   // Running in light client mode
-	NoDefSrv   bool   // No default LES server
 	LightServ  int    // Maximum percentage of time allowed for serving LES requests
 	LightPeers int    // Maximum number of LES client peers
 	MaxPeers   int    // Maximum number of global peers
@@ -106,7 +105,7 @@ type Config struct {
 }
 
 type LesServer interface {
-	Start()
+	Start(srvr *p2p.Server)
 	Stop()
 	Protocols() []p2p.Protocol
 }
@@ -434,7 +433,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 	s.protocolManager.Start()
 	if s.lesServer != nil {
-		s.lesServer.Start()
+		s.lesServer.Start(srvr)
 	}
 	return nil
 }
