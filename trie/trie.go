@@ -35,7 +35,10 @@ var (
 	emptyState common.Hash
 )
 
-var cacheMissCounter = metrics.NewRegisteredCounter("trie/cachemiss", nil)
+var (
+	cacheMissCounter   = metrics.NewRegisteredCounter("trie/cachemiss", nil)
+	cacheUnloadCounter = metrics.NewRegisteredCounter("trie/cacheunload", nil)
+)
 
 // CacheMisses retrieves a global counter measuring the number of cache misses
 // the trie did since process startup. This isn't useful for anything apart from
