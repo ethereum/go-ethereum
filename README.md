@@ -1,3 +1,17 @@
+## Trustfarm geth for IoT Arm board build - release.
+
+https://github.com/trustfarm-dev/go-ethereum/tree/master/release-1.4.18-armhf
+
+we're build geth 1.4.18 HF version for ARM based boards.
+base platform is http://armbian.com poppular IoT developers' open-community.
+
+jessie linux packaging platform. it's derived from debian packages.
+This release of geth will works well on most of arm-v7 linux kernel.
+
+Have a good time for develop.
+
+
+
 ## Ethereum Go
 
 Official golang implementation of the Ethereum protocol
