@@ -73,7 +73,13 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.IdentityFlag,
 			utils.FastSyncFlag,
 			utils.LightKDFFlag,
+		},
+	},
+	{
+		Name: "PERFORMANCE TUNING",
+		Flags: []cli.Flag{
 			utils.CacheFlag,
+			utils.TrieCacheGenFlag,
 		},
 	},
 	{
