@@ -60,6 +60,7 @@ type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)
 	gen   uint16   // cache generation counter
 	dirty bool     // whether the node has changes that must be written to the database
+	new   bool     // whether the node was allocated in the current generation
 }
 
 // canUnload tells whether a node can be unloaded.
@@ -138,7 +139,7 @@ func decodeShort(hash, buf, elems []byte, cachegen uint16) (node, error) {
 	if err != nil {
 		return nil, err
 	}
-	flag := nodeFlag{hash: hash, gen: cachegen}
+	flag := nodeFlag{hash: hash, gen: cachegen, new: true}
 	key := compactDecode(kbuf)
 	if key[len(key)-1] == 16 {
 		// value node
@@ -156,7 +157,7 @@ func decodeShort(hash, buf, elems []byte, cachegen uint16) (node, error) {
 }
 
 func decodeFull(hash, buf, elems []byte, cachegen uint16) (*fullNode, error) {
-	n := &fullNode{flags: nodeFlag{hash: hash, gen: cachegen}}
+	n := &fullNode{flags: nodeFlag{hash: hash, gen: cachegen, new: true}}
 	for i := 0; i < 16; i++ {
 		cld, rest, err := decodeRef(elems, cachegen)
 		if err != nil {
