@@ -98,7 +98,7 @@ func (t *Trie) SetCacheLimit(l uint16) {
 
 // newFlag returns the cache flag value for a newly created node.
 func (t *Trie) newFlag() nodeFlag {
-	return nodeFlag{dirty: true, gen: t.cachegen}
+	return nodeFlag{new: true, dirty: true, gen: t.cachegen}
 }
 
 // New creates a trie with an existing root node from db.
@@ -142,46 +142,52 @@ func (t *Trie) Get(key []byte) []byte {
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
 	key = compactHexDecode(key)
-	value, newroot, didResolve, err := t.tryGet(t.root, key, 0)
-	if err == nil && didResolve {
+	value, newroot, err := t.tryGet(t.root, key, 0)
+	if err == nil {
 		t.root = newroot
 	}
 	return value, err
 }
 
-func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, didResolve bool, err error) {
+func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode node, err error) {
 	switch n := (origNode).(type) {
 	case nil:
-		return nil, nil, false, nil
+		return nil, nil, nil
 	case valueNode:
-		return n, n, false, nil
+		return n, n, nil
 	case *shortNode:
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
-			return nil, n, false, nil
+			return nil, n, nil
 		}
-		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
-		if err == nil && didResolve {
-			n = n.copy()
-			n.Val = newnode
+		value, newnode, err = t.tryGet(n.Val, key, pos+len(n.Key))
+		if err == nil {
+			if !n.flags.new {
+				n = n.copy()
+				n.flags.new = true
+			}
 			n.flags.gen = t.cachegen
+			n.Val = newnode
 		}
-		return value, n, didResolve, err
+		return value, n, err
 	case *fullNode:
-		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
-		if err == nil && didResolve {
-			n = n.copy()
+		value, newnode, err = t.tryGet(n.Children[key[pos]], key, pos+1)
+		if err == nil {
+			if !n.flags.new {
+				n = n.copy()
+				n.flags.new = true
+			}
 			n.flags.gen = t.cachegen
 			n.Children[key[pos]] = newnode
 		}
-		return value, n, didResolve, err
+		return value, n, err
 	case hashNode:
 		child, err := t.resolveHash(n, key[:pos], key[pos:])
 		if err != nil {
-			return nil, n, true, err
+			return nil, n, err
 		}
-		value, newnode, _, err := t.tryGet(child, key, pos)
-		return value, newnode, true, err
+		value, newnode, err := t.tryGet(child, key, pos)
+		return value, newnode, err
 	default:
 		panic(fmt.Sprintf("%T: invalid node: %v", origNode, origNode))
 	}

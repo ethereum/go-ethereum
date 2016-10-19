@@ -85,11 +85,13 @@ func (h *hasher) hash(n node, db DatabaseWriter, force bool) (node, node, error)
 		cn.flags.hash = cachedHash
 		if db != nil {
 			cn.flags.dirty = false
+			cn.flags.new = false
 		}
 	case *fullNode:
 		cn.flags.hash = cachedHash
 		if db != nil {
 			cn.flags.dirty = false
+			cn.flags.new = false
 		}
 	}
 	return hashed, cached, nil
