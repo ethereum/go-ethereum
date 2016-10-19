@@ -30,7 +30,7 @@ func copyFromBuf(dst []byte, src []byte, beg int) int {
 	return beg + len(dst)
 }
 
-func generateMessageParams() (*MessageParams, err error) {
+func generateMessageParams() (*MessageParams, error) {
 	buf := make([]byte, 1024)
 	randomize(buf)
 	sz := rand.Intn(400)
@@ -46,6 +46,8 @@ func generateMessageParams() (*MessageParams, err error) {
 	b = copyFromBuf(p.Padding, buf, b)
 	b = copyFromBuf(p.KeySym, buf, b)
 	p.Topic = BytesToTopic(buf[b:])
+
+	var err error
 	p.Src, err = crypto.GenerateKey()
 	if err != nil {
 		return nil, err
