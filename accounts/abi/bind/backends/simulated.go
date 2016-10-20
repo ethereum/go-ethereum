@@ -27,10 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)
-var chainConfig = &core.ChainConfig{HomesteadBlock: big.NewInt(0)}
+var chainConfig = &params.ChainConfig{ChainId: new(big.Int), HomesteadBlock: big.NewInt(0), EIP150Block: new(big.Int), EIP158Block: new(big.Int)}
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
@@ -72,8 +73,7 @@ func (b *SimulatedBackend) Commit() {
 
 // Rollback aborts all pending transactions, reverting to the last committed state.
 func (b *SimulatedBackend) Rollback() {
-	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
-
+	blocks, _ := core.GenerateChain(chainConfig, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 }
@@ -182,7 +182,7 @@ func (b *SimulatedBackend) EstimateGasLimit(sender common.Address, contract *com
 // SendTransaction implements ContractTransactor.SendTransaction, delegating the raw
 // transaction injection to the remote node.
 func (b *SimulatedBackend) SendTransaction(tx *types.Transaction) error {
-	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(chainConfig, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTx(tx)
 		}

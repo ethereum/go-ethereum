@@ -91,6 +91,11 @@ type StateObject struct {
 	onDirty   func(addr common.Address) // Callback method to mark a state object newly dirty
 }
 
+// empty returns whether the account is considered empty.
+func (s *StateObject) empty() bool {
+	return s.data.Nonce == 0 && s.data.Balance.BitLen() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+}
+
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
@@ -221,8 +226,12 @@ func (self *StateObject) CommitTrie(db trie.Database, dbw trie.DatabaseWriter) e
 	return err
 }
 
+// AddBalance removes amount from c's balance.
+// It is used to add funds to the destination account of a transfer.
 func (c *StateObject) AddBalance(amount *big.Int) {
-	if amount.Cmp(common.Big0) == 0 {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
+	if amount.Cmp(common.Big0) == 0 && !c.empty() {
 		return
 	}
 	c.SetBalance(new(big.Int).Add(c.Balance(), amount))
@@ -232,6 +241,8 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 	}
 }
 
+// SubBalance removes amount from c's balance.
+// It is used to remove funds from the origin account of a transfer.
 func (c *StateObject) SubBalance(amount *big.Int) {
 	if amount.Cmp(common.Big0) == 0 {
 		return

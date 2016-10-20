@@ -33,17 +33,17 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Generate a common prefix for both pro-forkers and non-forkers
 	db, _ := ethdb.NewMemDatabase()
 	genesis := WriteGenesisBlockForTesting(db)
-	prefix, _ := GenerateChain(nil, genesis, db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
+	prefix, _ := GenerateChain(params.TestChainConfig, genesis, db, int(forkBlock.Int64()-1), func(i int, gen *BlockGen) {})
 
 	// Create the concurrent, conflicting two nodes
 	proDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(proDb)
-	proConf := &ChainConfig{HomesteadBlock: big.NewInt(0), DAOForkBlock: forkBlock, DAOForkSupport: true}
+	proConf := &params.ChainConfig{HomesteadBlock: big.NewInt(0), DAOForkBlock: forkBlock, DAOForkSupport: true}
 	proBc, _ := NewBlockChain(proDb, proConf, new(FakePow), new(event.TypeMux))
 
 	conDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(conDb)
-	conConf := &ChainConfig{HomesteadBlock: big.NewInt(0), DAOForkBlock: forkBlock, DAOForkSupport: false}
+	conConf := &params.ChainConfig{HomesteadBlock: big.NewInt(0), DAOForkBlock: forkBlock, DAOForkSupport: false}
 	conBc, _ := NewBlockChain(conDb, conConf, new(FakePow), new(event.TypeMux))
 
 	if _, err := proBc.InsertChain(prefix); err != nil {

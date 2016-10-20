@@ -154,7 +154,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 		blockchain.mu.Lock()
 		WriteTd(blockchain.chainDb, block.Hash(), new(big.Int).Add(block.Difficulty(), blockchain.GetTd(block.ParentHash())))
 		WriteBlock(blockchain.chainDb, block)
-		statedb.Commit()
+		statedb.Commit(false)
 		blockchain.mu.Unlock()
 	}
 	return nil
@@ -712,7 +712,7 @@ func TestFastVsFullChains(t *testing.T) {
 		funds    = big.NewInt(1000000000)
 		genesis  = GenesisBlockForTesting(gendb, address, funds)
 	)
-	blocks, receipts := GenerateChain(nil, genesis, gendb, 1024, func(i int, block *BlockGen) {
+	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, gendb, 1024, func(i int, block *BlockGen) {
 		block.SetCoinbase(common.Address{0x00})
 
 		// If the block number is multiple of 3, send a few bonus transactions to the miner
@@ -795,7 +795,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		genesis  = GenesisBlockForTesting(gendb, address, funds)
 	)
 	height := uint64(1024)
-	blocks, receipts := GenerateChain(nil, genesis, gendb, int(height), nil)
+	blocks, receipts := GenerateChain(params.TestChainConfig, genesis, gendb, int(height), nil)
 
 	// Configure a subchain to roll back
 	remove := []common.Hash{}
@@ -895,7 +895,7 @@ func TestChainTxReorgs(t *testing.T) {
 	//  - futureAdd: transaction added after the reorg has already finished
 	var pastAdd, freshAdd, futureAdd *types.Transaction
 
-	chain, _ := GenerateChain(nil, genesis, db, 3, func(i int, gen *BlockGen) {
+	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, 3, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			pastDrop, _ = types.NewTransaction(gen.TxNonce(addr2), addr2, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key2)
@@ -920,7 +920,7 @@ func TestChainTxReorgs(t *testing.T) {
 	}
 
 	// overwrite the old chain
-	chain, _ = GenerateChain(nil, genesis, db, 5, func(i int, gen *BlockGen) {
+	chain, _ = GenerateChain(params.TestChainConfig, genesis, db, 5, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			pastAdd, _ = types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(key3)
@@ -990,7 +990,7 @@ func TestLogReorgs(t *testing.T) {
 	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 
 	subs := evmux.Subscribe(RemovedLogsEvent{})
-	chain, _ := GenerateChain(nil, genesis, db, 2, func(i int, gen *BlockGen) {
+	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, 2, func(i int, gen *BlockGen) {
 		if i == 1 {
 			tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), code).SignECDSA(key1)
 			if err != nil {
@@ -1003,7 +1003,7 @@ func TestLogReorgs(t *testing.T) {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
-	chain, _ = GenerateChain(nil, genesis, db, 3, func(i int, gen *BlockGen) {})
+	chain, _ = GenerateChain(params.TestChainConfig, genesis, db, 3, func(i int, gen *BlockGen) {})
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert forked chain: %v", err)
 	}
@@ -1025,12 +1025,12 @@ func TestReorgSideEvent(t *testing.T) {
 	evmux := &event.TypeMux{}
 	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 
-	chain, _ := GenerateChain(nil, genesis, db, 3, func(i int, gen *BlockGen) {})
+	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, 3, func(i int, gen *BlockGen) {})
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
 
-	replacementBlocks, _ := GenerateChain(nil, genesis, db, 4, func(i int, gen *BlockGen) {
+	replacementBlocks, _ := GenerateChain(params.TestChainConfig, genesis, db, 4, func(i int, gen *BlockGen) {
 		tx, err := types.NewContractCreation(gen.TxNonce(addr1), new(big.Int), big.NewInt(1000000), new(big.Int), nil).SignECDSA(key1)
 		if i == 2 {
 			gen.OffsetTime(-1)
@@ -1101,7 +1101,7 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 	evmux := &event.TypeMux{}
 	blockchain, _ := NewBlockChain(db, testChainConfig(), FakePow{}, evmux)
 
-	chain, _ := GenerateChain(nil, genesis, db, 10, func(i int, gen *BlockGen) {})
+	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *BlockGen) {})
 
 	for i, _ := range chain {
 		go func(block *types.Block) {
@@ -1126,5 +1126,108 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 		}(chain[i])
 
 		blockchain.InsertChain(types.Blocks{chain[i]})
+	}
+}
+
+func TestEIP155Transition(t *testing.T) {
+	// Configure and generate a sample block chain
+	var (
+		db, _   = ethdb.NewMemDatabase()
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+		genesis = WriteGenesisBlockForTesting(db, GenesisAccount{address, funds})
+		config  = &params.ChainConfig{ChainId: big.NewInt(1), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
+		mux     event.TypeMux
+	)
+
+	blockchain, _ := NewBlockChain(db, config, FakePow{}, &mux)
+	blocks, _ := GenerateChain(config, genesis, db, 4, func(i int, block *BlockGen) {
+		var (
+			tx      *types.Transaction
+			err     error
+			basicTx = func(signer types.Signer) (*types.Transaction, error) {
+				tx := types.NewTransaction(block.TxNonce(address), common.Address{}, new(big.Int), big.NewInt(21000), new(big.Int), nil)
+				tx.SetSigner(signer)
+				return tx.SignECDSA(key)
+			}
+		)
+		switch i {
+		case 0:
+			tx, err = basicTx(types.HomesteadSigner{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		case 2:
+			tx, err = basicTx(types.HomesteadSigner{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+
+			tx, err = basicTx(types.NewEIP155Signer(config.ChainId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		case 3:
+			tx, err = basicTx(types.HomesteadSigner{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+
+			tx, err = basicTx(types.NewEIP155Signer(config.ChainId))
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		}
+	})
+
+	if _, err := blockchain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	block := blockchain.GetBlockByNumber(1)
+	if block.Transactions()[0].Protected() {
+		t.Error("Expected block[0].txs[0] to not be replay protected")
+	}
+
+	block = blockchain.GetBlockByNumber(3)
+	if block.Transactions()[0].Protected() {
+		t.Error("Expected block[3].txs[0] to not be replay protected")
+	}
+	if !block.Transactions()[1].Protected() {
+		t.Error("Expected block[3].txs[1] to be replay protected")
+	}
+	if _, err := blockchain.InsertChain(blocks[4:]); err != nil {
+		t.Fatal(err)
+	}
+
+	// generate an invalid chain id transaction
+	config = &params.ChainConfig{ChainId: big.NewInt(2), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
+	blocks, _ = GenerateChain(config, blocks[len(blocks)-1], db, 4, func(i int, block *BlockGen) {
+		var (
+			tx      *types.Transaction
+			err     error
+			basicTx = func(signer types.Signer) (*types.Transaction, error) {
+				tx := types.NewTransaction(block.TxNonce(address), common.Address{}, new(big.Int), big.NewInt(21000), new(big.Int), nil)
+				tx.SetSigner(signer)
+				return tx.SignECDSA(key)
+			}
+		)
+		switch i {
+		case 0:
+			tx, err = basicTx(types.NewEIP155Signer(big.NewInt(2)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			block.AddTx(tx)
+		}
+	})
+	_, err := blockchain.InsertChain(blocks)
+	if err != types.ErrInvalidChainId {
+		t.Error("expected error:", types.ErrInvalidChainId)
 	}
 }
