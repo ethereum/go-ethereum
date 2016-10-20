@@ -148,27 +148,8 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-type RuleSet struct {
-	HomesteadBlock           *big.Int
-	DAOForkBlock             *big.Int
-	DAOForkSupport           bool
-	HomesteadGasRepriceBlock *big.Int
-}
-
-func (r RuleSet) IsHomestead(n *big.Int) bool {
-	return n.Cmp(r.HomesteadBlock) >= 0
-}
-
-func (r RuleSet) GasTable(num *big.Int) params.GasTable {
-	if r.HomesteadGasRepriceBlock == nil || num == nil || num.Cmp(r.HomesteadGasRepriceBlock) < 0 {
-		return params.GasTableHomestead
-	}
-
-	return params.GasTableHomesteadGasRepriceFork
-}
-
 type Env struct {
-	ruleSet      RuleSet
+	chainConfig  *params.ChainConfig
 	depth        int
 	state        *state.StateDB
 	skipTransfer bool
@@ -189,16 +170,16 @@ type Env struct {
 	evm *vm.EVM
 }
 
-func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
+func NewEnv(chainConfig *params.ChainConfig, state *state.StateDB) *Env {
 	env := &Env{
-		ruleSet: ruleSet,
-		state:   state,
+		chainConfig: chainConfig,
+		state:       state,
 	}
 	return env
 }
 
-func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
-	env := NewEnv(ruleSet, state)
+func NewEnvFromMap(chainConfig *params.ChainConfig, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
+	env := NewEnv(chainConfig, state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
 	env.parent = common.HexToHash(envValues["previousHash"])
@@ -217,16 +198,16 @@ func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]s
 	return env
 }
 
-func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
-func (self *Env) Vm() vm.Vm                { return self.evm }
-func (self *Env) Origin() common.Address   { return self.origin }
-func (self *Env) BlockNumber() *big.Int    { return self.number }
-func (self *Env) Coinbase() common.Address { return self.coinbase }
-func (self *Env) Time() *big.Int           { return self.time }
-func (self *Env) Difficulty() *big.Int     { return self.difficulty }
-func (self *Env) Db() vm.Database          { return self.state }
-func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
-func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
+func (self *Env) ChainConfig() *params.ChainConfig { return self.chainConfig }
+func (self *Env) Vm() vm.Vm                        { return self.evm }
+func (self *Env) Origin() common.Address           { return self.origin }
+func (self *Env) BlockNumber() *big.Int            { return self.number }
+func (self *Env) Coinbase() common.Address         { return self.coinbase }
+func (self *Env) Time() *big.Int                   { return self.time }
+func (self *Env) Difficulty() *big.Int             { return self.difficulty }
+func (self *Env) Db() vm.Database                  { return self.state }
+func (self *Env) GasLimit() *big.Int               { return self.gasLimit }
+func (self *Env) VmType() vm.Type                  { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }

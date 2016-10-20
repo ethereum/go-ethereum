@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -78,7 +79,7 @@ const (
 // included in the canonical one where as GetBlockByNumber always represents the
 // canonical chain.
 type BlockChain struct {
-	config *ChainConfig // chain & network configuration
+	config *params.ChainConfig // chain & network configuration
 
 	hc           *HeaderChain
 	chainDb      ethdb.Database
@@ -113,7 +114,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialiser the default Ethereum Validator and
 // Processor.
-func NewBlockChain(chainDb ethdb.Database, config *ChainConfig, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
+func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -924,7 +925,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, self.config.VmConfig)
+		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, vm.Config{})
 		if err != nil {
 			reportBlock(block, err)
 			return i, err
@@ -936,7 +937,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Write state changes to database
-		_, err = self.stateCache.Commit()
+		_, err = self.stateCache.Commit(self.config.IsEIP158(block.Number()))
 		if err != nil {
 			return i, err
 		}
@@ -1309,4 +1310,4 @@ func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 }
 
 // Config retrieves the blockchain's chain configuration.
-func (self *BlockChain) Config() *ChainConfig { return self.config }
+func (self *BlockChain) Config() *params.ChainConfig { return self.config }

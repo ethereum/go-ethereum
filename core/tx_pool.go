@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -83,7 +84,7 @@ type stateFn func() (*state.StateDB, error)
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config       *ChainConfig
+	config       *params.ChainConfig
 	currentState stateFn // The state function which will allow us to do some pre checks
 	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
@@ -104,7 +105,7 @@ type TxPool struct {
 	homestead bool
 }
 
-func NewTxPool(config *ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	pool := &TxPool{
 		config:       config,
 		pending:      make(map[common.Address]*txList),

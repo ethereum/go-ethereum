@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -54,10 +55,10 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		pow           = new(core.FakePow)
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
-		chainConfig   = &core.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
+		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
 		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux)
 	)
-	chain, _ := core.GenerateChain(nil, genesis, db, blocks, generator)
+	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}

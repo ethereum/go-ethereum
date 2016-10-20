@@ -23,13 +23,14 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Env is a basic runtime environment required for running the EVM.
 type Env struct {
-	ruleSet vm.RuleSet
-	depth   int
-	state   *state.StateDB
+	chainConfig *params.ChainConfig
+	depth       int
+	state       *state.StateDB
 
 	origin   common.Address
 	coinbase common.Address
@@ -47,14 +48,14 @@ type Env struct {
 // NewEnv returns a new vm.Environment
 func NewEnv(cfg *Config, state *state.StateDB) vm.Environment {
 	env := &Env{
-		ruleSet:    cfg.RuleSet,
-		state:      state,
-		origin:     cfg.Origin,
-		coinbase:   cfg.Coinbase,
-		number:     cfg.BlockNumber,
-		time:       cfg.Time,
-		difficulty: cfg.Difficulty,
-		gasLimit:   cfg.GasLimit,
+		chainConfig: cfg.ChainConfig,
+		state:       state,
+		origin:      cfg.Origin,
+		coinbase:    cfg.Coinbase,
+		number:      cfg.BlockNumber,
+		time:        cfg.Time,
+		difficulty:  cfg.Difficulty,
+		gasLimit:    cfg.GasLimit,
 	}
 	env.evm = vm.New(env, vm.Config{
 		Debug:     cfg.Debug,
@@ -65,16 +66,16 @@ func NewEnv(cfg *Config, state *state.StateDB) vm.Environment {
 	return env
 }
 
-func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
-func (self *Env) Vm() vm.Vm                { return self.evm }
-func (self *Env) Origin() common.Address   { return self.origin }
-func (self *Env) BlockNumber() *big.Int    { return self.number }
-func (self *Env) Coinbase() common.Address { return self.coinbase }
-func (self *Env) Time() *big.Int           { return self.time }
-func (self *Env) Difficulty() *big.Int     { return self.difficulty }
-func (self *Env) Db() vm.Database          { return self.state }
-func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
-func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
+func (self *Env) ChainConfig() *params.ChainConfig { return self.chainConfig }
+func (self *Env) Vm() vm.Vm                        { return self.evm }
+func (self *Env) Origin() common.Address           { return self.origin }
+func (self *Env) BlockNumber() *big.Int            { return self.number }
+func (self *Env) Coinbase() common.Address         { return self.coinbase }
+func (self *Env) Time() *big.Int                   { return self.time }
+func (self *Env) Difficulty() *big.Int             { return self.difficulty }
+func (self *Env) Db() vm.Database                  { return self.state }
+func (self *Env) GasLimit() *big.Int               { return self.gasLimit }
+func (self *Env) VmType() vm.Type                  { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return self.getHashFn(n)
 }

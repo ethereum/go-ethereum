@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/net/context"
 )
 
@@ -34,7 +35,7 @@ import (
 type VMEnv struct {
 	vm.Environment
 	ctx         context.Context
-	chainConfig *core.ChainConfig
+	chainConfig *params.ChainConfig
 	evm         *vm.EVM
 	state       *VMState
 	header      *types.Header
@@ -45,7 +46,7 @@ type VMEnv struct {
 }
 
 // NewEnv creates a new execution environment based on an ODR capable light state
-func NewEnv(ctx context.Context, state *LightState, chainConfig *core.ChainConfig, chain *LightChain, msg core.Message, header *types.Header, cfg vm.Config) *VMEnv {
+func NewEnv(ctx context.Context, state *LightState, chainConfig *params.ChainConfig, chain *LightChain, msg core.Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		chainConfig: chainConfig,
 		chain:       chain,
@@ -58,17 +59,17 @@ func NewEnv(ctx context.Context, state *LightState, chainConfig *core.ChainConfi
 	return env
 }
 
-func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
-func (self *VMEnv) Vm() vm.Vm                { return self.evm }
-func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
-func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }
-func (self *VMEnv) Coinbase() common.Address { return self.header.Coinbase }
-func (self *VMEnv) Time() *big.Int           { return self.header.Time }
-func (self *VMEnv) Difficulty() *big.Int     { return self.header.Difficulty }
-func (self *VMEnv) GasLimit() *big.Int       { return self.header.GasLimit }
-func (self *VMEnv) Db() vm.Database          { return self.state }
-func (self *VMEnv) Depth() int               { return self.depth }
-func (self *VMEnv) SetDepth(i int)           { self.depth = i }
+func (self *VMEnv) ChainConfig() *params.ChainConfig { return self.chainConfig }
+func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
+func (self *VMEnv) Origin() common.Address           { f, _ := self.msg.From(); return f }
+func (self *VMEnv) BlockNumber() *big.Int            { return self.header.Number }
+func (self *VMEnv) Coinbase() common.Address         { return self.header.Coinbase }
+func (self *VMEnv) Time() *big.Int                   { return self.header.Time }
+func (self *VMEnv) Difficulty() *big.Int             { return self.header.Difficulty }
+func (self *VMEnv) GasLimit() *big.Int               { return self.header.GasLimit }
+func (self *VMEnv) Db() vm.Database                  { return self.state }
+func (self *VMEnv) Depth() int                       { return self.depth }
+func (self *VMEnv) SetDepth(i int)                   { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
 	for header := self.chain.GetHeader(self.header.ParentHash, self.header.Number.Uint64()-1); header != nil; header = self.chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
 		if header.Number.Uint64() == n {

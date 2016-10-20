@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -42,13 +41,14 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 )
 
 type LightEthereum struct {
 	odr         *LesOdr
 	relay       *LesTxRelay
-	chainConfig *core.ChainConfig
+	chainConfig *params.ChainConfig
 	// Channel for shutting down the service
 	shutdownChan chan bool
 	// Handlers
@@ -107,10 +107,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		return nil, errors.New("missing chain config")
 	}
 	eth.chainConfig = config.ChainConfig
-	eth.chainConfig.VmConfig = vm.Config{
-		EnableJit: config.EnableJit,
-		ForceJit:  config.ForceJit,
-	}
 	eth.blockchain, err = light.NewLightChain(odr, eth.chainConfig, eth.pow, eth.eventMux)
 	if err != nil {
 		if err == core.ErrNoGenesis {

@@ -31,11 +31,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/net/context"
 )
 
 // Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)
-var chainConfig = &core.ChainConfig{HomesteadBlock: big.NewInt(0)}
+var chainConfig = &params.ChainConfig{HomesteadBlock: big.NewInt(0), EIP150Block: new(big.Int), EIP158Block: new(big.Int)}
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
@@ -51,6 +52,8 @@ type SimulatedBackend struct {
 	mu           sync.Mutex
 	pendingBlock *types.Block   // Currently pending block that will be imported on request
 	pendingState *state.StateDB // Currently pending state that will be the active on on request
+
+	config *params.ChainConfig
 }
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
@@ -85,7 +88,7 @@ func (b *SimulatedBackend) Rollback() {
 }
 
 func (b *SimulatedBackend) rollback() {
-	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(chainConfig, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 }
@@ -243,7 +246,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
 
-	blocks, _ := core.GenerateChain(nil, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(chainConfig, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTx(tx)
 		}

@@ -87,7 +87,7 @@ func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state et
 		return nil, nil, err
 	}
 	from.SetBalance(common.MaxBig)
-	env := light.NewEnv(ctx, stateDb, b.eth.chainConfig, b.eth.blockchain, msg, header, b.eth.chainConfig.VmConfig)
+	env := light.NewEnv(ctx, stateDb, b.eth.chainConfig, b.eth.blockchain, msg, header, vm.Config{})
 	return env, env.Error, nil
 }
 

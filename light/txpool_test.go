@@ -87,7 +87,8 @@ func TestTxPool(t *testing.T) {
 	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux)
-	gchain, _ := core.GenerateChain(nil, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
+	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
+	gchain, _ := core.GenerateChain(chainConfig, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}

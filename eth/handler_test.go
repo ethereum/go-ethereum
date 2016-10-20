@@ -466,7 +466,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 		pow           = new(core.FakePow)
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db)
-		config        = &core.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
+		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
 		blockchain, _ = core.NewBlockChain(db, config, pow, evmux)
 	)
 	pm, err := NewProtocolManager(config, false, NetworkId, 1000, evmux, new(testTxPool), pow, blockchain, db)
@@ -491,7 +491,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	}
 	// Create a block to reply to the challenge if no timeout is simualted
 	if !timeout {
-		blocks, _ := core.GenerateChain(nil, genesis, db, 1, func(i int, block *core.BlockGen) {
+		blocks, _ := core.GenerateChain(&params.ChainConfig{}, genesis, db, 1, func(i int, block *core.BlockGen) {
 			if remoteForked {
 				block.SetExtra(params.DAOForkBlockExtra)
 			}

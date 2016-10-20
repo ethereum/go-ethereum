@@ -131,7 +131,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		pow         = new(core.FakePow)
 		db, _       = ethdb.NewMemDatabase()
 		genesis     = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
-		chainConfig = &core.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
+		chainConfig = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
 		odr         *LesOdr
 		chain       BlockChain
 	)
@@ -141,7 +141,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain, _ = light.NewLightChain(odr, chainConfig, pow, evmux)
 	} else {
 		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux)
-		gchain, _ := core.GenerateChain(nil, genesis, db, blocks, generator)
+		gchain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
 		}

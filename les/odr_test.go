@@ -26,17 +26,19 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/net/context"
 )
 
-type odrTestFn func(ctx context.Context, db ethdb.Database, config *core.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
+type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
 
 func TestOdrGetBlockLes1(t *testing.T) { testOdr(t, 1, 1, odrGetBlock) }
 
-func odrGetBlock(ctx context.Context, db ethdb.Database, config *core.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrGetBlock(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var block *types.Block
 	if bc != nil {
 		block = bc.GetBlockByHash(bhash)
@@ -52,7 +54,7 @@ func odrGetBlock(ctx context.Context, db ethdb.Database, config *core.ChainConfi
 
 func TestOdrGetReceiptsLes1(t *testing.T) { testOdr(t, 1, 1, odrGetReceipts) }
 
-func odrGetReceipts(ctx context.Context, db ethdb.Database, config *core.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrGetReceipts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	var receipts types.Receipts
 	if bc != nil {
 		receipts = core.GetBlockReceipts(db, bhash, core.GetBlockNumber(db, bhash))
@@ -68,7 +70,7 @@ func odrGetReceipts(ctx context.Context, db ethdb.Database, config *core.ChainCo
 
 func TestOdrAccountsLes1(t *testing.T) { testOdr(t, 1, 1, odrAccounts) }
 
-func odrAccounts(ctx context.Context, db ethdb.Database, config *core.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	dummyAddr := common.HexToAddress("1234567812345678123456781234567812345678")
 	acc := []common.Address{testBankAddress, acc1Addr, acc2Addr, dummyAddr}
 
@@ -138,7 +140,7 @@ func (m lightcallmsg) Gas() *big.Int                         { return m.gas }
 func (m lightcallmsg) Value() *big.Int                       { return m.value }
 func (m lightcallmsg) Data() []byte                          { return m.data }
 
-func odrContractCall(ctx context.Context, db ethdb.Database, config *core.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
+func odrContractCall(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 
 	var res []byte
@@ -160,7 +162,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *core.ChainC
 					to:       &testContractAddr,
 				}
 
-				vmenv := core.NewEnv(statedb, config, bc, msg, header, config.VmConfig)
+				vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
@@ -181,7 +183,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *core.ChainC
 					to:       &testContractAddr,
 				}
 
-				vmenv := light.NewEnv(ctx, state, config, lc, msg, header, config.VmConfig)
+				vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				if vmenv.Error() == nil {

@@ -35,8 +35,8 @@ import (
  */
 
 // MakeChainConfig returns a new ChainConfig with the ethereum default chain settings.
-func MakeChainConfig() *ChainConfig {
-	return &ChainConfig{
+func MakeChainConfig() *params.ChainConfig {
+	return &params.ChainConfig{
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   nil,
 		DAOForkSupport: true,
@@ -73,6 +73,8 @@ type BlockGen struct {
 	txs      []*types.Transaction
 	receipts []*types.Receipt
 	uncles   []*types.Header
+
+	config *params.ChainConfig
 }
 
 // SetCoinbase sets the coinbase of the generated block.
@@ -106,7 +108,7 @@ func (b *BlockGen) AddTx(tx *types.Transaction) {
 		b.SetCoinbase(common.Address{})
 	}
 	b.statedb.StartRecord(tx.Hash(), common.Hash{}, len(b.txs))
-	receipt, _, _, err := ApplyTransaction(MakeChainConfig(), nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
+	receipt, _, _, err := ApplyTransaction(b.config, nil, b.gasPool, b.statedb, b.header, tx, b.header.GasUsed, vm.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -178,10 +180,10 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
-		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb}
+		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb, config: config}
 
 		// Mutate the state and block according to any hard-fork specs
 		if config == nil {
@@ -203,7 +205,7 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 			gen(i, b)
 		}
 		AccumulateRewards(statedb, h, b.uncles)
-		root, err := statedb.Commit()
+		root, err := statedb.Commit(config.IsEIP158(h.Number))
 		if err != nil {
 			panic(fmt.Sprintf("state write error: %v", err))
 		}
@@ -215,7 +217,7 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 		if err != nil {
 			panic(err)
 		}
-		header := makeHeader(parent, statedb)
+		header := makeHeader(config, parent, statedb)
 		block, receipt := genblock(i, header, statedb)
 		blocks[i] = block
 		receipts[i] = receipt
@@ -224,7 +226,7 @@ func GenerateChain(config *ChainConfig, parent *types.Block, db ethdb.Database, 
 	return blocks, receipts
 }
 
-func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
+func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.StateDB) *types.Header {
 	var time *big.Int
 	if parent.Time() == nil {
 		time = big.NewInt(10)
@@ -232,7 +234,7 @@ func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
 	return &types.Header{
-		Root:       state.IntermediateRoot(),
+		Root:       state.IntermediateRoot(config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
 		Difficulty: CalcDifficulty(MakeChainConfig(), time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
@@ -283,7 +285,7 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 
 // makeBlockChain creates a deterministic chain of blocks rooted at parent.
 func makeBlockChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
-	blocks, _ := GenerateChain(nil, parent, db, n, func(i int, b *BlockGen) {
+	blocks, _ := GenerateChain(params.TestChainConfig, parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	return blocks

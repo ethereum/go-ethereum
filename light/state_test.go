@@ -41,7 +41,7 @@ func makeTestState() (common.Hash, ethdb.Database) {
 		st.AddBalance(addr, big.NewInt(int64(i)))
 		st.SetCode(addr, []byte{i, i, i})
 	}
-	root, _ := st.Commit()
+	root, _ := st.Commit(false)
 	return root, sdb
 }
 
