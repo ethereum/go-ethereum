@@ -77,7 +77,7 @@ func NewTrieSync(root common.Hash, database ethdb.Database, callback TrieSyncLea
 // AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
 func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback TrieSyncLeafCallback) {
 	// Short circuit if the trie is empty or already known
-	if root == emptyRoot {
+	if root == EmptyRoot {
 		return
 	}
 	key := root.Bytes()

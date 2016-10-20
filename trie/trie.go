@@ -30,7 +30,7 @@ import (
 
 var (
 	// This is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	EmptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	// This is the known hash of an empty state trie entry.
 	emptyState common.Hash
 )
@@ -109,7 +109,7 @@ func (t *Trie) newFlag() nodeFlag {
 // not exist in the database. Accessing the trie loads nodes from db on demand.
 func New(root common.Hash, db Database) (*Trie, error) {
 	trie := &Trie{db: db, originalRoot: root}
-	if (root != common.Hash{}) && root != emptyRoot {
+	if (root != common.Hash{}) && root != EmptyRoot {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
@@ -499,7 +499,7 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 
 func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
-		return hashNode(emptyRoot.Bytes()), nil, nil
+		return hashNode(EmptyRoot.Bytes()), nil, nil
 	}
 	h := newHasher(t.cachegen, t.cachelimit)
 	defer returnHasherToPool(h)

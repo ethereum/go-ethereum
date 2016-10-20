@@ -27,11 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
-func testChainConfig() *ChainConfig {
-	return &ChainConfig{HomesteadBlock: big.NewInt(0)}
+func testChainConfig() *params.ChainConfig {
+	return params.TestChainConfig
+	//return &params.ChainConfig{HomesteadBlock: big.NewInt(0)}
 }
 
 func proc() (Validator, *BlockChain) {
@@ -51,15 +53,15 @@ func TestNumber(t *testing.T) {
 	_, chain := proc()
 
 	statedb, _ := state.New(chain.Genesis().Root(), chain.chainDb)
-	header := makeHeader(chain.Genesis(), statedb)
-	header.Number = big.NewInt(3)
 	cfg := testChainConfig()
+	header := makeHeader(cfg, chain.Genesis(), statedb)
+	header.Number = big.NewInt(3)
 	err := ValidateHeader(cfg, pow, header, chain.Genesis().Header(), false, false)
 	if err != BlockNumberErr {
 		t.Errorf("expected block number error, got %q", err)
 	}
 
-	header = makeHeader(chain.Genesis(), statedb)
+	header = makeHeader(cfg, chain.Genesis(), statedb)
 	err = ValidateHeader(cfg, pow, header, chain.Genesis().Header(), false, false)
 	if err == BlockNumberErr {
 		t.Errorf("didn't expect block number error")

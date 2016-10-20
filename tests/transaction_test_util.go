@@ -24,7 +24,6 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -164,7 +163,7 @@ func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err e
 		decodedSender common.Address
 	)
 
-	chainConfig := &core.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
+	chainConfig := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
 	if chainConfig.IsHomestead(common.String2Big(txTest.Blocknumber)) {
 		decodedSender, err = decodedTx.From()
 	} else {

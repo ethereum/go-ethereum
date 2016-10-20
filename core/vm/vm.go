@@ -51,9 +51,9 @@ type EVM struct {
 func New(env Environment, cfg Config) *EVM {
 	return &EVM{
 		env:       env,
-		jumpTable: newJumpTable(env.RuleSet(), env.BlockNumber()),
+		jumpTable: newJumpTable(env.ChainConfig(), env.BlockNumber()),
 		cfg:       cfg,
-		gasTable:  env.RuleSet().GasTable(env.BlockNumber()),
+		gasTable:  env.ChainConfig().GasTable(env.BlockNumber()),
 	}
 }
 
@@ -172,6 +172,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
+		//fmt.Printf("OP %d %v\n", op, op)
 		// calculate the new memory size and gas price for the current executing opcode
 		newMemSize, cost, err = calculateGasAndSize(evm.gasTable, evm.env, contract, caller, op, statedb, mem, stack)
 		if err != nil {
@@ -257,8 +258,25 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 		// if suicide is not nil: homestead gas fork
 		if gasTable.CreateBySuicide != nil {
 			gas.Set(gasTable.Suicide)
-			if !env.Db().Exist(common.BigToAddress(stack.data[len(stack.data)-1])) {
-				gas.Add(gas, gasTable.CreateBySuicide)
+			var (
+				address = common.BigToAddress(stack.data[len(stack.data)-1])
+				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
+			)
+
+			switch {
+			case eip158:
+				var (
+					empty          = env.Db().Empty(address) // checking exist avoids going through the trie on nonexistent
+					transfersValue = statedb.GetBalance(contract.Address()).BitLen() > 0
+				)
+				if empty && transfersValue {
+					gas.Add(gas, gasTable.CreateBySuicide)
+				}
+			default:
+				exist := env.Db().Exist(address)
+				if !exist {
+					gas.Add(gas, gasTable.CreateBySuicide)
+				}
 			}
 		}
 
@@ -378,12 +396,27 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 	case CALL, CALLCODE:
 		gas.Set(gasTable.Calls)
 
+		transfersValue := stack.data[len(stack.data)-3].BitLen() > 0
 		if op == CALL {
-			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
-				gas.Add(gas, params.CallNewAccountGas)
+			var (
+				address = common.BigToAddress(stack.data[len(stack.data)-2])
+				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
+			)
+
+			switch {
+			case eip158:
+				empty := env.Db().Empty(address)
+				if empty && transfersValue {
+					gas.Add(gas, params.CallNewAccountGas)
+				}
+			default:
+				exist := env.Db().Exist(address)
+				if !exist {
+					gas.Add(gas, params.CallNewAccountGas)
+				}
 			}
 		}
-		if len(stack.data[stack.len()-3].Bytes()) > 0 {
+		if transfersValue {
 			gas.Add(gas, params.CallValueTransferGas)
 		}
 		x := calcMemSize(stack.data[stack.len()-6], stack.data[stack.len()-7])

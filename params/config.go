@@ -14,18 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package params
 
 import (
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
 )
-
-var ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error
 
 // ChainConfig is the core config which determines the blockchain settings.
 //
@@ -37,11 +32,14 @@ type ChainConfig struct {
 	DAOForkBlock   *big.Int `json:"daoForkBlock"`   // TheDAO hard-fork switch block (nil = no fork)
 	DAOForkSupport bool     `json:"daoForkSupport"` // Whether the nodes supports or opposes the DAO hard-fork
 
-	HomesteadGasRepriceBlock *big.Int    `json:"homesteadGasRepriceBlock"` // Homestead gas reprice switch block (nil = no fork)
-	HomesteadGasRepriceHash  common.Hash `json:"homesteadGasRepriceHash"`  // Homestead gas reprice switch block hash (fast sync aid)
+	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
+	EIP150Block *big.Int    `json:"EIP150Block"` // EIP150 HF block (nil = no fork)
+	EIP150Hash  common.Hash `json:"EIP150Hash"`  // EIP150 HF hash (fast sync aid)
 
-	VmConfig vm.Config `json:"-"`
+	EIP158Block *big.Int `json:"EIP158Block"` // EIP158 HF block
 }
+
+var TestChainConfig = &ChainConfig{new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int)}
 
 // IsHomestead returns whether num is either equal to the homestead block or greater.
 func (c *ChainConfig) IsHomestead(num *big.Int) bool {
@@ -54,10 +52,33 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.
-func (c *ChainConfig) GasTable(num *big.Int) params.GasTable {
-	if c.HomesteadGasRepriceBlock == nil || num == nil || num.Cmp(c.HomesteadGasRepriceBlock) < 0 {
-		return params.GasTableHomestead
+func (c *ChainConfig) GasTable(num *big.Int) GasTable {
+	if num == nil {
+		return GasTableHomestead
 	}
 
-	return params.GasTableHomesteadGasRepriceFork
+	switch {
+	case c.EIP158Block != nil && num.Cmp(c.EIP158Block) >= 0:
+		return GasTableEIP158
+	case c.EIP150Block != nil && num.Cmp(c.EIP150Block) >= 0:
+		return GasTableHomesteadGasRepriceFork
+	default:
+		return GasTableHomestead
+	}
+}
+
+func (c *ChainConfig) IsEIP150(num *big.Int) bool {
+	if c.EIP150Block == nil || num == nil {
+		return false
+	}
+	return num.Cmp(c.EIP150Block) >= 0
+
+}
+
+func (c *ChainConfig) IsEIP158(num *big.Int) bool {
+	if c.EIP158Block == nil || num == nil {
+		return false
+	}
+	return num.Cmp(c.EIP158Block) >= 0
+
 }

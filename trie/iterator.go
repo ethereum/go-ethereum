@@ -128,7 +128,7 @@ func (it *NodeIterator) step() error {
 		// Initialize the iterator if we've just started.
 		root := it.trie.Hash()
 		state := &nodeIteratorState{node: it.trie.root, child: -1}
-		if root != emptyRoot {
+		if root != EmptyRoot {
 			state.hash = root
 		}
 		it.stack = append(it.stack, state)

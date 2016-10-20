@@ -319,7 +319,7 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *Stack, env
 		}()
 	}
 
-	homestead := env.RuleSet().IsHomestead(env.BlockNumber())
+	homestead := env.ChainConfig().IsHomestead(env.BlockNumber())
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 

@@ -33,7 +33,7 @@ import (
 //      with the fork specific extra-data set
 //   b) if the node is pro-fork, require blocks in the specific range to have the
 //      unique extra-data set.
-func ValidateDAOHeaderExtraData(config *ChainConfig, header *types.Header) error {
+func ValidateDAOHeaderExtraData(config *params.ChainConfig, header *types.Header) error {
 	// Short circuit validation if the node doesn't care about the DAO fork
 	if config.DAOForkBlock == nil {
 		return nil

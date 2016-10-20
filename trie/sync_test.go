@@ -89,7 +89,7 @@ func checkTrieConsistency(db Database, root common.Hash) error {
 // Tests that an empty trie is not scheduled for syncing.
 func TestEmptyTrieSync(t *testing.T) {
 	emptyA, _ := New(common.Hash{}, nil)
-	emptyB, _ := New(emptyRoot, nil)
+	emptyB, _ := New(EmptyRoot, nil)
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		db, _ := ethdb.NewMemDatabase()

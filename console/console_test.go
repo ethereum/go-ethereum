@@ -28,10 +28,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/jsre"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
@@ -97,7 +97,7 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 		t.Fatalf("failed to create node: %v", err)
 	}
 	ethConf := &eth.Config{
-		ChainConfig: &core.ChainConfig{HomesteadBlock: new(big.Int)},
+		ChainConfig: &params.ChainConfig{HomesteadBlock: new(big.Int)},
 		Etherbase:   common.HexToAddress(testAddress),
 		PowTest:     true,
 	}

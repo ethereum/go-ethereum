@@ -191,7 +191,7 @@ func run(ctx *cli.Context) error {
 	vmdone := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
-		statedb.Commit()
+		statedb.Commit(true)
 		fmt.Println(string(statedb.Dump()))
 	}
 	vm.StdErrFormat(logger.StructLogs())
@@ -251,7 +251,7 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg
 	return env
 }
 
-// ruleSet implements vm.RuleSet and will always default to the homestead rule set.
+// ruleSet implements vm.ChainConfig and will always default to the homestead rule set.
 type ruleSet struct{}
 
 func (ruleSet) IsHomestead(*big.Int) bool { return true }
@@ -259,22 +259,22 @@ func (ruleSet) GasTable(*big.Int) params.GasTable {
 	return params.GasTableHomesteadGasRepriceFork
 }
 
-func (self *VMEnv) RuleSet() vm.RuleSet       { return ruleSet{} }
-func (self *VMEnv) Vm() vm.Vm                 { return self.evm }
-func (self *VMEnv) Db() vm.Database           { return self.state }
-func (self *VMEnv) SnapshotDatabase() int     { return self.state.Snapshot() }
-func (self *VMEnv) RevertToSnapshot(snap int) { self.state.RevertToSnapshot(snap) }
-func (self *VMEnv) Origin() common.Address    { return *self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int     { return common.Big0 }
-func (self *VMEnv) Coinbase() common.Address  { return *self.transactor }
-func (self *VMEnv) Time() *big.Int            { return self.time }
-func (self *VMEnv) Difficulty() *big.Int      { return common.Big1 }
-func (self *VMEnv) BlockHash() []byte         { return make([]byte, 32) }
-func (self *VMEnv) Value() *big.Int           { return self.value }
-func (self *VMEnv) GasLimit() *big.Int        { return big.NewInt(1000000000) }
-func (self *VMEnv) VmType() vm.Type           { return vm.StdVmTy }
-func (self *VMEnv) Depth() int                { return 0 }
-func (self *VMEnv) SetDepth(i int)            { self.depth = i }
+func (self *VMEnv) ChainConfig() *params.ChainConfig { return params.TestChainConfig }
+func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
+func (self *VMEnv) Db() vm.Database                  { return self.state }
+func (self *VMEnv) SnapshotDatabase() int            { return self.state.Snapshot() }
+func (self *VMEnv) RevertToSnapshot(snap int)        { self.state.RevertToSnapshot(snap) }
+func (self *VMEnv) Origin() common.Address           { return *self.transactor }
+func (self *VMEnv) BlockNumber() *big.Int            { return common.Big0 }
+func (self *VMEnv) Coinbase() common.Address         { return *self.transactor }
+func (self *VMEnv) Time() *big.Int                   { return self.time }
+func (self *VMEnv) Difficulty() *big.Int             { return common.Big1 }
+func (self *VMEnv) BlockHash() []byte                { return make([]byte, 32) }
+func (self *VMEnv) Value() *big.Int                  { return self.value }
+func (self *VMEnv) GasLimit() *big.Int               { return big.NewInt(1000000000) }
+func (self *VMEnv) VmType() vm.Type                  { return vm.StdVmTy }
+func (self *VMEnv) Depth() int                       { return 0 }
+func (self *VMEnv) SetDepth(i int)                   { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
 	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
 		return self.block.Hash()

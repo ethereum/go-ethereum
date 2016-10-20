@@ -41,13 +41,13 @@ var (
 //
 // BlockValidator implements Validator.
 type BlockValidator struct {
-	config *ChainConfig // Chain configuration options
-	bc     *BlockChain  // Canonical block chain
-	Pow    pow.PoW      // Proof of work used for validating
+	config *params.ChainConfig // Chain configuration options
+	bc     *BlockChain         // Canonical block chain
+	Pow    pow.PoW             // Proof of work used for validating
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *ChainConfig, blockchain *BlockChain, pow pow.PoW) *BlockValidator {
+func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, pow pow.PoW) *BlockValidator {
 	validator := &BlockValidator{
 		config: config,
 		Pow:    pow,
@@ -128,7 +128,7 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(); header.Root != root {
+	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
 		return fmt.Errorf("invalid merkle root: header=%x computed=%x", header.Root, root)
 	}
 	return nil
@@ -203,7 +203,7 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 // Validates a header. Returns an error if the header is invalid.
 //
 // See YP section 4.3.4. "Block Header Validity"
-func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
+func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
 	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
@@ -251,9 +251,9 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 	if err := ValidateDAOHeaderExtraData(config, header); err != nil {
 		return err
 	}
-	if config.HomesteadGasRepriceBlock != nil && config.HomesteadGasRepriceBlock.Cmp(header.Number) == 0 {
-		if config.HomesteadGasRepriceHash != (common.Hash{}) && config.HomesteadGasRepriceHash != header.Hash() {
-			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.HomesteadGasRepriceHash)
+	if config.EIP150Block != nil && config.EIP150Block.Cmp(header.Number) == 0 {
+		if config.EIP150Hash != (common.Hash{}) && config.EIP150Hash != header.Hash() {
+			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.EIP150Hash)
 		}
 	}
 	return nil
@@ -262,7 +262,7 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(config *ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
 	if config.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
 		return calcDifficultyHomestead(time, parentTime, parentNumber, parentDiff)
 	} else {
