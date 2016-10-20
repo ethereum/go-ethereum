@@ -26,9 +26,7 @@ type GasTable struct {
 	Calls       *big.Int
 	Suicide     *big.Int
 
-	Exp        *big.Int
-	ExpOneByte *big.Int
-	Exp256     *big.Int
+	ExpByte *big.Int
 
 	// CreateBySuicide occurs when the
 	// refunded account is one that does
@@ -48,7 +46,7 @@ var (
 		SLoad:       big.NewInt(50),
 		Calls:       big.NewInt(40),
 		Suicide:     big.NewInt(0),
-		Exp:         big.NewInt(20),
+		ExpByte:     big.NewInt(10),
 
 		// explicitly set to nil to indicate
 		// this rule does not apply to homestead.
@@ -66,7 +64,7 @@ var (
 		SLoad:       big.NewInt(200),
 		Calls:       big.NewInt(700),
 		Suicide:     big.NewInt(5000),
-		Exp:         big.NewInt(20),
+		ExpByte:     big.NewInt(10),
 
 		CreateBySuicide: big.NewInt(25000),
 	}
@@ -78,9 +76,7 @@ var (
 		SLoad:       big.NewInt(200),
 		Calls:       big.NewInt(700),
 		Suicide:     big.NewInt(5000),
-		Exp:         big.NewInt(80),
-		ExpOneByte:  big.NewInt(160),
-		Exp256:      big.NewInt(2640),
+		ExpByte:     big.NewInt(50),
 
 		CreateBySuicide: big.NewInt(25000),
 	}

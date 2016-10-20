@@ -313,7 +313,8 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 
 		quadMemGas(mem, newMemSize, gas)
 	case EXP:
-		gas.Add(gas, new(big.Int).Mul(big.NewInt(int64(len(stack.data[stack.len()-2].Bytes()))), params.ExpByteGas))
+		expByteLen := int64((stack.data[stack.len()-2].BitLen() + 7) / 8)
+		gas.Add(gas, new(big.Int).Mul(big.NewInt(expByteLen), gasTable.ExpByte))
 	case SSTORE:
 		err := stack.require(2)
 		if err != nil {
