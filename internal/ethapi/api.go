@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
 	"golang.org/x/net/context"
 )
 
@@ -1319,6 +1320,24 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 		property = "leveldb." + property
 	}
 	return ldb.LDB().GetProperty(property)
+}
+
+func (api *PrivateDebugAPI) ChaindbCompact() error {
+	ldb, ok := api.b.ChainDb().(interface {
+		LDB() *leveldb.DB
+	})
+	if !ok {
+		return fmt.Errorf("chaindbCompact does not work for memory databases")
+	}
+	for b := byte(0); b < 255; b++ {
+		glog.V(logger.Info).Infof("compacting chain DB range 0x%0.2X-0x%0.2X", b, b+1)
+		err := ldb.LDB().CompactRange(util.Range{Start: []byte{b}, Limit: []byte{b + 1}})
+		if err != nil {
+			glog.Errorf("compaction error: %v", err)
+			return err
+		}
+	}
+	return nil
 }
 
 // SetHead rewinds the head of the blockchain to a previous block.
