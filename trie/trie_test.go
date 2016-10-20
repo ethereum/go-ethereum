@@ -329,8 +329,7 @@ func TestCacheUnload(t *testing.T) {
 	root, _ := trie.Commit()
 
 	// Commit the trie repeatedly and access key1.
-	// The branch containing it is loaded from DB exactly two times:
-	// in the 0th and 6th iteration.
+	// The branch containing it is loaded from DB exactly once.
 	db := &countingDB{Database: trie.db, gets: make(map[string]int)}
 	trie, _ = New(root, db)
 	trie.SetCacheLimit(5)
@@ -339,10 +338,10 @@ func TestCacheUnload(t *testing.T) {
 		trie.Commit()
 	}
 
-	// Check that it got loaded two times.
+	// Check that it got loaded once.
 	for dbkey, count := range db.gets {
-		if count != 2 {
-			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
+		if count != 1 {
+			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 1)
 		}
 	}
 }

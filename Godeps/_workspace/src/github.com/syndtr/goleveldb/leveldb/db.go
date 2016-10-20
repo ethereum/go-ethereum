@@ -1017,6 +1017,10 @@ func (db *DB) SizeOf(ranges []util.Range) (Sizes, error) {
 	return sizes, nil
 }
 
+func (db *DB) ReturnBuffer(b []byte) {
+	db.s.tops.bpool.Put(b)
+}
+
 // Close closes the DB. This will also releases any outstanding snapshot,
 // abort any in-flight compaction and discard open transaction.
 //
