@@ -31,9 +31,9 @@ var ErrNotRequested = errors.New("not requested")
 
 // request represents a scheduled or already in-flight state retrieval request.
 type request struct {
-	hash   common.Hash // Hash of the node data content to retrieve
-	data   []byte      // Data content of the node, cached until all subtrees complete
-	object *node       // Target node to populate with retrieved data (hashnode originally)
+	hash common.Hash // Hash of the node data content to retrieve
+	data []byte      // Data content of the node, cached until all subtrees complete
+	raw  bool        // Whether this is a raw entry (code) or a trie node
 
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
@@ -86,9 +86,7 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 		return
 	}
 	// Assemble the new sub-trie sync request
-	node := node(hashNode(root.Bytes()))
 	req := &request{
-		object:   &node,
 		hash:     root,
 		depth:    depth,
 		callback: callback,
@@ -120,6 +118,7 @@ func (s *TrieSync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) 
 	// Assemble the new sub-trie sync request
 	req := &request{
 		hash:  hash,
+		raw:   true,
 		depth: depth,
 	}
 	// If this sub-trie has a designated parent, link them together
@@ -152,7 +151,7 @@ func (s *TrieSync) Process(results []SyncResult) (int, error) {
 			return i, ErrNotRequested
 		}
 		// If the item is a raw entry request, commit directly
-		if request.object == nil {
+		if request.raw {
 			request.data = item.Data
 			s.commit(request, nil)
 			continue
@@ -162,11 +161,10 @@ func (s *TrieSync) Process(results []SyncResult) (int, error) {
 		if err != nil {
 			return i, err
 		}
-		*request.object = node
 		request.data = item.Data
 
 		// Create and schedule a request for all the children nodes
-		requests, err := s.children(request)
+		requests, err := s.children(request, node)
 		if err != nil {
 			return i, err
 		}
@@ -203,27 +201,25 @@ func (s *TrieSync) schedule(req *request) {
 
 // children retrieves all the missing children of a state trie entry for future
 // retrieval scheduling.
-func (s *TrieSync) children(req *request) ([]*request, error) {
+func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 	// Gather all the children of the node, irrelevant whether known or not
 	type child struct {
-		node  *node
+		node  node
 		depth int
 	}
 	children := []child{}
 
-	switch node := (*req.object).(type) {
+	switch node := (object).(type) {
 	case *shortNode:
-		node = node.copy() // Prevents linking all downloaded nodes together.
 		children = []child{{
-			node:  &node.Val,
+			node:  node.Val,
 			depth: req.depth + len(node.Key),
 		}}
 	case *fullNode:
-		node = node.copy()
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
 				children = append(children, child{
-					node:  &node.Children[i],
+					node:  node.Children[i],
 					depth: req.depth + 1,
 				})
 			}
@@ -236,23 +232,21 @@ func (s *TrieSync) children(req *request) ([]*request, error) {
 	for _, child := range children {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
-			if node, ok := (*child.node).(valueNode); ok {
+			if node, ok := (child.node).(valueNode); ok {
 				if err := req.callback(node, req.hash); err != nil {
 					return nil, err
 				}
 			}
 		}
 		// If the child references another node, resolve or schedule
-		if node, ok := (*child.node).(hashNode); ok {
+		if node, ok := (child.node).(hashNode); ok {
 			// Try to resolve the node from the local database
 			blob, _ := s.database.Get(node)
 			if local, err := decodeNode(node[:], blob, 0); local != nil && err == nil {
-				*child.node = local
 				continue
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{
-				object:   child.node,
 				hash:     common.BytesToHash(node),
 				parents:  []*request{req},
 				depth:    child.depth,
