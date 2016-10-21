@@ -37,7 +37,7 @@ import (
 // contains all nodes of the longest existing prefix of the key
 // (at least the root node), ending with the node that proves the
 // absence of the key.
-func (t *Trie) Prove(key []byte) []rlp.RawValue {
+func (t *SimpleTrie) Prove(key []byte) []rlp.RawValue {
 	// Collect all nodes on the path to key.
 	key = compactHexDecode(key)
 	nodes := []node{}

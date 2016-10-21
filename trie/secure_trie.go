@@ -38,32 +38,22 @@ const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
 // SecureTrie is not safe for concurrent use.
 type SecureTrie struct {
 	trie             Trie
+	db               Database
 	hashKeyBuf       [secureKeyLength]byte
 	secKeyBuf        [200]byte
 	secKeyCache      map[string][]byte
 	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
 }
 
-// NewSecure creates a trie with an existing root node from db.
-//
-// If root is the zero hash or the sha3 hash of an empty string, the
-// trie is initially empty. Otherwise, New will panic if db is nil
-// and returns MissingNodeError if the root node cannot be found.
-//
-// Accessing the trie loads nodes from db on demand.
-// Loaded nodes are kept around until their 'cache generation' expires.
-// A new cache generation is created by each call to Commit.
-// cachelimit sets the number of past cache generations to keep.
-func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, error) {
+// NewSecure creates a secure trie from an existing trie.
+func NewSecure(t Trie, db Database) *SecureTrie {
+	if t == nil {
+		panic("NewSecure called with nil trie")
+	}
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
-	trie, err := New(root, db)
-	if err != nil {
-		return nil, err
-	}
-	trie.SetCacheLimit(cachelimit)
-	return &SecureTrie{trie: *trie}, nil
+	return &SecureTrie{trie: t, db: db}
 }
 
 // Get returns the value for key stored in the trie.
@@ -134,7 +124,7 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	if key, ok := t.getSecKeyCache()[string(shaKey)]; ok {
 		return key
 	}
-	key, _ := t.trie.db.Get(t.secKey(shaKey))
+	key, _ := t.db.Get(t.secKey(shaKey))
 	return key
 }
 
@@ -144,7 +134,10 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
 func (t *SecureTrie) Commit() (root common.Hash, err error) {
-	return t.CommitTo(t.trie.db)
+	if err := t.CommitPreimages(); err != nil {
+		return common.Hash{}, err
+	}
+	return t.trie.Commit()
 }
 
 func (t *SecureTrie) Hash() common.Hash {
@@ -160,7 +153,7 @@ func (t *SecureTrie) Iterator() *Iterator {
 }
 
 func (t *SecureTrie) NodeIterator() *NodeIterator {
-	return NewNodeIterator(&t.trie)
+	return t.trie.NodeIterator()
 }
 
 // CommitTo writes all nodes and the secure hash pre-images to the given database.
@@ -170,15 +163,22 @@ func (t *SecureTrie) NodeIterator() *NodeIterator {
 // the trie's database. Calling code must ensure that the changes made to db are
 // written back to the trie's attached database before using the trie.
 func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
+	if err := t.CommitPreimages(); err != nil {
+		return common.Hash{}, err
+	}
+	return t.trie.CommitTo(db)
+}
+
+func (t *SecureTrie) CommitPreimages() error {
 	if len(t.getSecKeyCache()) > 0 {
 		for hk, key := range t.secKeyCache {
-			if err := db.Put(t.secKey([]byte(hk)), key); err != nil {
-				return common.Hash{}, err
+			if err := t.db.Put(t.secKey([]byte(hk)), key); err != nil {
+				return err
 			}
 		}
 		t.secKeyCache = make(map[string][]byte)
 	}
-	return t.trie.CommitTo(db)
+	return nil
 }
 
 // secKey returns the database key for the preimage of key, as an ephemeral buffer.

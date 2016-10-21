@@ -89,14 +89,15 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
-	tr, err := trie.NewSecure(root, db, MaxTrieCacheGen)
+	tr, err := trie.New(root, db, MaxTrieCacheGen)
 	if err != nil {
 		return nil, err
 	}
+	st := trie.NewSecure(tr, db)
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &StateDB{
 		db:                db,
-		trie:              tr,
+		trie:              st,
 		codeSizeCache:     csc,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
@@ -158,7 +159,11 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 			return &tr, nil
 		}
 	}
-	return trie.NewSecure(root, self.db, MaxTrieCacheGen)
+	t, err := trie.New(root, self.db, MaxTrieCacheGen)
+	if err != nil {
+		return nil, err
+	}
+	return trie.NewSecure(t, self.db), nil
 }
 
 func (self *StateDB) pushTrie(t *trie.SecureTrie) {

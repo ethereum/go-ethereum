@@ -74,15 +74,26 @@ func (t *LightTrie) do(ctx context.Context, fallbackKey []byte, fn func() error)
 	return err
 }
 
+func (t *LightTrie) getTrie() (ret *trie.SecureTrie, err error) {
+	if t.trie == nil {
+		var tr trie.Trie
+		tr, err = trie.New(t.originalRoot, t.db, 0)
+		if err != nil {
+			return nil, err
+		}
+		t.trie = trie.NewSecure(tr, t.db)
+	}
+	return t.trie, nil
+}
+
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error) {
 	err = t.do(ctx, key, func() (err error) {
-		if t.trie == nil {
-			t.trie, err = trie.NewSecure(t.originalRoot, t.db, 0)
-		}
+		var tr *trie.SecureTrie
+		tr, err = t.getTrie()
 		if err == nil {
-			res, err = t.trie.TryGet(key)
+			res, err = tr.TryGet(key)
 		}
 		return
 	})
@@ -97,11 +108,10 @@ func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error)
 // stored in the trie.
 func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
-		if t.trie == nil {
-			t.trie, err = trie.NewSecure(t.originalRoot, t.db, 0)
-		}
+		var tr *trie.SecureTrie
+		tr, err = t.getTrie()
 		if err == nil {
-			err = t.trie.TryUpdate(key, value)
+			err = tr.TryUpdate(key, value)
 		}
 		return
 	})
@@ -111,11 +121,10 @@ func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
 // Delete removes any existing value for key from the trie.
 func (t *LightTrie) Delete(ctx context.Context, key []byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
-		if t.trie == nil {
-			t.trie, err = trie.NewSecure(t.originalRoot, t.db, 0)
-		}
+		var tr *trie.SecureTrie
+		tr, err = t.getTrie()
 		if err == nil {
-			err = t.trie.TryDelete(key)
+			err = tr.TryDelete(key)
 		}
 		return
 	})

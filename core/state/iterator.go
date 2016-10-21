@@ -115,11 +115,11 @@ func (it *NodeIterator) step() error {
 	if err := rlp.Decode(bytes.NewReader(it.stateIt.LeafBlob), &account); err != nil {
 		return err
 	}
-	dataTrie, err := trie.New(account.Root, it.state.db)
+	dataTrie, err := trie.New(account.Root, it.state.db, 0)
 	if err != nil {
 		return err
 	}
-	it.dataIt = trie.NewNodeIterator(dataTrie)
+	it.dataIt = dataTrie.NodeIterator()
 	if !it.dataIt.Next() {
 		it.dataIt = nil
 	}

@@ -29,15 +29,17 @@ import (
 
 func newEmptySecure() *SecureTrie {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db, 0)
-	return trie
+	tr, _ := New(common.Hash{}, db, 0)
+	st := NewSecure(tr, db)
+	return st
 }
 
 // makeTestSecureTrie creates a large enough secure trie for testing.
 func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db, 0)
+	tr, _ := New(common.Hash{}, db, 0)
+	trie := NewSecure(tr, db)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
