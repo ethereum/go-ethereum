@@ -774,7 +774,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	if stats.ignored > 0 {
 		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
 	}
-	glog.V(logger.Info).Infof("imported %d receipts%s in %9v. #%d [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+	glog.V(logger.Info).Infof("imported %d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignored)
 
 	return 0, nil
 }
@@ -981,6 +981,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		stats.processed++
 		if glog.V(logger.Info) {
+			stats.usedGas += usedGas.Uint64()
 			stats.report(chain, i)
 		}
 	}
@@ -993,6 +994,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 // insertStats tracks and reports on block insertion.
 type insertStats struct {
 	queued, processed, ignored int
+	usedGas                    uint64
 	lastIndex                  int
 	startTime                  time.Time
 }
@@ -1004,10 +1006,15 @@ const statsReportLimit = 8 * time.Second
 // report prints statistics if some number of blocks have been processed
 // or more than a few seconds have passed since the last message.
 func (st *insertStats) report(chain []*types.Block, index int) {
+	// Fetch the timings for the batch
 	var (
 		now     = time.Now()
 		elapsed = now.Sub(st.startTime)
 	)
+	if elapsed == 0 { // Yes Windows, I'm looking at you
+		elapsed = 1
+	}
+	// If we're at the last block of the batch or report period reached, log
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		start, end := chain[st.lastIndex], chain[index]
 		txcount := countTransactions(chain[st.lastIndex : index+1])
@@ -1016,7 +1023,13 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 		if st.queued > 0 || st.ignored > 0 {
 			extra = fmt.Sprintf(" (%d queued %d ignored)", st.queued, st.ignored)
 		}
-		glog.Infof("imported %d blocks%s, %5d txs in %9v. #%v [%x… / %x…]\n", st.processed, extra, txcount, common.PrettyDuration(elapsed), end.Number(), start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		hashes := ""
+		if st.processed > 1 {
+			hashes = fmt.Sprintf("%x… / %x…", start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
+		} else {
+			hashes = fmt.Sprintf("%x…", end.Hash().Bytes()[:4])
+		}
+		glog.Infof("imported %d blocks, %5d txs (%7.3f Mg) in %9v (%6.3f Mg/s). #%v [%s]%s", st.processed, txcount, float64(st.usedGas)/1000000, common.PrettyDuration(elapsed), float64(st.usedGas)*1000/float64(elapsed), end.Number(), hashes, extra)
 
 		*st = insertStats{startTime: now, lastIndex: index}
 	}

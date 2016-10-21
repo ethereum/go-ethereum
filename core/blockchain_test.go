@@ -436,7 +436,7 @@ func (bproc) ValidateState(block, parent *types.Block, state *state.StateDB, rec
 	return nil
 }
 func (bproc) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
-	return nil, nil, nil, nil
+	return nil, nil, new(big.Int), nil
 }
 
 func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
