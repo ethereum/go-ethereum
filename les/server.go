@@ -362,13 +362,13 @@ func makeCht(db ethdb.Database) bool {
 	var t *trie.Trie
 	if lastChtNum > 0 {
 		var err error
-		t, err = trie.New(getChtRoot(db, lastChtNum), db)
+		t, err = trie.New(getChtRoot(db, lastChtNum), db, 0)
 		if err != nil {
 			lastChtNum = 0
 		}
 	}
 	if lastChtNum == 0 {
-		t, _ = trie.New(common.Hash{}, db)
+		t, _ = trie.New(common.Hash{}, db, 0)
 	}
 
 	for num := lastChtNum * light.ChtFrequency; num < (lastChtNum+1)*light.ChtFrequency; num++ {

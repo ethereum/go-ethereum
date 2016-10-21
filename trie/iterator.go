@@ -82,7 +82,7 @@ type nodeIteratorState struct {
 
 // NodeIterator is an iterator to traverse the trie post-order.
 type NodeIterator struct {
-	trie  *Trie                // Trie being iterated
+	trie  *Trie          // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
 
 	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)

@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
@@ -284,6 +285,49 @@ func dump(ctx *cli.Context) error {
 		}
 	}
 	chainDb.Close()
+	return nil
+}
+
+var accountCacheKeyPrefix = []byte("accounthashcache:")
+
+type cachedAccount struct {
+	state.Account
+	BlockNum  uint64
+	BlockHash common.Hash
+}
+
+func buildCache(ctx *cli.Context) error {
+	stack := makeFullNode(ctx)
+	chain, chainDb := utils.MakeChain(ctx, stack)
+	defer chainDb.Close()
+
+	num, _ := strconv.Atoi(ctx.Args()[0])
+	blockNum := uint64(num)
+	block := chain.GetBlockByNumber(blockNum)
+	blockHash := block.Hash()
+	t, err := trie.New(block.Root(), chainDb, 0)
+	if err != nil {
+		utils.Fatalf("Could not open trie: %v", err)
+	}
+	st := trie.NewSecure(t, chainDb)
+	iter := st.Iterator()
+	i := 0
+	for iter.Next() {
+		var data state.Account
+		if err := rlp.DecodeBytes(iter.Value, &data); err != nil {
+			utils.Fatalf("can't decode object at %x: %v", iter.Key[:], err)
+		}
+
+		enc, _ := rlp.EncodeToBytes(cachedAccount{data, blockNum, blockHash})
+		if err := chainDb.Put(append(accountCacheKeyPrefix, iter.Key[:]...), enc); err != nil {
+			utils.Fatalf("Could not write to DB: %v", err)
+		}
+
+		i += 1
+		if i % 10000 == 0 {
+			fmt.Printf("Processed %d accounts, at %v\n", i, common.ToHex(iter.Key))
+		}
+	}
 	return nil
 }
 

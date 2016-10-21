@@ -275,7 +275,7 @@ func (self *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), self.chainDb, 0); err != nil {
+	if _, err := trie.New(block.Root(), self.chainDb, 0); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -549,6 +549,11 @@ func (self *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 		return nil
 	}
 	return self.GetBlock(hash, number)
+}
+
+// IsCanonChainBlock checks whether the given block is in the current canonical chain.
+func (self *BlockChain) IsCanonChainBlock(number uint64, hash common.Hash) bool {
+	return number < uint64(self.currentBlock.Number().Int64()) && GetCanonicalHash(self.chainDb, number) == hash
 }
 
 // [deprecated by eth/62]

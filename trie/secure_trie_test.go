@@ -27,17 +27,19 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func newEmptySecure() *SecureTrie {
+func newEmptySecure() (*Trie, *SecureTrie) {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db, 0)
-	return trie
+	tr, _ := New(common.Hash{}, db, 0)
+	st := NewSecure(tr, db)
+	return tr, st
 }
 
 // makeTestSecureTrie creates a large enough secure trie for testing.
 func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db, 0)
+	tr, _ := New(common.Hash{}, db, 0)
+	trie := NewSecure(tr, db)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -58,14 +60,14 @@ func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 			trie.Update(key, val)
 		}
 	}
-	trie.Commit()
+	trie.CommitTo(db)
 
 	// Return the generated trie
 	return db, trie, content
 }
 
 func TestSecureDelete(t *testing.T) {
-	trie := newEmptySecure()
+	trie, st := newEmptySecure()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -78,9 +80,9 @@ func TestSecureDelete(t *testing.T) {
 	}
 	for _, val := range vals {
 		if val.v != "" {
-			trie.Update([]byte(val.k), []byte(val.v))
+			st.Update([]byte(val.k), []byte(val.v))
 		} else {
-			trie.Delete([]byte(val.k))
+			st.Delete([]byte(val.k))
 		}
 	}
 	hash := trie.Hash()
@@ -91,24 +93,24 @@ func TestSecureDelete(t *testing.T) {
 }
 
 func TestSecureGetKey(t *testing.T) {
-	trie := newEmptySecure()
-	trie.Update([]byte("foo"), []byte("bar"))
+	_, st := newEmptySecure()
+	st.Update([]byte("foo"), []byte("bar"))
 
 	key := []byte("foo")
 	value := []byte("bar")
 	seckey := crypto.Keccak256(key)
 
-	if !bytes.Equal(trie.Get(key), value) {
+	if !bytes.Equal(st.Get(key), value) {
 		t.Errorf("Get did not return bar")
 	}
-	if k := trie.GetKey(seckey); !bytes.Equal(k, key) {
+	if k := st.GetKey(seckey); !bytes.Equal(k, key) {
 		t.Errorf("GetKey returned %q, want %q", k, key)
 	}
 }
 
 func TestSecureTrieConcurrency(t *testing.T) {
 	// Create an initial trie and copy if for concurrent access
-	_, trie, _ := makeTestSecureTrie()
+	db, trie, _ := makeTestSecureTrie()
 
 	threads := runtime.NumCPU()
 	tries := make([]*SecureTrie, threads)
@@ -137,7 +139,7 @@ func TestSecureTrieConcurrency(t *testing.T) {
 					tries[index].Update(key, val)
 				}
 			}
-			tries[index].Commit()
+			tries[index].CommitTo(db)
 		}(i)
 	}
 	// Wait for all threads to finish
