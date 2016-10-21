@@ -338,6 +338,10 @@ web3._extend({
 			outputFormatter: console.log
 		}),
 		new web3._extend.Method({
+			name: 'chaindbCompact',
+			call: 'debug_chaindbCompact',
+		}),
+		new web3._extend.Method({
 			name: 'metrics',
 			call: 'debug_metrics',
 			params: 1
