@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -85,37 +87,62 @@ func importChain(ctx *cli.Context) error {
 	chain, chainDb := utils.MakeChain(ctx, stack)
 	defer chainDb.Close()
 
+	// Start periodically gathering memory profiles
+	var peakMemAlloc, peakMemSys uint64
+	go func() {
+		stats := new(runtime.MemStats)
+		for {
+			runtime.ReadMemStats(stats)
+			if atomic.LoadUint64(&peakMemAlloc) < stats.Alloc {
+				atomic.StoreUint64(&peakMemAlloc, stats.Alloc)
+			}
+			if atomic.LoadUint64(&peakMemSys) < stats.Sys {
+				atomic.StoreUint64(&peakMemSys, stats.Sys)
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
 	// Import the chain
 	start := time.Now()
 	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
 		utils.Fatalf("Import error: %v", err)
 	}
-	fmt.Printf("Import done in %v.\n", time.Since(start))
+	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
-	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		// Output pre-compaction stats mostly to see the import trashing
-		stats, err := db.LDB().GetProperty("leveldb.stats")
-		if err != nil {
-			utils.Fatalf("Failed to read database stats: %v", err)
-		}
-		fmt.Println(stats)
-		fmt.Printf("Trie cache misses: %d\n", trie.CacheMisses())
-		fmt.Printf("Trie cache unloads: %d\n\n", trie.CacheUnloads())
+	// Output pre-compaction stats mostly to see the import trashing
+	db := chainDb.(*ethdb.LDBDatabase)
 
-		// Compact the entire database to more accurately measure disk io and print the stats
-		start = time.Now()
-		fmt.Println("Compacting entire database...")
-		if err = db.LDB().CompactRange(util.Range{}); err != nil {
-			utils.Fatalf("Compaction failed: %v", err)
-		}
-		fmt.Printf("Compaction done in %v.\n", time.Since(start))
-
-		stats, err = db.LDB().GetProperty("leveldb.stats")
-		if err != nil {
-			utils.Fatalf("Failed to read database stats: %v", err)
-		}
-		fmt.Println(stats)
+	stats, err := db.LDB().GetProperty("leveldb.stats")
+	if err != nil {
+		utils.Fatalf("Failed to read database stats: %v", err)
 	}
+	fmt.Println(stats)
+	fmt.Printf("Trie cache misses:  %d\n", trie.CacheMisses())
+	fmt.Printf("Trie cache unloads: %d\n\n", trie.CacheUnloads())
+
+	// Print the memory statistics used by the importing
+	mem := new(runtime.MemStats)
+	runtime.ReadMemStats(mem)
+
+	fmt.Printf("Object memory: %.3f MB current, %.3f MB peak\n", float64(mem.Alloc)/1024/1024, float64(atomic.LoadUint64(&peakMemAlloc))/1024/1024)
+	fmt.Printf("System memory: %.3f MB current, %.3f MB peak\n", float64(mem.Sys)/1024/1024, float64(atomic.LoadUint64(&peakMemSys))/1024/1024)
+	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
+	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
+
+	// Compact the entire database to more accurately measure disk io and print the stats
+	start = time.Now()
+	fmt.Println("Compacting entire database...")
+	if err = db.LDB().CompactRange(util.Range{}); err != nil {
+		utils.Fatalf("Compaction failed: %v", err)
+	}
+	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
+
+	stats, err = db.LDB().GetProperty("leveldb.stats")
+	if err != nil {
+		utils.Fatalf("Failed to read database stats: %v", err)
+	}
+	fmt.Println(stats)
+
 	return nil
 }
 
