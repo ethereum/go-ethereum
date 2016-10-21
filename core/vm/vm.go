@@ -78,7 +78,9 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		codehash = crypto.Keccak256Hash(contract.Code)
 	}
 	var program *Program
-	if evm.cfg.EnableJit {
+	if false {
+		// JIT disabled due to JIT not being Homestead gas reprice ready.
+
 		// If the JIT is enabled check the status of the JIT program,
 		// if it doesn't exist compile a new program in a separate
 		// goroutine or wait for compilation to finish if the JIT is
