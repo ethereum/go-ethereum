@@ -948,11 +948,12 @@ func (d *Downloader) fetchNodeData() error {
 				}
 				d.syncStatsLock.Lock()
 				d.syncStatsStateDone += uint64(delivered)
+				syncStatsStateDone := d.syncStatsStateDone // Thread safe copy for the log below
 				d.syncStatsLock.Unlock()
 
 				// Log a message to the user and return
 				if delivered > 0 {
-					glog.V(logger.Info).Infof("imported %3d state entries in %9v: processed %d, pending at least %d", delivered, common.PrettyDuration(time.Since(start)), d.syncStatsStateDone, pending)
+					glog.V(logger.Info).Infof("imported %3d state entries in %9v: processed %d, pending at least %d", delivered, common.PrettyDuration(time.Since(start)), syncStatsStateDone, pending)
 				}
 			})
 		}
