@@ -277,6 +277,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
+	// uncomment to test hard fork - requires fully synced node.
+	/*
+		 err = TestRunHardFork(eth)
+			if err != nil {
+				glog.V(logger.Info).Infof("TestRunHardFork err: %v", err)
+				return nil, err
+			}
+	*/
+
 	return eth, nil
 }
 
