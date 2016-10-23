@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -54,10 +53,11 @@ func generateMessageParams() (*MessageParams, error) {
 	}
 
 	// p.Dst, p.PoW, p.WorkTime are not set
+	p.PoW = 0.01
 	return &p, nil
 }
 
-func singleMessageTest(x *testing.T, seed int64, symmetric bool) {
+func singleMessageTest(x *testing.T, symmetric bool) {
 	params, err := generateMessageParams()
 	if err != nil {
 		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
@@ -130,18 +130,17 @@ func singleMessageTest(x *testing.T, seed int64, symmetric bool) {
 }
 
 func TestMessageEncryption(x *testing.T) {
-	seed := time.Now().Unix()
-	rand.Seed(seed)
-	var symmetric bool
+	InitSingleTest()
 
+	var symmetric bool
 	for i := 0; i < 256; i++ {
-		singleMessageTest(x, seed, symmetric)
+		singleMessageTest(x, symmetric)
 		symmetric = !symmetric
 	}
 }
 
 func TestMessageWrap(x *testing.T) {
-	seed := int64(1777444222)
+	seed = int64(1777444222)
 	rand.Seed(seed)
 	target := 128.0
 
@@ -169,7 +168,8 @@ func TestMessageWrap(x *testing.T) {
 }
 
 func TestMessageSeal(x *testing.T) {
-	seed := int64(1976726903)
+	// this test depends on deterministic choice of seed (1976726903)
+	seed = int64(1976726903)
 	rand.Seed(seed)
 
 	params, err := generateMessageParams()
@@ -210,24 +210,22 @@ func TestMessageSeal(x *testing.T) {
 	env.calculatePoW(0)
 	pow = env.PoW()
 	if pow < 2*target {
-		// this depends on deterministic choice of seed (1976726903)
 		x.Errorf("failed Wrap with seed %d: pow too small %f.", seed, pow)
 		return
 	}
 }
 
 func TestEnvelopeOpen(x *testing.T) {
-	seed := time.Now().Unix()
-	rand.Seed(seed)
-	var symmetric bool
+	InitSingleTest()
 
+	var symmetric bool
 	for i := 0; i < 256; i++ {
-		singleEnvelopeOpenTest(x, seed, symmetric)
+		singleEnvelopeOpenTest(x, symmetric)
 		symmetric = !symmetric
 	}
 }
 
-func singleEnvelopeOpenTest(x *testing.T, seed int64, symmetric bool) {
+func singleEnvelopeOpenTest(x *testing.T, symmetric bool) {
 	params, err := generateMessageParams()
 	if err != nil {
 		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
@@ -263,11 +261,6 @@ func singleEnvelopeOpenTest(x *testing.T, seed int64, symmetric bool) {
 	decrypted := env.Open(&f)
 	if decrypted == nil {
 		x.Errorf("failed to open with seed %d.", seed)
-		return
-	}
-
-	if !decrypted.Validate() {
-		x.Errorf("failed to validate with seed %d.", seed)
 		return
 	}
 

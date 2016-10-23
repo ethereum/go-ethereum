@@ -134,7 +134,6 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	if f.PoW > 0 && msg.PoW < f.PoW {
 		return false
 	}
-
 	if f.Src != nil && !isPubKeyEqual(msg.Src, f.Src) {
 		return false
 	}
@@ -165,7 +164,8 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
 		encryptionMethodMatch = true
 		if f.Topics == nil {
-			return true // wildcard
+			// wildcard
+			return true
 		}
 	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
 		encryptionMethodMatch = true

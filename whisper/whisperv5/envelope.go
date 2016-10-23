@@ -44,8 +44,9 @@ type Envelope struct {
 	Data     []byte
 	EnvNonce uint64
 
-	hash common.Hash // Cached hash of the envelope to avoid rehashing every time
-	pow  float64     // Message-specific PoW as described in the Whisper specification
+	pow  float64     // Message-specific PoW as described in the Whisper specification.
+	hash common.Hash // Cached hash of the envelope to avoid rehashing every time.
+	// Don't access hash directly, use Hash() function instead.
 }
 
 // NewEnvelope wraps a Whisper message with expiration and destination data
@@ -225,7 +226,7 @@ func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
 		msg.PoW = e.PoW()
 		msg.TTL = e.TTL
 		msg.Sent = e.Expiry - e.TTL
-		msg.EnvelopeHash = e.hash
+		msg.EnvelopeHash = e.Hash()
 		msg.EnvelopeVersion = e.Ver()
 	}
 	return msg
