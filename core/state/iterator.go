@@ -76,7 +76,7 @@ func (it *NodeIterator) step() error {
 	}
 	// Initialize the iterator if we've just started
 	if it.stateIt == nil {
-		it.stateIt = it.state.trie.NodeIterator()
+		it.stateIt = trie.NewNodeIterator(it.state.trie)
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
@@ -119,7 +119,7 @@ func (it *NodeIterator) step() error {
 	if err != nil {
 		return err
 	}
-	it.dataIt = dataTrie.NodeIterator()
+	it.dataIt = trie.NewNodeIterator(dataTrie)
 	if !it.dataIt.Next() {
 		it.dataIt = nil
 	}

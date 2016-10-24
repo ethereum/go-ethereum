@@ -76,7 +76,7 @@ type StateObject struct {
 	dbErr error
 
 	// Write caches.
-	trie *trie.SimpleTrie // storage trie, which becomes non-nil on first access
+	trie *trie.Trie // storage trie, which becomes non-nil on first access
 	storage *trie.SecureTrie // Interface to storage
 	code Code             // contract bytecode, which gets set when code is loaded
 

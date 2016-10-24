@@ -20,7 +20,7 @@ import "github.com/ethereum/go-ethereum/common"
 
 // Iterator is a key-value trie iterator that traverses a Trie.
 type Iterator struct {
-	trie   *SimpleTrie
+	trie   *Trie
 	nodeIt *NodeIterator
 	keyBuf []byte
 
@@ -29,7 +29,7 @@ type Iterator struct {
 }
 
 // NewIterator creates a new key-value iterator.
-func NewIterator(trie *SimpleTrie) *Iterator {
+func NewIterator(trie *Trie) *Iterator {
 	return &Iterator{
 		trie:   trie,
 		nodeIt: NewNodeIterator(trie),
@@ -82,7 +82,7 @@ type nodeIteratorState struct {
 
 // NodeIterator is an iterator to traverse the trie post-order.
 type NodeIterator struct {
-	trie  *SimpleTrie          // Trie being iterated
+	trie  *Trie          // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
 
 	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)
@@ -95,7 +95,7 @@ type NodeIterator struct {
 }
 
 // NewNodeIterator creates an post-order trie iterator.
-func NewNodeIterator(trie *SimpleTrie) *NodeIterator {
+func NewNodeIterator(trie *Trie) *NodeIterator {
 	if trie.Hash() == emptyState {
 		return new(NodeIterator)
 	}

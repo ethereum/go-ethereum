@@ -62,9 +62,9 @@ type revision struct {
 // * Accounts
 type StateDB struct {
 	db            ethdb.Database
-	trie          *trie.SimpleTrie
+	trie          *trie.Trie
 	storage       *trie.SecureTrie
-	pastTries     []*trie.SimpleTrie
+	pastTries     []*trie.Trie
 	codeSizeCache *lru.Cache
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
@@ -155,7 +155,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 
 // openTrie creates a trie. It uses an existing trie if one is available
 // from the journal if available.
-func (self *StateDB) openTrie(root common.Hash) (*trie.SimpleTrie, error) {
+func (self *StateDB) openTrie(root common.Hash) (*trie.Trie, error) {
 	for i := len(self.pastTries) - 1; i >= 0; i-- {
 		if self.pastTries[i].Hash() == root {
 			tr := *self.pastTries[i]
@@ -165,7 +165,7 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SimpleTrie, error) {
 	return trie.New(root, self.db, MaxTrieCacheGen)
 }
 
-func (self *StateDB) pushTrie(t *trie.SimpleTrie) {
+func (self *StateDB) pushTrie(t *trie.Trie) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 

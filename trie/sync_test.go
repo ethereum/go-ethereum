@@ -25,7 +25,7 @@ import (
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
-func makeTestTrie() (ethdb.Database, *SimpleTrie, map[string][]byte) {
+func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 	// Create an empty trie
 	db, _ := ethdb.NewMemDatabase()
 	trie, _ := New(common.Hash{}, db, 0)
@@ -91,7 +91,7 @@ func TestEmptyTrieSync(t *testing.T) {
 	emptyA, _ := New(common.Hash{}, nil, 0)
 	emptyB, _ := New(emptyRoot, nil, 0)
 
-	for i, trie := range []*SimpleTrie{emptyA, emptyB} {
+	for i, trie := range []*Trie{emptyA, emptyB} {
 		db, _ := ethdb.NewMemDatabase()
 		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)

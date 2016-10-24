@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func newEmptySecure() (*SimpleTrie, *SecureTrie) {
+func newEmptySecure() (*Trie, *SecureTrie) {
 	db, _ := ethdb.NewMemDatabase()
 	tr, _ := New(common.Hash{}, db, 0)
 	st := NewSecure(tr, db)

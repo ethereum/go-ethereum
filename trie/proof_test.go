@@ -129,7 +129,7 @@ func BenchmarkVerifyProof(b *testing.B) {
 	}
 }
 
-func randomTrie(n int) (*SimpleTrie, map[string]*kv) {
+func randomTrie(n int) (*Trie, map[string]*kv) {
 	trie, _ := New(common.Hash{}, nil, 0)
 	vals := make(map[string]*kv)
 	for i := byte(0); i < 100; i++ {

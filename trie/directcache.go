@@ -70,10 +70,6 @@ func (dc *DirectCache) Iterator() *Iterator {
 	return dc.storage.Iterator()
 }
 
-func (dc *DirectCache) NodeIterator() *NodeIterator {
-	return dc.storage.NodeIterator()
-}
-
 func (dc *DirectCache) makeKey(key []byte) []byte {
 	return append(dc.keyPrefix, key...)
 }

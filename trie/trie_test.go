@@ -38,14 +38,14 @@ func init() {
 }
 
 // Used for testing
-func newEmpty() *SimpleTrie {
+func newEmpty() *Trie {
 	db, _ := ethdb.NewMemDatabase()
 	trie, _ := New(common.Hash{}, db, 0)
 	return trie
 }
 
 func TestEmptyTrie(t *testing.T) {
-	var trie SimpleTrie
+	var trie Trie
 	res := trie.Hash()
 	exp := emptyRoot
 	if res != common.Hash(exp) {
@@ -54,7 +54,7 @@ func TestEmptyTrie(t *testing.T) {
 }
 
 func TestNull(t *testing.T) {
-	var trie SimpleTrie
+	var trie Trie
 	key := make([]byte, 32)
 	value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	trie.Update(key, value)
@@ -547,7 +547,7 @@ func benchGet(b *testing.B, commit bool) {
 	}
 }
 
-func benchUpdate(b *testing.B, e binary.ByteOrder) *SimpleTrie {
+func benchUpdate(b *testing.B, e binary.ByteOrder) *Trie {
 	trie := newEmpty()
 	k := make([]byte, 32)
 	for i := 0; i < b.N; i++ {
