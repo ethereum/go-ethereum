@@ -39,7 +39,7 @@ type PublicWhisperAPI struct {
 
 // NewPublicWhisperAPI create a new RPC whisper service.
 func NewPublicWhisperAPI() *PublicWhisperAPI {
-	w := whisperv5.New(nil)
+	w := whisperv5.NewWhisper(nil)
 	return &PublicWhisperAPI{whisper: w}
 }
 
@@ -89,7 +89,7 @@ func (api *PublicWhisperAPI) HasIdentity(identity string) (bool, error) {
 	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	return api.whisper.HasIdentity(crypto.ToECDSAPub(common.FromHex(identity))), nil
+	return api.whisper.HasIdentity(identity), nil
 }
 
 // DeleteIdentity deletes the specifies key if it exists.
@@ -201,7 +201,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 			glog.V(logger.Error).Infof(info)
 			return nil, errors.New(info)
 		}
-		filter.KeyAsym = api.whisper.GetIdentity(dst)
+		filter.KeyAsym = api.whisper.GetIdentity(string(args.To))
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)
@@ -275,7 +275,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 			glog.V(logger.Error).Infof(info)
 			return errors.New(info)
 		}
-		params.Src = api.whisper.GetIdentity(pub)
+		params.Src = api.whisper.GetIdentity(string(args.From))
 		if params.Src == nil {
 			info := "Post: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)

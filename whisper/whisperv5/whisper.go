@@ -60,7 +60,7 @@ type Whisper struct {
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 // Param s should be passed if you want to implement mail server, otherwise nil.
-func New(server MailServer) *Whisper {
+func NewWhisper(server MailServer) *Whisper {
 	whisper := &Whisper{
 		privateKeys: make(map[string]*ecdsa.PrivateKey),
 		symKeys:     make(map[string][]byte),
@@ -92,10 +92,6 @@ func (w *Whisper) Protocols() []p2p.Protocol {
 // Version returns the whisper sub-protocols version number.
 func (w *Whisper) Version() uint {
 	return w.protocol.Version
-}
-
-func (w *Whisper) GetFilter(id int) *Filter {
-	return w.filters.Get(id)
 }
 
 func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
@@ -157,7 +153,7 @@ func (w *Whisper) NewIdentity() *ecdsa.PrivateKey {
 	return key
 }
 
-// DeleteIdentity deletes the specifies key if it exists.
+// DeleteIdentity deletes the specified key if it exists.
 func (w *Whisper) DeleteIdentity(key string) {
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
@@ -166,17 +162,17 @@ func (w *Whisper) DeleteIdentity(key string) {
 
 // HasIdentity checks if the the whisper node is configured with the private key
 // of the specified public pair.
-func (w *Whisper) HasIdentity(key *ecdsa.PublicKey) bool {
+func (w *Whisper) HasIdentity(pubKey string) bool {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.privateKeys[string(crypto.FromECDSAPub(key))] != nil
+	return w.privateKeys[pubKey] != nil
 }
 
 // GetIdentity retrieves the private key of the specified public identity.
-func (w *Whisper) GetIdentity(key *ecdsa.PublicKey) *ecdsa.PrivateKey {
+func (w *Whisper) GetIdentity(pubKey string) *ecdsa.PrivateKey {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.privateKeys[string(crypto.FromECDSAPub(key))]
+	return w.privateKeys[pubKey]
 }
 
 func (w *Whisper) GenerateSymKey(name string) error {
@@ -236,6 +232,10 @@ func (w *Whisper) GetSymKey(name string) []byte {
 // from the whisper network.
 func (w *Whisper) Watch(f *Filter) int {
 	return w.filters.Install(f)
+}
+
+func (w *Whisper) GetFilter(id int) *Filter {
+	return w.filters.Get(id)
 }
 
 // Unwatch removes an installed message handler.
@@ -491,7 +491,7 @@ func (w *Whisper) Envelopes() []*Envelope {
 	return all
 }
 
-// Messages retrieves all the currently pooled messages matching a filter id.
+// Messages retrieves all the decrypted messages matching a filter id.
 func (w *Whisper) Messages(id int) []*ReceivedMessage {
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()
