@@ -804,6 +804,13 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfi
 			config.HomesteadGasRepriceBlock = params.MainNetHomesteadGasRepriceBlock
 		}
 	}
+	if config.HomesteadGasRepriceHash == (common.Hash{}) {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.HomesteadGasRepriceHash = params.TestNetHomesteadGasRepriceHash
+		} else {
+			config.HomesteadGasRepriceHash = params.MainNetHomesteadGasRepriceHash
+		}
+	}
 	// Force override any existing configs if explicitly requested
 	switch {
 	case ctx.GlobalBool(SupportDAOFork.Name):
