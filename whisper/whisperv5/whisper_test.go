@@ -18,7 +18,6 @@ package whisperv5
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -374,8 +373,4 @@ func TestWhisperSymKeyManagement(x *testing.T) {
 		x.Errorf("failed GetIdentity 44.")
 		return
 	}
-}
-
-func TestDebug(x *testing.T) {
-	fmt.Printf("Protocols: %v \n")
 }
