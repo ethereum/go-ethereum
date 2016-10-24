@@ -27,11 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 )
 
-func newEmptySecure() *SecureTrie {
+func newEmptySecure() (*SimpleTrie, *SecureTrie) {
 	db, _ := ethdb.NewMemDatabase()
 	tr, _ := New(common.Hash{}, db, 0)
 	st := NewSecure(tr, db)
-	return st
+	return tr, st
 }
 
 // makeTestSecureTrie creates a large enough secure trie for testing.
@@ -67,7 +67,7 @@ func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 }
 
 func TestSecureDelete(t *testing.T) {
-	trie := newEmptySecure()
+	trie, st := newEmptySecure()
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
 		{"ether", "wookiedoo"},
@@ -80,9 +80,9 @@ func TestSecureDelete(t *testing.T) {
 	}
 	for _, val := range vals {
 		if val.v != "" {
-			trie.Update([]byte(val.k), []byte(val.v))
+			st.Update([]byte(val.k), []byte(val.v))
 		} else {
-			trie.Delete([]byte(val.k))
+			st.Delete([]byte(val.k))
 		}
 	}
 	hash := trie.Hash()
@@ -93,17 +93,17 @@ func TestSecureDelete(t *testing.T) {
 }
 
 func TestSecureGetKey(t *testing.T) {
-	trie := newEmptySecure()
-	trie.Update([]byte("foo"), []byte("bar"))
+	_, st := newEmptySecure()
+	st.Update([]byte("foo"), []byte("bar"))
 
 	key := []byte("foo")
 	value := []byte("bar")
 	seckey := crypto.Keccak256(key)
 
-	if !bytes.Equal(trie.Get(key), value) {
+	if !bytes.Equal(st.Get(key), value) {
 		t.Errorf("Get did not return bar")
 	}
-	if k := trie.GetKey(seckey); !bytes.Equal(k, key) {
+	if k := st.GetKey(seckey); !bytes.Equal(k, key) {
 		t.Errorf("GetKey returned %q, want %q", k, key)
 	}
 }

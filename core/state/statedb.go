@@ -62,8 +62,9 @@ type revision struct {
 // * Accounts
 type StateDB struct {
 	db            ethdb.Database
-	trie          *trie.SecureTrie
-	pastTries     []*trie.SecureTrie
+	trie          *trie.SimpleTrie
+	storage       *trie.SecureTrie
+	pastTries     []*trie.SimpleTrie
 	codeSizeCache *lru.Cache
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
@@ -93,11 +94,11 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	st := trie.NewSecure(tr, db)
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &StateDB{
 		db:                db,
-		trie:              st,
+		trie:              tr,
+		storage:           trie.NewSecure(tr, db),
 		codeSizeCache:     csc,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
@@ -119,6 +120,7 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 	return &StateDB{
 		db:                self.db,
 		trie:              tr,
+		storage:           trie.NewSecure(tr, self.db),
 		codeSizeCache:     self.codeSizeCache,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
@@ -138,6 +140,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 		return err
 	}
 	self.trie = tr
+	self.storage = trie.NewSecure(tr, self.db)
 	self.stateObjects = make(map[common.Address]*StateObject)
 	self.stateObjectsDirty = make(map[common.Address]struct{})
 	self.thash = common.Hash{}
@@ -152,21 +155,17 @@ func (self *StateDB) Reset(root common.Hash) error {
 
 // openTrie creates a trie. It uses an existing trie if one is available
 // from the journal if available.
-func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
+func (self *StateDB) openTrie(root common.Hash) (*trie.SimpleTrie, error) {
 	for i := len(self.pastTries) - 1; i >= 0; i-- {
 		if self.pastTries[i].Hash() == root {
 			tr := *self.pastTries[i]
 			return &tr, nil
 		}
 	}
-	t, err := trie.New(root, self.db, MaxTrieCacheGen)
-	if err != nil {
-		return nil, err
-	}
-	return trie.NewSecure(t, self.db), nil
+	return trie.New(root, self.db, MaxTrieCacheGen)
 }
 
-func (self *StateDB) pushTrie(t *trie.SecureTrie) {
+func (self *StateDB) pushTrie(t *trie.SimpleTrie) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -361,14 +360,14 @@ func (self *StateDB) updateStateObject(stateObject *StateObject) {
 	if err != nil {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
-	self.trie.Update(addr[:], data)
+	self.storage.Update(addr[:], data)
 }
 
 // deleteStateObject removes the given object from the state trie.
 func (self *StateDB) deleteStateObject(stateObject *StateObject) {
 	stateObject.deleted = true
 	addr := stateObject.Address()
-	self.trie.Delete(addr[:])
+	self.storage.Delete(addr[:])
 }
 
 // Retrieve a state object given my the address. Returns nil if not found.
@@ -382,7 +381,7 @@ func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObje
 	}
 
 	// Load the object from the database.
-	enc := self.trie.Get(addr[:])
+	enc := self.storage.Get(addr[:])
 	if len(enc) == 0 {
 		return nil
 	}
@@ -462,6 +461,7 @@ func (self *StateDB) Copy() *StateDB {
 	state := &StateDB{
 		db:                self.db,
 		trie:              self.trie,
+		storage:           self.storage,
 		pastTries:         self.pastTries,
 		codeSizeCache:     self.codeSizeCache,
 		stateObjects:      make(map[common.Address]*StateObject, len(self.stateObjectsDirty)),
@@ -607,7 +607,7 @@ func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) 
 		delete(s.stateObjectsDirty, addr)
 	}
 	// Write trie changes.
-	root, err = s.trie.CommitTo(dbw)
+	root, err = s.storage.CommitTo(dbw)
 	if err == nil {
 		s.pushTrie(s.trie)
 	}

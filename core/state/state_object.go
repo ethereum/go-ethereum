@@ -76,7 +76,8 @@ type StateObject struct {
 	dbErr error
 
 	// Write caches.
-	trie *trie.SecureTrie // storage trie, which becomes non-nil on first access
+	trie *trie.SimpleTrie // storage trie, which becomes non-nil on first access
+	storage *trie.SecureTrie // Interface to storage
 	code Code             // contract bytecode, which gets set when code is loaded
 
 	cachedStorage Storage // Storage entry cache to avoid duplicate reads
@@ -134,17 +135,17 @@ func (self *StateObject) markSuicided() {
 	}
 }
 
-func (c *StateObject) getTrie(db trie.Database) *trie.SecureTrie {
+func (c *StateObject) getStorage(db trie.Database) *trie.SecureTrie {
 	if c.trie == nil {
 		var err error
-		t, err := trie.New(c.data.Root, db, 0)
+		c.trie, err = trie.New(c.data.Root, db, 0)
 		if err != nil {
-			t, _ = trie.New(common.Hash{}, nil, 0)
+			c.trie, _ = trie.New(common.Hash{}, nil, 0)
 			c.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
-		c.trie = trie.NewSecure(t, db)
+		c.storage = trie.NewSecure(c.trie, db)
 	}
-	return c.trie
+	return c.storage
 }
 
 // GetState returns a value in account storage.
@@ -154,7 +155,7 @@ func (self *StateObject) GetState(db trie.Database, key common.Hash) common.Hash
 		return value
 	}
 	// Load from DB in case it is missing.
-	if enc := self.getTrie(db).Get(key[:]); len(enc) > 0 {
+	if enc := self.getStorage(db).Get(key[:]); len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
 			self.setError(err)
@@ -189,7 +190,7 @@ func (self *StateObject) setState(key, value common.Hash) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (self *StateObject) updateTrie(db trie.Database) {
-	tr := self.getTrie(db)
+	tr := self.getStorage(db)
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
 		if (value == common.Hash{}) {
@@ -215,7 +216,7 @@ func (self *StateObject) CommitTrie(db trie.Database, dbw trie.DatabaseWriter) e
 	if self.dbErr != nil {
 		return self.dbErr
 	}
-	root, err := self.trie.CommitTo(dbw)
+	root, err := self.storage.CommitTo(dbw)
 	if err == nil {
 		self.data.Root = root
 	}
@@ -266,6 +267,7 @@ func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 func (self *StateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *StateObject {
 	stateObject := newObject(db, self.address, self.data, onDirty)
 	stateObject.trie = self.trie
+	stateObject.storage = self.storage
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
@@ -361,10 +363,10 @@ func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
 		cb(h, value)
 	}
 
-	it := self.getTrie(self.db.db).Iterator()
+	it := self.getStorage(self.db.db).Iterator()
 	for it.Next() {
 		// ignore cached values
-		key := common.BytesToHash(self.trie.GetKey(it.Key))
+		key := common.BytesToHash(self.storage.GetKey(it.Key))
 		if _, ok := self.cachedStorage[key]; !ok {
 			cb(key, common.BytesToHash(it.Value))
 		}
