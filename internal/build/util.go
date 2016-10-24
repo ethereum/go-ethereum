@@ -55,16 +55,7 @@ func GOPATH() string {
 	if len(path) == 0 {
 		log.Fatal("GOPATH is not set")
 	}
-	// Ensure Godeps workspace is present in the path.
-	godeps, _ := filepath.Abs(filepath.Join("Godeps", "_workspace"))
-	for _, dir := range path {
-		if dir == godeps {
-			return strings.Join(path, string(filepath.ListSeparator))
-		}
-	}
-	newpath := append(path[:1], godeps)
-	newpath = append(newpath, path[1:]...)
-	return strings.Join(newpath, string(filepath.ListSeparator))
+	return strings.Join(path, string(filepath.ListSeparator))
 }
 
 // VERSION returns the content of the VERSION file.
