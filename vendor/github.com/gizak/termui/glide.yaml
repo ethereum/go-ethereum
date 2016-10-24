@@ -1,0 +1,8 @@
+package: github.com/gizak/termui
+import:
+- package: github.com/mattn/go-runewidth
+- package: github.com/mitchellh/go-wordwrap
+- package: github.com/nsf/termbox-go
+- package: golang.org/x/net
+  subpackages:
+  - websocket
