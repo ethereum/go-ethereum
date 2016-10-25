@@ -89,8 +89,10 @@ func (dc *DirectCache) Get(key []byte) []byte {
 func (dc *DirectCache) TryGet(key []byte) ([]byte, error) {
 	start := time.Now()
 
+	dirty := dc.dirty[string(key)]
+
 	// Use the underlying object for dirty keys
-	if !dc.dirty[string(key)] {
+	if !dirty {
 		cacheKey := dc.makeKey(key)
 		if cached, ok := dc.getCached(cacheKey); ok {
 			directCacheHitTimer.UpdateSince(start)
@@ -103,14 +105,16 @@ func (dc *DirectCache) TryGet(key []byte) ([]byte, error) {
 		return value, err
 	}
 
-	// If the cache isn't comprehensive, update it
-	if !dc.complete && !dc.dirty[string(key)] {
-		if err := dc.putCache(dc.db, key, value); err != nil && glog.V(logger.Error) {
-			glog.Errorf("Error updating cache: %v", err)
-		}
+	if !dc.dirty[string(key)] {
+		// Flag the key as dirty so it gets written at commit time
+		dc.dirty[string(key)] = true
 	}
 
-	directCacheMissTimer.UpdateSince(start)
+	// Don't count fetches of dirty data as cache misses
+	if !dirty {
+		directCacheMissTimer.UpdateSince(start)
+	}
+
 	return value, nil
 }
 
@@ -126,15 +130,8 @@ func (dc *DirectCache) getCached(key []byte) ([]byte, bool) {
 		return nil, false
 	}
 
-	return data.Value, dc.validator.IsCanonChainBlock(data.BlockNum, data.BlockHash)
-}
-
-func (dc *DirectCache) putCache(dbw DatabaseWriter, key, value []byte) error {
-	enc, _ := rlp.EncodeToBytes(cachedValue{value, dc.blockNum, dc.blockHash})
-	if err := dbw.Put(append(dc.keyPrefix, key...), enc); err != nil {
-		return err
-	}
-	return nil
+	canonical := dc.validator.IsCanonChainBlock(data.BlockNum, data.BlockHash)
+	return data.Value, canonical
 }
 
 func (dc *DirectCache) Update(key, value []byte) {
@@ -172,4 +169,12 @@ func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error
 	}
 	dc.dirty = make(map[string]bool)
 	return dc.data.CommitTo(dbw)
+}
+
+func (dc *DirectCache) putCache(dbw DatabaseWriter, key, value []byte) error {
+	enc, _ := rlp.EncodeToBytes(cachedValue{value, dc.blockNum, dc.blockHash})
+	if err := dbw.Put(append(dc.keyPrefix, key...), enc); err != nil {
+		return err
+	}
+	return nil
 }
