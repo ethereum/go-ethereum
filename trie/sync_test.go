@@ -55,6 +55,28 @@ func makeTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
 	return db, trie, content
 }
 
+// makeRepetitiveTestTrie creates a test trie to test node-wise reconstruction,
+// where all values are the same, forcing large parts of the trie to share nodes.
+func makeRepetitiveTestTrie() (ethdb.Database, *Trie, map[string][]byte) {
+	// Create an empty trie
+	db, _ := ethdb.NewMemDatabase()
+	trie, _ := New(common.Hash{}, db, 0)
+
+	// Fill it with some arbitrary data
+	content := make(map[string][]byte)
+	for i := byte(0); i < 255; i++ {
+		for j := byte(0); j < 255; j++ {
+			key, val := common.LeftPadBytes([]byte{j, i}, 32), common.LeftPadBytes(nil, 32)
+			content[string(key)] = val
+			trie.Update(key, val)
+		}
+	}
+	trie.Commit()
+
+	// Return the generated trie
+	return db, trie, content
+}
+
 // checkTrieContents cross references a reconstructed trie with an expected data
 // content map.
 func checkTrieContents(t *testing.T, db Database, root []byte, content map[string][]byte) {
@@ -93,7 +115,7 @@ func TestEmptyTrieSync(t *testing.T) {
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		db, _ := ethdb.NewMemDatabase()
-		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil).Missing(1); len(req) != 0 {
+		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil, nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)
 		}
 	}
@@ -110,7 +132,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
 	for len(queue) > 0 {
@@ -139,7 +161,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(10000)...)
 	for len(queue) > 0 {
@@ -173,7 +195,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(batch) {
@@ -210,7 +232,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(10000) {
@@ -253,7 +275,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)
 	requested := make(map[common.Hash]struct{})
@@ -289,7 +311,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	added := []common.Hash{}
 	queue := append([]common.Hash{}, sched.Missing(1)...)
@@ -329,5 +351,51 @@ func TestIncompleteTrieSync(t *testing.T) {
 			t.Fatalf("trie inconsistency not caught, missing: %x", key)
 		}
 		dstDb.Put(key, value)
+	}
+}
+
+// Tests that if a leaf callback is specified, all leaf nodes are invoked with
+// it, even if sync short circuits with existing local nodes.
+func TestAllLeafCallbackTrieSync(t *testing.T) {
+	// Create a random trie to copy
+	srcDb, srcTrie, srcData := makeRepetitiveTestTrie()
+
+	// Create a callback to accumulate all keys for later verification
+	leaves, count := make(map[string]struct{}), 0
+	callback := func(keys [][]byte, leaf []byte, parent common.Hash) error {
+		for _, key := range keys {
+			leaves[string(key)] = struct{}{}
+			count++
+		}
+		return nil
+	}
+	// Create a destination trie and sync with the scheduler
+	dstDb, _ := ethdb.NewMemDatabase()
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, callback, []byte("leaf:"))
+
+	queue := append([]common.Hash{}, sched.Missing(1)...)
+	for len(queue) > 0 {
+		results := make([]SyncResult, len(queue))
+		for i, hash := range queue {
+			data, err := srcDb.Get(hash.Bytes())
+			if err != nil {
+				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
+			}
+			results[i] = SyncResult{hash, data}
+		}
+		if _, index, err := sched.Process(results); err != nil {
+			t.Fatalf("failed to process result #%d: %v", index, err)
+		}
+		queue = append(queue[:0], sched.Missing(1)...)
+	}
+	// Cross check that the two tries are in sync
+	checkTrieContents(t, dstDb, srcTrie.Root(), srcData)
+
+	// Ensure the leaf callback was invoked for all leaves, including cached ones
+	if len(leaves) != len(srcData) {
+		t.Errorf("Leaf callback count mismatch: have %v, want %v", len(leaves), len(srcData))
+	}
+	if len(leaves) != count {
+		t.Errorf("Duplicate leaf callbacks: have %v, want %v", count, len(leaves))
 	}
 }
