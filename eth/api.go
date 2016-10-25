@@ -102,7 +102,7 @@ func (s *PublicMinerAPI) SubmitWork(nonce rpc.HexNumber, solution, digest common
 // result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 func (s *PublicMinerAPI) GetWork() (work [3]string, err error) {
 	if !s.e.IsMining() {
-		if err := s.e.StartMining(0, ""); err != nil {
+		if err := s.e.StartMining(0); err != nil {
 			return work, err
 		}
 	}
@@ -141,7 +141,7 @@ func (s *PrivateMinerAPI) Start(threads *rpc.HexNumber) (bool, error) {
 		threads = rpc.NewHexNumber(runtime.NumCPU())
 	}
 
-	err := s.e.StartMining(threads.Int(), "")
+	err := s.e.StartMining(threads.Int())
 	if err == nil {
 		return true, nil
 	}
