@@ -36,10 +36,38 @@ type request struct {
 	raw  bool        // Whether this is a raw entry (code) or a trie node
 
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
+	nibbles [][]byte   // Trie path nibbles that accumulate up to the key at the leaf (paired with parents)
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
 	deps    int        // Number of dependencies before allowed to commit this node
 
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
+}
+
+// keys traverses the request ancestry tree, reconstructing the key paths leading
+// to the current request through the nibbles represented by each node.
+func (r *request) keys(suffix []byte) [][]byte {
+	keys := r.paths(suffix)
+	for i := 0; i < len(keys); i++ {
+		keys[i] = compactHexEncode(keys[i])
+	}
+	return keys
+}
+
+// paths traverses the request ancestry tree, reconstructing the key paths leading
+// to the current request through the nibbles represented by each node.
+func (r *request) paths(suffix []byte) [][]byte {
+	// A root level request just returns the trailing suffix
+	if len(r.parents) == 0 {
+		return [][]byte{suffix}
+	}
+	// Otherwise collect all the ancestor paths, and append the current one
+	var keys [][]byte
+	for i, parent := range r.parents {
+		for _, key := range parent.paths(r.nibbles[i]) {
+			keys = append(keys, append(key, suffix...))
+		}
+	}
+	return keys
 }
 
 // SyncResult is a simple list to return missing nodes along with their request
@@ -52,7 +80,7 @@ type SyncResult struct {
 // TrieSyncLeafCallback is a callback type invoked when a trie sync reaches a
 // leaf node. It's used by state syncing to check if the leaf node requires some
 // further data syncing.
-type TrieSyncLeafCallback func(leaf []byte, parent common.Hash) error
+type TrieSyncLeafCallback func(keys [][]byte, leaf []byte, parent common.Hash) error
 
 // TrieSync is the main state trie synchronisation scheduler, which provides yet
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
@@ -192,6 +220,7 @@ func (s *TrieSync) schedule(req *request) {
 	// If we're already requesting this node, add a new reference and stop
 	if old, ok := s.requests[req.hash]; ok {
 		old.parents = append(old.parents, req.parents...)
+		old.nibbles = append(old.nibbles, req.nibbles...)
 		return
 	}
 	// Schedule the request for future retrieval
@@ -204,6 +233,7 @@ func (s *TrieSync) schedule(req *request) {
 func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 	// Gather all the children of the node, irrelevant whether known or not
 	type child struct {
+		path  []byte
 		node  node
 		depth int
 	}
@@ -212,13 +242,19 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 	switch node := (object).(type) {
 	case *shortNode:
 		children = []child{{
+			path:  node.Key,
 			node:  node.Val,
 			depth: req.depth + len(node.Key),
 		}}
 	case *fullNode:
 		for i := 0; i < 17; i++ {
 			if node.Children[i] != nil {
+				var path []byte
+				if i < 16 {
+					path = []byte{byte(i)}
+				}
 				children = append(children, child{
+					path:  path,
 					node:  node.Children[i],
 					depth: req.depth + 1,
 				})
@@ -233,7 +269,7 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 		// Notify any external watcher of a new key/value node
 		if req.callback != nil {
 			if node, ok := (child.node).(valueNode); ok {
-				if err := req.callback(node, req.hash); err != nil {
+				if err := req.callback(req.keys(child.path), node, req.hash); err != nil {
 					return nil, err
 				}
 			}
@@ -243,12 +279,24 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 			// Try to resolve the node from the local database
 			blob, _ := s.database.Get(node)
 			if local, err := decodeNode(node[:], blob, 0); local != nil && err == nil {
+				// Local node found, iterate and invoke the leaf callback for all subleaves
+				if req.callback != nil {
+					trie, _ := New(common.BytesToHash(node[:]), s.database, 0)
+
+					it := NewNodeIterator(trie)
+					for it.Next() {
+						if it.Leaf {
+							req.callback(req.keys(append(child.path, it.Nibbles...)), nil, req.hash)
+						}
+					}
+				}
 				continue
 			}
 			// Locally unknown node, schedule for retrieval
 			requests = append(requests, &request{
 				hash:     common.BytesToHash(node),
 				parents:  []*request{req},
+				nibbles:  [][]byte{child.path},
 				depth:    child.depth,
 				callback: req.callback,
 			})

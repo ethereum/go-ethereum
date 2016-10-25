@@ -32,10 +32,11 @@ import (
 type StateSync trie.TrieSync
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
+func NewStateSync(number uint64, hash common.Hash, root common.Hash, database ethdb.Database) *StateSync {
 	var syncer *trie.TrieSync
 
-	callback := func(leaf []byte, parent common.Hash) error {
+	callback := func(keys [][]byte, leaf []byte, parent common.Hash) error {
+		// Try to decode any leaf nodes as accounts
 		var obj struct {
 			Nonce    uint64
 			Balance  *big.Int
@@ -45,6 +46,13 @@ func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
 		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
 			return err
 		}
+		// Populate the direct account caches in the database
+		for _, key := range keys {
+			if err := trie.WriteDirectCache(CachePrefix, key, leaf, number, hash, database); err != nil {
+				return err
+			}
+		}
+		// Schedule downloading all the dependencies of the account
 		syncer.AddSubTrie(obj.Root, 64, parent, nil)
 		syncer.AddRawEntry(common.BytesToHash(obj.CodeHash), 64, parent)
 
