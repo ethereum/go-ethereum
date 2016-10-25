@@ -34,7 +34,6 @@ type PersistentMap interface {
 	TryUpdate(key, value []byte) error
 	Delete(key []byte)
 	TryDelete(key []byte) error
-	Commit() (root common.Hash, err error)
 	CommitTo(db DatabaseWriter) (root common.Hash, err error)
 }
 
@@ -138,18 +137,6 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 	}
 	key, _ := t.db.Get(t.secKey(shaKey))
 	return key
-}
-
-// Commit writes all nodes and the secure hash pre-images to the database.
-// Nodes are stored with their sha3 hash as the key.
-//
-// Committing flushes nodes from memory. Subsequent Get calls will load nodes
-// from the database.
-func (t *SecureTrie) Commit() (root common.Hash, err error) {
-	if err := t.CommitPreimages(); err != nil {
-		return common.Hash{}, err
-	}
-	return t.data.Commit()
 }
 
 func (t *SecureTrie) Iterator() *Iterator {

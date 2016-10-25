@@ -159,10 +159,6 @@ func (dc *DirectCache) TryDelete(key []byte) error {
 	return dc.data.TryDelete(key)
 }
 
-func (dc *DirectCache) Commit() (root common.Hash, err error) {
-	return dc.CommitTo(dc.db)
-}
-
 func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error) {
 	directCacheWrites.Inc(int64(len(dc.dirty)))
 	for k, _ := range dc.dirty {

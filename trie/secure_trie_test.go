@@ -60,7 +60,7 @@ func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 			trie.Update(key, val)
 		}
 	}
-	trie.Commit()
+	trie.CommitTo(db)
 
 	// Return the generated trie
 	return db, trie, content
@@ -110,7 +110,7 @@ func TestSecureGetKey(t *testing.T) {
 
 func TestSecureTrieConcurrency(t *testing.T) {
 	// Create an initial trie and copy if for concurrent access
-	_, trie, _ := makeTestSecureTrie()
+	db, trie, _ := makeTestSecureTrie()
 
 	threads := runtime.NumCPU()
 	tries := make([]*SecureTrie, threads)
@@ -139,7 +139,7 @@ func TestSecureTrieConcurrency(t *testing.T) {
 					tries[index].Update(key, val)
 				}
 			}
-			tries[index].Commit()
+			tries[index].CommitTo(db)
 		}(i)
 	}
 	// Wait for all threads to finish

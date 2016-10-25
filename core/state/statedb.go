@@ -191,7 +191,7 @@ func (self *StateDB) SetTxContext(blockHash common.Hash, blockNum uint64, txHash
 	if validator == nil {
 		validator = &trie.NullCacheValidator{}
 	}
-	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, &trie.NullCacheValidator{}, true)
+	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, validator, true)
 	self.storage = trie.NewSecure(storage, self.db)
 }
 
