@@ -41,6 +41,8 @@ var StartingNonce uint64
 // Trie cache generation limit after which to evic trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
+var CachePrefix = []byte("accounthashcache:")
+
 const (
 	// Number of past tries to keep. This value is chosen such that
 	// reasonable chain reorg depths will hit an existing trie.
@@ -94,17 +96,19 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	csc, _ := lru.New(codeSizeCacheSize)
-	return &StateDB{
+	ret := &StateDB{
 		db:                db,
 		trie:              tr,
-		storage:           trie.NewSecure(tr, db),
 		codeSizeCache:     csc,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
-	}, nil
+	}
+	ret.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+	return ret, nil
 }
 
 // New creates a new statedb by reusing any journalled tries to avoid costly
@@ -117,16 +121,17 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StateDB{
+	ret := &StateDB{
 		db:                self.db,
 		trie:              tr,
-		storage:           trie.NewSecure(tr, self.db),
 		codeSizeCache:     self.codeSizeCache,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
-	}, nil
+	}
+	ret.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+	return ret, nil
 }
 
 // Reset clears out all emphemeral state objects from the state db, but keeps
@@ -140,7 +145,6 @@ func (self *StateDB) Reset(root common.Hash) error {
 		return err
 	}
 	self.trie = tr
-	self.storage = trie.NewSecure(tr, self.db)
 	self.stateObjects = make(map[common.Address]*StateObject)
 	self.stateObjectsDirty = make(map[common.Address]struct{})
 	self.thash = common.Hash{}
@@ -149,6 +153,8 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.logs = make(map[common.Hash]vm.Logs)
 	self.logSize = 0
 	self.clearJournalAndRefund()
+	self.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+
 
 	return nil
 }
@@ -177,10 +183,16 @@ func (self *StateDB) pushTrie(t *trie.Trie) {
 	}
 }
 
-func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
-	self.thash = thash
-	self.bhash = bhash
-	self.txIndex = ti
+func (self *StateDB) SetTxContext(blockHash common.Hash, blockNum uint64, txHash common.Hash, txIndex int, validator trie.CacheValidator) {
+	self.bhash = blockHash
+	self.thash = txHash
+	self.txIndex = txIndex
+
+	if validator == nil {
+		validator = &trie.NullCacheValidator{}
+	}
+	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, validator, true)
+	self.storage = trie.NewSecure(storage, self.db)
 }
 
 func (self *StateDB) AddLog(log *vm.Log) {

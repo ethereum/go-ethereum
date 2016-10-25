@@ -583,14 +583,14 @@ func tempDB() (string, Database) {
 	return dir, db
 }
 
-func getString(trie Trie, k string) []byte {
+func getString(trie *Trie, k string) []byte {
 	return trie.Get([]byte(k))
 }
 
-func updateString(trie Trie, k, v string) {
+func updateString(trie *Trie, k, v string) {
 	trie.Update([]byte(k), []byte(v))
 }
 
-func deleteString(trie Trie, k string) {
+func deleteString(trie *Trie, k string) {
 	trie.Delete([]byte(k))
 }

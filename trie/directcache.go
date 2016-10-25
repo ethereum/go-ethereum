@@ -52,13 +52,17 @@ type DirectCache struct {
 	dirty     map[string]bool
 }
 
-func NewDirectCache(s Storage, db Database, keyPrefix []byte, blockNum uint64, blockHash common.Hash, validator CacheValidator, complete bool) *DirectCache {
+type NullCacheValidator struct {}
+
+func (cv *NullCacheValidator) IsCanonChainBlock(num uint64, hash common.Hash) bool {
+	return false
+}
+
+func NewDirectCache(s Storage, db Database, keyPrefix []byte, validator CacheValidator, complete bool) *DirectCache {
 	return &DirectCache{
 		storage: s,
 		db: db,
 		keyPrefix: keyPrefix,
-		blockNum: blockNum,
-		blockHash: blockHash,
 		validator: validator,
 		complete: complete,
 		dirty: make(map[string]bool),
@@ -83,6 +87,7 @@ func (dc *DirectCache) Get(key []byte) []byte {
 }
 
 func (dc *DirectCache) TryGet(key []byte) ([]byte, error) {
+	return dc.storage.TryGet(key)
 	start := time.Now()
 
 	// Use the underlying object for dirty keys
