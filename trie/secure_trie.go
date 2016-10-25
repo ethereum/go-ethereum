@@ -26,6 +26,18 @@ var secureKeyPrefix = []byte("secure-key-")
 
 const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
 
+type PersistentMap interface {
+	Iterator() *Iterator
+	Get(key []byte) []byte
+	TryGet(key []byte) ([]byte, error)
+	Update(key, value []byte)
+	TryUpdate(key, value []byte) error
+	Delete(key []byte)
+	TryDelete(key []byte) error
+	Commit() (root common.Hash, err error)
+	CommitTo(db DatabaseWriter) (root common.Hash, err error)
+}
+
 // SecureTrie wraps a trie with key hashing. In a secure trie, all
 // access operations hash the key using keccak256. This prevents
 // calling code from creating long chains of nodes that
@@ -37,7 +49,7 @@ const secureKeyLength = 11 + 32 // Length of the above prefix + 32byte hash
 //
 // SecureTrie is not safe for concurrent use.
 type SecureTrie struct {
-	storage          Storage
+	data             PersistentMap
 	db               Database
 	hashKeyBuf       [secureKeyLength]byte
 	secKeyBuf        [200]byte
@@ -45,57 +57,57 @@ type SecureTrie struct {
 	secKeyCacheOwner *SecureTrie // Pointer to self, replace the key cache on mismatch
 }
 
-// NewSecure creates a secure Storage from an existing Storage.
-func NewSecure(s Storage, db Database) *SecureTrie {
-	if s == nil {
-		panic("NewSecure called with nil storage")
+// NewSecure creates a secure persistent map from an existing map.
+func NewSecure(pm PersistentMap, db Database) *SecureTrie {
+	if pm == nil {
+		panic("NewSecure called with nil persistent map")
 	}
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
-	return &SecureTrie{storage: s, db: db}
+	return &SecureTrie{data: pm, db: db}
 }
 
-// Get returns the value for key stored in the storage.
+// Get returns the value for key stored in the map.
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
 	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled storage error: %v", err)
+		glog.Errorf("Unhandled persistent map error: %v", err)
 	}
 	return res
 }
 
-// TryGet returns the value for key stored in the storage.
+// TryGet returns the value for key stored in the map.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
-	return t.storage.TryGet(t.hashKey(key))
+	return t.data.TryGet(t.hashKey(key))
 }
 
-// Update associates key with value in the storage. Subsequent calls to
+// Update associates key with value in the map. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
-// is deleted from the storage and calls to Get will return nil.
+// is deleted from the map and calls to Get will return nil.
 //
 // The value bytes must not be modified by the caller while they are
-// stored in the storage.
+// stored in the map.
 func (t *SecureTrie) Update(key, value []byte) {
 	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled storage error: %v", err)
+		glog.Errorf("Unhandled persistent map error: %v", err)
 	}
 }
 
-// TryUpdate associates key with value in the storage. Subsequent calls to
+// TryUpdate associates key with value in the map. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
-// is deleted from the storage and calls to Get will return nil.
+// is deleted from the map and calls to Get will return nil.
 //
 // The value bytes must not be modified by the caller while they are
-// stored in the storage.
+// stored in the map.
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	hk := t.hashKey(key)
-	err := t.storage.TryUpdate(hk, value)
+	err := t.data.TryUpdate(hk, value)
 	if err != nil {
 		return err
 	}
@@ -103,19 +115,19 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 	return nil
 }
 
-// Delete removes any existing value for key from the storage.
+// Delete removes any existing value for key from the map.
 func (t *SecureTrie) Delete(key []byte) {
 	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled storage error: %v", err)
+		glog.Errorf("Unhandled persistent map error: %v", err)
 	}
 }
 
-// TryDelete removes any existing value for key from the storage.
+// TryDelete removes any existing value for key from the map.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryDelete(key []byte) error {
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
-	return t.storage.TryDelete(hk)
+	return t.data.TryDelete(hk)
 }
 
 // GetKey returns the sha3 preimage of a hashed key that was
@@ -137,11 +149,11 @@ func (t *SecureTrie) Commit() (root common.Hash, err error) {
 	if err := t.CommitPreimages(); err != nil {
 		return common.Hash{}, err
 	}
-	return t.storage.Commit()
+	return t.data.Commit()
 }
 
 func (t *SecureTrie) Iterator() *Iterator {
-	return t.storage.Iterator()
+	return t.data.Iterator()
 }
 
 // CommitTo writes all nodes and the secure hash pre-images to the given database.
@@ -149,12 +161,12 @@ func (t *SecureTrie) Iterator() *Iterator {
 //
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes from
 // the database. Calling code must ensure that the changes made to db are
-// written back to the attached database before using the storage.
+// written back to the attached database before using the map.
 func (t *SecureTrie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 	if err := t.CommitPreimages(); err != nil {
 		return common.Hash{}, err
 	}
-	return t.storage.CommitTo(db)
+	return t.data.CommitTo(db)
 }
 
 func (t *SecureTrie) CommitPreimages() error {
@@ -191,7 +203,7 @@ func (t *SecureTrie) hashKey(key []byte) []byte {
 }
 
 // getSecKeyCache returns the current secure key cache, creating a new one if
-// ownership changed (i.e. the current secure storage is a copy of another owning
+// ownership changed (i.e. the current secure map is a copy of another owning
 // the actual cache).
 func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 	if t != t.secKeyCacheOwner {

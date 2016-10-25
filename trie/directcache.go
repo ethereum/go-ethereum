@@ -42,7 +42,7 @@ type CacheValidator interface {
 }
 
 type DirectCache struct {
-	storage   Storage
+	data      PersistentMap
 	db        Database
 	keyPrefix []byte
 	blockNum  uint64
@@ -58,9 +58,9 @@ func (cv *NullCacheValidator) IsCanonChainBlock(num uint64, hash common.Hash) bo
 	return false
 }
 
-func NewDirectCache(s Storage, db Database, keyPrefix []byte, validator CacheValidator, complete bool) *DirectCache {
+func NewDirectCache(pm PersistentMap, db Database, keyPrefix []byte, validator CacheValidator, complete bool) *DirectCache {
 	return &DirectCache{
-		storage: s,
+		data: pm,
 		db: db,
 		keyPrefix: keyPrefix,
 		validator: validator,
@@ -71,7 +71,7 @@ func NewDirectCache(s Storage, db Database, keyPrefix []byte, validator CacheVal
 
 func (dc *DirectCache) Iterator() *Iterator {
 	// Todo: If complete is true, implement an iterator over the DB instead.
-	return dc.storage.Iterator()
+	return dc.data.Iterator()
 }
 
 func (dc *DirectCache) makeKey(key []byte) []byte {
@@ -87,7 +87,6 @@ func (dc *DirectCache) Get(key []byte) []byte {
 }
 
 func (dc *DirectCache) TryGet(key []byte) ([]byte, error) {
-	return dc.storage.TryGet(key)
 	start := time.Now()
 
 	// Use the underlying object for dirty keys
@@ -99,7 +98,7 @@ func (dc *DirectCache) TryGet(key []byte) ([]byte, error) {
 		}
 	}
 
-	value, err := dc.storage.TryGet(key)
+	value, err := dc.data.TryGet(key)
 	if err != nil {
 		return value, err
 	}
@@ -146,7 +145,7 @@ func (dc *DirectCache) Update(key, value []byte) {
 
 func (dc *DirectCache) TryUpdate(key, value []byte) error {
 	dc.dirty[string(key)] = true
-	return dc.storage.TryUpdate(key, value)
+	return dc.data.TryUpdate(key, value)
 }
 
 func (dc *DirectCache) Delete(key []byte) {
@@ -157,7 +156,7 @@ func (dc *DirectCache) Delete(key []byte) {
 
 func (dc *DirectCache) TryDelete(key []byte) error {
 	dc.dirty[string(key)] = true
-	return dc.storage.TryDelete(key)
+	return dc.data.TryDelete(key)
 }
 
 func (dc *DirectCache) Commit() (root common.Hash, err error) {
@@ -167,7 +166,7 @@ func (dc *DirectCache) Commit() (root common.Hash, err error) {
 func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error) {
 	directCacheWrites.Inc(int64(len(dc.dirty)))
 	for k, _ := range dc.dirty {
-		v, err := dc.storage.TryGet([]byte(k))
+		v, err := dc.data.TryGet([]byte(k))
 		if err, ok := err.(*MissingNodeError); err != nil && !ok {
 			return common.Hash{}, err
 		}
@@ -176,5 +175,5 @@ func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error
 		}
 	}
 	dc.dirty = make(map[string]bool)
-	return dc.storage.CommitTo(dbw)
+	return dc.data.CommitTo(dbw)
 }

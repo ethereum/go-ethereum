@@ -78,18 +78,6 @@ type DatabaseWriter interface {
 // Use New to create a trie that sits on top of a database.
 //
 // trie is not safe for concurrent use.
-type Storage interface {
-	Iterator() *Iterator
-	Get(key []byte) []byte
-	TryGet(key []byte) ([]byte, error)
-	Update(key, value []byte)
-	TryUpdate(key, value []byte) error
-	Delete(key []byte)
-	TryDelete(key []byte) error
-	Commit() (root common.Hash, err error)
-	CommitTo(db DatabaseWriter) (root common.Hash, err error)
-}
-
 type Trie struct {
 	root         node
 	db           Database

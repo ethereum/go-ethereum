@@ -25,7 +25,7 @@ import (
 
 // LightTrie is an ODR-capable wrapper around trie.SecureTrie
 type LightTrie struct {
-	storage      *trie.SecureTrie
+	data         *trie.SecureTrie
 	originalRoot common.Hash
 	odr          OdrBackend
 	db           ethdb.Database
@@ -74,16 +74,16 @@ func (t *LightTrie) do(ctx context.Context, fallbackKey []byte, fn func() error)
 	return err
 }
 
-func (t *LightTrie) getStorage() (ret *trie.SecureTrie, err error) {
-	if t.storage == nil {
-		var tr trie.Storage
+func (t *LightTrie) getMap() (ret *trie.SecureTrie, err error) {
+	if t.data == nil {
+		var tr trie.PersistentMap
 		tr, err = trie.New(t.originalRoot, t.db, 0)
 		if err != nil {
 			return nil, err
 		}
-		t.storage = trie.NewSecure(tr, t.db)
+		t.data = trie.NewSecure(tr, t.db)
 	}
-	return t.storage, nil
+	return t.data, nil
 }
 
 // Get returns the value for key stored in the trie.
@@ -91,7 +91,7 @@ func (t *LightTrie) getStorage() (ret *trie.SecureTrie, err error) {
 func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error) {
 	err = t.do(ctx, key, func() (err error) {
 		var st *trie.SecureTrie
-		st, err = t.getStorage()
+		st, err = t.getMap()
 		if err == nil {
 			res, err = st.TryGet(key)
 		}
@@ -109,7 +109,7 @@ func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error)
 func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
 		var st *trie.SecureTrie
-		st, err = t.getStorage()
+		st, err = t.getMap()
 		if err == nil {
 			err = st.TryUpdate(key, value)
 		}
@@ -122,7 +122,7 @@ func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
 func (t *LightTrie) Delete(ctx context.Context, key []byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
 		var st *trie.SecureTrie
-		st, err = t.getStorage()
+		st, err = t.getMap()
 		if err == nil {
 			err = st.TryDelete(key)
 		}
