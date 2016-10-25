@@ -262,6 +262,7 @@ func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (
 
 func (self *worker) wait() {
 	for {
+		mustCommitNewWork := true
 		for result := range self.recv {
 			atomic.AddInt32(&self.atWork, -1)
 
@@ -315,6 +316,8 @@ func (self *worker) wait() {
 					core.WriteReceipts(self.chainDb, work.receipts)
 					// Write map map bloom filters
 					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
+					// implicit by posting ChainHeadEvent
+					mustCommitNewWork = false
 				}
 
 				// broadcast before waiting for validation
@@ -343,7 +346,9 @@ func (self *worker) wait() {
 			}
 			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
 
-			self.commitNewWork()
+			if mustCommitNewWork {
+				self.commitNewWork()
+			}
 		}
 	}
 }
@@ -451,6 +456,7 @@ func (self *worker) commitNewWork() {
 
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
+
 	tstamp := tstart.Unix()
 	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
 		tstamp = parent.Time().Int64() + 1
@@ -618,7 +624,16 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			txs.Shift()
 		}
 	}
+
 	if len(coalescedLogs) > 0 || env.tcount > 0 {
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		cpy := make(vm.Logs, len(coalescedLogs))
+		for i, l := range coalescedLogs {
+			cpy[i] = new(vm.Log)
+			*cpy[i] = *l
+		}
 		go func(logs vm.Logs, tcount int) {
 			if len(logs) > 0 {
 				mux.Post(core.PendingLogsEvent{Logs: logs})
@@ -626,7 +641,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			if tcount > 0 {
 				mux.Post(core.PendingStateEvent{})
 			}
-		}(coalescedLogs, env.tcount)
+		}(cpy, env.tcount)
 	}
 }
 

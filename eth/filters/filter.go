@@ -20,6 +20,8 @@ import (
 	"math"
 	"time"
 
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -162,7 +164,7 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []Log, er
 				}
 				unfiltered = append(unfiltered, rl...)
 			}
-			logs = append(logs, filterLogs(unfiltered, f.addresses, f.topics)...)
+			logs = append(logs, filterLogs(unfiltered, nil, nil, f.addresses, f.topics)...)
 		}
 	}
 
@@ -179,12 +181,18 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
-func filterLogs(logs []Log, addresses []common.Address, topics [][]common.Hash) []Log {
+func filterLogs(logs []Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []Log {
 	var ret []Log
-
 	// Filter the logs for interesting stuff
 Logs:
 	for _, log := range logs {
+		if fromBlock != nil && fromBlock.Int64() >= 0 && uint64(fromBlock.Int64()) > log.BlockNumber {
+			continue
+		}
+		if toBlock != nil && toBlock.Int64() >= 0 && uint64(toBlock.Int64()) < log.BlockNumber {
+			continue
+		}
+
 		if len(addresses) > 0 && !includes(addresses, log.Address) {
 			continue
 		}
@@ -211,7 +219,6 @@ Logs:
 				continue Logs
 			}
 		}
-
 		ret = append(ret, log)
 	}
 
