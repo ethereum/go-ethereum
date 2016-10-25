@@ -115,7 +115,7 @@ func TestEmptyTrieSync(t *testing.T) {
 
 	for i, trie := range []*Trie{emptyA, emptyB} {
 		db, _ := ethdb.NewMemDatabase()
-		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil).Missing(1); len(req) != 0 {
+		if req := NewTrieSync(common.BytesToHash(trie.Root()), db, nil, nil).Missing(1); len(req) != 0 {
 			t.Errorf("test %d: content requested for empty trie: %v", i, req)
 		}
 	}
@@ -132,7 +132,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
 	for len(queue) > 0 {
@@ -161,7 +161,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(10000)...)
 	for len(queue) > 0 {
@@ -195,7 +195,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(batch) {
@@ -232,7 +232,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(10000) {
@@ -275,7 +275,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)
 	requested := make(map[common.Hash]struct{})
@@ -311,7 +311,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, nil, nil)
 
 	added := []common.Hash{}
 	queue := append([]common.Hash{}, sched.Missing(1)...)
@@ -371,7 +371,7 @@ func TestAllLeafCallbackTrieSync(t *testing.T) {
 	}
 	// Create a destination trie and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, callback)
+	sched := NewTrieSync(common.BytesToHash(srcTrie.Root()), dstDb, callback, []byte("leaf:"))
 
 	queue := append([]common.Hash{}, sched.Missing(1)...)
 	for len(queue) > 0 {

@@ -41,6 +41,7 @@ type request struct {
 	deps    int        // Number of dependencies before allowed to commit this node
 
 	callback TrieSyncLeafCallback // Callback to invoke if a leaf node it reached on this branch
+	dcPrefix []byte               // Database prefix to use for leaf direct caching
 }
 
 // keys traverses the request ancestry tree, reconstructing the key paths leading
@@ -92,18 +93,18 @@ type TrieSync struct {
 }
 
 // NewTrieSync creates a new trie data download scheduler.
-func NewTrieSync(root common.Hash, database ethdb.Database, callback TrieSyncLeafCallback) *TrieSync {
+func NewTrieSync(root common.Hash, database ethdb.Database, callback TrieSyncLeafCallback, dcPrefix []byte) *TrieSync {
 	ts := &TrieSync{
 		database: database,
 		requests: make(map[common.Hash]*request),
 		queue:    prque.New(),
 	}
-	ts.AddSubTrie(root, 0, common.Hash{}, callback)
+	ts.AddSubTrie(root, 0, common.Hash{}, callback, dcPrefix)
 	return ts
 }
 
 // AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
-func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback TrieSyncLeafCallback) {
+func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback TrieSyncLeafCallback, dcPrefix []byte) {
 	// Short circuit if the trie is empty or already known
 	if root == emptyRoot {
 		return
@@ -118,6 +119,7 @@ func (s *TrieSync) AddSubTrie(root common.Hash, depth int, parent common.Hash, c
 		hash:     root,
 		depth:    depth,
 		callback: callback,
+		dcPrefix: dcPrefix,
 	}
 	// If this sub-trie has a designated parent, link them together
 	if parent != (common.Hash{}) {
@@ -280,13 +282,26 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 			blob, _ := s.database.Get(node)
 			if local, err := decodeNode(node[:], blob, 0); local != nil && err == nil {
 				// Local node found, iterate and invoke the leaf callback for all subleaves
-				if req.callback != nil {
+				if req.callback != nil && req.dcPrefix != nil {
 					trie, _ := New(common.BytesToHash(node[:]), s.database, 0)
+					unknown := false
 
 					it := NewNodeIterator(trie)
 					for it.Next() {
 						if it.Leaf {
-							req.callback(req.keys(append(child.path, it.Nibbles...)), nil, req.hash)
+							// If this branch was already visited, abort iteration
+							keys := req.keys(append(child.path, it.Nibbles...))
+							if !unknown {
+								if val, err := GetDirectCache(req.dcPrefix, keys[0], s.database); val != nil && err == nil {
+									break
+								}
+								// Branch is unknown, mark as so to avoid repeated db lookups
+								unknown = true
+							}
+							// Otherwise write out all accounts ending in this leaf
+							if err := req.callback(keys, nil, req.hash); err != nil {
+								return nil, err
+							}
 						}
 					}
 				}
@@ -299,6 +314,7 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 				nibbles:  [][]byte{child.path},
 				depth:    child.depth,
 				callback: req.callback,
+				dcPrefix: req.dcPrefix,
 			})
 		}
 	}

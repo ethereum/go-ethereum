@@ -53,12 +53,12 @@ func NewStateSync(number uint64, hash common.Hash, root common.Hash, database et
 			}
 		}
 		// Schedule downloading all the dependencies of the account
-		syncer.AddSubTrie(obj.Root, 64, parent, nil)
+		syncer.AddSubTrie(obj.Root, 64, parent, nil, nil)
 		syncer.AddRawEntry(common.BytesToHash(obj.CodeHash), 64, parent)
 
 		return nil
 	}
-	syncer = trie.NewTrieSync(root, database, callback)
+	syncer = trie.NewTrieSync(root, database, callback, CachePrefix)
 	return (*StateSync)(syncer)
 }
 

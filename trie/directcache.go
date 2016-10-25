@@ -30,6 +30,27 @@ var directCacheWrites = metrics.NewCounter("directcache/writes")
 var directCacheHitTimer = metrics.NewTimer("directcache/timer/hits")
 var directCacheMissTimer = metrics.NewTimer("directcache/timer/misses")
 
+// DirectCacheReads retrieves a global counter measuring the number of direct
+// cache reads from the disk since process startup. This isn't useful for anything
+// apart from trie debugging purposes.
+func DirectCacheReads() int64 {
+	return directCacheHitTimer.Count() + directCacheMissTimer.Count()
+}
+
+// DirectCacheWrites retrieves a global counter measuring the number of direct
+// cache writes from the disk since process startup. This isn't useful for anything
+// apart from trie debugging purposes.
+func DirectCacheWrites() int64 {
+	return directCacheWrites.Count()
+}
+
+// DirectCacheMisses retrieves a global counter measuring the number of direct
+// cache writes from the disk since process startup. This isn't useful for anything
+// apart from trie debugging purposes.
+func DirectCacheMisses() int64 {
+	return directCacheMissTimer.Count()
+}
+
 type cachedValue struct {
 	Value     []byte
 	BlockNum  uint64
@@ -157,7 +178,6 @@ func (dc *DirectCache) TryDelete(key []byte) error {
 }
 
 func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error) {
-	directCacheWrites.Inc(int64(len(dc.dirty)))
 	for k, _ := range dc.dirty {
 		v, err := dc.data.TryGet([]byte(k))
 		if err, ok := err.(*MissingNodeError); err != nil && !ok {
@@ -175,7 +195,23 @@ func (dc *DirectCache) putCache(dbw DatabaseWriter, key, value []byte) error {
 	return WriteDirectCache(dc.keyPrefix, key, value, dc.blockNum, dc.blockHash, dbw)
 }
 
+// WriteDirectCache places a value node directly into the database along with
+// block metadata to validate its relevancy.
+//
+// The method is meant to be used by code that circumvents the state database
+// and its integrated cache, namely during fast sync and database upgrades.
 func WriteDirectCache(prefix, key, value []byte, number uint64, hash common.Hash, dbw DatabaseWriter) error {
+	directCacheWrites.Inc(1)
 	enc, _ := rlp.EncodeToBytes(cachedValue{value, number, hash})
 	return dbw.Put(append(prefix, key...), enc)
+}
+
+// GetDirectCache retrieves a value node directly from the database along with
+// block metadata to validate its relevancy.
+//
+// The method is meant to be used by code that circumvents the state database
+// and its integrated cache, namely during fast sync and database upgrades.
+func GetDirectCache(prefix, key []byte, db Database) ([]byte, error) {
+	defer func(start time.Time) { directCacheHitTimer.UpdateSince(start) }(time.Now())
+	return db.Get(append(prefix, key...))
 }
