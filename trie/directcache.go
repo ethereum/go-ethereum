@@ -79,11 +79,13 @@ func (cv *NullCacheValidator) IsCanonChainBlock(num uint64, hash common.Hash) bo
 	return false
 }
 
-func NewDirectCache(pm PersistentMap, db Database, keyPrefix []byte, validator CacheValidator, complete bool) *DirectCache {
+func NewDirectCache(pm PersistentMap, db Database, keyPrefix []byte, blockNum uint64, blockHash common.Hash, validator CacheValidator, complete bool) *DirectCache {
 	return &DirectCache{
 		data:      pm,
 		db:        db,
 		keyPrefix: keyPrefix,
+		blockNum:  blockNum,
+		blockHash: blockHash,
 		validator: validator,
 		complete:  complete,
 		dirty:     make(map[string]bool),
@@ -151,7 +153,7 @@ func (dc *DirectCache) getCached(key []byte) ([]byte, bool) {
 		return nil, false
 	}
 
-	canonical := dc.validator.IsCanonChainBlock(data.BlockNum, data.BlockHash)
+	canonical := dc.blockNum > 0 && data.BlockNum < dc.blockNum && dc.validator.IsCanonChainBlock(data.BlockNum, data.BlockHash)
 	return data.Value, canonical
 }
 

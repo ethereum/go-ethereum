@@ -188,7 +188,7 @@ func (self *StateDB) SetBlockContext(blockHash common.Hash, blockNum uint64, val
 	if validator == nil {
 		validator = &trie.NullCacheValidator{}
 	}
-	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, validator, true)
+	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, blockNum, blockHash, validator, true)
 	self.storage = trie.NewSecure(storage, self.db)
 }
 

@@ -547,7 +547,7 @@ func (self *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 
 // IsCanonChainBlock checks whether the given block is in the current canonical chain.
 func (self *BlockChain) IsCanonChainBlock(number uint64, hash common.Hash) bool {
-	return number < uint64(self.currentBlock.Number().Int64()) && GetCanonicalHash(self.chainDb, number) == hash
+	return GetCanonicalHash(self.chainDb, number) == hash
 }
 
 // [deprecated by eth/62]
