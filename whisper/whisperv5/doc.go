@@ -57,7 +57,7 @@ const (
 	saltLength      = 12
 
 	MaxMessageLength = 0xFFFF // todo: remove this restriction after testing in morden and analizing stats. this should be regulated by MinimumPoW.
-	MinimumPoW       = 50.0   // todo: review
+	MinimumPoW       = 10.0   // todo: review
 
 	padSizeLimitLower = 128 // it can not be less - we don't want to reveal the absence of signature
 	padSizeLimitUpper = 256 // just an arbitrary number, could be changed without losing compatibility

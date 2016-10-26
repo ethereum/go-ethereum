@@ -46,7 +46,7 @@ type Whisper struct {
 	keyMu       sync.RWMutex
 
 	envelopes   map[common.Hash]*Envelope        // Pool of messages currently tracked by this node
-	messages    map[common.Hash]*ReceivedMessage // Pool of successfully decrypted messages, not expired yet
+	messages    map[common.Hash]*ReceivedMessage // Pool of successfully decrypted messages, which are not expired yet
 	expirations map[uint32]*set.SetNonTS         // Message expiration pool
 	poolMu      sync.RWMutex                     // Mutex to sync the message and expiration pools
 
@@ -56,6 +56,7 @@ type Whisper struct {
 	mailServer MailServer
 
 	quit chan struct{}
+	test bool
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -399,7 +400,7 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		return fmt.Errorf("oversized Salt")
 	}
 
-	if envelope.PoW() < MinimumPoW {
+	if envelope.PoW() < MinimumPoW && !wh.test {
 		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f", envelope.PoW())
 		return nil // drop envelope without error
 	}
@@ -423,7 +424,7 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		glog.V(logger.Detail).Infof("whisper envelope already cached: %x\n", envelope)
 	} else {
 		wh.postEvent(envelope, messagesCode) // notify the local node about the new message
-		glog.V(logger.Detail).Infof("cached whisper envelope %x\n", envelope)
+		glog.V(logger.Detail).Infof("cached whisper envelope %v\n", envelope)
 	}
 	return nil
 }
@@ -493,10 +494,10 @@ func (w *Whisper) Envelopes() []*Envelope {
 
 // Messages retrieves all the decrypted messages matching a filter id.
 func (w *Whisper) Messages(id int) []*ReceivedMessage {
+	result := make([]*ReceivedMessage, 0)
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()
 
-	result := make([]*ReceivedMessage, 0)
 	if filter := w.filters.Get(id); filter != nil {
 		for _, msg := range w.messages {
 			if filter.MatchMessage(msg) {

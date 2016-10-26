@@ -51,6 +51,10 @@ func NewFilters(w *Whisper) *Filters {
 }
 
 func (fs *Filters) Install(watcher *Filter) int {
+	if watcher.Messages == nil {
+		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
+	}
+
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
