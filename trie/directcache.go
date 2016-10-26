@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -25,6 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+var directCacheLock = &sync.Mutex{}
 
 var directCacheWrites = metrics.NewCounter("directcache/writes")
 var directCacheHitTimer = metrics.NewTimer("directcache/timer/hits")
@@ -180,12 +183,16 @@ func (dc *DirectCache) TryDelete(key []byte) error {
 }
 
 func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error) {
+	directCacheWrites.Inc(len(dc.dirty))
+	directCacheLock.Lock()
+	defer directCacheLock.Unlock()
+
 	for k, _ := range dc.dirty {
 		v, err := dc.data.TryGet([]byte(k))
 		if err, ok := err.(*MissingNodeError); err != nil && !ok {
 			return common.Hash{}, err
 		}
-		if err := dc.putCache(dbw, []byte(k), v); err != nil {
+		if err := writeCacheEntry(dc.keyPrefix, []byte(k), v, dc.blockNum, dc.blockHash, dbw); err != nil {
 			return common.Hash{}, err
 		}
 	}
@@ -193,9 +200,32 @@ func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error
 	return dc.data.CommitTo(dbw)
 }
 
-func (dc *DirectCache) putCache(dbw DatabaseWriter, key, value []byte) error {
-	return WriteDirectCache(dc.keyPrefix, key, value, dc.blockNum, dc.blockHash, dbw)
+// Populate iterates over the underlying trie, filling in any unset cache entries.
+// After Populate has completed, future DirectCache instances can have `complete`
+// set to true, for better efficiency on cache misses.
+func (dc *DirectCache) Populate() error {
+	i := 0
+	writes := 0
+	it := dc.Iterator()
+	for it.Next() {
+		directCacheLock.Lock()
+		if val, err := dc.db.Get(append(dc.keyPrefix, it.Key...)); err != nil || val == nil {
+			writes += 1
+			if err := writeCacheEntry(dc.keyPrefix, it.Key, it.Value, dc.blockNum, dc.blockHash, dc.db); err != nil {
+				directCacheLock.Unlock()
+				return err
+			}
+		}
+		directCacheLock.Unlock()
+
+		i += 1
+		if i % 10000 == 0 && glog.V(logger.Info) {
+			glog.V(logger.Info).Infof("Constructing direct cache: processed %v entries, writing %v", i, writes)
+		}
+	}
+	return nil
 }
+
 
 // WriteDirectCache places a value node directly into the database along with
 // block metadata to validate its relevancy.
@@ -204,6 +234,12 @@ func (dc *DirectCache) putCache(dbw DatabaseWriter, key, value []byte) error {
 // and its integrated cache, namely during fast sync and database upgrades.
 func WriteDirectCache(prefix, key, value []byte, number uint64, hash common.Hash, dbw DatabaseWriter) error {
 	directCacheWrites.Inc(1)
+	directCacheLock.Lock()
+	defer directCacheLock.Unlock()
+	return writeCacheEntry(prefix, key, value, number, hash, dbw)
+}
+
+func writeCacheEntry(prefix, key, value []byte, number uint64, hash common.Hash, dbw DatabaseWriter) error {
 	enc, _ := rlp.EncodeToBytes(cachedValue{value, number, hash})
 	return dbw.Put(append(prefix, key...), enc)
 }
