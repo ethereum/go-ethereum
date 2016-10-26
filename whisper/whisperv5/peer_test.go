@@ -78,8 +78,8 @@ type TestData struct {
 type TestNode struct {
 	shh     *Whisper
 	id      *ecdsa.PrivateKey
+	server  *p2p.Server
 	filerId int
-	server  p2p.Server
 }
 
 var result TestData
@@ -139,7 +139,7 @@ func initialize(x *testing.T) {
 			peers = append(peers, peer)
 		}
 
-		node.server = p2p.Server{
+		node.server = &p2p.Server{
 			Config: p2p.Config{
 				PrivateKey:     node.id,
 				MaxPeers:       NumNodes/2 + 1,
@@ -167,6 +167,7 @@ func stopServers() {
 	for i := 0; i < NumNodes; i++ {
 		n := nodes[i]
 		if n != nil {
+			n.shh.Unwatch(n.filerId)
 			n.server.Stop()
 		}
 	}
@@ -196,6 +197,7 @@ func checkPropagation(x *testing.T) {
 			}
 
 			if isTestComplete() {
+
 				return
 			}
 		}
@@ -242,6 +244,14 @@ func isTestComplete() bool {
 			return false
 		}
 	}
+
+	for i := 0; i < NumNodes; i++ {
+		envelopes := nodes[i].shh.Envelopes()
+		if len(envelopes) < 2 {
+			return false
+		}
+	}
+
 	return true
 }
 
