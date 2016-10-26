@@ -922,6 +922,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			reportBlock(block, err)
 			return i, err
 		}
+		self.stateCache.SetBlockContext(block.Hash(), block.NumberU64(), self)
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, self.config.VmConfig)
 		if err != nil {

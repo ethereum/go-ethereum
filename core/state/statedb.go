@@ -107,7 +107,7 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
 	}
-	ret.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+	ret.SetBlockContext(common.Hash{}, 0, nil)
 	return ret, nil
 }
 
@@ -130,7 +130,7 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
 	}
-	ret.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+	ret.SetBlockContext(common.Hash{}, 0, nil)
 	return ret, nil
 }
 
@@ -153,8 +153,8 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.logs = make(map[common.Hash]vm.Logs)
 	self.logSize = 0
 	self.clearJournalAndRefund()
-	self.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
-
+	self.SetBlockContext(common.Hash{}, 0, nil)
+	self.SetTxContext(common.Hash{}, 0)
 
 	return nil
 }
@@ -183,16 +183,18 @@ func (self *StateDB) pushTrie(t *trie.Trie) {
 	}
 }
 
-func (self *StateDB) SetTxContext(blockHash common.Hash, blockNum uint64, txHash common.Hash, txIndex int, validator trie.CacheValidator) {
+func (self *StateDB) SetBlockContext(blockHash common.Hash, blockNum uint64, validator trie.CacheValidator) {
 	self.bhash = blockHash
-	self.thash = txHash
-	self.txIndex = txIndex
-
 	if validator == nil {
 		validator = &trie.NullCacheValidator{}
 	}
 	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, validator, true)
 	self.storage = trie.NewSecure(storage, self.db)
+}
+
+func (self *StateDB) SetTxContext(txHash common.Hash, txIndex int) {
+	self.thash = txHash
+	self.txIndex = txIndex
 }
 
 func (self *StateDB) AddLog(log *vm.Log) {
