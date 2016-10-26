@@ -1,4 +1,6 @@
-import "mortal";
+pragma solidity ^0.4.3;
+
+import "mortal.sol" as mortal;
 
 /// @title Chequebook for Ethereum micropayments
 /// @author Daniel A. Nagy <daniel@ethdev.com>
@@ -8,6 +10,14 @@ contract chequebook is mortal {
 
     /// @notice Overdraft event
     event Overdraft(address deadbeat);
+
+    /// @notice Deposit event
+    event Deposit(uint256 amount);
+
+    /// @notice Top up chequebook
+    function() payable {
+        Deposit(msg.value);
+    }
 
     /// @notice Cash cheque
     ///
@@ -39,7 +49,7 @@ contract chequebook is mortal {
             // owner.sendToDebtorsPrison();
             Overdraft(owner);
             // Compensate beneficiary.
-            suicide(beneficiary);
+            selfdestruct(beneficiary);
         }
     }
 }
