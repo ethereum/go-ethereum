@@ -26,11 +26,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var useSequentialKeys = []byte("dbUpgrade_20160530sequentialKeys")
@@ -352,5 +354,38 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
 	}
 	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
+	return nil
+}
+
+func populateDirectCache(db ethdb.Database, bc *core.BlockChain) error {
+	blockHash, status := trie.GetMigrationState(state.DirectCachePrefix, db)
+	if status == trie.NotStarted {
+		blockHash = core.GetHeadBlockHash(db)
+		status = trie.Running
+		trie.SetMigrationState(state.DirectCachePrefix, blockHash, status, db)
+	}
+	blockNum := core.GetBlockNumber(db, blockHash)
+
+	if status == trie.Running {
+		tr, err := trie.New(core.GetBlock(db, blockHash, blockNum).Root(), db, 0)
+		if err != nil {
+			return err
+		}
+		dc := trie.NewDirectCache(tr, db, state.DirectCachePrefix, blockNum, blockHash, bc, false)
+		go func() {
+			for core.GetBlockNumber(db, core.GetHeadBlockHash(db)) < blockNum+8 {
+				time.Sleep(10 * time.Second)
+			}
+			glog.Infof("Beginning direct cache upgrade at block %v", blockNum)
+
+			start := time.Now()
+			if err := dc.Populate(); err != nil {
+				glog.Errorf("Direct cache upgrade failed: %v", err)
+			} else {
+				glog.Infof("Direct cache upgrade finished in %v", time.Since(start))
+			}
+			trie.SetMigrationState(state.DirectCachePrefix, blockHash, trie.Complete, db)
+		}()
+	}
 	return nil
 }

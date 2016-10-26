@@ -47,10 +47,15 @@ func NewStateSync(number uint64, hash common.Hash, root common.Hash, database et
 			return err
 		}
 		// Populate the direct account caches in the database
-		for _, key := range keys {
-			if err := trie.WriteDirectCache(CachePrefix, key, leaf, number, hash, database); err != nil {
-				return err
+		if err := trie.DirectCacheTransaction(func() error {
+			for _, key := range keys {
+				if err := trie.WriteDirectCache(DirectCachePrefix, key, leaf, number, hash, database); err != nil {
+					return err
+				}
 			}
+			return nil
+		}); err != nil {
+			return err
 		}
 		// Schedule downloading all the dependencies of the account
 		syncer.AddSubTrie(obj.Root, 64, parent, nil, nil)
@@ -58,7 +63,7 @@ func NewStateSync(number uint64, hash common.Hash, root common.Hash, database et
 
 		return nil
 	}
-	syncer = trie.NewTrieSync(root, database, callback, CachePrefix)
+	syncer = trie.NewTrieSync(root, database, callback, DirectCachePrefix)
 	return (*StateSync)(syncer)
 }
 

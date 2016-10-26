@@ -553,7 +553,7 @@ func (self *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 
 // IsCanonChainBlock checks whether the given block is in the current canonical chain.
 func (self *BlockChain) IsCanonChainBlock(number uint64, hash common.Hash) bool {
-	return number < uint64(self.currentBlock.Number().Int64()) && GetCanonicalHash(self.chainDb, number) == hash
+	return GetCanonicalHash(self.chainDb, number) == hash
 }
 
 // [deprecated by eth/62]
@@ -937,6 +937,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			self.reportBlock(block, nil, err)
 			return i, err
 		}
+		self.stateCache.SetBlockContext(block.Hash(), block.NumberU64(), self)
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, vm.Config{})
 		if err != nil {

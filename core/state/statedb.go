@@ -37,7 +37,7 @@ import (
 // Trie cache generation limit after which to evic trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
-var CachePrefix = []byte("accounthashcache:")
+var DirectCachePrefix = []byte("accounthashcache:")
 
 const (
 	// Number of past tries to keep. This value is chosen such that
@@ -62,6 +62,7 @@ type StateDB struct {
 	db            ethdb.Database
 	trie          *trie.Trie
 	storage       *trie.SecureTrie
+	cacheComplete bool  // True if we know that the directcache is complete
 	pastTries     []*trie.Trie
 	codeSizeCache *lru.Cache
 
@@ -103,7 +104,7 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
 	}
-	ret.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+	ret.SetBlockContext(common.Hash{}, 0, nil)
 	return ret, nil
 }
 
@@ -126,7 +127,7 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash]vm.Logs),
 	}
-	ret.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
+	ret.SetBlockContext(common.Hash{}, 0, nil)
 	return ret, nil
 }
 
@@ -149,8 +150,8 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.logs = make(map[common.Hash]vm.Logs)
 	self.logSize = 0
 	self.clearJournalAndRefund()
-	self.SetTxContext(common.Hash{}, 0, common.Hash{}, 0, nil)
-
+	self.SetBlockContext(common.Hash{}, 0, nil)
+	self.SetTxContext(common.Hash{}, 0)
 
 	return nil
 }
@@ -179,16 +180,26 @@ func (self *StateDB) pushTrie(t *trie.Trie) {
 	}
 }
 
-func (self *StateDB) SetTxContext(blockHash common.Hash, blockNum uint64, txHash common.Hash, txIndex int, validator trie.CacheValidator) {
+func (self *StateDB) SetBlockContext(blockHash common.Hash, blockNum uint64, validator trie.CacheValidator) {
 	self.bhash = blockHash
-	self.thash = txHash
-	self.txIndex = txIndex
-
 	if validator == nil {
 		validator = &trie.NullCacheValidator{}
 	}
-	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, validator, true)
+
+	// Check if cache population has completed
+	if !self.cacheComplete {
+		if _, status := trie.GetMigrationState(DirectCachePrefix, self.db); status == trie.Complete {
+			self.cacheComplete = true
+		}
+	}
+
+	storage := trie.NewDirectCache(self.trie, self.db, DirectCachePrefix, blockNum, blockHash, validator, self.cacheComplete)
 	self.storage = trie.NewSecure(storage, self.db)
+}
+
+func (self *StateDB) SetTxContext(txHash common.Hash, txIndex int) {
+	self.thash = txHash
+	self.txIndex = txIndex
 }
 
 func (self *StateDB) AddLog(log *vm.Log) {
