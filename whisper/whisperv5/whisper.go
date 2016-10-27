@@ -177,21 +177,30 @@ func (w *Whisper) GetIdentity(pubKey string) *ecdsa.PrivateKey {
 }
 
 func (w *Whisper) GenerateSymKey(name string) error {
-	if w.HasSymKey(name) {
-		return fmt.Errorf("Key with name [%s] already exists", name)
-	}
-
-	key := make([]byte, aesKeyLength)
-	_, err := crand.Read(key) // todo: check how safe is this function
+	buf := make([]byte, aesKeyLength*2)
+	_, err := crand.Read(buf) // todo: check how safe is this function
 	if err != nil {
 		return err
-	} else if !validateSymmetricKey(key) {
-		return fmt.Errorf("crypto/rand failed to generate valid key")
+	} else if !validateSymmetricKey(buf) {
+		return fmt.Errorf("crypto/rand failed to generate random data")
+	}
+
+	key := buf[:aesKeyLength]
+	salt := buf[aesKeyLength:]
+	derived, err := DeriveOneTimeKey(key, salt, EnvelopeVersion)
+	if err != nil {
+		return err
+	} else if !validateSymmetricKey(derived) {
+		return fmt.Errorf("failed to derive valid key")
 	}
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	w.symKeys[name] = key
+
+	if w.symKeys[name] != nil {
+		return fmt.Errorf("Key with name [%s] already exists", name)
+	}
+	w.symKeys[name] = derived
 	return nil
 }
 
@@ -561,7 +570,8 @@ func BytesToIntBigEndian(b []byte) (res uint64) {
 // pbkdf2 is used for security, in case people use password instead of randomly generated keys.
 func deriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error) {
 	if version == 0 {
-		// todo: review: kdf should run no less than 1 sec, because it's a once in a session experience
+		// kdf should run no less than 0.1 seconds on average compute,
+		// because it's a once in a session experience
 		derivedKey := pbkdf2.Key(key, nil, 65356, aesKeyLength, sha256.New)
 		return derivedKey, nil
 	} else {
