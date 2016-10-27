@@ -42,7 +42,6 @@ var StartingNonce uint64
 var MaxTrieCacheGen = uint16(120)
 
 var DirectCachePrefix = []byte("accounthashcache:")
-var DirectStateCacheCompleteKey = []byte("directstatecache:complete")
 
 const (
 	// Number of past tries to keep. This value is chosen such that
@@ -193,12 +192,12 @@ func (self *StateDB) SetBlockContext(blockHash common.Hash, blockNum uint64, val
 
 	// Check if cache population has completed
 	if !self.cacheComplete {
-		if value, err := self.db.Get(DirectStateCacheCompleteKey); err == nil && value != nil {
+		if _, status := trie.GetMigrationState(DirectCachePrefix, self.db); status == trie.Complete {
 			self.cacheComplete = true
 		}
 	}
 
-	storage := trie.NewDirectCache(self.trie, self.db, DirectCachePrefix, blockNum, blockHash, validator, true)
+	storage := trie.NewDirectCache(self.trie, self.db, DirectCachePrefix, blockNum, blockHash, validator, self.cacheComplete)
 	self.storage = trie.NewSecure(storage, self.db)
 }
 

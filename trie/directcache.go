@@ -30,13 +30,22 @@ import (
 )
 
 var (
-	directCacheLock             = &sync.Mutex{}
-	directCacheLocked           = false
-	directCacheWrites           = metrics.NewCounter("directcache/writes")
-	directCacheHits             = metrics.NewCounter("directcache/hits")
-	directCacheMisses           = metrics.NewCounter("directcache/misses")
-	directCacheTimer            = metrics.NewTimer("directcache/timer")
-	NotFound                    = errors.New("Cache entry not found")
+	directCacheLock              = &sync.Mutex{}
+	directCacheLocked            = false
+	directCacheWrites            = metrics.NewCounter("directcache/writes")
+	directCacheHits              = metrics.NewCounter("directcache/hits")
+	directCacheMisses            = metrics.NewCounter("directcache/misses")
+	directCacheTimer             = metrics.NewTimer("directcache/timer")
+	NotFound                     = errors.New("Cache entry not found")
+    MigrationPrefix              = []byte("directstatecachemigration:")
+)
+
+type MigrationStatus int
+
+const (
+	NotStarted = iota
+	Running    = iota
+	Complete   = iota
 )
 
 // CacheValidator can check whether a certain block is in the current canonical chain.
@@ -206,10 +215,6 @@ type cachedValue struct {
 }
 
 func DirectCacheTransaction(tx func() (error)) error {
-	if directCacheLocked {
-		return fmt.Errorf("Reentrant calls to DirectCacheTransaction are not permitted")
-	}
-
 	directCacheLock.Lock()
 	directCacheLocked = true
 	defer func() {
@@ -250,7 +255,7 @@ func GetDirectCache(prefix, key []byte, db Database) ([]byte, uint64, common.Has
 	}
 
 	var data cachedValue
-	if err := rlp.DecodeBytes(enc, &data); err != nil && glog.V(logger.Error) {
+	if err := rlp.DecodeBytes(enc, &data); err != nil {
 		return nil, 0, common.Hash{}, fmt.Errorf("Can't decode cached object at %x: %v", key, err)
 	}
 	return data.Value, data.BlockNum, data.BlockHash, nil
@@ -262,6 +267,34 @@ func HasDirectCache(prefix, key []byte, db Database) bool {
 		return true
 	}
 	return false
+}
+
+type migrationState struct {
+	Status MigrationStatus
+	Number uint64
+}
+
+// GetMigrationState returns the block number of the migration to the direct cache, and
+// whether or not it's complete.
+func GetMigrationState(prefix []byte, db Database) (uint64, MigrationStatus) {
+	enc, _ := db.Get(append(MigrationPrefix, prefix...))
+	if len(enc) == 0 {
+		return 0, NotStarted
+	}
+
+	var data migrationState
+	if err := rlp.DecodeBytes(enc, &data); err != nil {
+		glog.Errorf("Could not decode migration status: %v", err)
+		return 0, NotStarted
+	}
+
+	return data.Number, data.Status
+}
+
+// SetMigrationState updates the migration state in the database
+func SetMigrationState(prefix []byte, blockNum uint64, status MigrationStatus, db Database) error {
+	enc, _ := rlp.EncodeToBytes(migrationState{status, blockNum})
+	return db.Put(append(MigrationPrefix, prefix...), enc)
 }
 
 // DirectCacheReads retrieves a global counter measuring the number of direct

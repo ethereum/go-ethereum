@@ -355,9 +355,6 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 	return nil
 }
 
-//struct upgradeState 
-
 func populateDirectCache(db ethdb.Database, blockchain *core.BlockChain) error {
-
 	return nil
 }
