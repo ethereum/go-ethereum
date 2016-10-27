@@ -292,7 +292,7 @@ func (s *TrieSync) children(req *request, object node) ([]*request, error) {
 							// If this branch was already visited, abort iteration
 							keys := req.keys(append(child.path, it.Nibbles...))
 							if !unknown {
-								if val, err := GetDirectCache(req.dcPrefix, keys[0], s.database); val != nil && err == nil {
+								if HasDirectCache(req.dcPrefix, keys[0], s.database) {
 									break
 								}
 								// Branch is unknown, mark as so to avoid repeated db lookups

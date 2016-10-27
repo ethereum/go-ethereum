@@ -235,6 +235,10 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	gpo := gasprice.NewGasPriceOracle(eth.blockchain, chainDb, eth.eventMux, gpoParams)
 	eth.apiBackend = &EthApiBackend{eth, gpo}
 
+	if err := populateDirectCache(chainDb, eth.blockchain); err != nil {
+		return nil, err
+	}
+
 	return eth, nil
 }
 

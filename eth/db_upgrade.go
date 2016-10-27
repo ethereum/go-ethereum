@@ -354,3 +354,10 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
 	return nil
 }
+
+//struct upgradeState 
+
+func populateDirectCache(db ethdb.Database, blockchain *core.BlockChain) error {
+
+	return nil
+}

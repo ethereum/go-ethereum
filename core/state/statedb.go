@@ -41,7 +41,8 @@ var StartingNonce uint64
 // Trie cache generation limit after which to evic trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
-var CachePrefix = []byte("accounthashcache:")
+var DirectCachePrefix = []byte("accounthashcache:")
+var DirectStateCacheCompleteKey = []byte("directstatecache:complete")
 
 const (
 	// Number of past tries to keep. This value is chosen such that
@@ -66,6 +67,7 @@ type StateDB struct {
 	db            ethdb.Database
 	trie          *trie.Trie
 	storage       *trie.SecureTrie
+	cacheComplete bool  // True if we know that the directcache is complete
 	pastTries     []*trie.Trie
 	codeSizeCache *lru.Cache
 
@@ -188,7 +190,15 @@ func (self *StateDB) SetBlockContext(blockHash common.Hash, blockNum uint64, val
 	if validator == nil {
 		validator = &trie.NullCacheValidator{}
 	}
-	storage := trie.NewDirectCache(self.trie, self.db, CachePrefix, blockNum, blockHash, validator, true)
+
+	// Check if cache population has completed
+	if !self.cacheComplete {
+		if value, err := self.db.Get(DirectStateCacheCompleteKey); err == nil && value != nil {
+			self.cacheComplete = true
+		}
+	}
+
+	storage := trie.NewDirectCache(self.trie, self.db, DirectCachePrefix, blockNum, blockHash, validator, true)
 	self.storage = trie.NewSecure(storage, self.db)
 }
 
