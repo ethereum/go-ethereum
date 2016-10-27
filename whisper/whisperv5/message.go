@@ -92,7 +92,7 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 
 func DeriveOneTimeKey(key []byte, salt []byte, version uint64) ([]byte, error) {
 	if version == 0 {
-		derivedKey := pbkdf2.Key(key, salt, 16, aesKeyLength, sha256.New)
+		derivedKey := pbkdf2.Key(key, salt, 8, aesKeyLength, sha256.New)
 		return derivedKey, nil
 	} else {
 		return nil, unknownVersionError(version)
