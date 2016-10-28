@@ -128,7 +128,7 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		keys[i], _ = crypto.GenerateKey()
 	}
 	// Generate a batch of transactions with overlapping values, but shifted nonces
-	groups := map[common.Address]Transactions{}
+	groups := make(map[common.Address][]*Transaction)
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		for i := 0; i < 25; i++ {

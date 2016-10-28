@@ -126,8 +126,8 @@ func (b *EthApiBackend) GetPoolTransactions() types.Transactions {
 	defer b.eth.txMu.Unlock()
 
 	var txs types.Transactions
-	for _, batch := range b.eth.txPool.Pending() {
-		txs = append(txs, batch...)
+	for _, tx := range b.eth.txPool.PendingTransactions() {
+		txs = append(txs, tx)
 	}
 	return txs
 }

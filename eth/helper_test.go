@@ -23,7 +23,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
-	"sort"
 	"sync"
 	"testing"
 
@@ -103,19 +102,15 @@ func (p *testTxPool) AddBatch(txs []*types.Transaction) {
 }
 
 // Pending returns all the transactions known to the pool
-func (p *testTxPool) Pending() map[common.Address]types.Transactions {
+func (p *testTxPool) PendingTransactions() map[common.Hash]*types.Transaction {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	batches := make(map[common.Address]types.Transactions)
+	pending := make(map[common.Hash]*types.Transaction)
 	for _, tx := range p.pool {
-		from, _ := tx.From()
-		batches[from] = append(batches[from], tx)
+		pending[tx.Hash()] = tx
 	}
-	for _, batch := range batches {
-		sort.Sort(types.TxByNonce(batch))
-	}
-	return batches
+	return pending
 }
 
 // newTestTransaction create a new dummy transaction.
