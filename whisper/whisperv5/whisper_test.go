@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -143,8 +144,8 @@ func TestWhisperIdentityManagement(x *testing.T) {
 	w := NewWhisper(nil)
 	id1 := w.NewIdentity()
 	id2 := w.NewIdentity()
-	pub1 := string(crypto.FromECDSAPub(&id1.PublicKey))
-	pub2 := string(crypto.FromECDSAPub(&id2.PublicKey))
+	pub1 := common.ToHex(crypto.FromECDSAPub(&id1.PublicKey))
+	pub2 := common.ToHex(crypto.FromECDSAPub(&id2.PublicKey))
 	pk1 := w.GetIdentity(pub1)
 	pk2 := w.GetIdentity(pub2)
 	if !w.HasIdentity(pub1) {

@@ -150,7 +150,7 @@ func (w *Whisper) NewIdentity() *ecdsa.PrivateKey {
 	}
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	w.privateKeys[string(crypto.FromECDSAPub(&key.PublicKey))] = key
+	w.privateKeys[common.ToHex(crypto.FromECDSAPub(&key.PublicKey))] = key
 	return key
 }
 
