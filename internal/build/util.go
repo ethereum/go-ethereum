@@ -55,7 +55,15 @@ func GOPATH() string {
 	if len(path) == 0 {
 		log.Fatal("GOPATH is not set")
 	}
-	return strings.Join(path, string(filepath.ListSeparator))
+	// Ensure that our internal vendor folder in on GOPATH
+	vendor, _ := filepath.Abs(filepath.Join("build", "_vendor"))
+	for _, dir := range path {
+		if dir == vendor {
+			return strings.Join(path, string(filepath.ListSeparator))
+		}
+	}
+	newpath := append(path[:1], append([]string{vendor}, path[1:]...)...)
+	return strings.Join(newpath, string(filepath.ListSeparator))
 }
 
 // VERSION returns the content of the VERSION file.

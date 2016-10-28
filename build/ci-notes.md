@@ -1,3 +1,18 @@
+# Vendored Dependencies
+
+Dependencies are almost all vendored in at the standard Go `/vendor` path. This allows
+people to build go-ethereum using the standard toolchain without any particular package
+manager. It also plays nicely with `go get`, not requiring external code to be relied on.
+
+The one single dependent package missing from `vendor` is `golang.org/x/net/context`. As
+this is a package exposed via public library APIs, it must not be vendored as dependent
+code woulnd't be able to instantiate.
+
+To allow reproducible builds of go-ethereum nonetheless that don't need network access
+during build time to fetch `golang.org/x/net/context`, a version was copied into our repo
+at the very specific `/build/_vendor` path, which is added automatically by all CI build
+scripts and the makefile too.
+
 # Debian Packaging
 
 Tagged releases and develop branch commits are available as installable Debian packages

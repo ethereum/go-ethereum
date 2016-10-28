@@ -332,27 +332,25 @@ func getCachedColor(p Attribute) *Color {
 	return c
 }
 
-func printColor(format string, p Attribute, a ...interface{}) {
+func colorPrint(format string, p Attribute, a ...interface{}) {
 	c := getCachedColor(p)
-
-	if len(a) == 0 {
-		a = append(a, format)
-		format = "%s"
-	}
 
 	if !strings.HasSuffix(format, "\n") {
 		format += "\n"
 	}
 
-	c.Printf(format, a...)
+	if len(a) == 0 {
+		c.Print(format)
+	} else {
+		c.Printf(format, a...)
+	}
 }
 
-func printString(format string, p Attribute, a ...interface{}) string {
+func colorString(format string, p Attribute, a ...interface{}) string {
 	c := getCachedColor(p)
 
 	if len(a) == 0 {
-		a = append(a, format)
-		format = "%s"
+		return c.SprintFunc()(format)
 	}
 
 	return c.SprintfFunc()(format, a...)
@@ -360,66 +358,66 @@ func printString(format string, p Attribute, a ...interface{}) string {
 
 // Black is an convenient helper function to print with black foreground. A
 // newline is appended to format by default.
-func Black(format string, a ...interface{}) { printColor(format, FgBlack, a...) }
+func Black(format string, a ...interface{}) { colorPrint(format, FgBlack, a...) }
 
 // Red is an convenient helper function to print with red foreground. A
 // newline is appended to format by default.
-func Red(format string, a ...interface{}) { printColor(format, FgRed, a...) }
+func Red(format string, a ...interface{}) { colorPrint(format, FgRed, a...) }
 
 // Green is an convenient helper function to print with green foreground. A
 // newline is appended to format by default.
-func Green(format string, a ...interface{}) { printColor(format, FgGreen, a...) }
+func Green(format string, a ...interface{}) { colorPrint(format, FgGreen, a...) }
 
 // Yellow is an convenient helper function to print with yellow foreground.
 // A newline is appended to format by default.
-func Yellow(format string, a ...interface{}) { printColor(format, FgYellow, a...) }
+func Yellow(format string, a ...interface{}) { colorPrint(format, FgYellow, a...) }
 
 // Blue is an convenient helper function to print with blue foreground. A
 // newline is appended to format by default.
-func Blue(format string, a ...interface{}) { printColor(format, FgBlue, a...) }
+func Blue(format string, a ...interface{}) { colorPrint(format, FgBlue, a...) }
 
 // Magenta is an convenient helper function to print with magenta foreground.
 // A newline is appended to format by default.
-func Magenta(format string, a ...interface{}) { printColor(format, FgMagenta, a...) }
+func Magenta(format string, a ...interface{}) { colorPrint(format, FgMagenta, a...) }
 
 // Cyan is an convenient helper function to print with cyan foreground. A
 // newline is appended to format by default.
-func Cyan(format string, a ...interface{}) { printColor(format, FgCyan, a...) }
+func Cyan(format string, a ...interface{}) { colorPrint(format, FgCyan, a...) }
 
 // White is an convenient helper function to print with white foreground. A
 // newline is appended to format by default.
-func White(format string, a ...interface{}) { printColor(format, FgWhite, a...) }
+func White(format string, a ...interface{}) { colorPrint(format, FgWhite, a...) }
 
 // BlackString is an convenient helper function to return a string with black
 // foreground.
-func BlackString(format string, a ...interface{}) string { return printString(format, FgBlack, a...) }
+func BlackString(format string, a ...interface{}) string { return colorString(format, FgBlack, a...) }
 
 // RedString is an convenient helper function to return a string with red
 // foreground.
-func RedString(format string, a ...interface{}) string { return printString(format, FgRed, a...) }
+func RedString(format string, a ...interface{}) string { return colorString(format, FgRed, a...) }
 
 // GreenString is an convenient helper function to return a string with green
 // foreground.
-func GreenString(format string, a ...interface{}) string { return printString(format, FgGreen, a...) }
+func GreenString(format string, a ...interface{}) string { return colorString(format, FgGreen, a...) }
 
 // YellowString is an convenient helper function to return a string with yellow
 // foreground.
-func YellowString(format string, a ...interface{}) string { return printString(format, FgYellow, a...) }
+func YellowString(format string, a ...interface{}) string { return colorString(format, FgYellow, a...) }
 
 // BlueString is an convenient helper function to return a string with blue
 // foreground.
-func BlueString(format string, a ...interface{}) string { return printString(format, FgBlue, a...) }
+func BlueString(format string, a ...interface{}) string { return colorString(format, FgBlue, a...) }
 
 // MagentaString is an convenient helper function to return a string with magenta
 // foreground.
 func MagentaString(format string, a ...interface{}) string {
-	return printString(format, FgMagenta, a...)
+	return colorString(format, FgMagenta, a...)
 }
 
 // CyanString is an convenient helper function to return a string with cyan
 // foreground.
-func CyanString(format string, a ...interface{}) string { return printString(format, FgCyan, a...) }
+func CyanString(format string, a ...interface{}) string { return colorString(format, FgCyan, a...) }
 
 // WhiteString is an convenient helper function to return a string with white
 // foreground.
-func WhiteString(format string, a ...interface{}) string { return printString(format, FgWhite, a...) }
+func WhiteString(format string, a ...interface{}) string { return colorString(format, FgWhite, a...) }
