@@ -1,0 +1,28 @@
+pages:
+- Home: 'index.md'
+- Quickstart: 'quickstart.md'
+- Recipes: 'recipes.md'
+- References:
+    - Layouts: 'layouts.md'
+    - Components: 'components.md'
+    - Events: 'events.md'
+    - Themes: 'themes.md'
+- Versions: 'versions.md'
+- About: 'about.md'
+
+site_name: termui
+repo_url: https://github.com/gizak/termui/
+site_description: 'termui user guide'
+site_author: gizak
+
+docs_dir: '_docs'
+
+theme: readthedocs
+
+markdown_extensions:
+  - smarty
+  - admonition
+  - toc
+
+extra:
+    version: 1.0

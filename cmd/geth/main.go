@@ -85,22 +85,6 @@ Regular users do not need to execute it.
 `,
 		},
 		{
-			Action: gpuinfo,
-			Name:   "gpuinfo",
-			Usage:  "gpuinfo",
-			Description: `
-Prints OpenCL device info for all found GPUs.
-`,
-		},
-		{
-			Action: gpubench,
-			Name:   "gpubench",
-			Usage:  "benchmark GPU",
-			Description: `
-Runs quick benchmark on first GPU found.
-`,
-		},
-		{
 			Action: version,
 			Name:   "version",
 			Usage:  "print ethereum version numbers",
@@ -147,7 +131,6 @@ participating.
 		utils.OpposeDAOFork,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
-		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
@@ -312,7 +295,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("ethereum service not running: %v", err)
 		}
-		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
+		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
@@ -342,31 +325,6 @@ func makedag(ctx *cli.Context) error {
 			fmt.Println("making DAG, this could take awhile...")
 			ethash.MakeDAG(blockNum, dir)
 		}
-	default:
-		wrongArgs()
-	}
-	return nil
-}
-
-func gpuinfo(ctx *cli.Context) error {
-	eth.PrintOpenCLDevices()
-	return nil
-}
-
-func gpubench(ctx *cli.Context) error {
-	args := ctx.Args()
-	wrongArgs := func() {
-		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
-	}
-	switch {
-	case len(args) == 1:
-		n, err := strconv.ParseUint(args[0], 0, 64)
-		if err != nil {
-			wrongArgs()
-		}
-		eth.GPUBench(n)
-	case len(args) == 0:
-		eth.GPUBench(0)
 	default:
 		wrongArgs()
 	}

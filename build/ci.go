@@ -141,7 +141,6 @@ func doInstall(cmdline []string) {
 		log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
 		os.Exit(1)
 	}
-
 	// Compile packages given as arguments, or everything if there are no arguments.
 	packages := []string{"./..."}
 	if flag.NArg() > 0 {
@@ -178,6 +177,7 @@ func goTool(subcmd string, args ...string) *exec.Cmd {
 	cmd := exec.Command(gocmd, subcmd)
 	cmd.Args = append(cmd.Args, args...)
 	cmd.Env = []string{
+		"GO15VENDOREXPERIMENT=1",
 		"GOPATH=" + build.GOPATH(),
 		"GOBIN=" + GOBIN,
 	}
@@ -200,11 +200,24 @@ func doTest(cmdline []string) {
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
 	flag.CommandLine.Parse(cmdline)
+
 	packages := []string{"./..."}
 	if len(flag.CommandLine.Args()) > 0 {
 		packages = flag.CommandLine.Args()
 	}
-
+	if len(packages) == 1 && packages[0] == "./..." {
+		// Resolve ./... manually since go vet will fail on vendored stuff
+		out, err := goTool("list", "./...").CombinedOutput()
+		if err != nil {
+			log.Fatalf("package listing failed: %v\n%s", err, string(out))
+		}
+		packages = []string{}
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "vendor") {
+				packages = append(packages, strings.TrimSpace(line))
+			}
+		}
+	}
 	// Run analysis tools before the tests.
 	if *vet {
 		build.MustRun(goTool("vet", packages...))

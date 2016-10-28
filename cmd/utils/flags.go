@@ -170,7 +170,6 @@ var (
 		Usage: "Updates the chain rules to oppose the DAO hard-fork",
 	}
 	// Miner settings
-	// TODO: refactor CPU vs GPU mining flags
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable mining",
@@ -179,10 +178,6 @@ var (
 		Name:  "minerthreads",
 		Usage: "Number of CPU threads to use for mining",
 		Value: runtime.NumCPU(),
-	}
-	MiningGPUFlag = cli.StringFlag{
-		Name:  "minergpus",
-		Usage: "List of GPUs to use for mining (e.g. '0,1' will use the first two GPUs found)",
 	}
 	TargetGasLimitFlag = cli.StringFlag{
 		Name:  "targetgaslimit",

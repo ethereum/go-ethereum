@@ -13,8 +13,7 @@
 .ethtest
 */**/*tx_database*
 */**/*dapps*
-Godeps/_workspace/pkg
-Godeps/_workspace/bin
+build/_vendor/pkg
 
 #*
 .#*

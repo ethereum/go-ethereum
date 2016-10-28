@@ -362,6 +362,17 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
+func (s *Ethereum) StartMining(threads int) error {
+	eb, err := s.Etherbase()
+	if err != nil {
+		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
+		glog.V(logger.Error).Infoln(err)
+		return err
+	}
+	go s.miner.Start(eb, threads)
+	return nil
+}
+
 func (s *Ethereum) StopMining()         { s.miner.Stop() }
 func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
