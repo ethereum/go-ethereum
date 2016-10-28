@@ -302,10 +302,11 @@ func (self *Whisper) open(envelope *Envelope) *Message {
 	// Iterate over the keys and try to decrypt the message
 	for _, key := range self.keys {
 		message, err := envelope.Open(key)
-		if err == nil {
+		switch err {
+		case nil:
 			message.To = &key.PublicKey
 			return message
-		} else if err == ecies.ErrInvalidPublicKey {
+		case ecies.ErrInvalidPublicKey:
 			return message
 		}
 	}

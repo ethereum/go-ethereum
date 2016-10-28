@@ -178,6 +178,9 @@ func (s *PublicWhisperAPI) Post(args PostArgs) (bool, error) {
 
 	// construct whisper message with transmission options
 	message := NewMessage(common.FromHex(args.Payload))
+	if len(message.Payload) == 0 && len(args.Payload) > 0 {
+		message.Payload = []byte(args.Payload)
+	}
 	options := Options{
 		To:     crypto.ToECDSAPub(common.FromHex(args.To)),
 		TTL:    time.Duration(args.TTL) * time.Second,
