@@ -78,6 +78,12 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
+// Ecrecover returns the public key for the private key that was used to
+// calculate the signature.
+//
+// Note: secp256k1 expects the recover id to be either 0, 1. Ethereum
+// signatures have a recover id with an offset of 27. Callers must take
+// this into account and if "recovering" from an Ethereum signature adjust.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return secp256k1.RecoverPubkey(hash, sig)
 }
@@ -192,15 +198,38 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}, nil
 }
 
-func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
-	if len(hash) != 32 {
-		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
+// Sign calculates an ECDSA signature.
+// This function is susceptible to choosen plaintext attacks that can leak
+// information about the private key that is used for signing. Callers must
+// be aware that the given hash cannot be choosen by an adversery. Common
+// solution is to hash any input before calculating the signature.
+//
+// Note: the calculated signature is not Ethereum compliant. The yellow paper
+// dictates Ethereum singature to have a V value with and offset of 27 v in [27,28].
+// Use SignEthereum to get an Ethereum compliant signature.
+func Sign(data []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
+	if len(data) != 32 {
+		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(data))
 	}
 
 	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
-	sig, err = secp256k1.Sign(hash, seckey)
+	sig, err = secp256k1.Sign(data, seckey)
 	return
+}
+
+// SignEthereum calculates an Ethereum ECDSA signature.
+// This function is susceptible to choosen plaintext attacks that can leak
+// information about the private key that is used for signing. Callers must
+// be aware that the given hash cannot be freely choosen by an adversery.
+// Common solution is to hash the message before calculating the signature.
+func SignEthereum(data []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
+	sig, err := Sign(data, prv)
+	if err != nil {
+		return nil, err
+	}
+	sig[64] += 27 // as described in the yellow paper
+	return sig, err
 }
 
 func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {

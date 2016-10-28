@@ -318,6 +318,8 @@ func (tx *Transaction) publicKey(homestead bool) ([]byte, error) {
 	return pub, nil
 }
 
+// WithSignature returns a new transaction with the given signature.
+// This signature needs to be formatted as described in the yellow paper (v+27).
 func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
@@ -325,13 +327,13 @@ func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
 	cpy := &Transaction{data: tx.data}
 	cpy.data.R = new(big.Int).SetBytes(sig[:32])
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
-	cpy.data.V = sig[64] + 27
+	cpy.data.V = sig[64]
 	return cpy, nil
 }
 
 func (tx *Transaction) SignECDSA(prv *ecdsa.PrivateKey) (*Transaction, error) {
 	h := tx.SigHash()
-	sig, err := crypto.Sign(h[:], prv)
+	sig, err := crypto.SignEthereum(h[:], prv)
 	if err != nil {
 		return nil, err
 	}

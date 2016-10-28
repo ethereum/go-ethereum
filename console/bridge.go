@@ -126,6 +126,44 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 	return val
 }
 
+// Sign is a wrapper around the personal.sign RPC method that uses a non-echoing password
+// prompt to aquire the passphrase and executes the original RPC method (saved in
+// jeth.sign) with it to actually execute the RPC call.
+func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
+	var (
+		message = call.Argument(0)
+		account = call.Argument(1)
+		passwd  = call.Argument(2)
+	)
+
+	if !message.IsString() {
+		throwJSException("first argument must be the message to sign")
+	}
+	if !account.IsString() {
+		throwJSException("second argument must be the account to sign with")
+	}
+
+	// if the password is not given or null ask the user and ensure password is a string
+	if passwd.IsUndefined() || passwd.IsNull() {
+		fmt.Fprintf(b.printer, "Give password for account %s\n", account)
+		if input, err := b.prompter.PromptPassword("Passphrase: "); err != nil {
+			throwJSException(err.Error())
+		} else {
+			passwd, _ = otto.ToValue(input)
+		}
+	}
+	if !passwd.IsString() {
+		throwJSException("third argument must be the password to unlock the account")
+	}
+
+	// Send the request to the backend and return
+	val, err := call.Otto.Call("jeth.sign", nil, message, account, passwd)
+	if err != nil {
+		throwJSException(err.Error())
+	}
+	return val
+}
+
 // Sleep will block the console for the specified number of seconds.
 func (b *bridge) Sleep(call otto.FunctionCall) (response otto.Value) {
 	if call.Argument(0).IsNumber() {
