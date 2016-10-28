@@ -216,6 +216,11 @@ func (w *Whisper) AddSymKey(name string, key []byte) error {
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
+
+	// double check is necessary, because deriveKeyMaterial() is slow
+	if w.symKeys[name] != nil {
+		return fmt.Errorf("Key with name [%s] already exists", name)
+	}
 	w.symKeys[name] = derived
 	return nil
 }
