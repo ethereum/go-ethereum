@@ -14,7 +14,7 @@ https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/6874
 
 ## Automated development builds
 
-The following builds are build automatically by our build servers after each push to the [develop](https://github.com/ethereum/go-ethereum/tree/develop) branch.
+The following builds are built automatically by our build servers after each push to the [develop](https://github.com/ethereum/go-ethereum/tree/develop) branch.
 
 * [Docker](https://registry.hub.docker.com/u/ethereum/client-go/)
 * [OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)
