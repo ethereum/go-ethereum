@@ -152,15 +152,15 @@ func run(ctx *cli.Context) error {
 			var err error
 			hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
 			if err != nil {
-				fmt.Println("Could not load code from file: %v", err)
-				os.exit(1)
+				fmt.Printf("Could not load code from file: %v\n", err)
+				os.Exit(1)
 			}
 		} else {
 			var err error
 			hexcode, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
-				fmt.Println("Could not load code from stdin: %v", err)
-				os.exit(1)
+				fmt.Printf("Could not load code from stdin: %v\n", err)
+				os.Exit(1)
 			}
 		}
 		code = common.Hex2Bytes(string(hexcode[:]))
