@@ -781,34 +781,43 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfi
 			Fatalf("Could not make chain configuration: %v", err)
 		}
 	}
-	// Set any missing fields due to them being unset or system upgrade
-	if config.HomesteadBlock == nil {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.HomesteadBlock = params.TestNetHomesteadBlock
-		} else {
-			config.HomesteadBlock = params.MainNetHomesteadBlock
+	// Check whether we are allowed to set default config params or not:
+	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `geth init`)
+	//  - If a genesis is already set, ensure we have a configuration for it (mainnet or testnet)
+	defaults := genesis == nil ||
+		(genesis.Hash() == params.MainNetGenesisHash && !ctx.GlobalBool(TestNetFlag.Name)) ||
+		(genesis.Hash() == params.TestNetGenesisHash && ctx.GlobalBool(TestNetFlag.Name))
+
+	// Set any missing chainConfig fields due to them being unset or system upgrade
+	if defaults {
+		if config.HomesteadBlock == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.HomesteadBlock = params.TestNetHomesteadBlock
+			} else {
+				config.HomesteadBlock = params.MainNetHomesteadBlock
+			}
 		}
-	}
-	if config.DAOForkBlock == nil {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.DAOForkBlock = params.TestNetDAOForkBlock
-		} else {
-			config.DAOForkBlock = params.MainNetDAOForkBlock
+		if config.DAOForkBlock == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.DAOForkBlock = params.TestNetDAOForkBlock
+			} else {
+				config.DAOForkBlock = params.MainNetDAOForkBlock
+			}
+			config.DAOForkSupport = true
 		}
-		config.DAOForkSupport = true
-	}
-	if config.HomesteadGasRepriceBlock == nil {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.HomesteadGasRepriceBlock = params.TestNetHomesteadGasRepriceBlock
-		} else {
-			config.HomesteadGasRepriceBlock = params.MainNetHomesteadGasRepriceBlock
+		if config.HomesteadGasRepriceBlock == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.HomesteadGasRepriceBlock = params.TestNetHomesteadGasRepriceBlock
+			} else {
+				config.HomesteadGasRepriceBlock = params.MainNetHomesteadGasRepriceBlock
+			}
 		}
-	}
-	if config.HomesteadGasRepriceHash == (common.Hash{}) {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.HomesteadGasRepriceHash = params.TestNetHomesteadGasRepriceHash
-		} else {
-			config.HomesteadGasRepriceHash = params.MainNetHomesteadGasRepriceHash
+		if config.HomesteadGasRepriceHash == (common.Hash{}) {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.HomesteadGasRepriceHash = params.TestNetHomesteadGasRepriceHash
+			} else {
+				config.HomesteadGasRepriceHash = params.MainNetHomesteadGasRepriceHash
+			}
 		}
 	}
 	// Force override any existing configs if explicitly requested

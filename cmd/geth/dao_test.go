@@ -116,19 +116,19 @@ func TestDAOInitOldPrivnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{}, nil, false)
 }
 func TestDAODefaultOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, false}}, params.MainNetDAOForkBlock, true)
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, false}}, nil, false)
 }
 func TestDAOSupportOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true)
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}}, nil, true)
 }
 func TestDAOOpposeOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}}, params.MainNetDAOForkBlock, false)
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}}, nil, false)
 }
 func TestDAOSwitchToSupportOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}, {true, false}}, params.MainNetDAOForkBlock, true)
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}, {true, false}}, nil, true)
 }
 func TestDAOSwitchToOpposeOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}, {false, true}}, params.MainNetDAOForkBlock, false)
+	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}, {false, true}}, nil, false)
 }
 func TestDAOInitNoForkPrivnet(t *testing.T) {
 	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{}, daoGenesisForkBlock, false)

@@ -253,7 +253,7 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 	}
 	if config.HomesteadGasRepriceBlock != nil && config.HomesteadGasRepriceBlock.Cmp(header.Number) == 0 {
 		if config.HomesteadGasRepriceHash != (common.Hash{}) && config.HomesteadGasRepriceHash != header.Hash() {
-			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.HomesteadGasRepriceBlock)
+			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.HomesteadGasRepriceHash)
 		}
 	}
 	return nil
