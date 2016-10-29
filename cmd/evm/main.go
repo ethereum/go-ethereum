@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"runtime"
@@ -57,6 +58,10 @@ var (
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
 		Usage: "EVM code",
+	}
+	CodeFileFlag = cli.StringFlag{
+		Name:  "codefile",
+		Usage: "file containing EVM code",
 	}
 	GasFlag = cli.StringFlag{
 		Name:  "gas",
@@ -104,6 +109,7 @@ func init() {
 		DisableJitFlag,
 		SysStatFlag,
 		CodeFlag,
+		CodeFileFlag,
 		GasFlag,
 		PriceFlag,
 		ValueFlag,
@@ -133,12 +139,35 @@ func run(ctx *cli.Context) error {
 	tstart := time.Now()
 
 	var (
-		ret []byte
-		err error
+		code []byte
+		ret  []byte
+		err  error
 	)
 
+	if ctx.GlobalString(CodeFlag.Name) != "" {
+		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
+	} else {
+		var hexcode []byte
+		if ctx.GlobalString(CodeFileFlag.Name) != "" {
+			var err error
+			hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
+			if err != nil {
+				fmt.Printf("Could not load code from file: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			var err error
+			hexcode, err = ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Printf("Could not load code from stdin: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		code = common.Hex2Bytes(string(hexcode[:]))
+	}
+
 	if ctx.GlobalBool(CreateFlag.Name) {
-		input := append(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)), common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
+		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
 		ret, _, err = vmenv.Create(
 			sender,
 			input,
@@ -149,7 +178,6 @@ func run(ctx *cli.Context) error {
 	} else {
 		receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
 
-		code := common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
 		receiver.SetCode(crypto.Keccak256Hash(code), code)
 		ret, err = vmenv.Call(
 			sender,
