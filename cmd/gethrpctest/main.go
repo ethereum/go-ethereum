@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/ethereum/go-ethereum/whisper"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
 )
 
 const defaultTestKey = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"

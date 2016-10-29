@@ -29,4 +29,4 @@ Whisper is a pure identity-based messaging system. Whisper provides a low-level
 or prejudiced by the low-level hardware attributes and characteristics,
 particularly the notion of singular endpoints.
 */
-package whisper
+package whisperv2

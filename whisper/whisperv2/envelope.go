@@ -17,7 +17,7 @@
 // Contains the Whisper protocol Envelope element. For formal details please see
 // the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#envelopes.
 
-package whisper
+package whisperv2
 
 import (
 	"crypto/ecdsa"

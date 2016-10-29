@@ -17,7 +17,7 @@
 // Contains the Whisper protocol Topic element. For formal details please see
 // the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#topics.
 
-package whisper
+package whisperv2
 
 import "github.com/ethereum/go-ethereum/crypto"
 

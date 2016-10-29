@@ -48,7 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/whisper"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
 	"gopkg.in/urfave/cli.v1"
 )
 
