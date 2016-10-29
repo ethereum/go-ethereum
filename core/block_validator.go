@@ -248,7 +248,15 @@ func ValidateHeader(config *ChainConfig, pow pow.PoW, header *types.Header, pare
 		}
 	}
 	// If all checks passed, validate the extra-data field for hard forks
-	return ValidateDAOHeaderExtraData(config, header)
+	if err := ValidateDAOHeaderExtraData(config, header); err != nil {
+		return err
+	}
+	if config.HomesteadGasRepriceBlock != nil && config.HomesteadGasRepriceBlock.Cmp(header.Number) == 0 {
+		if config.HomesteadGasRepriceHash != (common.Hash{}) && config.HomesteadGasRepriceHash != header.Hash() {
+			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.HomesteadGasRepriceHash)
+		}
+	}
+	return nil
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
