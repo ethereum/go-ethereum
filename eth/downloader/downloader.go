@@ -934,7 +934,7 @@ func (d *Downloader) fetchNodeData() error {
 			return d.queue.DeliverNodeData(packet.PeerId(), packet.(*statePack).states, func(delivered int, progressed bool, err error) {
 				// If the peer returned old-requested data, forgive
 				if err == trie.ErrNotRequested {
-					glog.V(logger.Info).Infof("peer %s: replied to stale state request, forgiving", packet.PeerId())
+					glog.V(logger.Debug).Infof("peer %s: replied to stale state request, forgiving", packet.PeerId())
 					return
 				}
 				if err != nil {
