@@ -189,7 +189,7 @@ func (dc *DirectCache) Populate() (err error) {
 	it := dc.Iterator()
 	for it.Next() {
 		if err := DirectCacheTransaction(func() error {
-			if HasDirectCache(dc.keyPrefix, it.Key, dc.db) {
+			if !HasDirectCache(dc.keyPrefix, it.Key, dc.db) {
 				writes += 1
 				if err = WriteDirectCache(dc.keyPrefix, it.Key, it.Value, dc.blockNum, dc.blockHash, dc.db); err != nil {
 					return err
@@ -202,7 +202,7 @@ func (dc *DirectCache) Populate() (err error) {
 
 		i += 1
 		if i % 10000 == 0 && glog.V(logger.Info) {
-			glog.V(logger.Info).Infof("Constructing direct cache: processed %v entries, writing %v", i, writes)
+			glog.V(logger.Info).Infof("Constructing direct cache: processed %v entries, written %v", i, writes)
 		}
 	}
 	return nil
@@ -271,29 +271,29 @@ func HasDirectCache(prefix, key []byte, db Database) bool {
 
 type migrationState struct {
 	Status MigrationStatus
-	Number uint64
+	Hash   common.Hash
 }
 
 // GetMigrationState returns the block number of the migration to the direct cache, and
 // whether or not it's complete.
-func GetMigrationState(prefix []byte, db Database) (uint64, MigrationStatus) {
+func GetMigrationState(prefix []byte, db Database) (common.Hash, MigrationStatus) {
 	enc, _ := db.Get(append(MigrationPrefix, prefix...))
 	if len(enc) == 0 {
-		return 0, NotStarted
+		return common.Hash{}, NotStarted
 	}
 
 	var data migrationState
 	if err := rlp.DecodeBytes(enc, &data); err != nil {
 		glog.Errorf("Could not decode migration status: %v", err)
-		return 0, NotStarted
+		return common.Hash{}, NotStarted
 	}
 
-	return data.Number, data.Status
+	return data.Hash, data.Status
 }
 
 // SetMigrationState updates the migration state in the database
-func SetMigrationState(prefix []byte, blockNum uint64, status MigrationStatus, db Database) error {
-	enc, _ := rlp.EncodeToBytes(migrationState{status, blockNum})
+func SetMigrationState(prefix []byte, blockHash common.Hash, status MigrationStatus, db Database) error {
+	enc, _ := rlp.EncodeToBytes(migrationState{status, blockHash})
 	return db.Put(append(MigrationPrefix, prefix...), enc)
 }
 
