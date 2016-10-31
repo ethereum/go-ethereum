@@ -110,7 +110,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "callcodecallcode_11" */ {
+		if skipTest[name] /*|| name != "NonZeroValue_CALL_ToEmpty"*/ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -221,7 +221,6 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx m
 	}
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
-	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
@@ -229,6 +228,12 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx m
 	message := NewMessage(addr, to, data, value, gas, price, nonce)
 	vmenv := NewEnvFromMap(chainConfig, statedb, env, tx)
 	vmenv.origin = addr
+
+	root, _ := statedb.Commit(false)
+	statedb.Reset(root)
+
+	snapshot := statedb.Snapshot()
+
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.RevertToSnapshot(snapshot)

@@ -704,3 +704,29 @@ func TestEIP158Specific(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestEIP158NonZeroCalls(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "stNonZeroCallsTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158ZeroCalls(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "stZeroCallsTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
