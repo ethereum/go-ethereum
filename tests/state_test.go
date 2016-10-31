@@ -175,17 +175,6 @@ func TestCallCodes(t *testing.T) {
 	}
 }
 
-func TestDelegateCall(t *testing.T) {
-	chainConfig := &params.ChainConfig{
-		HomesteadBlock: big.NewInt(1150000),
-	}
-
-	fn := filepath.Join(stateTestDir, "stDelegatecallTest.json")
-	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
-		t.Error(err)
-	}
-}
-
 func TestMemory(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: big.NewInt(1150000),
@@ -261,6 +250,17 @@ func TestStateTestsRandom(t *testing.T) {
 }
 
 // homestead tests
+func TestHomesteadDelegateCall(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: big.NewInt(1150000),
+	}
+
+	fn := filepath.Join(stateTestDir, "Homestead", "stDelegatecallTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestHomesteadStateSystemOperations(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
@@ -700,6 +700,285 @@ func TestEIP158Specific(t *testing.T) {
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "stEIP158SpecificTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158NonZeroCalls(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "stNonZeroCallsTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158ZeroCalls(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "stZeroCallsTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158_150Specific(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stEIPSpecificTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158_150SingleCodeGasPrice(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stEIPSingleCodeGasPrices.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158_150MemExpandingCalls(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stMemExpandingEIPCalls.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStateSystemOperations(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stSystemOperationsTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStatePreCompiledContracts(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stPreCompiledContracts.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStateRecursiveCreate(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stSpecialTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStateRefund(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stRefundTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStateInitCode(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stInitCodeTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStateLog(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stLogTests.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadStateTransaction(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stTransactionTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadCallCreateCallCode(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallCreateCallCodeTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadCallCodes(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallCodes.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadMemory(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stMemoryTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadMemoryStress(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stMemoryStressTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadQuadraticComplexity(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	if os.Getenv("TEST_VM_COMPLEX") == "" {
+		t.Skip()
+	}
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stQuadraticComplexityTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadWallet(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stWalletTest.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadDelegateCodes(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallDelegateCodes.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadDelegateCodesCallCode(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallDelegateCodesCallCode.json")
+	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestEIP158HomesteadBounds(t *testing.T) {
+	chainConfig := &params.ChainConfig{
+		HomesteadBlock: new(big.Int),
+		EIP150Block:    big.NewInt(2457000),
+		EIP158Block:    big.NewInt(3500000),
+	}
+
+	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stBoundsTest.json")
 	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
 		t.Error(err)
 	}
