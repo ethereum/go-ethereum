@@ -1039,9 +1039,8 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header, taskQ
 }
 
 // DeliverNodeData injects a node state data retrieval response into the queue.
-// The method returns the number of node state entries originally requested, and
-// the number of them actually accepted from the delivery.
-func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(error, int)) (int, error) {
+// The method returns the number of node state accepted from the delivery.
+func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, bool, error)) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -1099,31 +1098,34 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(error, i
 
 // deliverNodeData is the asynchronous node data processor that injects a batch
 // of sync results into the state scheduler.
-func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(error, int)) {
+func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(int, bool, error)) {
 	// Wake up WaitResults after the state has been written because it
 	// might be waiting for the pivot block state to get completed.
 	defer q.active.Signal()
 
 	// Process results one by one to permit task fetches in between
+	progressed := false
 	for i, result := range results {
 		q.stateSchedLock.Lock()
 
 		if q.stateScheduler == nil {
 			// Syncing aborted since this async delivery started, bail out
 			q.stateSchedLock.Unlock()
-			callback(errNoFetchesPending, i)
+			callback(i, progressed, errNoFetchesPending)
 			return
 		}
-		if _, err := q.stateScheduler.Process([]trie.SyncResult{result}); err != nil {
+		if prog, _, err := q.stateScheduler.Process([]trie.SyncResult{result}); err != nil {
 			// Processing a state result failed, bail out
 			q.stateSchedLock.Unlock()
-			callback(err, i)
+			callback(i, progressed, err)
 			return
+		} else if prog {
+			progressed = true
 		}
 		// Item processing succeeded, release the lock (temporarily)
 		q.stateSchedLock.Unlock()
 	}
-	callback(nil, len(results))
+	callback(len(results), progressed, nil)
 }
 
 // Prepare configures the result cache to allow accepting and caching inbound

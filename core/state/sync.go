@@ -59,8 +59,10 @@ func (s *StateSync) Missing(max int) []common.Hash {
 	return (*trie.TrieSync)(s).Missing(max)
 }
 
-// Process injects a batch of retrieved trie nodes data.
-func (s *StateSync) Process(list []trie.SyncResult) (int, error) {
+// Process injects a batch of retrieved trie nodes data, returning if something
+// was committed to the database and also the index of an entry if processing of
+// it failed.
+func (s *StateSync) Process(list []trie.SyncResult) (bool, int, error) {
 	return (*trie.TrieSync)(s).Process(list)
 }
 

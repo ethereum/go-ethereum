@@ -142,34 +142,40 @@ func (s *TrieSync) Missing(max int) []common.Hash {
 	return requests
 }
 
-// Process injects a batch of retrieved trie nodes data.
-func (s *TrieSync) Process(results []SyncResult) (int, error) {
+// Process injects a batch of retrieved trie nodes data, returning if something
+// was committed to the database and also the index of an entry if processing of
+// it failed.
+func (s *TrieSync) Process(results []SyncResult) (bool, int, error) {
+	committed := false
+
 	for i, item := range results {
 		// If the item was not requested, bail out
 		request := s.requests[item.Hash]
 		if request == nil {
-			return i, ErrNotRequested
+			return committed, i, ErrNotRequested
 		}
 		// If the item is a raw entry request, commit directly
 		if request.raw {
 			request.data = item.Data
 			s.commit(request, nil)
+			committed = true
 			continue
 		}
 		// Decode the node data content and update the request
 		node, err := decodeNode(item.Hash[:], item.Data, 0)
 		if err != nil {
-			return i, err
+			return committed, i, err
 		}
 		request.data = item.Data
 
 		// Create and schedule a request for all the children nodes
 		requests, err := s.children(request, node)
 		if err != nil {
-			return i, err
+			return committed, i, err
 		}
 		if len(requests) == 0 && request.deps == 0 {
 			s.commit(request, nil)
+			committed = true
 			continue
 		}
 		request.deps += len(requests)
@@ -177,7 +183,7 @@ func (s *TrieSync) Process(results []SyncResult) (int, error) {
 			s.schedule(child)
 		}
 	}
-	return 0, nil
+	return committed, 0, nil
 }
 
 // Pending returns the number of state entries currently pending for download.

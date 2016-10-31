@@ -138,7 +138,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[:0], sched.Missing(batch)...)
@@ -168,7 +168,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[len(results):], sched.Missing(0)...)
@@ -206,7 +206,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = make(map[common.Hash]struct{})
@@ -249,7 +249,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, hash := range sched.Missing(0) {
@@ -283,7 +283,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
 		// Process each of the state nodes
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, result := range results {
