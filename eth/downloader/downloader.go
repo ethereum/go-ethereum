@@ -67,8 +67,8 @@ var (
 	fsHeaderCheckFrequency = 100        // Verification frequency of the downloaded headers during fast sync
 	fsHeaderSafetyNet      = 2048       // Number of headers to discard in case a chain violation is detected
 	fsHeaderForceVerify    = 24         // Number of headers to verify before and after the pivot to accept it
-	fsPivotInterval        = 512        // Number of headers out of which to randomize the pivot point
-	fsMinFullBlocks        = 1024       // Number of blocks to retrieve fully even in fast sync
+	fsPivotInterval        = 256        // Number of headers out of which to randomize the pivot point
+	fsMinFullBlocks        = 64         // Number of blocks to retrieve fully even in fast sync
 	fsCriticalTrials       = uint32(32) // Number of times to retry in the cricical section before bailing
 )
 
@@ -480,6 +480,11 @@ func (d *Downloader) spawnSync(origin uint64, fetchers ...func() error) error {
 	d.queue.Close()
 	d.cancel()
 	wg.Wait()
+
+	// If sync failed in the critical section, bump the fail counter
+	if err != nil && d.mode == FastSync && d.fsPivotLock != nil {
+		atomic.AddUint32(&d.fsPivotFails, 1)
+	}
 	return err
 }
 
@@ -1190,7 +1195,6 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 						}
 					}
 				}
-				atomic.AddUint32(&d.fsPivotFails, 1)
 			}
 		}
 	}()

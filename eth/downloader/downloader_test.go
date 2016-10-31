@@ -358,7 +358,7 @@ func (dl *downloadTester) insertBlocks(blocks types.Blocks) (int, error) {
 	return len(blocks), nil
 }
 
-// insertReceipts injects a new batch of blocks into the simulated chain.
+// insertReceipts injects a new batch of receipts into the simulated chain.
 func (dl *downloadTester) insertReceipts(blocks types.Blocks, receipts []types.Receipts) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
@@ -1199,7 +1199,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := 3*fsHeaderSafetyNet + fsMinFullBlocks
+	targetBlocks := 3*fsHeaderSafetyNet + fsPivotInterval + fsMinFullBlocks
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Attempt to sync with an attacker that feeds junk during the fast sync phase.
@@ -1722,8 +1722,6 @@ func TestFastCriticalRestartsCont63(t *testing.T) { testFastCriticalRestarts(t, 
 func TestFastCriticalRestartsCont64(t *testing.T) { testFastCriticalRestarts(t, 64, true) }
 
 func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
-	t.Parallel()
-
 	tester := newTester()
 	defer tester.terminate()
 
@@ -1731,12 +1729,16 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 	targetBlocks := fsMinFullBlocks + 2*fsPivotInterval - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
-	// Create a tester peer with the critical section state roots missing (force failures)
+	// Create a tester peer with a critical section header missing (force failures)
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
+	delete(tester.peerHeaders["peer"], hashes[fsMinFullBlocks-1])
+	tester.downloader.dropPeer = func(id string) {} // We reuse the same "faulty" peer throughout the test
+
+	// Remove all possible pivot state roots and slow down replies (test failure resets later)
 	for i := 0; i < fsPivotInterval; i++ {
 		tester.peerMissingStates["peer"][headers[hashes[fsMinFullBlocks+i]].Root] = true
 	}
-	tester.downloader.dropPeer = func(id string) {} // We reuse the same "faulty" peer throughout the test
+	tester.downloader.peers.peers["peer"].getNodeData = tester.peerGetNodeDataFn("peer", 500*time.Millisecond) // Enough to reach the critical section
 
 	// Synchronise with the peer a few times and make sure they fail until the retry limit
 	for i := 0; i < int(fsCriticalTrials)-1; i++ {
@@ -1744,12 +1746,18 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 		if err := tester.sync("peer", nil, FastSync); err == nil {
 			t.Fatalf("failing fast sync succeeded: %v", err)
 		}
-		time.Sleep(100 * time.Millisecond) // Make sure no in-flight requests remain
+		time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
 
 		// If it's the first failure, pivot should be locked => reenable all others to detect pivot changes
 		if i == 0 {
+			if tester.downloader.fsPivotLock == nil {
+				time.Sleep(400 * time.Millisecond) // Make sure the first huge timeout expires too
+				t.Fatalf("pivot block not locked in after critical section failure")
+			}
 			tester.lock.Lock()
+			tester.peerHeaders["peer"][hashes[fsMinFullBlocks-1]] = headers[hashes[fsMinFullBlocks-1]]
 			tester.peerMissingStates["peer"] = map[common.Hash]bool{tester.downloader.fsPivotLock.Root: true}
+			tester.downloader.peers.peers["peer"].getNodeData = tester.peerGetNodeDataFn("peer", 0)
 			tester.lock.Unlock()
 		}
 	}
@@ -1762,16 +1770,17 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 		if err := tester.sync("peer", nil, FastSync); err != nil {
 			t.Fatalf("failed to synchronise blocks in progressed fast sync: %v", err)
 		}
-		time.Sleep(100 * time.Millisecond) // Make sure no in-flight requests remain
+		time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
 
 		if fails := atomic.LoadUint32(&tester.downloader.fsPivotFails); fails != 1 {
 			t.Fatalf("progressed pivot trial count mismatch: have %v, want %v", fails, 1)
 		}
+		assertOwnChain(t, tester, targetBlocks+1)
 	} else {
 		if err := tester.sync("peer", nil, FastSync); err == nil {
 			t.Fatalf("succeeded to synchronise blocks in failed fast sync")
 		}
-		time.Sleep(100 * time.Millisecond) // Make sure no in-flight requests remain
+		time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
 
 		if fails := atomic.LoadUint32(&tester.downloader.fsPivotFails); fails != fsCriticalTrials {
 			t.Fatalf("failed pivot trial count mismatch: have %v, want %v", fails, fsCriticalTrials)
@@ -1781,5 +1790,7 @@ func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
 	if err := tester.sync("peer", nil, FastSync); err != nil {
 		t.Fatalf("failed to synchronise blocks in slow sync: %v", err)
 	}
-	assertOwnChain(t, tester, targetBlocks+1)
+	// Note, we can't assert the chain here because the test asserter assumes sync
+	// completed using a single mode of operation, whereas fast-then-slow can result
+	// in arbitrary intermediate state that's not cleanly verifiable.
 }
