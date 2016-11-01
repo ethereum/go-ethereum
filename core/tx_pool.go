@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -53,6 +54,23 @@ var (
 	maxQueuedInTotal     = uint64(1024)  // Max limit of queued transactions from all accounts
 	maxQueuedLifetime    = 3 * time.Hour // Max amount of time transactions from idle accounts are queued
 	evictionInterval     = time.Minute   // Time interval to check for evictable transactions
+)
+
+var (
+	// Metrics for the pending pool
+	pendingDiscardCounter = metrics.NewCounter("txpool/pending/discard")
+	pendingReplaceCounter = metrics.NewCounter("txpool/pending/replace")
+	pendingRLCounter      = metrics.NewCounter("txpool/pending/ratelimit") // Dropped due to rate limiting
+	pendingNofundsCounter = metrics.NewCounter("txpool/pending/nofunds")   // Dropped due to out-of-funds
+
+	// Metrics for the queued pool
+	queuedDiscardCounter = metrics.NewCounter("txpool/queued/discard")
+	queuedReplaceCounter = metrics.NewCounter("txpool/queued/replace")
+	queuedRLCounter      = metrics.NewCounter("txpool/queued/ratelimit") // Dropped due to rate limiting
+	queuedNofundsCounter = metrics.NewCounter("txpool/queued/nofunds")   // Dropped due to out-of-funds
+
+	// General tx metrics
+	invalidTxCounter = metrics.NewCounter("txpool/invalid")
 )
 
 type stateFn func() (*state.StateDB, error)
@@ -306,6 +324,7 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 	}
 	// Otherwise ensure basic validation passes and queue it up
 	if err := pool.validateTx(tx); err != nil {
+		invalidTxCounter.Inc(1)
 		return err
 	}
 	pool.enqueueTx(hash, tx)
@@ -333,11 +352,13 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 	}
 	inserted, old := pool.queue[from].Add(tx)
 	if !inserted {
+		queuedDiscardCounter.Inc(1)
 		return // An older transaction was better, discard this
 	}
 	// Discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
+		queuedReplaceCounter.Inc(1)
 	}
 	pool.all[hash] = tx
 }
@@ -360,11 +381,13 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	if !inserted {
 		// An older transaction was better, discard this
 		delete(pool.all, hash)
+		pendingDiscardCounter.Inc(1)
 		return
 	}
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
+		pendingReplaceCounter.Inc(1)
 	}
 	pool.all[hash] = tx // Failsafe to work around direct pending inserts (tests)
 
@@ -499,6 +522,7 @@ func (pool *TxPool) promoteExecutables() {
 				glog.Infof("Removed unpayable queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			queuedNofundsCounter.Inc(1)
 		}
 		// Gather all executable transactions and promote them
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
@@ -513,6 +537,7 @@ func (pool *TxPool) promoteExecutables() {
 				glog.Infof("Removed cap-exceeding queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			queuedRLCounter.Inc(1)
 		}
 		queued += uint64(list.Len())
 
@@ -527,6 +552,7 @@ func (pool *TxPool) promoteExecutables() {
 		pending += uint64(list.Len())
 	}
 	if pending > maxPendingTotal {
+		pendingBeforeCap := pending
 		// Assemble a spam order to penalize large transactors first
 		spammers := prque.New()
 		for addr, list := range pool.pending {
@@ -573,6 +599,7 @@ func (pool *TxPool) promoteExecutables() {
 				}
 			}
 		}
+		pendingRLCounter.Inc(int64(pendingBeforeCap - pending))
 	}
 	// If we've queued more transactions than the hard limit, drop oldest ones
 	if queued > maxQueuedInTotal {
@@ -596,6 +623,7 @@ func (pool *TxPool) promoteExecutables() {
 					pool.removeTx(tx.Hash())
 				}
 				drop -= size
+				queuedRLCounter.Inc(int64(size))
 				continue
 			}
 			// Otherwise drop only last few transactions
@@ -603,6 +631,7 @@ func (pool *TxPool) promoteExecutables() {
 			for i := len(txs) - 1; i >= 0 && drop > 0; i-- {
 				pool.removeTx(txs[i].Hash())
 				drop--
+				queuedRLCounter.Inc(1)
 			}
 		}
 	}
@@ -636,6 +665,7 @@ func (pool *TxPool) demoteUnexecutables() {
 				glog.Infof("Removed unpayable pending transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			pendingNofundsCounter.Inc(1)
 		}
 		for _, tx := range invalids {
 			if glog.V(logger.Core) {
