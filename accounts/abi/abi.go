@@ -136,12 +136,8 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		}
 		//slice is there for a fixed amount of times
 		slice = output[index : index+size*32]
-
-		if size*32 > len(slice) {
-			return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
-		}
 	}
-	
+
 	for i := 0; i < size; i++ {
 		var (
 			inter        interface{}             // interface type
