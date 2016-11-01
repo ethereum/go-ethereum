@@ -58,21 +58,19 @@ var (
 
 var (
 	// Metrics for the pending pool
-	pendingDiscardMeter    = metrics.NewMeter("txpool/pending/discard") 
-	pendingReplaceMeter    = metrics.NewMeter("txpool/pending/replace")
-	pendingRLMeter         = metrics.NewMeter("txpool/pending/ratelimit") // Dropped due to rate limiting
-	pendingNofundsMeter    = metrics.NewMeter("txpool/pending/nofunds")   // Dropped due to out-of-funds
-	pendingTooOldMeter     = metrics.NewMeter("txpool/pending/oldnonce")   // Dropped due to old nonce
+	pendingDiscardMeter = metrics.NewMeter("txpool/pending/discard")
+	pendingReplaceMeter = metrics.NewMeter("txpool/pending/replace")
+	pendingRLMeter      = metrics.NewMeter("txpool/pending/ratelimit") // Dropped due to rate limiting
+	pendingNofundsMeter = metrics.NewMeter("txpool/pending/nofunds")   // Dropped due to out-of-funds
 
 	// Metrics for the queued pool
-	queuedDiscardMeter     = metrics.NewMeter("txpool/queued/discard")
-	queuedReplaceMeter     = metrics.NewMeter("txpool/queued/replace")
-	queuedRLMeter          = metrics.NewMeter("txpool/queued/ratelimit")  // Dropped due to rate limiting
-	queuedNofundsMeter     = metrics.NewMeter("txpool/queued/nofunds")    // Dropped due to out-of-funds
-	queuedTooOldMeter      = metrics.NewMeter("txpool/queued/oldnonce")   // Dropped due to old nonce
+	queuedDiscardMeter = metrics.NewMeter("txpool/queued/discard")
+	queuedReplaceMeter = metrics.NewMeter("txpool/queued/replace")
+	queuedRLMeter      = metrics.NewMeter("txpool/queued/ratelimit") // Dropped due to rate limiting
+	queuedNofundsMeter = metrics.NewMeter("txpool/queued/nofunds")   // Dropped due to out-of-funds
 
 	// General tx metrics
-	invalidTxMeter         = metrics.NewMeter("txpool/invalid")
+	invalidTxMeter = metrics.NewMeter("txpool/invalid")
 )
 
 type stateFn func() (*state.StateDB, error)
@@ -516,7 +514,6 @@ func (pool *TxPool) promoteExecutables() {
 				glog.Infof("Removed old queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
-			queuedTooOldMeter.Mark(1)
 		}
 		// Drop all transactions that are too costly (low balance)
 		drops, _ := list.Filter(state.GetBalance(addr))
@@ -668,6 +665,7 @@ func (pool *TxPool) demoteUnexecutables() {
 				glog.Infof("Removed unpayable pending transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			pendingNofundsMeter.Mark(1)
 		}
 		for _, tx := range invalids {
 			if glog.V(logger.Core) {
