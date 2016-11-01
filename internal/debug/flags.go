@@ -53,7 +53,7 @@ var (
 		Value: 6060,
 	}
 	pprofAddrFlag = cli.StringFlag{
-		Name: "pprofaddr",
+		Name:  "pprofaddr",
 		Usage: "pprof HTTP server listening interface",
 		Value: "127.0.0.1",
 	}
