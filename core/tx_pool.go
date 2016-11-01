@@ -63,16 +63,16 @@ var (
 	pendingRLMeter         = metrics.NewMeter("txpool/pending/ratelimit") // Dropped due to rate limiting
 	pendingNofundsMeter    = metrics.NewMeter("txpool/pending/nofunds")   // Dropped due to out-of-funds
 	pendingTooOldMeter     = metrics.NewMeter("txpool/pending/oldnonce")   // Dropped due to old nonce
+
 	// Metrics for the queued pool
 	queuedDiscardMeter     = metrics.NewMeter("txpool/queued/discard")
 	queuedReplaceMeter     = metrics.NewMeter("txpool/queued/replace")
 	queuedRLMeter          = metrics.NewMeter("txpool/queued/ratelimit")  // Dropped due to rate limiting
 	queuedNofundsMeter     = metrics.NewMeter("txpool/queued/nofunds")    // Dropped due to out-of-funds
 	queuedTooOldMeter      = metrics.NewMeter("txpool/queued/oldnonce")   // Dropped due to old nonce
-	// Metrics for the queued pool
+
 	// General tx metrics
 	invalidTxMeter         = metrics.NewMeter("txpool/invalid")
-
 )
 
 type stateFn func() (*state.StateDB, error)
