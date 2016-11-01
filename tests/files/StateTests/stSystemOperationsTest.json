@@ -18019,7 +18019,7 @@
             "currentCoinbase" : "4401fcaf7d64d53fb1cfc5c9045c32aa919a8c82",
             "currentDifficulty" : "0x7fb7d889155ce8c6",
             "currentGasLimit" : "0x58272e28",
-            "currentNumber" : "0x7608d138",
+            "currentNumber" : "0x00",
             "currentTimestamp" : "0xa4befad141d51c4f",
             "previousHash" : "d30f77155de00f207ad60109897e790f73e9f3431be25717bf3651d91949f041"
         },
