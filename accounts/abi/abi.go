@@ -126,8 +126,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 
 		// reslice to match the required size
 		slice = slice[:(size * 32)]
-	}
-	if t.Type.IsArray {
+	} else if t.Type.IsArray {
 		//get the number of elements in the array
 		size = t.Type.SliceSize
 
@@ -142,6 +141,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 			return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
 		}
 	}
+	
 	for i := 0; i < size; i++ {
 		var (
 			inter        interface{}             // interface type

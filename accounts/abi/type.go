@@ -180,8 +180,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		}
 		if t.IsSlice {
 			return packBytesSlice(packed, v.Len()), nil
-		}
-		if t.IsArray {
+		} else if t.IsArray {
 			return packed, nil
 		}
 	}

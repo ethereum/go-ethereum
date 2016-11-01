@@ -248,7 +248,7 @@ func (n *Node) openDataDir() error {
 	// Try to open the instance directory as LevelDB storage. This creates a lock file
 	// which prevents concurrent use by another instance as well as accidental use of the
 	// instance directory as a database.
-	storage, err := storage.OpenFile(instdir, true)
+	storage, err := storage.OpenFile(instdir)
 	if err != nil {
 		return err
 	}
