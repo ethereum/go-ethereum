@@ -634,17 +634,19 @@ func (self *BlockChain) Rollback(chain []common.Hash) {
 }
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
-func SetReceiptsData(block *types.Block, receipts types.Receipts) {
+func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts types.Receipts) {
+	signer := types.MakeSigner(config, block.Number())
+
 	transactions, logIndex := block.Transactions(), uint(0)
 
 	for j := 0; j < len(receipts); j++ {
 		// The transaction hash can be retrieved from the transaction itself
 		receipts[j].TxHash = transactions[j].Hash()
 
+		tx, _ := transactions[j].AsMessage(signer)
 		// The contract address can be derived from the transaction itself
-		if MessageCreatesContract(transactions[j]) {
-			from, _ := transactions[j].From()
-			receipts[j].ContractAddress = crypto.CreateAddress(from, transactions[j].Nonce())
+		if MessageCreatesContract(tx) {
+			receipts[j].ContractAddress = crypto.CreateAddress(tx.From(), tx.Nonce())
 		}
 		// The used gas can be calculated based on previous receipts
 		if j == 0 {
@@ -666,6 +668,7 @@ func SetReceiptsData(block *types.Block, receipts types.Receipts) {
 
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
+// XXX should this be moved to the test?
 func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
 	self.wg.Add(1)
 	defer self.wg.Done()
@@ -705,7 +708,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				continue
 			}
 			// Compute all the non-consensus fields of the receipts
-			SetReceiptsData(block, receipts)
+			SetReceiptsData(self.config, block, receipts)
 			// Write all the data out into the database
 			if err := WriteBody(self.chainDb, block.Hash(), block.NumberU64(), block.Body()); err != nil {
 				errs[index] = fmt.Errorf("failed to write block body: %v", err)

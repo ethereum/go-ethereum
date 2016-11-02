@@ -159,16 +159,11 @@ func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err e
 		}
 	}()
 
-	var (
-		decodedSender common.Address
-	)
+	var decodedSender common.Address
 
 	chainConfig := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock}
-	if chainConfig.IsHomestead(common.String2Big(txTest.Blocknumber)) {
-		decodedSender, err = decodedTx.From()
-	} else {
-		decodedSender, err = decodedTx.FromFrontier()
-	}
+	signer := types.MakeSigner(chainConfig, common.String2Big(txTest.Blocknumber))
+	decodedSender, err = types.Sender(signer, decodedTx)
 	if err != nil {
 		return err
 	}
@@ -198,7 +193,7 @@ func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err e
 		return fmt.Errorf("Nonce mismatch: %v %v", expectedNonce, decodedTx.Nonce())
 	}
 
-	v, r, s := decodedTx.SignatureValues()
+	v, r, s := types.SignatureValues(signer, decodedTx)
 	expectedR := mustConvertBigInt(txTest.Transaction.R, 16)
 	if r.Cmp(expectedR) != 0 {
 		return fmt.Errorf("R mismatch: %v %v", expectedR, r)

@@ -48,15 +48,15 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	return &TransactOpts{
 		From: keyAddr,
-		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != keyAddr {
 				return nil, errors.New("not authorized to sign this account")
 			}
-			signature, err := crypto.SignEthereum(tx.SigHash().Bytes(), key)
+			signature, err := crypto.SignEthereum(signer.Hash(tx).Bytes(), key)
 			if err != nil {
 				return nil, err
 			}
-			return tx.WithSignature(signature)
+			return tx.WithSignature(signer, signature)
 		},
 	}
 }

@@ -279,7 +279,8 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 		tx = types.NewTransaction(args.Nonce.Uint64(), *args.To, args.Value.BigInt(), args.Gas.BigInt(), args.GasPrice.BigInt(), common.FromHex(args.Data))
 	}
 
-	signature, err := s.am.SignWithPassphrase(args.From, passwd, tx.SigHash().Bytes())
+	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
+	signature, err := s.am.SignWithPassphrase(args.From, passwd, signer.Hash(tx).Bytes())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -537,22 +538,14 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	}
 
 	// Assemble the CALL invocation
-	msg := callmsg{
-		addr:     addr,
-		to:       args.To,
-		gas:      args.Gas.BigInt(),
-		gasPrice: args.GasPrice.BigInt(),
-		value:    args.Value.BigInt(),
-		data:     common.FromHex(args.Data),
+	gas, gasPrice := args.Gas.BigInt(), args.GasPrice.BigInt()
+	if gas.Cmp(common.Big0) == 0 {
+		gas = big.NewInt(50000000)
 	}
-
-	if msg.gas.Cmp(common.Big0) == 0 {
-		msg.gas = big.NewInt(50000000)
+	if gasPrice.Cmp(common.Big0) == 0 {
+		gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
 	}
-
-	if msg.gasPrice.Cmp(common.Big0) == 0 {
-		msg.gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
-	}
+	msg := types.NewMessage(addr, args.To, 0, args.Value.BigInt(), gas, gasPrice, common.FromHex(args.Data))
 
 	// Execute the call and return
 	vmenv, vmError, err := s.b.GetVMEnv(ctx, msg, state, header)
@@ -714,8 +707,12 @@ type RPCTransaction struct {
 
 // newRPCPendingTransaction returns a pending transaction that will serialize to the RPC representation
 func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
-	from, _ := tx.FromFrontier()
-	v, r, s := tx.SignatureValues()
+	var signer types.Signer = types.FrontierSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
+	from, _ := types.Sender(signer, tx)
+	v, r, s := types.SignatureValues(signer, tx)
 	return &RPCTransaction{
 		From:     from,
 		Gas:      rpc.NewHexNumber(tx.Gas()),
@@ -735,11 +732,12 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 func newRPCTransactionFromBlockIndex(b *types.Block, txIndex int) (*RPCTransaction, error) {
 	if txIndex >= 0 && txIndex < len(b.Transactions()) {
 		tx := b.Transactions()[txIndex]
-		from, err := tx.FromFrontier()
-		if err != nil {
-			return nil, err
+		var signer types.Signer = types.FrontierSigner{}
+		if tx.Protected() {
+			signer = types.NewEIP155Signer(tx.ChainId())
 		}
-		v, r, s := tx.SignatureValues()
+		from, _ := types.Sender(signer, tx)
+		v, r, s := tx.RawSignatureValues()
 		return &RPCTransaction{
 			BlockHash:        b.Hash(),
 			BlockNumber:      rpc.NewHexNumber(b.Number()),
@@ -958,11 +956,11 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 		return nil, nil
 	}
 
-	from, err := tx.FromFrontier()
-	if err != nil {
-		glog.V(logger.Debug).Infof("%v\n", err)
-		return nil, nil
+	var signer types.Signer = types.FrontierSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
 	}
+	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
 		"root":              rpc.HexBytes(receipt.PostState),
@@ -990,11 +988,13 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 
 // sign is a helper function that signs a transaction with the private key of the given address.
 func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
-	signature, err := s.b.AccountManager().SignEthereum(addr, tx.SigHash().Bytes())
+	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
+
+	signature, err := s.b.AccountManager().SignEthereum(addr, signer.Hash(tx).Bytes())
 	if err != nil {
 		return nil, err
 	}
-	return tx.WithSignature(signature)
+	return tx.WithSignature(signer, signature)
 }
 
 // SendTxArgs represents the arguments to sumbit a new transaction into the transaction pool.
@@ -1028,7 +1028,9 @@ func prepareSendTxArgs(ctx context.Context, args SendTxArgs, b Backend) (SendTxA
 
 // submitTransaction is a helper function that submits tx to txPool and creates a log entry.
 func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction, signature []byte) (common.Hash, error) {
-	signedTx, err := tx.WithSignature(signature)
+	signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
+
+	signedTx, err := tx.WithSignature(signer, signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1038,7 +1040,7 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction, si
 	}
 
 	if signedTx.To() == nil {
-		from, _ := signedTx.From()
+		from, _ := types.Sender(signer, signedTx)
 		addr := crypto.CreateAddress(from, signedTx.Nonce())
 		glog.V(logger.Info).Infof("Tx(%s) created: %s\n", signedTx.Hash().Hex(), addr.Hex())
 	} else {
@@ -1072,7 +1074,8 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 		tx = types.NewTransaction(args.Nonce.Uint64(), *args.To, args.Value.BigInt(), args.Gas.BigInt(), args.GasPrice.BigInt(), common.FromHex(args.Data))
 	}
 
-	signature, err := s.b.AccountManager().SignEthereum(args.From, tx.SigHash().Bytes())
+	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
+	signature, err := s.b.AccountManager().SignEthereum(args.From, signer.Hash(tx).Bytes())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -1092,8 +1095,9 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 		return "", err
 	}
 
+	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
 	if tx.To() == nil {
-		from, err := tx.FromFrontier()
+		from, err := types.Sender(signer, tx)
 		if err != nil {
 			return "", err
 		}
@@ -1202,7 +1206,12 @@ type SignTransactionResult struct {
 }
 
 func newTx(t *types.Transaction) *Tx {
-	from, _ := t.FromFrontier()
+	var signer types.Signer = types.HomesteadSigner{}
+	if t.Protected() {
+		signer = types.NewEIP155Signer(t.ChainId())
+	}
+
+	from, _ := types.Sender(signer, t)
 	return &Tx{
 		tx:       t,
 		To:       t.To(),
@@ -1268,7 +1277,11 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
 	pending := s.b.GetPoolTransactions()
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
-		from, _ := tx.FromFrontier()
+		var signer types.Signer = types.HomesteadSigner{}
+		if tx.Protected() {
+			signer = types.NewEIP155Signer(tx.ChainId())
+		}
+		from, _ := types.Sender(signer, tx)
 		if s.b.AccountManager().HasAddress(from) {
 			transactions = append(transactions, newRPCPendingTransaction(tx))
 		}
@@ -1281,7 +1294,12 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
 func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, tx Tx, gasPrice, gasLimit *rpc.HexNumber) (common.Hash, error) {
 	pending := s.b.GetPoolTransactions()
 	for _, p := range pending {
-		if pFrom, err := p.FromFrontier(); err == nil && pFrom == tx.From && p.SigHash() == tx.tx.SigHash() {
+		var signer types.Signer = types.HomesteadSigner{}
+		if p.Protected() {
+			signer = types.NewEIP155Signer(p.ChainId())
+		}
+
+		if pFrom, err := types.Sender(signer, p); err == nil && pFrom == tx.From && signer.Hash(p) == signer.Hash(tx.tx) {
 			if gasPrice == nil {
 				gasPrice = rpc.NewHexNumber(tx.tx.GasPrice())
 			}

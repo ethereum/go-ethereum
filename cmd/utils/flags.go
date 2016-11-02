@@ -825,6 +825,10 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 			Fatalf("Could not make chain configuration: %v", err)
 		}
 	}
+	// set chain id in case it's zero.
+	if config.ChainId == nil {
+		config.ChainId = new(big.Int)
+	}
 	// Check whether we are allowed to set default config params or not:
 	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `geth init`)
 	//  - If a genesis is already set, ensure we have a configuration for it (mainnet or testnet)

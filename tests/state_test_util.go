@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -225,7 +226,7 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx m
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
-	message := NewMessage(addr, to, data, value, gas, price, nonce)
+	message := types.NewMessage(addr, to, nonce, value, gas, price, data)
 	vmenv := NewEnvFromMap(chainConfig, statedb, env, tx)
 	vmenv.origin = addr
 

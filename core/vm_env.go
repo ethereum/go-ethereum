@@ -69,7 +69,7 @@ func NewEnv(state *state.StateDB, chainConfig *params.ChainConfig, chain *BlockC
 
 func (self *VMEnv) ChainConfig() *params.ChainConfig { return self.chainConfig }
 func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
-func (self *VMEnv) Origin() common.Address           { f, _ := self.msg.From(); return f }
+func (self *VMEnv) Origin() common.Address           { return self.msg.From() }
 func (self *VMEnv) BlockNumber() *big.Int            { return self.header.Number }
 func (self *VMEnv) Coinbase() common.Address         { return self.header.Coinbase }
 func (self *VMEnv) Time() *big.Int                   { return self.header.Time }

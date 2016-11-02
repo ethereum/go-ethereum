@@ -44,6 +44,7 @@ var txPermanent = uint64(500)
 // created.
 type TxPool struct {
 	config   *params.ChainConfig
+	signer   types.Signer
 	quit     chan bool
 	eventMux *event.TypeMux
 	events   event.Subscription
@@ -80,6 +81,7 @@ type TxRelayBackend interface {
 func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
 		config:   config,
+		signer:   types.HomesteadSigner{},
 		nonce:    make(map[common.Address]uint64),
 		pending:  make(map[common.Hash]*types.Transaction),
 		mined:    make(map[common.Hash][]*types.Transaction),
@@ -198,7 +200,7 @@ func (pool *TxPool) checkMinedTxs(ctx context.Context, hash common.Hash, idx uin
 				if len(receipts) != len(block.Transactions()) {
 					panic(nil) // should never happen if hashes did match
 				}
-				core.SetReceiptsData(block, receipts)
+				core.SetReceiptsData(pool.config, block, receipts)
 			}
 			//fmt.Println("WriteReceipt", receipts[i].TxHash)
 			core.WriteReceipt(pool.chainDb, receipts[i])
@@ -309,6 +311,7 @@ func (pool *TxPool) eventLoop() {
 			m, r := txc.getLists()
 			pool.relay.NewHead(pool.head, m, r)
 			pool.homestead = pool.config.IsHomestead(head.Number)
+			pool.signer = types.MakeSigner(pool.config, head.Number)
 			pool.mu.Unlock()
 		}
 	}
@@ -340,7 +343,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// Validate the transaction sender and it's sig. Throw
 	// if the from fields is invalid.
-	if from, err = tx.From(); err != nil {
+	if from, err = types.Sender(pool.signer, tx); err != nil {
 		return core.ErrInvalidSender
 	}
 
@@ -389,7 +392,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 
 	// Should supply enough intrinsic gas
-	if tx.Gas().Cmp(core.IntrinsicGas(tx.Data(), core.MessageCreatesContract(tx), pool.homestead)) < 0 {
+	if tx.Gas().Cmp(core.IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)) < 0 {
 		return core.ErrIntrinsicGas
 	}
 
@@ -413,7 +416,8 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		self.pending[hash] = tx
 
 		nonce := tx.Nonce() + 1
-		addr, _ := tx.From()
+
+		addr, _ := types.Sender(self.signer, tx)
 		if nonce > self.nonce[addr] {
 			self.nonce[addr] = nonce
 		}
@@ -433,7 +437,7 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		}
 		// we can ignore the error here because From is
 		// verified in ValidateTransaction.
-		f, _ := tx.From()
+		f, _ := types.Sender(self.signer, tx)
 		from := common.Bytes2Hex(f[:4])
 		glog.Infof("(t) %x => %s (%v) %x\n", from, toname, tx.Value, hash)
 	}
@@ -518,7 +522,7 @@ func (self *TxPool) Content() (map[common.Address]types.Transactions, map[common
 	// Retrieve all the pending transactions and sort by account and by nonce
 	pending := make(map[common.Address]types.Transactions)
 	for _, tx := range self.pending {
-		account, _ := tx.From()
+		account, _ := types.Sender(self.signer, tx)
 		pending[account] = append(pending[account], tx)
 	}
 	// There are no queued transactions in a light pool, just return an empty map

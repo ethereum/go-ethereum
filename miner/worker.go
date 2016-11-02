@@ -63,7 +63,9 @@ type uint64RingBuffer struct {
 // Work is the workers current environment and holds
 // all of the current state information
 type Work struct {
-	config           *params.ChainConfig
+	config *params.ChainConfig
+	signer types.Signer
+
 	state            *state.StateDB // apply state changes here
 	ancestors        *set.Set       // ancestor set (used for checking uncle parent validity)
 	family           *set.Set       // family set (used for checking uncle invalidity)
@@ -235,7 +237,7 @@ func (self *worker) update() {
 			if atomic.LoadInt32(&self.mining) == 0 {
 				self.currentMu.Lock()
 
-				acc, _ := ev.Tx.From()
+				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: types.Transactions{ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
 
@@ -367,6 +369,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	}
 	work := &Work{
 		config:    self.config,
+		signer:    types.NewEIP155Signer(self.config.ChainId),
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
@@ -570,7 +573,17 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
-		from, _ := tx.From()
+		//
+		// We use the eip155 signer regardless of the current hf.
+		from, _ := types.Sender(env.signer, tx)
+		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+		// phase, start ignoring the sender until we do.
+		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
+			glog.V(logger.Detail).Infof("Transaction (%x) is replay protected, but we haven't yet hardforked. Transaction will be ignored until we hardfork.\n", tx.Hash())
+
+			txs.Pop()
+			continue
+		}
 
 		// Ignore any transactions (and accounts subsequently) with low gas limits
 		if tx.GasPrice().Cmp(gasPrice) < 0 && !env.ownedAccounts.Has(from) {

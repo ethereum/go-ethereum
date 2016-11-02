@@ -100,45 +100,11 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 
 func TestOdrContractCallLes1(t *testing.T) { testOdr(t, 1, 2, odrContractCall) }
 
-// fullcallmsg is the message type used for call transations.
-type fullcallmsg struct {
-	from          *state.StateObject
-	to            *common.Address
-	gas, gasPrice *big.Int
-	value         *big.Int
-	data          []byte
+type callmsg struct {
+	types.Message
 }
 
-// accessor boilerplate to implement core.Message
-func (m fullcallmsg) From() (common.Address, error)         { return m.from.Address(), nil }
-func (m fullcallmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
-func (m fullcallmsg) Nonce() uint64                         { return 0 }
-func (m fullcallmsg) CheckNonce() bool                      { return false }
-func (m fullcallmsg) To() *common.Address                   { return m.to }
-func (m fullcallmsg) GasPrice() *big.Int                    { return m.gasPrice }
-func (m fullcallmsg) Gas() *big.Int                         { return m.gas }
-func (m fullcallmsg) Value() *big.Int                       { return m.value }
-func (m fullcallmsg) Data() []byte                          { return m.data }
-
-// callmsg is the message type used for call transations.
-type lightcallmsg struct {
-	from          *light.StateObject
-	to            *common.Address
-	gas, gasPrice *big.Int
-	value         *big.Int
-	data          []byte
-}
-
-// accessor boilerplate to implement core.Message
-func (m lightcallmsg) From() (common.Address, error)         { return m.from.Address(), nil }
-func (m lightcallmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
-func (m lightcallmsg) Nonce() uint64                         { return 0 }
-func (m lightcallmsg) CheckNonce() bool                      { return false }
-func (m lightcallmsg) To() *common.Address                   { return m.to }
-func (m lightcallmsg) GasPrice() *big.Int                    { return m.gasPrice }
-func (m lightcallmsg) Gas() *big.Int                         { return m.gas }
-func (m lightcallmsg) Value() *big.Int                       { return m.value }
-func (m lightcallmsg) Data() []byte                          { return m.data }
+func (callmsg) CheckNonce() bool { return false }
 
 func odrContractCall(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
@@ -153,15 +119,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(common.MaxBig)
 
-				msg := fullcallmsg{
-					from:     from,
-					gas:      big.NewInt(100000),
-					gasPrice: big.NewInt(0),
-					value:    big.NewInt(0),
-					data:     data,
-					to:       &testContractAddr,
-				}
-
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data)}
 				vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
@@ -174,14 +132,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 			if err == nil {
 				from.SetBalance(common.MaxBig)
 
-				msg := lightcallmsg{
-					from:     from,
-					gas:      big.NewInt(100000),
-					gasPrice: big.NewInt(0),
-					value:    big.NewInt(0),
-					data:     data,
-					to:       &testContractAddr,
-				}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data)}
 
 				vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)

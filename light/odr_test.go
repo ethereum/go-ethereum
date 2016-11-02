@@ -148,45 +148,11 @@ func odrAccounts(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc
 
 func TestOdrContractCallLes1(t *testing.T) { testChainOdr(t, 1, 2, odrContractCall) }
 
-// fullcallmsg is the message type used for call transations.
-type fullcallmsg struct {
-	from          *state.StateObject
-	to            *common.Address
-	gas, gasPrice *big.Int
-	value         *big.Int
-	data          []byte
+type callmsg struct {
+	types.Message
 }
 
-// accessor boilerplate to implement core.Message
-func (m fullcallmsg) From() (common.Address, error)         { return m.from.Address(), nil }
-func (m fullcallmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
-func (m fullcallmsg) Nonce() uint64                         { return 0 }
-func (m fullcallmsg) CheckNonce() bool                      { return false }
-func (m fullcallmsg) To() *common.Address                   { return m.to }
-func (m fullcallmsg) GasPrice() *big.Int                    { return m.gasPrice }
-func (m fullcallmsg) Gas() *big.Int                         { return m.gas }
-func (m fullcallmsg) Value() *big.Int                       { return m.value }
-func (m fullcallmsg) Data() []byte                          { return m.data }
-
-// callmsg is the message type used for call transations.
-type lightcallmsg struct {
-	from          *StateObject
-	to            *common.Address
-	gas, gasPrice *big.Int
-	value         *big.Int
-	data          []byte
-}
-
-// accessor boilerplate to implement core.Message
-func (m lightcallmsg) From() (common.Address, error)         { return m.from.Address(), nil }
-func (m lightcallmsg) FromFrontier() (common.Address, error) { return m.from.Address(), nil }
-func (m lightcallmsg) Nonce() uint64                         { return 0 }
-func (m lightcallmsg) CheckNonce() bool                      { return false }
-func (m lightcallmsg) To() *common.Address                   { return m.to }
-func (m lightcallmsg) GasPrice() *big.Int                    { return m.gasPrice }
-func (m lightcallmsg) Gas() *big.Int                         { return m.gas }
-func (m lightcallmsg) Value() *big.Int                       { return m.value }
-func (m lightcallmsg) Data() []byte                          { return m.data }
+func (callmsg) CheckNonce() bool { return false }
 
 func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) []byte {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
@@ -201,15 +167,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(common.MaxBig)
 
-				msg := fullcallmsg{
-					from:     from,
-					gas:      big.NewInt(100000),
-					gasPrice: big.NewInt(0),
-					value:    big.NewInt(0),
-					data:     data,
-					to:       &testContractAddr,
-				}
-
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data)}
 				vmenv := core.NewEnv(statedb, testChainConfig(), bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
@@ -222,15 +180,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 			if err == nil {
 				from.SetBalance(common.MaxBig)
 
-				msg := lightcallmsg{
-					from:     from,
-					gas:      big.NewInt(100000),
-					gasPrice: big.NewInt(0),
-					value:    big.NewInt(0),
-					data:     data,
-					to:       &testContractAddr,
-				}
-
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data)}
 				vmenv := NewEnv(ctx, state, testChainConfig(), lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
@@ -244,20 +194,21 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 }
 
 func testChainGen(i int, block *core.BlockGen) {
+	signer := types.HomesteadSigner{}
 	switch i {
 	case 0:
 		// In block 1, the test bank sends account #1 some ether.
-		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
 		block.AddTx(tx)
 	case 1:
 		// In block 2, the test bank sends some more ether to account #1.
 		// acc1Addr passes it on to account #2.
 		// acc1Addr creates a test contract.
-		tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
 		nonce := block.TxNonce(acc1Addr)
-		tx2, _ := types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
+		tx2, _ := types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, acc1Key)
 		nonce++
-		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(1000000), big.NewInt(0), testContractCode).SignECDSA(acc1Key)
+		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(1000000), big.NewInt(0), testContractCode).SignECDSA(signer, acc1Key)
 		testContractAddr = crypto.CreateAddress(acc1Addr, nonce)
 		block.AddTx(tx1)
 		block.AddTx(tx2)
@@ -267,7 +218,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		block.SetCoinbase(acc2Addr)
 		block.SetExtra([]byte("yeehaw"))
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001")
-		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(testBankKey)
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(signer, testBankKey)
 		block.AddTx(tx)
 	case 3:
 		// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
@@ -278,7 +229,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		b3.Extra = []byte("foo")
 		block.AddUncle(b3)
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002")
-		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(testBankKey)
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(signer, testBankKey)
 		block.AddTx(tx)
 	}
 }

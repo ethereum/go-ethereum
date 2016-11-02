@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/light"
+	"github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
@@ -37,6 +38,14 @@ import (
 type LesApiBackend struct {
 	eth *LightEthereum
 	gpo *gasprice.LightPriceOracle
+}
+
+func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
+	return b.eth.chainConfig
+}
+
+func (b *LesApiBackend) CurrentBlock() *types.Block {
+	return types.NewBlockWithHeader(b.eth.BlockChain().CurrentHeader())
 }
 
 func (b *LesApiBackend) SetHead(number uint64) {
@@ -81,7 +90,7 @@ func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
 
 func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
 	stateDb := state.(*light.LightState).Copy()
-	addr, _ := msg.From()
+	addr := msg.From()
 	from, err := stateDb.GetOrNewStateObject(ctx, addr)
 	if err != nil {
 		return nil, nil, err

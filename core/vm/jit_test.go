@@ -174,7 +174,7 @@ func NewEnv(config *Config) *Env {
 }
 
 func (self *Env) ChainConfig() *params.ChainConfig {
-	return &params.ChainConfig{new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int)}
+	return params.TestChainConfig
 }
 func (self *Env) Vm() Vm                 { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }

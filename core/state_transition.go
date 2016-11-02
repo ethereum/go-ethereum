@@ -62,8 +62,8 @@ type StateTransition struct {
 
 // Message represents a message sent to a contract.
 type Message interface {
-	From() (common.Address, error)
-	FromFrontier() (common.Address, error)
+	From() common.Address
+	//FromFrontier() (common.Address, error)
 	To() *common.Address
 
 	GasPrice() *big.Int
@@ -134,23 +134,12 @@ func ApplyMessage(env vm.Environment, msg Message, gp *GasPool) ([]byte, *big.In
 	return ret, gasUsed, err
 }
 
-func (self *StateTransition) from() (vm.Account, error) {
-	var (
-		f   common.Address
-		err error
-	)
-	if self.env.ChainConfig().IsHomestead(self.env.BlockNumber()) {
-		f, err = self.msg.From()
-	} else {
-		f, err = self.msg.FromFrontier()
-	}
-	if err != nil {
-		return nil, err
-	}
+func (self *StateTransition) from() vm.Account {
+	f := self.msg.From()
 	if !self.state.Exist(f) {
-		return self.state.CreateAccount(f), nil
+		return self.state.CreateAccount(f)
 	}
-	return self.state.GetAccount(f), nil
+	return self.state.GetAccount(f)
 }
 
 func (self *StateTransition) to() vm.Account {
@@ -185,14 +174,11 @@ func (self *StateTransition) buyGas() error {
 	mgas := self.msg.Gas()
 	mgval := new(big.Int).Mul(mgas, self.gasPrice)
 
-	sender, err := self.from()
-	if err != nil {
-		return err
-	}
+	sender := self.from()
 	if sender.Balance().Cmp(mgval) < 0 {
 		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], mgval, sender.Balance())
 	}
-	if err = self.gp.SubGas(mgas); err != nil {
+	if err := self.gp.SubGas(mgas); err != nil {
 		return err
 	}
 	self.addGas(mgas)
@@ -203,10 +189,7 @@ func (self *StateTransition) buyGas() error {
 
 func (self *StateTransition) preCheck() (err error) {
 	msg := self.msg
-	sender, err := self.from()
-	if err != nil {
-		return err
-	}
+	sender := self.from()
 
 	// Make sure this transaction's nonce is correct
 	if msg.CheckNonce() {
@@ -232,7 +215,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 		return
 	}
 	msg := self.msg
-	sender, _ := self.from() // err checked in preCheck
+	sender := self.from() // err checked in preCheck
 
 	homestead := self.env.ChainConfig().IsHomestead(self.env.BlockNumber())
 	contractCreation := MessageCreatesContract(msg)
@@ -282,7 +265,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 func (self *StateTransition) refundGas() {
 	// Return eth for remaining gas to the sender account,
 	// exchanged at the original rate.
-	sender, _ := self.from() // err already checked
+	sender := self.from() // err already checked
 	remaining := new(big.Int).Mul(self.gas, self.gasPrice)
 	sender.AddBalance(remaining)
 

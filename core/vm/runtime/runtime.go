@@ -57,7 +57,7 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
-		cfg.ChainConfig = &params.ChainConfig{new(big.Int), new(big.Int), false, new(big.Int), common.Hash{}, new(big.Int)}
+		cfg.ChainConfig = &params.ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), false, new(big.Int), common.Hash{}, new(big.Int), new(big.Int), new(big.Int)}
 	}
 
 	if cfg.Difficulty == nil {
