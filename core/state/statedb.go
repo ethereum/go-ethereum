@@ -46,6 +46,9 @@ const (
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
+
+	// Number of recent accessed accounts to keep in memory
+	accountsMemoryCacheSize = 4096
 )
 
 type revision struct {
@@ -59,12 +62,13 @@ type revision struct {
 // * Contracts
 // * Accounts
 type StateDB struct {
-	db            ethdb.Database
-	trie          *trie.Trie
-	storage       *trie.SecureTrie
-	cacheComplete bool  // True if we know that the directcache is complete
-	pastTries     []*trie.Trie
-	codeSizeCache *lru.Cache
+	db               ethdb.Database
+	trie             *trie.Trie
+	storage          *trie.SecureTrie
+	cacheComplete    bool // True if we know that the directcache is complete
+	pastTries        []*trie.Trie
+	codeSizeCache    *lru.Cache
+	accountsMemCache *lru.ARCCache
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects      map[common.Address]*StateObject
@@ -95,10 +99,12 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 	}
 
 	csc, _ := lru.New(codeSizeCacheSize)
+	amc, _ := lru.NewARC(accountsMemoryCacheSize)
 	ret := &StateDB{
 		db:                db,
 		trie:              tr,
 		codeSizeCache:     csc,
+		accountsMemCache:  amc,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
@@ -122,6 +128,7 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 		db:                self.db,
 		trie:              tr,
 		codeSizeCache:     self.codeSizeCache,
+		accountsMemCache:  self.accountsMemCache,
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
@@ -193,7 +200,7 @@ func (self *StateDB) SetBlockContext(blockHash common.Hash, blockNum uint64, val
 		}
 	}
 
-	storage := trie.NewDirectCache(self.trie, self.db, DirectCachePrefix, blockNum, blockHash, validator, self.cacheComplete)
+	storage := trie.NewDirectCache(self.trie, self.db, self.accountsMemCache, DirectCachePrefix, blockNum, blockHash, validator, self.cacheComplete)
 	self.storage = trie.NewSecure(storage, self.db)
 }
 

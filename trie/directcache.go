@@ -17,27 +17,31 @@
 package trie
 
 import (
-	"fmt"
 	"errors"
-	"time"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
-	directCacheLock              = &sync.Mutex{}
-	directCacheLocked            = false
-	directCacheWrites            = metrics.NewCounter("directcache/writes")
-	directCacheHits              = metrics.NewCounter("directcache/hits")
-	directCacheMisses            = metrics.NewCounter("directcache/misses")
-	directCacheTimer             = metrics.NewTimer("directcache/timer")
-	NotFound                     = errors.New("Cache entry not found")
-    MigrationPrefix              = []byte("directstatecachemigration:")
+	directCacheLock      = &sync.Mutex{}
+	directCacheLocked    = false
+	directCacheWrites    = metrics.NewCounter("directcache/writes")
+	directCacheHits      = metrics.NewCounter("directcache/hits")
+	directCacheMisses    = metrics.NewCounter("directcache/misses")
+	directCacheMemHits   = metrics.NewCounter("directcache/memcache/hits")
+	directCacheMemMisses = metrics.NewCounter("directcache/memcache/misses")
+	directCacheTimer     = metrics.NewTimer("directcache/timer")
+
+	NotFound        = errors.New("Cache entry not found")
+	MigrationPrefix = []byte("directstatecachemigration:")
 )
 
 type MigrationStatus int
@@ -54,8 +58,10 @@ type CacheValidator interface {
 }
 
 type DirectCache struct {
-	data      PersistentMap
-	db        Database
+	data     PersistentMap
+	db       Database
+	memcache *lru.ARCCache
+
 	keyPrefix []byte
 	blockNum  uint64
 	blockHash common.Hash
@@ -70,10 +76,14 @@ func (cv *NullCacheValidator) IsCanonChainBlock(num uint64, hash common.Hash) bo
 	return false
 }
 
-func NewDirectCache(pm PersistentMap, db Database, keyPrefix []byte, blockNum uint64, blockHash common.Hash, validator CacheValidator, complete bool) *DirectCache {
+func NewDirectCache(pm PersistentMap, db Database, memcache *lru.ARCCache, keyPrefix []byte, blockNum uint64, blockHash common.Hash, validator CacheValidator, complete bool) *DirectCache {
+	if memcache == nil {
+		memcache, _ = lru.NewARC(0)
+	}
 	return &DirectCache{
 		data:      pm,
 		db:        db,
+		memcache:  memcache,
 		keyPrefix: keyPrefix,
 		blockNum:  blockNum,
 		blockHash: blockHash,
@@ -125,17 +135,28 @@ func (dc *DirectCache) TryGet(key []byte) ([]byte, error) {
 }
 
 func (dc *DirectCache) getCached(key []byte) ([]byte, bool) {
-	data, blockNum, blockHash, err := GetDirectCache(dc.keyPrefix, key, dc.db)
-	if err != nil {
-		if err == NotFound {
-			return nil, dc.complete
-		}
-		glog.Errorf("Error retrieving direct cache data: %v", err)
-		return nil, false
+	// Try to retrieve the object from the memcache
+	var entry *cachedValue
+	if cached, ok := dc.memcache.Get(string(key)); ok {
+		directCacheMemHits.Inc(1)
+		entry = cached.(*cachedValue)
 	}
+	// If the memcache missed, reach down to the database
+	var err error
+	if entry == nil {
+		directCacheMemMisses.Inc(1)
 
-	canonical := dc.blockNum > 0 && blockNum < dc.blockNum && dc.validator.IsCanonChainBlock(blockNum, blockHash)
-	return data, canonical
+		if entry, err = getDirectCache(dc.keyPrefix, key, dc.db); err != nil {
+			if err == NotFound {
+				return nil, dc.complete
+			}
+			glog.Errorf("Error retrieving direct cache data: %v", err)
+			return nil, false
+		}
+		dc.memcache.Add(string(key), entry)
+	}
+	canonical := dc.blockNum > 0 && entry.BlockNum < dc.blockNum && dc.validator.IsCanonChainBlock(entry.BlockNum, entry.BlockHash)
+	return entry.Value, canonical
 }
 
 func (dc *DirectCache) Update(key, value []byte) {
@@ -170,6 +191,7 @@ func (dc *DirectCache) CommitTo(dbw DatabaseWriter) (root common.Hash, err error
 			if err := WriteDirectCache(dc.keyPrefix, []byte(k), v, dc.blockNum, dc.blockHash, dbw); err != nil {
 				return err
 			}
+			dc.memcache.Add(k, &cachedValue{v, dc.blockNum, dc.blockHash})
 		}
 		return nil
 	}); err != nil {
@@ -201,7 +223,7 @@ func (dc *DirectCache) Populate() (err error) {
 		}
 
 		i += 1
-		if i % 10000 == 0 && glog.V(logger.Info) {
+		if i%10000 == 0 && glog.V(logger.Info) {
 			glog.V(logger.Info).Infof("Constructing direct cache: processed %v entries, written %v", i, writes)
 		}
 	}
@@ -214,7 +236,7 @@ type cachedValue struct {
 	BlockHash common.Hash
 }
 
-func DirectCacheTransaction(tx func() (error)) error {
+func DirectCacheTransaction(tx func() error) error {
 	directCacheLock.Lock()
 	directCacheLocked = true
 	defer func() {
@@ -241,22 +263,31 @@ func WriteDirectCache(prefix, key, value []byte, number uint64, hash common.Hash
 	return dbw.Put(append(prefix, key...), enc)
 }
 
+// getDirectCache retrieves a value node directly from the database along with
+// block metadata to validate its relevancy.
+func getDirectCache(prefix, key []byte, db Database) (*cachedValue, error) {
+	defer func(start time.Time) { directCacheTimer.UpdateSince(start) }(time.Now())
+
+	enc, _ := db.Get(append(prefix, key...))
+	if len(enc) == 0 {
+		return nil, NotFound
+	}
+	data := new(cachedValue)
+	if err := rlp.DecodeBytes(enc, data); err != nil {
+		return nil, fmt.Errorf("Can't decode cached object at %x: %v", key, err)
+	}
+	return data, nil
+}
+
 // GetDirectCache retrieves a value node directly from the database along with
 // block metadata to validate its relevancy.
 //
 // The method is meant to be used by code that circumvents the state database
 // and its integrated cache, namely during fast sync and database upgrades.
 func GetDirectCache(prefix, key []byte, db Database) ([]byte, uint64, common.Hash, error) {
-	defer func(start time.Time) { directCacheTimer.UpdateSince(start) }(time.Now())
-
-	enc, _ := db.Get(append(prefix, key...))
-	if len(enc) == 0 {
-		return nil, 0, common.Hash{}, NotFound
-	}
-
-	var data cachedValue
-	if err := rlp.DecodeBytes(enc, &data); err != nil {
-		return nil, 0, common.Hash{}, fmt.Errorf("Can't decode cached object at %x: %v", key, err)
+	data, err := getDirectCache(prefix, key, db)
+	if err != nil {
+		return nil, 0, common.Hash{}, err
 	}
 	return data.Value, data.BlockNum, data.BlockHash, nil
 }
@@ -316,4 +347,12 @@ func DirectCacheWrites() int64 {
 // apart from trie debugging purposes.
 func DirectCacheMisses() int64 {
 	return directCacheMisses.Count()
+}
+
+func DirectCacheMemcacheHits() int64 {
+	return directCacheMemHits.Count()
+}
+
+func DirectCacheMemcacheMisses() int64 {
+	return directCacheMemMisses.Count()
 }

@@ -371,7 +371,7 @@ func populateDirectCache(db ethdb.Database, bc *core.BlockChain) error {
 		if err != nil {
 			return err
 		}
-		dc := trie.NewDirectCache(tr, db, state.DirectCachePrefix, blockNum, blockHash, bc, false)
+		dc := trie.NewDirectCache(tr, db, nil, state.DirectCachePrefix, blockNum, blockHash, bc, false)
 		go func() {
 			for core.GetBlockNumber(db, core.GetHeadBlockHash(db)) < blockNum+8 {
 				time.Sleep(10 * time.Second)
