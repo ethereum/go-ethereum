@@ -23,12 +23,12 @@ Usage: go run ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ packages... ]                          -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ packages... ]   -- runs the tests
-   archive    [ -type zip|tar ]                        -- archives build artefacts
-   importkeys                                          -- imports signing keys from env
-   debsrc     [ -sign key-id ] [ -upload dest ]        -- creates a debian source package
-   xgo        [ options ]                              -- cross builds according to options
+   install    [ packages... ]                                           -- builds packages and executables
+   test       [ -coverage ] [ -vet ] [ packages... ]                    -- runs the tests
+   archive    [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
+   importkeys                                                           -- imports signing keys from env
+   debsrc     [ -signer key-id ] [ -upload dest ]                       -- creates a debian source package
+   xgo        [ options ]                                               -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
 
@@ -49,7 +49,7 @@ import (
 	"strings"
 	"time"
 
-	"../internal/build"
+	"github.com/ethereum/go-ethereum/internal/build"
 )
 
 var (
@@ -239,8 +239,10 @@ func doTest(cmdline []string) {
 
 func doArchive(cmdline []string) {
 	var (
-		atype = flag.String("type", "zip", "Type of archive to write (zip|tar)")
-		ext   string
+		atype  = flag.String("type", "zip", "Type of archive to write (zip|tar)")
+		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
+		upload = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		ext    string
 	)
 	flag.CommandLine.Parse(cmdline)
 	switch *atype {
@@ -262,6 +264,12 @@ func doArchive(cmdline []string) {
 	if err := build.WriteArchive("geth-alltools-"+base, ext, allToolsArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
+
+	for _, archive := range []string{"geth-" + base + ext, "geth-alltools-" + base + ext} {
+		if err := archiveUpload(archive, *upload, *signer); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
 func archiveBasename(env build.Environment) string {
@@ -272,6 +280,36 @@ func archiveBasename(env build.Environment) string {
 		archive += "-" + env.Commit[:8]
 	}
 	return archive
+}
+
+func archiveUpload(archive string, blobstore string, signer string) error {
+	// If signing was requested, generate the signature files
+	if signer != "" {
+		pgpkey, err := base64.StdEncoding.DecodeString(os.Getenv(signer))
+		if err != nil {
+			return fmt.Errorf("invalid base64 %s", signer)
+		}
+		if err := build.PGPSignFile(archive, archive+".asc", string(pgpkey)); err != nil {
+			return err
+		}
+	}
+	// If uploading to Azure was requested, push the archive possibly with its signature
+	if blobstore != "" {
+		auth := build.AzureBlobstoreConfig{
+			Account:   strings.Split(blobstore, "/")[0],
+			Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
+			Container: strings.SplitN(blobstore, "/", 2)[1],
+		}
+		if err := build.AzureBlobstoreUpload(archive, archive, auth); err != nil {
+			return err
+		}
+		if signer != "" {
+			if err := build.AzureBlobstoreUpload(archive+".asc", archive+".asc", auth); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // skips archiving for some build configurations.

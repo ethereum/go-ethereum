@@ -6,6 +6,8 @@ matrix:
     - os: linux
       dist: trusty
       go: 1.5.4
+      env:
+        - GO15VENDOREXPERIMENT=1
     - os: linux
       dist: trusty
       go: 1.6.2
@@ -15,11 +17,13 @@ matrix:
     - os: osx
       go: 1.7
 
-    # This builder does the PPA upload (and nothing else).
+    # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
       go: 1.7
-      env: PPA
+      env:
+        - ubuntu-ppa
+        - azure-linux-amd64
       addons:
         apt:
           packages:
@@ -28,14 +32,23 @@ matrix:
             - dput
       script:
         - go run build/ci.go debsrc -signer "Felix Lange (Geth CI Testing Key) <fjl@twurst.com>" -upload ppa:lp-fjl/geth-ci-testing
+        - go run build/ci.go install
+        - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+    # This builder does the OSX Azure uploads
+    - os: osx
+      go: 1.7
+      env:
+        - azure-osx-amd64
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go archive -type zip -signer OSX_SIGNING_KEY -upload gethstore/builds
 
 install:
   - go get golang.org/x/tools/cmd/cover
 script:
   - go run build/ci.go install
   - go run build/ci.go test -coverage -vet
-after_success:
-  # - go run build/ci.go archive -type tar
 
 notifications:
   webhooks:
