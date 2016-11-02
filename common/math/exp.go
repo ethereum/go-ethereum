@@ -6,14 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-const (
-	// Perverted constants straight out of big.Int
-	// https://golang.org/src/math/big/arith.go
-	_m    = ^big.Word(0)
-	_logS = _m>>8&1 + _m>>16&1 + _m>>32&1
-	_S    = 1 << _logS
-	_W    = _S << 3 // word size in bits
-)
+// wordSize is the size number of bytes in a big.Int Word.
+const wordSize = 32 << (uint64(^big.Word(0))>>63)
 
 // Exp implement exponentiation by squaring algorithm.
 //
@@ -22,7 +16,7 @@ func Exp(base, exponent *big.Int) *big.Int {
 	result := big.NewInt(1)
 
 	for _, word := range exponent.Bits() {
-		for i := 0; i < _W; i++ {
+		for i := 0; i < wordSize; i++ {
 			if word&1 == 1 {
 				common.U256(result.Mul(result, base))
 			}
