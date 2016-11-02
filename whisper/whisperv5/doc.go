@@ -46,7 +46,9 @@ const (
 	messagesCode         = 1
 	p2pCode              = 2
 	mailRequestCode      = 3
-	NumberOfMessageCodes = 4
+	bloomExchangeCode    = 4
+	reservedCode         = 5
+	NumberOfMessageCodes = 6
 
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)

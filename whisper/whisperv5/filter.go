@@ -143,18 +143,9 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		// if Dst match, ignore the topic
-		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
+		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
-		// check if that both the key and the topic match
-		if f.SymKeyHash == msg.SymKeyHash {
-			for _, t := range f.Topics {
-				if t == msg.Topic {
-					return true
-				}
-			}
-			return false
-		}
+		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
 	}
 	return false
 }
@@ -175,14 +166,15 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 		encryptionMethodMatch = true
 	}
 
-	if encryptionMethodMatch {
-		for _, t := range f.Topics {
-			if t == envelope.Topic {
-				return true
-			}
+	return encryptionMethodMatch && f.MatchTopic(envelope.Topic)
+}
+
+func (f *Filter) MatchTopic(topic TopicType) bool {
+	for _, t := range f.Topics {
+		if t == topic {
+			return true
 		}
 	}
-
 	return false
 }
 

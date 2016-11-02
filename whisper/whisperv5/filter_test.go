@@ -487,10 +487,9 @@ func TestMatchMessageAsym(x *testing.T) {
 		return
 	}
 
-	// topic mismatch, but still match, because for asymmetric encryption
-	// only private key matters (in case the message is already decrypted)
+	// topic mismatch
 	f.Topics[index][0]++
-	if !f.MatchMessage(msg) {
+	if f.MatchMessage(msg) {
 		x.Errorf("failed test case 8 with seed %d.", seed)
 		return
 	}
