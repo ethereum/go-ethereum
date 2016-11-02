@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -74,10 +74,17 @@ func NewSessionController() (*ResourceController, chan bool) {
 			Create: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 					// TODO: take config for type of network
-					network := NewNetwork(&adapters.SimPipe{})
+					eventer := &event.TypeMux{}
 					ticker := time.NewTicker(1000 * time.Millisecond)
-					go mockJournal(network, &ticker.C)
-					return NewNetworkController(network, parent), nil
+					journal := NewJournal(eventer, &Entry{})
+
+					m := NewMockNetworkController(journal, func() { ticker.Stop() })
+					if parent != nil {
+						parent.SetResource(fmt.Sprintf("%d", parent.id), m)
+					}
+					go MockNetwork(eventer, ticker.C)
+					parent.id++
+					return m, nil
 				},
 			},
 

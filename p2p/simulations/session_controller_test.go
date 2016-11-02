@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -66,9 +67,13 @@ func TestUpdate(t *testing.T) {
 		id := discover.MustHexID(key)
 		ids = append(ids, &id)
 	}
-	network := NewNetwork(nil)
-	NewNetworkController(network, controller)
-	Update(network, ids)
+	eventer := &event.TypeMux{}
+	journal := NewJournal(eventer, &Entry{})
+
+	mc := NewMockNetworkController(journal, nil)
+	controller.SetResource("0", mc)
+	mockNewNodes(eventer, ids)
+	journal.WaitEntries(len(ids))
 	r, err := (&http.Client{}).Do(req)
 	if err != nil {
 		t.Fatalf("unexpected error")
@@ -107,15 +112,12 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-func Update(self *Network, ids []*discover.NodeID) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func mockNewNodes(eventer *event.TypeMux, ids []*discover.NodeID) {
 	for _, id := range ids {
-		e := &Entry{
+		eventer.Post(&Entry{
 			Action: "Add",
 			Type:   "Node",
 			Object: &SimNode{ID: id, config: &NodeConfig{ID: id}},
-		}
-		self.Journal = append(self.Journal, e)
+		})
 	}
 }
