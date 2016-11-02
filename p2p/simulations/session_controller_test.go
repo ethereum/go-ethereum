@@ -1,12 +1,14 @@
 package simulations
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -32,7 +34,6 @@ func url(port, path string) string {
 
 func TestQuit(t *testing.T) {
 	req, err := http.NewRequest("DELETE", url(port, ""), nil)
-	// req, err := http.NewRequest("PUT", url(""), nil)
 	if err != nil {
 		t.Fatalf("unexpected error")
 	}
@@ -53,10 +54,7 @@ func TestQuit(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	req, err := http.NewRequest("GET", url(port, "0"), nil)
-	if err != nil {
-		t.Fatalf("unexpected error")
-	}
+
 	keys := []string{
 		"aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80aa7cca80",
 		"f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3f5ae22c3",
@@ -66,12 +64,25 @@ func TestUpdate(t *testing.T) {
 		id := discover.MustHexID(key)
 		ids = append(ids, &id)
 	}
-	network := NewNetwork(nil)
-	NewNetworkController(network, controller)
-	Update(network, ids)
+
+	eventer := &event.TypeMux{}
+	journal := NewJournal()
+	journal.Subscribe(eventer, &Entry{})
+	mockNewNodes(eventer, ids)
+	conf := &NetworkConfig{
+		Id: "0",
+	}
+	mc := NewNetworkController(conf, eventer, journal)
+	controller.SetResource(conf.Id, mc)
+	journal.WaitEntries(len(ids))
+
+	req, err := http.NewRequest("GET", url(port, "0"), bytes.NewReader([]byte("{}")))
+	if err != nil {
+		t.Fatalf("unexpected error creating request: %v", err)
+	}
 	r, err := (&http.Client{}).Do(req)
 	if err != nil {
-		t.Fatalf("unexpected error")
+		t.Fatalf("unexpected error on http.Client request: %v", err)
 	}
 	resp, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -107,15 +118,18 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-func Update(self *Network, ids []*discover.NodeID) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func mockNewNodes(eventer *event.TypeMux, ids []*discover.NodeID) {
+	glog.V(6).Infof("mock starting")
 	for _, id := range ids {
-		e := &Entry{
+		glog.V(6).Infof("mock adding node %v", id)
+		eventer.Post(&Entry{
 			Action: "Add",
 			Type:   "Node",
 			Object: &SimNode{ID: id, config: &NodeConfig{ID: id}},
-		}
-		self.Journal = append(self.Journal, e)
+		})
 	}
 }
+
+// func TestReplay(t *testing.T) {
+
+// }

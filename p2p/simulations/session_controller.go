@@ -8,11 +8,10 @@ import (
 	"io/ioutil"
 	"reflect"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -73,12 +72,18 @@ func NewSessionController() (*ResourceController, chan bool) {
 
 			Create: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					// TODO: take config for type of network
-					network := NewNetwork(&adapters.SimPipe{})
-					ticker := time.NewTicker(1000 * time.Millisecond)
-					go mockJournal(network, &ticker.C)
-					return NewNetworkController(network, parent), nil
+					conf := msg.(*NetworkConfig)
+					m := NewNetworkController(conf, &event.TypeMux{}, NewJournal())
+					if len(conf.Id) == 0 {
+						conf.Id = fmt.Sprintf("%d", parent.id)
+					}
+					if parent != nil {
+						parent.SetResource(conf.Id, m)
+					}
+					parent.id++
+					return m, nil
 				},
+				Type: reflect.TypeOf(&NetworkConfig{}),
 			},
 
 			Destroy: &ResourceHandler{
@@ -147,6 +152,10 @@ func (self *ResourceController) SetResource(id string, c Controller) {
 	} else {
 		self.controllers[id] = c
 	}
+}
+
+func (self *ResourceController) DeleteResource(id string) {
+	delete(self.controllers, id)
 }
 
 func RandomNodeID() *discover.NodeID {
