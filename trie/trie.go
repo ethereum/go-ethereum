@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package trie implements Merkle Patricia Tries.
+// Package trie implements Merkle Patricia tries.
 package trie
 
 import (
@@ -73,11 +73,11 @@ type DatabaseWriter interface {
 	Put(key, value []byte) error
 }
 
-// Trie is a Merkle Patricia Trie.
+// trie is a Merkle Patricia trie.
 // The zero value is an empty trie with no database.
 // Use New to create a trie that sits on top of a database.
 //
-// Trie is not safe for concurrent use.
+// trie is not safe for concurrent use.
 type Trie struct {
 	root         node
 	db           Database
@@ -88,12 +88,6 @@ type Trie struct {
 	// new nodes are tagged with the current generation and unloaded
 	// when their generation is older than than cachegen-cachelimit.
 	cachegen, cachelimit uint16
-}
-
-// SetCacheLimit sets the number of 'cache generations' to keep.
-// A cache generations is created by a call to Commit.
-func (t *Trie) SetCacheLimit(l uint16) {
-	t.cachelimit = l
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -107,11 +101,14 @@ func (t *Trie) newFlag() nodeFlag {
 // trie is initially empty and does not require a database. Otherwise,
 // New will panic if db is nil and returns a MissingNodeError if root does
 // not exist in the database. Accessing the trie loads nodes from db on demand.
-func New(root common.Hash, db Database) (*Trie, error) {
-	trie := &Trie{db: db, originalRoot: root}
+//
+// cacheLimit is the number of 'cache generations' to keep.
+// A cache generations is created by a call to Commit.
+func New(root common.Hash, db Database, cacheLimit uint16) (*Trie, error) {
+	trie := &Trie{db: db, originalRoot: root, cachelimit: cacheLimit}
 	if (root != common.Hash{}) && root != emptyRoot {
 		if db == nil {
-			panic("trie.New: cannot use existing root without a database")
+			panic("Trie.New: cannot use existing root without a database")
 		}
 		rootnode, err := trie.resolveHash(root[:], nil, nil)
 		if err != nil {

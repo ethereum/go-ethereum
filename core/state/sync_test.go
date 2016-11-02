@@ -47,8 +47,8 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 		obj := state.GetOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
-		obj.AddBalance(big.NewInt(int64(11 * i)))
-		acc.balance = big.NewInt(int64(11 * i))
+		obj.AddBalance(big.NewInt(11 * int64(i)))
+		acc.balance = big.NewInt(11 * int64(i))
 
 		obj.SetNonce(uint64(42 * i))
 		acc.nonce = uint64(42 * i)
@@ -110,7 +110,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 func TestEmptyStateSync(t *testing.T) {
 	empty := common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 	db, _ := ethdb.NewMemDatabase()
-	if req := NewStateSync(empty, db).Missing(1); len(req) != 0 {
+	if req := NewStateSync(0, common.Hash{}, empty, db).Missing(1); len(req) != 0 {
 		t.Errorf("content requested for empty state: %v", req)
 	}
 }
@@ -126,7 +126,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	sched := NewStateSync(0, common.Hash{}, srcRoot, dstDb)
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
 	for len(queue) > 0 {
@@ -155,7 +155,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	sched := NewStateSync(0, common.Hash{}, srcRoot, dstDb)
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)
 	for len(queue) > 0 {
@@ -189,7 +189,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	sched := NewStateSync(0, common.Hash{}, srcRoot, dstDb)
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(batch) {
@@ -226,7 +226,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	sched := NewStateSync(0, common.Hash{}, srcRoot, dstDb)
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(0) {
@@ -268,7 +268,7 @@ func TestIncompleteStateSync(t *testing.T) {
 
 	// Create a destination state and sync with the scheduler
 	dstDb, _ := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	sched := NewStateSync(0, common.Hash{}, srcRoot, dstDb)
 
 	added := []common.Hash{}
 	queue := append([]common.Hash{}, sched.Missing(1)...)

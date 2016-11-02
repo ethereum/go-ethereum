@@ -269,7 +269,7 @@ func (self *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	if block == nil {
 		return fmt.Errorf("non existent block [%x…]", hash[:4])
 	}
-	if _, err := trie.NewSecure(block.Root(), self.chainDb, 0); err != nil {
+	if _, err := trie.New(block.Root(), self.chainDb, 0); err != nil {
 		return err
 	}
 	// If all checks out, manually set the head block
@@ -543,6 +543,11 @@ func (self *BlockChain) GetBlockByNumber(number uint64) *types.Block {
 		return nil
 	}
 	return self.GetBlock(hash, number)
+}
+
+// IsCanonChainBlock checks whether the given block is in the current canonical chain.
+func (self *BlockChain) IsCanonChainBlock(number uint64, hash common.Hash) bool {
+	return GetCanonicalHash(self.chainDb, number) == hash
 }
 
 // [deprecated by eth/62]
@@ -917,6 +922,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			reportBlock(block, err)
 			return i, err
 		}
+		self.stateCache.SetBlockContext(block.Hash(), block.NumberU64(), self)
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, self.config.VmConfig)
 		if err != nil {

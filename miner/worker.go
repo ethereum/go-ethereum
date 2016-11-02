@@ -583,7 +583,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			continue
 		}
 		// Start executing the transaction
-		env.state.StartRecord(tx.Hash(), common.Hash{}, env.tcount)
+		env.state.SetTxContext(tx.Hash(), env.tcount)
 
 		err, logs := env.commitTransaction(tx, bc, gp)
 		switch {

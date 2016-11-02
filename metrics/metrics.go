@@ -75,6 +75,15 @@ func NewTimer(name string) metrics.Timer {
 	return metrics.GetOrRegisterTimer(name, metrics.DefaultRegistry)
 }
 
+// NewCounter create a new metrics Counter, either a real one of a NOP stub depending
+// on the metrics flag.
+func NewCounter(name string) metrics.Counter {
+	if !Enabled {
+		return new(metrics.NilCounter)
+	}
+	return metrics.GetOrRegisterCounter(name, metrics.DefaultRegistry)
+}
+
 // CollectProcessMetrics periodically collects various metrics about the running
 // process.
 func CollectProcessMetrics(refresh time.Duration) {

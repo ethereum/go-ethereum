@@ -71,7 +71,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		statedb.StartRecord(tx.Hash(), block.Hash(), i)
+		statedb.SetTxContext(tx.Hash(), i)
 		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
 			return nil, nil, totalUsedGas, err

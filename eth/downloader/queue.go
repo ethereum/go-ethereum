@@ -399,7 +399,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			}
 
 			q.stateSchedLock.Lock()
-			q.stateScheduler = state.NewStateSync(header.Root, q.stateDatabase)
+			q.stateScheduler = state.NewStateSync(header.Number.Uint64(), header.Hash(), header.Root, q.stateDatabase)
 			q.stateSchedLock.Unlock()
 		}
 		inserts = append(inserts, header)
@@ -1152,6 +1152,6 @@ func (q *queue) Prepare(offset uint64, mode SyncMode, pivot uint64, head *types.
 
 	// If long running fast sync, also start up a head stateretrieval immediately
 	if mode == FastSync && pivot > 0 {
-		q.stateScheduler = state.NewStateSync(head.Root, q.stateDatabase)
+		q.stateScheduler = state.NewStateSync(head.Number.Uint64(), head.Hash(), head.Root, q.stateDatabase)
 	}
 }
