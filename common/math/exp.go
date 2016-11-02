@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// wordSize is the size number of bytes in a big.Int Word.
+// wordSize is the size number of bits in a big.Int Word.
 const wordSize = 32 << (uint64(^big.Word(0))>>63)
 
 // Exp implement exponentiation by squaring algorithm.
