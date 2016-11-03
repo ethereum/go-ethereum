@@ -319,6 +319,9 @@ func doArchive(cmdline []string) {
 func archiveBasename(arch string, env build.Environment) string {
 	platform := runtime.GOOS + "-" + arch
 	archive := platform + "-" + build.VERSION()
+	if isUnstableBuild(env) {
+		archive += "-unstable"
+	}
 	if env.Commit != "" {
 		archive += "-" + env.Commit[:8]
 	}
