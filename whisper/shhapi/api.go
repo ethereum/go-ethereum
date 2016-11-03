@@ -155,7 +155,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 	}
 
 	filter := whisperv5.Filter{
-		Src:       crypto.ToECDSAPub(args.From),
+		Src:       crypto.ToECDSAPub(common.FromHex(args.From)),
 		KeySym:    api.whisper.GetSymKey(args.KeyName),
 		PoW:       args.PoW,
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
@@ -195,7 +195,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 	}
 
 	if len(args.To) > 0 {
-		dst := crypto.ToECDSAPub(args.To)
+		dst := crypto.ToECDSAPub(common.FromHex(args.To))
 		if !whisperv5.ValidatePublicKey(dst) {
 			info := "NewFilter: Invalid 'To' address"
 			glog.V(logger.Error).Infof(info)
@@ -259,7 +259,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 
 	params := whisperv5.MessageParams{
 		TTL:      args.TTL,
-		Dst:      crypto.ToECDSAPub(args.To),
+		Dst:      crypto.ToECDSAPub(common.FromHex(args.To)),
 		KeySym:   api.whisper.GetSymKey(args.KeyName),
 		Topic:    args.Topic,
 		Payload:  args.Payload,
@@ -269,7 +269,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	if len(args.From) > 0 {
-		pub := crypto.ToECDSAPub(args.From)
+		pub := crypto.ToECDSAPub(common.FromHex(args.From))
 		if !whisperv5.ValidatePublicKey(pub) {
 			info := "Post: Invalid 'From' address"
 			glog.V(logger.Error).Infof(info)
@@ -321,13 +321,13 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		return errors.New(info)
 	}
 
-	if len(args.To) == 0 && len(args.KeyName) == 0 {
+	if len(args.To) == 0 && len(params.KeySym) == 0 {
 		info := "Post: message must be encrypted either symmetrically or asymmetrically"
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 
-	if len(args.To) != 0 && len(args.KeyName) != 0 {
+	if len(args.To) != 0 && len(params.KeySym) != 0 {
 		info := "Post: ambigous encryption method requested"
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
@@ -367,32 +367,32 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 }
 
 type PostArgs struct {
-	TTL      uint32              `json:"ttl"`
-	From     rpc.HexBytes        `json:"from"`
-	To       rpc.HexBytes        `json:"to"`
-	KeyName  string              `json:"keyname"`
-	Topic    whisperv5.TopicType `json:"topic"`
-	Padding  rpc.HexBytes        `json:"padding"`
-	Payload  rpc.HexBytes        `json:"payload"`
-	WorkTime uint32              `json:"worktime"`
-	PoW      float64             `json:"pow"`
-	FilterID int                 `json:"filter"`
-	PeerID   rpc.HexBytes        `json:"directP2P"`
+	TTL      uint32
+	From     string
+	To       string
+	KeyName  string
+	Topic    whisperv5.TopicType
+	Padding  rpc.HexBytes
+	Payload  rpc.HexBytes
+	WorkTime uint32
+	PoW      float64
+	FilterID int
+	PeerID   rpc.HexBytes
 }
 
 func (args *PostArgs) UnmarshalJSON(data []byte) (err error) {
 	var obj struct {
 		TTL      uint32              `json:"ttl"`
-		From     rpc.HexBytes        `json:"from"`
-		To       rpc.HexBytes        `json:"to"`
+		From     string              `json:"from"`
+		To       string              `json:"to"`
 		KeyName  string              `json:"keyname"`
 		Topic    whisperv5.TopicType `json:"topic"`
 		Payload  rpc.HexBytes        `json:"payload"`
 		Padding  rpc.HexBytes        `json:"padding"`
 		WorkTime uint32              `json:"worktime"`
 		PoW      float64             `json:"pow"`
-		FilterID rpc.HexBytes        `json:"filter"`
-		PeerID   rpc.HexBytes        `json:"directP2P"`
+		FilterID rpc.HexBytes        `json:"filterID"`
+		PeerID   rpc.HexBytes        `json:"peerID"`
 	}
 
 	if err := json.Unmarshal(data, &obj); err != nil {
@@ -420,8 +420,8 @@ func (args *PostArgs) UnmarshalJSON(data []byte) (err error) {
 }
 
 type WhisperFilterArgs struct {
-	To        []byte
-	From      []byte
+	To        string
+	From      string
 	KeyName   string
 	PoW       float64
 	Topics    []whisperv5.TopicType
@@ -433,8 +433,8 @@ type WhisperFilterArgs struct {
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	// Unmarshal the JSON message and sanity check
 	var obj struct {
-		To        rpc.HexBytes  `json:"to"`
-		From      rpc.HexBytes  `json:"from"`
+		To        string        `json:"to"`
+		From      string        `json:"from"`
 		KeyName   string        `json:"keyname"`
 		PoW       float64       `json:"pow"`
 		Topics    []interface{} `json:"topics"`
