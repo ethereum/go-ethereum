@@ -95,7 +95,7 @@ func newTerminalPrompter() *terminalPrompter {
 	}
 	p.SetCtrlCAborts(true)
 	p.SetTabCompletionStyle(liner.TabPrints)
-
+	p.SetMultiLineMode(true)
 	return p
 }
 
