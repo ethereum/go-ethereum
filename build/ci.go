@@ -23,12 +23,12 @@ Usage: go run ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [ packages... ]                          -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ packages... ]   -- runs the tests
-   archive    [ -type zip|tar ]                        -- archives build artefacts
-   importkeys                                          -- imports signing keys from env
-   debsrc     [ -sign key-id ] [ -upload dest ]        -- creates a debian source package
-   xgo        [ options ]                              -- cross builds according to options
+   install    [-arch architecture] [ packages... ]                                           -- builds packages and executables
+   test       [ -coverage ] [ -vet ] [ packages... ]                                         -- runs the tests
+   archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
+   importkeys                                                                                -- imports signing keys from env
+   debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
+   xgo        [ options ]                                                                    -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
 
@@ -40,6 +40,8 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io/ioutil"
 	"log"
 	"os"
@@ -49,7 +51,7 @@ import (
 	"strings"
 	"time"
 
-	"../internal/build"
+	"github.com/ethereum/go-ethereum/internal/build"
 )
 
 var (
@@ -130,6 +132,9 @@ func main() {
 // Compiling
 
 func doInstall(cmdline []string) {
+	var (
+		arch = flag.String("arch", "", "Architecture to cross build for")
+	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
@@ -146,11 +151,38 @@ func doInstall(cmdline []string) {
 	if flag.NArg() > 0 {
 		packages = flag.Args()
 	}
-
-	goinstall := goTool("install", buildFlags(env)...)
+	if *arch == "" || *arch == runtime.GOARCH {
+		goinstall := goTool("install", buildFlags(env)...)
+		goinstall.Args = append(goinstall.Args, "-v")
+		goinstall.Args = append(goinstall.Args, packages...)
+		build.MustRun(goinstall)
+		return
+	}
+	// Seems we are cross compiling, work around forbidden GOBIN
+	goinstall := goToolArch(*arch, "install", buildFlags(env)...)
 	goinstall.Args = append(goinstall.Args, "-v")
+	goinstall.Args = append(goinstall.Args, []string{"-buildmode", "archive"}...)
 	goinstall.Args = append(goinstall.Args, packages...)
 	build.MustRun(goinstall)
+
+	if cmds, err := ioutil.ReadDir("cmd"); err == nil {
+		for _, cmd := range cmds {
+			pkgs, err := parser.ParseDir(token.NewFileSet(), filepath.Join(".", "cmd", cmd.Name()), nil, parser.PackageClauseOnly)
+			if err != nil {
+				log.Fatal(err)
+			}
+			for name, _ := range pkgs {
+				if name == "main" {
+					gobuild := goToolArch(*arch, "build", buildFlags(env)...)
+					gobuild.Args = append(gobuild.Args, "-v")
+					gobuild.Args = append(gobuild.Args, []string{"-o", filepath.Join(GOBIN, cmd.Name())}...)
+					gobuild.Args = append(gobuild.Args, "."+string(filepath.Separator)+filepath.Join("cmd", cmd.Name()))
+					build.MustRun(gobuild)
+					break
+				}
+			}
+		}
+	}
 }
 
 func buildFlags(env build.Environment) (flags []string) {
@@ -173,13 +205,22 @@ func buildFlags(env build.Environment) (flags []string) {
 }
 
 func goTool(subcmd string, args ...string) *exec.Cmd {
+	return goToolArch(runtime.GOARCH, subcmd, args...)
+}
+
+func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 	gocmd := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cmd := exec.Command(gocmd, subcmd)
 	cmd.Args = append(cmd.Args, args...)
 	cmd.Env = []string{
 		"GO15VENDOREXPERIMENT=1",
 		"GOPATH=" + build.GOPATH(),
-		"GOBIN=" + GOBIN,
+	}
+	if arch == "" || arch == runtime.GOARCH {
+		cmd.Env = append(cmd.Env, "GOBIN="+GOBIN)
+	} else {
+		cmd.Env = append(cmd.Env, "CGO_ENABLED=1")
+		cmd.Env = append(cmd.Env, "GOARCH="+arch)
 	}
 	for _, e := range os.Environ() {
 		if strings.HasPrefix(e, "GOPATH=") || strings.HasPrefix(e, "GOBIN=") {
@@ -239,8 +280,11 @@ func doTest(cmdline []string) {
 
 func doArchive(cmdline []string) {
 	var (
-		atype = flag.String("type", "zip", "Type of archive to write (zip|tar)")
-		ext   string
+		arch   = flag.String("arch", runtime.GOARCH, "Architecture cross packaging")
+		atype  = flag.String("type", "zip", "Type of archive to write (zip|tar)")
+		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
+		upload = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		ext    string
 	)
 	flag.CommandLine.Parse(cmdline)
 	switch *atype {
@@ -255,23 +299,59 @@ func doArchive(cmdline []string) {
 	env := build.Env()
 	maybeSkipArchive(env)
 
-	base := archiveBasename(env)
+	base := archiveBasename(*arch, env)
 	if err := build.WriteArchive("geth-"+base, ext, gethArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
 	if err := build.WriteArchive("geth-alltools-"+base, ext, allToolsArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
+
+	for _, archive := range []string{"geth-" + base + ext, "geth-alltools-" + base + ext} {
+		if err := archiveUpload(archive, *upload, *signer); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
-func archiveBasename(env build.Environment) string {
+func archiveBasename(arch string, env build.Environment) string {
 	// date := time.Now().UTC().Format("200601021504")
-	platform := runtime.GOOS + "-" + runtime.GOARCH
+	platform := runtime.GOOS + "-" + arch
 	archive := platform + "-" + build.VERSION()
 	if env.Commit != "" {
 		archive += "-" + env.Commit[:8]
 	}
 	return archive
+}
+
+func archiveUpload(archive string, blobstore string, signer string) error {
+	// If signing was requested, generate the signature files
+	if signer != "" {
+		pgpkey, err := base64.StdEncoding.DecodeString(os.Getenv(signer))
+		if err != nil {
+			return fmt.Errorf("invalid base64 %s", signer)
+		}
+		if err := build.PGPSignFile(archive, archive+".asc", string(pgpkey)); err != nil {
+			return err
+		}
+	}
+	// If uploading to Azure was requested, push the archive possibly with its signature
+	if blobstore != "" {
+		auth := build.AzureBlobstoreConfig{
+			Account:   strings.Split(blobstore, "/")[0],
+			Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
+			Container: strings.SplitN(blobstore, "/", 2)[1],
+		}
+		if err := build.AzureBlobstoreUpload(archive, archive, auth); err != nil {
+			return err
+		}
+		if signer != "" {
+			if err := build.AzureBlobstoreUpload(archive+".asc", archive+".asc", auth); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // skips archiving for some build configurations.

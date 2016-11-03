@@ -72,6 +72,7 @@ type Writer struct {
 	handle  syscall.Handle
 	lastbuf bytes.Buffer
 	oldattr word
+	oldpos  coord
 }
 
 func NewColorable(file *os.File) io.Writer {
@@ -83,7 +84,7 @@ func NewColorable(file *os.File) io.Writer {
 		var csbi consoleScreenBufferInfo
 		handle := syscall.Handle(file.Fd())
 		procGetConsoleScreenBufferInfo.Call(uintptr(handle), uintptr(unsafe.Pointer(&csbi)))
-		return &Writer{out: file, handle: handle, oldattr: csbi.attributes}
+		return &Writer{out: file, handle: handle, oldattr: csbi.attributes, oldpos: coord{0, 0}}
 	} else {
 		return file
 	}
@@ -644,6 +645,11 @@ loop:
 				ci.visible = 0
 				procSetConsoleCursorInfo.Call(uintptr(w.handle), uintptr(unsafe.Pointer(&ci)))
 			}
+		case 's':
+			procGetConsoleScreenBufferInfo.Call(uintptr(w.handle), uintptr(unsafe.Pointer(&csbi)))
+			w.oldpos = csbi.cursorPosition
+		case 'u':
+			procSetConsoleCursorPosition.Call(uintptr(w.handle), *(*uintptr)(unsafe.Pointer(&w.oldpos)))
 		}
 	}
 	return len(data) - w.lastbuf.Len(), nil
