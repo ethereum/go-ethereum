@@ -45,9 +45,7 @@ matrix:
         - azure-osx
       script:
         - go run build/ci.go install
-        - go run build/ci.go archive -type zip -signer OSX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch 386
-        - go run build/ci.go archive -arch 386 -type zip -signer OSX_SIGNING_KEY -upload gethstore/builds
+        - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
 install:
   - go get golang.org/x/tools/cmd/cover
