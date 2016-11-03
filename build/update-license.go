@@ -45,7 +45,7 @@ var (
 	// paths with any of these prefixes will be skipped
 	skipPrefixes = []string{
 		// boring stuff
-		"Godeps/", "tests/files/", "build/",
+		"vendor/", "tests/files/", "build/",
 		// don't relicense vendored sources
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
 		"crypto/secp256k1/curve.go",

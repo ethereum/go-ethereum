@@ -296,18 +296,20 @@ func doArchive(cmdline []string) {
 		log.Fatal("unknown archive type: ", atype)
 	}
 
-	env := build.Env()
+	var (
+		env      = build.Env()
+		base     = archiveBasename(*arch, env)
+		geth     = "geth-" + base + ext
+		alltools = "geth-alltools-" + base + ext
+	)
 	maybeSkipArchive(env)
-
-	base := archiveBasename(*arch, env)
-	if err := build.WriteArchive("geth-"+base, ext, gethArchiveFiles); err != nil {
+	if err := build.WriteArchive(geth, gethArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
-	if err := build.WriteArchive("geth-alltools-"+base, ext, allToolsArchiveFiles); err != nil {
+	if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
-
-	for _, archive := range []string{"geth-" + base + ext, "geth-alltools-" + base + ext} {
+	for _, archive := range []string{geth, alltools} {
 		if err := archiveUpload(archive, *upload, *signer); err != nil {
 			log.Fatal(err)
 		}
@@ -315,9 +317,11 @@ func doArchive(cmdline []string) {
 }
 
 func archiveBasename(arch string, env build.Environment) string {
-	// date := time.Now().UTC().Format("200601021504")
 	platform := runtime.GOOS + "-" + arch
 	archive := platform + "-" + build.VERSION()
+	if isUnstableBuild(env) {
+		archive += "-unstable"
+	}
 	if env.Commit != "" {
 		archive += "-" + env.Commit[:8]
 	}
