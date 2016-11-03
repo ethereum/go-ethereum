@@ -10,13 +10,14 @@ import (
 var (
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 
-	procGetStdHandle               = kernel32.NewProc("GetStdHandle")
-	procReadConsoleInput           = kernel32.NewProc("ReadConsoleInputW")
-	procGetConsoleMode             = kernel32.NewProc("GetConsoleMode")
-	procSetConsoleMode             = kernel32.NewProc("SetConsoleMode")
-	procSetConsoleCursorPosition   = kernel32.NewProc("SetConsoleCursorPosition")
-	procGetConsoleScreenBufferInfo = kernel32.NewProc("GetConsoleScreenBufferInfo")
-	procFillConsoleOutputCharacter = kernel32.NewProc("FillConsoleOutputCharacterW")
+	procGetStdHandle                  = kernel32.NewProc("GetStdHandle")
+	procReadConsoleInput              = kernel32.NewProc("ReadConsoleInputW")
+	procGetNumberOfConsoleInputEvents = kernel32.NewProc("GetNumberOfConsoleInputEvents")
+	procGetConsoleMode                = kernel32.NewProc("GetConsoleMode")
+	procSetConsoleMode                = kernel32.NewProc("SetConsoleMode")
+	procSetConsoleCursorPosition      = kernel32.NewProc("SetConsoleCursorPosition")
+	procGetConsoleScreenBufferInfo    = kernel32.NewProc("GetConsoleScreenBufferInfo")
+	procFillConsoleOutputCharacter    = kernel32.NewProc("FillConsoleOutputCharacterW")
 )
 
 // These names are from the Win32 api, so they use underscores (contrary to
@@ -147,6 +148,21 @@ const (
 	modKeys = shiftPressed | leftAltPressed | rightAltPressed | leftCtrlPressed | rightCtrlPressed
 )
 
+// inputWaiting only returns true if the next call to readNext will return immediately.
+func (s *State) inputWaiting() bool {
+	var num uint32
+	ok, _, _ := procGetNumberOfConsoleInputEvents.Call(uintptr(s.handle), uintptr(unsafe.Pointer(&num)))
+	if ok == 0 {
+		// call failed, so we cannot guarantee a non-blocking readNext
+		return false
+	}
+
+	// during a "paste" input events are always an odd number, and
+	// the last one results in a blocking readNext, so return false
+	// when num is 1 or 0.
+	return num > 1
+}
+
 func (s *State) readNext() (interface{}, error) {
 	if s.repeat > 0 {
 		s.repeat--
@@ -263,7 +279,6 @@ func (s *State) readNext() (interface{}, error) {
 		}
 		return s.key, nil
 	}
-	return unknown, nil
 }
 
 // Close returns the terminal to its previous mode
