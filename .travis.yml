@@ -35,8 +35,6 @@ matrix:
         - go run build/ci.go debsrc -signer "Felix Lange (Geth CI Testing Key) <fjl@twurst.com>" -upload ppa:lp-fjl/geth-ci-testing
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
-        - go run build/ci.go install -arch 386
-        - go run build/ci.go archive -arch 386 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
     # This builder does the OSX Azure uploads
     - os: osx
