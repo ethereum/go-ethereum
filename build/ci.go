@@ -158,6 +158,13 @@ func doInstall(cmdline []string) {
 		build.MustRun(goinstall)
 		return
 	}
+	// If we are cross compiling to ARMv5 ARMv6 or ARMv7, clean any prvious builds
+	if *arch == "arm" {
+		os.RemoveAll(filepath.Join(runtime.GOROOT(), "pkg", runtime.GOOS+"_arm"))
+		for _, path := range filepath.SplitList(build.GOPATH()) {
+			os.RemoveAll(filepath.Join(path, "pkg", runtime.GOOS+"_arm"))
+		}
+	}
 	// Seems we are cross compiling, work around forbidden GOBIN
 	goinstall := goToolArch(*arch, "install", buildFlags(env)...)
 	goinstall.Args = append(goinstall.Args, "-v")
@@ -318,6 +325,9 @@ func doArchive(cmdline []string) {
 
 func archiveBasename(arch string, env build.Environment) string {
 	platform := runtime.GOOS + "-" + arch
+	if arch == "arm" {
+		platform += os.Getenv("GOARM")
+	}
 	archive := platform + "-" + build.VERSION()
 	if isUnstableBuild(env) {
 		archive += "-unstable"
