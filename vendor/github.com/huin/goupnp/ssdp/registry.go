@@ -18,7 +18,7 @@ const (
 )
 
 var (
-	maxAgeRx = regexp.MustCompile("max-age=([0-9]+)")
+	maxAgeRx = regexp.MustCompile("max-age= *([0-9]+)")
 )
 
 const (

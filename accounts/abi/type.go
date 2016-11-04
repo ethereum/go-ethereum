@@ -170,6 +170,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 
 	if (t.IsSlice || t.IsArray) && t.T != BytesTy && t.T != FixedBytesTy {
 		var packed []byte
+
 		for i := 0; i < v.Len(); i++ {
 			val, err := t.Elem.pack(v.Index(i))
 			if err != nil {
@@ -177,7 +178,11 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 			}
 			packed = append(packed, val...)
 		}
-		return packBytesSlice(packed, v.Len()), nil
+		if t.IsSlice {
+			return packBytesSlice(packed, v.Len()), nil
+		} else if t.IsArray {
+			return packed, nil
+		}
 	}
 
 	return packElement(t, v), nil
@@ -186,5 +191,5 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 // requireLengthPrefix returns whether the type requires any sort of length
 // prefixing.
 func (t Type) requiresLengthPrefix() bool {
-	return t.T != FixedBytesTy && (t.T == StringTy || t.T == BytesTy || t.IsSlice || t.IsArray)
+	return t.T != FixedBytesTy && (t.T == StringTy || t.T == BytesTy || t.IsSlice)
 }

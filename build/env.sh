@@ -19,7 +19,6 @@ if [ ! -L "$ethdir/go-ethereum" ]; then
 fi
 
 # Set up the environment to use the workspace.
-# Also add Godeps workspace so we build using canned dependencies.
 GOPATH="$workspace"
 export GOPATH
 

@@ -98,28 +98,46 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	case HashTy: // hash must be of slice hash
 		refSlice = reflect.ValueOf([]common.Hash(nil))
 	case FixedBytesTy:
-		refSlice = reflect.ValueOf([]byte(nil))
+		refSlice = reflect.ValueOf([][]byte(nil))
 	default: // no other types are supported
 		return nil, fmt.Errorf("abi: unsupported slice type %v", elem.T)
 	}
-	// get the offset which determines the start of this array ...
-	offset := int(common.BytesToBig(output[index : index+32]).Uint64())
-	if offset+32 > len(output) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+
+	var slice []byte
+	var size int
+	var offset int
+	if t.Type.IsSlice {
+
+		// get the offset which determines the start of this array ...
+		offset = int(common.BytesToBig(output[index : index+32]).Uint64())
+		if offset+32 > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+		}
+
+		slice = output[offset:]
+		// ... starting with the size of the array in elements ...
+		size = int(common.BytesToBig(slice[:32]).Uint64())
+		slice = slice[32:]
+		// ... and make sure that we've at the very least the amount of bytes
+		// available in the buffer.
+		if size*32 > len(slice) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
+		}
+
+		// reslice to match the required size
+		slice = slice[:(size * 32)]
+	} else if t.Type.IsArray {
+		//get the number of elements in the array
+		size = t.Type.SliceSize
+
+		//check to make sure array size matches up
+		if index+32*size > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), index+32*size)
+		}
+		//slice is there for a fixed amount of times
+		slice = output[index : index+size*32]
 	}
 
-	slice := output[offset:]
-	// ... starting with the size of the array in elements ...
-	size := int(common.BytesToBig(slice[:32]).Uint64())
-	slice = slice[32:]
-	// ... and make sure that we've at the very least the amount of bytes
-	// available in the buffer.
-	if size*32 > len(slice) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
-	}
-
-	// reslice to match the required size
-	slice = slice[:(size * 32)]
 	for i := 0; i < size; i++ {
 		var (
 			inter        interface{}             // interface type
@@ -136,6 +154,8 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 			inter = common.BytesToAddress(returnOutput)
 		case HashTy:
 			inter = common.BytesToHash(returnOutput)
+		case FixedBytesTy:
+			inter = returnOutput
 		}
 		// append the item to our reflect slice
 		refSlice = reflect.Append(refSlice, reflect.ValueOf(inter))
