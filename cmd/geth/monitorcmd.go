@@ -49,9 +49,11 @@ var (
 		Usage: "Refresh interval in seconds",
 	}
 	monitorCommand = cli.Command{
-		Action: monitor,
-		Name:   "monitor",
-		Usage:  `Geth Monitor: node metrics monitoring and visualization`,
+		Action:    monitor,
+		Name:      "monitor",
+		Usage:     "Monitor and visualize node metrics",
+		ArgsUsage: " ",
+		Category:  "MONITOR COMMANDS",
 		Description: `
 The Geth monitor is a tool to collect and visualize various internal metrics
 gathered by the node, supporting different chart types as well as the capacity
