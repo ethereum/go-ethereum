@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Go Ethereum Installation</title>
+    <link rel="icon" type="image/png" href="../static/images/favicon.png" />
+
+    <link href="../static/styles/bootstrap.min.css" rel="stylesheet" />
+    <link href="../static/styles/flatly.min.css" rel="stylesheet" />
+    <link href="../static/styles/font-awesome.min.css" rel="stylesheet" />
+
+    <link href="../static/styles/custom/common.css" rel="stylesheet" />
+
+    <script src="../static/scripts/jquery.min.js"></script>
+    <script src="../static/scripts/bootstrap.min.js"></script>
+    <script src="../static/scripts/moment.min.js"></script>
+    <script src="../static/scripts/marked.min.js"></script>
+    <script src="../static/scripts/emojify.min.js"></script>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="../">Go Ethereum</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li class="active"><a href="../install">Install</a></li>
+            <li><a href="../downloads">Downloads</a></li>
+            <!--<li><a href="../guide">Guide</a></li>-->
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container" style="padding-top: 24px;">
+      <div class="row">
+        <div class="col-md-12">
+          <h1>Installing Go Ethereum</h1>
+        </div>
+        <div class="col-md-12" id="content"></div>
+      </div>
+      <hr/>
+      <footer>
+        <p>&copy; 2013-2016. The go-ethereum Authors.</p>
+      </footer>
+    </div>
+
+    <script type="text/javascript">
+      $.ajax({
+        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Installing-Geth.md',
+        error: function() {
+          alert("Failed to load latest release!");
+        },
+        dataType: 'text',
+        success: function(data) {
+          $('#content').html(marked(data));
+          emojify.setConfig({img_dir: '../static/images/emoji'});
+          emojify.run(document.getElementById('content'));
+        }
+      });
+    </script>
+  </body>
+</html>

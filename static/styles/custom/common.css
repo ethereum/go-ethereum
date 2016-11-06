@@ -1,0 +1,33 @@
+body {
+	padding-top: 50px;
+}
+
+h1, h2, h3 {
+	margin-top: 36px;
+	margin-bottom: 24px;
+}
+
+code {
+	color:            #7b8a8b;
+	background-color: #ecf0f1;
+}
+
+a code {
+	color: #18bc9c;
+}
+
+.jumbotron h2 {
+	margin-top: 21px;
+	margin-bottom: 10px;
+}
+
+.fa {
+	margin-right: 4px;
+}
+
+.emoji {
+	width:         1.5em;
+	height:        1.5em;
+	display:       inline-block;
+	margin-bottom: -0.25em;
+}

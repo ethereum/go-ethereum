@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Go Ethereum Guide</title>
+    <link rel="icon" type="image/png" href="../static/images/favicon.png" />
+
+    <link href="../static/styles/bootstrap.min.css" rel="stylesheet" />
+    <link href="../static/styles/flatly.min.css" rel="stylesheet" />
+    <link href="../static/styles/font-awesome.min.css" rel="stylesheet" />
+
+    <link href="../static/styles/custom/common.css" rel="stylesheet" />
+
+    <script src="../static/scripts/jquery.min.js"></script>
+    <script src="../static/scripts/bootstrap.min.js"></script>
+    <script src="../static/scripts/moment.min.js"></script>
+    <script src="../static/scripts/marked.min.js"></script>
+    <script src="../static/scripts/emojify.min.js"></script>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="../">Go Ethereum</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="../install">Install</a></li>
+            <li><a href="../downloads">Downloads</a></li>
+            <li class="active"><a href="../guide">Guide</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container" style="padding-top: 48px; padding-bottom: 48px;">
+      <div class="row">
+        <div class="col-md-3" id="toc"></div>
+        <div class="col-md-9" id="content"></div>
+      </div>
+      <hr/>
+      <footer>
+        <p>&copy; 2013-2016. The go-ethereum Authors.</p>
+      </footer>
+    </div>
+
+    <script type="text/javascript">
+      // Download the go-ethereum wiki sidebar and convert it into a guide sidebar
+      $.ajax({
+        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/_Sidebar.md',
+        error: function() {
+          alert("Failed to load latest release!");
+        },
+        dataType: 'text',
+        success: function(data) {
+          // Iterate over all the lines of the sidebar markdown
+          var lines = data.split("\n");
+
+          var toc = $("#toc");
+          var menu;
+
+          for (var i = 0; i < lines.length; i++) {
+            // Skip any empty lines
+            var line = lines[i].trim();
+            if (line == "") {
+              continue;
+            }
+            // If the line is a heading, add a new menu entry
+            if (line[0] == "#") {
+              while (line.length > 0 && line[0] == "#") {
+                line = line.slice(1);
+              }
+              line = line.trim();
+              menu = $("<div class='list-group'></div>").appendTo(toc);
+              $("<a href='#' class='list-group-item active'>" + line + "</a>").appendTo(menu);
+              continue;
+            }
+            // Otherwise if the line is a link, add a new entry to the sub-menu
+            if (line[0] == "[") {
+              var name = /\[(.*)\]/g.exec(line)[1];
+
+              var link = /\((.*)\)/g.exec(line)[1];
+              link = "https://raw.githubusercontent.com/wiki/" + link.slice("https://github.com/".length).replace("wiki/", "") + ".md";
+
+              var item = $("<a href='#' class='list-group-item'>" + name + "</a>").appendTo(menu);
+              $(item).click(function(name, link) {
+                return function() {
+                  $.ajax({
+                    url: link,
+                    error: function() {
+                      $('#content').html("<div class='alert alert-dismissible alert-danger'>Failed to load guide page \"" + name + "\". Please report this issue on our <a href='https://github.com/ethereum/go-ethereum/issues' class='alert-link'>bug tracker</a>. Thank you!</div>");
+                    },
+                    dataType: 'text',
+                    success: function(data) {
+                      $('#content').html(marked(data));
+                      emojify.setConfig({img_dir: '../static/images/emoji'});
+                      emojify.run(document.getElementById('content'));
+                    }
+                  });
+                };
+              }(name, link));
+            }
+          }
+        }
+      });
+    </script>
+
+    <script type="text/javascript">
+      // Download the primary page content of the guide
+      $.ajax({
+        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Frontier.md',
+        error: function() {
+          alert("Failed to load latest release!");
+        },
+        dataType: 'text',
+        success: function(data) {
+          $('#content').html(marked(data));
+          emojify.setConfig({img_dir: '../static/images/emoji'});
+          emojify.run(document.getElementById('content'));
+        }
+      });
+    </script>
+  </body>
+</html>

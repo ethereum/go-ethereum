@@ -1,0 +1,48 @@
+.jumbotron .mascot {
+  background-image: url('../../images/mascot.png');
+  background-size: auto 300px;
+  background-repeat: no-repeat;
+  background-position: 2.5% -30px;
+  height: 256px;
+}
+
+.jumbotron h1, .jumbotron h2 {
+  text-shadow: -1px 0 #ecf0f1, 0 1px #ecf0f1, 1px 0 #ecf0f1, 0 -1px #ecf0f1;
+}
+
+.jumbotron h1 {
+  font-size: 56px;
+  font-weight: bold;
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
+.jumbotron h2 {
+  margin-top: 12px;
+  font-size: 28px;
+}
+
+.featurette-divider {
+  margin: 80px 0;
+}
+
+.featurette-heading {
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+@media (min-width: 768px) {
+  .featurette-heading {
+    font-size: 50px;
+  }
+}
+
+@media (min-width: 992px) {
+  .featurette-heading {
+    margin-top: 80px;
+  }
+  .featurette-image {
+    margin-top: 30px;
+  }
+}

@@ -1,160 +1,102 @@
 <!DOCTYPE html>
-<html lang="en-us">
+<html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <title>Ethereum</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
-    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
-    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
-    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+
+    <title>Go Ethereum</title>
+    <link rel="icon" type="image/png" href="./static/images/favicon.png" />
+
+    <link href="./static/styles/bootstrap.min.css" rel="stylesheet" />
+    <link href="./static/styles/flatly.min.css" rel="stylesheet" />
+    <link href="./static/styles/font-awesome.min.css" rel="stylesheet" />
+
+    <link href="./static/styles/custom/common.css" rel="stylesheet" />
+    <link href="./static/styles/custom/home.css" rel="stylesheet" />
+
+    <script src="./static/scripts/jquery.min.js"></script>
+    <script src="./static/scripts/bootstrap.min.js"></script>
+    <script src="./static/scripts/moment.min.js"></script>
+    <script src="./static/scripts/marked.min.js"></script>
+    <script src="./static/scripts/emojify.min.js"></script>
   </head>
+
   <body>
-    <section class="page-header">
-      <h1 class="project-name">Ethereum</h1>
-      <h2 class="project-tagline">Official golang implementation of the Ethereum protocol</h2>
-      <a href="https://github.com/ethereum/go-ethereum" class="btn">View on GitHub</a>
-      <a href="https://github.com/ethereum/go-ethereum/releases/latest" class="btn">Download</a>
-      <a href="https://github.com/ethereum/go-ethereum/tarball/master" class="btn">Download source</a>
-    </section>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">Go Ethereum</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="install">Install</a></li>
+            <li><a href="downloads">Downloads</a></li>
+            <!--<li><a href="/guide">Guide</a></li>-->
+          </ul>
+        </div>
+      </div>
+    </nav>
 
-    <section class="main-content">
+    <div class="jumbotron" style="padding-top: 16px; padding-bottom: 0;">
+      <div class="container mascot">
+        <div class="row">
+          <div class="col-lg-2">
+          </div>
+          <div class="col-lg-8" style="text-align: center">
+            <h1 style="padding-top: 32px;">Go Ethereum</h1>
+            <h2>Official Go implementation of the Ethereum protocol</h2>
+            <br/>
+            <a href="https://github.com/ethereum/go-ethereum" target="_blank" class="btn btn-success" style="margin: 4px;"><i class="fa fa-github" aria-hidden="true"></i> View on GitHub</a>
+            <a href="https://gitter.im/ethereum/go-ethereum" target="_blank" class="btn btn-success" style="margin: 4px;"><i class="fa fa-user-circle" aria-hidden="true"></i> Chat on Gitter</a>
+          </div>
+        </div>
+      </div>
+    </div>
 
-<p>
-Ethereum is an open source crypto project written in the Go language
-(among others: Py &amp; C++). This is the official Go implementation and home
-of <strong>geth</strong>, and the <a href="#executables">Ethereum toolset</a>.
-</p>
-
-<p>
-Ethereum's publicly available network can be accessed by anyone at any
-time, freely without any cost. It can serve as a backbone for
-any open or closed sourced project that may require 
-the robustness of free, public peer-to-peer networks with a consensus
-backing layer.
-</p>
-
-<p>
-Ethereum may also be run in a private environment, such as for use within a corporate network,
-without any cost. All core source is licensed under the <a href="https://github.com/ethereum/go-ethereum/tree/master/COPYING.LESSER">LGPL</a>
-and all frontend code is licensed under <a href="https://github.com/ethereum/go-ethereum/tree/master/COPYING">GPL</a>.
-</p>
-
-<p>
-For more information about the Ethereum protocol refer to the <a href="http://ethereum.org">official Ethereum website</a>.
-</p>
-
-<h1><a id="getting-startid" class="anchor" href="#getting-started" aria-hidden="true"><span class="octicon octicon-link"></span></a>Getting started</h1>
-
-Getting started with Ethereum is simple, the only thing you require is the <code>geth</code>
-binary.
-
-Please refer to the <a href="getting_started.html">developer</a> documentation
-for a beginner tutorial on how to get started with the Go Ethereum API.
-
-<h1><a id="development-binaries" class="anchor" href=#development-binaries" aria-hidden="true"><span class="octicon octicon-link"></span></a>Development builds</h1>
-
-<p>The following builds are built automatically after each push to the <a href="https://github.com/ethereum/go-ethereum/tree/develop">develop</a> branch.</p>
-
-<ul>
-<li><a href="https://registry.hub.docker.com/u/ethereum/client-go/">Docker</a></li>
-<li><a href="http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg">OS X</a></li>
-<li>Ubuntu
-<a href="https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-trusty/latest/">trusty</a> |
-<a href="https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-utopic/latest/">utopic</a>
-</li>
-<li><a href="https://build.ethdev.com/builds/Windows%20Go%20develop%20branch/Geth-Win64-latest.zip">Windows 64-bit</a></li>
-<li><a href="https://build.ethdev.com/builds/ARM%20Go%20develop%20branch/geth-ARM-latest.tar.bz2">ARM</a></li>
-</ul>
-
-<h1>
-<a id="building-the-source" class="anchor" href="#building-the-source" aria-hidden="true"><span class="octicon octicon-link"></span></a>Building the source</h1>
-
-<p>For prerequisites and detailed build instructions please read the
-<a href="https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum">Installation Instructions</a>
-on the wiki.</p>
-
-<p>Building geth requires two external dependencies: Go and GMP.
-You can install them using your favourite package manager.
-Once the dependencies are installed, run</p>
-
-<pre><code>make geth
-</code></pre>
-
-<h1>
-<a id="executables" class="anchor" href="#executables" aria-hidden="true"><span class="octicon octicon-link"></span></a>Executables</h1>
-
-<p>Go Ethereum comes with several wrappers/executables found in 
-<a href="https://github.com/ethereum/go-ethereum/tree/develop/cmd">the <code>cmd</code> directory</a>:</p>
-
-<table>
-<thead>
-<tr>
-<th>Command</th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>geth</code></td>
-<td>Ethereum CLI (ethereum command line interface client)</td>
-</tr>
-<tr>
-<td><code>bootnode</code></td>
-<td>runs a bootstrap node for the Discovery Protocol</td>
-</tr>
-<tr>
-<td><code>ethtest</code></td>
-<td>test tool which runs with the <a href="https://github.com/ethereum/tests">tests</a> suite: <code>/path/to/test.json &gt; ethtest --test BlockTests --stdin</code>.</td>
-</tr>
-<tr>
-<td><code>evm</code></td>
-<td>is a generic Ethereum Virtual Machine: <code>evm -code 60ff60ff -gas 10000 -price 0 -dump</code>. See <code>-h</code> for a detailed description.</td>
-</tr>
-<tr>
-<td><code>disasm</code></td>
-<td>disassembles EVM code: <code>echo "6001" | disasm</code>
-</td>
-</tr>
-<tr>
-<td><code>rlpdump</code></td>
-<td>prints RLP structures</td>
-</tr>
-</tbody>
-</table>
-
-<h1>
-<a id="command-line-options" class="anchor" href="#command-line-options" aria-hidden="true"><span class="octicon octicon-link"></span></a>Command line options</h1>
-
-<p><code>geth</code> can be configured via command line options, environment variables and config files.</p>
-
-<p>Geth comes with extensive build in help. To get the available options:</p>
-
-<pre><code>geth help
-</code></pre>
-
-<p>For further details on options, see the <a href="https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options">wiki</a></p>
-
-<h1>
-<a id="contribution" class="anchor" href="#contribution" aria-hidden="true"><span class="octicon octicon-link"></span></a>Contribution</h1>
-
-<p>If you'd like to contribute to go-ethereum please fork, fix, commit and
-send a pull request. Commits that do not comply with the coding standards
-are ignored (use gofmt!). If you send pull requests, make absolute sure that you
-commit on the <code>develop</code> branch and that you do not merge to master.
-Commits that are directly based on master are simply ignored.</p>
-
-<p>See <a href="https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide">Developers' Guide</a>
-for more details on configuring your environment, testing, and
-dependency management.</p>
-
-      <footer class="site-footer">
-        <span class="site-footer-owner"><a href="https://github.com/ethereum/go-ethereum">Ethereum</a> is maintained by <a href="https://github.com/ethereum/go-ethereum/graphs/contributors"> the go ethereum team</a>.</span>
-
-        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+    <div class="container marketing">
+      <div class="row featurette">
+        <div class="col-md-7">
+          <h2 class="featurette-heading">What is Ethereum?</h2>
+          <p class="lead">Ethereum is a  decentralized platform that runs smart contracts, applications that run exactly as programmed without possibility of downtime, censorship, fraud or third party interference.</p>
+          <p class="lead">See <a href="https://ethereum.org" target="_blank">our website</a> or <a href="http://ethdocs.org/en/latest/introduction/what-is-ethereum.html" target="_blank">read the docs</a> for more infos!</p>
+        </div>
+        <div class="col-md-5">
+          <img class="featurette-image center-block" src="./static/images/ethereum.png" height="300px">
+        </div>
+      </div>
+      <hr/>
+      <div class="row featurette">
+        <div class="col-md-7 col-md-push-5">
+          <h2 class="featurette-heading">What is Go Ethereum?</h2>
+          <p class="lead">Go Ethereum is one of the three original implementations (along with C++ and Python) of the Ethereum protocol. It is written in Go, fully open source and licensed under the GNU LGPL v3.</p>
+          <p class="lead">See <a href="https://github.com/ethereum/go-ethereum" target="_blank">our repository</a> and <a href="./downloads">downloads section</a> for the code!</p>
+        </div>
+        <div class="col-md-5 col-md-pull-7">
+          <img class="featurette-image center-block">
+        </div>
+      </div>
+      <hr/>
+      <div class="row featurette">
+        <div class="col-md-7">
+          <h2 class="featurette-heading">How can I use it?</h2>
+          <p class="lead">Go Ethereum is available either as a standalone client called Geth that you can install on pretty much any operating system, or as a library that you can embed in your Go, Android or iOS projects.</p>
+          <p class="lead">See our <a href="./install">installation guide</a> or our <a href="./downloads">developer guide</a> for details!</p>
+        </div>
+        <div class="col-md-5">
+          <img class="featurette-image center-block">
+        </div>
+      </div>
+      <hr/>
+      <footer>
+        <p>&copy; 2013-2016. The go-ethereum Authors.</p>
       </footer>
-
-    </section>
-  
+    </div>
   </body>
 </html>

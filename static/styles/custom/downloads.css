@@ -1,0 +1,12 @@
+.jumbotron p {
+	font-size: 15px;
+}
+.table-hover tbody tr.latest:nth-child(even) td {
+	background-color: #ecf0f1;
+}
+.table-hover tbody tr.latest:nth-child(odd) td {
+	background-color: #dde4e6;
+}
+.table-hover tbody tr.latest:hover td {
+	background-color: #cfd8db;
+}
