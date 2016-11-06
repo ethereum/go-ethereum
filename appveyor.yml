@@ -6,28 +6,34 @@ clone_depth: 5
 version: "{branch}.{build}"
 environment:
   global:
-    # Go stuff
     GOPATH: c:\gopath
-    GO: c:\go\bin\go
-    GOROOT: c:\go
-    CC: C:\msys64\mingw64\bin\gcc.exe
-    # MSYS2 stuff
-    MSYS2_ARCH: x86_64
-    MSYSTEM: MINGW64
-    PATH: C:\msys64\mingw64\bin\;%PATH%
+    CC: gcc.exe
+  matrix:
+    - GETH_ARCH: amd64
+      MSYS2_ARCH: x86_64
+      MSYS2_BITS: 64
+      MSYSTEM: MINGW64
+      PATH: C:\msys64\mingw64\bin\;%PATH%
+    - GETH_ARCH: 386
+      MSYS2_ARCH: i686
+      MSYS2_BITS: 32
+      MSYSTEM: MINGW32
+      PATH: C:\msys64\mingw32\bin\;%PATH%
 
 install:
-  - "%GO% version"
-  - "%CC% --version"
+  - rmdir c:\go /s /q
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.7.3.windows-amd64.zip
+  - 7z x go1.7.3.windows-amd64.zip -y -oC:\ > NUL
+  - go version
+  - gcc --version
 
 build_script:
-  - "%GO% run build\\ci.go install"
-
-test_script:
-  - "%GO% run build\\ci.go test -vet -coverage"
+  - go run build\\ci.go install -arch %GETH_ARCH%
 
 after_build:
-  - "%GO% run build\\ci.go archive -type zip"
+  - go run build\\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
 
-artifacts:
-  - path: geth-*.zip
+test_script:
+  - set GOARCH=%GETH_ARCH%
+  - set CGO_ENABLED=1
+  - go run build\\ci.go test -vet -coverage
