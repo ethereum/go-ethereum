@@ -90,11 +90,11 @@ const (
 )
 
 func (s *State) refresh(prompt []rune, buf []rune, pos int) error {
+	s.needRefresh = false
 	if s.multiLineMode {
 		return s.refreshMultiLine(prompt, buf, pos)
-	} else {
-		return s.refreshSingleLine(prompt, buf, pos)
 	}
+	return s.refreshSingleLine(prompt, buf, pos)
 }
 
 func (s *State) refreshSingleLine(prompt []rune, buf []rune, pos int) error {
@@ -387,8 +387,6 @@ func (s *State) tabComplete(p []rune, line []rune, pos int) ([]rune, int, interf
 		}
 		return []rune(head + pick + tail), hl + utf8.RuneCountInString(pick), next, nil
 	}
-	// Not reached
-	return line, pos, rune(esc), nil
 }
 
 // reverse intelligent search, implements a bash-like history search.
@@ -556,8 +554,6 @@ func (s *State) yank(p []rune, text []rune, pos int) ([]rune, int, interface{}, 
 			}
 		}
 	}
-
-	return line, pos, esc, nil
 }
 
 // Prompt displays p and returns a line of user input, not including a trailing
@@ -573,6 +569,11 @@ func (s *State) Prompt(prompt string) (string, error) {
 // including a trailing newline character. An io.EOF error is returned if the user
 // signals end-of-file by pressing Ctrl-D.
 func (s *State) PromptWithSuggestion(prompt string, text string, pos int) (string, error) {
+	for _, r := range prompt {
+		if unicode.Is(unicode.C, r) {
+			return "", ErrInvalidPrompt
+		}
+	}
 	if s.inputRedirected || !s.terminalSupported {
 		return s.promptUnsupported(prompt)
 	}
@@ -587,8 +588,9 @@ func (s *State) PromptWithSuggestion(prompt string, text string, pos int) (strin
 	p := []rune(prompt)
 	var line = []rune(text)
 	historyEnd := ""
-	prefixHistory := s.getHistoryByPrefix(string(line))
-	historyPos := len(prefixHistory)
+	var historyPrefix []string
+	historyPos := 0
+	historyStale := true
 	historyAction := false // used to mark history related actions
 	killAction := 0        // used to mark kill related actions
 
@@ -628,21 +630,21 @@ mainLoop:
 				break mainLoop
 			case ctrlA: // Start of line
 				pos = 0
-				s.refresh(p, line, pos)
+				s.needRefresh = true
 			case ctrlE: // End of line
 				pos = len(line)
-				s.refresh(p, line, pos)
+				s.needRefresh = true
 			case ctrlB: // left
 				if pos > 0 {
 					pos -= len(getSuffixGlyphs(line[:pos], 1))
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				} else {
 					fmt.Print(beep)
 				}
 			case ctrlF: // right
 				if pos < len(line) {
 					pos += len(getPrefixGlyphs(line[pos:], 1))
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				} else {
 					fmt.Print(beep)
 				}
@@ -661,7 +663,7 @@ mainLoop:
 				} else {
 					n := len(getPrefixGlyphs(line[pos:], 1))
 					line = append(line[:pos], line[pos+n:]...)
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				}
 			case ctrlK: // delete remainder of line
 				if pos >= len(line) {
@@ -675,32 +677,42 @@ mainLoop:
 
 					killAction = 2 // Mark that there was a kill action
 					line = line[:pos]
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				}
 			case ctrlP: // up
 				historyAction = true
+				if historyStale {
+					historyPrefix = s.getHistoryByPrefix(string(line))
+					historyPos = len(historyPrefix)
+					historyStale = false
+				}
 				if historyPos > 0 {
-					if historyPos == len(prefixHistory) {
+					if historyPos == len(historyPrefix) {
 						historyEnd = string(line)
 					}
 					historyPos--
-					line = []rune(prefixHistory[historyPos])
+					line = []rune(historyPrefix[historyPos])
 					pos = len(line)
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				} else {
 					fmt.Print(beep)
 				}
 			case ctrlN: // down
 				historyAction = true
-				if historyPos < len(prefixHistory) {
+				if historyStale {
+					historyPrefix = s.getHistoryByPrefix(string(line))
+					historyPos = len(historyPrefix)
+					historyStale = false
+				}
+				if historyPos < len(historyPrefix) {
 					historyPos++
-					if historyPos == len(prefixHistory) {
+					if historyPos == len(historyPrefix) {
 						line = []rune(historyEnd)
 					} else {
-						line = []rune(prefixHistory[historyPos])
+						line = []rune(historyPrefix[historyPos])
 					}
 					pos = len(line)
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				} else {
 					fmt.Print(beep)
 				}
@@ -718,11 +730,11 @@ mainLoop:
 					copy(line[pos-len(prev):], next)
 					copy(line[pos-len(prev)+len(next):], scratch)
 					pos += len(next)
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				}
 			case ctrlL: // clear screen
 				s.eraseScreen()
-				s.refresh(p, line, pos)
+				s.needRefresh = true
 			case ctrlC: // reset
 				fmt.Println("^C")
 				if s.multiLineMode {
@@ -742,7 +754,7 @@ mainLoop:
 					n := len(getSuffixGlyphs(line[:pos], 1))
 					line = append(line[:pos-n], line[pos:]...)
 					pos -= n
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				}
 			case ctrlU: // Erase line before cursor
 				if killAction > 0 {
@@ -754,7 +766,7 @@ mainLoop:
 				killAction = 2 // Mark that there was some killing
 				line = line[pos:]
 				pos = 0
-				s.refresh(p, line, pos)
+				s.needRefresh = true
 			case ctrlW: // Erase word
 				if pos == 0 {
 					fmt.Print(beep)
@@ -791,13 +803,13 @@ mainLoop:
 				}
 				killAction = 2 // Mark that there was some killing
 
-				s.refresh(p, line, pos)
+				s.needRefresh = true
 			case ctrlY: // Paste from Yank buffer
 				line, pos, next, err = s.yank(p, line, pos)
 				goto haveNext
 			case ctrlR: // Reverse Search
 				line, pos, next, err = s.reverseISearch(line, pos)
-				s.refresh(p, line, pos)
+				s.needRefresh = true
 				goto haveNext
 			case tab: // Tab completion
 				line, pos, next, err = s.tabComplete(p, line, pos)
@@ -812,14 +824,16 @@ mainLoop:
 			case 0, 28, 29, 30, 31:
 				fmt.Print(beep)
 			default:
-				if pos == len(line) && !s.multiLineMode && countGlyphs(p)+countGlyphs(line) < s.columns-1 {
+				if pos == len(line) && !s.multiLineMode &&
+					len(p)+len(line) < s.columns*4 && // Avoid countGlyphs on large lines
+					countGlyphs(p)+countGlyphs(line) < s.columns-1 {
 					line = append(line, v)
 					fmt.Printf("%c", v)
 					pos++
 				} else {
 					line = append(line[:pos], append([]rune{v}, line[pos:]...)...)
 					pos++
-					s.refresh(p, line, pos)
+					s.needRefresh = true
 				}
 			}
 		case action:
@@ -887,24 +901,34 @@ mainLoop:
 				}
 			case up:
 				historyAction = true
+				if historyStale {
+					historyPrefix = s.getHistoryByPrefix(string(line))
+					historyPos = len(historyPrefix)
+					historyStale = false
+				}
 				if historyPos > 0 {
-					if historyPos == len(prefixHistory) {
+					if historyPos == len(historyPrefix) {
 						historyEnd = string(line)
 					}
 					historyPos--
-					line = []rune(prefixHistory[historyPos])
+					line = []rune(historyPrefix[historyPos])
 					pos = len(line)
 				} else {
 					fmt.Print(beep)
 				}
 			case down:
 				historyAction = true
-				if historyPos < len(prefixHistory) {
+				if historyStale {
+					historyPrefix = s.getHistoryByPrefix(string(line))
+					historyPos = len(historyPrefix)
+					historyStale = false
+				}
+				if historyPos < len(historyPrefix) {
 					historyPos++
-					if historyPos == len(prefixHistory) {
+					if historyPos == len(historyPrefix) {
 						line = []rune(historyEnd)
 					} else {
-						line = []rune(prefixHistory[historyPos])
+						line = []rune(historyPrefix[historyPos])
 					}
 					pos = len(line)
 				} else {
@@ -928,11 +952,13 @@ mainLoop:
 					s.cursorRows = 1
 				}
 			}
+			s.needRefresh = true
+		}
+		if s.needRefresh && !s.inputWaiting() {
 			s.refresh(p, line, pos)
 		}
 		if !historyAction {
-			prefixHistory = s.getHistoryByPrefix(string(line))
-			historyPos = len(prefixHistory)
+			historyStale = true
 		}
 		if killAction > 0 {
 			killAction--
@@ -944,6 +970,11 @@ mainLoop:
 // PasswordPrompt displays p, and then waits for user input. The input typed by
 // the user is not displayed in the terminal.
 func (s *State) PasswordPrompt(prompt string) (string, error) {
+	for _, r := range prompt {
+		if unicode.Is(unicode.C, r) {
+			return "", ErrInvalidPrompt
+		}
+	}
 	if !s.terminalSupported {
 		return "", errors.New("liner: function not supported in this terminal")
 	}
