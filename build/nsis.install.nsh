@@ -1,6 +1,6 @@
 Name "geth ${MAJORVERSION}.${MINORVERSION}.${BUILDVERSION}" # VERSION variables set through command line arguments
-InstallDir "$PROGRAMFILES64\${APPNAME}"
-OutFile "../bin/${OUTPUTFILE}.exe" # OUTPUTFILE set through command line arguments
+InstallDir "$InstDir"
+OutFile "${OUTPUTFILE}.exe" # OUTPUTFILE set through command line arguments
 
 # Links for "Add/Remove Programs"
 !define HELPURL "https://github.com/ethereum/go-ethereum/issues"
@@ -9,17 +9,17 @@ OutFile "../bin/${OUTPUTFILE}.exe" # OUTPUTFILE set through command line argumen
 !define /date NOW "%Y%m%d"
 
 PageEx license
-	LicenseData ../../COPYING
+	LicenseData COPYING
 PageExEnd
 
 # Install geth binary
 Section "Geth" GETH_IDX
 	SetOutPath $INSTDIR
-	file ..\bin\geth.exe
+	file geth.exe
 
     # Create start menu launcher
     createDirectory "$SMPROGRAMS\${APPNAME}"
-    createShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\geth.exe" "--fast" ""
+    createShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\geth.exe" "--fast" "--cache=512"
     createShortCut "$SMPROGRAMS\${APPNAME}\Attach.lnk" "$INSTDIR\geth.exe" "attach" "" ""
     createShortCut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe" "" "" ""
 
@@ -44,11 +44,8 @@ SectionEnd
 # Install optional develop tools.
 Section /o "Development tools" DEV_TOOLS_IDX
 	SetOutPath $INSTDIR
-	file ..\bin\abigen.exe
-	file ..\bin\bootnode.exe
-	file ..\bin\disasm.exe
-	file ..\bin\evm.exe
-	file ..\bin\rlpdump.exe
+	{{range $}}file {{$}}
+	{{end}}
 SectionEnd
 
 # Return on top of stack the total size (as DWORD) of the selected/installed sections.

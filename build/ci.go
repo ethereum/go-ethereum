@@ -432,7 +432,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = ioutil.TempDir("", "eth-deb-build-")
+		wdflag, err = ioutil.TempDir("", "geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -562,27 +562,65 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	return pkgdir
 }
 
-// Create Windows installer.
+// Windows installer
+
 func doWindowsInstaller(cmdline []string) {
-	// Create binaries that user are embedded in installer.
-	// The installer depends on the following packages.
-	cmdline = append(cmdline, "./cmd/geth", "./cmd/bootnode", "./cmd/abigen", "./cmd/disasm", "./cmd/evm", "./cmd/rlpdump")
-	doInstall(cmdline)
+	// Parse the flags and make skip installer generation on PRs
+	var (
+		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
+		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
+	)
+	flag.CommandLine.Parse(cmdline)
+	*workdir = makeWorkdir(*workdir)
+	env := build.Env()
+	maybeSkipArchive(env)
 
-	// create NSIS package
-	outputFile := "/DOUTPUTFILE=geth-" + makeArchiveBasename()
+	// Configure and run the NSIS installer maker. This assumes that all the needed
+	// files have been previously built (don't mix building and packaging to keep
+	// cross compilation complexity to a minimum).
+	var (
+		base    = archiveBasename(*arch, env)
+		version = strings.Split(build.VERSION(), ".")
 
-	version := strings.Split(build.VERSION(), ".")
-	if len(version) != 3 {
-		panic("Expected major.minor.build version string, got " + build.VERSION())
+		majorVersion = "/DMAJORVERSION=" + version[0]
+		minorVersion = "/DMINORVERSION=" + version[1]
+		buildId      = "/DBUILDVERSION=" + version[2]
+		buildArch    = "/DARCH=" + *arch
+	)
+	bundles := []struct {
+		name    string
+		content []string
+	}{
+		{"geth-" + base, gethArchiveFiles},
+		{"geth-alltools-" + base, allToolsArchiveFiles},
 	}
-	majorVersion := "/DMAJORVERSION=" + version[0]
-	minorVersion := "/DMINORVERSION=" + version[1]
-	buildId := "/DBUILDVERSION=" + version[2]
+	for _, bundle := range bundles {
+		// Run NSIS for this specific bundle
+		outputFile := "/DOUTPUTFILE=" + bundle.name
 
-	cmd := exec.Command("makensis.exe", outputFile, majorVersion, minorVersion, buildId, `.\build\nsis\geth.nsi`)
+		tools := []string{}
+		for _, file := range bundle.content {
+			name := filepath.Base(file)
+			if name != "geth.exe" && name != "COPYING" {
+				tools = append(tools, name)
+			}
+			build.CopyFile(filepath.Join(*workdir, name), file, 0755)
+		}
+		build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
+		build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, tools)
+		build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, tools)
+		build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
 
-	build.MustRun(cmd)
+		build.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll", 0755)
+		makensis := exec.Command("makensis.exe", outputFile, majorVersion, minorVersion, buildId, buildArch, filepath.Join(*workdir, "geth.nsi"))
+		build.MustRun(makensis)
+
+		if err := archiveUpload(filepath.Join(*workdir, bundle.name+".exe"), *upload, *signer); err != nil {
+			log.Fatal(err)
+		}
+	}
 }
 
 // Cross compilation

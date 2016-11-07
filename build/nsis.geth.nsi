@@ -27,7 +27,8 @@ CRCCheck on
 
 !define GROUPNAME "Ethereum"
 !define APPNAME "Geth"
-!define DESCRIPTION "Official golang implementation of the Ethereum protocol"
+!define DESCRIPTION "Official Go implementation of the Ethereum protocol"
+!addplugindir .\
 
 # Require admin rights on NT6+ (When UAC is turned on)
 RequestExecutionLevel admin
@@ -49,6 +50,12 @@ function .onInit
     # make vars are global for all users since geth is installed global
 	setShellVarContext all
 	!insertmacro VerifyUserIsAdmin
+
+  ${If} ${ARCH} == "amd64"
+  	StrCpy $InstDir "$PROGRAMFILES64\${APPNAME}"
+  ${Else}
+  	StrCpy $InstDir "$PROGRAMFILES32\${APPNAME}"
+  ${Endif}
 functionEnd
 
 !include install.nsh

@@ -3,12 +3,9 @@ Section "Uninstall"
     setShellVarContext all
 
     # Delete (optionally) installed files
+    {{range $}}Delete $INSTDIR\{{$}}
+    {{end}}
     Delete $INSTDIR\geth.exe
-    Delete $INSTDIR\abigen.exe
-    Delete $INSTDIR\bootnode.exe
-    Delete $INSTDIR\disasm.exe
-    Delete $INSTDIR\evm.exe
-    Delete $INSTDIR\rlpdump.exe
     Delete $INSTDIR\uninstall.exe
 
     # Delete install directory
