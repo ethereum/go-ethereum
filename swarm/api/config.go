@@ -48,7 +48,7 @@ type Config struct {
 	*storage.ChunkerParams
 	*network.HiveParams
 	Swap *swap.SwapParams
-	*network.SyncParams
+	// *network.SyncParams
 	Path      string
 	Port      string
 	PublicKey string
@@ -73,8 +73,8 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 	keyhex := crypto.Sha3Hash(pubkey).Hex()
 
 	self = &Config{
-		SyncParams:    network.NewSyncParams(dirpath),
-		HiveParams:    network.NewHiveParams(dirpath),
+		// SyncParams:    network.NewSyncParams(dirpath),
+		HiveParams:    network.NewHiveParams(),
 		ChunkerParams: storage.NewChunkerParams(),
 		StoreParams:   storage.NewStoreParams(dirpath),
 		Port:          port,
