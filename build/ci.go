@@ -359,11 +359,11 @@ func archiveUpload(archive string, blobstore string, signer string) error {
 			Token:     os.Getenv("AZURE_BLOBSTORE_TOKEN"),
 			Container: strings.SplitN(blobstore, "/", 2)[1],
 		}
-		if err := build.AzureBlobstoreUpload(archive, archive, auth); err != nil {
+		if err := build.AzureBlobstoreUpload(archive, filepath.Base(archive), auth); err != nil {
 			return err
 		}
 		if signer != "" {
-			if err := build.AzureBlobstoreUpload(archive+".asc", archive+".asc", auth); err != nil {
+			if err := build.AzureBlobstoreUpload(archive+".asc", filepath.Base(archive+".asc"), auth); err != nil {
 				return err
 			}
 		}
