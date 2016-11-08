@@ -2348,11 +2348,11 @@
                 "nonce" : "0x00",
                 "storage" : {
                     "0x00" : "0x01",
-                    "0x01" : "0x80"
+                    "0x01" : "0x17"
                 }
             },
             "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
-                "balance" : "0xf125",
+                "balance" : "0xf124",
                 "code" : "0x",
                 "nonce" : "0x00",
                 "storage" : {
@@ -2360,20 +2360,20 @@
             },
             "945304eb96065b2a98b57a48a06ae28d285a71b5" : {
                 "balance" : "0x17",
-                "code" : "0x6080600155",
+                "code" : "0x34600155",
                 "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "0x0de0b6b3a7630ec4",
+                "balance" : "0x0de0b6b3a7630ec5",
                 "code" : "0x",
                 "nonce" : "0x01",
                 "storage" : {
                 }
             }
         },
-        "postStateRoot" : "48bff583115901da1892da1ff92bcf59f3f61e643edb2e05df7f6bffabe248b0",
+        "postStateRoot" : "14122ff01c9fbf8e582d0f8e8b334179bc3cbb23eaa4b8a110fd68f1b837c2da",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
                 "balance" : "0x0de0b6b3a7640000",
@@ -2384,7 +2384,7 @@
             },
             "945304eb96065b2a98b57a48a06ae28d285a71b5" : {
                 "balance" : "0x17",
-                "code" : "0x6080600155",
+                "code" : "0x34600155",
                 "nonce" : "0x00",
                 "storage" : {
                 }

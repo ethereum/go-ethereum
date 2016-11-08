@@ -751,7 +751,7 @@ func TestEIP158_150SingleCodeGasPrice(t *testing.T) {
 		EIP158Block:    big.NewInt(3500000),
 	}
 
-	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stEIPSingleCodeGasPrices.json")
+	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stEIPsingleCodeGasPrices.json")
 	if err := RunStateTest(chainConfig, fn, StateSkipTests); err != nil {
 		t.Error(err)
 	}
