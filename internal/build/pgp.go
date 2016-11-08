@@ -54,5 +54,5 @@ func PGPSignFile(input string, output string, pgpkey string) error {
 	defer out.Close()
 
 	// Generate the signature and return
-	return openpgp.ArmoredDetachSignText(out, keys[0], in, nil)
+	return openpgp.ArmoredDetachSign(out, keys[0], in, nil)
 }
