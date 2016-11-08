@@ -853,22 +853,37 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 			}
 			config.DAOForkSupport = true
 		}
+		if config.EIP150Block == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.EIP150Block = params.TestNetHomesteadGasRepriceBlock
+			} else {
+				config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
+			}
+		}
+		if config.EIP150Hash == (common.Hash{}) {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.EIP150Hash = params.TestNetHomesteadGasRepriceHash
+			} else {
+				config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
+			}
+		}
+		if config.EIP155Block == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.EIP150Block = params.TestNetSpuriousDragon
+			} else {
+				config.EIP155Block = params.MainNetSpuriousDragon
+			}
+		}
+		if config.EIP158Block == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.EIP158Block = params.TestNetSpuriousDragon
+			} else {
+				config.EIP158Block = params.MainNetSpuriousDragon
+			}
+		}
 		config.DAOForkSupport = true
 	}
-	if config.EIP150Block == nil {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.EIP150Block = params.TestNetHomesteadGasRepriceBlock
-		} else {
-			config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
-		}
-	}
-	if config.EIP150Hash == (common.Hash{}) {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.EIP150Hash = params.TestNetHomesteadGasRepriceHash
-		} else {
-			config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
-		}
-	}
+
 	// Force override any existing configs if explicitly requested
 	switch {
 	case ctx.GlobalBool(SupportDAOFork.Name):
