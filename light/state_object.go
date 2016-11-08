@@ -40,7 +40,7 @@ func (self Code) String() string {
 }
 
 // Storage is a memory map cache of a contract storage
-type Storage map[string]common.Hash
+type Storage map[common.Hash]common.Hash
 
 // String returns a string representation of the storage cache
 func (self Storage) String() (str string) {
@@ -100,7 +100,7 @@ func NewStateObject(address common.Address, odr OdrBackend) *StateObject {
 		codeHash: emptyCodeHash,
 		storage:  make(Storage),
 	}
-	object.trie = NewLightTrie(common.Hash{}, odr, true)
+	object.trie = NewLightTrie(&TrieID{}, odr, true)
 	return object
 }
 
@@ -133,8 +133,7 @@ func (self *StateObject) Storage() Storage {
 // GetState returns the storage value at the given address from either the cache
 // or the trie
 func (self *StateObject) GetState(ctx context.Context, key common.Hash) (common.Hash, error) {
-	strkey := key.Str()
-	value, exists := self.storage[strkey]
+	value, exists := self.storage[key]
 	if !exists {
 		var err error
 		value, err = self.getAddr(ctx, key)
@@ -142,7 +141,7 @@ func (self *StateObject) GetState(ctx context.Context, key common.Hash) (common.
 			return common.Hash{}, err
 		}
 		if (value != common.Hash{}) {
-			self.storage[strkey] = value
+			self.storage[key] = value
 		}
 	}
 
@@ -151,7 +150,7 @@ func (self *StateObject) GetState(ctx context.Context, key common.Hash) (common.
 
 // SetState sets the storage value at the given address
 func (self *StateObject) SetState(k, value common.Hash) {
-	self.storage[k.Str()] = value
+	self.storage[k] = value
 	self.dirty = true
 }
 
@@ -178,6 +177,9 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 	c.balance = amount
 	c.dirty = true
 }
+
+// ReturnGas returns the gas back to the origin. Used by the Virtual machine or Closures
+func (c *StateObject) ReturnGas(gas, price *big.Int) {}
 
 // Copy creates a copy of the state object
 func (self *StateObject) Copy() *StateObject {
@@ -215,9 +217,9 @@ func (self *StateObject) Code() []byte {
 }
 
 // SetCode sets the contract code
-func (self *StateObject) SetCode(code []byte) {
+func (self *StateObject) SetCode(hash common.Hash, code []byte) {
 	self.code = code
-	self.codeHash = crypto.Keccak256(code)
+	self.codeHash = hash[:]
 	self.dirty = true
 }
 
@@ -232,6 +234,23 @@ func (self *StateObject) Nonce() uint64 {
 	return self.nonce
 }
 
+// ForEachStorage calls a callback function for every key/value pair found
+// in the local storage cache. Note that unlike core/state.StateObject,
+// light.StateObject only returns cached values and doesn't download the
+// entire storage tree.
+func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
+	for h, v := range self.storage {
+		cb(h, v)
+	}
+}
+
+// Never called, but must be present to allow StateObject to be used
+// as a vm.Account interface that also satisfies the vm.ContractRef
+// interface. Interfaces are awesome.
+func (self *StateObject) Value() *big.Int {
+	panic("Value on StateObject should never be called")
+}
+
 // Encoding
 
 type extStateObject struct {
@@ -242,7 +261,7 @@ type extStateObject struct {
 }
 
 // DecodeObject decodes an RLP-encoded state object.
-func DecodeObject(ctx context.Context, address common.Address, odr OdrBackend, data []byte) (*StateObject, error) {
+func DecodeObject(ctx context.Context, stateID *TrieID, address common.Address, odr OdrBackend, data []byte) (*StateObject, error) {
 	var (
 		obj = &StateObject{address: address, odr: odr, storage: make(Storage)}
 		ext extStateObject
@@ -251,9 +270,10 @@ func DecodeObject(ctx context.Context, address common.Address, odr OdrBackend, d
 	if err = rlp.DecodeBytes(data, &ext); err != nil {
 		return nil, err
 	}
-	obj.trie = NewLightTrie(ext.Root, odr, true)
+	trieID := StorageTrieID(stateID, address, ext.Root)
+	obj.trie = NewLightTrie(trieID, odr, true)
 	if !bytes.Equal(ext.CodeHash, emptyCodeHash) {
-		if obj.code, err = retrieveNodeData(ctx, obj.odr, common.BytesToHash(ext.CodeHash)); err != nil {
+		if obj.code, err = retrieveContractCode(ctx, obj.odr, trieID, common.BytesToHash(ext.CodeHash)); err != nil {
 			return nil, fmt.Errorf("can't find code for hash %x: %v", ext.CodeHash, err)
 		}
 	}

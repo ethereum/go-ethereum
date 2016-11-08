@@ -347,8 +347,13 @@ func WriteBody(db ethdb.Database, hash common.Hash, number uint64, body *types.B
 	if err != nil {
 		return err
 	}
+	return WriteBodyRLP(db, hash, number, data)
+}
+
+// WriteBodyRLP writes a serialized body of a block into the database.
+func WriteBodyRLP(db ethdb.Database, hash common.Hash, number uint64, rlp rlp.RawValue) error {
 	key := append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-	if err := db.Put(key, data); err != nil {
+	if err := db.Put(key, rlp); err != nil {
 		glog.Fatalf("failed to store block body into database: %v", err)
 	}
 	glog.V(logger.Debug).Infof("stored block body [%x…]", hash.Bytes()[:4])
@@ -444,6 +449,16 @@ func WriteTransactions(db ethdb.Database, block *types.Block) error {
 		glog.Fatalf("failed to store transactions into database: %v", err)
 	}
 	return nil
+}
+
+// WriteReceipt stores a single transaction receipt into the database.
+func WriteReceipt(db ethdb.Database, receipt *types.Receipt) error {
+	storageReceipt := (*types.ReceiptForStorage)(receipt)
+	data, err := rlp.EncodeToBytes(storageReceipt)
+	if err != nil {
+		return err
+	}
+	return db.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data)
 }
 
 // WriteReceipts stores a batch of transaction receipts into the database.
@@ -613,4 +628,31 @@ func GetChainConfig(db ethdb.Database, hash common.Hash) (*ChainConfig, error) {
 	}
 
 	return &config, nil
+}
+
+// FindCommonAncestor returns the last common ancestor of two block headers
+func FindCommonAncestor(db ethdb.Database, a, b *types.Header) *types.Header {
+	for a.GetNumberU64() > b.GetNumberU64() {
+		a = GetHeader(db, a.ParentHash, a.GetNumberU64()-1)
+		if a == nil {
+			return nil
+		}
+	}
+	for a.GetNumberU64() < b.GetNumberU64() {
+		b = GetHeader(db, b.ParentHash, b.GetNumberU64()-1)
+		if b == nil {
+			return nil
+		}
+	}
+	for a.Hash() != b.Hash() {
+		a = GetHeader(db, a.ParentHash, a.GetNumberU64()-1)
+		if a == nil {
+			return nil
+		}
+		b = GetHeader(db, b.ParentHash, b.GetNumberU64()-1)
+		if b == nil {
+			return nil
+		}
+	}
+	return a
 }

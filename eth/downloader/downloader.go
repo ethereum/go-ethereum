@@ -164,13 +164,13 @@ type Downloader struct {
 }
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
-func New(stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, hasBlockAndState blockAndStateCheckFn,
+func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, hasHeader headerCheckFn, hasBlockAndState blockAndStateCheckFn,
 	getHeader headerRetrievalFn, getBlock blockRetrievalFn, headHeader headHeaderRetrievalFn, headBlock headBlockRetrievalFn,
 	headFastBlock headFastBlockRetrievalFn, commitHeadBlock headBlockCommitterFn, getTd tdRetrievalFn, insertHeaders headerChainInsertFn,
 	insertBlocks blockChainInsertFn, insertReceipts receiptChainInsertFn, rollback chainRollbackFn, dropPeer peerDropFn) *Downloader {
 
 	dl := &Downloader{
-		mode:             FullSync,
+		mode:             mode,
 		mux:              mux,
 		queue:            newQueue(stateDb),
 		peers:            newPeerSet(),
@@ -1179,10 +1179,23 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 			for i, header := range rollback {
 				hashes[i] = header.Hash()
 			}
-			lastHeader, lastFastBlock, lastBlock := d.headHeader().Number, d.headFastBlock().Number(), d.headBlock().Number()
+			lastHeader, lastFastBlock, lastBlock := d.headHeader().Number, common.Big0, common.Big0
+			if d.headFastBlock != nil {
+				lastFastBlock = d.headFastBlock().Number()
+			}
+			if d.headBlock != nil {
+				lastBlock = d.headBlock().Number()
+			}
 			d.rollback(hashes)
+			curFastBlock, curBlock := common.Big0, common.Big0
+			if d.headFastBlock != nil {
+				curFastBlock = d.headFastBlock().Number()
+			}
+			if d.headBlock != nil {
+				curBlock = d.headBlock().Number()
+			}
 			glog.V(logger.Warn).Infof("Rolled back %d headers (LH: %d->%d, FB: %d->%d, LB: %d->%d)",
-				len(hashes), lastHeader, d.headHeader().Number, lastFastBlock, d.headFastBlock().Number(), lastBlock, d.headBlock().Number())
+				len(hashes), lastHeader, d.headHeader().Number, lastFastBlock, curFastBlock, lastBlock, curBlock)
 
 			// If we're already past the pivot point, this could be an attack, thread carefully
 			if rollback[len(rollback)-1].Number.Uint64() > pivot {
@@ -1229,8 +1242,10 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// L: Sync begins, and finds common ancestor at 11
 				// L: Request new headers up from 11 (R's TD was higher, it must have something)
 				// R: Nothing to give
-				if !gotHeaders && td.Cmp(d.getTd(d.headBlock().Hash())) > 0 {
-					return errStallingPeer
+				if d.mode != LightSync {
+					if !gotHeaders && td.Cmp(d.getTd(d.headBlock().Hash())) > 0 {
+						return errStallingPeer
+					}
 				}
 				// If fast or light syncing, ensure promised headers are indeed delivered. This is
 				// needed to detect scenarios where an attacker feeds a bad pivot and then bails out

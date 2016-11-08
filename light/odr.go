@@ -19,14 +19,22 @@
 package light
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/net/context"
 )
 
-// OdrBackend is an interface to a backend service that handles odr retrievals
+// NoOdr is the default context passed to an ODR capable function when the ODR
+// service is not required.
+var NoOdr = context.Background()
+
+// OdrBackend is an interface to a backend service that handles ODR retrievals
 type OdrBackend interface {
 	Database() ethdb.Database
 	Retrieve(ctx context.Context, req OdrRequest) error
@@ -37,17 +45,44 @@ type OdrRequest interface {
 	StoreResult(db ethdb.Database)
 }
 
+// TrieID identifies a state or account storage trie
+type TrieID struct {
+	BlockHash, Root common.Hash
+	AccKey          []byte
+}
+
+// StateTrieID returns a TrieID for a state trie belonging to a certain block
+// header.
+func StateTrieID(header *types.Header) *TrieID {
+	return &TrieID{
+		BlockHash: header.Hash(),
+		AccKey:    nil,
+		Root:      header.Root,
+	}
+}
+
+// StorageTrieID returns a TrieID for a contract storage trie at a given account
+// of a given state trie. It also requires the root hash of the trie for
+// checking Merkle proofs.
+func StorageTrieID(state *TrieID, addr common.Address, root common.Hash) *TrieID {
+	return &TrieID{
+		BlockHash: state.BlockHash,
+		AccKey:    crypto.Keccak256(addr[:]),
+		Root:      root,
+	}
+}
+
 // TrieRequest is the ODR request type for state/storage trie entries
 type TrieRequest struct {
 	OdrRequest
-	root  common.Hash
-	key   []byte
-	proof []rlp.RawValue
+	Id    *TrieID
+	Key   []byte
+	Proof []rlp.RawValue
 }
 
 // StoreResult stores the retrieved data in local database
 func (req *TrieRequest) StoreResult(db ethdb.Database) {
-	storeProof(db, req.proof)
+	storeProof(db, req.Proof)
 }
 
 // storeProof stores the new trie nodes obtained from a merkle proof in the database
@@ -61,38 +96,61 @@ func storeProof(db ethdb.Database, proof []rlp.RawValue) {
 	}
 }
 
-// NodeDataRequest is the ODR request type for node data (used for retrieving contract code)
-type NodeDataRequest struct {
+// CodeRequest is the ODR request type for retrieving contract code
+type CodeRequest struct {
 	OdrRequest
-	hash common.Hash
-	data []byte
-}
-
-// GetData returns the retrieved node data after a successful request
-func (req *NodeDataRequest) GetData() []byte {
-	return req.data
+	Id   *TrieID
+	Hash common.Hash
+	Data []byte
 }
 
 // StoreResult stores the retrieved data in local database
-func (req *NodeDataRequest) StoreResult(db ethdb.Database) {
-	db.Put(req.hash[:], req.GetData())
+func (req *CodeRequest) StoreResult(db ethdb.Database) {
+	db.Put(req.Hash[:], req.Data)
 }
 
-var sha3_nil = crypto.Keccak256Hash(nil)
+// BlockRequest is the ODR request type for retrieving block bodies
+type BlockRequest struct {
+	OdrRequest
+	Hash   common.Hash
+	Number uint64
+	Rlp    []byte
+}
 
-// retrieveNodeData tries to retrieve node data with the given hash from the network
-func retrieveNodeData(ctx context.Context, odr OdrBackend, hash common.Hash) ([]byte, error) {
-	if hash == sha3_nil {
-		return nil, nil
-	}
-	res, _ := odr.Database().Get(hash[:])
-	if res != nil {
-		return res, nil
-	}
-	r := &NodeDataRequest{hash: hash}
-	if err := odr.Retrieve(ctx, r); err != nil {
-		return nil, err
-	} else {
-		return r.GetData(), nil
-	}
+// StoreResult stores the retrieved data in local database
+func (req *BlockRequest) StoreResult(db ethdb.Database) {
+	core.WriteBodyRLP(db, req.Hash, req.Number, req.Rlp)
+}
+
+// ReceiptsRequest is the ODR request type for retrieving block bodies
+type ReceiptsRequest struct {
+	OdrRequest
+	Hash     common.Hash
+	Number   uint64
+	Receipts types.Receipts
+}
+
+// StoreResult stores the retrieved data in local database
+func (req *ReceiptsRequest) StoreResult(db ethdb.Database) {
+	core.WriteBlockReceipts(db, req.Hash, req.Number, req.Receipts)
+}
+
+// TrieRequest is the ODR request type for state/storage trie entries
+type ChtRequest struct {
+	OdrRequest
+	ChtNum, BlockNum uint64
+	ChtRoot          common.Hash
+	Header           *types.Header
+	Td               *big.Int
+	Proof            []rlp.RawValue
+}
+
+// StoreResult stores the retrieved data in local database
+func (req *ChtRequest) StoreResult(db ethdb.Database) {
+	// if there is a canonical hash, there is a header too
+	core.WriteHeader(db, req.Header)
+	hash, num := req.Header.Hash(), req.Header.Number.Uint64()
+	core.WriteTd(db, hash, num, req.Td)
+	core.WriteCanonicalHash(db, hash, num)
+	//storeProof(db, req.Proof)
 }
