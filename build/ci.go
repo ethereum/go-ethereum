@@ -69,8 +69,6 @@ var (
 		executablePath("evm"),
 		executablePath("geth"),
 		executablePath("rlpdump"),
-		executablePath("disasm"),
-		executablePath("bootnode"),
 	}
 
 	// A debian package is created for all executables listed here.
@@ -579,22 +577,6 @@ func doWindowsInstaller(cmdline []string) {
 	env := build.Env()
 	maybeSkipArchive(env)
 
-	defer os.RemoveAll(*workdir)
-
-	// Configure and run the NSIS installer maker. This assumes that all the needed
-	// files have been previously built (don't mix building and packaging to keep
-	// cross compilation complexity to a minimum).
-	var (
-		base            = archiveBasename(*arch, env)
-		installerName   = "geth-" + base
-		installFilename = "/DOUTPUTFILE=" + installerName
-
-		version      = strings.Split(build.VERSION(), ".")
-		majorVersion = "/DMAJORVERSION=" + version[0]
-		minorVersion = "/DMINORVERSION=" + version[1]
-		buildId      = "/DBUILDVERSION=" + version[2]
-		buildArch    = "/DARCH=" + *arch
-	)
 	// Aggregate binaries that are included in the installer
 	var (
 		devTools []string
@@ -612,26 +594,40 @@ func doWindowsInstaller(cmdline []string) {
 			devTools = append(devTools, file)
 		}
 	}
+
 	// Render NSIS scripts: Installer NSIS contains two installer sections,
 	// first section contains the geth binary, second section holds the dev tools.
-	installer := map[string]interface{}{
+	templateData := map[string]interface{}{
 		"License":  "COPYING",
 		"Geth":     gethTool,
 		"DevTools": devTools,
 	}
 	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
-	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, installer)
+	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
-
 	build.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll", 0755)
 	build.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING", 0755)
 
-	makensis := exec.Command("makensis.exe", installFilename, majorVersion, minorVersion, buildId, buildArch, filepath.Join(*workdir, "geth.nsi"))
-	build.MustRun(makensis)
+	// Build the installer. This assumes that all the needed files have been previously
+	// built (don't mix building and packaging to keep cross compilation complexity to a
+	// minimum).
+	version := strings.Split(build.VERSION(), ".")
+	if env.Commit != "" {
+		version[2] += "-" + env.Commit[:8]
+	}
+	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, env) + ".exe")
+	build.MustRunCommand("makensis.exe",
+		"/DOUTPUTFILE="+installer,
+		"/DMAJORVERSION="+version[0],
+		"/DMINORVERSION="+version[1],
+		"/DBUILDVERSION="+version[2],
+		"/DARCH="+*arch,
+		filepath.Join(*workdir, "geth.nsi"),
+	)
 
 	// Sign and publish installer.
-	if err := archiveUpload(filepath.Join(*workdir, installerName+".exe"), *upload, *signer); err != nil {
+	if err := archiveUpload(installer, *upload, *signer); err != nil {
 		log.Fatal(err)
 	}
 }

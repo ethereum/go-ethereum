@@ -33,6 +33,9 @@ CRCCheck on
 # Require admin rights on NT6+ (When UAC is turned on)
 RequestExecutionLevel admin
 
+# Use LZMA compression
+SetCompressor /SOLID lzma
+
 !include LogicLib.nsh
 !include EnvVarUpdate.nsh
 
@@ -40,21 +43,21 @@ RequestExecutionLevel admin
 UserInfo::GetAccountType
 pop $0
 ${If} $0 != "admin" # Require admin rights on NT4+
-        messageBox mb_iconstop "Administrator rights required!"
-        setErrorLevel 740 # ERROR_ELEVATION_REQUIRED
-        quit
+  messageBox mb_iconstop "Administrator rights required!"
+  setErrorLevel 740 # ERROR_ELEVATION_REQUIRED
+  quit
 ${EndIf}
 !macroend
 
 function .onInit
-    # make vars are global for all users since geth is installed global
-	setShellVarContext all
-	!insertmacro VerifyUserIsAdmin
+  # make vars are global for all users since geth is installed global
+  setShellVarContext all
+  !insertmacro VerifyUserIsAdmin
 
   ${If} ${ARCH} == "amd64"
-  	StrCpy $InstDir "$PROGRAMFILES64\${APPNAME}"
+    StrCpy $InstDir "$PROGRAMFILES64\${APPNAME}"
   ${Else}
-  	StrCpy $InstDir "$PROGRAMFILES32\${APPNAME}"
+    StrCpy $InstDir "$PROGRAMFILES32\${APPNAME}"
   ${Endif}
 functionEnd
 
