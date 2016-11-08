@@ -9,13 +9,13 @@ OutFile "${OUTPUTFILE}.exe" # OUTPUTFILE set through command line arguments
 !define /date NOW "%Y%m%d"
 
 PageEx license
-	LicenseData COPYING
+	LicenseData {{.License}}
 PageExEnd
 
 # Install geth binary
 Section "Geth" GETH_IDX
 	SetOutPath $INSTDIR
-	file geth.exe
+	file {{.Geth}}
 
     # Create start menu launcher
     createDirectory "$SMPROGRAMS\${APPNAME}"
@@ -44,7 +44,7 @@ SectionEnd
 # Install optional develop tools.
 Section /o "Development tools" DEV_TOOLS_IDX
 	SetOutPath $INSTDIR
-	{{range $}}file {{$}}
+	{{range .DevTools}}file {{.}}
 	{{end}}
 SectionEnd
 
