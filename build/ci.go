@@ -28,6 +28,7 @@ Available commands are:
    archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
+   nsis                                                                                      -- creates a Windows NSIS installer
    xgo        [ options ]                                                                    -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -122,6 +123,8 @@ func main() {
 		doArchive(os.Args[2:])
 	case "debsrc":
 		doDebianSource(os.Args[2:])
+	case "nsis":
+		doWindowsInstaller(os.Args[2:])
 	case "xgo":
 		doXgo(os.Args[2:])
 	default:
@@ -429,7 +432,7 @@ func makeWorkdir(wdflag string) string {
 	if wdflag != "" {
 		err = os.MkdirAll(wdflag, 0744)
 	} else {
-		wdflag, err = ioutil.TempDir("", "eth-deb-build-")
+		wdflag, err = ioutil.TempDir("", "geth-build-")
 	}
 	if err != nil {
 		log.Fatal(err)
@@ -557,6 +560,76 @@ func stageDebianSource(tmpdir string, meta debMetadata) (pkgdir string) {
 	}
 
 	return pkgdir
+}
+
+// Windows installer
+
+func doWindowsInstaller(cmdline []string) {
+	// Parse the flags and make skip installer generation on PRs
+	var (
+		arch    = flag.String("arch", runtime.GOARCH, "Architecture for cross build packaging")
+		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. WINDOWS_SIGNING_KEY)`)
+		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		workdir = flag.String("workdir", "", `Output directory for packages (uses temp dir if unset)`)
+	)
+	flag.CommandLine.Parse(cmdline)
+	*workdir = makeWorkdir(*workdir)
+	env := build.Env()
+	maybeSkipArchive(env)
+
+	// Aggregate binaries that are included in the installer
+	var (
+		devTools []string
+		allTools []string
+		gethTool string
+	)
+	for _, file := range allToolsArchiveFiles {
+		if file == "COPYING" { // license, copied later
+			continue
+		}
+		allTools = append(allTools, filepath.Base(file))
+		if filepath.Base(file) == "geth.exe" {
+			gethTool = file
+		} else {
+			devTools = append(devTools, file)
+		}
+	}
+
+	// Render NSIS scripts: Installer NSIS contains two installer sections,
+	// first section contains the geth binary, second section holds the dev tools.
+	templateData := map[string]interface{}{
+		"License":  "COPYING",
+		"Geth":     gethTool,
+		"DevTools": devTools,
+	}
+	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
+	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
+	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
+	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
+	build.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll", 0755)
+	build.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING", 0755)
+
+	// Build the installer. This assumes that all the needed files have been previously
+	// built (don't mix building and packaging to keep cross compilation complexity to a
+	// minimum).
+	version := strings.Split(build.VERSION(), ".")
+	if env.Commit != "" {
+		version[2] += "-" + env.Commit[:8]
+	}
+	installer, _ := filepath.Abs("geth-" + archiveBasename(*arch, env) + ".exe")
+	build.MustRunCommand("makensis.exe",
+		"/DOUTPUTFILE="+installer,
+		"/DMAJORVERSION="+version[0],
+		"/DMINORVERSION="+version[1],
+		"/DBUILDVERSION="+version[2],
+		"/DARCH="+*arch,
+		filepath.Join(*workdir, "geth.nsi"),
+	)
+
+	// Sign and publish installer.
+	if err := archiveUpload(installer, *upload, *signer); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Cross compilation

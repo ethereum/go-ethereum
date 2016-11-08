@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -114,6 +115,28 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 		log.Fatal(err)
 	}
 	if err := out.Close(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// CopyFile copies a file.
+func CopyFile(dst, src string, mode os.FileMode) {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		log.Fatal(err)
+	}
+	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer destFile.Close()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer srcFile.Close()
+
+	if _, err := io.Copy(destFile, srcFile); err != nil {
 		log.Fatal(err)
 	}
 }
