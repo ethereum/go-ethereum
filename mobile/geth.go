@@ -24,12 +24,13 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/whisper/whisperv2"
@@ -107,9 +108,11 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	}
 	// Create the empty networking stack
 	nodeConf := &node.Config{
+		Name:           clientIdentifier,
 		DataDir:        datadir,
 		KeyStoreDir:    filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
-		Name:           common.MakeName(clientIdentifier, utils.Version),
+		NoDiscovery:    true,
+		DiscoveryV5:    true,
 		BootstrapNodes: config.BootstrapNodes.nodes,
 		ListenAddr:     ":0",
 		NAT:            nat.Any(),
@@ -123,12 +126,14 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	if config.EthereumEnabled {
 		ethConf := &eth.Config{
 			ChainConfig: &core.ChainConfig{
-				HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
-				DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
-				DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
+				HomesteadBlock:           big.NewInt(config.EthereumChainConfig.HomesteadBlock),
+				DAOForkBlock:             big.NewInt(config.EthereumChainConfig.DAOForkBlock),
+				DAOForkSupport:           config.EthereumChainConfig.DAOForkSupport,
+				HomesteadGasRepriceBlock: big.NewInt(config.EthereumChainConfig.HomesteadGasRepriceBlock),
+				HomesteadGasRepriceHash:  config.EthereumChainConfig.HomesteadGasRepriceHash.hash,
 			},
 			Genesis:                 config.EthereumGenesis,
-			FastSync:                true,
+			LightMode:               true,
 			DatabaseCache:           config.EthereumDatabaseCache,
 			NetworkId:               config.EthereumNetworkID,
 			GasPrice:                new(big.Int).Mul(big.NewInt(20), common.Shannon),
@@ -141,9 +146,10 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 		}
 		if config.EthereumTestnetNonces {
 			state.StartingNonce = 1048576 // (2**20)
+			light.StartingNonce = 1048576 // (2**20)
 		}
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return eth.New(ctx, ethConf)
+			return les.New(ctx, ethConf)
 		}); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}

@@ -46,14 +46,18 @@ var TestnetBootnodes = []*discover.Node{
 
 // MainnetChainConfig is the chain parameters to run a node on the main network.
 var MainnetChainConfig = &core.ChainConfig{
-	HomesteadBlock: params.MainNetHomesteadBlock,
-	DAOForkBlock:   params.MainNetDAOForkBlock,
-	DAOForkSupport: true,
+	HomesteadBlock:           params.MainNetHomesteadBlock,
+	DAOForkBlock:             params.MainNetDAOForkBlock,
+	DAOForkSupport:           true,
+	HomesteadGasRepriceBlock: params.MainNetHomesteadGasRepriceBlock,
+	HomesteadGasRepriceHash:  params.MainNetHomesteadGasRepriceHash,
 }
 
 // TestnetChainConfig is the chain parameters to run a node on the test network.
 var TestnetChainConfig = &core.ChainConfig{
-	HomesteadBlock: params.TestNetHomesteadBlock,
-	DAOForkBlock:   params.TestNetDAOForkBlock,
-	DAOForkSupport: false,
+	HomesteadBlock:           params.TestNetHomesteadBlock,
+	DAOForkBlock:             params.TestNetDAOForkBlock,
+	DAOForkSupport:           false,
+	HomesteadGasRepriceBlock: params.TestNetHomesteadGasRepriceBlock,
+	HomesteadGasRepriceHash:  params.TestNetHomesteadGasRepriceHash,
 }

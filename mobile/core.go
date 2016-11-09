@@ -23,32 +23,46 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// MainnetChainConfig is the chain configurations for the main Ethereum network.
-var MainnetChainConfig = &ChainConfig{
-	HomesteadBlock: params.MainNetHomesteadBlock.Int64(),
-	DAOForkBlock:   params.MainNetDAOForkBlock.Int64(),
-	DAOForkSupport: true,
+// MainnetChainConfig returns the chain configurations for the main Ethereum network.
+func MainnetChainConfig() *ChainConfig {
+	return &ChainConfig{
+		HomesteadBlock:           params.MainNetHomesteadBlock.Int64(),
+		DAOForkBlock:             params.MainNetDAOForkBlock.Int64(),
+		DAOForkSupport:           true,
+		HomesteadGasRepriceBlock: params.MainNetHomesteadGasRepriceBlock.Int64(),
+		HomesteadGasRepriceHash:  Hash{params.MainNetHomesteadGasRepriceHash},
+	}
 }
 
-// MainnetGenesis is the JSON spec to use for the main Ethereum network. It is
-// actually empty since that defaults to the hard coded binary genesis block.
-var MainnetGenesis = ""
-
-// TestnetChainConfig is the chain configurations for the Ethereum test network.
-var TestnetChainConfig = &ChainConfig{
-	HomesteadBlock: params.TestNetHomesteadBlock.Int64(),
-	DAOForkBlock:   0,
-	DAOForkSupport: false,
+// MainnetGenesis returns the JSON spec to use for the main Ethereum network. It
+// is actually empty since that defaults to the hard coded binary genesis block.
+func MainnetGenesis() string {
+	return ""
 }
 
-// TestnetGenesis is the JSON spec to use for the Ethereum test network.
-var TestnetGenesis = core.TestNetGenesisBlock()
+// TestnetChainConfig returns the chain configurations for the Ethereum test network.
+func TestnetChainConfig() *ChainConfig {
+	return &ChainConfig{
+		HomesteadBlock:           params.TestNetHomesteadBlock.Int64(),
+		DAOForkBlock:             0,
+		DAOForkSupport:           false,
+		HomesteadGasRepriceBlock: params.TestNetHomesteadGasRepriceBlock.Int64(),
+		HomesteadGasRepriceHash:  Hash{params.TestNetHomesteadGasRepriceHash},
+	}
+}
+
+// TestnetGenesis returns the JSON spec to use for the Ethereum test network.
+func TestnetGenesis() string {
+	return core.TestNetGenesisBlock()
+}
 
 // ChainConfig is the core config which determines the blockchain settings.
 type ChainConfig struct {
-	HomesteadBlock int64 // Homestead switch block
-	DAOForkBlock   int64 // TheDAO hard-fork switch block
-	DAOForkSupport bool  // Whether the nodes supports or opposes the DAO hard-fork
+	HomesteadBlock           int64 // Homestead switch block
+	DAOForkBlock             int64 // TheDAO hard-fork switch block
+	DAOForkSupport           bool  // Whether the nodes supports or opposes the DAO hard-fork
+	HomesteadGasRepriceBlock int64 // Homestead gas reprice switch block
+	HomesteadGasRepriceHash  Hash  // Homestead gas reprice switch block hash
 }
 
 // NewChainConfig creates a new chain configuration that transitions immediately
