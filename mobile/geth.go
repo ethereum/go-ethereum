@@ -78,11 +78,11 @@ type NodeConfig struct {
 // defaultNodeConfig contains the default node configuration values to use if all
 // or some fields are missing from the user's specified list.
 var defaultNodeConfig = &NodeConfig{
-	BootstrapNodes:        MainnetBootnodes(),
+	BootstrapNodes:        FoundationBootnodes(),
 	MaxPeers:              25,
 	EthereumEnabled:       true,
 	EthereumNetworkID:     1,
-	EthereumChainConfig:   MainnetChainConfig,
+	EthereumChainConfig:   MainnetChainConfig(),
 	EthereumDatabaseCache: 16,
 }
 
@@ -106,17 +106,21 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	if config.MaxPeers == 0 {
 		config.MaxPeers = defaultNodeConfig.MaxPeers
 	}
+	if config.BootstrapNodes == nil || config.BootstrapNodes.Size() == 0 {
+		config.BootstrapNodes = defaultNodeConfig.BootstrapNodes
+	}
 	// Create the empty networking stack
 	nodeConf := &node.Config{
-		Name:           clientIdentifier,
-		DataDir:        datadir,
-		KeyStoreDir:    filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
-		NoDiscovery:    true,
-		DiscoveryV5:    true,
-		BootstrapNodes: config.BootstrapNodes.nodes,
-		ListenAddr:     ":0",
-		NAT:            nat.Any(),
-		MaxPeers:       config.MaxPeers,
+		Name:             clientIdentifier,
+		DataDir:          datadir,
+		KeyStoreDir:      filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
+		NoDiscovery:      true,
+		DiscoveryV5:      true,
+		DiscoveryV5Addr:  ":0",
+		BootstrapNodesV5: config.BootstrapNodes.nodes,
+		ListenAddr:       ":0",
+		NAT:              nat.Any(),
+		MaxPeers:         config.MaxPeers,
 	}
 	stack, err := node.New(nodeConf)
 	if err != nil {

@@ -23,28 +23,14 @@ import (
 	"errors"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 )
 
-// MainnetBootnodes returns the enode URLs of the P2P bootstrap nodes running
-// on the main network.
-//
-// Note, this needs to be a method to prevent gomobile generating a setter for it.
-func MainnetBootnodes() *Enodes {
-	nodes := &Enodes{nodes: make([]*discover.Node, len(utils.MainnetBootnodes))}
-	for i, node := range utils.MainnetBootnodes {
-		nodes.nodes[i] = node
-	}
-	return nodes
-}
-
-// TestnetBootnodes returns the enode URLs of the P2P bootstrap nodes running
-// on the test network.
-//
-// Note, this needs to be a method to prevent gomobile generating a setter for it.
-func TestnetBootnodes() *Enodes {
-	nodes := &Enodes{nodes: make([]*discover.Node, len(utils.TestnetBootnodes))}
-	for i, node := range utils.TestnetBootnodes {
+// FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
+// by the foundation running the V5 discovery protocol.
+func FoundationBootnodes() *Enodes {
+	nodes := &Enodes{nodes: make([]*discv5.Node, len(utils.DiscoveryV5Bootnodes))}
+	for i, node := range utils.DiscoveryV5Bootnodes {
 		nodes.nodes[i] = node
 	}
 	return nodes
@@ -52,7 +38,7 @@ func TestnetBootnodes() *Enodes {
 
 // Enode represents a host on the network.
 type Enode struct {
-	node *discover.Node
+	node *discv5.Node
 }
 
 // NewEnode parses a node designator.
@@ -79,7 +65,7 @@ type Enode struct {
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
 func NewEnode(rawurl string) (*Enode, error) {
-	node, err := discover.ParseNode(rawurl)
+	node, err := discv5.ParseNode(rawurl)
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +73,12 @@ func NewEnode(rawurl string) (*Enode, error) {
 }
 
 // Enodes represents a slice of accounts.
-type Enodes struct{ nodes []*discover.Node }
+type Enodes struct{ nodes []*discv5.Node }
 
 // NewEnodes creates a slice of uninitialized enodes.
 func NewEnodes(size int) *Enodes {
 	return &Enodes{
-		nodes: make([]*discover.Node, size),
+		nodes: make([]*discv5.Node, size),
 	}
 }
 
