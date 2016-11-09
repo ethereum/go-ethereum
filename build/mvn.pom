@@ -6,7 +6,7 @@
 
   <groupId>org.ethereum</groupId>
   <artifactId>geth</artifactId>
-  <version>{{.VersionString}}</version>
+  <version>{{.Version}}</version>
   <packaging>aar</packaging>
 
   <name>Android Ethereum Client</name>

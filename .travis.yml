@@ -63,7 +63,11 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
-        # Build the Android archives and upload them to Maven Central
+        # Build the iOS framework and upload it to CocoaPods and Azure
+        - gem install cocoapods --pre
+        - go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
+
+        # Build the Android archive and upload it to Maven Central and Azure
         - brew update
         - brew install android-sdk maven
         - export ANDROID_HOME=/usr/local/opt/android-sdk
