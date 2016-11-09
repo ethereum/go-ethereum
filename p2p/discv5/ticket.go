@@ -766,8 +766,24 @@ func (r *topicRadius) targetForBucket(bucket int) common.Hash {
 	prefix := r.topicHashPrefix ^ xor
 	var target common.Hash
 	binary.BigEndian.PutUint64(target[0:8], prefix)
-	rand.Read(target[8:])
+	globalRandRead(target[8:])
 	return target
+}
+
+// package rand provides a Read function in Go 1.6 and later, but
+// we can't use it yet because we still support Go 1.5.
+func globalRandRead(b []byte) {
+	pos := 0
+	val := 0
+	for n := 0; n < len(b); n++ {
+		if pos == 0 {
+			val = rand.Int()
+			pos = 7
+		}
+		b[n] = byte(val)
+		val >>= 8
+		pos--
+	}
 }
 
 func (r *topicRadius) isInRadius(addrHash common.Hash) bool {
@@ -926,7 +942,7 @@ func (r *topicRadius) nextTarget(forceRegular bool) lookupInfo {
 	prefix := r.topicHashPrefix ^ rnd
 	var target common.Hash
 	binary.BigEndian.PutUint64(target[0:8], prefix)
-	rand.Read(target[8:])
+	globalRandRead(target[8:])
 	return lookupInfo{target: target, topic: r.topic, radiusLookup: false}
 }
 
