@@ -1,0 +1,15 @@
+language: go
+go:
+- 1.6.2
+- tip
+before_install:
+- go get -v github.com/golang/lint/golint
+- go get -v -t -d ./...
+after_success:
+- make coverdata
+- bash <(curl -s https://codecov.io/bash)
+script:
+- make -j4 check GOTEST_FLAGS=-v
+notifications:
+  slack:
+    secure: MO/3LqbyALbi9vAY3pZetp/LfRuKEPAYEUya7XKmTWA3OFHYkTGqJWNosVkFJd6eSKwnc3HP4jlKADEBNVxADHzcA3uMPUQi1mIcNk/Ps1WWMNDv1liE2XOoOmHSHZ/8ksk6TNq83x+d17ZffYq8KAH6iKNKvllO1JzQPgJJdf+cNXQQlg6uPSe+ggMpjqVLkKcHqA4L3/BWo6fNcyvkqaN3uXcEzYPi7Nb2q9tl0ja6ToyZV4H6SinwitZmpedN3RkBcm4fKmGyw5ikzH93ycA5SvWrnXTh1dJvq6DU0FV7iwI6oqPTbAUc3FE5g7aEkK0qVR21s2j+KNaOLnuX10ZGQFwj2r3SW2REHq4j+qqFla/2EmSFZJt3GXYS+plmGCxqCgyjSw6tTi7LaGZ/mWBJEA9/EaXG1NkwlQYx5tdUMeGj77OczjXClynpb2hJ7MM2b32Rnp0JmNaXAh01SmClo+8nDWuksAsIdPtWsbF0/XHmEJiqpu8ojvVXOQIbPt43bjG7PS1t5jaRAU/N1n56SiCGgCSGd3Ui5eX5vmgWdpZMl8NG05G4LFsgmkdphRT5fru0C2PrhNZYRDGWs63XKapBxsvfqGzdHxTtYuaDjHjrI+9w0BC/8kEzSWoPmabQ5ci4wf4DeplcIay4tDMgMSo8pGAf52vrne4rmUo=

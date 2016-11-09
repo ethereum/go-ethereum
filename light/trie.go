@@ -17,7 +17,6 @@
 package light
 
 import (
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/net/context"
@@ -25,28 +24,28 @@ import (
 
 // LightTrie is an ODR-capable wrapper around trie.SecureTrie
 type LightTrie struct {
-	trie         *trie.SecureTrie
-	originalRoot common.Hash
-	odr          OdrBackend
-	db           ethdb.Database
+	trie *trie.SecureTrie
+	id   *TrieID
+	odr  OdrBackend
+	db   ethdb.Database
 }
 
 // NewLightTrie creates a new LightTrie instance. It doesn't instantly try to
 // access the db or network and retrieve the root node, it only initializes its
 // encapsulated SecureTrie at the first actual operation.
-func NewLightTrie(root common.Hash, odr OdrBackend, useFakeMap bool) *LightTrie {
+func NewLightTrie(id *TrieID, odr OdrBackend, useFakeMap bool) *LightTrie {
 	return &LightTrie{
 		// SecureTrie is initialized before first request
-		originalRoot: root,
-		odr:          odr,
-		db:           odr.Database(),
+		id:  id,
+		odr: odr,
+		db:  odr.Database(),
 	}
 }
 
 // retrieveKey retrieves a single key, returns true and stores nodes in local
 // database if successful
 func (t *LightTrie) retrieveKey(ctx context.Context, key []byte) bool {
-	r := &TrieRequest{root: t.originalRoot, key: key}
+	r := &TrieRequest{Id: t.id, Key: key}
 	return t.odr.Retrieve(ctx, r) == nil
 }
 
@@ -79,7 +78,7 @@ func (t *LightTrie) do(ctx context.Context, fallbackKey []byte, fn func() error)
 func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error) {
 	err = t.do(ctx, key, func() (err error) {
 		if t.trie == nil {
-			t.trie, err = trie.NewSecure(t.originalRoot, t.db, 0)
+			t.trie, err = trie.NewSecure(t.id.Root, t.db, 0)
 		}
 		if err == nil {
 			res, err = t.trie.TryGet(key)
@@ -98,7 +97,7 @@ func (t *LightTrie) Get(ctx context.Context, key []byte) (res []byte, err error)
 func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
 		if t.trie == nil {
-			t.trie, err = trie.NewSecure(t.originalRoot, t.db, 0)
+			t.trie, err = trie.NewSecure(t.id.Root, t.db, 0)
 		}
 		if err == nil {
 			err = t.trie.TryUpdate(key, value)
@@ -112,7 +111,7 @@ func (t *LightTrie) Update(ctx context.Context, key, value []byte) (err error) {
 func (t *LightTrie) Delete(ctx context.Context, key []byte) (err error) {
 	err = t.do(ctx, key, func() (err error) {
 		if t.trie == nil {
-			t.trie, err = trie.NewSecure(t.originalRoot, t.db, 0)
+			t.trie, err = trie.NewSecure(t.id.Root, t.db, 0)
 		}
 		if err == nil {
 			err = t.trie.TryDelete(key)

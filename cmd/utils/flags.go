@@ -39,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -144,6 +146,20 @@ var (
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
 		Usage: "Enable fast syncing through state downloads",
+	}
+	LightModeFlag = cli.BoolFlag{
+		Name:  "light",
+		Usage: "Enable light client mode",
+	}
+	LightServFlag = cli.IntFlag{
+		Name:  "lightserv",
+		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
+		Value: 0,
+	}
+	LightPeersFlag = cli.IntFlag{
+		Name:  "lightpeers",
+		Usage: "Maximum number of LES client peers",
+		Value: 20,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
@@ -348,6 +364,10 @@ var (
 		Name:  "nodiscover",
 		Usage: "Disables the peer discovery mechanism (manual peer addition)",
 	}
+	DiscoveryV5Flag = cli.BoolFlag{
+		Name:  "v5disc",
+		Usage: "Enables the experimental RLPx V5 (Topic Discovery) mechanism",
+	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
 		Usage: "Enable Whisper",
@@ -491,6 +511,10 @@ func MakeListenAddress(ctx *cli.Context) string {
 	return fmt.Sprintf(":%d", ctx.GlobalInt(ListenPortFlag.Name))
 }
 
+func MakeListenAddressV5(ctx *cli.Context) string {
+	return fmt.Sprintf(":%d", ctx.GlobalInt(ListenPortFlag.Name)+1)
+}
+
 // MakeNAT creates a port mapper from set command line flags.
 func MakeNAT(ctx *cli.Context) nat.Interface {
 	natif, err := nat.Parse(ctx.GlobalString(NATFlag.Name))
@@ -621,9 +645,11 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		Name:              name,
 		Version:           vsn,
 		UserIdent:         makeNodeUserIdent(ctx),
-		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name),
+		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name),
+		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0,
 		BootstrapNodes:    MakeBootstrapNodes(ctx),
 		ListenAddr:        MakeListenAddress(ctx),
+		ListenAddrV5:      MakeListenAddressV5(ctx),
 		NAT:               MakeNAT(ctx),
 		MaxPeers:          ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:   ctx.GlobalInt(MaxPendingPeersFlag.Name),
@@ -680,6 +706,10 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		Etherbase:               MakeEtherbase(stack.AccountManager(), ctx),
 		ChainConfig:             MakeChainConfig(ctx, stack),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
+		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
+		LightServ:               ctx.GlobalInt(LightServFlag.Name),
+		LightPeers:              ctx.GlobalInt(LightPeersFlag.Name),
+		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		DatabaseHandles:         MakeDatabaseHandles(),
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
@@ -714,6 +744,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		}
 		ethConf.Genesis = core.TestNetGenesisBlock()
 		state.StartingNonce = 1048576 // (2**20)
+		light.StartingNonce = 1048576 // (2**20)
 
 	case ctx.GlobalBool(DevModeFlag.Name):
 		ethConf.Genesis = core.OlympicGenesisBlock()
@@ -727,10 +758,23 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		state.MaxTrieCacheGen = uint16(gen)
 	}
 
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return eth.New(ctx, ethConf)
-	}); err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+	if ethConf.LightMode {
+		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			return les.New(ctx, ethConf)
+		}); err != nil {
+			Fatalf("Failed to register the Ethereum light node service: %v", err)
+		}
+	} else {
+		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			fullNode, err := eth.New(ctx, ethConf)
+			if fullNode != nil && ethConf.LightServ > 0 {
+				ls, _ := les.NewLesServer(fullNode, ethConf)
+				fullNode.AddLesServer(ls)
+			}
+			return fullNode, err
+		}); err != nil {
+			Fatalf("Failed to register the Ethereum full node service: %v", err)
+		}
 	}
 }
 
@@ -830,14 +874,23 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfi
 	return config
 }
 
+func ChainDbName(ctx *cli.Context) string {
+	if ctx.GlobalBool(LightModeFlag.Name) {
+		return "lightchaindata"
+	} else {
+		return "chaindata"
+	}
+}
+
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name)
 		handles = MakeDatabaseHandles()
+		name    = ChainDbName(ctx)
 	)
 
-	chainDb, err := stack.OpenDatabase("chaindata", cache, handles)
+	chainDb, err := stack.OpenDatabase(name, cache, handles)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}

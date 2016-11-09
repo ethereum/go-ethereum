@@ -22,6 +22,8 @@ import (
 	"os"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,6 +50,7 @@ func BenchmarkMipmaps(b *testing.B) {
 
 	var (
 		db, _   = ethdb.NewLDBDatabase(dir, 0, 0)
+		backend = &testBackend{mux, db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = common.BytesToAddress([]byte("jeff"))
@@ -100,13 +103,13 @@ func BenchmarkMipmaps(b *testing.B) {
 	}
 	b.ResetTimer()
 
-	filter := New(db)
+	filter := New(backend, true)
 	filter.SetAddresses([]common.Address{addr1, addr2, addr3, addr4})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
 	for i := 0; i < b.N; i++ {
-		logs := filter.Find()
+		logs, _ := filter.Find(context.Background())
 		if len(logs) != 4 {
 			b.Fatal("expected 4 log, got", len(logs))
 		}
@@ -122,6 +125,7 @@ func TestFilters(t *testing.T) {
 
 	var (
 		db, _   = ethdb.NewLDBDatabase(dir, 0, 0)
+		backend = &testBackend{mux, db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)
 
@@ -201,23 +205,23 @@ func TestFilters(t *testing.T) {
 		}
 	}
 
-	filter := New(db)
+	filter := New(backend, true)
 	filter.SetAddresses([]common.Address{addr})
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash1, hash2, hash3, hash4}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
-	logs := filter.Find()
+	logs, _ := filter.Find(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = New(db)
+	filter = New(backend, true)
 	filter.SetAddresses([]common.Address{addr})
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash3}})
 	filter.SetBeginBlock(900)
 	filter.SetEndBlock(999)
-	logs = filter.Find()
+	logs, _ = filter.Find(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
 	}
@@ -225,12 +229,12 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = New(db)
+	filter = New(backend, true)
 	filter.SetAddresses([]common.Address{addr})
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash3}})
 	filter.SetBeginBlock(990)
 	filter.SetEndBlock(-1)
-	logs = filter.Find()
+	logs, _ = filter.Find(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
 	}
@@ -238,44 +242,44 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = New(db)
+	filter = New(backend, true)
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash1, hash2}})
 	filter.SetBeginBlock(1)
 	filter.SetEndBlock(10)
 
-	logs = filter.Find()
+	logs, _ = filter.Find(context.Background())
 	if len(logs) != 2 {
 		t.Error("expected 2 log, got", len(logs))
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = New(db)
+	filter = New(backend, true)
 	filter.SetTopics([][]common.Hash{[]common.Hash{failHash}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
-	logs = filter.Find()
+	logs, _ = filter.Find(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = New(db)
+	filter = New(backend, true)
 	filter.SetAddresses([]common.Address{failAddr})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
-	logs = filter.Find()
+	logs, _ = filter.Find(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
-	filter = New(db)
+	filter = New(backend, true)
 	filter.SetTopics([][]common.Hash{[]common.Hash{failHash}, []common.Hash{hash1}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
-	logs = filter.Find()
+	logs, _ = filter.Find(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
