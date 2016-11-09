@@ -71,7 +71,7 @@ func (self *VMEnv) Depth() int               { return self.depth }
 func (self *VMEnv) SetDepth(i int)           { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
 	for header := self.chain.GetHeader(self.header.ParentHash, self.header.Number.Uint64()-1); header != nil; header = self.chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
-		if header.GetNumberU64() == n {
+		if header.Number.Uint64() == n {
 			return header.Hash()
 		}
 	}

@@ -103,7 +103,7 @@ func (f *lightFetcher) gotHeader(header *types.Header) {
 	if peerList == nil {
 		return
 	}
-	number := header.GetNumberU64()
+	number := header.Number.Uint64()
 	td := core.GetTd(f.pm.chainDb, hash, number)
 	for _, peer := range peerList {
 		peer.lock.Lock()
@@ -201,7 +201,7 @@ func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) boo
 		return false
 	}
 	for _, header := range headers {
-		td := core.GetTd(f.pm.chainDb, header.Hash(), header.GetNumberU64())
+		td := core.GetTd(f.pm.chainDb, header.Hash(), header.Number.Uint64())
 		if td == nil {
 			return false
 		}

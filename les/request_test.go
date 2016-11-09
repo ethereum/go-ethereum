@@ -42,7 +42,7 @@ func TestCodeAccessLes1(t *testing.T) { testAccess(t, 1, tfCodeAccess) }
 
 func tfCodeAccess(db ethdb.Database, bhash common.Hash, number uint64) light.OdrRequest {
 	header := core.GetHeader(db, bhash, core.GetBlockNumber(db, bhash))
-	if header.GetNumberU64() < testContractDeployed {
+	if header.Number.Uint64() < testContractDeployed {
 		return nil
 	}
 	sti := light.StateTrieID(header)
@@ -66,7 +66,7 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	lpm.synchronise(lpeer)
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= pm.blockchain.CurrentHeader().GetNumberU64(); i++ {
+		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(db, i)
 			if req := fn(ldb, bhash, i); req != nil {
 				ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)

@@ -193,7 +193,7 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	lpm.synchronise(lpeer)
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= pm.blockchain.CurrentHeader().GetNumberU64(); i++ {
+		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(db, i)
 			b1 := fn(light.NoOdr, db, pm.chainConfig, pm.blockchain.(*core.BlockChain), nil, bhash)
 			ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)

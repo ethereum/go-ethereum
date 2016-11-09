@@ -90,7 +90,7 @@ func NewTxPool(config *core.ChainConfig, eventMux *event.TypeMux, chain *LightCh
 		odr:      chain.Odr(),
 		chainDb:  chain.Odr().Database(),
 		head:     chain.CurrentHeader().Hash(),
-		clearIdx: chain.CurrentHeader().GetNumberU64(),
+		clearIdx: chain.CurrentHeader().Number.Uint64(),
 	}
 	go pool.eventLoop()
 
@@ -241,11 +241,11 @@ func (pool *TxPool) setNewHead(ctx context.Context, newHeader *types.Header) (tx
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHashes, newHashes []common.Hash
 	for oldh.Hash() != newh.Hash() {
-		if oldh.GetNumberU64() >= newh.GetNumberU64() {
+		if oldh.Number.Uint64() >= newh.Number.Uint64() {
 			oldHashes = append(oldHashes, oldh.Hash())
 			oldh = pool.chain.GetHeader(oldh.ParentHash, oldh.Number.Uint64()-1)
 		}
-		if oldh.GetNumberU64() < newh.GetNumberU64() {
+		if oldh.Number.Uint64() < newh.Number.Uint64() {
 			newHashes = append(newHashes, newh.Hash())
 			newh = pool.chain.GetHeader(newh.ParentHash, newh.Number.Uint64()-1)
 			if newh == nil {
@@ -254,8 +254,8 @@ func (pool *TxPool) setNewHead(ctx context.Context, newHeader *types.Header) (tx
 			}
 		}
 	}
-	if oldh.GetNumberU64() < pool.clearIdx {
-		pool.clearIdx = oldh.GetNumberU64()
+	if oldh.Number.Uint64() < pool.clearIdx {
+		pool.clearIdx = oldh.Number.Uint64()
 	}
 	// roll back old blocks
 	for _, hash := range oldHashes {
@@ -265,14 +265,14 @@ func (pool *TxPool) setNewHead(ctx context.Context, newHeader *types.Header) (tx
 	// check mined txs of new blocks (array is in reversed order)
 	for i := len(newHashes) - 1; i >= 0; i-- {
 		hash := newHashes[i]
-		if err := pool.checkMinedTxs(ctx, hash, newHeader.GetNumberU64()-uint64(i), txc); err != nil {
+		if err := pool.checkMinedTxs(ctx, hash, newHeader.Number.Uint64()-uint64(i), txc); err != nil {
 			return txc, err
 		}
 		pool.head = hash
 	}
 
 	// clear old mined tx entries of old blocks
-	if idx := newHeader.GetNumberU64(); idx > pool.clearIdx+txPermanent {
+	if idx := newHeader.Number.Uint64(); idx > pool.clearIdx+txPermanent {
 		idx2 := idx - txPermanent
 		for i := pool.clearIdx; i < idx2; i++ {
 			hash := core.GetCanonicalHash(pool.chainDb, i)

@@ -279,12 +279,12 @@ func (pm *ProtocolManager) blockLoop() {
 				if len(peers) > 0 {
 					header := ev.Data.(core.ChainHeadEvent).Block.Header()
 					hash := header.Hash()
-					number := header.GetNumberU64()
+					number := header.Number.Uint64()
 					td := core.GetTd(pm.chainDb, hash, number)
 					if td != nil && td.Cmp(lastBroadcastTd) > 0 {
 						var reorg uint64
 						if lastHead != nil {
-							reorg = lastHead.GetNumberU64() - core.FindCommonAncestor(pm.chainDb, header, lastHead).GetNumberU64()
+							reorg = lastHead.Number.Uint64() - core.FindCommonAncestor(pm.chainDb, header, lastHead).Number.Uint64()
 						}
 						lastHead = header
 						lastBroadcastTd = td

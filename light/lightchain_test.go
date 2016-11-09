@@ -134,7 +134,7 @@ func testFork(t *testing.T, LightChain *LightChain, i, n int, comparator func(td
 }
 
 func printChain(bc *LightChain) {
-	for i := bc.CurrentHeader().GetNumberU64(); i > 0; i-- {
+	for i := bc.CurrentHeader().Number.Uint64(); i > 0; i-- {
 		b := bc.GetHeaderByNumber(uint64(i))
 		fmt.Printf("\t%x %v\n", b.Hash(), b.Difficulty)
 	}

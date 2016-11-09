@@ -78,7 +78,7 @@ func (self *LightPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error
 		return lastPrice, nil
 	}
 
-	blockNum := head.GetNumberU64()
+	blockNum := head.Number.Uint64()
 	chn := make(chan lpResult, LpoMaxBlocks)
 	sent := 0
 	exp := 0

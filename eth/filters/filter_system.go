@@ -309,11 +309,11 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 	// find common ancestor, create list of rolled back and new block hashes
 	var oldHeaders, newHeaders []*types.Header
 	for oldh.Hash() != newh.Hash() {
-		if oldh.GetNumberU64() >= newh.GetNumberU64() {
+		if oldh.Number.Uint64() >= newh.Number.Uint64() {
 			oldHeaders = append(oldHeaders, oldh)
 			oldh = core.GetHeader(es.backend.ChainDb(), oldh.ParentHash, oldh.Number.Uint64()-1)
 		}
-		if oldh.GetNumberU64() < newh.GetNumberU64() {
+		if oldh.Number.Uint64() < newh.Number.Uint64() {
 			newHeaders = append(newHeaders, newh)
 			newh = core.GetHeader(es.backend.ChainDb(), newh.ParentHash, newh.Number.Uint64()-1)
 			if newh == nil {

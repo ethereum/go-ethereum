@@ -295,7 +295,7 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	}
 
 	test := func(expFail uint64) {
-		for i := uint64(0); i <= blockchain.CurrentHeader().GetNumberU64(); i++ {
+		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(sdb, i)
 			b1 := fn(NoOdr, sdb, blockchain, nil, bhash)
 			ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
