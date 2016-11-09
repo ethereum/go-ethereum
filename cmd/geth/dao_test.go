@@ -80,91 +80,75 @@ var daoProForkGenesis = `{
 var daoGenesisHash = common.HexToHash("5e1fc79cb4ffa4739177b5408045cd5d51c6cf766133f23f7cd72ee1f8d790e0")
 var daoGenesisForkBlock = big.NewInt(314)
 
-// Tests that the DAO hard-fork number and the nodes support/opposition is correctly
+// TestDAOForkBlockNewChain tests that the DAO hard-fork number and the nodes support/opposition is correctly
 // set in the database after various initialization procedures and invocations.
-func TestDAODefaultMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, false}}, params.MainNetDAOForkBlock, true)
-}
-func TestDAOSupportMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true)
-}
-func TestDAOOpposeMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, true}}, params.MainNetDAOForkBlock, false)
-}
-func TestDAOSwitchToSupportMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", [][2]bool{{false, true}, {true, false}}, params.MainNetDAOForkBlock, true)
-}
-func TestDAOSwitchToOpposeMainnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, "", [][2]bool{{true, false}, {false, true}}, params.MainNetDAOForkBlock, false)
-}
-func TestDAODefaultTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, false}}, params.TestNetDAOForkBlock, true)
-}
-func TestDAOSupportTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", [][2]bool{{true, false}}, params.TestNetDAOForkBlock, true)
-}
-func TestDAOOpposeTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, true}}, params.TestNetDAOForkBlock, false)
-}
-func TestDAOSwitchToSupportTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", [][2]bool{{false, true}, {true, false}}, params.TestNetDAOForkBlock, true)
-}
-func TestDAOSwitchToOpposeTestnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, true, "", [][2]bool{{true, false}, {false, true}}, params.TestNetDAOForkBlock, false)
-}
-func TestDAOInitOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{}, nil, false)
-}
-func TestDAODefaultOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, false}}, nil, false)
-}
-func TestDAOSupportOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}}, nil, true)
-}
-func TestDAOOpposeOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}}, nil, false)
-}
-func TestDAOSwitchToSupportOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{false, true}, {true, false}}, nil, true)
-}
-func TestDAOSwitchToOpposeOldPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoOldGenesis, [][2]bool{{true, false}, {false, true}}, nil, false)
-}
-func TestDAOInitNoForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{}, daoGenesisForkBlock, false)
-}
-func TestDAODefaultNoForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{false, false}}, daoGenesisForkBlock, false)
-}
-func TestDAOSupportNoForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{true, false}}, daoGenesisForkBlock, true)
-}
-func TestDAOOpposeNoForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{false, true}}, daoGenesisForkBlock, false)
-}
-func TestDAOSwitchToSupportNoForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{false, true}, {true, false}}, daoGenesisForkBlock, true)
-}
-func TestDAOSwitchToOpposeNoForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoNoForkGenesis, [][2]bool{{true, false}, {false, true}}, daoGenesisForkBlock, false)
-}
-func TestDAOInitProForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{}, daoGenesisForkBlock, true)
-}
-func TestDAODefaultProForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{false, false}}, daoGenesisForkBlock, true)
-}
-func TestDAOSupportProForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{true, false}}, daoGenesisForkBlock, true)
-}
-func TestDAOOpposeProForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{false, true}}, daoGenesisForkBlock, false)
-}
-func TestDAOSwitchToSupportProForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{false, true}, {true, false}}, daoGenesisForkBlock, true)
-}
-func TestDAOSwitchToOpposeProForkPrivnet(t *testing.T) {
-	testDAOForkBlockNewChain(t, false, daoProForkGenesis, [][2]bool{{true, false}, {false, true}}, daoGenesisForkBlock, false)
+func TestDAOForkBlockNewChain(t *testing.T) {
+	for _, arg := range []struct {
+		testnet     bool
+		genesis     string
+		votes       [][2]bool
+		expectBlock *big.Int
+		expectVote  bool
+	}{
+		// Test DAO Default Mainnet
+		{false, "", [][2]bool{{false, false}}, params.MainNetDAOForkBlock, true},
+		// test DAO Support Mainnet
+		{false, "", [][2]bool{{true, false}}, params.MainNetDAOForkBlock, true},
+		// test DAO Oppose Mainnet
+		{false, "", [][2]bool{{false, true}}, params.MainNetDAOForkBlock, false},
+		// test DAO Switch To Support Mainnet
+		{false, "", [][2]bool{{false, true}, {true, false}}, params.MainNetDAOForkBlock, true},
+		// test DAO Switch To Oppose Mainnet
+		{false, "", [][2]bool{{true, false}, {false, true}}, params.MainNetDAOForkBlock, false},
+		// test DAO Default Testnet
+		{true, "", [][2]bool{{false, false}}, params.TestNetDAOForkBlock, true},
+		// test DAO Support Testnet
+		{true, "", [][2]bool{{true, false}}, params.TestNetDAOForkBlock, true},
+		// test DAO Oppose Testnet
+		{true, "", [][2]bool{{false, true}}, params.TestNetDAOForkBlock, false},
+		// test DAO Switch To Support Testnet
+		{true, "", [][2]bool{{false, true}, {true, false}}, params.TestNetDAOForkBlock, true},
+		// test DAO Switch To Oppose Testnet
+		{true, "", [][2]bool{{true, false}, {false, true}}, params.TestNetDAOForkBlock, false},
+		// test DAO Init Old Privnet
+		{false, daoOldGenesis, [][2]bool{}, nil, false},
+		// test DAO Default Old Privnet
+		{false, daoOldGenesis, [][2]bool{{false, false}}, nil, false},
+		// test DAO Support Old Privnet
+		{false, daoOldGenesis, [][2]bool{{true, false}}, nil, true},
+		// test DAO Oppose Old Privnet
+		{false, daoOldGenesis, [][2]bool{{false, true}}, nil, false},
+		// test DAO Switch To Support Old Privnet
+		{false, daoOldGenesis, [][2]bool{{false, true}, {true, false}}, nil, true},
+		// test DAO Switch To Oppose Old Privnet
+		{false, daoOldGenesis, [][2]bool{{true, false}, {false, true}}, nil, false},
+		// test DAO Init No Fork Privnet
+		{false, daoNoForkGenesis, [][2]bool{}, daoGenesisForkBlock, false},
+		// test DAO Default No Fork Privnet
+		{false, daoNoForkGenesis, [][2]bool{{false, false}}, daoGenesisForkBlock, false},
+		// test DAO Support No Fork Privnet
+		{false, daoNoForkGenesis, [][2]bool{{true, false}}, daoGenesisForkBlock, true},
+		// test DAO Oppose No Fork Privnet
+		{false, daoNoForkGenesis, [][2]bool{{false, true}}, daoGenesisForkBlock, false},
+		// test DAO Switch To Support No Fork Privnet
+		{false, daoNoForkGenesis, [][2]bool{{false, true}, {true, false}}, daoGenesisForkBlock, true},
+		// test DAO Switch To Oppose No Fork Privnet
+		{false, daoNoForkGenesis, [][2]bool{{true, false}, {false, true}}, daoGenesisForkBlock, false},
+		// test DAO Init Pro Fork Privnet
+		{false, daoProForkGenesis, [][2]bool{}, daoGenesisForkBlock, true},
+		// test DAO Default Pro Fork Privnet
+		{false, daoProForkGenesis, [][2]bool{{false, false}}, daoGenesisForkBlock, true},
+		// test DAO Support Pro Fork Privnet
+		{false, daoProForkGenesis, [][2]bool{{true, false}}, daoGenesisForkBlock, true},
+		// test DAO Oppose Pro Fork Privnet
+		{false, daoProForkGenesis, [][2]bool{{false, true}}, daoGenesisForkBlock, false},
+		// test DAO Switch To Support Pro Fork Privnet
+		{false, daoProForkGenesis, [][2]bool{{false, true}, {true, false}}, daoGenesisForkBlock, true},
+		// test DAO Switch To Oppose Pro Fork Privnet
+		{false, daoProForkGenesis, [][2]bool{{true, false}, {false, true}}, daoGenesisForkBlock, false},
+	} {
+		testDAOForkBlockNewChain(t, arg.testnet, arg.genesis, arg.votes, arg.expectBlock, arg.expectVote)
+	}
 }
 
 func testDAOForkBlockNewChain(t *testing.T, testnet bool, genesis string, votes [][2]bool, expectBlock *big.Int, expectVote bool) {
