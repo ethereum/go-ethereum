@@ -30,9 +30,11 @@ import (
 
 var (
 	consoleCommand = cli.Command{
-		Action: localConsole,
-		Name:   "console",
-		Usage:  `Geth Console: interactive JavaScript environment`,
+		Action:    localConsole,
+		Name:      "console",
+		Usage:     "Start an interactive JavaScript environment",
+		ArgsUsage: "", // TODO: Write this!
+		Category:  "CONSOLE COMMANDS",
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
@@ -40,20 +42,24 @@ See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
 `,
 	}
 	attachCommand = cli.Command{
-		Action: remoteConsole,
-		Name:   "attach",
-		Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
+		Action:    remoteConsole,
+		Name:      "attach",
+		Usage:     "Start an interactive JavaScript environment (connect to node)",
+		ArgsUsage: "", // TODO: Write this!
+		Category:  "CONSOLE COMMANDS",
 		Description: `
 The Geth console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
 See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
 This command allows to open a console on a running geth node.
-	`,
+`,
 	}
 	javascriptCommand = cli.Command{
-		Action: ephemeralConsole,
-		Name:   "js",
-		Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
+		Action:    ephemeralConsole,
+		Name:      "js",
+		Usage:     "Execute the specified JavaScript files",
+		ArgsUsage: "", // TODO: Write this!
+		Category:  "CONSOLE COMMANDS",
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
 JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console

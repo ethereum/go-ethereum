@@ -40,35 +40,54 @@ import (
 
 var (
 	importCommand = cli.Command{
-		Action: importChain,
-		Name:   "import",
-		Usage:  `import a blockchain file`,
+		Action:    importChain,
+		Name:      "import",
+		Usage:     "Import a blockchain file",
+		ArgsUsage: "<filename>",
+		Category:  "BLOCKCHAIN COMMANDS",
+		Description: `
+TODO: Please write this
+`,
 	}
 	exportCommand = cli.Command{
-		Action: exportChain,
-		Name:   "export",
-		Usage:  `export blockchain into file`,
+		Action:    exportChain,
+		Name:      "export",
+		Usage:     "Export blockchain into file",
+		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
+		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.
-		`,
+`,
 	}
 	upgradedbCommand = cli.Command{
-		Action: upgradeDB,
-		Name:   "upgradedb",
-		Usage:  "upgrade chainblock database",
+		Action:    upgradeDB,
+		Name:      "upgradedb",
+		Usage:     "Upgrade chainblock database",
+		ArgsUsage: " ",
+		Category:  "BLOCKCHAIN COMMANDS",
+		Description: `
+TODO: Please write this
+`,
 	}
 	removedbCommand = cli.Command{
-		Action: removeDB,
-		Name:   "removedb",
-		Usage:  "Remove blockchain and state databases",
+		Action:    removeDB,
+		Name:      "removedb",
+		Usage:     "Remove blockchain and state databases",
+		ArgsUsage: " ",
+		Category:  "BLOCKCHAIN COMMANDS",
+		Description: `
+TODO: Please write this
+`,
 	}
 	dumpCommand = cli.Command{
-		Action: dump,
-		Name:   "dump",
-		Usage:  `dump a specific block from storage`,
+		Action:    dump,
+		Name:      "dump",
+		Usage:     "Dump a specific block from storage",
+		ArgsUsage: "[<blockHash> | <blockNum>]...",
+		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.

@@ -61,6 +61,7 @@ func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
+	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		importCommand,
 		exportCommand,
@@ -74,9 +75,11 @@ func init() {
 		attachCommand,
 		javascriptCommand,
 		{
-			Action: makedag,
-			Name:   "makedag",
-			Usage:  "generate ethash dag (for testing)",
+			Action:    makedag,
+			Name:      "makedag",
+			Usage:     "Generate ethash DAG (for testing)",
+			ArgsUsage: "<blockNum> <outputDir>",
+			Category:  "MISCELLANEOUS COMMANDS",
 			Description: `
 The makedag command generates an ethash DAG in /tmp/dag.
 
@@ -85,27 +88,33 @@ Regular users do not need to execute it.
 `,
 		},
 		{
-			Action: version,
-			Name:   "version",
-			Usage:  "print ethereum version numbers",
+			Action:    version,
+			Name:      "version",
+			Usage:     "Print version numbers",
+			ArgsUsage: " ",
+			Category:  "MISCELLANEOUS COMMANDS",
 			Description: `
 The output of this command is supposed to be machine-readable.
 `,
 		},
 		{
-			Action: initGenesis,
-			Name:   "init",
-			Usage:  "bootstraps and initialises a new genesis block (JSON)",
+			Action:    initGenesis,
+			Name:      "init",
+			Usage:     "Bootstrap and initialize a new genesis block",
+			ArgsUsage: "<genesisPath>",
+			Category:  "BLOCKCHAIN COMMANDS",
 			Description: `
-The init command initialises a new genesis block and definition for the network.
+The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
 `,
 		},
 		{
-			Action: license,
-			Name:   "license",
-			Usage:  "displays geth's license information",
+			Action:    license,
+			Name:      "license",
+			Usage:     "Display license information",
+			ArgsUsage: " ",
+			Category:  "MISCELLANEOUS COMMANDS",
 		},
 	}
 
@@ -335,23 +344,22 @@ func makedag(ctx *cli.Context) error {
 	return nil
 }
 
-func version(c *cli.Context) error {
+func version(ctx *cli.Context) error {
 	fmt.Println(strings.Title(clientIdentifier))
 	fmt.Println("Version:", utils.Version)
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
-	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
-
 	return nil
 }
 
-func license(c *cli.Context) error {
+func license(_ *cli.Context) error {
 	fmt.Println(`Geth is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -365,6 +373,5 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with geth. If not, see <http://www.gnu.org/licenses/>.
 `)
-
 	return nil
 }
