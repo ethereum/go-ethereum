@@ -207,7 +207,13 @@ func writeKeyFile(file string, content []byte) error {
 		return err
 	}
 	f.Close()
-	return os.Rename(f.Name(), file)
+
+	if err := os.Rename(f.Name(), file); err != nil {
+		// Renaming failed, may be a data race between a cache sync, retry
+		time.Sleep(100 * time.Millisecond)
+		return os.Rename(f.Name(), file)
+	}
+	return nil
 }
 
 // keyFileName implements the naming convention for keyfiles:
