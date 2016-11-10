@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
@@ -72,6 +73,8 @@ type Config struct {
 	// or not. Disabling is usually useful for protocol debugging (manual topology).
 	Discovery bool
 
+	DiscoveryV5 bool
+
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
 	Name string
@@ -105,6 +108,8 @@ type Config struct {
 	// the server is started.
 	ListenAddr string
 
+	ListenAddrV5 string
+
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
@@ -135,6 +140,7 @@ type Server struct {
 	listener     net.Listener
 	ourHandshake *protoHandshake
 	lastLookup   time.Time
+	DiscV5       *discv5.Network
 
 	// These are for Peers, PeerCount (and nothing else).
 	peerOp     chan peerOpFunc
@@ -352,6 +358,17 @@ func (srv *Server) Start() (err error) {
 		srv.ntab = ntab
 	}
 
+	if srv.DiscoveryV5 {
+		ntab, err := discv5.ListenUDP(srv.PrivateKey, srv.ListenAddrV5, srv.NAT, "") //srv.NodeDatabase)
+		if err != nil {
+			return err
+		}
+		if err := ntab.SetFallbackNodes(discv5.BootNodes); err != nil {
+			return err
+		}
+		srv.DiscV5 = ntab
+	}
+
 	dynPeers := (srv.MaxPeers + 1) / 2
 	if !srv.Discovery {
 		dynPeers = 0
@@ -526,6 +543,9 @@ running:
 	// Terminate discovery. If there is a running lookup it will terminate soon.
 	if srv.ntab != nil {
 		srv.ntab.Close()
+	}
+	if srv.DiscV5 != nil {
+		srv.DiscV5.Close()
 	}
 	// Disconnect all peers.
 	for _, p := range peers {

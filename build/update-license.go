@@ -53,6 +53,7 @@ var (
 		"contracts/chequebook/contract/",
 		"contracts/ens/contract/",
 		"contracts/release/contract.go",
+		"p2p/discv5/nodeevent_string.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.

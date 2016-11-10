@@ -1,3 +1,4 @@
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -16,6 +17,7 @@
 package build
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -36,6 +38,11 @@ type AzureBlobstoreConfig struct {
 //
 // See: https://msdn.microsoft.com/en-us/library/azure/dd179451.aspx#Anchor_3
 func AzureBlobstoreUpload(path string, name string, config AzureBlobstoreConfig) error {
+	if *DryRunFlag {
+		fmt.Printf("would upload %q to %s/%s/%s\n", path, config.Account, config.Container, name)
+		return nil
+	}
+
 	// Create an authenticated client against the Azure cloud
 	rawClient, err := storage.NewBasicClient(config.Account, config.Token)
 	if err != nil {

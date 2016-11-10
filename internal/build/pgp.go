@@ -1,3 +1,4 @@
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -54,5 +55,5 @@ func PGPSignFile(input string, output string, pgpkey string) error {
 	defer out.Close()
 
 	// Generate the signature and return
-	return openpgp.ArmoredDetachSignText(out, keys[0], in, nil)
+	return openpgp.ArmoredDetachSign(out, keys[0], in, nil)
 }

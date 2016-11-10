@@ -95,11 +95,15 @@ type Config struct {
 	// or not. Disabling is usually useful for protocol debugging (manual topology).
 	NoDiscovery bool
 
+	DiscoveryV5 bool
+
 	// Bootstrap nodes used to establish connectivity with the rest of the network.
 	BootstrapNodes []*discover.Node
 
 	// Network interface address on which the node should listen for inbound peers.
 	ListenAddr string
+
+	ListenAddrV5 string
 
 	// If set to a non-nil value, the given NAT port mapper is used to make the
 	// listening port available to the Internet.

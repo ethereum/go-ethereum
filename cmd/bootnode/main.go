@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 )
 
@@ -38,6 +39,7 @@ func main() {
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
+		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
 
 		nodeKey *ecdsa.PrivateKey
 		err     error
@@ -79,8 +81,15 @@ func main() {
 		os.Exit(0)
 	}
 
-	if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
-		utils.Fatalf("%v", err)
+	if *runv5 {
+		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
+			utils.Fatalf("%v", err)
+		}
+	} else {
+		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
+			utils.Fatalf("%v", err)
+		}
 	}
+
 	select {}
 }
