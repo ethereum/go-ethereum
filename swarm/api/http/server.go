@@ -115,7 +115,11 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 	switch {
 	case r.Method == "POST" || r.Method == "PUT":
-		key, err := a.Store(r.Body, r.ContentLength, nil)
+		if r.Header.Get("content-length") == "" {
+			http.Error(w, "Missing Content-Length header in request.", http.StatusBadRequest)
+			return
+		}
+		key, err := a.Store(io.LimitReader(r.Body, r.ContentLength), r.ContentLength, nil)
 		if err == nil {
 			glog.V(logger.Debug).Infof("Content for %v stored", key.Log())
 		} else {
