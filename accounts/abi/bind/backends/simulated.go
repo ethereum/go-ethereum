@@ -167,7 +167,7 @@ func (b *SimulatedBackend) CallContract(ctx context.Context, call ethereum.CallM
 	if err != nil {
 		return nil, err
 	}
-	rval, _, err := b.callContract(ctx, call, b.blockchain.CurrentBlock(), state)
+	rval, _, err := b.callContract(call, b.blockchain.CurrentBlock(), state)
 	return rval, err
 }
 
@@ -177,7 +177,7 @@ func (b *SimulatedBackend) PendingCallContract(ctx context.Context, call ethereu
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	rval, _, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+	rval, _, err := b.callContract(call, b.pendingBlock, b.pendingState)
 	return rval, err
 }
 
@@ -203,32 +203,16 @@ func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMs
 	defer b.mu.Unlock()
 	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+	_, gas, err := b.callContract(call, b.pendingBlock, b.pendingState)
 	return gas, err
 }
 
 // callContract implemens common code between normal and pending contract calls.
 // state is modified during execution, make sure to copy it if necessary.
-func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallMsg, block *types.Block, statedb *state.StateDB) ([]byte, *big.Int, error) {
-	// Ensure message is initialized properly.
-	if call.GasPrice == nil {
-		call.GasPrice = big.NewInt(1)
-	}
-	if call.Gas == nil || call.Gas.BitLen() == 0 {
-		call.Gas = big.NewInt(50000000)
-	}
-	if call.Value == nil {
-		call.Value = new(big.Int)
-	}
-	// Set infinite balance to the fake caller account.
-	from := statedb.GetOrNewStateObject(call.From)
-	from.SetBalance(common.MaxBig)
-	// Execute the call.
-	msg := callmsg{call}
-	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
-	gaspool := new(core.GasPool).AddGas(common.MaxBig)
-	ret, gasUsed, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
-	return ret, gasUsed, err
+func (b *SimulatedBackend) callContract(call ethereum.CallMsg, block *types.Block, state *state.StateDB) ([]byte, *big.Int, error) {
+	return core.ApplyCallMessage(call, func(msg core.Message) vm.Environment {
+		return core.NewEnv(state, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
+	})
 }
 
 // SendTransaction updates the pending block to include the given transaction.
@@ -256,17 +240,3 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 	return nil
 }
-
-// callmsg implements core.Message to allow passing it as a transaction simulator.
-type callmsg struct {
-	ethereum.CallMsg
-}
-
-func (m callmsg) From() common.Address { return m.CallMsg.From }
-func (m callmsg) Nonce() uint64        { return 0 }
-func (m callmsg) CheckNonce() bool     { return false }
-func (m callmsg) To() *common.Address  { return m.CallMsg.To }
-func (m callmsg) GasPrice() *big.Int   { return m.CallMsg.GasPrice }
-func (m callmsg) Gas() *big.Int        { return m.CallMsg.Gas }
-func (m callmsg) Value() *big.Int      { return m.CallMsg.Value }
-func (m callmsg) Data() []byte         { return m.CallMsg.Data }

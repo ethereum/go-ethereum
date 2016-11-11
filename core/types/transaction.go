@@ -340,12 +340,12 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 // XXX This only makes for a nice API: NewTx(...).SignECDSA(signer, prv). Should
 // we keep this?
 func (tx *Transaction) SignECDSA(signer Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	return signer.SignECDSA(tx, prv)
+	return SignECDSA(signer, tx, prv)
 }
 
 // WithSignature returns a new transaction with the given signature.
 // This signature needs to be formatted as described in the yellow paper (v+27).
-func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, error) {
+func (tx *Transaction) WithSignature(signer Signer, sig []byte) *Transaction {
 	return signer.WithSignature(tx, sig)
 }
 

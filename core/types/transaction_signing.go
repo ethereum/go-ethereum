@@ -57,7 +57,7 @@ func SignECDSA(s Signer, tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, 
 	if err != nil {
 		return nil, err
 	}
-	return s.WithSignature(tx, sig)
+	return s.WithSignature(tx, sig), nil
 }
 
 // Sender derives the sender from the tx using the signer derivation
@@ -101,10 +101,9 @@ type Signer interface {
 	Hash(tx *Transaction) common.Hash
 	// PubilcKey returns the public key derived from the signature
 	PublicKey(tx *Transaction) ([]byte, error)
-	// SignECDSA signs the transaction with the given and returns a copy of the tx
-	SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error)
-	// WithSignature returns a copy of the transaction with the given signature
-	WithSignature(tx *Transaction, sig []byte) (*Transaction, error)
+	// WithSignature returns a copy of the transaction with the given signature.
+	// It panics if the signature has the wrong size.
+	WithSignature(tx *Transaction, sig []byte) *Transaction
 	// Checks for equality on the signers
 	Equal(Signer) bool
 }
@@ -127,10 +126,6 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 func (s EIP155Signer) Equal(s2 Signer) bool {
 	eip155, ok := s2.(EIP155Signer)
 	return ok && eip155.chainId.Cmp(s.chainId) == 0
-}
-
-func (s EIP155Signer) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	return SignECDSA(s, tx, prv)
 }
 
 func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
@@ -169,7 +164,7 @@ func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
 
 // WithSignature returns a new transaction with the given signature.
 // This signature needs to be formatted as described in the yellow paper (v+27).
-func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
+func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) *Transaction {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
 	}
@@ -182,7 +177,7 @@ func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, 
 		cpy.data.V = big.NewInt(int64(sig[64] - 27 + 35))
 		cpy.data.V.Add(cpy.data.V, s.chainIdMul)
 	}
-	return cpy, nil
+	return cpy
 }
 
 // Hash returns the hash to be signed by the sender.
@@ -199,15 +194,6 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 	})
 }
 
-func (s EIP155Signer) SigECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := s.Hash(tx)
-	sig, err := crypto.SignEthereum(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return s.WithSignature(tx, sig)
-}
-
 // HomesteadTransaction implements TransactionInterface using the
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
@@ -219,7 +205,7 @@ func (s HomesteadSigner) Equal(s2 Signer) bool {
 
 // WithSignature returns a new transaction with the given snature.
 // This snature needs to be formatted as described in the yellow paper (v+27).
-func (hs HomesteadSigner) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
+func (hs HomesteadSigner) WithSignature(tx *Transaction, sig []byte) *Transaction {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
 	}
@@ -227,16 +213,7 @@ func (hs HomesteadSigner) WithSignature(tx *Transaction, sig []byte) (*Transacti
 	cpy.data.R = new(big.Int).SetBytes(sig[:32])
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
 	cpy.data.V = new(big.Int).SetBytes([]byte{sig[64]})
-	return cpy, nil
-}
-
-func (hs HomesteadSigner) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := hs.Hash(tx)
-	sig, err := crypto.SignEthereum(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return hs.WithSignature(tx, sig)
+	return cpy
 }
 
 func (hs HomesteadSigner) PublicKey(tx *Transaction) ([]byte, error) {
@@ -275,7 +252,7 @@ func (s FrontierSigner) Equal(s2 Signer) bool {
 
 // WithSignature returns a new transaction with the given snature.
 // This snature needs to be formatted as described in the yellow paper (v+27).
-func (fs FrontierSigner) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
+func (fs FrontierSigner) WithSignature(tx *Transaction, sig []byte) *Transaction {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
 	}
@@ -283,16 +260,7 @@ func (fs FrontierSigner) WithSignature(tx *Transaction, sig []byte) (*Transactio
 	cpy.data.R = new(big.Int).SetBytes(sig[:32])
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
 	cpy.data.V = new(big.Int).SetBytes([]byte{sig[64]})
-	return cpy, nil
-}
-
-func (fs FrontierSigner) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := fs.Hash(tx)
-	sig, err := crypto.SignEthereum(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return fs.WithSignature(tx, sig)
+	return cpy
 }
 
 // Hash returns the hash to be sned by the sender.

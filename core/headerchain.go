@@ -124,7 +124,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
 		return cached.(uint64)
 	}
 	number := GetBlockNumber(hc.chainDb, hash)
-	if number != missingNumber {
+	if number != MissingNumber {
 		hc.numberCache.Add(hash, number)
 	}
 	return number

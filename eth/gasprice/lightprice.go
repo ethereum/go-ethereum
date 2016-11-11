@@ -21,9 +21,8 @@ import (
 	"sort"
 	"sync"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
 
@@ -38,7 +37,7 @@ const (
 // LightPriceOracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
 type LightPriceOracle struct {
-	backend   ethapi.Backend
+	backend   ethereum.ChainReader
 	lastHead  common.Hash
 	lastPrice *big.Int
 	cacheLock sync.RWMutex
@@ -46,7 +45,7 @@ type LightPriceOracle struct {
 }
 
 // NewLightPriceOracle returns a new oracle.
-func NewLightPriceOracle(backend ethapi.Backend) *LightPriceOracle {
+func NewLightPriceOracle(backend ethereum.ChainReader) *LightPriceOracle {
 	return &LightPriceOracle{
 		backend:   backend,
 		lastPrice: big.NewInt(LpoDefaultPrice),
@@ -60,7 +59,7 @@ func (self *LightPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error
 	lastPrice := self.lastPrice
 	self.cacheLock.RUnlock()
 
-	head, _ := self.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	head, _ := self.backend.HeaderByNumber(ctx, nil)
 	headHash := head.Hash()
 	if headHash == lastHead {
 		return lastPrice, nil
@@ -132,7 +131,7 @@ type lpResult struct {
 // getLowestPrice calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty, price is nil.
 func (self *LightPriceOracle) getLowestPrice(ctx context.Context, blockNum uint64, chn chan lpResult) {
-	block, err := self.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
+	block, err := self.backend.BlockByNumber(ctx, new(big.Int).SetUint64(blockNum))
 	if block == nil {
 		chn <- lpResult{nil, err}
 		return

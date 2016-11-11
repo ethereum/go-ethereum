@@ -154,9 +154,9 @@ func (tx *Transaction) GetTo() *Address {
 	return nil
 }
 
-func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
-	t, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
-	return &Transaction{t}, err
+func (tx *Transaction) WithSignature(sig []byte) *Transaction {
+	t := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
+	return &Transaction{t}
 }
 
 // Transactions represents a slice of transactions.

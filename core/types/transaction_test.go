@@ -37,8 +37,7 @@ var (
 		big.NewInt(0), big.NewInt(0), big.NewInt(0),
 		nil,
 	)
-
-	rightvrsTx, _ = NewTransaction(
+	rightvrsTx = NewTransaction(
 		3,
 		common.HexToAddress("b94f5374fce5edbc8e2a8697c15331677e6ebf0b"),
 		big.NewInt(10),

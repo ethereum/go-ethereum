@@ -17,137 +17,208 @@
 package les
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
-	rpc "github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
 
-type LesApiBackend struct {
-	eth *LightEthereum
-	gpo *gasprice.LightPriceOracle
-}
+var (
+	ErrBlockNotFound   = errors.New("block not found")
+	ErrTxNotFound      = errors.New("the light client cannot retrieve past transactions by hash")
+	ErrReceiptNotFound = errors.New("the light client cannot retrieve receipts by hash")
+)
 
-func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
-	return b.eth.chainConfig
-}
-
-func (b *LesApiBackend) CurrentBlock() *types.Block {
-	return types.NewBlockWithHeader(b.eth.BlockChain().CurrentHeader())
-}
-
-func (b *LesApiBackend) SetHead(number uint64) {
-	b.eth.blockchain.SetHead(number)
-}
-
-func (b *LesApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
-	if blockNr == rpc.LatestBlockNumber || blockNr == rpc.PendingBlockNumber {
-		return b.eth.blockchain.CurrentHeader(), nil
+func (eth *LightEthereum) HeaderByHash(ctx context.Context, blockhash common.Hash) (*types.Header, error) {
+	if h := eth.blockchain.GetHeaderByHash(blockhash); h != nil {
+		return h, nil
 	}
-
-	return b.eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blockNr))
+	return nil, ErrBlockNotFound
 }
 
-func (b *LesApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
-	header, err := b.HeaderByNumber(ctx, blockNr)
-	if header == nil || err != nil {
+func (eth *LightEthereum) HeaderByNumber(ctx context.Context, blocknum *big.Int) (*types.Header, error) {
+	if blocknum == nil {
+		return eth.blockchain.CurrentHeader(), nil
+	}
+	h, err := eth.blockchain.GetHeaderByNumberOdr(ctx, uint64(blocknum.Uint64()))
+	if err != nil {
 		return nil, err
 	}
-	return b.GetBlock(ctx, header.Hash())
-}
-
-func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (ethapi.State, *types.Header, error) {
-	header, err := b.HeaderByNumber(ctx, blockNr)
-	if header == nil || err != nil {
-		return nil, nil, err
+	if h == nil {
+		return nil, ErrBlockNotFound
 	}
-	return light.NewLightState(light.StateTrieID(header), b.eth.odr), header, nil
+	return h, nil
 }
 
-func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(ctx, blockHash)
-}
-
-func (b *LesApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	return light.GetBlockReceipts(ctx, b.eth.odr, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
-}
-
-func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
-	return b.eth.blockchain.GetTdByHash(blockHash)
-}
-
-func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
-	stateDb := state.(*light.LightState).Copy()
-	addr := msg.From()
-	from, err := stateDb.GetOrNewStateObject(ctx, addr)
+func (eth *LightEthereum) BlockByNumber(ctx context.Context, blocknum *big.Int) (*types.Block, error) {
+	header, err := eth.HeaderByNumber(ctx, blocknum)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	from.SetBalance(common.MaxBig)
-	env := light.NewEnv(ctx, stateDb, b.eth.chainConfig, b.eth.blockchain, msg, header, vm.Config{})
-	return env, env.Error, nil
+	return eth.BlockByHash(ctx, header.Hash())
 }
 
-func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return b.eth.txPool.Add(ctx, signedTx)
+func (eth *LightEthereum) BlockByHash(ctx context.Context, blockhash common.Hash) (*types.Block, error) {
+	return eth.blockchain.GetBlockByHash(ctx, blockhash)
 }
 
-func (b *LesApiBackend) RemoveTx(txHash common.Hash) {
-	b.eth.txPool.RemoveTx(txHash)
+func (eth *LightEthereum) BlockReceipts(ctx context.Context, blockhash common.Hash, blocknum uint64) ([]*types.Receipt, error) {
+	return light.GetBlockReceipts(ctx, eth.odr, blockhash, blocknum)
 }
 
-func (b *LesApiBackend) GetPoolTransactions() types.Transactions {
-	return b.eth.txPool.GetTransactions()
+func (eth *LightEthereum) BlockTD(blockHash common.Hash) *big.Int {
+	return eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *LesApiBackend) GetPoolTransaction(txHash common.Hash) *types.Transaction {
-	return b.eth.txPool.GetTransaction(txHash)
+func (eth *LightEthereum) TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+	if tx = eth.txPool.GetTransaction(txHash); tx != nil {
+		return tx, true, nil
+	}
+	return nil, false, ErrTxNotFound
 }
 
-func (b *LesApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return b.eth.txPool.GetNonce(ctx, addr)
+func (eth *LightEthereum) TransactionInBlock(ctx context.Context, blockhash common.Hash, index uint) (*types.Transaction, error) {
+	b, err := eth.blockchain.GetBlockByHash(ctx, blockhash)
+	if err != nil {
+		return nil, err
+	}
+	if index >= uint(len(b.Transactions())) {
+		return nil, fmt.Errorf("transaction index out of range")
+	}
+	return b.Transactions()[index], nil
 }
 
-func (b *LesApiBackend) Stats() (pending int, queued int) {
-	return b.eth.txPool.Stats(), 0
+func (eth *LightEthereum) TransactionReceipt(ctx context.Context, txhash common.Hash) (*types.Receipt, error) {
+	return nil, ErrReceiptNotFound
 }
 
-func (b *LesApiBackend) TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions) {
-	return b.eth.txPool.Content()
+func (eth *LightEthereum) TransactionCount(ctx context.Context, blockhash common.Hash) (uint, error) {
+	b, err := eth.blockchain.GetBlockByHash(ctx, blockhash)
+	if err != nil {
+		return 0, err
+	}
+	return uint(len(b.Transactions())), nil
 }
 
-func (b *LesApiBackend) Downloader() *downloader.Downloader {
-	return b.eth.Downloader()
+func (eth *LightEthereum) BalanceAt(ctx context.Context, addr common.Address, blocknum *big.Int) (*big.Int, error) {
+	st, err := eth.state(ctx, blocknum)
+	if err != nil {
+		return nil, err
+	}
+	return st.GetBalance(ctx, addr)
 }
 
-func (b *LesApiBackend) ProtocolVersion() int {
-	return b.eth.LesVersion() + 10000
+func (eth *LightEthereum) CodeAt(ctx context.Context, addr common.Address, blocknum *big.Int) ([]byte, error) {
+	st, err := eth.state(ctx, blocknum)
+	if err != nil {
+		return nil, err
+	}
+	return st.GetCode(ctx, addr)
 }
 
-func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx)
+func (eth *LightEthereum) NonceAt(ctx context.Context, addr common.Address, blocknum *big.Int) (uint64, error) {
+	st, err := eth.state(ctx, blocknum)
+	if err != nil {
+		return 0, err
+	}
+	return st.GetNonce(ctx, addr)
 }
 
-func (b *LesApiBackend) ChainDb() ethdb.Database {
-	return b.eth.chainDb
+func (eth *LightEthereum) StorageAt(ctx context.Context, addr common.Address, key common.Hash, blocknum *big.Int) ([]byte, error) {
+	st, err := eth.state(ctx, blocknum)
+	if err != nil {
+		return nil, err
+	}
+	v, err := st.GetState(ctx, addr, key)
+	if err != nil {
+		return nil, err
+	}
+	return v[:], nil
 }
 
-func (b *LesApiBackend) EventMux() *event.TypeMux {
-	return b.eth.eventMux
+func (eth *LightEthereum) PendingCodeAt(ctx context.Context, addr common.Address) ([]byte, error) {
+	// TODO(fjl): find a way to get rid of PendingCodeAt here. CodeAt is a bad emulation
+	// of PendingCodeAt because it forces users to wait for transactions to get mined.
+	return eth.CodeAt(ctx, addr, nil)
 }
 
-func (b *LesApiBackend) AccountManager() *accounts.Manager {
-	return b.eth.accountManager
+func (eth *LightEthereum) state(ctx context.Context, blocknum *big.Int) (*light.LightState, error) {
+	header, err := eth.HeaderByNumber(ctx, blocknum)
+	if err != nil {
+		return nil, err
+	}
+	return light.NewLightState(light.StateTrieID(header), eth.odr), nil
+}
+
+func (eth *LightEthereum) SendTransaction(ctx context.Context, signedTx *types.Transaction) error {
+	return eth.txPool.Add(ctx, signedTx)
+}
+
+func (eth *LightEthereum) RemoveTransaction(txHash common.Hash) {
+	eth.txPool.RemoveTx(txHash)
+}
+
+func (eth *LightEthereum) PendingTransactions() []*types.Transaction {
+	return eth.txPool.GetTransactions()
+}
+
+func (eth *LightEthereum) PendingNonceAt(ctx context.Context, addr common.Address) (uint64, error) {
+	return eth.txPool.GetNonce(ctx, addr)
+}
+
+func (eth *LightEthereum) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, error) {
+	return eth.protocolManager.downloader.Progress(), nil
+}
+
+// ChainConfig returns the active chain configuration.
+func (eth *LightEthereum) ChainConfig() *params.ChainConfig {
+	return eth.chainConfig
+}
+
+func (eth *LightEthereum) ProtocolVersion() int {
+	return int(eth.protocolManager.SubProtocols[0].Version) + 10000
+}
+
+func (eth *LightEthereum) SuggestGasPrice(ctx context.Context) (*big.Int, error) {
+	return eth.gpo.SuggestPrice(ctx)
+}
+
+func (eth *LightEthereum) AccountManager() *accounts.Manager {
+	return eth.accountManager
+}
+
+func (eth *LightEthereum) ResetHeadBlock(number uint64) {
+	eth.blockchain.SetHead(number)
+}
+
+func (eth *LightEthereum) EstimateGas(ctx context.Context, call ethereum.CallMsg) (usedGas *big.Int, err error) {
+	_, gas, err := eth.callContract(ctx, call, nil)
+	return gas, err
+}
+
+func (eth *LightEthereum) CallContract(ctx context.Context, call ethereum.CallMsg, blocknum *big.Int) ([]byte, error) {
+	val, _, err := eth.callContract(ctx, call, blocknum)
+	return val, err
+}
+
+func (eth *LightEthereum) callContract(ctx context.Context, call ethereum.CallMsg, blocknum *big.Int) ([]byte, *big.Int, error) {
+	var head *types.Header
+	if blocknum == nil {
+		head = eth.blockchain.CurrentHeader()
+	} else if head = eth.blockchain.GetHeaderByNumber(blocknum.Uint64()); head == nil {
+		return nil, nil, ErrBlockNotFound
+	}
+	state := light.NewLightState(light.StateTrieID(head), eth.odr)
+	return core.ApplyCallMessage(call, func(msg core.Message) vm.Environment {
+		return light.NewEnv(ctx, state, eth.chainConfig, eth.blockchain, msg, head, vm.Config{})
+	})
 }

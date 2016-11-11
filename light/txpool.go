@@ -325,12 +325,11 @@ func (pool *TxPool) Stop() {
 }
 
 // Stats returns the number of currently pending (locally created) transactions
-func (pool *TxPool) Stats() (pending int) {
+func (pool *TxPool) Stats() (pending int, queued int) {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
 
-	pending = len(pool.pending)
-	return
+	return len(pool.pending), 0
 }
 
 // validateTx checks whether a transaction is valid according to the consensus rules.

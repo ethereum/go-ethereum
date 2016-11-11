@@ -56,20 +56,20 @@ type PublicFilterAPI struct {
 	useMipMap bool
 	mux       *event.TypeMux
 	quit      chan struct{}
-	chainDb   ethdb.Database
+	chaindb   ethdb.Database
 	events    *EventSystem
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, mux *event.TypeMux, chaindb ethdb.Database, lightMode bool) *PublicFilterAPI {
 	api := &PublicFilterAPI{
 		backend:   backend,
 		useMipMap: !lightMode,
-		mux:       backend.EventMux(),
-		chainDb:   backend.ChainDb(),
-		events:    NewEventSystem(backend.EventMux(), backend, lightMode),
+		mux:       mux,
+		chaindb:   chaindb,
+		events:    NewEventSystem(mux, backend, lightMode),
 		filters:   make(map[rpc.ID]*filter),
 	}
 
@@ -326,7 +326,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
 	}
 
-	filter := New(api.backend, api.useMipMap)
+	filter := New(api.backend, api.chaindb, api.useMipMap)
 	filter.SetBeginBlock(crit.FromBlock.Int64())
 	filter.SetEndBlock(crit.ToBlock.Int64())
 	filter.SetAddresses(crit.Addresses)
@@ -366,7 +366,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]Log
 		return []Log{}, nil
 	}
 
-	filter := New(api.backend, api.useMipMap)
+	filter := New(api.backend, api.chaindb, api.useMipMap)
 	filter.SetBeginBlock(f.crit.FromBlock.Int64())
 	filter.SetEndBlock(f.crit.ToBlock.Int64())
 	filter.SetAddresses(f.crit.Addresses)
