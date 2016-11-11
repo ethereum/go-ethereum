@@ -236,7 +236,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 }
 
 func (pm *ProtocolManager) findServers() {
-	if pm.p2pServer == nil {
+	if pm.p2pServer == nil || pm.topicDisc == nil {
 		return
 	}
 	enodes := make(chan string, 100)
@@ -259,7 +259,10 @@ func (pm *ProtocolManager) findServers() {
 			}
 		}
 	}()
-	time.Sleep(time.Second * 20)
+	select {
+	case <-time.After(time.Second * 20):
+	case <-pm.quitSync:
+	}
 	close(stop)
 }
 

@@ -268,7 +268,7 @@ func (c *Config) name() string {
 	return c.Name
 }
 
-// These resources are resolved differently for the "geth" and "geth-testnet" instances.
+// These resources are resolved differently for "geth" instances.
 var isOldGethResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
@@ -297,7 +297,14 @@ func (c *Config) resolvePath(path string) string {
 			return oldpath
 		}
 	}
-	return filepath.Join(c.DataDir, c.name(), path)
+	return filepath.Join(c.instanceDir(), path)
+}
+
+func (c *Config) instanceDir() string {
+	if c.DataDir == "" {
+		return ""
+	}
+	return filepath.Join(c.DataDir, c.name())
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking

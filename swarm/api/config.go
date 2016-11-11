@@ -59,9 +59,8 @@ type Config struct {
 // config is agnostic to where private key is coming from
 // so managing accounts is outside swarm and left to wrappers
 func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (self *Config, err error) {
-
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
-	dirpath := filepath.Join(path, common.Bytes2Hex(address.Bytes()))
+	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
 	err = os.MkdirAll(dirpath, os.ModePerm)
 	if err != nil {
 		return

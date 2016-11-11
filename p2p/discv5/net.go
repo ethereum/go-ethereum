@@ -863,6 +863,9 @@ func init() {
 		name: "verifywait",
 		handle: func(net *Network, n *Node, ev nodeEvent, pkt *ingressPacket) (*nodeState, error) {
 			switch ev {
+			case pingPacket:
+				net.handlePing(n, pkt)
+				return verifywait, nil
 			case pongPacket:
 				err := net.handleKnownPong(n, pkt)
 				return known, err
