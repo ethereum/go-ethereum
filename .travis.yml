@@ -59,6 +59,10 @@ matrix:
       env:
         - azure-osx
         - mobile
+      cache:
+        directories:
+          - $HOME/.android.platforms
+          - $HOME/.cocoapods
       script:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
@@ -71,8 +75,13 @@ matrix:
         - brew update
         - brew install android-sdk maven
         - export ANDROID_HOME=/usr/local/opt/android-sdk
+
+        - mkdir -p $ANDROID_HOME/platforms
+        - mv -f $HOME/.android.platforms $ANDROID_HOME/platforms
         - echo "y" | android update sdk --no-ui --filter platform
+
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
+        - mv -f $ANDROID_HOME/platforms $HOME/.android.platforms
 
 install:
   - go get golang.org/x/tools/cmd/cover

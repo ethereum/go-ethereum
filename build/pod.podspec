@@ -17,6 +17,6 @@ Pod::Spec.new do |spec|
     curl https://gethstore.blob.core.windows.net/builds/geth-ios-all-{{.Version}}.tar.gz | tar -xvz
     mkdir Frameworks
     mv geth-ios-all-{{.Version}}/Geth.framework Frameworks
-    rm geth-ios-all-{{.Version}}
+    rm -rf geth-ios-all-{{.Version}}
   CMD
 end

@@ -799,7 +799,7 @@ func doXCodeFramework(cmdline []string) {
 	if *deploy != "" {
 		meta := newPodMetadata(env)
 		build.Render("build/pod.podspec", meta.Name+".podspec", 0755, meta)
-		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec")
+		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec", "--allow-warnings")
 	}
 }
 
