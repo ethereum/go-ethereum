@@ -368,7 +368,7 @@ func TestTransactionStorage(t *testing.T) {
 		if txn, hash, number, index := GetTransaction(db, tx.Hash()); txn == nil {
 			t.Fatalf("tx #%d [%x]: transaction not found", i, tx.Hash())
 		} else {
-			if hash != block.Hash() || number != block.NumberU64() || index != uint64(i) {
+			if hash != block.Hash() || number != block.NumberU64() || index != i {
 				t.Fatalf("tx #%d [%x]: positional metadata mismatch: have %x/%d/%d, want %x/%v/%v", i, tx.Hash(), hash, number, index, block.Hash(), block.NumberU64(), i)
 			}
 			if tx.String() != txn.String() {

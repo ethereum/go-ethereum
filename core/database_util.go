@@ -82,7 +82,7 @@ func GetCanonicalHash(db ethdb.Database, number uint64) common.Hash {
 
 // missingNumber is returned by GetBlockNumber if no header with the
 // given block hash has been stored in the database
-const missingNumber = uint64(0xffffffffffffffff)
+const MissingNumber = uint64(0xffffffffffffffff)
 
 // GetBlockNumber returns the block number assigned to a block hash
 // if the corresponding header is present in the database
@@ -91,7 +91,7 @@ func GetBlockNumber(db ethdb.Database, hash common.Hash) uint64 {
 	if len(data) != 8 {
 		data, _ := db.Get(append(append(oldBlockPrefix, hash.Bytes()...), oldHeaderSuffix...))
 		if len(data) == 0 {
-			return missingNumber
+			return MissingNumber
 		}
 		header := new(types.Header)
 		if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
@@ -247,7 +247,7 @@ func GetBlockReceipts(db ethdb.Database, hash common.Hash, number uint64) types.
 
 // GetTransaction retrieves a specific transaction from the database, along with
 // its added positional metadata.
-func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64) {
+func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, common.Hash, uint64, int) {
 	// Retrieve the transaction itself from the database
 	data, _ := db.Get(hash.Bytes())
 	if len(data) == 0 {
@@ -270,7 +270,7 @@ func GetTransaction(db ethdb.Database, hash common.Hash) (*types.Transaction, co
 	if err := rlp.DecodeBytes(data, &meta); err != nil {
 		return nil, common.Hash{}, 0, 0
 	}
-	return &tx, meta.BlockHash, meta.BlockIndex, meta.Index
+	return &tx, meta.BlockHash, meta.BlockIndex, int(meta.Index)
 }
 
 // GetReceipt returns a receipt by hash

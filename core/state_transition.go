@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/logger"
@@ -131,6 +132,39 @@ func ApplyMessage(env vm.Environment, msg Message, gp *GasPool) ([]byte, *big.In
 	st := NewStateTransition(env, msg, gp)
 
 	ret, _, gasUsed, err := st.TransitionDb()
+	return ret, gasUsed, err
+}
+
+// ApplyCallMessage runs the given message as a read-only contract call.
+//
+// It modifies the environment to provide a near infinite amount of ether to the sender
+// account and runs the message with the amount of gas configured in the message. This
+// function is meant to be used outside of regular block processing.
+//
+// It returns the bytes returned by any EVM execution (if it took place), the gas used
+// (not including gas refunds) and an error if it failed. An error always indicates a core
+// error meaning that the message would always fail for that particular state and would
+// never be accepted within a block.
+func ApplyCallMessage(call ethereum.CallMsg, newEnv func(Message) vm.Environment) ([]byte, *big.Int, error) {
+	// Ensure message is initialized properly.
+	if call.GasPrice == nil {
+		call.GasPrice = big.NewInt(1)
+	}
+	if call.Gas == nil || call.Gas.BitLen() == 0 {
+		call.Gas = big.NewInt(50000000)
+	}
+	if call.Value == nil {
+		call.Value = new(big.Int)
+	}
+	msg := callmsg{call}
+	env := newEnv(msg)
+	// Provide ether to the caller account.
+	have := env.Db().GetBalance(call.From)
+	need := new(big.Int).Sub(common.MaxBig, have)
+	env.Db().AddBalance(call.From, need)
+	// Execute the call.
+	gaspool := new(GasPool).AddGas(call.Gas)
+	ret, gasUsed, _, err := NewStateTransition(env, msg, gaspool).TransitionDb()
 	return ret, gasUsed, err
 }
 
@@ -300,3 +334,18 @@ func (self *StateTransition) refundGas() {
 func (self *StateTransition) gasUsed() *big.Int {
 	return new(big.Int).Sub(self.initialGas, self.gas)
 }
+
+// callmsg wraps ethereum.CallMsg so it implements Message.
+type callmsg struct {
+	ethereum.CallMsg
+}
+
+func (m callmsg) From() (common.Address, error)         { return m.CallMsg.From, nil }
+func (m callmsg) FromFrontier() (common.Address, error) { return m.CallMsg.From, nil }
+func (m callmsg) Nonce() uint64                         { return 0 }
+func (m callmsg) CheckNonce() bool                      { return false }
+func (m callmsg) To() *common.Address                   { return m.CallMsg.To }
+func (m callmsg) GasPrice() *big.Int                    { return m.CallMsg.GasPrice }
+func (m callmsg) Gas() *big.Int                         { return m.CallMsg.Gas }
+func (m callmsg) Value() *big.Int                       { return m.CallMsg.Value }
+func (m callmsg) Data() []byte                          { return m.CallMsg.Data }

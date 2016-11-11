@@ -20,52 +20,44 @@ package ethapi
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
 
-// Backend interface provides the common API services (that are provided by
-// both full and light clients) with access to necessary functions.
+// Backend defines most methods required for the RPC API.
 type Backend interface {
-	// general Ethereum API
-	Downloader() *downloader.Downloader
+	ethereum.ChainReader
+	ethereum.ChainStateReader
+	ethereum.ChainSyncReader
+	ethereum.TransactionSender
+	ethereum.GasPricer
+	ethereum.GasEstimator
+	ethereum.ContractCaller
+
 	ProtocolVersion() int
-	SuggestPrice(ctx context.Context) (*big.Int, error)
-	ChainDb() ethdb.Database
-	EventMux() *event.TypeMux
-	AccountManager() *accounts.Manager
-	// BlockChain API
-	SetHead(number uint64)
-	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
-	BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error)
-	StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (State, *types.Header, error)
-	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
-	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
-	GetTd(blockHash common.Hash) *big.Int
-	GetVMEnv(ctx context.Context, msg core.Message, state State, header *types.Header) (vm.Environment, func() error, error)
-	// TxPool API
-	SendTx(ctx context.Context, signedTx *types.Transaction) error
-	RemoveTx(txHash common.Hash)
-	GetPoolTransactions() types.Transactions
-	GetPoolTransaction(txHash common.Hash) *types.Transaction
-	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
-	Stats() (pending int, queued int)
-	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
+	AccountManager() *accounts.Manager // TODO(fjl): this should be a constructor argb
+	BlockTD(common.Hash) *big.Int
+	RemoveTransaction(txhash common.Hash)
+	PendingTransactions() []*types.Transaction
+	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
+	ResetHeadBlock(number uint64) // for admin API
 }
 
-type State interface {
-	GetBalance(ctx context.Context, addr common.Address) (*big.Int, error)
-	GetCode(ctx context.Context, addr common.Address) ([]byte, error)
-	GetState(ctx context.Context, a common.Address, b common.Hash) (common.Hash, error)
-	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
+// PendingState is implemented by the eth.Ethereum backend and provides access to optional
+// features that can only be provided by a full pending state.
+type PendingState interface {
+	PendingBlock() (*types.Block, error)
+	ethereum.PendingStateReader
+	ethereum.PendingContractCaller
+}
+
+type TransactionInclusionBlock interface {
+	// returns the block at which the given transaction was included in the blockchain
+	TransactionInclusionBlock(txhash common.Hash) (blockhash common.Hash, blocknum uint64, index int, err error)
 }
 
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
@@ -87,19 +79,10 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Service:   NewPublicTransactionPoolAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "txpool",
-			Version:   "1.0",
-			Service:   NewPublicTxPoolAPI(apiBackend),
-			Public:    true,
-		}, {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPublicDebugAPI(apiBackend),
 			Public:    true,
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(apiBackend),
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
