@@ -283,8 +283,8 @@ import org.ethereum.geth.internal.*;
 		public final static String ABI = "{{.InputABI}}";
 
 		{{if .InputBin}}
-			// Bytecode is the compiled bytecode used for deploying new contracts.
-			public final static byte[] Bytecode = "{{.InputBin}}".getBytes();
+			// BYTECODE is the compiled bytecode used for deploying new contracts.
+			public final static byte[] BYTECODE = "{{.InputBin}}".getBytes();
 
 			// deploy deploys a new Ethereum contract, binding an instance of {{.Type}} to it.
 			public static {{.Type}} deploy(TransactOpts auth, EthereumClient client{{range .Constructor.Inputs}}, {{bindtype .Type}} {{.Name}}{{end}}) throws Exception {
@@ -292,7 +292,7 @@ import org.ethereum.geth.internal.*;
 				{{range $index, $element := .Constructor.Inputs}}
 				  args.set({{$index}}, Geth.newInterface()); args.get({{$index}}).set{{namedtype (bindtype .Type) .Type}}({{.Name}});
 				{{end}}
-				return new {{.Type}}(Geth.deployContract(auth, ABI, Bytecode, client, args));
+				return new {{.Type}}(Geth.deployContract(auth, ABI, BYTECODE, client, args));
 			}
 
 			// Internal constructor used by contract deployment.
