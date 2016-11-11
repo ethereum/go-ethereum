@@ -59,18 +59,23 @@ func init() {
 	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
+		// See chaincmd.go:
 		initCommand,
 		importCommand,
 		exportCommand,
 		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
+		// See monitorcmd.go:
 		monitorCommand,
+		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
+		// See consolecmd.go:
 		consoleCommand,
 		attachCommand,
 		javascriptCommand,
+		// See misccmd.go:
 		makedagCommand,
 		versionCommand,
 		licenseCommand,
