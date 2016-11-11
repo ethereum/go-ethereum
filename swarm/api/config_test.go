@@ -30,14 +30,14 @@ import (
 var (
 	hexprvkey     = "65138b2aa745041b372153550584587da326ab440576b2a1191dd95cee30039c"
 	defaultConfig = `{
-    "ChunkDbPath": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e", "chunks") + `",
+    "ChunkDbPath": "` + filepath.Join("TMPDIR", "chunks") + `",
     "DbCapacity": 5000000,
     "CacheCapacity": 5000,
     "Radius": 0,
     "Branches": 128,
     "Hash": "SHA3",
     "CallInterval": 3000000000,
-    "KadDbPath": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e", "bzz-peers.json") + `",
+    "KadDbPath": "` + filepath.Join("TMPDIR", "bzz-peers.json") + `",
     "MaxProx": 8,
     "ProxBinSize": 2,
     "BucketSize": 4,
@@ -59,7 +59,7 @@ var (
         "Contract": "0x0000000000000000000000000000000000000000",
         "Beneficiary": "0x0d2f62485607cf38d9d795d93682a517661e513e"
     },
-    "RequestDbPath": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e", "requests") + `",
+    "RequestDbPath": "` + filepath.Join("TMPDIR", "requests") + `",
     "RequestDbBatchSize": 512,
     "KeyBufferSize": 1024,
     "SyncBatchSize": 128,
@@ -79,7 +79,7 @@ var (
         true,
         false
     ],
-    "Path": "` + filepath.Join("TMPDIR", "0d2f62485607cf38d9d795d93682a517661e513e") + `",
+    "Path": "TMPDIR",
     "Port": "8500",
     "PublicKey": "0x045f5cfd26692e48d0017d380349bcf50982488bc11b5145f3ddf88b24924299048450542d43527fbe29a5cb32f38d62755393ac002e6bfdd71b8d7ba725ecd7a3",
     "BzzKey": "0xe861964402c0b78e2d44098329b8545726f215afa737d803714a4338552fcb81",
@@ -99,16 +99,12 @@ func TestConfigWriteRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	account := crypto.PubkeyToAddress(prvkey.PublicKey)
-	dirpath := filepath.Join(tmp, common.Bytes2Hex(account.Bytes()))
-	confpath := filepath.Join(dirpath, "config.json")
-	data, err := ioutil.ReadFile(confpath)
+	data, err := ioutil.ReadFile(filepath.Join(orig.Path, "config.json"))
 	if err != nil {
 		t.Fatalf("default config file cannot be read: %v", err)
 	}
-	exp := strings.Replace(defaultConfig, "TMPDIR", tmp, -1)
+	exp := strings.Replace(defaultConfig, "TMPDIR", orig.Path, -1)
 	exp = strings.Replace(exp, "\\", "\\\\", -1)
-
 	if string(data) != exp {
 		t.Fatalf("default config mismatch:\nexpected: %v\ngot: %v", exp, string(data))
 	}
