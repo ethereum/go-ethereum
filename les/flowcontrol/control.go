@@ -99,7 +99,7 @@ type ServerNode struct {
 	params      *ServerParams
 	sumCost     uint64            // sum of req costs sent to this server
 	pending     map[uint64]uint64 // value = sumCost after sending the given req
-	lock        sync.Mutex
+	lock        sync.RWMutex
 }
 
 func NewServerNode(params *ServerParams) *ServerNode {
@@ -135,8 +135,8 @@ func (peer *ServerNode) canSend(maxCost uint64) uint64 {
 }
 
 func (peer *ServerNode) CanSend(maxCost uint64) uint64 {
-	peer.lock.Lock()
-	defer peer.lock.Unlock()
+	peer.lock.RLock()
+	defer peer.lock.RUnlock()
 
 	return peer.canSend(maxCost)
 }
@@ -148,7 +148,10 @@ func (peer *ServerNode) SendRequest(reqID, maxCost uint64) {
 
 	peer.recalcBLE(getTime())
 	for peer.bufEstimate < maxCost {
-		time.Sleep(time.Duration(peer.canSend(maxCost)))
+		wait := time.Duration(peer.canSend(maxCost))
+		peer.lock.Unlock()
+		time.Sleep(wait)
+		peer.lock.Lock()
 		peer.recalcBLE(getTime())
 	}
 	peer.bufEstimate -= maxCost
