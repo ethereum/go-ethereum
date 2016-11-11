@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2013-2016 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -39,6 +40,18 @@ import (
 )
 
 var (
+	initCommand = cli.Command{
+		Action:    initGenesis,
+		Name:      "init",
+		Usage:     "Bootstrap and initialize a new genesis block",
+		ArgsUsage: "<genesisPath>",
+		Category:  "BLOCKCHAIN COMMANDS",
+		Description: `
+The init command initializes a new genesis block and definition for the network.
+This is a destructive action and changes the network in which you will be
+participating.
+`,
+	}
 	importCommand = cli.Command{
 		Action:    importChain,
 		Name:      "import",
@@ -94,6 +107,34 @@ Use "ethereum dump 0" to dump the genesis block.
 `,
 	}
 )
+
+// initGenesis will initialise the given JSON format genesis file and writes it as
+// the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
+func initGenesis(ctx *cli.Context) error {
+	genesisPath := ctx.Args().First()
+	if len(genesisPath) == 0 {
+		utils.Fatalf("must supply path to genesis JSON file")
+	}
+
+	if ctx.GlobalBool(utils.TestNetFlag.Name) {
+		state.StartingNonce = 1048576 // (2**20)
+	}
+
+	stack := makeFullNode(ctx)
+	chaindb := utils.MakeChainDatabase(ctx, stack)
+
+	genesisFile, err := os.Open(genesisPath)
+	if err != nil {
+		utils.Fatalf("failed to read genesis file: %v", err)
+	}
+
+	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
+	if err != nil {
+		utils.Fatalf("failed to write genesis block: %v", err)
+	}
+	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	return nil
+}
 
 func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) != 1 {
