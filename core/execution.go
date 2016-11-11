@@ -150,11 +150,13 @@ func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, gasPric
 	defer contract.Finalise()
 
 	ret, err = env.Vm().Run(contract, nil)
+	// check whether the max code size has been exceeded
+	maxCodeSizeExceeded := len(ret) > params.MaxCodeSize
 	// if the contract creation ran successfully and no errors were returned
 	// calculate the gas required to store the code. If the code could not
 	// be stored due to not enough gas set an error and let it be handled
 	// by the error checking condition below.
-	if err == nil {
+	if err == nil && !maxCodeSizeExceeded {
 		dataGas := big.NewInt(int64(len(ret)))
 		dataGas.Mul(dataGas, params.CreateDataGas)
 		if contract.UseGas(dataGas) {
@@ -167,9 +169,9 @@ func Create(env vm.Environment, caller vm.ContractRef, code []byte, gas, gasPric
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
-	if err != nil && (env.ChainConfig().IsHomestead(env.BlockNumber()) || err != vm.CodeStoreOutOfGasError) {
+	if maxCodeSizeExceeded ||
+		(err != nil && (env.ChainConfig().IsHomestead(env.BlockNumber()) || err != vm.CodeStoreOutOfGasError)) {
 		contract.UseGas(contract.Gas)
-
 		env.RevertToSnapshot(snapshotPreTransfer)
 
 		// Nothing should be returned when an error is thrown.
