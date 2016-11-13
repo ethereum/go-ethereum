@@ -212,7 +212,7 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, hasHeader he
 // In addition, during the state download phase of fast synchronisation the number
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
-func (d *Downloader) Progress() ethereum.SyncProgress {
+func (d *Downloader) Progress() *ethereum.SyncProgress {
 	// Fetch the pending state count outside of the lock to prevent unforeseen deadlocks
 	pendingStates := uint64(d.queue.PendingNodeData())
 
@@ -229,7 +229,7 @@ func (d *Downloader) Progress() ethereum.SyncProgress {
 	case LightSync:
 		current = d.headHeader().Number.Uint64()
 	}
-	return ethereum.SyncProgress{
+	return &ethereum.SyncProgress{
 		StartingBlock: d.syncStatsChainOrigin,
 		CurrentBlock:  current,
 		HighestBlock:  d.syncStatsChainHeight,

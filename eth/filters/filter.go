@@ -18,22 +18,20 @@ package filters
 
 import (
 	"math"
+	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
 
 type Backend interface {
-	ChainDb() ethdb.Database
-	EventMux() *event.TypeMux
-	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
-	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
+	HeaderByHash(context.Context, common.Hash) (*types.Header, error)
+	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
+	BlockReceipts(ctx context.Context, blockhash common.Hash, blocknum uint64) ([]*types.Receipt, error)
 }
 
 // Filter can be used to retrieve and filter logs
@@ -51,11 +49,11 @@ type Filter struct {
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
-func New(backend Backend, useMipMap bool) *Filter {
+func New(backend Backend, chaindb ethdb.Database, useMipMap bool) *Filter {
 	return &Filter{
 		backend:   backend,
 		useMipMap: useMipMap,
-		db:        backend.ChainDb(),
+		db:        chaindb,
 	}
 }
 
@@ -84,7 +82,7 @@ func (f *Filter) SetTopics(topics [][]common.Hash) {
 
 // Run filters logs with the current parameters set
 func (f *Filter) Find(ctx context.Context) ([]Log, error) {
-	head, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	head, _ := f.backend.HeaderByNumber(ctx, nil)
 	if head == nil {
 		return nil, nil
 	}
@@ -141,7 +139,7 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []Log) {
 
 func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []Log, err error) {
 	for i := start; i <= end; i++ {
-		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+		header, err := f.backend.HeaderByNumber(ctx, new(big.Int).SetUint64(i))
 		if header == nil || err != nil {
 			return logs, err
 		}
@@ -150,7 +148,7 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []Log, er
 		// current parameters
 		if f.bloomFilter(header.Bloom) {
 			// Get the logs of the block
-			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
+			receipts, err := f.backend.BlockReceipts(ctx, header.Hash(), i)
 			if err != nil {
 				return nil, err
 			}

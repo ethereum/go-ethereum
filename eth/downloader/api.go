@@ -76,7 +76,7 @@ func (api *PublicDownloaderAPI) eventLoop() {
 			case StartEvent:
 				notification = &SyncingResult{
 					Syncing: true,
-					Status:  api.d.Progress(),
+					Status:  *api.d.Progress(),
 				}
 			case DoneEvent, FailedEvent:
 				notification = false

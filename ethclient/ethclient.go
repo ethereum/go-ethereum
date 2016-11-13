@@ -143,15 +143,18 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 }
 
 // TransactionByHash returns the transaction with the given hash.
-func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, error) {
-	var tx *types.Transaction
-	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByHash", hash)
+func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+	var rtx struct {
+		*types.Transaction
+		BlockHash *common.Hash
+	}
+	err = ec.c.CallContext(ctx, &rtx, "eth_getTransactionByHash", hash)
 	if err == nil {
-		if _, r, _ := tx.SignatureValues(); r == nil {
-			return nil, fmt.Errorf("server returned transaction without signature")
+		if _, r, _ := rtx.SignatureValues(); r == nil {
+			return nil, false, fmt.Errorf("server returned transaction without signature")
 		}
 	}
-	return tx, err
+	return rtx.Transaction, rtx.BlockHash == nil, err
 }
 
 // TransactionCount returns the total number of transactions in the given block.

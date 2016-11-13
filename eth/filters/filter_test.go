@@ -103,7 +103,7 @@ func BenchmarkMipmaps(b *testing.B) {
 	}
 	b.ResetTimer()
 
-	filter := New(backend, true)
+	filter := New(backend, db, true)
 	filter.SetAddresses([]common.Address{addr1, addr2, addr3, addr4})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
@@ -205,7 +205,7 @@ func TestFilters(t *testing.T) {
 		}
 	}
 
-	filter := New(backend, true)
+	filter := New(backend, db, true)
 	filter.SetAddresses([]common.Address{addr})
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash1, hash2, hash3, hash4}})
 	filter.SetBeginBlock(0)
@@ -216,7 +216,7 @@ func TestFilters(t *testing.T) {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = New(backend, true)
+	filter = New(backend, db, true)
 	filter.SetAddresses([]common.Address{addr})
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash3}})
 	filter.SetBeginBlock(900)
@@ -229,7 +229,7 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = New(backend, true)
+	filter = New(backend, db, true)
 	filter.SetAddresses([]common.Address{addr})
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash3}})
 	filter.SetBeginBlock(990)
@@ -242,7 +242,7 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = New(backend, true)
+	filter = New(backend, db, true)
 	filter.SetTopics([][]common.Hash{[]common.Hash{hash1, hash2}})
 	filter.SetBeginBlock(1)
 	filter.SetEndBlock(10)
@@ -253,7 +253,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = New(backend, true)
+	filter = New(backend, db, true)
 	filter.SetTopics([][]common.Hash{[]common.Hash{failHash}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
@@ -264,7 +264,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = New(backend, true)
+	filter = New(backend, db, true)
 	filter.SetAddresses([]common.Address{failAddr})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
@@ -274,7 +274,7 @@ func TestFilters(t *testing.T) {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
-	filter = New(backend, true)
+	filter = New(backend, db, true)
 	filter.SetTopics([][]common.Hash{[]common.Hash{failHash}, []common.Hash{hash1}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)

@@ -37,7 +37,7 @@ var (
 	mux     = new(event.TypeMux)
 	db, _   = ethdb.NewMemDatabase()
 	backend = &testBackend{mux, db}
-	api     = NewPublicFilterAPI(backend, false)
+	api     = NewPublicFilterAPI(backend, mux, db, false)
 )
 
 type testBackend struct {
@@ -45,30 +45,26 @@ type testBackend struct {
 	db  ethdb.Database
 }
 
-func (b *testBackend) ChainDb() ethdb.Database {
-	return b.db
-}
-
-func (b *testBackend) EventMux() *event.TypeMux {
-	return b.mux
-}
-
-func (b *testBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
+func (b *testBackend) HeaderByNumber(ctx context.Context, blockNum *big.Int) (*types.Header, error) {
 	var hash common.Hash
 	var num uint64
-	if blockNr == rpc.LatestBlockNumber {
+	if blockNum == nil {
 		hash = core.GetHeadBlockHash(b.db)
 		num = core.GetBlockNumber(b.db, hash)
 	} else {
-		num = uint64(blockNr)
+		num = blockNum.Uint64()
 		hash = core.GetCanonicalHash(b.db, num)
 	}
 	return core.GetHeader(b.db, hash, num), nil
 }
 
-func (b *testBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
+func (b *testBackend) HeaderByHash(ctx context.Context, blockHash common.Hash) (*types.Header, error) {
 	num := core.GetBlockNumber(b.db, blockHash)
-	return core.GetBlockReceipts(b.db, blockHash, num), nil
+	return core.GetHeader(b.db, blockHash, num), nil
+}
+
+func (b *testBackend) BlockReceipts(ctx context.Context, blockHash common.Hash, blockNum uint64) ([]*types.Receipt, error) {
+	return core.GetBlockReceipts(b.db, blockHash, blockNum), nil
 }
 
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.

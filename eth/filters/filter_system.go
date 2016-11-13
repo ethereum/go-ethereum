@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
@@ -301,27 +303,44 @@ func (es *EventSystem) broadcast(filters filterIndex, ev *event.Event) {
 
 func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func(*types.Header, bool)) {
 	oldh := es.lastHead
-	es.lastHead = newHeader
 	if oldh == nil {
 		return
 	}
-	newh := newHeader
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+
 	// find common ancestor, create list of rolled back and new block hashes
-	var oldHeaders, newHeaders []*types.Header
+	var (
+		oldHeaders, newHeaders []*types.Header
+		newh                   = newHeader
+		err                    error
+	)
 	for oldh.Hash() != newh.Hash() {
 		if oldh.Number.Uint64() >= newh.Number.Uint64() {
 			oldHeaders = append(oldHeaders, oldh)
-			oldh = core.GetHeader(es.backend.ChainDb(), oldh.ParentHash, oldh.Number.Uint64()-1)
+			oldh, err = es.backend.HeaderByHash(ctx, oldh.ParentHash)
+			if err != nil {
+				break
+			}
 		}
 		if oldh.Number.Uint64() < newh.Number.Uint64() {
 			newHeaders = append(newHeaders, newh)
-			newh = core.GetHeader(es.backend.ChainDb(), newh.ParentHash, newh.Number.Uint64()-1)
+			newh, err = es.backend.HeaderByHash(ctx, newh.ParentHash)
+			if err != nil {
+				break
+			}
 			if newh == nil {
 				// happens when CHT syncing, nothing to do
 				newh = oldh
 			}
 		}
 	}
+	if err != nil {
+		if glog.V(logger.Error) {
+			glog.Errorf("aborted rollback, can't fetch header: %v", err)
+		}
+		return
+	}
+
 	// roll back old blocks
 	for _, h := range oldHeaders {
 		callBack(h, true)
@@ -330,6 +349,7 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 	for i := len(newHeaders) - 1; i >= 0; i-- {
 		callBack(newHeaders[i], false)
 	}
+	es.lastHead = newh
 }
 
 // filter logs of a single header in light client mode
@@ -339,7 +359,7 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 		//fmt.Println("bloom match")
 		// Get the logs of the block
 		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
-		receipts, err := es.backend.GetReceipts(ctx, header.Hash())
+		receipts, err := es.backend.BlockReceipts(ctx, header.Hash(), header.Number.Uint64())
 		if err != nil {
 			return nil
 		}

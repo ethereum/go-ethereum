@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -62,20 +61,20 @@ type ReleaseService struct {
 // releases and notify the user of such.
 func NewReleaseService(ctx *node.ServiceContext, config Config) (node.Service, error) {
 	// Retrieve the Ethereum service dependency to access the blockchain
-	var apiBackend ethapi.Backend
+	var apiBackend bind.ContractBackend
 	var ethereum *eth.Ethereum
 	if err := ctx.Service(&ethereum); err == nil {
-		apiBackend = ethereum.ApiBackend
+		apiBackend = ethereum
 	} else {
 		var ethereum *les.LightEthereum
 		if err := ctx.Service(&ethereum); err == nil {
-			apiBackend = ethereum.ApiBackend
+			apiBackend = ethereum
 		} else {
 			return nil, err
 		}
 	}
 	// Construct the release service
-	contract, err := NewReleaseOracle(config.Oracle, eth.NewContractBackend(apiBackend))
+	contract, err := NewReleaseOracle(config.Oracle, apiBackend)
 	if err != nil {
 		return nil, err
 	}

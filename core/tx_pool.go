@@ -190,11 +190,12 @@ func (pool *TxPool) Stop() {
 	glog.V(logger.Info).Infoln("Transaction pool stopped")
 }
 
-func (pool *TxPool) State() *state.ManagedState {
-	pool.mu.RLock()
-	defer pool.mu.RUnlock()
+// NonceAt returns the next valid nonce for the given account.
+func (pool *TxPool) NonceAt(addr common.Address) uint64 {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 
-	return pool.pendingState
+	return pool.pendingState.GetNonce(addr)
 }
 
 // Stats retrieves the current pool stats, namely the number of pending and the

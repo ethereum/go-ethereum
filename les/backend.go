@@ -58,7 +58,7 @@ type LightEthereum struct {
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
-	ApiBackend *LesApiBackend
+	gpo *gasprice.LightPriceOracle
 
 	eventMux       *event.TypeMux
 	pow            *ethash.Ethash
@@ -124,8 +124,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		return nil, err
 	}
 
-	eth.ApiBackend = &LesApiBackend{eth, nil}
-	eth.ApiBackend.gpo = gasprice.NewLightPriceOracle(eth.ApiBackend)
+	eth.gpo = gasprice.NewLightPriceOracle(eth)
+
 	return eth, nil
 }
 
@@ -153,9 +153,13 @@ func (s *LightDummyAPI) Mining() bool {
 
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *LightEthereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend, s.solcPath), []rpc.API{
+func (eth *LightEthereum) APIs() []rpc.API {
+	return append(ethapi.GetAPIs(eth, eth.solcPath), []rpc.API{
 		{
+			Namespace: "debug",
+			Version:   "1.0",
+			Service:   ethapi.NewPrivateDebugAPI(eth, eth.chainDb),
+		}, {
 			Namespace: "eth",
 			Version:   "1.0",
 			Service:   &LightDummyAPI{},
@@ -163,17 +167,22 @@ func (s *LightEthereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Service:   downloader.NewPublicDownloaderAPI(eth.protocolManager.downloader, eth.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
+			Service:   filters.NewPublicFilterAPI(eth, eth.eventMux, eth.chainDb, true),
 			Public:    true,
 		}, {
+			Namespace: "txpool",
+			Version:   "1.0",
+			Service:   ethapi.TxPoolDebugAPI{Pool: eth.txPool},
+		},
+		{
 			Namespace: "net",
 			Version:   "1.0",
-			Service:   s.netRPCService,
+			Service:   eth.netRPCService,
 			Public:    true,
 		},
 	}...)
@@ -182,11 +191,6 @@ func (s *LightEthereum) APIs() []rpc.API {
 func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
-
-func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchain }
-func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
-func (s *LightEthereum) LesVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

@@ -53,8 +53,8 @@ type ChainReader interface {
 	HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error)
 	TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error)
 	TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error)
-	TransactionByHash(ctx context.Context, txHash common.Hash) (*types.Transaction, error)
 	TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error)
+	TransactionByHash(ctx context.Context, txHash common.Hash) (tx *types.Transaction, isPending bool, err error)
 }
 
 // ChainStateReader wraps access to the state trie of the canonical blockchain. Note that
@@ -163,6 +163,9 @@ type PendingStateReader interface {
 	PendingNonceAt(ctx context.Context, account common.Address) (uint64, error)
 	PendingTransactionCount(ctx context.Context) (uint, error)
 }
+
+// TODO(fjl): PendingNonceAt should have its own interface because it is provided by the tx pool
+// and more widely available than the others. We could also make it part of TransactionSender.
 
 // PendingContractCaller can be used to perform calls against the pending state.
 type PendingContractCaller interface {

@@ -768,7 +768,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			fullNode, err := eth.New(ctx, ethConf)
 			if fullNode != nil && ethConf.LightServ > 0 {
-				ls, _ := les.NewLesServer(fullNode, ethConf)
+				ls, _ := les.NewLesServer(fullNode, stack.EventMux(), ethConf)
 				fullNode.AddLesServer(ls)
 			}
 			return fullNode, err

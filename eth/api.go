@@ -521,7 +521,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 			data:     tx.Data(),
 		}
 		// Mutate the state if we haven't reached the tracing transaction yet
-		if uint64(idx) < txIndex {
+		if idx < txIndex {
 			vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{})
 			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {

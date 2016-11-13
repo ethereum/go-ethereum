@@ -31,8 +31,6 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -127,10 +125,7 @@ type Ethereum struct {
 
 	eventMux       *event.TypeMux
 	pow            *ethash.Ethash
-	httpclient     *httpclient.HTTPClient
 	accountManager *accounts.Manager
-
-	ApiBackend *EthApiBackend
 
 	miner        *miner.Miner
 	Mining       bool
@@ -138,6 +133,7 @@ type Ethereum struct {
 	AutoDAG      bool
 	autodagquit  chan bool
 	etherbase    common.Address
+	gpo          *gasprice.GasPriceOracle
 	solcPath     string
 
 	NatSpec       bool
@@ -173,7 +169,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		pow:            pow,
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
-		httpclient:     httpclient.New(config.DocRoot),
 		netVersionId:   config.NetworkId,
 		NatSpec:        config.NatSpec,
 		PowTest:        config.PowTest,
@@ -222,14 +217,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		ForceJit:  config.ForceJit,
 	}
 
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux())
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.eventMux)
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`No chain found. Please initialise a new chain using the "init" subcommand.`)
 		}
 		return nil, err
 	}
-	newPool := core.NewTxPool(eth.chainConfig, eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
+	newPool := core.NewTxPool(eth.chainConfig, eth.eventMux, eth.blockchain.State, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
 	maxPeers := config.MaxPeers
@@ -246,10 +241,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.pow)
+
+	// Set up the miner.
+	eth.miner = miner.New(eth, eth.chainConfig, eth.eventMux, eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
+	// Set up the gas price oracle.
 	gpoParams := &gasprice.GpoParams{
 		GpoMinGasPrice:          config.GpoMinGasPrice,
 		GpoMaxGasPrice:          config.GpoMaxGasPrice,
@@ -258,8 +256,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
-	gpo := gasprice.NewGasPriceOracle(eth.blockchain, chainDb, eth.eventMux, gpoParams)
-	eth.ApiBackend = &EthApiBackend{eth, gpo}
+	eth.gpo = gasprice.NewGasPriceOracle(eth.blockchain, chainDb, eth.eventMux, gpoParams)
 
 	return eth, nil
 }
@@ -313,55 +310,59 @@ func CreatePoW(config *Config) (*ethash.Ethash, error) {
 
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
-func (s *Ethereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend, s.solcPath), []rpc.API{
+func (eth *Ethereum) APIs() []rpc.API {
+	return append(ethapi.GetAPIs(eth, eth.solcPath), []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
+			Service:   NewPublicEthereumAPI(eth),
 			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicMinerAPI(s),
+			Service:   NewPublicMinerAPI(eth),
 			Public:    true,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+			Service:   downloader.NewPublicDownloaderAPI(eth.protocolManager.downloader, eth.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "miner",
 			Version:   "1.0",
-			Service:   NewPrivateMinerAPI(s),
+			Service:   NewPrivateMinerAPI(eth),
 			Public:    false,
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false),
+			Service:   filters.NewPublicFilterAPI(eth, eth.eventMux, eth.chainDb, false),
 			Public:    true,
 		}, {
 			Namespace: "admin",
 			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(s),
+			Service:   NewPrivateAdminAPI(eth),
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPublicDebugAPI(s),
+			Service:   NewPublicDebugAPI(eth),
 			Public:    true,
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s.chainConfig, s),
+			Service:   ethapi.NewPrivateDebugAPI(eth, eth.chainDb),
+		}, {
+			Namespace: "debug",
+			Version:   "1.0",
+			Service:   NewPrivateDebugAPI(eth.chainConfig, eth),
+		}, {
+			Namespace: "txpool",
+			Version:   "1.0",
+			Service:   ethapi.TxPoolDebugAPI{Pool: eth.txPool},
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
-			Service:   s.netRPCService,
+			Service:   eth.netRPCService,
 			Public:    true,
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   ethreg.NewPrivateRegistarAPI(s.chainConfig, s.blockchain, s.chainDb, s.txPool, s.accountManager),
 		},
 	}...)
 }
@@ -399,20 +400,16 @@ func (s *Ethereum) StartMining(threads int) error {
 	return nil
 }
 
-func (s *Ethereum) StopMining()         { s.miner.Stop() }
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
-func (s *Ethereum) Miner() *miner.Miner { return s.miner }
+func (s *Ethereum) StopMining()    { s.miner.Stop() }
+func (s *Ethereum) IsMining() bool { return s.miner.Mining() }
 
-func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
-func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
-func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
-func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Pow() *ethash.Ethash                { return s.pow }
-func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
-func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() int                    { return s.netVersionId }
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+// Deprecated Accessors
+
+func (s *Ethereum) BlockChain() *core.BlockChain { return s.blockchain }
+func (s *Ethereum) ChainDb() ethdb.Database      { return s.chainDb }
+func (s *Ethereum) TxPool() *core.TxPool         { return s.txPool }
+func (s *Ethereum) Pow() *ethash.Ethash          { return s.pow }
+func (s *Ethereum) Miner() *miner.Miner          { return s.miner }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
@@ -427,7 +424,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start(srvr *p2p.Server) error {
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
+	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.netVersionId)
 	if s.AutoDAG {
 		s.StartAutoDAG()
 	}
@@ -527,12 +524,6 @@ func (self *Ethereum) StopAutoDAG() {
 		self.autodagquit = nil
 	}
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
-}
-
-// HTTPClient returns the light http client used for fetching offchain docs
-// (natspec, source for verification)
-func (self *Ethereum) HTTPClient() *httpclient.HTTPClient {
-	return self.httpclient
 }
 
 // dagFiles(epoch) returns the two alternative DAG filenames (not a path)
