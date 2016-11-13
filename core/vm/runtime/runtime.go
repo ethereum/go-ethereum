@@ -57,7 +57,15 @@ type Config struct {
 // sets defaults on the config
 func setDefaults(cfg *Config) {
 	if cfg.ChainConfig == nil {
-		cfg.ChainConfig = &params.ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), false, new(big.Int), common.Hash{}, new(big.Int), new(big.Int), new(big.Int)}
+		cfg.ChainConfig = &params.ChainConfig{
+			ChainId:        big.NewInt(1),
+			HomesteadBlock: new(big.Int),
+			DAOForkBlock:   new(big.Int),
+			DAOForkSupport: false,
+			EIP150Block:    new(big.Int),
+			EIP155Block:    new(big.Int),
+			EIP158Block:    new(big.Int),
+		}
 	}
 
 	if cfg.Difficulty == nil {
