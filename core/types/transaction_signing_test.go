@@ -114,3 +114,25 @@ func TestEIP155SigningVitalik(t *testing.T) {
 
 	}
 }
+
+func TestChainId(t *testing.T) {
+	key, _ := defaultTestKey()
+
+	tx := NewTransaction(0, common.Address{}, new(big.Int), new(big.Int), new(big.Int), nil)
+
+	var err error
+	tx, err = tx.SignECDSA(NewEIP155Signer(big.NewInt(1)), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Sender(NewEIP155Signer(big.NewInt(2)), tx)
+	if err != ErrInvalidChainId {
+		t.Error("expected error:", ErrInvalidChainId)
+	}
+
+	_, err = Sender(NewEIP155Signer(big.NewInt(1)), tx)
+	if err != nil {
+		t.Error("expected no error")
+	}
+}

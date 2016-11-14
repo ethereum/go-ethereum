@@ -1226,11 +1226,8 @@ func TestEIP155Transition(t *testing.T) {
 			block.AddTx(tx)
 		}
 	})
-	errExp := "Invalid transaction chain id. Current chain id: 1 tx chain id: 2"
 	_, err := blockchain.InsertChain(blocks)
-	if err == nil {
-		t.Error("expected transaction chain id error")
-	} else if err.Error() != errExp {
-		t.Error("expected:", errExp, "got:", err)
+	if err != types.ErrInvalidChainId {
+		t.Error("expected error:", types.ErrInvalidChainId)
 	}
 }

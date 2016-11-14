@@ -17,7 +17,6 @@
 package core
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -73,10 +72,6 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		if tx.Protected() && tx.ChainId().Cmp(p.config.ChainId) != 0 {
-			return nil, nil, nil, fmt.Errorf("Invalid transaction chain id. Current chain id: %v tx chain id: %v", p.config.ChainId, tx.ChainId())
-		}
-
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
