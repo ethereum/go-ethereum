@@ -525,7 +525,9 @@ func (s *ticketStore) searchLookupDone(lookup lookupInfo, nodes []*Node, ping fu
 			} // else {
 			if s.canQueryTopic(n, lookup.topic) {
 				hash := query(n, lookup.topic)
-				s.addTopicQuery(common.BytesToHash(hash), n, lookup)
+				if hash != nil {
+					s.addTopicQuery(common.BytesToHash(hash), n, lookup)
+				}
 			}
 			//}
 		}

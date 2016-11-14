@@ -321,12 +321,13 @@ func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int, err er
 // XXX Rename message to something less arbitrary?
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:    tx.data.AccountNonce,
-		price:    new(big.Int).Set(tx.data.Price),
-		gasLimit: new(big.Int).Set(tx.data.GasLimit),
-		to:       tx.data.Recipient,
-		amount:   tx.data.Amount,
-		data:     tx.data.Payload,
+		nonce:      tx.data.AccountNonce,
+		price:      new(big.Int).Set(tx.data.Price),
+		gasLimit:   new(big.Int).Set(tx.data.GasLimit),
+		to:         tx.data.Recipient,
+		amount:     tx.data.Amount,
+		data:       tx.data.Payload,
+		checkNonce: true,
 	}
 
 	var err error
@@ -535,17 +536,19 @@ type Message struct {
 	nonce                   uint64
 	amount, price, gasLimit *big.Int
 	data                    []byte
+	checkNonce              bool
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount, gasLimit, price *big.Int, data []byte) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount, gasLimit, price *big.Int, data []byte, checkNonce bool) Message {
 	return Message{
-		from:     from,
-		to:       to,
-		nonce:    nonce,
-		amount:   amount,
-		price:    price,
-		gasLimit: gasLimit,
-		data:     data,
+		from:       from,
+		to:         to,
+		nonce:      nonce,
+		amount:     amount,
+		price:      price,
+		gasLimit:   gasLimit,
+		data:       data,
+		checkNonce: checkNonce,
 	}
 }
 
@@ -556,4 +559,4 @@ func (m Message) Value() *big.Int      { return m.amount }
 func (m Message) Gas() *big.Int        { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
-func (m Message) CheckNonce() bool     { return true }
+func (m Message) CheckNonce() bool     { return m.checkNonce }

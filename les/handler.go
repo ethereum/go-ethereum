@@ -240,6 +240,7 @@ func (pm *ProtocolManager) findServers() {
 	if pm.p2pServer == nil || pm.topicDisc == nil {
 		return
 	}
+	glog.V(logger.Debug).Infoln("Looking for topic", string(pm.lesTopic))
 	enodes := make(chan string, 100)
 	stop := make(chan struct{})
 	go pm.topicDisc.SearchTopic(pm.lesTopic, stop, enodes)
@@ -280,9 +281,9 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	} else {
 		if pm.topicDisc != nil {
 			go func() {
-				glog.V(logger.Debug).Infoln("Starting topic register")
+				glog.V(logger.Debug).Infoln("Starting registering topic", string(pm.lesTopic))
 				pm.topicDisc.RegisterTopic(pm.lesTopic, pm.quitSync)
-				glog.V(logger.Debug).Infoln("Stopped topic register")
+				glog.V(logger.Debug).Infoln("Stopped registering topic", string(pm.lesTopic))
 			}()
 		}
 		go func() {

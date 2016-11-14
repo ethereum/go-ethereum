@@ -226,7 +226,7 @@ func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx m
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
-	message := types.NewMessage(addr, to, nonce, value, gas, price, data)
+	message := types.NewMessage(addr, to, nonce, value, gas, price, data, true)
 	vmenv := NewEnvFromMap(chainConfig, statedb, env, tx)
 	vmenv.origin = addr
 
