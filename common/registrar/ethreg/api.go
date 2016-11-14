@@ -187,7 +187,7 @@ func (be *registryAPIBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr
 	if gasPrice.BitLen() == 0 {
 		gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
 	}
-	msg := types.NewMessage(from.Address(), to, 0, common.Big(valueStr), gas, gasPrice, common.FromHex(dataStr))
+	msg := types.NewMessage(from.Address(), to, 0, common.Big(valueStr), gas, gasPrice, common.FromHex(dataStr), false)
 
 	header := be.bc.CurrentBlock().Header()
 	vmenv := core.NewEnv(statedb, be.config, be.bc, msg, header, vm.Config{})

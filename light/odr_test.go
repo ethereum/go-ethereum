@@ -167,7 +167,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(common.MaxBig)
 
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data)}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 				vmenv := core.NewEnv(statedb, testChainConfig(), bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
@@ -180,7 +180,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 			if err == nil {
 				from.SetBalance(common.MaxBig)
 
-				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data)}
+				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 				vmenv := NewEnv(ctx, state, testChainConfig(), lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)

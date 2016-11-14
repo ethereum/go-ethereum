@@ -545,7 +545,7 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	if gasPrice.Cmp(common.Big0) == 0 {
 		gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
 	}
-	msg := types.NewMessage(addr, args.To, 0, args.Value.BigInt(), gas, gasPrice, common.FromHex(args.Data))
+	msg := types.NewMessage(addr, args.To, 0, args.Value.BigInt(), gas, gasPrice, common.FromHex(args.Data), false)
 
 	// Execute the call and return
 	vmenv, vmError, err := s.b.GetVMEnv(ctx, msg, state, header)
