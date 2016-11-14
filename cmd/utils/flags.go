@@ -881,6 +881,13 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 				config.EIP158Block = params.MainNetSpuriousDragon
 			}
 		}
+		if config.ChainId.BitLen() == 0 {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.ChainId = params.TestNetChainID
+			} else {
+				config.ChainId = params.MainNetChainID
+			}
+		}
 		config.DAOForkSupport = true
 	}
 
