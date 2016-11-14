@@ -21,12 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
+
+var ErrInvalidChainId = errors.New("invalid chaid id for signer")
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -75,7 +76,7 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 		// If the signer used to derive from in a previous
 		// call is not the same as used current, invalidate
 		// the cache.
-		if reflect.TypeOf(sigCache.signer) == reflect.TypeOf(signer) {
+		if sigCache.signer.Equal(signer) {
 			return sigCache.from, nil
 		}
 	}
@@ -104,6 +105,8 @@ type Signer interface {
 	SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error)
 	// WithSignature returns a copy of the transaction with the given signature
 	WithSignature(tx *Transaction, sig []byte) (*Transaction, error)
+	// Checks for equality on the signers
+	Equal(Signer) bool
 }
 
 // EIP155Transaction implements TransactionInterface using the
@@ -121,6 +124,11 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 	}
 }
 
+func (s EIP155Signer) Equal(s2 Signer) bool {
+	eip155, ok := s2.(EIP155Signer)
+	return ok && eip155.chainId.Cmp(s.chainId) == 0
+}
+
 func (s EIP155Signer) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
 	return SignECDSA(s, tx, prv)
 }
@@ -129,6 +137,10 @@ func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
 	// if the transaction is not protected fall back to homestead signer
 	if !tx.Protected() {
 		return (HomesteadSigner{}).PublicKey(tx)
+	}
+
+	if tx.ChainId().Cmp(s.chainId) != 0 {
+		return nil, ErrInvalidChainId
 	}
 
 	V := normaliseV(s, tx.data.V)
@@ -200,6 +212,11 @@ func (s EIP155Signer) SigECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transac
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
 
+func (s HomesteadSigner) Equal(s2 Signer) bool {
+	_, ok := s2.(HomesteadSigner)
+	return ok
+}
+
 // WithSignature returns a new transaction with the given snature.
 // This snature needs to be formatted as described in the yellow paper (v+27).
 func (hs HomesteadSigner) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
@@ -250,6 +267,11 @@ func (hs HomesteadSigner) PublicKey(tx *Transaction) ([]byte, error) {
 }
 
 type FrontierSigner struct{}
+
+func (s FrontierSigner) Equal(s2 Signer) bool {
+	_, ok := s2.(FrontierSigner)
+	return ok
+}
 
 // WithSignature returns a new transaction with the given snature.
 // This snature needs to be formatted as described in the yellow paper (v+27).

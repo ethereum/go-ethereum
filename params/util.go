@@ -37,4 +37,7 @@ var (
 
 	TestNetSpuriousDragon = big.NewInt(3000000)
 	MainNetSpuriousDragon = big.NewInt(3000000)
+
+	TestNetChainID = big.NewInt(2) // Test net default chain ID
+	MainNetChainID = big.NewInt(1) // main net default chain ID
 )
