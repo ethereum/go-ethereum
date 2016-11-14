@@ -29,32 +29,34 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
-func RunStateTestWithReader(ruleSet RuleSet, r io.Reader, skipTests []string) error {
+func RunStateTestWithReader(chainConfig *params.ChainConfig, r io.Reader, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	if err := readJson(r, &tests); err != nil {
 		return err
 	}
 
-	if err := runStateTests(ruleSet, tests, skipTests); err != nil {
+	if err := runStateTests(chainConfig, tests, skipTests); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func RunStateTest(ruleSet RuleSet, p string, skipTests []string) error {
+func RunStateTest(chainConfig *params.ChainConfig, p string, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	if err := readJsonFile(p, &tests); err != nil {
 		return err
 	}
 
-	if err := runStateTests(ruleSet, tests, skipTests); err != nil {
+	if err := runStateTests(chainConfig, tests, skipTests); err != nil {
 		return err
 	}
 
@@ -62,7 +64,7 @@ func RunStateTest(ruleSet RuleSet, p string, skipTests []string) error {
 
 }
 
-func BenchStateTest(ruleSet RuleSet, p string, conf bconf, b *testing.B) error {
+func BenchStateTest(chainConfig *params.ChainConfig, p string, conf bconf, b *testing.B) error {
 	tests := make(map[string]VmTest)
 	if err := readJsonFile(p, &tests); err != nil {
 		return err
@@ -87,35 +89,35 @@ func BenchStateTest(ruleSet RuleSet, p string, conf bconf, b *testing.B) error {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchStateTest(ruleSet, test, env, b)
+		benchStateTest(chainConfig, test, env, b)
 	}
 
 	return nil
 }
 
-func benchStateTest(ruleSet RuleSet, test VmTest, env map[string]string, b *testing.B) {
+func benchStateTest(chainConfig *params.ChainConfig, test VmTest, env map[string]string, b *testing.B) {
 	b.StopTimer()
 	db, _ := ethdb.NewMemDatabase()
 	statedb := makePreState(db, test.Pre)
 	b.StartTimer()
 
-	RunState(ruleSet, statedb, env, test.Exec)
+	RunState(chainConfig, statedb, env, test.Exec)
 }
 
-func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string) error {
+func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "callcodecallcode_11" */ {
+		if skipTest[name] /*|| name != "NonZeroValue_CALL_ToEmpty"*/ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
 
 		//fmt.Println("StateTest:", name)
-		if err := runStateTest(ruleSet, test); err != nil {
+		if err := runStateTest(chainConfig, test); err != nil {
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
@@ -126,7 +128,7 @@ func runStateTests(ruleSet RuleSet, tests map[string]VmTest, skipTests []string)
 
 }
 
-func runStateTest(ruleSet RuleSet, test VmTest) error {
+func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 	db, _ := ethdb.NewMemDatabase()
 	statedb := makePreState(db, test.Pre)
 
@@ -150,7 +152,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 		logs vm.Logs
 	)
 
-	ret, logs, _, _ = RunState(ruleSet, statedb, env, test.Transaction)
+	ret, logs, _, _ = RunState(chainConfig, statedb, env, test.Transaction)
 
 	// Compare expected and actual return
 	var rexp []byte
@@ -189,7 +191,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 		}
 	}
 
-	root, _ := statedb.Commit()
+	root, _ := statedb.Commit(false)
 	if common.HexToHash(test.PostStateRoot) != root {
 		return fmt.Errorf("Post state root error. Expected: %s have: %x", test.PostStateRoot, root)
 	}
@@ -204,7 +206,7 @@ func runStateTest(ruleSet RuleSet, test VmTest) error {
 	return nil
 }
 
-func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
@@ -220,19 +222,24 @@ func RunState(ruleSet RuleSet, statedb *state.StateDB, env, tx map[string]string
 	}
 	// Set pre compiled contracts
 	vm.Precompiled = vm.PrecompiledContracts()
-	snapshot := statedb.Snapshot()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	key, _ := hex.DecodeString(tx["secretKey"])
 	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
-	message := NewMessage(addr, to, data, value, gas, price, nonce)
-	vmenv := NewEnvFromMap(ruleSet, statedb, env, tx)
+	message := types.NewMessage(addr, to, nonce, value, gas, price, data)
+	vmenv := NewEnvFromMap(chainConfig, statedb, env, tx)
 	vmenv.origin = addr
+
+	root, _ := statedb.Commit(false)
+	statedb.Reset(root)
+
+	snapshot := statedb.Snapshot()
+
 	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.RevertToSnapshot(snapshot)
 	}
-	statedb.Commit()
+	statedb.Commit(chainConfig.IsEIP158(vmenv.BlockNumber()))
 
 	return ret, vmenv.state.Logs(), vmenv.Gas, err
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
 )
@@ -38,6 +39,14 @@ import (
 type EthApiBackend struct {
 	eth *Ethereum
 	gpo *gasprice.GasPriceOracle
+}
+
+func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
+	return b.eth.chainConfig
+}
+
+func (b *EthApiBackend) CurrentBlock() *types.Block {
+	return b.eth.blockchain.CurrentBlock()
 }
 
 func (b *EthApiBackend) SetHead(number uint64) {
@@ -99,11 +108,10 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 
 func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
 	statedb := state.(EthApiState).state
-	addr, _ := msg.From()
-	from := statedb.GetOrNewStateObject(addr)
+	from := statedb.GetOrNewStateObject(msg.From())
 	from.SetBalance(common.MaxBig)
 	vmError := func() error { return nil }
-	return core.NewEnv(statedb, b.eth.chainConfig, b.eth.blockchain, msg, header, b.eth.chainConfig.VmConfig), vmError, nil
+	return core.NewEnv(statedb, b.eth.chainConfig, b.eth.blockchain, msg, header, vm.Config{}), vmError, nil
 }
 
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {

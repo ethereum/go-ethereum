@@ -74,7 +74,7 @@ func txPoolTestChainGen(i int, block *core.BlockGen) {
 
 func TestTxPool(t *testing.T) {
 	for i, _ := range testTx {
-		testTx[i], _ = types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		testTx[i], _ = types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(types.HomesteadSigner{}, testBankKey)
 	}
 
 	var (
@@ -87,7 +87,8 @@ func TestTxPool(t *testing.T) {
 	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux)
-	gchain, _ := core.GenerateChain(nil, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
+	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
+	gchain, _ := core.GenerateChain(chainConfig, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}

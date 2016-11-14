@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -60,7 +61,7 @@ func TestPowVerification(t *testing.T) {
 	var (
 		testdb, _ = ethdb.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
-		blocks, _ = GenerateChain(nil, genesis, testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -115,7 +116,7 @@ func testPowConcurrentVerification(t *testing.T, threads int) {
 	var (
 		testdb, _ = ethdb.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
-		blocks, _ = GenerateChain(nil, genesis, testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -186,7 +187,7 @@ func testPowConcurrentAbortion(t *testing.T, threads int) {
 	var (
 		testdb, _ = ethdb.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
-		blocks, _ = GenerateChain(nil, genesis, testdb, 1024, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 1024, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {

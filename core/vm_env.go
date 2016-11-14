@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // GetHashFn returns a function for which the VM env can query block hashes through
@@ -41,18 +42,18 @@ func GetHashFn(ref common.Hash, chain *BlockChain) func(n uint64) common.Hash {
 }
 
 type VMEnv struct {
-	chainConfig *ChainConfig   // Chain configuration
-	state       *state.StateDB // State to use for executing
-	evm         *vm.EVM        // The Ethereum Virtual Machine
-	depth       int            // Current execution depth
-	msg         Message        // Message appliod
+	chainConfig *params.ChainConfig // Chain configuration
+	state       *state.StateDB      // State to use for executing
+	evm         *vm.EVM             // The Ethereum Virtual Machine
+	depth       int                 // Current execution depth
+	msg         Message             // Message appliod
 
 	header    *types.Header            // Header information
 	chain     *BlockChain              // Blockchain handle
 	getHashFn func(uint64) common.Hash // getHashFn callback is used to retrieve block hashes
 }
 
-func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
+func NewEnv(state *state.StateDB, chainConfig *params.ChainConfig, chain *BlockChain, msg Message, header *types.Header, cfg vm.Config) *VMEnv {
 	env := &VMEnv{
 		chainConfig: chainConfig,
 		chain:       chain,
@@ -66,18 +67,18 @@ func NewEnv(state *state.StateDB, chainConfig *ChainConfig, chain *BlockChain, m
 	return env
 }
 
-func (self *VMEnv) RuleSet() vm.RuleSet      { return self.chainConfig }
-func (self *VMEnv) Vm() vm.Vm                { return self.evm }
-func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
-func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }
-func (self *VMEnv) Coinbase() common.Address { return self.header.Coinbase }
-func (self *VMEnv) Time() *big.Int           { return self.header.Time }
-func (self *VMEnv) Difficulty() *big.Int     { return self.header.Difficulty }
-func (self *VMEnv) GasLimit() *big.Int       { return self.header.GasLimit }
-func (self *VMEnv) Value() *big.Int          { return self.msg.Value() }
-func (self *VMEnv) Db() vm.Database          { return self.state }
-func (self *VMEnv) Depth() int               { return self.depth }
-func (self *VMEnv) SetDepth(i int)           { self.depth = i }
+func (self *VMEnv) ChainConfig() *params.ChainConfig { return self.chainConfig }
+func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
+func (self *VMEnv) Origin() common.Address           { return self.msg.From() }
+func (self *VMEnv) BlockNumber() *big.Int            { return self.header.Number }
+func (self *VMEnv) Coinbase() common.Address         { return self.header.Coinbase }
+func (self *VMEnv) Time() *big.Int                   { return self.header.Time }
+func (self *VMEnv) Difficulty() *big.Int             { return self.header.Difficulty }
+func (self *VMEnv) GasLimit() *big.Int               { return self.header.GasLimit }
+func (self *VMEnv) Value() *big.Int                  { return self.msg.Value() }
+func (self *VMEnv) Db() vm.Database                  { return self.state }
+func (self *VMEnv) Depth() int                       { return self.depth }
+func (self *VMEnv) SetDepth(i int)                   { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
 	return self.getHashFn(n)
 }

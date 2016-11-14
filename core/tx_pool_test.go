@@ -32,7 +32,7 @@ import (
 )
 
 func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx, _ := types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, big.NewInt(1), nil).SignECDSA(key)
+	tx, _ := types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, big.NewInt(1), nil).SignECDSA(types.HomesteadSigner{}, key)
 	return tx
 }
 
@@ -47,6 +47,10 @@ func setupTxPool() (*TxPool, *ecdsa.PrivateKey) {
 	return newPool, key
 }
 
+func deriveSender(tx *types.Transaction) (common.Address, error) {
+	return types.Sender(types.HomesteadSigner{}, tx)
+}
+
 func TestInvalidTransactions(t *testing.T) {
 	pool, key := setupTxPool()
 
@@ -55,7 +59,7 @@ func TestInvalidTransactions(t *testing.T) {
 		t.Error("expected", ErrNonExistentAccount)
 	}
 
-	from, _ := tx.From()
+	from, _ := deriveSender(tx)
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1))
 	if err := pool.Add(tx); err != ErrInsufficientFunds {
@@ -90,7 +94,7 @@ func TestInvalidTransactions(t *testing.T) {
 func TestTransactionQueue(t *testing.T) {
 	pool, key := setupTxPool()
 	tx := transaction(0, big.NewInt(100), key)
-	from, _ := tx.From()
+	from, _ := deriveSender(tx)
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1000))
 	pool.enqueueTx(tx.Hash(), tx)
@@ -101,7 +105,7 @@ func TestTransactionQueue(t *testing.T) {
 	}
 
 	tx = transaction(1, big.NewInt(100), key)
-	from, _ = tx.From()
+	from, _ = deriveSender(tx)
 	currentState.SetNonce(from, 2)
 	pool.enqueueTx(tx.Hash(), tx)
 	pool.promoteExecutables()
@@ -117,7 +121,7 @@ func TestTransactionQueue(t *testing.T) {
 	tx1 := transaction(0, big.NewInt(100), key)
 	tx2 := transaction(10, big.NewInt(100), key)
 	tx3 := transaction(11, big.NewInt(100), key)
-	from, _ = tx1.From()
+	from, _ = deriveSender(tx1)
 	currentState, _ = pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1000))
 	pool.enqueueTx(tx1.Hash(), tx1)
@@ -137,7 +141,7 @@ func TestTransactionQueue(t *testing.T) {
 func TestRemoveTx(t *testing.T) {
 	pool, key := setupTxPool()
 	tx := transaction(0, big.NewInt(100), key)
-	from, _ := tx.From()
+	from, _ := deriveSender(tx)
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1))
 
@@ -161,8 +165,8 @@ func TestRemoveTx(t *testing.T) {
 func TestNegativeValue(t *testing.T) {
 	pool, key := setupTxPool()
 
-	tx, _ := types.NewTransaction(0, common.Address{}, big.NewInt(-1), big.NewInt(100), big.NewInt(1), nil).SignECDSA(key)
-	from, _ := tx.From()
+	tx, _ := types.NewTransaction(0, common.Address{}, big.NewInt(-1), big.NewInt(100), big.NewInt(1), nil).SignECDSA(types.HomesteadSigner{}, key)
+	from, _ := deriveSender(tx)
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1))
 	if err := pool.Add(tx); err != ErrNegativeValue {
@@ -209,9 +213,10 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	}
 	resetState()
 
-	tx1, _ := types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(100000), big.NewInt(1), nil).SignECDSA(key)
-	tx2, _ := types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(1000000), big.NewInt(2), nil).SignECDSA(key)
-	tx3, _ := types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(1000000), big.NewInt(1), nil).SignECDSA(key)
+	signer := types.HomesteadSigner{}
+	tx1, _ := types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(100000), big.NewInt(1), nil).SignECDSA(signer, key)
+	tx2, _ := types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(1000000), big.NewInt(2), nil).SignECDSA(signer, key)
+	tx3, _ := types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(1000000), big.NewInt(1), nil).SignECDSA(signer, key)
 
 	// Add the first two transaction, ensure higher priced stays only
 	if err := pool.add(tx1); err != nil {
@@ -287,7 +292,7 @@ func TestNonceRecovery(t *testing.T) {
 func TestRemovedTxEvent(t *testing.T) {
 	pool, key := setupTxPool()
 	tx := transaction(0, big.NewInt(1000000), key)
-	from, _ := tx.From()
+	from, _ := deriveSender(tx)
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1000000000000))
 	pool.eventMux.Post(RemovedTransactionEvent{types.Transactions{tx}})
@@ -305,7 +310,7 @@ func TestRemovedTxEvent(t *testing.T) {
 func TestTransactionDropping(t *testing.T) {
 	// Create a test account and fund it
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000))
@@ -369,7 +374,7 @@ func TestTransactionDropping(t *testing.T) {
 func TestTransactionPostponing(t *testing.T) {
 	// Create a test account and fund it
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000))
@@ -443,7 +448,7 @@ func TestTransactionPostponing(t *testing.T) {
 func TestTransactionQueueAccountLimiting(t *testing.T) {
 	// Create a test account and fund it
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
@@ -531,7 +536,7 @@ func TestTransactionQueueTimeLimiting(t *testing.T) {
 
 	// Create a test account and fund it
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
@@ -555,7 +560,7 @@ func TestTransactionQueueTimeLimiting(t *testing.T) {
 func TestTransactionPendingLimiting(t *testing.T) {
 	// Create a test account and fund it
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
@@ -585,7 +590,7 @@ func TestTransactionPendingLimitingEquivalency(t *testing.T) { testTransactionLi
 func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	// Add a batch of transactions to a pool one by one
 	pool1, key1 := setupTxPool()
-	account1, _ := transaction(0, big.NewInt(0), key1).From()
+	account1, _ := deriveSender(transaction(0, big.NewInt(0), key1))
 	state1, _ := pool1.currentState()
 	state1.AddBalance(account1, big.NewInt(1000000))
 
@@ -596,7 +601,7 @@ func testTransactionLimitingEquivalency(t *testing.T, origin uint64) {
 	}
 	// Add a batch of transactions to a pool in one big batch
 	pool2, key2 := setupTxPool()
-	account2, _ := transaction(0, big.NewInt(0), key2).From()
+	account2, _ := deriveSender(transaction(0, big.NewInt(0), key2))
 	state2, _ := pool2.currentState()
 	state2.AddBalance(account2, big.NewInt(1000000))
 
@@ -717,7 +722,7 @@ func BenchmarkPendingDemotion10000(b *testing.B) { benchmarkPendingDemotion(b, 1
 func benchmarkPendingDemotion(b *testing.B, size int) {
 	// Add a batch of transactions to a pool one by one
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
 
@@ -741,7 +746,7 @@ func BenchmarkFuturePromotion10000(b *testing.B) { benchmarkFuturePromotion(b, 1
 func benchmarkFuturePromotion(b *testing.B, size int) {
 	// Add a batch of transactions to a pool one by one
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
 
@@ -760,7 +765,7 @@ func benchmarkFuturePromotion(b *testing.B, size int) {
 func BenchmarkPoolInsert(b *testing.B) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
 
@@ -783,7 +788,7 @@ func BenchmarkPoolBatchInsert10000(b *testing.B) { benchmarkPoolBatchInsert(b, 1
 func benchmarkPoolBatchInsert(b *testing.B, size int) {
 	// Generate a batch of transactions to enqueue into the pool
 	pool, key := setupTxPool()
-	account, _ := transaction(0, big.NewInt(0), key).From()
+	account, _ := deriveSender(transaction(0, big.NewInt(0), key))
 	state, _ := pool.currentState()
 	state.AddBalance(account, big.NewInt(1000000))
 
