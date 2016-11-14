@@ -248,7 +248,7 @@ func (pm *ProtocolManager) findServers() {
 			select {
 			case enode := <-enodes:
 				if !added[enode] {
-					fmt.Println("Found LES server:", enode)
+					glog.V(logger.Info).Infoln("Found LES server:", enode)
 					added[enode] = true
 					if node, err := discover.ParseNode(enode); err == nil {
 						pm.p2pServer.AddPeer(node)
@@ -279,9 +279,9 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	} else {
 		if pm.topicDisc != nil {
 			go func() {
-				fmt.Println("Starting topic register")
+				glog.V(logger.Debug).Infoln("Starting topic register")
 				pm.topicDisc.RegisterTopic(pm.lesTopic, pm.quitSync)
-				fmt.Println("Stopped topic register")
+				glog.V(logger.Debug).Infoln("Stopped topic register")
 			}()
 		}
 		go func() {
@@ -381,7 +381,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			select {
 			case announce := <-p.announceChn:
 				p.SendAnnounce(announce)
-				//fmt.Println("  BROADCAST sent")
 			case <-stop:
 				return
 			}
@@ -392,7 +391,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	for {
 		if err := pm.handleMsg(p); err != nil {
 			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
-			//fmt.Println("handleMsg err:", err)
 			return err
 		}
 	}
@@ -412,7 +410,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	var costs *requestCosts
 	var reqCnt, maxReqs int
 
-	//fmt.Println("MSG", msg.Code, msg.Size)
+	glog.V(logger.Debug).Infoln("msg:", msg.Code, msg.Size)
 	if rc, ok := p.fcCosts[msg.Code]; ok { // check if msg is a supported request type
 		costs = rc
 		if p.fcClient == nil {
@@ -441,21 +439,23 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	// Handle the message depending on its contents
 	switch msg.Code {
 	case StatusMsg:
-		glog.V(logger.Debug).Infof("LES: received StatusMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== StatusMsg from peer %v", p.id)
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
 	// Block header query, collect the requested headers and reply
 	case AnnounceMsg:
+		glog.V(logger.Debug).Infoln("<=== AnnounceMsg from peer %v:", p.id)
+
 		var req announceData
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		//fmt.Println("RECEIVED", req.Number, req.Hash, req.Td, req.ReorgDepth)
+		glog.V(logger.Detail).Infoln("AnnounceMsg:", req.Number, req.Hash, req.Td, req.ReorgDepth)
 		pm.fetcher.notify(p, &req)
 
 	case GetBlockHeadersMsg:
-		glog.V(logger.Debug).Infof("LES: received GetBlockHeadersMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== GetBlockHeadersMsg from peer %v", p.id)
 		// Decode the complex header query
 		var req struct {
 			ReqID uint64
@@ -540,7 +540,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		glog.V(logger.Debug).Infof("LES: received BlockHeadersMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== BlockHeadersMsg from peer %v", p.id)
 		// A batch of headers arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -560,7 +560,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetBlockBodiesMsg:
-		glog.V(logger.Debug).Infof("LES: received GetBlockBodiesMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<===  GetBlockBodiesMsg from peer %v", p.id)
 		// Decode the retrieval message
 		var req struct {
 			ReqID  uint64
@@ -597,7 +597,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		glog.V(logger.Debug).Infof("LES: received BlockBodiesMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<===  BlockBodiesMsg from peer %v", p.id)
 		// A batch of block bodies arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -614,7 +614,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetCodeMsg:
-		glog.V(logger.Debug).Infof("LES: received GetCodeMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<===  GetCodeMsg from peer %v", p.id)
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
@@ -658,7 +658,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		glog.V(logger.Debug).Infof("LES: received CodeMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== CodeMsg from peer %v", p.id)
 		// A batch of node state data arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -675,7 +675,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetReceiptsMsg:
-		glog.V(logger.Debug).Infof("LES: received GetReceiptsMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<===  GetReceiptsMsg from peer %v", p.id)
 		// Decode the retrieval message
 		var req struct {
 			ReqID  uint64
@@ -721,7 +721,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		glog.V(logger.Debug).Infof("LES: received ReceiptsMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== ReceiptsMsg from peer %v", p.id)
 		// A batch of receipts arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -738,7 +738,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetProofsMsg:
-		glog.V(logger.Debug).Infof("LES: received GetProofsMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== GetProofsMsg from peer %v", p.id)
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
@@ -788,7 +788,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		glog.V(logger.Debug).Infof("LES: received ProofsMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== ProofsMsg from peer %v", p.id)
 		// A batch of merkle proofs arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -805,7 +805,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetHeaderProofsMsg:
-		glog.V(logger.Debug).Infof("LES: received GetHeaderProofsMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== GetHeaderProofsMsg from peer %v", p.id)
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
@@ -849,7 +849,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		glog.V(logger.Debug).Infof("LES: received HeaderProofsMsg from peer %v", p.id)
+		glog.V(logger.Debug).Infof("<=== HeaderProofsMsg from peer %v", p.id)
 		var resp struct {
 			ReqID, BV uint64
 			Data      []ChtResp
@@ -882,7 +882,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
 
 	default:
-		glog.V(logger.Debug).Infof("LES: received unknown message with code %d from peer %v", msg.Code, p.id)
+		glog.V(logger.Debug).Infof("<=== unknown message with code %d from peer %v", msg.Code, p.id)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 
