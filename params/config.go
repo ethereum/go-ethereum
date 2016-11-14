@@ -22,6 +22,28 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// MainnetChainConfig is the chain parameters to run a node on the main network.
+var MainnetChainConfig = &ChainConfig{
+	HomesteadBlock: MainNetHomesteadBlock,
+	DAOForkBlock:   MainNetDAOForkBlock,
+	DAOForkSupport: true,
+	EIP150Block:    MainNetHomesteadGasRepriceBlock,
+	EIP150Hash:     MainNetHomesteadGasRepriceHash,
+	EIP155Block:    MainNetSpuriousDragon,
+	EIP158Block:    MainNetSpuriousDragon,
+}
+
+// TestnetChainConfig is the chain parameters to run a node on the test network.
+var TestnetChainConfig = &ChainConfig{
+	HomesteadBlock: TestNetHomesteadBlock,
+	DAOForkBlock:   TestNetDAOForkBlock,
+	DAOForkSupport: false,
+	EIP150Block:    TestNetHomesteadGasRepriceBlock,
+	EIP150Hash:     TestNetHomesteadGasRepriceHash,
+	EIP155Block:    TestNetSpuriousDragon,
+	EIP158Block:    TestNetSpuriousDragon,
+}
+
 // ChainConfig is the core config which determines the blockchain settings.
 //
 // ChainConfig is stored in the database on a per block basis. This means

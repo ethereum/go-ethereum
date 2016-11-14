@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains all the wrappers from the core package.
+// Contains all the wrappers from the params package.
 
 package geth
 
@@ -26,11 +26,13 @@ import (
 // MainnetChainConfig returns the chain configurations for the main Ethereum network.
 func MainnetChainConfig() *ChainConfig {
 	return &ChainConfig{
-		HomesteadBlock:           params.MainNetHomesteadBlock.Int64(),
-		DAOForkBlock:             params.MainNetDAOForkBlock.Int64(),
-		DAOForkSupport:           true,
-		HomesteadGasRepriceBlock: params.MainNetHomesteadGasRepriceBlock.Int64(),
-		HomesteadGasRepriceHash:  Hash{params.MainNetHomesteadGasRepriceHash},
+		HomesteadBlock: params.MainNetHomesteadBlock.Int64(),
+		DAOForkBlock:   params.MainNetDAOForkBlock.Int64(),
+		DAOForkSupport: true,
+		EIP150Block:    params.MainNetHomesteadGasRepriceBlock.Int64(),
+		EIP150Hash:     Hash{params.MainNetHomesteadGasRepriceHash},
+		EIP155Block:    params.MainNetSpuriousDragon.Int64(),
+		EIP158Block:    params.MainNetSpuriousDragon.Int64(),
 	}
 }
 
@@ -43,11 +45,13 @@ func MainnetGenesis() string {
 // TestnetChainConfig returns the chain configurations for the Ethereum test network.
 func TestnetChainConfig() *ChainConfig {
 	return &ChainConfig{
-		HomesteadBlock:           params.TestNetHomesteadBlock.Int64(),
-		DAOForkBlock:             0,
-		DAOForkSupport:           false,
-		HomesteadGasRepriceBlock: params.TestNetHomesteadGasRepriceBlock.Int64(),
-		HomesteadGasRepriceHash:  Hash{params.TestNetHomesteadGasRepriceHash},
+		HomesteadBlock: params.TestNetHomesteadBlock.Int64(),
+		DAOForkBlock:   0,
+		DAOForkSupport: false,
+		EIP150Block:    params.TestNetHomesteadGasRepriceBlock.Int64(),
+		EIP150Hash:     Hash{params.TestNetHomesteadGasRepriceHash},
+		EIP155Block:    params.TestNetSpuriousDragon.Int64(),
+		EIP158Block:    params.TestNetSpuriousDragon.Int64(),
 	}
 }
 
@@ -58,11 +62,13 @@ func TestnetGenesis() string {
 
 // ChainConfig is the core config which determines the blockchain settings.
 type ChainConfig struct {
-	HomesteadBlock           int64 // Homestead switch block
-	DAOForkBlock             int64 // TheDAO hard-fork switch block
-	DAOForkSupport           bool  // Whether the nodes supports or opposes the DAO hard-fork
-	HomesteadGasRepriceBlock int64 // Homestead gas reprice switch block
-	HomesteadGasRepriceHash  Hash  // Homestead gas reprice switch block hash
+	HomesteadBlock int64 // Homestead switch block
+	DAOForkBlock   int64 // TheDAO hard-fork switch block
+	DAOForkSupport bool  // Whether the nodes supports or opposes the DAO hard-fork
+	EIP150Block    int64 // Homestead gas reprice switch block
+	EIP150Hash     Hash  // Homestead gas reprice switch block hash
+	EIP155Block    int64 // Replay protection switch block
+	EIP158Block    int64 // Empty account pruning switch block
 }
 
 // NewChainConfig creates a new chain configuration that transitions immediately

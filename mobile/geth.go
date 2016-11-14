@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -33,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper/whisperv2"
 )
 
@@ -129,12 +129,14 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
 		ethConf := &eth.Config{
-			ChainConfig: &core.ChainConfig{
-				HomesteadBlock:           big.NewInt(config.EthereumChainConfig.HomesteadBlock),
-				DAOForkBlock:             big.NewInt(config.EthereumChainConfig.DAOForkBlock),
-				DAOForkSupport:           config.EthereumChainConfig.DAOForkSupport,
-				HomesteadGasRepriceBlock: big.NewInt(config.EthereumChainConfig.HomesteadGasRepriceBlock),
-				HomesteadGasRepriceHash:  config.EthereumChainConfig.HomesteadGasRepriceHash.hash,
+			ChainConfig: &params.ChainConfig{
+				HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
+				DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
+				DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
+				EIP150Block:    big.NewInt(config.EthereumChainConfig.EIP150Block),
+				EIP150Hash:     config.EthereumChainConfig.EIP150Hash.hash,
+				EIP155Block:    big.NewInt(config.EthereumChainConfig.EIP155Block),
+				EIP158Block:    big.NewInt(config.EthereumChainConfig.EIP158Block),
 			},
 			Genesis:                 config.EthereumGenesis,
 			LightMode:               true,

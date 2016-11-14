@@ -139,11 +139,11 @@ func (tx *Transaction) GetValue() *BigInt    { return &BigInt{tx.tx.Value()} }
 func (tx *Transaction) GetNonce() int64      { return int64(tx.tx.Nonce()) }
 
 func (tx *Transaction) GetHash() *Hash    { return &Hash{tx.tx.Hash()} }
-func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash()} }
+func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash(types.HomesteadSigner{})} }
 func (tx *Transaction) GetCost() *BigInt  { return &BigInt{tx.tx.Cost()} }
 
 func (tx *Transaction) GetFrom() (*Address, error) {
-	from, err := tx.tx.From()
+	from, err := types.Sender(types.HomesteadSigner{}, tx.tx)
 	return &Address{from}, err
 }
 
@@ -155,7 +155,7 @@ func (tx *Transaction) GetTo() *Address {
 }
 
 func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
-	t, err := tx.tx.WithSignature(sig)
+	t, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
 	return &Transaction{t}, err
 }
 

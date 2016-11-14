@@ -39,7 +39,7 @@ type signer struct {
 }
 
 func (s *signer) Sign(addr *Address, tx *Transaction) (*Transaction, error) {
-	sig, err := s.sign(addr.address, tx.tx)
+	sig, err := s.sign(types.HomesteadSigner{}, addr.address, tx.tx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (opts *TransactOpts) GetGasLimit() int64   { return opts.opts.GasLimit.Int6
 func (opts *TransactOpts) SetFrom(from *Address) { opts.opts.From = from.address }
 func (opts *TransactOpts) SetNonce(nonce int64)  { opts.opts.Nonce = big.NewInt(nonce) }
 func (opts *TransactOpts) SetSigner(s Signer) {
-	opts.opts.Signer = func(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	opts.opts.Signer = func(signer types.Signer, addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 		sig, err := s.Sign(&Address{addr}, &Transaction{tx})
 		if err != nil {
 			return nil, err
