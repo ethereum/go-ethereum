@@ -79,7 +79,7 @@ func (n *BlockNonce) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// Header represents Ethereum block headers.
+// Header represents a block header in the Ethereum blockchain.
 type Header struct {
 	ParentHash  common.Hash    // Hash to the previous block
 	UncleHash   common.Hash    // Uncles of this block
@@ -214,7 +214,7 @@ type Body struct {
 	Uncles       []*Header
 }
 
-// Block represents a block in the Ethereum blockchain.
+// Block represents an entire block in the Ethereum blockchain.
 type Block struct {
 	header       *Header
 	uncles       []*Header
