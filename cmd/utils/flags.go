@@ -488,9 +488,9 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	// Return pre-configured nodes if none were manually requested
 	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
 		if ctx.GlobalBool(TestNetFlag.Name) {
-			return TestnetBootnodes
+			return params.TestnetBootnodes
 		}
-		return MainnetBootnodes
+		return params.MainnetBootnodes
 	}
 	// Otherwise parse and use the CLI bootstrap nodes
 	bootnodes := []*discover.Node{}
@@ -511,7 +511,7 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	// Return pre-configured nodes if none were manually requested
 	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
-		return DiscoveryV5Bootnodes
+		return params.DiscoveryV5Bootnodes
 	}
 	// Otherwise parse and use the CLI bootstrap nodes
 	bootnodes := []*discv5.Node{}

@@ -20,6 +20,7 @@ package geth
 
 import (
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -75,4 +76,14 @@ type ChainConfig struct {
 // to homestead and has no notion of the DAO fork (ideal for a private network).
 func NewChainConfig() *ChainConfig {
 	return new(ChainConfig)
+}
+
+// FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
+// by the foundation running the V5 discovery protocol.
+func FoundationBootnodes() *Enodes {
+	nodes := &Enodes{nodes: make([]*discv5.Node, len(params.DiscoveryV5Bootnodes))}
+	for i, node := range params.DiscoveryV5Bootnodes {
+		nodes.nodes[i] = node
+	}
+	return nodes
 }

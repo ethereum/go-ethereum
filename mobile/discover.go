@@ -22,19 +22,8 @@ package geth
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 )
-
-// FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
-// by the foundation running the V5 discovery protocol.
-func FoundationBootnodes() *Enodes {
-	nodes := &Enodes{nodes: make([]*discv5.Node, len(utils.DiscoveryV5Bootnodes))}
-	for i, node := range utils.DiscoveryV5Bootnodes {
-		nodes.nodes[i] = node
-	}
-	return nodes
-}
 
 // Enode represents a host on the network.
 type Enode struct {
