@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/hashicorp/golang-lru"
 	"golang.org/x/net/context"
@@ -41,7 +42,7 @@ var (
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.
 func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) []*types.Header {
-	blocks, _ := core.GenerateChain(nil, types.NewBlockWithHeader(parent), db, n, func(i int, b *core.BlockGen) {
+	blocks, _ := core.GenerateChain(params.TestChainConfig, types.NewBlockWithHeader(parent), db, n, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})
 	headers := make([]*types.Header, len(blocks))
@@ -51,8 +52,8 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 	return headers
 }
 
-func testChainConfig() *core.ChainConfig {
-	return &core.ChainConfig{HomesteadBlock: big.NewInt(0)}
+func testChainConfig() *params.ChainConfig {
+	return &params.ChainConfig{HomesteadBlock: big.NewInt(0)}
 }
 
 // newCanonical creates a chain database, and injects a deterministic canonical

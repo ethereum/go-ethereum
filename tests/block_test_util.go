@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -170,7 +171,7 @@ func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *Blo
 	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
 	core.WriteHeadBlockHash(db, test.Genesis.Hash())
 	evmux := new(event.TypeMux)
-	config := &core.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true, HomesteadGasRepriceBlock: gasPriceFork}
+	config := &params.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true, EIP150Block: gasPriceFork}
 	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux)
 	if err != nil {
 		return err
@@ -228,7 +229,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 		}
 	}
 
-	root, err := statedb.Commit()
+	root, err := statedb.Commit(false)
 	if err != nil {
 		return nil, fmt.Errorf("error writing state: %v", err)
 	}

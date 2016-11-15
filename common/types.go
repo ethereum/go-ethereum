@@ -35,7 +35,10 @@ const (
 var hashJsonLengthErr = errors.New("common: unmarshalJSON failed: hash must be exactly 32 bytes")
 
 type (
-	Hash    [HashLength]byte
+	// Hash represents the 32 byte Keccak256 hash of arbitrary data.
+	Hash [HashLength]byte
+
+	// Address represents the 20 byte address of an Ethereum account.
 	Address [AddressLength]byte
 )
 

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -83,7 +84,7 @@ type stateFn func() (*state.StateDB, error)
 // current state) and future transactions. Transactions move between those
 // two states over time as they are received and processed.
 type TxPool struct {
-	config       *ChainConfig
+	config       *params.ChainConfig
 	currentState stateFn // The state function which will allow us to do some pre checks
 	pendingState *state.ManagedState
 	gasLimit     func() *big.Int // The current gas limit function callback
@@ -91,6 +92,7 @@ type TxPool struct {
 	eventMux     *event.TypeMux
 	events       event.Subscription
 	localTx      *txSet
+	signer       types.Signer
 	mu           sync.RWMutex
 
 	pending map[common.Address]*txList         // All currently processable transactions
@@ -104,9 +106,10 @@ type TxPool struct {
 	homestead bool
 }
 
-func NewTxPool(config *ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
 	pool := &TxPool{
 		config:       config,
+		signer:       types.NewEIP155Signer(config.ChainId),
 		pending:      make(map[common.Address]*txList),
 		queue:        make(map[common.Address]*txList),
 		all:          make(map[common.Hash]*types.Transaction),
@@ -138,8 +141,10 @@ func (pool *TxPool) eventLoop() {
 		switch ev := ev.Data.(type) {
 		case ChainHeadEvent:
 			pool.mu.Lock()
-			if ev.Block != nil && pool.config.IsHomestead(ev.Block.Number()) {
-				pool.homestead = true
+			if ev.Block != nil {
+				if pool.config.IsHomestead(ev.Block.Number()) {
+					pool.homestead = true
+				}
 			}
 
 			pool.resetState()
@@ -271,7 +276,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return err
 	}
 
-	from, err := tx.From()
+	from, err := types.Sender(pool.signer, tx)
 	if err != nil {
 		return ErrInvalidSender
 	}
@@ -306,7 +311,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrInsufficientFunds
 	}
 
-	intrGas := IntrinsicGas(tx.Data(), MessageCreatesContract(tx), pool.homestead)
+	intrGas := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 	if tx.Gas().Cmp(intrGas) < 0 {
 		return ErrIntrinsicGas
 	}
@@ -335,7 +340,7 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 		if to := tx.To(); to != nil {
 			rcpt = common.Bytes2Hex(to[:4])
 		}
-		from, _ := tx.From() // from already verified during tx validation
+		from, _ := types.Sender(pool.signer, tx) // from already verified during tx validation
 		glog.Infof("(t) 0x%x => %s (%v) %x\n", from[:4], rcpt, tx.Value, hash)
 	}
 	return nil
@@ -346,7 +351,7 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 	// Try to insert the transaction into the future queue
-	from, _ := tx.From() // already validated
+	from, _ := types.Sender(pool.signer, tx) // already validated
 	if pool.queue[from] == nil {
 		pool.queue[from] = newTxList(false)
 	}
@@ -458,7 +463,7 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 	if !ok {
 		return
 	}
-	addr, _ := tx.From() // already validated during insertion
+	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
 
 	// Remove it from the list of known transactions
 	delete(pool.all, hash)

@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -47,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -64,7 +64,7 @@ var (
 )
 
 type Config struct {
-	ChainConfig *core.ChainConfig // chain configuration
+	ChainConfig *params.ChainConfig // chain configuration
 
 	NetworkId  int    // Network ID to use for selecting peers to connect to
 	Genesis    string // Genesis JSON to seed the chain database with
@@ -112,7 +112,7 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	chainConfig *core.ChainConfig
+	chainConfig *params.ChainConfig
 	// Channel for shutting down the service
 	shutdownChan  chan bool // Channel for shutting down the ethereum
 	stopDbUpgrade func()    // stop chain db sequential key upgrade
@@ -217,10 +217,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	core.WriteChainConfig(chainDb, genesis.Hash(), config.ChainConfig)
 
 	eth.chainConfig = config.ChainConfig
-	eth.chainConfig.VmConfig = vm.Config{
-		EnableJit: config.EnableJit,
-		ForceJit:  config.ForceJit,
-	}
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux())
 	if err != nil {

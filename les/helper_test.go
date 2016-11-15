@@ -73,20 +73,22 @@ contract test {
 */
 
 func testChainGen(i int, block *core.BlockGen) {
+	signer := types.HomesteadSigner{}
+
 	switch i {
 	case 0:
 		// In block 1, the test bank sends account #1 some ether.
-		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
 		block.AddTx(tx)
 	case 1:
 		// In block 2, the test bank sends some more ether to account #1.
 		// acc1Addr passes it on to account #2.
 		// acc1Addr creates a test contract.
-		tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(testBankKey)
+		tx1, _ := types.NewTransaction(block.TxNonce(testBankAddress), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
 		nonce := block.TxNonce(acc1Addr)
-		tx2, _ := types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(acc1Key)
+		tx2, _ := types.NewTransaction(nonce, acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, acc1Key)
 		nonce++
-		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(200000), big.NewInt(0), testContractCode).SignECDSA(acc1Key)
+		tx3, _ := types.NewContractCreation(nonce, big.NewInt(0), big.NewInt(200000), big.NewInt(0), testContractCode).SignECDSA(signer, acc1Key)
 		testContractAddr = crypto.CreateAddress(acc1Addr, nonce)
 		block.AddTx(tx1)
 		block.AddTx(tx2)
@@ -96,7 +98,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		block.SetCoinbase(acc2Addr)
 		block.SetExtra([]byte("yeehaw"))
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001")
-		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(testBankKey)
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(signer, testBankKey)
 		block.AddTx(tx)
 	case 3:
 		// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
@@ -107,7 +109,7 @@ func testChainGen(i int, block *core.BlockGen) {
 		b3.Extra = []byte("foo")
 		block.AddUncle(b3)
 		data := common.Hex2Bytes("C16431B900000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002")
-		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(testBankKey)
+		tx, _ := types.NewTransaction(block.TxNonce(testBankAddress), testContractAddr, big.NewInt(0), big.NewInt(100000), nil, data).SignECDSA(signer, testBankKey)
 		block.AddTx(tx)
 	}
 }
@@ -131,7 +133,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		pow         = new(core.FakePow)
 		db, _       = ethdb.NewMemDatabase()
 		genesis     = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
-		chainConfig = &core.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
+		chainConfig = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
 		odr         *LesOdr
 		chain       BlockChain
 	)
@@ -141,7 +143,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain, _ = light.NewLightChain(odr, chainConfig, pow, evmux)
 	} else {
 		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux)
-		gchain, _ := core.GenerateChain(nil, genesis, db, blocks, generator)
+		gchain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
 		}
@@ -214,7 +216,7 @@ func (p *testTxPool) GetTransactions() types.Transactions {
 // newTestTransaction create a new dummy transaction.
 func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
 	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = tx.SignECDSA(from)
+	tx, _ = tx.SignECDSA(types.HomesteadSigner{}, from)
 
 	return tx
 }

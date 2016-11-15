@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 const maxRun = 1000
@@ -172,7 +173,9 @@ func NewEnv(config *Config) *Env {
 	return env
 }
 
-func (self *Env) RuleSet() RuleSet       { return ruleSet{new(big.Int)} }
+func (self *Env) ChainConfig() *params.ChainConfig {
+	return params.TestChainConfig
+}
 func (self *Env) Vm() Vm                 { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }

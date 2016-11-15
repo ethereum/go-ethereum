@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
@@ -71,7 +72,7 @@ type LightChain struct {
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *core.ChainConfig, pow pow.PoW, mux *event.TypeMux) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -107,8 +108,8 @@ func NewLightChain(odr OdrBackend, config *core.ChainConfig, pow pow.PoW, mux *e
 		// add trusted CHT
 		if config.DAOForkSupport {
 			WriteTrustedCht(bc.chainDb, TrustedCht{
-				Number: 612,
-				Root:   common.HexToHash("8c87a93e0ee531e2aca1b4460e4c201a60c19ffec4f5979262bf14ceeeff8471"),
+				Number: 637,
+				Root:   common.HexToHash("01e408d9b1942f05dba1a879f3eaafe34d219edaeb8223fecf1244cc023d3e23"),
 			})
 		} else {
 			WriteTrustedCht(bc.chainDb, TrustedCht{
@@ -121,8 +122,8 @@ func NewLightChain(odr OdrBackend, config *core.ChainConfig, pow pow.PoW, mux *e
 		if bc.genesisBlock.Hash() == (common.Hash{12, 215, 134, 162, 66, 93, 22, 241, 82, 198, 88, 49, 108, 66, 62, 108, 225, 24, 30, 21, 195, 41, 88, 38, 215, 201, 144, 76, 186, 156, 227, 3}) {
 			// add trusted CHT for testnet
 			WriteTrustedCht(bc.chainDb, TrustedCht{
-				Number: 436,
-				Root:   common.HexToHash("97a12df5d04d72bde4b4b840e1018e4f08aee34b7d0bf2c5dbfc052b86fe7439"),
+				Number: 452,
+				Root:   common.HexToHash("511da2c88e32b14cf4a4e62f7fcbb297139faebc260a4ab5eb43cce6edcba324"),
 			})
 			glog.V(logger.Info).Infoln("Added trusted CHT for testnet")
 		} else {

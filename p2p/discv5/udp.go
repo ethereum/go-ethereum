@@ -336,14 +336,17 @@ func (t *udp) sendTopicNodes(remote *Node, queryHash common.Hash, nodes []*Node)
 }
 
 func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req interface{}) (hash []byte, err error) {
+	//fmt.Println("sendPacket", nodeEvent(ptype), toaddr.String(), toid.String())
 	packet, hash, err := encodePacket(t.priv, ptype, req)
 	if err != nil {
+		//fmt.Println(err)
 		return hash, err
 	}
 	glog.V(logger.Detail).Infof(">>> %v to %x@%v\n", nodeEvent(ptype), toid[:8], toaddr)
 	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
 		glog.V(logger.Detail).Infoln("UDP send failed:", err)
 	}
+	//fmt.Println(err)
 	return hash, err
 }
 
@@ -406,6 +409,7 @@ func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	pkt := ingressPacket{remoteAddr: from}
 	if err := decodePacket(buf, &pkt); err != nil {
 		glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
+		//fmt.Println("bad packet", err)
 		return err
 	}
 	t.net.reqReadPacket(pkt)

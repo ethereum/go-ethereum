@@ -213,6 +213,13 @@ func (self *StateDB) Exist(addr common.Address) bool {
 	return self.GetStateObject(addr) != nil
 }
 
+// Empty returns whether the state object is either non-existant
+// or empty according to the EIP161 specification (balance = nonce = code = 0)
+func (self *StateDB) Empty(addr common.Address) bool {
+	so := self.GetStateObject(addr)
+	return so == nil || so.empty()
+}
+
 func (self *StateDB) GetAccount(addr common.Address) vm.Account {
 	return self.GetStateObject(addr)
 }
@@ -516,10 +523,10 @@ func (self *StateDB) GetRefund() *big.Int {
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot() common.Hash {
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	for addr, _ := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
-		if stateObject.suicided {
+		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
 			s.deleteStateObject(stateObject)
 		} else {
 			stateObject.updateRoot(s.db)
@@ -553,17 +560,17 @@ func (s *StateDB) DeleteSuicides() {
 }
 
 // Commit commits all state changes to the database.
-func (s *StateDB) Commit() (root common.Hash, err error) {
-	root, batch := s.CommitBatch()
+func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
+	root, batch := s.CommitBatch(deleteEmptyObjects)
 	return root, batch.Write()
 }
 
 // CommitBatch commits all state changes to a write batch but does not
 // execute the batch. It is used to validate state changes against
 // the root hash stored in a block.
-func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
+func (s *StateDB) CommitBatch(deleteEmptyObjects bool) (root common.Hash, batch ethdb.Batch) {
 	batch = s.db.NewBatch()
-	root, _ = s.commit(batch)
+	root, _ = s.commit(batch, deleteEmptyObjects)
 
 	glog.V(logger.Debug).Infof("Trie cache stats: %d misses, %d unloads", trie.CacheMisses(), trie.CacheUnloads())
 	return root, batch
@@ -575,16 +582,18 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.refund = new(big.Int)
 }
 
-func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) {
+func (s *StateDB) commit(dbw trie.DatabaseWriter, deleteEmptyObjects bool) (root common.Hash, err error) {
 	defer s.clearJournalAndRefund()
 
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
-		if stateObject.suicided {
+		_, isDirty := s.stateObjectsDirty[addr]
+		switch {
+		case stateObject.suicided || (isDirty && deleteEmptyObjects && stateObject.empty()):
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
 			s.deleteStateObject(stateObject)
-		} else if _, ok := s.stateObjectsDirty[addr]; ok {
+		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
 				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {

@@ -154,21 +154,22 @@ func (n *Node) Start() error {
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
 	n.serverConfig = p2p.Config{
-		PrivateKey:      n.config.NodeKey(),
-		Name:            n.config.NodeName(),
-		Discovery:       !n.config.NoDiscovery,
-		DiscoveryV5:     n.config.DiscoveryV5,
-		BootstrapNodes:  n.config.BootstrapNodes,
-		StaticNodes:     n.config.StaticNodes(),
-		TrustedNodes:    n.config.TrusterNodes(),
-		NodeDatabase:    n.config.NodeDB(),
-		ListenAddr:      n.config.ListenAddr,
-		ListenAddrV5:    n.config.ListenAddrV5,
-		NAT:             n.config.NAT,
-		Dialer:          n.config.Dialer,
-		NoDial:          n.config.NoDial,
-		MaxPeers:        n.config.MaxPeers,
-		MaxPendingPeers: n.config.MaxPendingPeers,
+		PrivateKey:       n.config.NodeKey(),
+		Name:             n.config.NodeName(),
+		Discovery:        !n.config.NoDiscovery,
+		DiscoveryV5:      n.config.DiscoveryV5,
+		DiscoveryV5Addr:  n.config.DiscoveryV5Addr,
+		BootstrapNodes:   n.config.BootstrapNodes,
+		BootstrapNodesV5: n.config.BootstrapNodesV5,
+		StaticNodes:      n.config.StaticNodes(),
+		TrustedNodes:     n.config.TrusterNodes(),
+		NodeDatabase:     n.config.NodeDB(),
+		ListenAddr:       n.config.ListenAddr,
+		NAT:              n.config.NAT,
+		Dialer:           n.config.Dialer,
+		NoDial:           n.config.NoDial,
+		MaxPeers:         n.config.MaxPeers,
+		MaxPendingPeers:  n.config.MaxPendingPeers,
 	}
 	running := &p2p.Server{Config: n.serverConfig}
 	glog.V(logger.Info).Infoln("instance:", n.serverConfig.Name)

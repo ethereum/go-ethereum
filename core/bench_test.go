@@ -83,7 +83,7 @@ func genValueTx(nbytes int) func(int, *BlockGen) {
 		toaddr := common.Address{}
 		data := make([]byte, nbytes)
 		gas := IntrinsicGas(data, false, false)
-		tx, _ := types.NewTransaction(gen.TxNonce(benchRootAddr), toaddr, big.NewInt(1), gas, nil, data).SignECDSA(benchRootKey)
+		tx, _ := types.NewTransaction(gen.TxNonce(benchRootAddr), toaddr, big.NewInt(1), gas, nil, data).SignECDSA(types.HomesteadSigner{}, benchRootKey)
 		gen.AddTx(tx)
 	}
 }
@@ -123,7 +123,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 				nil,
 				nil,
 			)
-			tx, _ = tx.SignECDSA(ringKeys[from])
+			tx, _ = tx.SignECDSA(types.HomesteadSigner{}, ringKeys[from])
 			gen.AddTx(tx)
 			from = to
 		}
@@ -163,12 +163,12 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
 	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{benchRootAddr, benchRootFunds})
-	chain, _ := GenerateChain(nil, genesis, db, b.N, gen)
+	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, b.N, gen)
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewBlockChain(db, &ChainConfig{HomesteadBlock: new(big.Int)}, FakePow{}, evmux)
+	chainman, _ := NewBlockChain(db, &params.ChainConfig{HomesteadBlock: new(big.Int)}, FakePow{}, evmux)
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()

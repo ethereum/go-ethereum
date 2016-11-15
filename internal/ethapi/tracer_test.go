@@ -29,11 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type ruleSet struct{}
-
-func (self *ruleSet) IsHomestead(*big.Int) bool    { return true }
-func (*ruleSet) GasTable(*big.Int) params.GasTable { return params.GasTableHomesteadGasRepriceFork }
-
 type Env struct {
 	gasLimit *big.Int
 	depth    int
@@ -46,7 +41,9 @@ func NewEnv(config *vm.Config) *Env {
 	return env
 }
 
-func (self *Env) RuleSet() vm.RuleSet    { return &ruleSet{} }
+func (self *Env) ChainConfig() *params.ChainConfig {
+	return params.TestChainConfig
+}
 func (self *Env) Vm() vm.Vm              { return self.evm }
 func (self *Env) Origin() common.Address { return common.Address{} }
 func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }

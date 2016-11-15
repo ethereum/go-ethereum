@@ -32,11 +32,20 @@ import (
 	"golang.org/x/tools/imports"
 )
 
+// Lang is a target programming language selector to generate bindings for.
+type Lang int
+
+const (
+	LangGo Lang = iota
+	LangJava
+	LangObjC
+)
+
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, pkg string) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, pkg string, lang Lang) (string, error) {
 	// Process each individual contract requested binding
 	contracts := make(map[string]*tmplContract)
 
@@ -62,7 +71,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string) (string
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalized.Name = capitalise(original.Name)
+			normalized.Name = methodNormalizer[lang](original.Name)
 
 			normalized.Inputs = make([]abi.Argument, len(original.Inputs))
 			copy(normalized.Inputs, original.Inputs)
@@ -78,7 +87,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string) (string
 					normalized.Outputs[j].Name = capitalise(output.Name)
 				}
 			}
-			// Append the methos to the call or transact lists
+			// Append the methods to the call or transact lists
 			if original.Const {
 				calls[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original)}
 			} else {
@@ -87,7 +96,7 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string) (string
 		}
 		contracts[types[i]] = &tmplContract{
 			Type:        capitalise(types[i]),
-			InputABI:    strippedABI,
+			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
 			InputBin:    strings.TrimSpace(bytecodes[i]),
 			Constructor: evmABI.Constructor,
 			Calls:       calls,
@@ -102,24 +111,38 @@ func Bind(types []string, abis []string, bytecodes []string, pkg string) (string
 	buffer := new(bytes.Buffer)
 
 	funcs := map[string]interface{}{
-		"bindtype": bindType,
+		"bindtype":     bindType[lang],
+		"namedtype":    namedType[lang],
+		"capitalise":   capitalise,
+		"decapitalise": decapitalise,
 	}
-	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource))
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
 	}
-	// Pass the code through goimports to clean it up and double check
-	code, err := imports.Process("", buffer.Bytes(), nil)
-	if err != nil {
-		return "", fmt.Errorf("%v\n%s", err, buffer)
+	// For Go bindings pass the code through goimports to clean it up and double check
+	if lang == LangGo {
+		code, err := imports.Process("", buffer.Bytes(), nil)
+		if err != nil {
+			return "", fmt.Errorf("%v\n%s", err, buffer)
+		}
+		return string(code), nil
 	}
-	return string(code), nil
+	// For all others just return as is for now
+	return string(buffer.Bytes()), nil
 }
 
-// bindType converts a Solidity type to a Go one. Since there is no clear mapping
+// bindType is a set of type binders that convert Solidity types to some supported
+// programming language.
+var bindType = map[Lang]func(kind abi.Type) string{
+	LangGo:   bindTypeGo,
+	LangJava: bindTypeJava,
+}
+
+// bindTypeGo converts a Solidity type to a Go one. Since there is no clear mapping
 // from all Solidity types to Go ones (e.g. uint17), those that cannot be exactly
 // mapped will use an upscaled type (e.g. *big.Int).
-func bindType(kind abi.Type) string {
+func bindTypeGo(kind abi.Type) string {
 	stringKind := kind.String()
 
 	switch {
@@ -160,9 +183,135 @@ func bindType(kind abi.Type) string {
 	}
 }
 
+// bindTypeJava converts a Solidity type to a Java one. Since there is no clear mapping
+// from all Solidity types to Java ones (e.g. uint17), those that cannot be exactly
+// mapped will use an upscaled type (e.g. BigDecimal).
+func bindTypeJava(kind abi.Type) string {
+	stringKind := kind.String()
+
+	switch {
+	case strings.HasPrefix(stringKind, "address"):
+		parts := regexp.MustCompile("address(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 2 {
+			return stringKind
+		}
+		if parts[1] == "" {
+			return fmt.Sprintf("Address")
+		}
+		return fmt.Sprintf("Addresses")
+
+	case strings.HasPrefix(stringKind, "bytes"):
+		parts := regexp.MustCompile("bytes([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 3 {
+			return stringKind
+		}
+		if parts[2] != "" {
+			return "byte[][]"
+		}
+		return "byte[]"
+
+	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
+		parts := regexp.MustCompile("(u)?int([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 4 {
+			return stringKind
+		}
+		switch parts[2] {
+		case "8", "16", "32", "64":
+			if parts[1] == "" {
+				if parts[3] == "" {
+					return fmt.Sprintf("int%s", parts[2])
+				}
+				return fmt.Sprintf("int%s[]", parts[2])
+			}
+		}
+		if parts[3] == "" {
+			return fmt.Sprintf("BigInt")
+		}
+		return fmt.Sprintf("BigInts")
+
+	case strings.HasPrefix(stringKind, "bool"):
+		parts := regexp.MustCompile("bool(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 2 {
+			return stringKind
+		}
+		if parts[1] == "" {
+			return fmt.Sprintf("bool")
+		}
+		return fmt.Sprintf("bool[]")
+
+	case strings.HasPrefix(stringKind, "string"):
+		parts := regexp.MustCompile("string(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		if len(parts) != 2 {
+			return stringKind
+		}
+		if parts[1] == "" {
+			return fmt.Sprintf("String")
+		}
+		return fmt.Sprintf("String[]")
+
+	default:
+		return stringKind
+	}
+}
+
+// namedType is a set of functions that transform language specific types to
+// named versions that my be used inside method names.
+var namedType = map[Lang]func(string, abi.Type) string{
+	LangGo:   func(string, abi.Type) string { panic("this shouldn't be needed") },
+	LangJava: namedTypeJava,
+}
+
+// namedTypeJava converts some primitive data types to named variants that can
+// be used as parts of method names.
+func namedTypeJava(javaKind string, solKind abi.Type) string {
+	switch javaKind {
+	case "byte[]":
+		return "Binary"
+	case "byte[][]":
+		return "Binaries"
+	case "string":
+		return "String"
+	case "string[]":
+		return "Strings"
+	case "bool":
+		return "Bool"
+	case "bool[]":
+		return "Bools"
+	case "BigInt":
+		parts := regexp.MustCompile("(u)?int([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(solKind.String())
+		if len(parts) != 4 {
+			return javaKind
+		}
+		switch parts[2] {
+		case "8", "16", "32", "64":
+			if parts[3] == "" {
+				return capitalise(fmt.Sprintf("%sint%s", parts[1], parts[2]))
+			}
+			return capitalise(fmt.Sprintf("%sint%ss", parts[1], parts[2]))
+
+		default:
+			return javaKind
+		}
+	default:
+		return javaKind
+	}
+}
+
+// methodNormalizer is a name transformer that modifies Solidity method names to
+// conform to target language naming concentions.
+var methodNormalizer = map[Lang]func(string) string{
+	LangGo:   capitalise,
+	LangJava: decapitalise,
+}
+
 // capitalise makes the first character of a string upper case.
 func capitalise(input string) string {
 	return strings.ToUpper(input[:1]) + input[1:]
+}
+
+// decapitalise makes the first character of a string lower case.
+func decapitalise(input string) string {
+	return strings.ToLower(input[:1]) + input[1:]
 }
 
 // structured checks whether a method has enough information to return a proper

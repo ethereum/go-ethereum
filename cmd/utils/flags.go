@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
@@ -487,9 +488,9 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	// Return pre-configured nodes if none were manually requested
 	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
 		if ctx.GlobalBool(TestNetFlag.Name) {
-			return TestNetBootNodes
+			return params.TestnetBootnodes
 		}
-		return FrontierBootNodes
+		return params.MainnetBootnodes
 	}
 	// Otherwise parse and use the CLI bootstrap nodes
 	bootnodes := []*discover.Node{}
@@ -505,13 +506,36 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	return bootnodes
 }
 
+// MakeBootstrapNodesV5 creates a list of bootstrap nodes from the command line
+// flags, reverting to pre-configured ones if none have been specified.
+func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
+	// Return pre-configured nodes if none were manually requested
+	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
+		return params.DiscoveryV5Bootnodes
+	}
+	// Otherwise parse and use the CLI bootstrap nodes
+	bootnodes := []*discv5.Node{}
+
+	for _, url := range strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",") {
+		node, err := discv5.ParseNode(url)
+		if err != nil {
+			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			continue
+		}
+		bootnodes = append(bootnodes, node)
+	}
+	return bootnodes
+}
+
 // MakeListenAddress creates a TCP listening address string from set command
 // line flags.
 func MakeListenAddress(ctx *cli.Context) string {
 	return fmt.Sprintf(":%d", ctx.GlobalInt(ListenPortFlag.Name))
 }
 
-func MakeListenAddressV5(ctx *cli.Context) string {
+// MakeDiscoveryV5Address creates a UDP listening address string from set command
+// line flags for the V5 discovery protocol.
+func MakeDiscoveryV5Address(ctx *cli.Context) string {
 	return fmt.Sprintf(":%d", ctx.GlobalInt(ListenPortFlag.Name)+1)
 }
 
@@ -647,9 +671,10 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		UserIdent:         makeNodeUserIdent(ctx),
 		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name),
 		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0,
+		DiscoveryV5Addr:   MakeDiscoveryV5Address(ctx),
 		BootstrapNodes:    MakeBootstrapNodes(ctx),
+		BootstrapNodesV5:  MakeBootstrapNodesV5(ctx),
 		ListenAddr:        MakeListenAddress(ctx),
-		ListenAddrV5:      MakeListenAddressV5(ctx),
 		NAT:               MakeNAT(ctx),
 		MaxPeers:          ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:   ctx.GlobalInt(MaxPendingPeersFlag.Name),
@@ -801,7 +826,7 @@ func SetupNetwork(ctx *cli.Context) {
 }
 
 // MakeChainConfig reads the chain configuration from the database in ctx.Datadir.
-func MakeChainConfig(ctx *cli.Context, stack *node.Node) *core.ChainConfig {
+func MakeChainConfig(ctx *cli.Context, stack *node.Node) *params.ChainConfig {
 	db := MakeChainDatabase(ctx, stack)
 	defer db.Close()
 
@@ -809,9 +834,9 @@ func MakeChainConfig(ctx *cli.Context, stack *node.Node) *core.ChainConfig {
 }
 
 // MakeChainConfigFromDb reads the chain configuration from the given database.
-func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfig {
+func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainConfig {
 	// If the chain is already initialized, use any existing chain configs
-	config := new(core.ChainConfig)
+	config := new(params.ChainConfig)
 
 	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0)
 	if genesis != nil {
@@ -824,6 +849,10 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfi
 		default:
 			Fatalf("Could not make chain configuration: %v", err)
 		}
+	}
+	// set chain id in case it's zero.
+	if config.ChainId == nil {
+		config.ChainId = new(big.Int)
 	}
 	// Check whether we are allowed to set default config params or not:
 	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `geth init`)
@@ -849,21 +878,44 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfi
 			}
 			config.DAOForkSupport = true
 		}
-		if config.HomesteadGasRepriceBlock == nil {
+		if config.EIP150Block == nil {
 			if ctx.GlobalBool(TestNetFlag.Name) {
-				config.HomesteadGasRepriceBlock = params.TestNetHomesteadGasRepriceBlock
+				config.EIP150Block = params.TestNetHomesteadGasRepriceBlock
 			} else {
-				config.HomesteadGasRepriceBlock = params.MainNetHomesteadGasRepriceBlock
+				config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
 			}
 		}
-		if config.HomesteadGasRepriceHash == (common.Hash{}) {
+		if config.EIP150Hash == (common.Hash{}) {
 			if ctx.GlobalBool(TestNetFlag.Name) {
-				config.HomesteadGasRepriceHash = params.TestNetHomesteadGasRepriceHash
+				config.EIP150Hash = params.TestNetHomesteadGasRepriceHash
 			} else {
-				config.HomesteadGasRepriceHash = params.MainNetHomesteadGasRepriceHash
+				config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
 			}
 		}
+		if config.EIP155Block == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.EIP150Block = params.TestNetSpuriousDragon
+			} else {
+				config.EIP155Block = params.MainNetSpuriousDragon
+			}
+		}
+		if config.EIP158Block == nil {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.EIP158Block = params.TestNetSpuriousDragon
+			} else {
+				config.EIP158Block = params.MainNetSpuriousDragon
+			}
+		}
+		if config.ChainId.BitLen() == 0 {
+			if ctx.GlobalBool(TestNetFlag.Name) {
+				config.ChainId = params.TestNetChainID
+			} else {
+				config.ChainId = params.MainNetChainID
+			}
+		}
+		config.DAOForkSupport = true
 	}
+
 	// Force override any existing configs if explicitly requested
 	switch {
 	case ctx.GlobalBool(SupportDAOFork.Name):

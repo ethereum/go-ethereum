@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestMipmapUpgrade(t *testing.T) {
@@ -32,7 +33,7 @@ func TestMipmapUpgrade(t *testing.T) {
 	addr := common.BytesToAddress([]byte("jeff"))
 	genesis := core.WriteGenesisBlockForTesting(db)
 
-	chain, receipts := core.GenerateChain(nil, genesis, db, 10, func(i int, gen *core.BlockGen) {
+	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts
 		switch i {
 		case 1:

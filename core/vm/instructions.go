@@ -515,7 +515,7 @@ func opCreate(instr instruction, pc *uint64, env Environment, contract *Contract
 		input        = memory.Get(offset.Int64(), size.Int64())
 		gas          = new(big.Int).Set(contract.Gas)
 	)
-	if env.RuleSet().GasTable(env.BlockNumber()).CreateBySuicide != nil {
+	if env.ChainConfig().IsEIP150(env.BlockNumber()) {
 		gas.Div(gas, n64)
 		gas = gas.Sub(contract.Gas, gas)
 	}
@@ -526,7 +526,7 @@ func opCreate(instr instruction, pc *uint64, env Environment, contract *Contract
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if env.RuleSet().IsHomestead(env.BlockNumber()) && suberr == CodeStoreOutOfGasError {
+	if env.ChainConfig().IsHomestead(env.BlockNumber()) && suberr == CodeStoreOutOfGasError {
 		stack.push(new(big.Int))
 	} else if suberr != nil && suberr != CodeStoreOutOfGasError {
 		stack.push(new(big.Int))
