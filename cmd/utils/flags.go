@@ -894,7 +894,7 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 		}
 		if config.EIP155Block == nil {
 			if ctx.GlobalBool(TestNetFlag.Name) {
-				config.EIP150Block = params.TestNetSpuriousDragon
+				config.EIP155Block = params.TestNetSpuriousDragon
 			} else {
 				config.EIP155Block = params.MainNetSpuriousDragon
 			}
