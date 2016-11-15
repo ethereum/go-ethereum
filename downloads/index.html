@@ -319,6 +319,8 @@
             }
             if (date.length != 14) {
               date = new Date($($(blobs[i]).find('Last-Modified')[0]).text());
+            } else {
+              date = moment(date, "YYYYMMDDhhmmss").toDate();
             }
             var size = $($(blobs[i]).find('Content-Length')[0]).text();
 
