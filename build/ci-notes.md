@@ -37,7 +37,7 @@ We want to build go-ethereum with the most recent version of Go, irrespective of
 version that is available in the main Ubuntu repository. In order to make this possible,
 our PPA depends on the ~gophers/ubuntu/archive PPA. Our source package build-depends on
 golang-1.7, which is co-installable alongside the regular golang package. PPA dependencies
-can be edited at https://launchpad.net/%7Elp-fjl/+archive/ubuntu/geth-ci-testing/+edit-dependencies
+can be edited at https://launchpad.net/%7Eethereum/+archive/ubuntu/ethereum/+edit-dependencies
 
 ## Building Packages Locally (for testing)
 

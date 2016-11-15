@@ -34,7 +34,7 @@ matrix:
             - gcc-multilib
       script:
         # Build for the primary platforms that Trusty can manage
-        - go run build/ci.go debsrc -signer "Felix Lange (Geth CI Testing Key) <fjl@twurst.com>" -upload ppa:lp-fjl/geth-ci-testing
+        - go run build/ci.go debsrc -signer "Go Ethereum Linux Builder <geth-ci@ethereum.org>" -upload ppa:ethereum/ethereum
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
         - go run build/ci.go install -arch 386
