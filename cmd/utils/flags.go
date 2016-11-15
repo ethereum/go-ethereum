@@ -861,7 +861,6 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 		(genesis.Hash() == params.MainNetGenesisHash && !ctx.GlobalBool(TestNetFlag.Name)) ||
 		(genesis.Hash() == params.TestNetGenesisHash && ctx.GlobalBool(TestNetFlag.Name))
 
-	// Set any missing chainConfig fields due to them being unset or system upgrade
 	if defaults {
 		// Homestead fork
 		if ctx.GlobalBool(TestNetFlag.Name) {
@@ -896,7 +895,6 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 			config.ChainId = params.MainNetChainID
 		}
 	}
-
 	// Force override any existing configs if explicitly requested
 	switch {
 	case ctx.GlobalBool(SupportDAOFork.Name):

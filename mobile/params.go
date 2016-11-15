@@ -27,6 +27,7 @@ import (
 // MainnetChainConfig returns the chain configurations for the main Ethereum network.
 func MainnetChainConfig() *ChainConfig {
 	return &ChainConfig{
+		ChainID:        params.MainNetChainID.Int64(),
 		HomesteadBlock: params.MainNetHomesteadBlock.Int64(),
 		DAOForkBlock:   params.MainNetDAOForkBlock.Int64(),
 		DAOForkSupport: true,
@@ -46,9 +47,10 @@ func MainnetGenesis() string {
 // TestnetChainConfig returns the chain configurations for the Ethereum test network.
 func TestnetChainConfig() *ChainConfig {
 	return &ChainConfig{
+		ChainID:        params.TestNetChainID.Int64(),
 		HomesteadBlock: params.TestNetHomesteadBlock.Int64(),
 		DAOForkBlock:   0,
-		DAOForkSupport: false,
+		DAOForkSupport: true,
 		EIP150Block:    params.TestNetHomesteadGasRepriceBlock.Int64(),
 		EIP150Hash:     Hash{params.TestNetHomesteadGasRepriceHash},
 		EIP155Block:    params.TestNetSpuriousDragon.Int64(),
@@ -63,6 +65,7 @@ func TestnetGenesis() string {
 
 // ChainConfig is the core config which determines the blockchain settings.
 type ChainConfig struct {
+	ChainID        int64 // Chain ID for replay protection
 	HomesteadBlock int64 // Homestead switch block
 	DAOForkBlock   int64 // TheDAO hard-fork switch block
 	DAOForkSupport bool  // Whether the nodes supports or opposes the DAO hard-fork
