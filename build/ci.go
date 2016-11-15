@@ -672,8 +672,15 @@ func doAndroidArchive(cmdline []string) {
 	// Skip Maven deploy and Azure upload for PR builds
 	maybeSkipArchive(env)
 
+	// Sign and upload the archive to Azure
+	archive := "geth-" + archiveBasename("android", env) + ".aar"
+	os.Rename("geth.aar", archive)
+
+	if err := archiveUpload(archive, *upload, *signer); err != nil {
+		log.Fatal(err)
+	}
 	// Sign and upload all the artifacts to Maven Central
-	os.Rename("geth.aar", meta.Package+".aar")
+	os.Rename(archive, meta.Package+".aar")
 	if *signer != "" && *deploy != "" {
 		// Import the signing key into the local GPG instance
 		if b64key := os.Getenv(*signer); b64key != "" {
@@ -693,13 +700,6 @@ func doAndroidArchive(cmdline []string) {
 		build.MustRunCommand("mvn", "gpg:sign-and-deploy-file",
 			"-settings=build/mvn.settings", "-Durl="+repo, "-DrepositoryId=ossrh",
 			"-DpomFile="+meta.Package+".pom", "-Dfile="+meta.Package+".aar")
-	}
-	// Sign and upload the archive to Azure
-	archive := "geth-" + archiveBasename("android", env) + ".aar"
-	os.Rename(meta.Package+".aar", archive)
-
-	if err := archiveUpload(archive, *upload, *signer); err != nil {
-		log.Fatal(err)
 	}
 }
 
