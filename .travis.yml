@@ -83,6 +83,8 @@ matrix:
         # Build the iOS framework and upload it to CocoaPods and Azure
         - gem uninstall cocoapods -a
         - gem install cocoapods --pre
+        - xctool -version
+        - xcrun simctl list
         - travis_wait 30 go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
 install:
