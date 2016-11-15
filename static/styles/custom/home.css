@@ -1,21 +1,16 @@
-.jumbotron .mascot {
-  background-size: auto 300px;
-  background-repeat: no-repeat;
-  background-position: 0 -30px;
-  height: 280px;
+.jumbotron {
+  text-align: center;
+  padding: 20pt 0;
 }
 
 .jumbotron h1 {
   font-size: 56px;
   font-weight: bold;
   margin-top: 0;
-  margin-bottom: 12px;
 }
 
 .jumbotron h2 {
   font-size: 28px;
-  max-width: 500px;
-  margin: auto;
 }
 
 .mascot-mobile {
@@ -31,9 +26,6 @@
 }
 
 @media (min-width: 768px) {
-  .jumbotron .mascot {
-    background-image: url('../../images/mascot.png');
-  }
   .mascot-mobile {
     display: none;
   }
