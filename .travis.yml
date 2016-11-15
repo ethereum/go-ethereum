@@ -67,14 +67,10 @@ matrix:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
-        # Build the iOS framework and upload it to CocoaPods and Azure
-        - gem uninstall cocoapods -a
-        - gem install cocoapods --pre
-        - travis_wait 30 go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
-
         # Build the Android archive and upload it to Maven Central and Azure
         - brew update
-        - brew install android-sdk maven
+        - brew install android-sdk maven gpg
+        - alias gpg="gpg2"
         - export ANDROID_HOME=/usr/local/opt/android-sdk
 
         - mkdir -p $ANDROID_HOME/platforms
@@ -83,6 +79,11 @@ matrix:
 
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
         - mv -f $ANDROID_HOME/platforms $HOME/.android.platforms
+
+        # Build the iOS framework and upload it to CocoaPods and Azure
+        - gem uninstall cocoapods -a
+        - gem install cocoapods --pre
+        - travis_wait 30 go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
 install:
   - go get golang.org/x/tools/cmd/cover
