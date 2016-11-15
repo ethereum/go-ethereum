@@ -68,6 +68,7 @@ matrix:
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
+        - gem uninstall cocoapods -a
         - gem install cocoapods --pre
         - travis_wait 30 go run build/ci.go xcode -signer IOS_SIGNING_KEY -deploy trunk -upload gethstore/builds
 
