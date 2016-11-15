@@ -769,7 +769,7 @@ func SetupNetwork(ctx *cli.Context) {
 }
 
 // MustMakeChainConfig reads the chain configuration from the database in ctx.Datadir.
-func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
+func MustMakeChainConfig(ctx *cli.Context) *params.ChainConfig {
 	db := MakeChainDatabase(ctx)
 	defer db.Close()
 
@@ -777,9 +777,9 @@ func MustMakeChainConfig(ctx *cli.Context) *core.ChainConfig {
 }
 
 // MustMakeChainConfigFromDb reads the chain configuration from the given database.
-func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainConfig {
+func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainConfig {
 	// If the chain is already initialized, use any existing chain configs
-	config := new(core.ChainConfig)
+	config := new(params.ChainConfig)
 
 	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0))
 	if genesis != nil {
@@ -792,6 +792,9 @@ func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainC
 		default:
 			Fatalf("Could not make chain configuration: %v", err)
 		}
+	}
+	if config.ChainId == nil {
+		config.ChainId = new(big.Int)
 	}
 	// Set any missing fields due to them being unset or system upgrade
 	if config.HomesteadBlock == nil {
@@ -809,11 +812,39 @@ func MustMakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *core.ChainC
 		}
 		config.DAOForkSupport = true
 	}
-	if config.HomesteadGasRepriceBlock == nil {
+	if config.EIP150Block == nil {
 		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.HomesteadGasRepriceBlock = params.TestNetHomesteadGasRepriceBlock
+			config.EIP150Block = params.TestNetHomesteadGasRepriceBlock
 		} else {
-			config.HomesteadGasRepriceBlock = params.MainNetHomesteadGasRepriceBlock
+			config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
+		}
+	}
+	if config.EIP150Hash == (common.Hash{}) {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.EIP150Hash = params.TestNetHomesteadGasRepriceHash
+		} else {
+			config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
+		}
+	}
+	if config.EIP155Block == nil {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.EIP150Block = params.TestNetSpuriousDragon
+		} else {
+			config.EIP155Block = params.MainNetSpuriousDragon
+		}
+	}
+	if config.EIP158Block == nil {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.EIP158Block = params.TestNetSpuriousDragon
+		} else {
+			config.EIP158Block = params.MainNetSpuriousDragon
+		}
+	}
+	if config.ChainId.BitLen() == 0 {
+		if ctx.GlobalBool(TestNetFlag.Name) {
+			config.ChainId = params.TestNetChainID
+		} else {
+			config.ChainId = params.MainNetChainID
 		}
 	}
 	// Force override any existing configs if explicitly requested

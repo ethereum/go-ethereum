@@ -23,20 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// RuleSet is an interface that defines the current rule set during the
-// execution of the EVM instructions (e.g. whether it's homestead)
-type RuleSet interface {
-	IsHomestead(*big.Int) bool
-	// GasTable returns the gas prices for this phase, which is based on
-	// block number passed in.
-	GasTable(*big.Int) params.GasTable
-}
-
 // Environment is an EVM requirement and helper which allows access to outside
 // information such as states.
 type Environment interface {
 	// The current ruleset
-	RuleSet() RuleSet
+	ChainConfig() *params.ChainConfig
 	// The state database
 	Db() Database
 	// Creates a restorable snapshot
@@ -115,6 +106,7 @@ type Database interface {
 	// Exist reports whether the given account exists in state.
 	// Notably this should also return true for suicided accounts.
 	Exist(common.Address) bool
+	Empty(common.Address) bool
 }
 
 // Account represents a contract or basic ethereum account.

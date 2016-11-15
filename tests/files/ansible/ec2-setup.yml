@@ -1,0 +1,9 @@
+---
+- name: Provision EC2 instances
+  hosts: localhost
+  gather_facts: false
+  roles:
+    - ec2 
+
+  tasks:
+    - include: roles/ec2/tasks/setup.yml

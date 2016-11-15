@@ -16,11 +16,22 @@
 
 package params
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 var (
-	TestNetHomesteadBlock           = big.NewInt(494000)  // Testnet homestead block
-	MainNetHomesteadBlock           = big.NewInt(1150000) // Mainnet homestead block
-	TestNetHomesteadGasRepriceBlock = big.NewInt(1783000) // Test net gas reprice block
-	MainNetHomesteadGasRepriceBlock = big.NewInt(2463000) // Main net gas reprice block
+	TestNetHomesteadBlock           = big.NewInt(494000)                                                                     // Testnet homestead block
+	MainNetHomesteadBlock           = big.NewInt(1150000)                                                                    // Mainnet homestead block
+	TestNetHomesteadGasRepriceBlock = big.NewInt(1783000)                                                                    // Test net gas reprice block
+	MainNetHomesteadGasRepriceBlock = big.NewInt(2463000)                                                                    // Main net gas reprice block
+	TestNetHomesteadGasRepriceHash  = common.HexToHash("0xf376243aeff1f256d970714c3de9fd78fa4e63cf63e32a51fe1169e375d98145") // Testnet gas reprice block hash (used by fast sync)
+	MainNetHomesteadGasRepriceHash  = common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0") // Mainnet gas reprice block hash (used by fast sync)
+	TestNetChainID                  = big.NewInt(2)                                                                          // Testnet default chain ID
+	MainNetChainID                  = big.NewInt(1)                                                                          // Main net default chain ID
+
+	TestNetSpuriousDragon = big.NewInt(1885000)
+	MainNetSpuriousDragon = big.NewInt(2675000)
 )
