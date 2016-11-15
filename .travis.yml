@@ -75,7 +75,7 @@ matrix:
 
         - mkdir -p $ANDROID_HOME/platforms
         - mv -f $HOME/.android.platforms $ANDROID_HOME/platforms
-        - echo "y" | android update sdk --no-ui --filter platform
+        - echo "y" | android update sdk --no-ui --filter `android list sdk | grep "SDK Platform Android" | grep -E 'API 15|API 19|API 24' | awk '{print $1}' | cut -d '-' -f 1 | tr '\n' ','`
 
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
         - mv -f $ANDROID_HOME/platforms $HOME/.android.platforms
