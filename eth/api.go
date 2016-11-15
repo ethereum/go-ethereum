@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -408,6 +409,7 @@ func (s *PublicAccountAPI) Accounts() []accounts.Account {
 // It offers methods to create, (un)lock en list accounts. Some methods accept
 // passwords and are therefore considered private by default.
 type PrivateAccountAPI struct {
+	bc     *core.BlockChain
 	am     *accounts.Manager
 	txPool *core.TxPool
 	txMu   *sync.Mutex
@@ -417,6 +419,7 @@ type PrivateAccountAPI struct {
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
 func NewPrivateAccountAPI(e *Ethereum) *PrivateAccountAPI {
 	return &PrivateAccountAPI{
+		bc:     e.blockchain,
 		am:     e.accountManager,
 		txPool: e.txPool,
 		txMu:   &e.txMu,
@@ -495,6 +498,10 @@ func (s *PrivateAccountAPI) SignAndSendTransaction(args SendTxArgs, passwd strin
 		tx = types.NewTransaction(args.Nonce.Uint64(), *args.To, args.Value.BigInt(), args.Gas.BigInt(), args.GasPrice.BigInt(), common.FromHex(args.Data))
 	}
 
+	if s.bc.Config().IsEIP155(s.bc.CurrentBlock().Number()) {
+		tx.SetSigner(types.NewEIP155Signer(s.bc.Config().ChainId))
+	}
+
 	signature, err := s.am.SignWithPassphrase(args.From, passwd, tx.SigHash().Bytes())
 	if err != nil {
 		return common.Hash{}, err
@@ -506,7 +513,7 @@ func (s *PrivateAccountAPI) SignAndSendTransaction(args SendTxArgs, passwd strin
 // PublicBlockChainAPI provides an API to access the Ethereum blockchain.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicBlockChainAPI struct {
-	config                  *core.ChainConfig
+	config                  *params.ChainConfig
 	bc                      *core.BlockChain
 	chainDb                 ethdb.Database
 	eventMux                *event.TypeMux
@@ -518,7 +525,7 @@ type PublicBlockChainAPI struct {
 }
 
 // NewPublicBlockChainAPI creates a new Etheruem blockchain API.
-func NewPublicBlockChainAPI(config *core.ChainConfig, bc *core.BlockChain, m *miner.Miner, chainDb ethdb.Database, gpo *GasPriceOracle, eventMux *event.TypeMux, am *accounts.Manager) *PublicBlockChainAPI {
+func NewPublicBlockChainAPI(config *params.ChainConfig, bc *core.BlockChain, m *miner.Miner, chainDb ethdb.Database, gpo *GasPriceOracle, eventMux *event.TypeMux, am *accounts.Manager) *PublicBlockChainAPI {
 	api := &PublicBlockChainAPI{
 		config:   config,
 		bc:       bc,
@@ -769,7 +776,7 @@ func (s *PublicBlockChainAPI) doCall(args CallArgs, blockNr rpc.BlockNumber) (st
 	}
 
 	// Execute the call and return
-	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), s.config.VmConfig)
+	vmenv := core.NewEnv(stateDb, s.config, s.bc, msg, block.Header(), vm.Config{})
 	gp := new(core.GasPool).AddGas(common.MaxBig)
 
 	res, requiredGas, _, err := core.NewStateTransition(vmenv, msg, gp).TransitionDb()
@@ -823,6 +830,9 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 
 		if fullTx {
 			formatTx = func(tx *types.Transaction) (interface{}, error) {
+				if tx.Protected() {
+					tx.SetSigner(types.NewEIP155Signer(s.bc.Config().ChainId))
+				}
 				return newRPCTransaction(b, tx.Hash())
 			}
 		}
@@ -1205,6 +1215,10 @@ func (s *PublicTransactionPoolAPI) SendTransaction(args SendTxArgs) (common.Hash
 		tx = types.NewContractCreation(args.Nonce.Uint64(), args.Value.BigInt(), args.Gas.BigInt(), args.GasPrice.BigInt(), common.FromHex(args.Data))
 	} else {
 		tx = types.NewTransaction(args.Nonce.Uint64(), *args.To, args.Value.BigInt(), args.Gas.BigInt(), args.GasPrice.BigInt(), common.FromHex(args.Data))
+	}
+
+	if s.bc.Config().IsEIP155(s.bc.CurrentBlock().Number()) {
+		tx.SetSigner(types.NewEIP155Signer(s.bc.Config().ChainId))
 	}
 
 	signature, err := s.am.Sign(args.From, tx.SigHash().Bytes())
@@ -1619,13 +1633,13 @@ func (api *PublicDebugAPI) SeedHash(number uint64) (string, error) {
 // PrivateDebugAPI is the collection of Etheruem APIs exposed over the private
 // debugging endpoint.
 type PrivateDebugAPI struct {
-	config *core.ChainConfig
+	config *params.ChainConfig
 	eth    *Ethereum
 }
 
 // NewPrivateDebugAPI creates a new API definition for the private debug methods
 // of the Ethereum service.
-func NewPrivateDebugAPI(config *core.ChainConfig, eth *Ethereum) *PrivateDebugAPI {
+func NewPrivateDebugAPI(config *params.ChainConfig, eth *Ethereum) *PrivateDebugAPI {
 	return &PrivateDebugAPI{config: config, eth: eth}
 }
 

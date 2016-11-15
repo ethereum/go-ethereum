@@ -43,7 +43,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 
 	var genesis struct {
-		ChainConfig *ChainConfig `json:"config"`
+		ChainConfig *params.ChainConfig `json:"config"`
 		Nonce       string
 		Timestamp   string
 		ParentHash  string
@@ -73,7 +73,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
 		}
 	}
-	root, stateBatch := statedb.CommitBatch()
+	root, stateBatch := statedb.CommitBatch(false)
 
 	difficulty := common.String2Big(genesis.Difficulty)
 	block := types.NewBlock(&types.Header{
@@ -128,7 +128,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	statedb, _ := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
-	root, err := statedb.Commit()
+	root, err := statedb.Commit(false)
 	if err != nil {
 		panic(fmt.Sprintf("cannot write state: %v", err))
 	}

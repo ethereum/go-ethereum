@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -52,7 +54,8 @@ var (
 
 	blockHashPrefix = []byte("block-hash-") // [deprecated by the header/block split, remove eventually]
 
-	configPrefix = []byte("ethereum-config-") // config prefix for the db
+	configPrefix           = []byte("ethereum-config-")          // config prefix for the db
+	ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error
 )
 
 // GetCanonicalHash retrieves a hash assigned to a canonical block number.
@@ -536,7 +539,7 @@ func WriteBlockChainVersion(db ethdb.Database, vsn int) {
 }
 
 // WriteChainConfig writes the chain config settings to the database.
-func WriteChainConfig(db ethdb.Database, hash common.Hash, cfg *ChainConfig) error {
+func WriteChainConfig(db ethdb.Database, hash common.Hash, cfg *params.ChainConfig) error {
 	// short circuit and ignore if nil config. GetChainConfig
 	// will return a default.
 	if cfg == nil {
@@ -552,13 +555,13 @@ func WriteChainConfig(db ethdb.Database, hash common.Hash, cfg *ChainConfig) err
 }
 
 // GetChainConfig will fetch the network settings based on the given hash.
-func GetChainConfig(db ethdb.Database, hash common.Hash) (*ChainConfig, error) {
+func GetChainConfig(db ethdb.Database, hash common.Hash) (*params.ChainConfig, error) {
 	jsonChainConfig, _ := db.Get(append(configPrefix, hash[:]...))
 	if len(jsonChainConfig) == 0 {
 		return nil, ChainConfigNotFoundErr
 	}
 
-	var config ChainConfig
+	var config params.ChainConfig
 	if err := json.Unmarshal(jsonChainConfig, &config); err != nil {
 		return nil, err
 	}

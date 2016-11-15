@@ -63,7 +63,8 @@ type uint64RingBuffer struct {
 // environment is the workers current environment and holds
 // all of the current state information
 type Work struct {
-	config           *core.ChainConfig
+	config           *params.ChainConfig
+	signer           types.Signer
 	state            *state.StateDB // apply state changes here
 	ancestors        *set.Set       // ancestor set (used for checking uncle parent validity)
 	family           *set.Set       // family set (used for checking uncle invalidity)
@@ -90,7 +91,7 @@ type Result struct {
 
 // worker is the main object which takes care of applying messages to the new state
 type worker struct {
-	config *core.ChainConfig
+	config *params.ChainConfig
 
 	mu sync.Mutex
 
@@ -128,7 +129,7 @@ type worker struct {
 	fullValidation bool
 }
 
-func newWorker(config *core.ChainConfig, coinbase common.Address, eth core.Backend) *worker {
+func newWorker(config *params.ChainConfig, coinbase common.Address, eth core.Backend) *worker {
 	worker := &worker{
 		config:         config,
 		eth:            eth,
@@ -276,7 +277,7 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
-				work.state.Commit()
+				work.state.Commit(self.config.IsEIP158(block.Number()))
 				parent := self.chain.GetBlock(block.ParentHash())
 				if parent == nil {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
@@ -367,6 +368,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	}
 	work := &Work{
 		config:    self.config,
+		signer:    types.NewEIP155Signer(self.config.ChainId),
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
@@ -528,7 +530,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(work.state, header, uncles)
-		header.Root = work.state.IntermediateRoot()
+		header.Root = work.state.IntermediateRoot(self.config.IsEIP158(header.Number))
 	}
 
 	// create the new block whose nonce will be mined.
@@ -569,7 +571,18 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		}
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
+		//
+		// We use the eip155 signer regardless of the current hf.
+		tx.SetSigner(env.signer)
 		from, _ := tx.From()
+		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+		// phase, start ignoring the sender until we do.
+		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
+			glog.V(logger.Detail).Infof("Transaction (%x) is replay protected, but we haven't yet hardforked. Transaction will be ignored until we hardfork.\n", tx.Hash())
+
+			txs.Pop()
+			continue
+		}
 
 		// Ignore any transactions (and accounts subsequently) with low gas limits
 		if tx.GasPrice().Cmp(gasPrice) < 0 && !env.ownedAccounts.Has(from) {
@@ -619,14 +632,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
 	snap := env.state.Snapshot()
 
-	// this is a bit of a hack to force jit for the miners
-	config := env.config.VmConfig
-	if !(config.EnableJit && config.ForceJit) {
-		config.EnableJit = false
-	}
-	config.ForceJit = false // disable forcing jit
-
-	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, config)
+	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, vm.Config{})
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil

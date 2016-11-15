@@ -1411,6 +1411,76 @@
             "value" : "0x0a"
         }
     },
+    "StoreGasOnCreate" : {
+        "env" : {
+            "currentCoinbase" : "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x02b8feb0",
+            "currentGasLimit" : "0xe8d4a51000",
+            "currentNumber" : "0x118c30",
+            "currentTimestamp" : "0x01",
+            "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "logs" : [
+        ],
+        "out" : "0x",
+        "post" : {
+            "2adc25665018aa1fe0e6bc666dac8fc2697ff9ba" : {
+                "balance" : "0x011d42",
+                "code" : "0x",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x04fcda",
+                "code" : "0x",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x64",
+                "code" : "0x635a60fd556000526004601c6000f0",
+                "nonce" : "0x01",
+                "storage" : {
+                }
+            },
+            "f1ecf98489fa9ed60a664fc4998db699cfa39d40" : {
+                "balance" : "0x00",
+                "code" : "0x",
+                "nonce" : "0x00",
+                "storage" : {
+                    "0xfd" : "0x01340b"
+                }
+            }
+        },
+        "postStateRoot" : "4fcf97ddd84051f2363ad75ca6bba1e45b802b7ffd17644aa2117ea5e0bbfe0b",
+        "pre" : {
+            "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x061a80",
+                "code" : "0x",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "b94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x00",
+                "code" : "0x635a60fd556000526004601c6000f0",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : "",
+            "gasLimit" : "0x02032a",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "value" : "0x64"
+        }
+    },
     "SuicidesAndInternlCallSuicidesBonusGasAtCall" : {
         "env" : {
             "currentCoinbase" : "b94f5374fce5edbc8e2a8697c15331677e6ebf0b",
