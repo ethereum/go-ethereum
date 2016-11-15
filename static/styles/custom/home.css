@@ -29,6 +29,9 @@
   .mascot-mobile {
     display: none;
   }
+  .hide-on-small-screen {
+    display: block;
+  }
   .featurette-heading {
     font-size: 50px;
   }
@@ -37,8 +40,5 @@
 @media (min-width: 992px) {
   .featurette-image {
     margin-top: 30px;
-  }
-  .hide-on-small-screen {
-    display: block;
   }
 }
