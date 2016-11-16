@@ -130,6 +130,7 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	if config.EthereumEnabled {
 		ethConf := &eth.Config{
 			ChainConfig: &params.ChainConfig{
+				ChainId:        big.NewInt(config.EthereumChainConfig.ChainID),
 				HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
 				DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
 				DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,

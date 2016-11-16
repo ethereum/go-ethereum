@@ -395,7 +395,7 @@ func makeCht(db ethdb.Database) bool {
 	} else {
 		lastChtNum++
 
-		glog.V(logger.Info).Infoln("CHT %d %064x\n", lastChtNum, root)
+		glog.V(logger.Detail).Infof("cht: %d %064x", lastChtNum, root)
 
 		storeChtRoot(db, lastChtNum, root)
 		var data [8]byte

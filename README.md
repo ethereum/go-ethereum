@@ -1,28 +1,14 @@
 ## Ethereum Go
 
-Official golang implementation of the Ethereum protocol
-
-          | Linux   | OSX | ARM | Windows | Tests
-----------|---------|-----|-----|---------|------
-develop   | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=ARM%20Go%20develop%20branch)](https://build.ethdev.com/builders/ARM%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Windows%20Go%20develop%20branch)](https://build.ethdev.com/builders/Windows%20Go%20develop%20branch/builds/-1) | [![Buildr+Status](https://travis-ci.org/ethereum/go-ethereum.svg?branch=develop)](https://travis-ci.org/ethereum/go-ethereum) [![codecov.io](https://codecov.io/github/ethereum/go-ethereum/coverage.svg?branch=develop)](https://codecov.io/github/ethereum/go-ethereum?branch=develop)
-master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](https://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](https://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=ARM%20Go%20master%20branch)](https://build.ethdev.com/builders/ARM%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Windows%20Go%20master%20branch)](https://build.ethdev.com/builders/Windows%20Go%20master%20branch/builds/-1) | [![Buildr+Status](https://travis-ci.org/ethereum/go-ethereum.svg?branch=master)](https://travis-ci.org/ethereum/go-ethereum) [![codecov.io](https://codecov.io/github/ethereum/go-ethereum/coverage.svg?branch=master)](https://codecov.io/github/ethereum/go-ethereum?branch=master)
+Official golang implementation of the Ethereum protocol.
 
 [![API Reference](
 https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
 )](https://godoc.org/github.com/ethereum/go-ethereum)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-## Automated development builds
-
-The following builds are built automatically by our build servers after each push to the [develop](https://github.com/ethereum/go-ethereum/tree/develop) branch.
-
-* [Docker](https://registry.hub.docker.com/u/ethereum/client-go/)
-* [OS X](https://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)
-* Ubuntu
-  [trusty](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-trusty/latest/) |
-  [utopic](https://build.ethdev.com/builds/Linux%20Go%20develop%20deb%20i386-utopic/latest/)
-* [Windows 64-bit](https://build.ethdev.com/builds/Windows%20Go%20develop%20branch/Geth-Win64-latest.zip)
-* [ARM](https://build.ethdev.com/builds/ARM%20Go%20develop%20branch/geth-ARM-latest.tar.bz2)
+Automated builds are available for stable releases and the unstable master branch.
+Binary archives are published at https://geth.ethereum.org/downloads/.
 
 ## Building the source
 
@@ -273,7 +259,7 @@ Please make sure your contributions adhere to our coding guidelines:
 
  * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
  * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
- * Pull requests need to be based on and opened against the `develop` branch.
+ * Pull requests need to be based on and opened against the `master` branch.
  * Commit messages should be prefixed with the package(s) they modify.
    * E.g. "eth, rpc: make trace configs optional"
 
