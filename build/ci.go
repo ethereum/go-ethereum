@@ -777,7 +777,6 @@ func doXCodeFramework(cmdline []string) {
 
 	// Build the iOS XCode framework
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
-	build.MustRun(gomobileTool("init"))
 
 	archive := "geth-" + archiveBasename("ios", env)
 	if err := os.Mkdir(archive, os.ModePerm); err != nil {
@@ -799,7 +798,7 @@ func doXCodeFramework(cmdline []string) {
 	if *deploy != "" {
 		meta := newPodMetadata(env)
 		build.Render("build/pod.podspec", meta.Name+".podspec", 0755, meta)
-		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec", "--allow-warnings")
+		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec", "--allow-warnings", "--verbose")
 	}
 }
 
