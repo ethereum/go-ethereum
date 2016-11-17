@@ -57,6 +57,8 @@ type peer struct {
 
 	announceChn chan announceData
 
+	poolEntry *poolEntry
+
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
 	fcServerParams *flowcontrol.ServerParams
