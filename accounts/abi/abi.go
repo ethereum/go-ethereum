@@ -274,12 +274,19 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		// struct will match named return values to the struct's field
 		// names
 		case reflect.Struct:
+			idx := 0
 			for i := 0; i < len(method.Outputs); i++ {
-				marshalledValue, err := toGoType(i, method.Outputs[i], output)
+				marshalledValue, err := toGoType(idx, method.Outputs[i], output)
 				if err != nil {
 					return err
 				}
 				reflectValue := reflect.ValueOf(marshalledValue)
+				switch reflectValue.Type().Kind() {
+				case reflect.Slice, reflect.Array:
+					idx += reflectValue.Len()
+				default:
+					idx++
+				}
 
 				for j := 0; j < typ.NumField(); j++ {
 					field := typ.Field(j)
