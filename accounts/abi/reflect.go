@@ -81,7 +81,14 @@ func set(dst, src reflect.Value, output Argument) error {
 		if dst.Len() < output.Type.SliceSize {
 			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
 		}
-		reflect.Copy(dst, src)
+		switch dstType.Elem().Kind() {
+		case reflect.Array:
+			for i := 0; i < dst.Len(); i++ {
+				reflect.Copy(dst.Index(i), src.Index(i))
+			}
+		default:
+			reflect.Copy(dst, src)
+		}
 	case dstType.Kind() == reflect.Interface:
 		dst.Set(src)
 	case dstType.Kind() == reflect.Ptr:
