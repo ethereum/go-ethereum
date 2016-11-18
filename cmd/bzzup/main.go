@@ -106,7 +106,7 @@ func (c *client) uploadFile(file string, fi os.FileInfo) (manifest, error) {
 
 func (c *client) uploadDirectory(dir string) (manifest, error) {
 	dirm := manifest{}
-	prefix := filepath.ToSlash(dir) + "/"
+	prefix := filepath.ToSlash(filepath.Clean(dir)) + "/"
 	err := filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
 		if err != nil || fi.IsDir() {
 			return err
@@ -115,7 +115,7 @@ func (c *client) uploadDirectory(dir string) (manifest, error) {
 			return fmt.Errorf("path %s outside directory %s", path, dir)
 		}
 		entry, err := c.uploadFile(path, fi)
-		entry.Path = strings.TrimPrefix(filepath.ToSlash(path), prefix)
+		entry.Path = strings.TrimPrefix(filepath.ToSlash(filepath.Clean(path)), prefix)
 		dirm.Entries = append(dirm.Entries, entry)
 		return err
 	})
