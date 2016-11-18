@@ -24,6 +24,7 @@ import (
 
 // MainnetChainConfig is the chain parameters to run a node on the main network.
 var MainnetChainConfig = &ChainConfig{
+	ChainId:        MainNetChainID,
 	HomesteadBlock: MainNetHomesteadBlock,
 	DAOForkBlock:   MainNetDAOForkBlock,
 	DAOForkSupport: true,
@@ -35,6 +36,7 @@ var MainnetChainConfig = &ChainConfig{
 
 // TestnetChainConfig is the chain parameters to run a node on the test network.
 var TestnetChainConfig = &ChainConfig{
+	ChainId:        TestNetChainID,
 	HomesteadBlock: TestNetHomesteadBlock,
 	DAOForkBlock:   TestNetDAOForkBlock,
 	DAOForkSupport: false,
