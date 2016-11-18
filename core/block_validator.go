@@ -251,7 +251,7 @@ func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Heade
 	if err := ValidateDAOHeaderExtraData(config, header); err != nil {
 		return err
 	}
-	if config.EIP150Block != nil && config.EIP150Block.Cmp(header.Number) == 0 {
+	if !uncle && config.EIP150Block != nil && config.EIP150Block.Cmp(header.Number) == 0 {
 		if config.EIP150Hash != (common.Hash{}) && config.EIP150Hash != header.Hash() {
 			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.EIP150Hash)
 		}
