@@ -365,12 +365,11 @@ func (c *Config) TrusterNodes() []*discover.Node {
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
-func (c *Config) parsePersistentNodes(file string) []*discover.Node {
+func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return nil
 	}
-	path := filepath.Join(c.DataDir, file)
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
