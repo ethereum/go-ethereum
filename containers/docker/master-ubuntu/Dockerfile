@@ -11,7 +11,7 @@ RUN apt-get update && \
     apt-get update && \
     apt-get install -q -y geth
 
-EXPOSE 8545
+EXPOSE 8588
 EXPOSE 30303
 
 ENTRYPOINT ["/usr/bin/geth"]
