@@ -290,7 +290,7 @@ var (
 	IPCPathFlag = DirectoryFlag{
 		Name:  "ipcpath",
 		Usage: "Filename for IPC socket/pipe within the datadir (explicit paths escape it)",
-		Value: DirectoryString{"geth.ipc"},
+		Value: DirectoryString{"gubiq.ipc"},
 	}
 	WSEnabledFlag = cli.BoolFlag{
 		Name:  "ws",

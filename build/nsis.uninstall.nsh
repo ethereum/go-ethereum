@@ -22,7 +22,7 @@ Section "Uninstall"
   SimpleFC::AdvRemoveRule "Geth UDP discovery (UDP:30303)"
 
   # Remove IPC endpoint (https://github.com/ethereum/EIPs/issues/147)
-  ${un.EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"
+  ${un.EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\gubiq.ipc"
 
   # Remove install directory from PATH
   ${un.EnvVarUpdate} $0 "PATH" "R" "HKLM" $INSTDIR
