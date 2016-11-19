@@ -25,7 +25,7 @@
 # - sign installer
 CRCCheck on
 
-!define GROUPNAME "Ethereum"
+!define GROUPNAME "Ubiq"
 !define APPNAME "Gubiq"
 !define DESCRIPTION "Official Go implementation of the Ethereum protocol"
 !addplugindir .\

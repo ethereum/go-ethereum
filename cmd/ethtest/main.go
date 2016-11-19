@@ -206,10 +206,10 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "ethtest"
-	app.Usage = "go-ethereum test interface"
+	app.Usage = "go-ubiq test interface"
 	app.Action = setupApp
 	app.Version = "0.2.0"
-	app.Author = "go-ethereum team"
+	app.Author = "go-ubiq team"
 
 	app.Flags = []cli.Flag{
 		TestFlag,

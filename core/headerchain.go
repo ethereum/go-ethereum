@@ -102,7 +102,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, getValid
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		glog.V(logger.Info).Infoln("WARNING: Wrote default ubiq genesis block")
 		hc.genesisHeader = genesisBlock.Header()
 	}
 

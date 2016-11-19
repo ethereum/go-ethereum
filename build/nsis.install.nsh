@@ -29,9 +29,9 @@ Section "Gubiq" GETH_IDX
   SimpleFC::AdvRemoveRule "Gubiq UDP discovery (UDP:30303)"
 
   # Firewall - add rules
-  SimpleFC::AdvAddRule "Gubiq incoming peers (TCP:30303)" ""  6 1 1 2147483647 1 "$INSTDIR\gubiq.exe" "" "" "Ethereum" 30303 "" "" ""
-  SimpleFC::AdvAddRule "Gubiq outgoing peers (TCP:30303)" ""  6 2 1 2147483647 1 "$INSTDIR\gubiq.exe" "" "" "Ethereum" "" 30303 "" ""
-  SimpleFC::AdvAddRule "Gubiq UDP discovery (UDP:30303)" "" 17 2 1 2147483647 1 "$INSTDIR\gubiq.exe" "" "" "Ethereum" "" 30303 "" ""
+  SimpleFC::AdvAddRule "Gubiq incoming peers (TCP:30303)" ""  6 1 1 2147483647 1 "$INSTDIR\gubiq.exe" "" "" "Ubiq" 30303 "" "" ""
+  SimpleFC::AdvAddRule "Gubiq outgoing peers (TCP:30303)" ""  6 2 1 2147483647 1 "$INSTDIR\gubiq.exe" "" "" "Ubiq" "" 30303 "" ""
+  SimpleFC::AdvAddRule "Gubiq UDP discovery (UDP:30303)" "" 17 2 1 2147483647 1 "$INSTDIR\gubiq.exe" "" "" "Ubiq" "" 30303 "" ""
 
   # Set default IPC endpoint (https://github.com/ethereum/EIPs/issues/147)
   ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\gubiq.ipc"

@@ -1,13 +1,13 @@
 # common
 
 [![Build
-Status](https://travis-ci.org/ethereum/go-ethereum.png?branch=master)](https://travis-ci.org/ethereum/go-ethereum)
+Status](https://travis-ci.org/ubiq/go-ubiq.png?branch=master)](https://travis-ci.org/ubiq/go-ubiq)
 
 The common package contains the ethereum utility library.
 
 # Installation
 
-As a subdirectory the main go-ethereum repository, you get it with
+As a subdirectory the main go-ubiq repository, you get it with
 `go get github.com/ubiq/go-ubiq`.
 
 # Usage

@@ -76,7 +76,7 @@ func Env() Environment {
 
 // LocalEnv returns build environment metadata gathered from git.
 func LocalEnv() Environment {
-	env := applyEnvFlags(Environment{Name: "local", Repo: "ethereum/go-ethereum"})
+	env := applyEnvFlags(Environment{Name: "local", Repo: "ubiq/go-ubiq"})
 	if _, err := os.Stat(".git"); err != nil {
 		return env
 	}

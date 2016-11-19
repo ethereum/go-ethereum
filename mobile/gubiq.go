@@ -158,7 +158,7 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)
 		}); err != nil {
-			return nil, fmt.Errorf("ethereum init: %v", err)
+			return nil, fmt.Errorf("ubiq init: %v", err)
 		}
 	}
 	// Register the Whisper protocol if requested

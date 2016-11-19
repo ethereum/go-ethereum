@@ -90,7 +90,7 @@ TODO: Please write this
 		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
 The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.
+Use "ubiq dump 0" to dump the genesis block.
 `,
 	}
 )

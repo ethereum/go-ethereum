@@ -45,7 +45,7 @@ const clientIdentifier = "bzzd"
 
 var (
 	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-	app       = utils.NewApp(gitCommit, "Ethereum Swarm server daemon")
+	app       = utils.NewApp(gitCommit, "Ubiq Swarm server daemon")
 )
 
 var (

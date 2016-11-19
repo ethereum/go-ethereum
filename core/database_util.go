@@ -51,7 +51,7 @@ var (
 	mipmapPre    = []byte("mipmap-log-bloom-")
 	MIPMapLevels = []uint64{1000000, 500000, 100000, 50000, 1000}
 
-	configPrefix = []byte("ethereum-config-") // config prefix for the db
+	configPrefix = []byte("ubiq-config-") // config prefix for the db
 
 	// used by old (non-sequential keys) db, now only used for conversion
 	oldBlockPrefix         = []byte("block-")

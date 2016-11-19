@@ -51,7 +51,7 @@ func main() {
 	m := make(map[string]setting)
 	json.Unmarshal(content, &m)
 
-	filepath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "params", os.Args[2])
+	filepath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ubiq", "go-ubiq", "params", os.Args[2])
 	output, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		fatalf("error opening file for writing %v\n", err)

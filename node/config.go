@@ -417,7 +417,7 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 		keydir, err = filepath.Abs(conf.KeyStoreDir)
 	default:
 		// There is no datadir.
-		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
+		keydir, err = ioutil.TempDir("", "go-ubiq-keystore")
 		ephemeralKeystore = keydir
 	}
 	if err != nil {

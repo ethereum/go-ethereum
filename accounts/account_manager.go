@@ -17,7 +17,7 @@
 // Package accounts implements encrypted storage of secp256k1 private keys.
 //
 // Keys are stored as encrypted JSON files according to the Web3 Secret Storage specification.
-// See https://github.com/ethereum/wiki/wiki/Web3-Secret-Storage-Definition for more information.
+// See https://github.com/ubiq/wiki/wiki/Web3-Secret-Storage-Definition for more information.
 package accounts
 
 import (

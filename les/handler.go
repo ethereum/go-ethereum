@@ -296,7 +296,7 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 func (pm *ProtocolManager) Stop() {
 	// Showing a log message. During download / process this could actually
 	// take between 5 to 10 seconds and therefor feedback is required.
-	glog.V(logger.Info).Infoln("Stopping light ethereum protocol handler...")
+	glog.V(logger.Info).Infoln("Stopping light ubiq protocol handler...")
 
 	// Quit the sync loop.
 	// After this send has completed, no new peers will be accepted.
@@ -313,7 +313,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for any process action
 	pm.wg.Wait()
 
-	glog.V(logger.Info).Infoln("Light ethereum protocol handler stopped")
+	glog.V(logger.Info).Infoln("Light ubiq protocol handler stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {

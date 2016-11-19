@@ -79,7 +79,7 @@ var (
 	debExecutables = []debExecutable{
 		{
 			Name:        "gubiq",
-			Description: "Ethereum CLI client.",
+			Description: "Ubiq CLI client.",
 		},
 		{
 			Name:        "rlpdump",
@@ -153,7 +153,7 @@ func doInstall(cmdline []string) {
 	// failure with outdated Go. This should save them the trouble.
 	if runtime.Version() < "go1.4" && !strings.HasPrefix(runtime.Version(), "devel") {
 		log.Println("You have Go version", runtime.Version())
-		log.Println("go-ethereum requires at least Go version 1.4 and cannot")
+		log.Println("go-ubiq requires at least Go version 1.4 and cannot")
 		log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
 		os.Exit(1)
 	}
@@ -468,7 +468,7 @@ func isUnstableBuild(env build.Environment) bool {
 type debMetadata struct {
 	Env build.Environment
 
-	// go-ethereum version being built. Note that this
+	// go-ubiq version being built. Note that this
 	// is not the debian package version. The package version
 	// is constructed by VersionString.
 	Version string
@@ -485,7 +485,7 @@ type debExecutable struct {
 func newDebMetadata(distro, author string, env build.Environment, t time.Time) debMetadata {
 	if author == "" {
 		// No signing key, use default author.
-		author = "Ethereum Builds <fjl@ethereum.org>"
+		author = "Ubiq Builds <fjl@ethereum.org>"
 	}
 	return debMetadata{
 		Env:         env,
@@ -501,9 +501,9 @@ func newDebMetadata(distro, author string, env build.Environment, t time.Time) d
 // on all executable packages.
 func (meta debMetadata) Name() string {
 	if isUnstableBuild(meta.Env) {
-		return "ethereum-unstable"
+		return "ubiq-unstable"
 	}
-	return "ethereum"
+	return "ubiq"
 }
 
 // VersionString returns the debian version of the packages.
@@ -547,7 +547,7 @@ func (meta debMetadata) ExeConflicts(exe debExecutable) string {
 		// be preferred and the conflicting files should be handled via
 		// alternates. We might do this eventually but using a conflict is
 		// easier now.
-		return "ethereum, " + exe.Name
+		return "ubiq, " + exe.Name
 	}
 	return ""
 }

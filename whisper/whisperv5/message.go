@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains the Whisper protocol Message element. For formal details please see
-// the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
+// the specs at https://github.com/ubiq/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
 // todo: fix the spec link, and move it to doc.go
 
 package whisperv5
