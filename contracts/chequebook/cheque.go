@@ -35,14 +35,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
+	"github.com/ubiq/go-ubiq/accounts/abi/bind"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/contracts/chequebook/contract"
+	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/crypto"
+	"github.com/ubiq/go-ubiq/logger"
+	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/swarm/services/swap/swap"
 	"golang.org/x/net/context"
 )
 

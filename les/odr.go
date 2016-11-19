@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ubiq/go-ubiq/common/mclock"
+	"github.com/ubiq/go-ubiq/ethdb"
+	"github.com/ubiq/go-ubiq/light"
+	"github.com/ubiq/go-ubiq/logger"
+	"github.com/ubiq/go-ubiq/logger/glog"
 	"golang.org/x/net/context"
 )
 

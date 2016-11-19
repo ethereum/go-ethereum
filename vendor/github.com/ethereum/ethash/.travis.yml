@@ -9,9 +9,9 @@ before_install:
   # Set up go-ethereum
   - sudo apt-get update -y -qq
   - sudo apt-get install -yqq libgmp3-dev 
-  - git clone --depth=10 https://github.com/ethereum/go-ethereum ${GOPATH}/src/github.com/ethereum/go-ethereum
+  - git clone --depth=10 https://github.com/ubiq/go-ubiq ${GOPATH}/src/github.com/ubiq/go-ubiq
   # use canned dependencies from the go-ethereum repository
-  - export GOPATH=$GOPATH:$GOPATH/src/github.com/ethereum/go-ethereum/Godeps/_workspace/
+  - export GOPATH=$GOPATH:$GOPATH/src/github.com/ubiq/go-ubiq/Godeps/_workspace/
   - echo $GOPATH
 
 install:

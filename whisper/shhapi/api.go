@@ -22,12 +22,12 @@ import (
 	"fmt"
 	mathrand "math/rand"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/crypto"
+	"github.com/ubiq/go-ubiq/logger"
+	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/rpc"
+	"github.com/ubiq/go-ubiq/whisper/whisperv5"
 )
 
 var whisperOffLineErr = errors.New("whisper is offline")

@@ -24,14 +24,14 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/mclock"
+	"github.com/ubiq/go-ubiq/crypto"
+	"github.com/ubiq/go-ubiq/crypto/sha3"
+	"github.com/ubiq/go-ubiq/logger"
+	"github.com/ubiq/go-ubiq/logger/glog"
+	"github.com/ubiq/go-ubiq/p2p/nat"
+	"github.com/ubiq/go-ubiq/rlp"
 )
 
 var (

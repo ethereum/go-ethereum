@@ -19,7 +19,7 @@ package abi
 import (
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ubiq/go-ubiq/common"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation

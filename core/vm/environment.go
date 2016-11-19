@@ -19,8 +19,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/params"
 )
 
 // Environment is an EVM requirement and helper which allows access to outside

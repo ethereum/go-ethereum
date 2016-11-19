@@ -19,7 +19,7 @@ package params
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ubiq/go-ubiq/common"
 )
 
 // MainnetChainConfig is the chain parameters to run a node on the main network.

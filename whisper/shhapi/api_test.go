@@ -19,8 +19,8 @@ package shhapi
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"github.com/ubiq/go-ubiq/rpc"
+	"github.com/ubiq/go-ubiq/whisper/whisperv5"
 )
 
 func TestBasic(x *testing.T) {

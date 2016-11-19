@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/httpclient"
+	"github.com/ubiq/go-ubiq/common/httpclient"
 )
 
 const port = "3222"

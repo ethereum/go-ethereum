@@ -17,8 +17,8 @@
 package params
 
 import (
-	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ubiq/go-ubiq/p2p/discover"
+	"github.com/ubiq/go-ubiq/p2p/discv5"
 )
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on

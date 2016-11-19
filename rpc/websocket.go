@@ -25,8 +25,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ubiq/go-ubiq/logger"
+	"github.com/ubiq/go-ubiq/logger/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"

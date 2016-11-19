@@ -25,9 +25,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/mclock"
+	"github.com/ubiq/go-ubiq/crypto"
 )
 
 const (

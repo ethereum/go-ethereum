@@ -56,7 +56,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/internal/build"
+	"github.com/ubiq/go-ubiq/internal/build"
 )
 
 var (
@@ -664,7 +664,7 @@ func doAndroidArchive(cmdline []string) {
 	// Build the Android archive and Maven resources
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
 	build.MustRun(gomobileTool("init"))
-	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
+	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ubiq/go-ubiq/mobile"))
 
 	meta := newMavenMetadata(env)
 	build.Render("build/mvn.pom", meta.Package+".pom", 0755, meta)
@@ -782,7 +782,7 @@ func doXCodeFramework(cmdline []string) {
 	if err := os.Mkdir(archive, os.ModePerm); err != nil {
 		log.Fatal(err)
 	}
-	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ethereum/go-ethereum/mobile")
+	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ubiq/go-ubiq/mobile")
 	bind.Dir, _ = filepath.Abs(archive)
 	build.MustRun(bind)
 	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)

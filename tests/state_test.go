@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ubiq/go-ubiq/params"
 )
 
 func BenchmarkStateCall1024(b *testing.B) {

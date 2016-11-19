@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ubiq/go-ubiq/core/types"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that

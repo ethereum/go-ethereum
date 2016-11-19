@@ -20,8 +20,8 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/params"
 )
 
 // Type is the VM type accepted by **NewVm**

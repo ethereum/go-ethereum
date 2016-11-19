@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ubiq/go-ubiq/crypto"
 )
 
 func copyFromBuf(dst []byte, src []byte, beg int) int {

@@ -24,16 +24,16 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/whisper/whisperv2"
+	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/core/state"
+	"github.com/ubiq/go-ubiq/eth"
+	"github.com/ubiq/go-ubiq/ethclient"
+	"github.com/ubiq/go-ubiq/les"
+	"github.com/ubiq/go-ubiq/light"
+	"github.com/ubiq/go-ubiq/node"
+	"github.com/ubiq/go-ubiq/p2p/nat"
+	"github.com/ubiq/go-ubiq/params"
+	"github.com/ubiq/go-ubiq/whisper/whisperv2"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth

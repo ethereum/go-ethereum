@@ -22,7 +22,7 @@ import (
 	"os"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ubiq/go-ubiq/common"
 )
 
 type Storage map[common.Hash]common.Hash

@@ -19,9 +19,9 @@ package downloader
 import (
 	"sync"
 
-	ethereum "github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/rpc"
+	ethereum "github.com/ubiq/go-ubiq"
+	"github.com/ubiq/go-ubiq/event"
+	"github.com/ubiq/go-ubiq/rpc"
 	"golang.org/x/net/context"
 )
 

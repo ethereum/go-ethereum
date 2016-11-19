@@ -22,7 +22,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ubiq/go-ubiq/swarm/storage"
 )
 
 func main() {

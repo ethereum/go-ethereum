@@ -21,8 +21,8 @@ package main
 import (
 	"io"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ubiq/go-ubiq/cmd/utils"
+	"github.com/ubiq/go-ubiq/internal/debug"
 	"gopkg.in/urfave/cli.v1"
 )
 

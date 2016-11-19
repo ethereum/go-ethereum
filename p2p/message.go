@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ubiq/go-ubiq/rlp"
 )
 
 // Msg defines the structure of a p2p message.

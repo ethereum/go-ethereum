@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ubiq/go-ubiq/params"
 )
 
 func TestInit(t *testing.T) {

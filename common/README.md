@@ -8,7 +8,7 @@ The common package contains the ethereum utility library.
 # Installation
 
 As a subdirectory the main go-ethereum repository, you get it with
-`go get github.com/ethereum/go-ethereum`.
+`go get github.com/ubiq/go-ubiq`.
 
 # Usage
 

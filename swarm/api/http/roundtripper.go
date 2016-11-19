@@ -20,18 +20,18 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ubiq/go-ubiq/logger"
+	"github.com/ubiq/go-ubiq/logger/glog"
 )
 
 /*
 http roundtripper to register for bzz url scheme
-see https://github.com/ethereum/go-ethereum/issues/2040
+see https://github.com/ubiq/go-ubiq/issues/2040
 Usage:
 
 import (
- "github.com/ethereum/go-ethereum/common/httpclient"
- "github.com/ethereum/go-ethereum/swarm/api/http"
+ "github.com/ubiq/go-ubiq/common/httpclient"
+ "github.com/ubiq/go-ubiq/swarm/api/http"
 )
 client := httpclient.New()
 // for (private) swarm proxy running locally
@@ -45,7 +45,7 @@ If Host is left empty, localhost is assumed.
 Using a public gateway, the above few lines gives you the leanest
 bzz-scheme aware read-only http client. You really only ever need this
 if you need go-native swarm access to bzz addresses, e.g.,
-github.com/ethereum/go-ethereum/common/natspec
+github.com/ubiq/go-ubiq/common/natspec
 
 */
 

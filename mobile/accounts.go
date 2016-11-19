@@ -23,7 +23,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ubiq/go-ubiq/accounts"
 )
 
 const (
