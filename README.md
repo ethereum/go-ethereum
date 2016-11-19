@@ -108,7 +108,7 @@ One of the quickest ways to get Ethereum up and running on your machine is by us
 
 ```
 docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
-           -p 8588:8588 -p 30303:30303 \
+           -p 8588:8588 -p 30388:30388 \
            ethereum/client-go --fast --cache=512
 ```
 

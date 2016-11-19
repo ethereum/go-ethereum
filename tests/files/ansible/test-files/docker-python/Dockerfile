@@ -16,7 +16,7 @@ RUN cd pyethereum && curl https://bootstrap.pypa.io/bootstrap-buildout.py | pyth
 RUN cd pyethereum && bin/buildout
 
 #default port for incoming requests
-EXPOSE 30303
+EXPOSE 30388
 
 WORKDIR /pyethereum 
 

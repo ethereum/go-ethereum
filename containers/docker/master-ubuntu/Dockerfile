@@ -12,6 +12,6 @@ RUN apt-get update && \
     apt-get install -q -y gubiq
 
 EXPOSE 8588
-EXPOSE 30303
+EXPOSE 30388
 
 ENTRYPOINT ["/usr/bin/gubiq"]
