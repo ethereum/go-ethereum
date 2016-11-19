@@ -17,7 +17,7 @@
 // Contains all the wrappers from the accounts package to support client side key
 // management on mobile platforms.
 
-package geth
+package gubiq
 
 import (
 	"io/ioutil"
@@ -40,14 +40,14 @@ package go;
 import android.test.InstrumentationTestCase;
 import android.test.MoreAsserts;
 
-import org.ethereum.geth.*;
+import org.ethereum.gubiq.*;
 
 public class AndroidTest extends InstrumentationTestCase {
 	public AndroidTest() {}
 
 	public void testAccountManagement() {
 		try {
-			AccountManager am = new AccountManager(getInstrumentation().getContext().getFilesDir() + "/keystore", Geth.LightScryptN, Geth.LightScryptP);
+			AccountManager am = new AccountManager(getInstrumentation().getContext().getFilesDir() + "/keystore", Gubiq.LightScryptN, Gubiq.LightScryptP);
 
 			Account newAcc = am.newAccount("Creation password");
 			byte[] jsonAcc = am.exportKey(newAcc, "Creation password", "Export password");
@@ -121,7 +121,7 @@ func TestAndroid(t *testing.T) {
 		t.Logf("initialization took %v", time.Since(start))
 	}
 	// Create and switch to a temporary workspace
-	workspace, err := ioutil.TempDir("", "geth-android-")
+	workspace, err := ioutil.TempDir("", "gubiq-android-")
 	if err != nil {
 		t.Fatalf("failed to create temporary workspace: %v", err)
 	}
@@ -137,21 +137,21 @@ func TestAndroid(t *testing.T) {
 	defer os.Chdir(pwd)
 
 	// Create the skeleton of the Android project
-	for _, dir := range []string{"src/main", "src/androidTest/java/org/ethereum/gethtest", "libs"} {
+	for _, dir := range []string{"src/main", "src/androidTest/java/org/ethereum/gubiqtest", "libs"} {
 		err = os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Generate the mobile bindings for Geth and add the tester class
+	// Generate the mobile bindings for Gubiq and add the tester class
 	gobind := exec.Command("gomobile", "bind", "-javapkg", "org.ethereum", "github.com/ubiq/go-ubiq/mobile")
 	if output, err := gobind.CombinedOutput(); err != nil {
 		t.Logf("%s", output)
 		t.Fatalf("failed to run gomobile bind: %v", err)
 	}
-	build.CopyFile(filepath.Join("libs", "geth.aar"), "geth.aar", os.ModePerm)
+	build.CopyFile(filepath.Join("libs", "gubiq.aar"), "gubiq.aar", os.ModePerm)
 
-	if err = ioutil.WriteFile(filepath.Join("src", "androidTest", "java", "org", "ethereum", "gethtest", "AndroidTest.java"), []byte(androidTestClass), os.ModePerm); err != nil {
+	if err = ioutil.WriteFile(filepath.Join("src", "androidTest", "java", "org", "ethereum", "gubiqtest", "AndroidTest.java"), []byte(androidTestClass), os.ModePerm); err != nil {
 		t.Fatalf("failed to write Android test class: %v", err)
 	}
 	// Finish creating the project and run the tests via gradle
@@ -169,7 +169,7 @@ func TestAndroid(t *testing.T) {
 
 const androidManifest = `<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="org.ethereum.gethtest"
+          package="org.ethereum.gubiqtest"
 	  android:versionCode="1"
 	  android:versionName="1.0">
 
@@ -198,6 +198,6 @@ repositories {
 }
 dependencies {
     compile 'com.android.support:appcompat-v7:19.0.0'
-    compile(name: "geth", ext: "aar")
+    compile(name: "gubiq", ext: "aar")
 }
 `

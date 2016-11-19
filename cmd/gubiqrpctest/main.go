@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// gethrpctest is a command to run the external RPC tests.
+// gubiqrpctest is a command to run the external RPC tests.
 package main
 
 import (

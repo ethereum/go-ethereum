@@ -31,7 +31,7 @@ import (
 )
 
 func tmpKeyStore(t *testing.T, encrypted bool) (dir string, ks keyStore) {
-	d, err := ioutil.TempDir("", "geth-keystore-test")
+	d, err := ioutil.TempDir("", "gubiq-keystore-test")
 	if err != nil {
 		t.Fatal(err)
 	}

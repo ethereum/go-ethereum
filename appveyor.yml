@@ -31,8 +31,8 @@ build_script:
   - go run build\ci.go install -arch %GETH_ARCH%
 
 after_build:
-  - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gubiqstore/builds
+  - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gubiqstore/builds
 
 test_script:
   - set GOARCH=%GETH_ARCH%

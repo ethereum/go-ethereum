@@ -575,7 +575,7 @@ func MakeWSRpcHost(ctx *cli.Context) string {
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
-// for Geth and returns half of the allowance to assign to the database.
+// for Gubiq and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
 	if err := raiseFdLimit(2048); err != nil {
 		Fatalf("Failed to raise file descriptor allowance: %v", err)
@@ -841,7 +841,7 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 		config.ChainId = new(big.Int)
 	}
 	// Check whether we are allowed to set default config params or not:
-	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `geth init`)
+	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `gubiq init`)
 	//  - If a genesis is already set, ensure we have a configuration for it (mainnet or testnet)
 	defaults := genesis == nil ||
 		(genesis.Hash() == params.MainNetGenesisHash && !ctx.GlobalBool(TestNetFlag.Name)) ||

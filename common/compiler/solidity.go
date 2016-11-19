@@ -98,7 +98,7 @@ func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	}
 	// Write source to a temporary file. Compiling stdin used to be supported
 	// but seems to produce an exception with solc 0.3.5.
-	infile, err := ioutil.TempFile("", "geth-compile-solidity")
+	infile, err := ioutil.TempFile("", "gubiq-compile-solidity")
 	if err != nil {
 		return nil, err
 	}

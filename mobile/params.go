@@ -16,7 +16,7 @@
 
 // Contains all the wrappers from the params package.
 
-package geth
+package gubiq
 
 import (
 	"github.com/ubiq/go-ubiq/core"

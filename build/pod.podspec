@@ -11,12 +11,12 @@ Pod::Spec.new do |spec|
 
 	spec.platform = :ios
   spec.ios.deployment_target  = '9.0'
-	spec.ios.vendored_frameworks = 'Frameworks/Geth.framework'
+	spec.ios.vendored_frameworks = 'Frameworks/Gubiq.framework'
 
 	spec.prepare_command = <<-CMD
-    curl https://gethstore.blob.core.windows.net/builds/geth-ios-all-{{.Version}}.tar.gz | tar -xvz
+    curl https://gubiqstore.blob.core.windows.net/builds/gubiq-ios-all-{{.Version}}.tar.gz | tar -xvz
     mkdir Frameworks
-    mv geth-ios-all-{{.Version}}/Geth.framework Frameworks
-    rm -rf geth-ios-all-{{.Version}}
+    mv gubiq-ios-all-{{.Version}}/Gubiq.framework Frameworks
+    rm -rf gubiq-ios-all-{{.Version}}
   CMD
 end

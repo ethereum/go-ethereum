@@ -11,8 +11,8 @@ Vcs-Browser: https://github.com/ubiq/go-ubiq
 Package: {{.Name}}
 Architecture: any
 Depends: ${misc:Depends}, {{.ExeList}}
-Description: Meta-package to install geth and other tools
- Meta-package to install geth and other tools
+Description: Meta-package to install gubiq and other tools
+ Meta-package to install gubiq and other tools
  
 {{range .Executables}}
 Package: {{$.ExeName .}}

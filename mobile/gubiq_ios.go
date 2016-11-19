@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build !android,!ios
+// +build ios
 
-package geth
+package gubiq
 
 // clientIdentifier is a hard coded identifier to report into the network.
-var clientIdentifier = "GethMobile"
+var clientIdentifier = "iGubiq"

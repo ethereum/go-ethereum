@@ -37,28 +37,28 @@ import (
 func TestConsoleWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
-	// Start a geth console, make sure it's cleaned up and terminate the console
-	geth := runGeth(t,
+	// Start a gubiq console, make sure it's cleaned up and terminate the console
+	gubiq := runGubiq(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--shh",
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
-	geth.setTemplateFunc("goos", func() string { return runtime.GOOS })
-	geth.setTemplateFunc("gover", runtime.Version)
-	geth.setTemplateFunc("gethver", func() string { return utils.Version })
-	geth.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	geth.setTemplateFunc("apis", func() []string {
+	gubiq.setTemplateFunc("goos", func() string { return runtime.GOOS })
+	gubiq.setTemplateFunc("gover", runtime.Version)
+	gubiq.setTemplateFunc("gubiqver", func() string { return utils.Version })
+	gubiq.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	gubiq.setTemplateFunc("apis", func() []string {
 		apis := append(strings.Split(rpc.DefaultIPCApis, ","), rpc.MetadataApi)
 		sort.Strings(apis)
 		return apis
 	})
 
 	// Verify the actual welcome message to the required template
-	geth.expect(`
-Welcome to the Geth JavaScript console!
+	gubiq.expect(`
+Welcome to the Gubiq JavaScript console!
 
-instance: Geth/v{{gethver}}/{{goos}}/{{gover}}
+instance: Gubiq/v{{gubiqver}}/{{goos}}/{{gover}}
 coinbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
@@ -66,7 +66,7 @@ at block: 0 ({{niltime}})
 
 > {{.InputLine "exit"}}
 `)
-	geth.expectExit()
+	gubiq.expectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
@@ -75,7 +75,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
-		ipc = `\\.\pipe\geth` + strconv.Itoa(trulyRandInt(100000, 999999))
+		ipc = `\\.\pipe\gubiq` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
 		ws := tmpdir(t)
 		defer os.RemoveAll(ws)
@@ -83,60 +83,60 @@ func TestIPCAttachWelcome(t *testing.T) {
 	}
 	// Note: we need --shh because testAttachWelcome checks for default
 	// list of ipc modules and shh is included there.
-	geth := runGeth(t,
+	gubiq := runGubiq(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--shh", "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, geth, "ipc:"+ipc)
+	testAttachWelcome(t, gubiq, "ipc:"+ipc)
 
-	geth.interrupt()
-	geth.expectExit()
+	gubiq.interrupt()
+	gubiq.expectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
-	geth := runGeth(t,
+	gubiq := runGubiq(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, geth, "http://localhost:"+port)
+	testAttachWelcome(t, gubiq, "http://localhost:"+port)
 
-	geth.interrupt()
-	geth.expectExit()
+	gubiq.interrupt()
+	gubiq.expectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
-	geth := runGeth(t,
+	gubiq := runGubiq(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, geth, "ws://localhost:"+port)
+	testAttachWelcome(t, gubiq, "ws://localhost:"+port)
 
-	geth.interrupt()
-	geth.expectExit()
+	gubiq.interrupt()
+	gubiq.expectExit()
 }
 
-func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
-	// Attach to a running geth note and terminate immediately
-	attach := runGeth(t, "attach", endpoint)
+func testAttachWelcome(t *testing.T, gubiq *testgubiq, endpoint string) {
+	// Attach to a running gubiq note and terminate immediately
+	attach := runGubiq(t, "attach", endpoint)
 	defer attach.expectExit()
 	attach.stdin.Close()
 
 	// Gather all the infos the welcome message needs to contain
 	attach.setTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.setTemplateFunc("gover", runtime.Version)
-	attach.setTemplateFunc("gethver", func() string { return utils.Version })
-	attach.setTemplateFunc("etherbase", func() string { return geth.Etherbase })
+	attach.setTemplateFunc("gubiqver", func() string { return utils.Version })
+	attach.setTemplateFunc("etherbase", func() string { return gubiq.Etherbase })
 	attach.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	attach.setTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.setTemplateFunc("datadir", func() string { return geth.Datadir })
+	attach.setTemplateFunc("datadir", func() string { return gubiq.Datadir })
 	attach.setTemplateFunc("apis", func() []string {
 		var apis []string
 		if strings.HasPrefix(endpoint, "ipc") {
@@ -150,9 +150,9 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
 
 	// Verify the actual welcome message to the required template
 	attach.expect(`
-Welcome to the Geth JavaScript console!
+Welcome to the Gubiq JavaScript console!
 
-instance: Geth/v{{gethver}}/{{goos}}/{{gover}}
+instance: Gubiq/v{{gubiqver}}/{{goos}}/{{gover}}
 coinbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}

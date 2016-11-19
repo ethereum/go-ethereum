@@ -18,7 +18,7 @@
 
 // +build go1.7
 
-package geth
+package gubiq
 
 // GetString returns the value of x as a formatted string in some number base.
 func (bi *BigInt) GetString(base int) string {

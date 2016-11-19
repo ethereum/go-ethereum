@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains a simple library definition to allow creating a Geth instance from
+// Contains a simple library definition to allow creating a Gubiq instance from
 // straight C code.
 
 package main
@@ -37,8 +37,8 @@ import (
 
 //export doRun
 func doRun(args *C.char) C.int {
-	// This is equivalent to geth.main, just modified to handle the function arg passing
-	if err := app.Run(strings.Split("geth "+C.GoString(args), " ")); err != nil {
+	// This is equivalent to gubiq.main, just modified to handle the function arg passing
+	if err := app.Run(strings.Split("gubiq "+C.GoString(args), " ")); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return -1
 	}

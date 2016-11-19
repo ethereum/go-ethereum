@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains specialized code for running Geth on Android.
+// Contains specialized code for running Gubiq on Android.
 
 package main
 

@@ -76,14 +76,14 @@ var (
 	EthAPI = cli.StringFlag{
 		Name:  "ethapi",
 		Usage: "URL of the Ethereum API provider",
-		Value: node.DefaultIPCEndpoint("geth"),
+		Value: node.DefaultIPCEndpoint("gubiq"),
 	}
 )
 
 var defaultBootnodes = []string{}
 
 func init() {
-	// Override flag defaults so bzzd can run alongside geth.
+	// Override flag defaults so bzzd can run alongside gubiq.
 	utils.ListenPortFlag.Value = 30399
 	utils.IPCPathFlag.Value = utils.DirectoryString{Value: "bzzd.ipc"}
 

@@ -36,7 +36,7 @@ var (
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
-    geth wallet import /path/to/my/presale.wallet
+    gubiq wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -107,7 +107,7 @@ TODO: Please write this
 				Usage:     "Create a new account",
 				ArgsUsage: " ",
 				Description: `
-    geth account new
+    gubiq account new
 
 Creates a new account. Prints the address.
 
@@ -117,7 +117,7 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    geth --password <passwordfile> account new
+    gubiq --password <passwordfile> account new
 
 Note, this is meant to be used for testing only, it is a bad idea to save your
 password to file or expose in any other way.
@@ -129,7 +129,7 @@ password to file or expose in any other way.
 				Usage:     "Update an existing account",
 				ArgsUsage: "<address>",
 				Description: `
-    geth account update <address>
+    gubiq account update <address>
 
 Update an existing account.
 
@@ -141,7 +141,7 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    geth --password <passwordfile> account update <address>
+    gubiq --password <passwordfile> account update <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
@@ -153,7 +153,7 @@ changing your password is only possible interactively.
 				Usage:     "Import a private key into a new account",
 				ArgsUsage: "<keyFile>",
 				Description: `
-    geth account import <keyfile>
+    gubiq account import <keyfile>
 
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
@@ -166,7 +166,7 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the -password flag:
 
-    geth --password <passwordfile> account import <keyfile>
+    gubiq --password <passwordfile> account import <keyfile>
 
 Note:
 As you can directly copy your encrypted accounts to another ethereum instance,

@@ -49,7 +49,7 @@ var (
 // all registered services.
 type Config struct {
 	// Name sets the instance name of the node. It must not contain the / character and is
-	// used in the devp2p node identifier. The instance name of geth is "geth". If no
+	// used in the devp2p node identifier. The instance name of gubiq is "gubiq". If no
 	// value is specified, the basename of the current executable is used.
 	Name string
 
@@ -250,9 +250,9 @@ func DefaultWSEndpoint() string {
 // NodeName returns the devp2p node identifier.
 func (c *Config) NodeName() string {
 	name := c.name()
-	// Backwards compatibility: previous versions used title-cased "Geth", keep that.
-	if name == "geth" || name == "geth-testnet" {
-		name = "Geth"
+	// Backwards compatibility: previous versions used title-cased "Gubiq", keep that.
+	if name == "gubiq" || name == "gubiq-testnet" {
+		name = "Gubiq"
 	}
 	if c.UserIdent != "" {
 		name += "/" + c.UserIdent
@@ -276,8 +276,8 @@ func (c *Config) name() string {
 	return c.Name
 }
 
-// These resources are resolved differently for "geth" instances.
-var isOldGethResource = map[string]bool{
+// These resources are resolved differently for "gubiq" instances.
+var isOldGubiqResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
@@ -294,10 +294,10 @@ func (c *Config) resolvePath(path string) string {
 		return ""
 	}
 	// Backwards-compatibility: ensure that data directory files created
-	// by geth 1.4 are used if they exist.
-	if c.name() == "geth" && isOldGethResource[path] {
+	// by gubiq 1.4 are used if they exist.
+	if c.name() == "gubiq" && isOldGubiqResource[path] {
 		oldpath := ""
-		if c.Name == "geth" {
+		if c.Name == "gubiq" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
