@@ -191,14 +191,15 @@ func testDAOForkBlockNewChain(t *testing.T, testnet bool, genesis string, votes 
 
 	genesisHash := common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
 	if testnet {
-		genesisHash = common.HexToHash("0x0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303")
+		genesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	}
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}
 	config, err := core.GetChainConfig(db, genesisHash)
 	if err != nil {
-		t.Fatalf("failed to retrieve chain config: %v", err)
+		t.Errorf("failed to retrieve chain config: %v", err)
+		return // we want to return here, the other checks can't make it past this point (nil panic).
 	}
 	// Validate the DAO hard-fork block number against the expected value
 	if config.DAOForkBlock == nil {

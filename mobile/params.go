@@ -60,7 +60,7 @@ func TestnetChainConfig() *ChainConfig {
 
 // TestnetGenesis returns the JSON spec to use for the Ethereum test network.
 func TestnetGenesis() string {
-	return core.TestNetGenesisBlock()
+	return core.DefaultTestnetGenesisBlock()
 }
 
 // ChainConfig is the core config which determines the blockchain settings.

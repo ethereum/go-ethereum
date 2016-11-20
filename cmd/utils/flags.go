@@ -750,9 +750,9 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 
 	case ctx.GlobalBool(TestNetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			ethConf.NetworkId = 2
+			ethConf.NetworkId = 3
 		}
-		ethConf.Genesis = core.TestNetGenesisBlock()
+		ethConf.Genesis = core.DefaultTestnetGenesisBlock()
 
 	case ctx.GlobalBool(DevModeFlag.Name):
 		ethConf.Genesis = core.OlympicGenesisBlock()
@@ -845,34 +845,20 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 		(genesis.Hash() == params.TestNetGenesisHash && ctx.GlobalBool(TestNetFlag.Name))
 
 	if defaults {
-		// Homestead fork
 		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.HomesteadBlock = params.TestNetHomesteadBlock
+			config = params.TestnetChainConfig
 		} else {
+			// Homestead fork
 			config.HomesteadBlock = params.MainNetHomesteadBlock
-		}
-		// DAO fork
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.DAOForkBlock = params.TestNetDAOForkBlock
-		} else {
+			// DAO fork
 			config.DAOForkBlock = params.MainNetDAOForkBlock
-		}
-		config.DAOForkSupport = true
+			config.DAOForkSupport = true
 
-		// DoS reprice fork
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.EIP150Block = params.TestNetHomesteadGasRepriceBlock
-			config.EIP150Hash = params.TestNetHomesteadGasRepriceHash
-		} else {
+			// DoS reprice fork
 			config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
 			config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
-		}
-		// DoS state cleanup fork
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config.EIP155Block = params.TestNetSpuriousDragon
-			config.EIP158Block = params.TestNetSpuriousDragon
-			config.ChainId = params.TestNetChainID
-		} else {
+
+			// DoS state cleanup fork
 			config.EIP155Block = params.MainNetSpuriousDragon
 			config.EIP158Block = params.MainNetSpuriousDragon
 			config.ChainId = params.MainNetChainID

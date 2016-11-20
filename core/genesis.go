@@ -17,6 +17,7 @@
 package core
 
 import (
+	"compress/bzip2"
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
@@ -43,7 +44,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 
 	var genesis struct {
-		ChainConfig params.ChainConfig `json:"config"`
+		ChainConfig *params.ChainConfig `json:"config"`
 		Nonce       string
 		Timestamp   string
 		ParentHash  string
@@ -115,7 +116,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := WriteHeadBlockHash(chainDb, block.Hash()); err != nil {
 		return nil, err
 	}
-	if err := WriteChainConfig(chainDb, block.Hash(), &genesis.ChainConfig); err != nil {
+	if err := WriteChainConfig(chainDb, block.Hash(), genesis.ChainConfig); err != nil {
 		return nil, err
 	}
 
@@ -174,7 +175,7 @@ func WriteDefaultGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
 // WriteTestNetGenesisBlock assembles the Morden test network genesis block and
 // writes it - along with all associated state - into a chain database.
 func WriteTestNetGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
-	return WriteGenesisBlock(chainDb, strings.NewReader(TestNetGenesisBlock()))
+	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultTestnetGenesisBlock()))
 }
 
 // WriteOlympicGenesisBlock assembles the Olympic genesis block and writes it
@@ -190,6 +191,15 @@ func DefaultGenesisBlock() string {
 	if err != nil {
 		panic(fmt.Sprintf("failed to access default genesis: %v", err))
 	}
+	blob, err := ioutil.ReadAll(reader)
+	if err != nil {
+		panic(fmt.Sprintf("failed to load default genesis: %v", err))
+	}
+	return string(blob)
+}
+
+func DefaultTestnetGenesisBlock() string {
+	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultTestnetGenesisBlock)))
 	blob, err := ioutil.ReadAll(reader)
 	if err != nil {
 		panic(fmt.Sprintf("failed to load default genesis: %v", err))
@@ -219,26 +229,4 @@ func OlympicGenesisBlock() string {
 			"1a26338f0d905e295fccb71fa9ea849ffa12aaf4": {"balance": "1606938044258990275541962092341162602522202993782792835301376"}
 		}
 	}`, types.EncodeNonce(42), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes())
-}
-
-// TestNetGenesisBlock assembles a JSON string representing the Morden test net
-// genenis block.
-func TestNetGenesisBlock() string {
-	return fmt.Sprintf(`{
-		"nonce": "0x%x",
-		"difficulty": "0x20000",
-		"mixhash": "0x00000000000000000000000000000000000000647572616c65787365646c6578",
-		"coinbase": "0x0000000000000000000000000000000000000000",
-		"timestamp": "0x00",
-		"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-		"extraData": "0x",
-		"gasLimit": "0x2FEFD8",
-		"alloc": {
-			"0000000000000000000000000000000000000001": { "balance": "1" },
-			"0000000000000000000000000000000000000002": { "balance": "1" },
-			"0000000000000000000000000000000000000003": { "balance": "1" },
-			"0000000000000000000000000000000000000004": { "balance": "1" },
-			"102e61f5d8f9bc71d0ad4a084df4e65e05ce0e1c": { "balance": "1606938044258990275541962092341162602522202993782792835301376" }
-		}
-	}`, types.EncodeNonce(0x6d6f7264656e))
 }
