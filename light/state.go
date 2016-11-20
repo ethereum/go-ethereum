@@ -26,9 +26,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-// StartingNonce determines the default nonce when new accounts are being created.
-var StartingNonce uint64
-
 // LightState is a memory representation of a state.
 // This version is ODR capable, caching only the already accessed part of the
 // state, retrieving unknown parts on-demand from the ODR backend. Changes are
@@ -238,7 +235,7 @@ func (self *LightState) newStateObject(addr common.Address) *StateObject {
 	}
 
 	stateObject := NewStateObject(addr, self.odr)
-	stateObject.SetNonce(StartingNonce)
+	stateObject.SetNonce(0)
 	self.stateObjects[addr.Str()] = stateObject
 
 	return stateObject

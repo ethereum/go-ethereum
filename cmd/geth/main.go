@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
@@ -235,10 +234,6 @@ func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
-	}
-
-	if ctx.GlobalBool(utils.TestNetFlag.Name) {
-		state.StartingNonce = 1048576 // (2**20)
 	}
 
 	stack := makeFullNode(ctx)

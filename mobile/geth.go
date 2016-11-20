@@ -25,11 +25,9 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
@@ -62,10 +60,6 @@ type NodeConfig struct {
 	// EthereumGenesis is the genesis JSON to use to seed the blockchain with. An
 	// empty genesis state is equivalent to using the mainnet's state.
 	EthereumGenesis string
-
-	// EthereumTestnetNonces specifies whether to use account nonces from the testnet
-	// range (2^20) or from the mainnet one (0).
-	EthereumTestnetNonces bool
 
 	// EthereumDatabaseCache is the system memory in MB to allocate for database caching.
 	// A minimum of 16MB is always reserved.
@@ -150,10 +144,6 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 			GpobaseStepDown:         10,
 			GpobaseStepUp:           100,
 			GpobaseCorrectionFactor: 110,
-		}
-		if config.EthereumTestnetNonces {
-			state.StartingNonce = 1048576 // (2**20)
-			light.StartingNonce = 1048576 // (2**20)
 		}
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)
