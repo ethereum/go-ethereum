@@ -235,7 +235,6 @@ func (self *LightState) newStateObject(addr common.Address) *StateObject {
 	}
 
 	stateObject := NewStateObject(addr, self.odr)
-	stateObject.SetNonce(0)
 	self.stateObjects[addr.Str()] = stateObject
 
 	return stateObject
