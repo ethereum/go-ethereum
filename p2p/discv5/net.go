@@ -45,6 +45,7 @@ const (
 	bucketRefreshInterval = 1 * time.Minute
 	seedCount             = 30
 	seedMaxAge            = 5 * 24 * time.Hour
+	lowPort               = 1024
 )
 
 const testTopic = "foo"
@@ -684,16 +685,19 @@ func (net *Network) internNodeFromDB(dbn *Node) *Node {
 	return n
 }
 
-func (net *Network) internNodeFromNeighbours(rn rpcNode) (n *Node, err error) {
+func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n *Node, err error) {
 	if rn.ID == net.tab.self.ID {
 		return nil, errors.New("is self")
+	}
+	if rn.UDP <= lowPort {
+		return nil, errors.New("low port")
 	}
 	n = net.nodes[rn.ID]
 	if n == nil {
 		// We haven't seen this node before.
-		n, err = nodeFromRPC(rn)
-		n.state = unknown
+		n, err = nodeFromRPC(sender, rn)
 		if err == nil {
+			n.state = unknown
 			net.nodes[n.ID] = n
 		}
 		return n, err
@@ -1095,7 +1099,7 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 		net.conn.sendNeighbours(n, results)
 		return n.state, nil
 	case neighborsPacket:
-		err := net.handleNeighboursPacket(n, pkt.data.(*neighbors))
+		err := net.handleNeighboursPacket(n, pkt)
 		return n.state, err
 	case neighboursTimeout:
 		if n.pendingNeighbours != nil {
@@ -1182,17 +1186,18 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-func (net *Network) handleNeighboursPacket(n *Node, req *neighbors) error {
+func (net *Network) handleNeighboursPacket(n *Node, pkt *ingressPacket) error {
 	if n.pendingNeighbours == nil {
 		return errNoQuery
 	}
 	net.abortTimedEvent(n, neighboursTimeout)
 
+	req := pkt.data.(*neighbors)
 	nodes := make([]*Node, len(req.Nodes))
 	for i, rn := range req.Nodes {
-		nn, err := net.internNodeFromNeighbours(rn)
+		nn, err := net.internNodeFromNeighbours(pkt.remoteAddr, rn)
 		if err != nil {
-			glog.V(logger.Debug).Infof("invalid neighbour from %x: %v", n.ID[:8], err)
+			glog.V(logger.Debug).Infof("invalid neighbour (%v) from %x@%v: %v", rn.IP, n.ID[:8], pkt.remoteAddr, err)
 			continue
 		}
 		nodes[i] = nn

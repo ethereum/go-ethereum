@@ -68,7 +68,7 @@ func newUDPTest(t *testing.T) *udpTest {
 		pipe:       newpipe(),
 		localkey:   newkey(),
 		remotekey:  newkey(),
-		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
+		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
 	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
 	return test
@@ -312,8 +312,9 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	// check that the sent neighbors are all returned by findnode
 	select {
 	case result := <-resultc:
-		if !reflect.DeepEqual(result, list) {
-			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, list)
+		want := append(list[:2], list[3:]...)
+		if !reflect.DeepEqual(result, want) {
+			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, want)
 		}
 	case err := <-errc:
 		t.Errorf("findnode error: %v", err)
