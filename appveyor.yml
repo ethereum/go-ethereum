@@ -22,19 +22,18 @@ environment:
 
 install:
   - rmdir C:\go /s /q
-  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.7.3.windows-amd64.zip
-  - 7z x go1.7.3.windows-amd64.zip -y -oC:\ > NUL
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.7.3.windows-%GETH_ARCH%.zip
+  - 7z x go1.7.3.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
   - go version
   - gcc --version
 
 build_script:
-  - go run build\ci.go install -arch %GETH_ARCH%
+  - go run build\ci.go install
 
 after_build:
-  - go run build\ci.go archive -arch %GETH_ARCH% -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
-  - go run build\ci.go nsis -arch %GETH_ARCH% -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
+  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gethstore/builds
 
 test_script:
-  - set GOARCH=%GETH_ARCH%
   - set CGO_ENABLED=1
   - go run build\ci.go test -vet -coverage
