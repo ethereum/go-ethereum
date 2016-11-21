@@ -385,7 +385,7 @@ func (t *udp) readLoop() {
 	buf := make([]byte, 1280)
 	for {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
-		if isTemporaryError(err) {
+		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
 			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
 			continue
@@ -396,13 +396,6 @@ func (t *udp) readLoop() {
 		}
 		t.handlePacket(from, buf[:nbytes])
 	}
-}
-
-func isTemporaryError(err error) bool {
-	tempErr, ok := err.(interface {
-		Temporary() bool
-	})
-	return ok && tempErr.Temporary() || isPacketTooBig(err)
 }
 
 func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
