@@ -88,8 +88,9 @@ func LocalEnv() Environment {
 			env.Branch = b
 		}
 	}
-	// Note that we don't get the current git tag. It would slow down
-	// builds and isn't used by anything.
+	if env.Tag == "" {
+		env.Tag = RunGit("for-each-ref", "--points-at=HEAD", "--count=1", "--format=%(refname:short)", "refs/tags")
+	}
 	return env
 }
 
