@@ -43,9 +43,9 @@
       </div>
     </nav>
 
-    <div class="container" style="padding-top: 48px; padding-bottom: 48px;">
+    <div class="container" style="padding-top: 24px;">
       <div class="row">
-        <div class="col-md-3" id="toc"></div>
+        <div class="col-md-3" id="toc" style="padding-top: 16px;"></div>
         <div class="col-md-9" id="content"></div>
       </div>
       <hr/>
@@ -57,7 +57,7 @@
     <script type="text/javascript">
       // Download the go-ethereum wiki sidebar and convert it into a guide sidebar
       $.ajax({
-        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/_Sidebar.md',
+        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Developer-Guide.md',
         error: function() {
           alert("Failed to load latest release!");
         },
@@ -118,13 +118,13 @@
     <script type="text/javascript">
       // Download the primary page content of the guide
       $.ajax({
-        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Frontier.md',
+        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Mobile:-Introduction.md',
         error: function() {
           alert("Failed to load latest release!");
         },
         dataType: 'text',
         success: function(data) {
-          $('#content').html(marked(data));
+          $('#content').html("<h1>Mobile platforms: Introduction</h1>" + marked(data));
           emojify.setConfig({img_dir: '../static/images/emoji'});
           emojify.run(document.getElementById('content'));
         }
