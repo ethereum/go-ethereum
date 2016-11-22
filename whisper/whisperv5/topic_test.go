@@ -32,7 +32,7 @@ func TestTopicString(x *testing.T) {
 	for i, tst := range topicStringTests {
 		s := tst.topic.String()
 		if s != tst.str {
-			x.Errorf("failed test %d: have %s, want %s.", i, s, tst.str)
+			x.Fatalf("failed test %d: have %s, want %s.", i, s, tst.str)
 		}
 	}
 }
@@ -57,7 +57,7 @@ func TestBytesToTopic(x *testing.T) {
 	for i, tst := range bytesToTopicTests {
 		t := BytesToTopic(tst.data)
 		if t != tst.topic {
-			x.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			x.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }
@@ -104,9 +104,9 @@ func TestUnmarshalTestsGood(x *testing.T) {
 		var t TopicType
 		err := t.UnmarshalJSON(tst.data)
 		if err != nil {
-			x.Errorf("failed test %d. input: %v.", i, tst.data)
+			x.Fatalf("failed test %d. input: %v.", i, tst.data)
 		} else if t != tst.topic {
-			x.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			x.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }
@@ -117,7 +117,7 @@ func TestUnmarshalTestsBad(x *testing.T) {
 		var t TopicType
 		err := t.UnmarshalJSON(tst.data)
 		if err == nil {
-			x.Errorf("failed test %d. input: %v.", i, tst.data)
+			x.Fatalf("failed test %d. input: %v.", i, tst.data)
 		}
 	}
 }
@@ -128,9 +128,9 @@ func TestUnmarshalTestsUgly(x *testing.T) {
 		var t TopicType
 		err := t.UnmarshalJSON(tst.data)
 		if err != nil {
-			x.Errorf("failed test %d. input: %v.", i, tst.data)
+			x.Fatalf("failed test %d. input: %v.", i, tst.data)
 		} else if t == tst.topic {
-			x.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			x.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }

@@ -29,114 +29,92 @@ func TestWhisperBasic(x *testing.T) {
 	p := w.Protocols()
 	shh := p[0]
 	if shh.Name != ProtocolName {
-		x.Errorf("failed Protocol Name: %v.", shh.Name)
-		return
+		x.Fatalf("failed Protocol Name: %v.", shh.Name)
 	}
 	if uint64(shh.Version) != ProtocolVersion {
-		x.Errorf("failed Protocol Version: %v.", shh.Version)
-		return
+		x.Fatalf("failed Protocol Version: %v.", shh.Version)
 	}
 	if shh.Length != NumberOfMessageCodes {
-		x.Errorf("failed Protocol Length: %v.", shh.Length)
-		return
+		x.Fatalf("failed Protocol Length: %v.", shh.Length)
 	}
 	if shh.Run == nil {
-		x.Errorf("failed shh.Run.")
-		return
+		x.Fatalf("failed shh.Run.")
 	}
 	if uint64(w.Version()) != ProtocolVersion {
-		x.Errorf("failed whisper Version: %v.", shh.Version)
-		return
+		x.Fatalf("failed whisper Version: %v.", shh.Version)
 	}
 	if w.GetFilter(0) != nil {
-		x.Errorf("failed GetFilter.")
-		return
+		x.Fatalf("failed GetFilter.")
 	}
 
 	peerID := make([]byte, 64)
 	randomize(peerID)
 	peer, err := w.getPeer(peerID)
 	if peer != nil {
-		x.Errorf("failed GetPeer.")
-		return
+		x.Fatalf("failed GetPeer.")
 	}
 	err = w.MarkPeerTrusted(peerID)
 	if err == nil {
-		x.Errorf("failed MarkPeerTrusted.")
-		return
+		x.Fatalf("failed MarkPeerTrusted.")
 	}
 	err = w.RequestHistoricMessages(peerID, peerID)
 	if err == nil {
-		x.Errorf("failed RequestHistoricMessages.")
-		return
+		x.Fatalf("failed RequestHistoricMessages.")
 	}
 	err = w.SendP2PMessage(peerID, nil)
 	if err == nil {
-		x.Errorf("failed SendP2PMessage.")
-		return
+		x.Fatalf("failed SendP2PMessage.")
 	}
 	exist := w.HasSymKey("non-existing")
 	if exist {
-		x.Errorf("failed HasSymKey.")
-		return
+		x.Fatalf("failed HasSymKey.")
 	}
 	key := w.GetSymKey("non-existing")
 	if key != nil {
-		x.Errorf("failed GetSymKey.")
-		return
+		x.Fatalf("failed GetSymKey.")
 	}
 	mail := w.Envelopes()
 	if len(mail) != 0 {
-		x.Errorf("failed w.Envelopes().")
-		return
+		x.Fatalf("failed w.Envelopes().")
 	}
 	m := w.Messages(0)
 	if len(m) != 0 {
-		x.Errorf("failed w.Messages.")
-		return
+		x.Fatalf("failed w.Messages.")
 	}
 
 	var derived []byte
 	ver := uint64(0xDEADBEEF)
 	derived, err = deriveKeyMaterial(peerID, ver)
 	if err != unknownVersionError(ver) {
-		x.Errorf("failed deriveKeyMaterial 1 with param = %v: %s.", peerID, err)
-		return
+		x.Fatalf("failed deriveKeyMaterial test case 1 with param = %v: %s.", peerID, err)
 	}
 	derived, err = deriveKeyMaterial(peerID, 0)
 	if err != nil {
-		x.Errorf("failed deriveKeyMaterial 2 with param = %v: %s.", peerID, err)
-		return
+		x.Fatalf("failed deriveKeyMaterial test case 2 with param = %v: %s.", peerID, err)
 	}
 	if !validateSymmetricKey(derived) {
-		x.Errorf("failed validateSymmetricKey with param = %v.", derived)
-		return
+		x.Fatalf("failed validateSymmetricKey with param = %v.", derived)
 	}
 	if containsOnlyZeros(derived) {
-		x.Errorf("failed containsOnlyZeros with param = %v.", derived)
-		return
+		x.Fatalf("failed containsOnlyZeros with param = %v.", derived)
 	}
 
 	buf := []byte{0xFF, 0xE5, 0x80, 0x2, 0}
 	le := bytesToIntLittleEndian(buf)
 	be := BytesToIntBigEndian(buf)
 	if le != uint64(0x280e5ff) {
-		x.Errorf("failed bytesToIntLittleEndian: %d.", le)
-		return
+		x.Fatalf("failed bytesToIntLittleEndian: %d.", le)
 	}
 	if be != uint64(0xffe5800200) {
-		x.Errorf("failed BytesToIntBigEndian: %d.", be)
-		return
+		x.Fatalf("failed BytesToIntBigEndian: %d.", be)
 	}
 
 	pk := w.NewIdentity()
 	if !validatePrivateKey(pk) {
-		x.Errorf("failed validatePrivateKey: %v.", pk)
-		return
+		x.Fatalf("failed validatePrivateKey: %v.", pk)
 	}
 	if !ValidatePublicKey(&pk.PublicKey) {
-		x.Errorf("failed ValidatePublicKey: %v.", pk)
-		return
+		x.Fatalf("failed ValidatePublicKey: %v.", pk)
 	}
 }
 
@@ -149,20 +127,16 @@ func TestWhisperIdentityManagement(x *testing.T) {
 	pk1 := w.GetIdentity(pub1)
 	pk2 := w.GetIdentity(pub2)
 	if !w.HasIdentity(pub1) {
-		x.Errorf("failed HasIdentity 1.")
-		return
+		x.Fatalf("failed test case 1.")
 	}
 	if !w.HasIdentity(pub2) {
-		x.Errorf("failed HasIdentity 2.")
-		return
+		x.Fatalf("failed test case 2.")
 	}
 	if pk1 != id1 {
-		x.Errorf("failed GetIdentity 3.")
-		return
+		x.Fatalf("failed test case 3.")
 	}
 	if pk2 != id2 {
-		x.Errorf("failed GetIdentity 4.")
-		return
+		x.Fatalf("failed test case 4.")
 	}
 
 	// Delete one identity
@@ -170,20 +144,16 @@ func TestWhisperIdentityManagement(x *testing.T) {
 	pk1 = w.GetIdentity(pub1)
 	pk2 = w.GetIdentity(pub2)
 	if w.HasIdentity(pub1) {
-		x.Errorf("failed HasIdentity 11.")
-		return
+		x.Fatalf("failed test case 11.")
 	}
 	if !w.HasIdentity(pub2) {
-		x.Errorf("failed HasIdentity 12.")
-		return
+		x.Fatalf("failed test case 12.")
 	}
 	if pk1 != nil {
-		x.Errorf("failed GetIdentity 13.")
-		return
+		x.Fatalf("failed test case 13.")
 	}
 	if pk2 != id2 {
-		x.Errorf("failed GetIdentity 14.")
-		return
+		x.Fatalf("failed test case 14.")
 	}
 
 	// Delete again non-existing identity
@@ -191,20 +161,16 @@ func TestWhisperIdentityManagement(x *testing.T) {
 	pk1 = w.GetIdentity(pub1)
 	pk2 = w.GetIdentity(pub2)
 	if w.HasIdentity(pub1) {
-		x.Errorf("failed HasIdentity 21.")
-		return
+		x.Fatalf("failed test case 21.")
 	}
 	if !w.HasIdentity(pub2) {
-		x.Errorf("failed HasIdentity 22.")
-		return
+		x.Fatalf("failed test case 22.")
 	}
 	if pk1 != nil {
-		x.Errorf("failed GetIdentity 23.")
-		return
+		x.Fatalf("failed test case 23.")
 	}
 	if pk2 != id2 {
-		x.Errorf("failed GetIdentity 24.")
-		return
+		x.Fatalf("failed test case 24.")
 	}
 
 	// Delete second identity
@@ -212,20 +178,16 @@ func TestWhisperIdentityManagement(x *testing.T) {
 	pk1 = w.GetIdentity(pub1)
 	pk2 = w.GetIdentity(pub2)
 	if w.HasIdentity(pub1) {
-		x.Errorf("failed HasIdentity 31.")
-		return
+		x.Fatalf("failed test case 31.")
 	}
 	if w.HasIdentity(pub2) {
-		x.Errorf("failed HasIdentity 32.")
-		return
+		x.Fatalf("failed test case 32.")
 	}
 	if pk1 != nil {
-		x.Errorf("failed GetIdentity 33.")
-		return
+		x.Fatalf("failed test case 33.")
 	}
 	if pk2 != nil {
-		x.Errorf("failed GetIdentity 34.")
-		return
+		x.Fatalf("failed test case 34.")
 	}
 }
 
@@ -239,27 +201,22 @@ func TestWhisperSymKeyManagement(x *testing.T) {
 
 	err := w.GenerateSymKey(id1)
 	if err != nil {
-		x.Errorf("failed test case 1 with seed %d: %s.", seed, err)
-		return
+		x.Fatalf("failed test case 1 with seed %d: %s.", seed, err)
 	}
 
 	k1 = w.GetSymKey(id1)
 	k2 = w.GetSymKey(id2)
 	if !w.HasSymKey(id1) {
-		x.Errorf("failed HasIdentity 2.")
-		return
+		x.Fatalf("failed test case 2.")
 	}
 	if w.HasSymKey(id2) {
-		x.Errorf("failed HasIdentity 3.")
-		return
+		x.Fatalf("failed test case 3.")
 	}
 	if k1 == nil {
-		x.Errorf("failed GetIdentity 4.")
-		return
+		x.Fatalf("failed test case 4.")
 	}
 	if k2 != nil {
-		x.Errorf("failed GetIdentity 5.")
-		return
+		x.Fatalf("failed test case 5.")
 	}
 
 	// add existing id, nothing should change
@@ -267,91 +224,72 @@ func TestWhisperSymKeyManagement(x *testing.T) {
 	randomize(randomKey)
 	err = w.AddSymKey(id1, randomKey)
 	if err == nil {
-		x.Errorf("failed test case 10 with seed %d.", seed)
-		return
+		x.Fatalf("failed test case 10 with seed %d.", seed)
 	}
 
 	k1 = w.GetSymKey(id1)
 	k2 = w.GetSymKey(id2)
 	if !w.HasSymKey(id1) {
-		x.Errorf("failed HasIdentity 12.")
-		return
+		x.Fatalf("failed test case 12.")
 	}
 	if w.HasSymKey(id2) {
-		x.Errorf("failed HasIdentity 13.")
-		return
+		x.Fatalf("failed test case 13.")
 	}
 	if k1 == nil {
-		x.Errorf("failed GetIdentity 14.")
-		return
+		x.Fatalf("failed test case 14.")
 	}
 	if bytes.Compare(k1, randomKey) == 0 {
-		x.Errorf("failed GetIdentity 15: k1 == randomKey.")
-		return
+		x.Fatalf("failed test case 15: k1 == randomKey.")
 	}
 	if k2 != nil {
-		x.Errorf("failed GetIdentity 16.")
-		return
+		x.Fatalf("failed test case 16.")
 	}
 
 	err = w.AddSymKey(id2, randomKey) // add non-existing (yet)
 	if err != nil {
-		x.Errorf("failed test case 21 with seed %d: %s.", seed, err)
-		return
+		x.Fatalf("failed test case 21 with seed %d: %s.", seed, err)
 	}
 	k1 = w.GetSymKey(id1)
 	k2 = w.GetSymKey(id2)
 	if !w.HasSymKey(id1) {
-		x.Errorf("failed HasIdentity 22.")
-		return
+		x.Fatalf("failed test case 22.")
 	}
 	if !w.HasSymKey(id2) {
-		x.Errorf("failed HasIdentity 23.")
-		return
+		x.Fatalf("failed test case 23.")
 	}
 	if k1 == nil {
-		x.Errorf("failed GetIdentity 24.")
-		return
+		x.Fatalf("failed test case 24.")
 	}
 	if k2 == nil {
-		x.Errorf("failed GetIdentity 25.")
-		return
+		x.Fatalf("failed test case 25.")
 	}
 	if bytes.Compare(k1, k2) == 0 {
-		x.Errorf("failed GetIdentity 26.")
-		return
+		x.Fatalf("failed test case 26.")
 	}
 	if bytes.Compare(k1, randomKey) == 0 {
-		x.Errorf("failed GetIdentity 27.")
-		return
+		x.Fatalf("failed test case 27.")
 	}
 	if len(k1) != aesKeyLength {
-		x.Errorf("failed GetIdentity 28.")
-		return
+		x.Fatalf("failed test case 28.")
 	}
 	if len(k2) != aesKeyLength {
-		x.Errorf("failed GetIdentity 29.")
-		return
+		x.Fatalf("failed test case 29.")
 	}
 
 	w.DeleteSymKey(id1)
 	k1 = w.GetSymKey(id1)
 	k2 = w.GetSymKey(id2)
 	if w.HasSymKey(id1) {
-		x.Errorf("failed HasIdentity 31.")
-		return
+		x.Fatalf("failed test case 31.")
 	}
 	if !w.HasSymKey(id2) {
-		x.Errorf("failed HasIdentity 32.")
-		return
+		x.Fatalf("failed test case 32.")
 	}
 	if k1 != nil {
-		x.Errorf("failed GetIdentity 33.")
-		return
+		x.Fatalf("failed test case 33.")
 	}
 	if k2 == nil {
-		x.Errorf("failed GetIdentity 34.")
-		return
+		x.Fatalf("failed test case 34.")
 	}
 
 	w.DeleteSymKey(id1)
@@ -359,19 +297,15 @@ func TestWhisperSymKeyManagement(x *testing.T) {
 	k1 = w.GetSymKey(id1)
 	k2 = w.GetSymKey(id2)
 	if w.HasSymKey(id1) {
-		x.Errorf("failed HasIdentity 41.")
-		return
+		x.Fatalf("failed test case 41.")
 	}
 	if w.HasSymKey(id2) {
-		x.Errorf("failed HasIdentity 42.")
-		return
+		x.Fatalf("failed test case 42.")
 	}
 	if k1 != nil {
-		x.Errorf("failed GetIdentity 43.")
-		return
+		x.Fatalf("failed test case 43.")
 	}
 	if k2 != nil {
-		x.Errorf("failed GetIdentity 44.")
-		return
+		x.Fatalf("failed test case 44.")
 	}
 }

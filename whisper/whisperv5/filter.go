@@ -155,21 +155,20 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 		return false
 	}
 
-	encryptionMethodMatch := false
 	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
-		encryptionMethodMatch = true
-		if f.Topics == nil {
-			// wildcard
-			return true
-		}
+		return f.MatchTopic(envelope.Topic)
 	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
-		encryptionMethodMatch = true
+		return f.MatchTopic(envelope.Topic)
 	}
-
-	return encryptionMethodMatch && f.MatchTopic(envelope.Topic)
+	return false
 }
 
 func (f *Filter) MatchTopic(topic TopicType) bool {
+	if len(f.Topics) == 0 {
+		// any topic matches
+		return true
+	}
+
 	for _, t := range f.Topics {
 		if t == topic {
 			return true
