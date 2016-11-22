@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -63,8 +64,9 @@ func debugLog(s string) {
 
 // Network manages the table and all protocol interaction.
 type Network struct {
-	db   *nodeDB // database of known nodes
-	conn transport
+	db          *nodeDB // database of known nodes
+	conn        transport
+	netrestrict *netutil.Netlist
 
 	closed           chan struct{}          // closed when loop is done
 	closeReq         chan struct{}          // 'request to close'
@@ -133,7 +135,7 @@ type timeoutEvent struct {
 	node *Node
 }
 
-func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, dbPath string) (*Network, error) {
+func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, dbPath string, netrestrict *netutil.Netlist) (*Network, error) {
 	ourID := PubkeyID(&ourPubkey)
 
 	var db *nodeDB
@@ -148,6 +150,7 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, d
 	net := &Network{
 		db:               db,
 		conn:             conn,
+		netrestrict:      netrestrict,
 		tab:              tab,
 		topictab:         newTopicTable(db, tab.self),
 		ticketStore:      newTicketStore(),
@@ -696,6 +699,9 @@ func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n
 	if n == nil {
 		// We haven't seen this node before.
 		n, err = nodeFromRPC(sender, rn)
+		if net.netrestrict != nil && !net.netrestrict.Contains(n.IP) {
+			return n, errors.New("not contained in netrestrict whitelist")
+		}
 		if err == nil {
 			n.state = unknown
 			net.nodes[n.ID] = n
