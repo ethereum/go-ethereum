@@ -744,7 +744,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 				continue
 			}
 			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+>)")
+			re := regexp.MustCompile("([^<]+) <(.+)>")
 			parts := re.FindStringSubmatch(line)
 			if len(parts) == 3 {
 				contribs = append(contribs, mavenContributor{Name: parts[1], Email: parts[2]})
@@ -796,7 +796,7 @@ func doXCodeFramework(cmdline []string) {
 	}
 	// Prepare and upload a PodSpec to CocoaPods
 	if *deploy != "" {
-		meta := newPodMetadata(env)
+		meta := newPodMetadata(env, archive)
 		build.Render("build/pod.podspec", meta.Name+".podspec", 0755, meta)
 		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec", "--allow-warnings", "--verbose")
 	}
@@ -806,6 +806,7 @@ type podMetadata struct {
 	Name         string
 	Version      string
 	Commit       string
+	Archive      string
 	Contributors []podContributor
 }
 
@@ -814,7 +815,7 @@ type podContributor struct {
 	Email string
 }
 
-func newPodMetadata(env build.Environment) podMetadata {
+func newPodMetadata(env build.Environment, archive string) podMetadata {
 	// Collect the list of authors from the repo root
 	contribs := []podContributor{}
 	if authors, err := os.Open("AUTHORS"); err == nil {
@@ -828,7 +829,7 @@ func newPodMetadata(env build.Environment) podMetadata {
 				continue
 			}
 			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+>)")
+			re := regexp.MustCompile("([^<]+) <(.+)>")
 			parts := re.FindStringSubmatch(line)
 			if len(parts) == 3 {
 				contribs = append(contribs, podContributor{Name: parts[1], Email: parts[2]})
@@ -841,7 +842,8 @@ func newPodMetadata(env build.Environment) podMetadata {
 	}
 	return podMetadata{
 		Name:         name,
-		Version:      archiveVersion(env),
+		Archive:      archive,
+		Version:      build.VERSION() + "+" + env.Commit[:8],
 		Commit:       env.Commit,
 		Contributors: contribs,
 	}
