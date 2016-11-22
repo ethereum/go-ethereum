@@ -744,7 +744,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 				continue
 			}
 			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+>)")
+			re := regexp.MustCompile("([^<]+) <(.+)>")
 			parts := re.FindStringSubmatch(line)
 			if len(parts) == 3 {
 				contribs = append(contribs, mavenContributor{Name: parts[1], Email: parts[2]})
@@ -829,7 +829,7 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 				continue
 			}
 			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+>)")
+			re := regexp.MustCompile("([^<]+) <(.+)>")
 			parts := re.FindStringSubmatch(line)
 			if len(parts) == 3 {
 				contribs = append(contribs, podContributor{Name: parts[1], Email: parts[2]})
