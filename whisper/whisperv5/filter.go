@@ -143,9 +143,18 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
+		// if Dst match, ignore the topic
+		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
-		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
+		// check if that both the key and the topic match
+		if f.SymKeyHash == msg.SymKeyHash {
+			for _, t := range f.Topics {
+				if t == msg.Topic {
+					return true
+				}
+			}
+			return false
+		}
 	}
 	return false
 }
@@ -155,25 +164,25 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 		return false
 	}
 
+	encryptionMethodMatch := false
 	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
-		return f.MatchTopic(envelope.Topic)
-	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
-		return f.MatchTopic(envelope.Topic)
-	}
-	return false
-}
-
-func (f *Filter) MatchTopic(topic TopicType) bool {
-	if len(f.Topics) == 0 {
-		// any topic matches
-		return true
-	}
-
-	for _, t := range f.Topics {
-		if t == topic {
+		encryptionMethodMatch = true
+		if f.Topics == nil {
+			// wildcard
 			return true
 		}
+	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
+		encryptionMethodMatch = true
 	}
+
+	if encryptionMethodMatch {
+		for _, t := range f.Topics {
+			if t == envelope.Topic {
+				return true
+			}
+		}
+	}
+
 	return false
 }
 

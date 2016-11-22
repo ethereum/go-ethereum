@@ -124,7 +124,8 @@ func initialize(x *testing.T) {
 		node.filerId = node.shh.Watch(&f)
 		node.id, err = crypto.HexToECDSA(keys[i])
 		if err != nil {
-			x.Fatalf("failed convert the key: %s.", keys[i])
+			x.Errorf("failed convert the key: %s.", keys[i])
+			return
 		}
 		port := port0 + i
 		addr := fmt.Sprintf(":%d", port) // e.g. ":30303"
@@ -154,7 +155,8 @@ func initialize(x *testing.T) {
 
 		err = node.server.Start()
 		if err != nil {
-			x.Fatalf("failed to start server %d.", i)
+			x.Errorf("failed to start server %d.", i)
+			return
 		}
 
 		nodes[i] = &node
@@ -185,7 +187,8 @@ func checkPropagation(x *testing.T) {
 		for i := 0; i < NumNodes; i++ {
 			f := nodes[i].shh.GetFilter(nodes[i].filerId)
 			if f == nil {
-				x.Fatalf("failed to get filterId %d from node %d.", nodes[i].filerId, i)
+				x.Errorf("failed to get filterId %d from node %d.", nodes[i].filerId, i)
+				return
 			}
 
 			mail := f.Retrieve()
@@ -194,12 +197,13 @@ func checkPropagation(x *testing.T) {
 			}
 
 			if isTestComplete() {
+
 				return
 			}
 		}
 	}
 
-	x.Fatalf("Test was not complete: timeout %d seconds.", iterations*cycle/1000)
+	x.Errorf("Test was not complete: timeout %d seconds.", iterations*cycle/1000)
 }
 
 func validateMail(x *testing.T, index int, mail []*ReceivedMessage) bool {
@@ -215,7 +219,7 @@ func validateMail(x *testing.T, index int, mail []*ReceivedMessage) bool {
 		return true
 	}
 	if cnt > 1 {
-		x.Fatalf("node %d received %d.", index, cnt)
+		x.Errorf("node %d received %d.", index, cnt)
 		return false
 	}
 
@@ -224,7 +228,8 @@ func validateMail(x *testing.T, index int, mail []*ReceivedMessage) bool {
 		defer result.mutex.Unlock()
 		result.counter[index] += cnt
 		if result.counter[index] > 1 {
-			x.Fatalf("node %d accumulated %d.", index, result.counter[index])
+			x.Errorf("node %d accumulated %d.", index, result.counter[index])
+			return false
 		}
 	}
 	return true
@@ -265,12 +270,14 @@ func sendMsg(x *testing.T, expected bool, id int) {
 	msg := NewSentMessage(&opt)
 	envelope, err := msg.Wrap(&opt)
 	if err != nil {
-		x.Fatalf("failed to seal message.")
+		x.Errorf("failed to seal message.")
+		return
 	}
 
 	err = nodes[id].shh.Send(envelope)
 	if err != nil {
-		x.Fatalf("failed to send message.")
+		x.Errorf("failed to send message.")
+		return
 	}
 }
 
@@ -279,19 +286,22 @@ func TestPeerBasic(x *testing.T) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		x.Fatalf("failed generateMessageParams with seed %d.", seed)
+		x.Errorf("failed 1 with seed %d.", seed)
+		return
 	}
 
 	params.PoW = 0.001
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		x.Fatalf("failed Wrap with seed %d.", seed)
+		x.Errorf("failed 2 with seed %d.", seed)
+		return
 	}
 
 	p := newPeer(nil, nil, nil)
 	p.mark(env)
 	if !p.marked(env) {
-		x.Fatalf("failed mark with seed %d.", seed)
+		x.Errorf("failed 3 with seed %d.", seed)
+		return
 	}
 }
