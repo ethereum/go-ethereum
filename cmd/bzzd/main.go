@@ -96,6 +96,7 @@ func init() {
 		utils.BootnodesFlag,
 		utils.KeyStoreDirFlag,
 		utils.ListenPortFlag,
+		utils.NetrestrictFlag,
 		utils.MaxPeersFlag,
 		utils.NATFlag,
 		utils.NodeKeyFileFlag,

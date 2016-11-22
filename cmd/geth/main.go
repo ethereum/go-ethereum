@@ -149,6 +149,7 @@ participating.
 		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
+		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.RPCEnabledFlag,

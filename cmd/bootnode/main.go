@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 func main() {
@@ -39,6 +40,7 @@ func main() {
 		nodeKeyFile = flag.String("nodekey", "", "private key filename")
 		nodeKeyHex  = flag.String("nodekeyhex", "", "private key as hex (for testing)")
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
+		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
 		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
 
 		nodeKey *ecdsa.PrivateKey
@@ -81,12 +83,20 @@ func main() {
 		os.Exit(0)
 	}
 
+	var restrictList *netutil.Netlist
+	if *netrestrict != "" {
+		restrictList, err = netutil.ParseNetlist(*netrestrict)
+		if err != nil {
+			utils.Fatalf("-netrestrict: %v", err)
+		}
+	}
+
 	if *runv5 {
-		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
+		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	} else {
-		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, ""); err != nil {
+		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
