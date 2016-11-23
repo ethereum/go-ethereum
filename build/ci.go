@@ -459,7 +459,7 @@ func makeWorkdir(wdflag string) string {
 }
 
 func isUnstableBuild(env build.Environment) bool {
-	if env.Branch != "master" && env.Tag != "" {
+	if env.Tag != "" {
 		return false
 	}
 	return true

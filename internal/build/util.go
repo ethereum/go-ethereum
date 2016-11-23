@@ -76,6 +76,8 @@ func VERSION() string {
 	return string(bytes.TrimSpace(version))
 }
 
+var warnedAboutGit bool
+
 // RunGit runs a git subcommand and returns its output.
 // The command must complete successfully.
 func RunGit(args ...string) string {
@@ -83,7 +85,10 @@ func RunGit(args ...string) string {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err == exec.ErrNotFound {
-		log.Println("no git in PATH")
+		if !warnedAboutGit {
+			log.Println("Warning: can't find 'git' in PATH")
+			warnedAboutGit = true
+		}
 		return ""
 	} else if err != nil {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
