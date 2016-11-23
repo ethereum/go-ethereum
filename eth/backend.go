@@ -218,6 +218,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth.chainConfig = config.ChainConfig
 
+	glog.V(logger.Info).Infoln("Chain config:", eth.chainConfig)
+
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
