@@ -843,7 +843,7 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 	return podMetadata{
 		Name:         name,
 		Archive:      archive,
-		Version:      build.VERSION() + "+" + env.Commit[:8],
+		Version:      build.VERSION(),
 		Commit:       env.Commit,
 		Contributors: contribs,
 	}
