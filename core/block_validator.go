@@ -113,7 +113,7 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
 	header := block.Header()
 	if block.GasUsed().Cmp(usedGas) != 0 {
-		return ValidationError(fmt.Sprintf("gas used error (%v / %v)", block.GasUsed(), usedGas))
+		return ValidationError(fmt.Sprintf("gas used error (%v / %v : %v)", block.GasUsed(), usedGas, receipts))
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
