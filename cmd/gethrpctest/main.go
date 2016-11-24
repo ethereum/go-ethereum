@@ -121,7 +121,7 @@ func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 	ethConf := &eth.Config{
 		TestGenesisState: db,
 		TestGenesisBlock: test.Genesis,
-		ChainConfig:      &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock},
+		ChainConfig:      params.MainnetChainConfig,
 	}
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		return nil, err
