@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -273,6 +274,17 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 
 func (bn BlockNumber) Int64() int64 {
 	return (int64)(bn)
+}
+
+func (bn BlockNumber) String() string {
+	switch bn {
+	case PendingBlockNumber:
+		return "pending"
+	case LatestBlockNumber:
+		return "latest"
+	default:
+		return "0x" + strconv.FormatInt(int64(bn), 16)
+	}
 }
 
 // HexBytes JSON-encodes as hex with 0x prefix.
