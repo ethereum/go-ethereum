@@ -304,74 +304,88 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 // transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
 	block, err := blockByNumber(ctx, s.b, blockNr)
-	if block != nil {
-		response, err := s.rpcOutputBlock(ctx, block, true, fullTx)
-		if err == nil && blockNr == rpc.PendingBlockNumber {
-			// Pending blocks need to nil out a few fields
-			for _, field := range []string{"hash", "nonce", "logsBloom", "miner"} {
-				response[field] = nil
-			}
-		}
-		return response, err
+	if block == nil || err != nil {
+		return nil, err
 	}
-	return nil, err
+	response := s.rpcOutputBlock(ctx, block, true, fullTx)
+	if blockNr == rpc.PendingBlockNumber {
+		// Pending blocks need to nil out a few fields
+		for _, field := range []string{"hash", "nonce", "logsBloom", "miner"} {
+			response[field] = nil
+		}
+	}
+	return response, nil
 }
 
-func blockByNumber(ctx context.Context, b Backend, blockNr rpc.BlockNumber) (*types.Block, error) {
+func blockByNumber(ctx context.Context, b Backend, blockNr rpc.BlockNumber) (block *types.Block, err error) {
 	switch blockNr {
 	case rpc.PendingBlockNumber:
 		ps, ok := b.(PendingState)
 		if !ok {
-			return nil, fmt.Errorf("can't access the pending block with the current backend")
+			return nil, ErrNoPendingState
 		}
-		return ps.PendingBlock()
+		block, err = ps.PendingBlock()
 	case rpc.LatestBlockNumber:
-		return b.BlockByNumber(ctx, nil)
+		block, err = b.BlockByNumber(ctx, nil)
 	default:
-		return b.BlockByNumber(ctx, big.NewInt(int64(blockNr)))
+		block, err = b.BlockByNumber(ctx, big.NewInt(int64(blockNr)))
 	}
+	// Don't return errors to the client. This is bad but we can't distinguish errors at
+	// this level and the API requires returning null for non-existent blocks.
+	if err != nil && glog.V(logger.Debug) {
+		glog.Warningf("can't get block %q: %v", blockNr, err)
+	}
+	return block, nil
 }
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
 // detail, otherwise only the transaction hash is returned.
-func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) (map[string]interface{}, error) {
+func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, blockHash common.Hash, fullTx bool) map[string]interface{} {
 	block, err := s.b.BlockByHash(ctx, blockHash)
 	if block != nil {
 		return s.rpcOutputBlock(ctx, block, true, fullTx)
 	}
-	return nil, err
+	if err != nil {
+		if glog.V(logger.Debug) {
+			glog.Warningf("can't get block %x: %v", blockHash[:], err)
+		}
+	}
+	return nil
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index rpc.HexNumber) (map[string]interface{}, error) {
 	block, err := blockByNumber(ctx, s.b, blockNr)
-	if block != nil {
-		uncles := block.Uncles()
-		if index.Int() < 0 || index.Int() >= len(uncles) {
-			glog.V(logger.Debug).Infof("uncle block on index %d not found for block #%d", index.Int(), blockNr)
-			return nil, nil
-		}
-		block = types.NewBlockWithHeader(uncles[index.Int()])
-		return s.rpcOutputBlock(ctx, block, false, false)
+	if block == nil || err != nil {
+		return nil, err
 	}
-	return nil, err
+	uncles := block.Uncles()
+	if index.Int() < 0 || index.Int() >= len(uncles) {
+		glog.V(logger.Debug).Infof("uncle block on index %d not found for block #%d", index.Int(), blockNr)
+		return nil, nil
+	}
+	block = types.NewBlockWithHeader(uncles[index.Int()])
+	return s.rpcOutputBlock(ctx, block, false, false), nil
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
-func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index rpc.HexNumber) (map[string]interface{}, error) {
+func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index rpc.HexNumber) map[string]interface{} {
 	block, err := s.b.BlockByHash(ctx, blockHash)
-	if block != nil {
-		uncles := block.Uncles()
-		if index.Int() < 0 || index.Int() >= len(uncles) {
-			glog.V(logger.Debug).Infof("uncle block on index %d not found for block %s", index.Int(), blockHash.Hex())
-			return nil, nil
-		}
-		block = types.NewBlockWithHeader(uncles[index.Int()])
-		return s.rpcOutputBlock(ctx, block, false, false)
+	if err != nil && glog.V(logger.Debug) {
+		glog.Warningf("can't get block %x: %v", blockHash[:], err)
 	}
-	return nil, err
+	if block == nil {
+		return nil
+	}
+	uncles := block.Uncles()
+	if index.Int() < 0 || index.Int() >= len(uncles) {
+		glog.V(logger.Debug).Infof("uncle block on index %d not found for block %s", index.Int(), blockHash.Hex())
+		return nil
+	}
+	block = types.NewBlockWithHeader(uncles[index.Int()])
+	return s.rpcOutputBlock(ctx, block, false, false)
 }
 
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
@@ -559,7 +573,7 @@ func FormatLogs(structLogs []vm.StructLog) []StructLogRes {
 // rpcOutputBlock converts the given block to the RPC output which depends on fullTx. If inclTx is true transactions are
 // returned. When fullTx is true the returned block contains full transaction details, otherwise it will only contain
 // transaction hashes.
-func (s *PublicBlockChainAPI) rpcOutputBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
+func (s *PublicBlockChainAPI) rpcOutputBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) map[string]interface{} {
 	head := b.Header() // copies the header once
 	fields := map[string]interface{}{
 		"number":           rpc.NewHexNumber(head.Number),
@@ -604,7 +618,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(ctx context.Context, b *types.Block
 	}
 	fields["uncles"] = uncleHashes
 
-	return fields, nil
+	return fields
 }
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
