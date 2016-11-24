@@ -57,6 +57,9 @@ var (
 	*/
 	TransSkipTests = []string{
 		"TransactionWithHihghNonce256",
+		"Vitalik_15",
+		"Vitalik_16",
+		"Vitalik_17",
 	}
 	StateSkipTests = []string{}
 	VmSkipTests    = []string{}
