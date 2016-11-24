@@ -91,8 +91,31 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	// first we need to create a slice of the type
 	var refSlice reflect.Value
 	switch elem.T {
-	case IntTy, UintTy, BoolTy: // int, uint, bool can all be of type big int.
-		refSlice = reflect.ValueOf([]*big.Int(nil))
+	case IntTy, UintTy, BoolTy: //we need to create the correct type of array otherwise we see the following issue;
+		//cannot unmarshal []*big.Int in to []uint32 as described in
+		//https://github.com/ethereum/go-ethereum/issues/2802
+		switch t.Type.Kind {
+		case reflect.Bool:
+			refSlice = reflect.ValueOf([]bool(nil))
+		case reflect.Uint8:
+			refSlice = reflect.ValueOf([]uint8(nil))
+		case reflect.Uint16:
+			refSlice = reflect.ValueOf([]uint16(nil))
+		case reflect.Uint32:
+			refSlice = reflect.ValueOf([]uint32(nil))
+		case reflect.Uint64:
+			refSlice = reflect.ValueOf([]uint64(nil))
+		case reflect.Int8:
+			refSlice = reflect.ValueOf([]int8(nil))
+		case reflect.Int16:
+			refSlice = reflect.ValueOf([]int16(nil))
+		case reflect.Int32:
+			refSlice = reflect.ValueOf([]int32(nil))
+		case reflect.Int64:
+			refSlice = reflect.ValueOf([]int64(nil))
+		default:
+			refSlice = reflect.ValueOf([]*big.Int(nil))
+		}
 	case AddressTy: // address must be of slice Address
 		refSlice = reflect.ValueOf([]common.Address(nil))
 	case HashTy: // hash must be of slice hash
@@ -147,7 +170,27 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		// set inter to the correct type (cast)
 		switch elem.T {
 		case IntTy, UintTy:
-			inter = common.BytesToBig(returnOutput)
+			bigNum := common.BytesToBig(returnOutput)
+			switch t.Type.Kind {
+			case reflect.Uint8:
+				inter = uint8(bigNum.Uint64())
+			case reflect.Uint16:
+				inter = uint16(bigNum.Uint64())
+			case reflect.Uint32:
+				inter = uint32(bigNum.Uint64())
+			case reflect.Uint64:
+				inter = bigNum.Uint64()
+			case reflect.Int8:
+				inter = int8(bigNum.Int64())
+			case reflect.Int16:
+				inter = int16(bigNum.Int64())
+			case reflect.Int32:
+				inter = int32(bigNum.Int64())
+			case reflect.Int64:
+				inter = bigNum.Int64()
+			default:
+				inter = common.BytesToBig(returnOutput)
+			}
 		case BoolTy:
 			inter = common.BytesToBig(returnOutput).Uint64() > 0
 		case AddressTy:
