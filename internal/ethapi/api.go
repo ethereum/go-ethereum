@@ -584,7 +584,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(ctx context.Context, b *types.Block
 
 	if inclTx {
 		txs := b.Transactions()
-		transactions := make([]interface{}, len(txs))
+		transactions := make([]interface{}, 0, len(txs))
 		for i, tx := range b.Transactions() {
 			if fullTx {
 				rtx := newRPCTransaction(tx)
