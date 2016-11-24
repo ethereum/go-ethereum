@@ -20,123 +20,38 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/net/context"
 )
-
-// VMEnv is the light client version of the vm execution environment.
-// Unlike other structures, VMEnv holds a context that is applied by state
-// retrieval requests through the entire execution. If any state operation
-// returns an error, the execution fails.
-type VMEnv struct {
-	vm.Environment
-	ctx         context.Context
-	chainConfig *params.ChainConfig
-	evm         *vm.EVM
-	state       *VMState
-	header      *types.Header
-	msg         core.Message
-	depth       int
-	chain       *LightChain
-	err         error
-}
-
-// NewEnv creates a new execution environment based on an ODR capable light state
-func NewEnv(ctx context.Context, state *LightState, chainConfig *params.ChainConfig, chain *LightChain, msg core.Message, header *types.Header, cfg vm.Config) *VMEnv {
-	env := &VMEnv{
-		chainConfig: chainConfig,
-		chain:       chain,
-		header:      header,
-		msg:         msg,
-	}
-	env.state = &VMState{ctx: ctx, state: state, env: env}
-
-	env.evm = vm.New(env, cfg)
-	return env
-}
-
-func (self *VMEnv) ChainConfig() *params.ChainConfig { return self.chainConfig }
-func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
-func (self *VMEnv) Origin() common.Address           { return self.msg.From() }
-func (self *VMEnv) BlockNumber() *big.Int            { return self.header.Number }
-func (self *VMEnv) Coinbase() common.Address         { return self.header.Coinbase }
-func (self *VMEnv) Time() *big.Int                   { return self.header.Time }
-func (self *VMEnv) Difficulty() *big.Int             { return self.header.Difficulty }
-func (self *VMEnv) GasLimit() *big.Int               { return self.header.GasLimit }
-func (self *VMEnv) Db() vm.Database                  { return self.state }
-func (self *VMEnv) Depth() int                       { return self.depth }
-func (self *VMEnv) SetDepth(i int)                   { self.depth = i }
-func (self *VMEnv) GetHash(n uint64) common.Hash {
-	for header := self.chain.GetHeader(self.header.ParentHash, self.header.Number.Uint64()-1); header != nil; header = self.chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
-		if header.Number.Uint64() == n {
-			return header.Hash()
-		}
-	}
-
-	return common.Hash{}
-}
-
-func (self *VMEnv) AddLog(log *vm.Log) {
-	//self.state.AddLog(log)
-}
-func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
-	return self.state.GetBalance(from).Cmp(balance) >= 0
-}
-
-func (self *VMEnv) SnapshotDatabase() int {
-	return self.state.SnapshotDatabase()
-}
-
-func (self *VMEnv) RevertToSnapshot(idx int) {
-	self.state.RevertToSnapshot(idx)
-}
-
-func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {
-	core.Transfer(from, to, amount)
-}
-
-func (self *VMEnv) Call(me vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	return core.Call(self, me, addr, data, gas, price, value)
-}
-func (self *VMEnv) CallCode(me vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	return core.CallCode(self, me, addr, data, gas, price, value)
-}
-
-func (self *VMEnv) DelegateCall(me vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
-	return core.DelegateCall(self, me, addr, data, gas, price)
-}
-
-func (self *VMEnv) Create(me vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
-	return core.Create(self, me, data, gas, price, value)
-}
-
-// Error returns the error (if any) that happened during execution.
-func (self *VMEnv) Error() error {
-	return self.err
-}
 
 // VMState is a wrapper for the light state that holds the actual context and
 // passes it to any state operation that requires it.
 type VMState struct {
-	vm.Database
 	ctx       context.Context
 	state     *LightState
 	snapshots []*LightState
-	env       *VMEnv
+	err       error
 }
+
+func NewVMState(ctx context.Context, state *LightState) *VMState {
+	return &VMState{ctx: ctx, state: state}
+}
+
+func (s *VMState) Error() error {
+	return s.err
+}
+
+func (s *VMState) AddLog(log *vm.Log) {}
 
 // errHandler handles and stores any state error that happens during execution.
 func (s *VMState) errHandler(err error) {
-	if err != nil && s.env.err == nil {
-		s.env.err = err
+	if err != nil && s.err == nil {
+		s.err = err
 	}
 }
 
-func (self *VMState) SnapshotDatabase() int {
+func (self *VMState) Snapshot() int {
 	self.snapshots = append(self.snapshots, self.state.Copy())
 	return len(self.snapshots) - 1
 }
@@ -172,6 +87,12 @@ func (s *VMState) CreateAccount(addr common.Address) vm.Account {
 // AddBalance adds the given amount to the balance of the specified account
 func (s *VMState) AddBalance(addr common.Address, amount *big.Int) {
 	err := s.state.AddBalance(s.ctx, addr, amount)
+	s.errHandler(err)
+}
+
+// SubBalance adds the given amount to the balance of the specified account
+func (s *VMState) SubBalance(addr common.Address, amount *big.Int) {
+	err := s.state.SubBalance(s.ctx, addr, amount)
 	s.errHandler(err)
 }
 

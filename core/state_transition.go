@@ -55,9 +55,9 @@ type StateTransition struct {
 	initialGas    *big.Int
 	value         *big.Int
 	data          []byte
-	state         vm.Database
+	state         vm.StateDB
 
-	env vm.Environment
+	env *vm.Environment
 }
 
 // Message represents a message sent to a contract.
@@ -106,7 +106,7 @@ func IntrinsicGas(data []byte, contractCreation, homestead bool) *big.Int {
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(env vm.Environment, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(env *vm.Environment, msg Message, gp *GasPool) *StateTransition {
 	return &StateTransition{
 		gp:         gp,
 		env:        env,
@@ -116,7 +116,7 @@ func NewStateTransition(env vm.Environment, msg Message, gp *GasPool) *StateTran
 		initialGas: new(big.Int),
 		value:      msg.Value(),
 		data:       msg.Data(),
-		state:      env.Db(),
+		state:      env.StateDB,
 	}
 }
 
@@ -127,7 +127,7 @@ func NewStateTransition(env vm.Environment, msg Message, gp *GasPool) *StateTran
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(env vm.Environment, msg Message, gp *GasPool) ([]byte, *big.Int, error) {
+func ApplyMessage(env *vm.Environment, msg Message, gp *GasPool) ([]byte, *big.Int, error) {
 	st := NewStateTransition(env, msg, gp)
 
 	ret, _, gasUsed, err := st.TransitionDb()
@@ -217,7 +217,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	msg := self.msg
 	sender := self.from() // err checked in preCheck
 
-	homestead := self.env.ChainConfig().IsHomestead(self.env.BlockNumber())
+	homestead := self.env.ChainConfig().IsHomestead(self.env.BlockNumber)
 	contractCreation := MessageCreatesContract(msg)
 	// Pay intrinsic gas
 	if err = self.useGas(IntrinsicGas(self.data, contractCreation, homestead)); err != nil {
@@ -227,7 +227,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	vmenv := self.env
 	//var addr common.Address
 	if contractCreation {
-		ret, _, err = vmenv.Create(sender, self.data, self.gas, self.gasPrice, self.value)
+		ret, _, err = vmenv.Create(sender, self.data, self.gas, self.value)
 		if homestead && err == vm.CodeStoreOutOfGasError {
 			self.gas = Big0
 		}
@@ -239,7 +239,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.gasPrice, self.value)
+		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
 		if err != nil {
 			glog.V(logger.Core).Infoln("VM call err:", err)
 		}
@@ -257,7 +257,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	requiredGas = new(big.Int).Set(self.gasUsed())
 
 	self.refundGas()
-	self.state.AddBalance(self.env.Coinbase(), new(big.Int).Mul(self.gasUsed(), self.gasPrice))
+	self.state.AddBalance(self.env.Coinbase, new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 
 	return ret, requiredGas, self.gasUsed(), err
 }

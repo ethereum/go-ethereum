@@ -299,11 +299,11 @@ func CompileProgram(program *Program) (err error) {
 
 // RunProgram runs the program given the environment and contract and returns an
 // error if the execution failed (non-consensus)
-func RunProgram(program *Program, env Environment, contract *Contract, input []byte) ([]byte, error) {
+func RunProgram(program *Program, env *Environment, contract *Contract, input []byte) ([]byte, error) {
 	return runProgram(program, 0, NewMemory(), newstack(), env, contract, input)
 }
 
-func runProgram(program *Program, pcstart uint64, mem *Memory, stack *Stack, env Environment, contract *Contract, input []byte) ([]byte, error) {
+func runProgram(program *Program, pcstart uint64, mem *Memory, stack *Stack, env *Environment, contract *Contract, input []byte) ([]byte, error) {
 	contract.Input = input
 
 	var (
@@ -319,7 +319,7 @@ func runProgram(program *Program, pcstart uint64, mem *Memory, stack *Stack, env
 		}()
 	}
 
-	homestead := env.ChainConfig().IsHomestead(env.BlockNumber())
+	homestead := env.ChainConfig().IsHomestead(env.BlockNumber)
 	for pc < uint64(len(program.instructions)) {
 		instrCount++
 
@@ -357,7 +357,7 @@ func validDest(dests map[uint64]struct{}, dest *big.Int) bool {
 
 // jitCalculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func jitCalculateGasAndSize(env Environment, contract *Contract, instr instruction, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
+func jitCalculateGasAndSize(env *Environment, contract *Contract, instr instruction, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -408,7 +408,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
-		val := statedb.GetState(contract.Address(), common.BigToHash(x))
+		val := env.StateDB.GetState(contract.Address(), common.BigToHash(x))
 
 		// This checks for 3 scenario's and calculates gas accordingly
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
@@ -417,7 +417,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
 			g = params.SstoreSetGas
 		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
-			statedb.AddRefund(params.SstoreRefundGas)
+			env.StateDB.AddRefund(params.SstoreRefundGas)
 
 			g = params.SstoreClearGas
 		} else {
@@ -425,8 +425,8 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		}
 		gas.Set(g)
 	case SUICIDE:
-		if !statedb.HasSuicided(contract.Address()) {
-			statedb.AddRefund(params.SuicideRefundGas)
+		if !env.StateDB.HasSuicided(contract.Address()) {
+			env.StateDB.AddRefund(params.SuicideRefundGas)
 		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
@@ -463,7 +463,7 @@ func jitCalculateGasAndSize(env Environment, contract *Contract, instr instructi
 		gas.Add(gas, stack.data[stack.len()-1])
 
 		if op == CALL {
-			if !env.Db().Exist(common.BigToAddress(stack.data[stack.len()-2])) {
+			if !env.StateDB.Exist(common.BigToAddress(stack.data[stack.len()-2])) {
 				gas.Add(gas, params.CallNewAccountGas)
 			}
 		}

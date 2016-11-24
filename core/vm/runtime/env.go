@@ -23,9 +23,28 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
 )
 
+func NewEnv(cfg *Config, state *state.StateDB) *vm.Environment {
+	context := vm.Context{
+		CallContext: core.EVMCallContext{
+			CanTransfer: core.CanTransfer,
+			Transfer:    core.Transfer,
+			GetHashFn:   func(uint64) common.Hash { return common.Hash{} },
+		},
+		Origin:      cfg.Origin,
+		Coinbase:    cfg.Coinbase,
+		BlockNumber: cfg.BlockNumber,
+		Time:        cfg.Time,
+		Difficulty:  cfg.Difficulty,
+		GasLimit:    cfg.GasLimit,
+		GasPrice:    new(big.Int),
+	}
+
+	return vm.NewEnvironment(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
+}
+
+/*
 // Env is a basic runtime environment required for running the EVM.
 type Env struct {
 	chainConfig *params.ChainConfig
@@ -112,3 +131,4 @@ func (self *Env) DelegateCall(me vm.ContractRef, addr common.Address, data []byt
 func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
 	return core.Create(self, caller, data, gas, price, value)
 }
+*/

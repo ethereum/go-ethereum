@@ -23,104 +23,95 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Environment is an EVM requirement and helper which allows access to outside
-// information such as states.
-type Environment interface {
-	// The current ruleset
-	ChainConfig() *params.ChainConfig
-	// The state database
-	Db() Database
-	// Creates a restorable snapshot
-	SnapshotDatabase() int
-	// Set database to previous snapshot
-	RevertToSnapshot(int)
-	// Address of the original invoker (first occurrence of the VM invoker)
-	Origin() common.Address
-	// The block number this VM is invoked on
-	BlockNumber() *big.Int
-	// The n'th hash ago from this block number
-	GetHash(uint64) common.Hash
-	// The handler's address
-	Coinbase() common.Address
-	// The current time (block time)
-	Time() *big.Int
-	// Difficulty set on the current block
-	Difficulty() *big.Int
-	// The gas limit of the block
-	GasLimit() *big.Int
-	// Determines whether it's possible to transact
-	CanTransfer(from common.Address, balance *big.Int) bool
-	// Transfers amount from one account to the other
-	Transfer(from, to Account, amount *big.Int)
-	// Adds a LOG to the state
-	AddLog(*Log)
-	// Type of the VM
-	Vm() Vm
-	// Get the curret calling depth
-	Depth() int
-	// Set the current calling depth
-	SetDepth(i int)
-	// Call another contract
-	Call(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
-	// Take another's contract code and execute within our own context
-	CallCode(me ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error)
-	// Same as CallCode except sender and value is propagated from parent to child scope
-	DelegateCall(me ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error)
-	// Create a new contract
-	Create(me ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error)
+// Context provides the EVM with auxilary information. Once provided it shouldn't be modified.
+type Context struct {
+	CallContext
+
+	// Message information
+	Origin   common.Address // Provides information for ORIGIN
+	Coinbase common.Address // Provides information for COINBASE
+	GasPrice *big.Int       // Provides information for GASPRICE
+
+	// Block information
+	GasLimit    *big.Int // Provides information for GASLIMIT
+	BlockNumber *big.Int // Provides information for NUMBER
+	Time        *big.Int // Provides information for TIME
+	Difficulty  *big.Int // Provides information for DIFFICULTY
 }
 
-// Vm is the basic interface for an implementation of the EVM.
-type Vm interface {
-	// Run should execute the given contract with the input given in in
-	// and return the contract execution return bytes or an error if it
-	// failed.
-	Run(c *Contract, in []byte) ([]byte, error)
+// Environment provides information about external sources for the EVM.
+type Environment struct {
+	// Context provides auxiliary blockchain related information
+	Context
+	// StateDB gives access to the underlying state
+	StateDB StateDB
+	// Depth is the current call stack
+	Depth int
+
+	// evm is the ethereum virtual machine
+	evm Vm
+	// chainConfig contains information about the current chain
+	chainConfig *params.ChainConfig
+	vmConfig    Config
 }
 
-// Database is a EVM database for full state querying.
-type Database interface {
-	GetAccount(common.Address) Account
-	CreateAccount(common.Address) Account
-
-	AddBalance(common.Address, *big.Int)
-	GetBalance(common.Address) *big.Int
-
-	GetNonce(common.Address) uint64
-	SetNonce(common.Address, uint64)
-
-	GetCodeHash(common.Address) common.Hash
-	GetCodeSize(common.Address) int
-	GetCode(common.Address) []byte
-	SetCode(common.Address, []byte)
-
-	AddRefund(*big.Int)
-	GetRefund() *big.Int
-
-	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
-
-	Suicide(common.Address) bool
-	HasSuicided(common.Address) bool
-
-	// Exist reports whether the given account exists in state.
-	// Notably this should also return true for suicided accounts.
-	Exist(common.Address) bool
-	// Empty returns whether the given account is empty. Empty
-	// is defined according to EIP161 (balance = nonce = code = 0).
-	Empty(common.Address) bool
+// NewEnvironment retutrns a new EVM environment.
+func NewEnvironment(context Context, statedb StateDB, chainConfig *params.ChainConfig, vmCfg Config) *Environment {
+	env := &Environment{
+		Context:     context,
+		StateDB:     statedb,
+		vmConfig:    vmCfg,
+		chainConfig: chainConfig,
+	}
+	env.evm = New(env, vmCfg)
+	return env
 }
 
-// Account represents a contract or basic ethereum account.
-type Account interface {
-	SubBalance(amount *big.Int)
-	AddBalance(amount *big.Int)
-	SetBalance(*big.Int)
-	SetNonce(uint64)
-	Balance() *big.Int
-	Address() common.Address
-	ReturnGas(*big.Int, *big.Int)
-	SetCode(common.Hash, []byte)
-	ForEachStorage(cb func(key, value common.Hash) bool)
-	Value() *big.Int
+func (env *Environment) Call(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
+	if env.vmConfig.Test && env.Depth > 0 {
+		caller.ReturnGas(gas)
+
+		return nil, nil
+	}
+
+	return env.CallContext.Call(env, caller, addr, data, gas, value)
 }
+
+// Take another's contract code and execute within our own context
+func (env *Environment) CallCode(caller ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error) {
+	if env.vmConfig.Test && env.Depth > 0 {
+		caller.ReturnGas(gas)
+
+		return nil, nil
+	}
+
+	return env.CallContext.CallCode(env, caller, addr, data, gas, value)
+}
+
+// Same as CallCode except sender and value is propagated from parent to child scope
+func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error) {
+	if env.vmConfig.Test && env.Depth > 0 {
+		caller.ReturnGas(gas)
+
+		return nil, nil
+	}
+
+	return env.CallContext.DelegateCall(env, caller, addr, data, gas)
+}
+
+// Create a new contract
+func (env *Environment) Create(caller ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error) {
+	if env.vmConfig.Test && env.Depth > 0 {
+		caller.ReturnGas(gas)
+
+		return nil, common.Address{}, nil
+	}
+
+	return env.CallContext.Create(env, caller, data, gas, value)
+}
+
+// ChainConfig returns the environment's chain configuration
+func (env *Environment) ChainConfig() *params.ChainConfig { return env.chainConfig }
+
+// EVM returns the environments EVM
+func (env *Environment) EVM() Vm { return env.evm }
