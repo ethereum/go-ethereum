@@ -91,7 +91,11 @@ func NewType(t string) (typ Type, err error) {
 		}
 		typ.Elem = &sliceType
 		typ.stringKind = sliceType.stringKind + t[len(res[1]):]
-		return typ, nil
+		//Altough we know that this is an array, we cannot return as we don't
+		//know the type of the element, however, if it is still an array, then don't determine the type
+		if typ.Elem.IsArray {
+			return typ, nil
+		}
 	}
 
 	// parse the type and size of the abi-type.
