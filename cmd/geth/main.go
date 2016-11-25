@@ -40,6 +40,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -173,6 +175,7 @@ participating.
 		utils.VMEnableJitFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
+		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
 		utils.SolcPathFlag,
@@ -254,8 +257,24 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func makeFullNode(ctx *cli.Context) *node.Node {
+	// Create the default extradata and construct the base node
+	var clientInfo = struct {
+		Version   uint
+		Name      string
+		GoVersion string
+		Os        string
+	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
+	extra, err := rlp.EncodeToBytes(clientInfo)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+	}
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
+		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		extra = nil
+	}
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	utils.RegisterEthService(ctx, stack, utils.MakeDefaultExtraData(clientIdentifier))
+	utils.RegisterEthService(ctx, stack, extra)
 
 	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
 	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
@@ -263,14 +282,17 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if shhEnabled || shhAutoEnabled {
 		utils.RegisterShhService(stack)
 	}
-
+	// Add the Ethereum Stats daemon if requested
+	if url := ctx.GlobalString(utils.EthStatsURLFlag.Name); url != "" {
+		utils.RegisterEthStatsService(stack, url)
+	}
 	// Add the release oracle service so it boots along with node.
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		config := release.Config{
 			Oracle: relOracle,
-			Major:  uint32(utils.VersionMajor),
-			Minor:  uint32(utils.VersionMinor),
-			Patch:  uint32(utils.VersionPatch),
+			Major:  uint32(params.VersionMajor),
+			Minor:  uint32(params.VersionMinor),
+			Patch:  uint32(params.VersionPatch),
 		}
 		commit, _ := hex.DecodeString(gitCommit)
 		copy(config.Commit[:], commit)
@@ -278,7 +300,6 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}); err != nil {
 		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
-
 	return stack
 }
 
@@ -342,7 +363,7 @@ func makedag(ctx *cli.Context) error {
 
 func version(ctx *cli.Context) error {
 	fmt.Println(strings.Title(clientIdentifier))
-	fmt.Println("Version:", utils.Version)
+	fmt.Println("Version:", params.Version)
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}

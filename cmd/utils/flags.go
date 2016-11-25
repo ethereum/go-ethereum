@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
+// Package utils contains internal helper functions for go-ethereum commands.
 package utils
 
 import (
@@ -36,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/logger"
@@ -86,7 +88,7 @@ func NewApp(gitCommit, usage string) *cli.App {
 	app.Author = ""
 	//app.Authors = nil
 	app.Email = ""
-	app.Version = Version
+	app.Version = params.Version
 	if gitCommit != "" {
 		app.Version += "-" + gitCommit[:8]
 	}
@@ -242,8 +244,11 @@ var (
 		Name:  "jitvm",
 		Usage: "Enable the JIT VM",
 	}
-
-	// logging and debug settings
+	// Logging and debug settings
+	EthStatsURLFlag = cli.StringFlag{
+		Name:  "ethstats",
+		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
+	}
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
 		Usage: "Enable metrics collection and reporting",
@@ -660,7 +665,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 
 // MakeNode configures a node with no services from command line flags.
 func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
-	vsn := Version
+	vsn := params.Version
 	if gitCommit != "" {
 		vsn += "-" + gitCommit[:8]
 	}
@@ -801,10 +806,27 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	}
 }
 
-// RegisterShhService configures whisper and adds it to the given node.
+// RegisterShhService configures Whisper and adds it to the given node.
 func RegisterShhService(stack *node.Node) {
 	if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
 		Fatalf("Failed to register the Whisper service: %v", err)
+	}
+}
+
+// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
+// th egiven node.
+func RegisterEthStatsService(stack *node.Node, url string) {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		// Retrieve both eth and les services
+		var ethServ *eth.Ethereum
+		ctx.Service(&ethServ)
+
+		var lesServ *les.LightEthereum
+		ctx.Service(&lesServ)
+
+		return ethstats.New(url, ethServ, lesServ)
+	}); err != nil {
+		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
 }
 

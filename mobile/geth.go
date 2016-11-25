@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -64,6 +65,12 @@ type NodeConfig struct {
 	// EthereumDatabaseCache is the system memory in MB to allocate for database caching.
 	// A minimum of 16MB is always reserved.
 	EthereumDatabaseCache int
+
+	// EthereumNetStats is a netstats connection string to use to report various
+	// chain, transaction and node stats to a monitoring server.
+	//
+	// It has the form "nodename:secret@host:port"
+	EthereumNetStats string
 
 	// WhisperEnabled specifies whether the node should run the Whisper protocol.
 	WhisperEnabled bool
@@ -106,6 +113,7 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	// Create the empty networking stack
 	nodeConf := &node.Config{
 		Name:             clientIdentifier,
+		Version:          params.Version,
 		DataDir:          datadir,
 		KeyStoreDir:      filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
 		NoDiscovery:      true,
@@ -149,6 +157,17 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 			return les.New(ctx, ethConf)
 		}); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
+		}
+		// If netstats reporting is requested, do it
+		if config.EthereumNetStats != "" {
+			if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+				var lesServ *les.LightEthereum
+				ctx.Service(&lesServ)
+
+				return ethstats.New(config.EthereumNetStats, nil, lesServ)
+			}); err != nil {
+				return nil, fmt.Errorf("netstats init: %v", err)
+			}
 		}
 	}
 	// Register the Whisper protocol if requested
