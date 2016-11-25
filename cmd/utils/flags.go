@@ -373,7 +373,7 @@ var (
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
-		Usage: "JavaScript root path for `loadScript` and document root for `admin.httpGet`",
+		Usage: "JavaScript root path for `loadScript`",
 		Value: ".",
 	}
 	SolcPathFlag = cli.StringFlag{

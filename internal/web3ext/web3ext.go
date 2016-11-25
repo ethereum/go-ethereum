@@ -226,11 +226,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopWS',
 			call: 'admin_stopWS'
-		}),
-		new web3._extend.Method({
-			name: 'httpGet',
-			call: 'admin_httpGet',
-			params: 2
 		})
 	],
 	properties:
