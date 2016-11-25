@@ -29,8 +29,8 @@ Available commands are:
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
    nsis                                                                                      -- creates a Windows NSIS installer
-   aar        [ -sign key-id ] [-deploy repo] [ -upload dest ]                               -- creates an Android archive
-   xcode      [ -sign key-id ] [-deploy repo] [ -upload dest ]                               -- creates an iOS XCode framework
+   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an Android archive
+   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an iOS XCode framework
    xgo        [ options ]                                                                    -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -654,6 +654,7 @@ func doWindowsInstaller(cmdline []string) {
 
 func doAndroidArchive(cmdline []string) {
 	var (
+		local  = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
 		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. ANDROID_SIGNING_KEY)`)
 		deploy = flag.String("deploy", "", `Destination to deploy the archive (usually "https://oss.sonatype.org")`)
 		upload = flag.String("upload", "", `Destination to upload the archive (usually "gethstore/builds")`)
@@ -666,6 +667,11 @@ func doAndroidArchive(cmdline []string) {
 	build.MustRun(gomobileTool("init"))
 	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
 
+	if *local {
+		// If we're building locally, copy bundle to build dir and skip Maven
+		os.Rename("geth.aar", filepath.Join(GOBIN, "geth.aar"))
+		return
+	}
 	meta := newMavenMetadata(env)
 	build.Render("build/mvn.pom", meta.Package+".pom", 0755, meta)
 
@@ -768,6 +774,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 
 func doXCodeFramework(cmdline []string) {
 	var (
+		local  = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
 		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. IOS_SIGNING_KEY)`)
 		deploy = flag.String("deploy", "", `Destination to deploy the archive (usually "trunk")`)
 		upload = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
@@ -777,12 +784,19 @@ func doXCodeFramework(cmdline []string) {
 
 	// Build the iOS XCode framework
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
+	build.MustRun(gomobileTool("init"))
+	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ethereum/go-ethereum/mobile")
 
+	if *local {
+		// If we're building locally, use the build folder and stop afterwards
+		bind.Dir, _ = filepath.Abs(GOBIN)
+		build.MustRun(bind)
+		return
+	}
 	archive := "geth-" + archiveBasename("ios", env)
 	if err := os.Mkdir(archive, os.ModePerm); err != nil {
 		log.Fatal(err)
 	}
-	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ethereum/go-ethereum/mobile")
 	bind.Dir, _ = filepath.Abs(archive)
 	build.MustRun(bind)
 	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)

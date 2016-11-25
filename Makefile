@@ -2,12 +2,11 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: geth geth-cross evm all test clean
+.PHONY: geth android ios geth-cross evm all test clean
 .PHONY: geth-linux geth-linux-386 geth-linux-amd64 geth-linux-mips64 geth-linux-mips64le
 .PHONY: geth-linux-arm geth-linux-arm-5 geth-linux-arm-6 geth-linux-arm-7 geth-linux-arm64
 .PHONY: geth-darwin geth-darwin-386 geth-darwin-amd64
 .PHONY: geth-windows geth-windows-386 geth-windows-amd64
-.PHONY: geth-android geth-ios
 
 GOBIN = build/bin
 GO ?= latest
@@ -20,10 +19,20 @@ geth:
 evm:
 	build/env.sh go run build/ci.go install ./cmd/evm
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/evm to start the evm."
+	@echo "Run \"$(GOBIN)/evm\" to start the evm."
 
 all:
 	build/env.sh go run build/ci.go install
+
+android:
+	build/env.sh go run build/ci.go aar --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/geth.aar\" to use the library."
+
+ios:
+	build/env.sh go run build/ci.go xcode --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/Geth.framework\" to use the library."
 
 test: all
 	build/env.sh go run build/ci.go test
@@ -112,13 +121,3 @@ geth-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=windows/amd64 -v ./cmd/geth
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/geth-windows-* | grep amd64
-
-geth-android:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=android-21/aar -v ./cmd/geth
-	@echo "Android cross compilation done:"
-	@ls -ld $(GOBIN)/geth-android-*
-
-geth-ios:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=ios-7.0/framework -v ./cmd/geth
-	@echo "iOS framework cross compilation done:"
-	@ls -ld $(GOBIN)/geth-ios-*
