@@ -131,7 +131,7 @@ func (e *Envelope) calculatePoW(diff uint32) {
 	h = crypto.Keccak256(buf)
 	firstBit := common.FirstBitSet(common.BigD(h))
 	x := math.Pow(2, float64(firstBit))
-	x /= float64(len(e.Data))
+	x /= float64(len(e.Data) + len(e.Salt) + len(e.AESNonce))
 	x /= float64(e.TTL + diff)
 	e.pow = x
 }

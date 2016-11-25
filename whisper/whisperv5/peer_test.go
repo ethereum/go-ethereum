@@ -79,7 +79,7 @@ type TestNode struct {
 	shh     *Whisper
 	id      *ecdsa.PrivateKey
 	server  *p2p.Server
-	filerId int
+	filerId uint32
 }
 
 var result TestData

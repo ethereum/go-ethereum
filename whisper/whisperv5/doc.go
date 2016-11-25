@@ -46,7 +46,7 @@ const (
 	messagesCode         = 1
 	p2pCode              = 2
 	mailRequestCode      = 3
-	NumberOfMessageCodes = 10
+	NumberOfMessageCodes = 32
 
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)

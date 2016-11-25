@@ -43,7 +43,7 @@ func InitDebugTest(i int64) {
 
 type FilterTestCase struct {
 	f      *Filter
-	id     int
+	id     uint32
 	alive  bool
 	msgCnt int
 }
@@ -100,7 +100,7 @@ func TestInstallFilters(x *testing.T) {
 	filters := NewFilters(w)
 	tst := generateTestCases(x, SizeTestFilters)
 
-	var j int
+	var j uint32
 	for i := 0; i < SizeTestFilters; i++ {
 		j = filters.Install(tst[i].f)
 		tst[i].id = j
@@ -516,7 +516,8 @@ func TestWatchers(x *testing.T) {
 
 	const NumFilters = 16
 	const NumMessages = 256
-	var i, j int
+	var i int
+	var j uint32
 	var e *Envelope
 
 	w := NewWhisper(nil)
@@ -532,7 +533,7 @@ func TestWatchers(x *testing.T) {
 
 	var envelopes [NumMessages]*Envelope
 	for i = 0; i < NumMessages; i++ {
-		j = rand.Int() % NumFilters
+		j = rand.Uint32() % NumFilters
 		e = generateCompatibeEnvelope(x, tst[j].f)
 		envelopes[i] = e
 		tst[j].msgCnt++
@@ -585,7 +586,7 @@ func TestWatchers(x *testing.T) {
 	envelopes[0] = e
 	tst[0].msgCnt++
 	for i = 1; i < NumMessages; i++ {
-		j = rand.Int() % NumFilters
+		j = rand.Uint32() % NumFilters
 		e = generateCompatibeEnvelope(x, tst[j].f)
 		envelopes[i] = e
 		tst[j].msgCnt++
@@ -639,7 +640,10 @@ func TestWatchers(x *testing.T) {
 		x.Fatalf("failed test case 9 with seed %d.", seed)
 	}
 
-	f := filters.Get(0)
+	f := filters.Get(1)
+	if f == nil {
+		x.Fatalf("failed to get the filter with seed %d.", seed)
+	}
 	f.AcceptP2P = true
 	total = 0
 	filters.NotifyWatchers(envelopes[0], p2pCode)

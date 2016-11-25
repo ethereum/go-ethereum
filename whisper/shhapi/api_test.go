@@ -21,8 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
@@ -42,10 +43,9 @@ func TestBasic(x *testing.T) {
 		x.Fatalf("wrong version: %d.", ver.Uint64())
 	}
 
-	var hexnum rpc.HexNumber
-	mail := api.GetFilterChanges(hexnum)
+	mail := api.GetFilterChanges(1)
 	if len(mail) != 0 {
-		x.Fatalf("failed GetFilterChanges")
+		x.Fatalf("failed GetFilterChanges: premature result")
 	}
 
 	exist, err := api.HasIdentity(id)
@@ -213,12 +213,12 @@ func TestUnmarshalPostArgs(x *testing.T) {
 	"payload":"0x7061796C6F61642073686F756C642062652070736575646F72616E646F6D",
 	"worktime":777,
 	"pow":3.1416,
-	"filterID":"0x40",
+	"filterID":64,
 	"peerID":"0xf26e7779"
 	}`)
 
 	var a PostArgs
-	err := a.UnmarshalJSON(s)
+	err := json.Unmarshal(s, &a)
 	if err != nil {
 		x.Fatalf("failed UnmarshalJSON: %s.", err)
 	}
@@ -258,9 +258,9 @@ func TestUnmarshalPostArgs(x *testing.T) {
 	}
 }
 
-func waitForMessage(api *PublicWhisperAPI, id *rpc.HexNumber, target int) bool {
+func waitForMessage(api *PublicWhisperAPI, id uint32, target int) bool {
 	for i := 0; i < 64; i++ {
-		all := api.GetMessages(*id)
+		all := api.GetMessages(id)
 		if len(all) >= target {
 			return true
 		}
@@ -336,7 +336,7 @@ func TestIntegrationAsym(x *testing.T) {
 		x.Fatalf("failed to receive first message: timeout.")
 	}
 
-	mail := api.GetFilterChanges(*id)
+	mail := api.GetFilterChanges(id)
 	if len(mail) != 1 {
 		x.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -358,7 +358,7 @@ func TestIntegrationAsym(x *testing.T) {
 		x.Fatalf("failed to receive second message: timeout.")
 	}
 
-	mail = api.GetFilterChanges(*id)
+	mail = api.GetFilterChanges(id)
 	if len(mail) != 1 {
 		x.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -432,7 +432,7 @@ func TestIntegrationSym(x *testing.T) {
 		x.Fatalf("failed test case 33 (receive first message: timeout).")
 	}
 
-	mail := api.GetFilterChanges(*id)
+	mail := api.GetFilterChanges(id)
 	if len(mail) != 1 {
 		x.Fatalf("failed test case 34 (GetFilterChanges: got %d messages).", len(mail))
 	}
@@ -454,7 +454,7 @@ func TestIntegrationSym(x *testing.T) {
 		x.Fatalf("failed test case 43 (receive second message: timeout).")
 	}
 
-	mail = api.GetFilterChanges(*id)
+	mail = api.GetFilterChanges(id)
 	if len(mail) != 1 {
 		x.Fatalf("failed test case 44 (GetFilterChanges: got %d messages).", len(mail))
 	}
@@ -510,7 +510,7 @@ func TestIntegrationSymWithFilter(x *testing.T) {
 
 	var p PostArgs
 	p.TTL = 1
-	p.FilterID = id.Int()
+	p.FilterID = id
 	p.From = sig
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
@@ -528,7 +528,7 @@ func TestIntegrationSymWithFilter(x *testing.T) {
 		x.Fatalf("failed to receive first message: timeout.")
 	}
 
-	mail := api.GetFilterChanges(*id)
+	mail := api.GetFilterChanges(id)
 	if len(mail) != 1 {
 		x.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -550,7 +550,7 @@ func TestIntegrationSymWithFilter(x *testing.T) {
 		x.Fatalf("failed to receive second message: timeout.")
 	}
 
-	mail = api.GetFilterChanges(*id)
+	mail = api.GetFilterChanges(id)
 	if len(mail) != 1 {
 		x.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
