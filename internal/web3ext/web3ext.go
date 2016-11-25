@@ -226,41 +226,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopWS',
 			call: 'admin_stopWS'
-		}),
-		new web3._extend.Method({
-			name: 'setGlobalRegistrar',
-			call: 'admin_setGlobalRegistrar',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setHashReg',
-			call: 'admin_setHashReg',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setUrlHint',
-			call: 'admin_setUrlHint',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'saveInfo',
-			call: 'admin_saveInfo',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'register',
-			call: 'admin_register',
-			params: 3
-		}),
-		new web3._extend.Method({
-			name: 'registerUrl',
-			call: 'admin_registerUrl',
-			params: 3
-		}),
-		new web3._extend.Method({
-			name: 'httpGet',
-			call: 'admin_httpGet',
-			params: 2
 		})
 	],
 	properties:
