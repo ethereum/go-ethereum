@@ -43,56 +43,6 @@ func init() {
 	spew.Config.DisableMethods = true
 }
 
-// This test checks that isPacketTooBig correctly identifies
-// errors that result from receiving a UDP packet larger
-// than the supplied receive buffer.
-func TestIsPacketTooBig(t *testing.T) {
-	listener, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	sender, err := net.Dial("udp", listener.LocalAddr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sender.Close()
-
-	sendN := 1800
-	recvN := 300
-	for i := 0; i < 20; i++ {
-		go func() {
-			buf := make([]byte, sendN)
-			for i := range buf {
-				buf[i] = byte(i)
-			}
-			sender.Write(buf)
-		}()
-
-		buf := make([]byte, recvN)
-		listener.SetDeadline(time.Now().Add(1 * time.Second))
-		n, _, err := listener.ReadFrom(buf)
-		if err != nil {
-			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-				continue
-			}
-			if !isPacketTooBig(err) {
-				t.Fatal("unexpected read error:", spew.Sdump(err))
-			}
-			continue
-		}
-		if n != recvN {
-			t.Fatalf("short read: %d, want %d", n, recvN)
-		}
-		for i := range buf {
-			if buf[i] != byte(i) {
-				t.Fatalf("error in pattern")
-				break
-			}
-		}
-	}
-}
-
 // shared test variables
 var (
 	futureExp          = uint64(time.Now().Add(10 * time.Hour).Unix())
@@ -118,9 +68,9 @@ func newUDPTest(t *testing.T) *udpTest {
 		pipe:       newpipe(),
 		localkey:   newkey(),
 		remotekey:  newkey(),
-		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 30303},
+		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 30303},
 	}
-	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
+	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "", nil)
 	return test
 }
 
@@ -362,8 +312,9 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	// check that the sent neighbors are all returned by findnode
 	select {
 	case result := <-resultc:
-		if !reflect.DeepEqual(result, list) {
-			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, list)
+		want := append(list[:2], list[3:]...)
+		if !reflect.DeepEqual(result, want) {
+			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, want)
 		}
 	case err := <-errc:
 		t.Errorf("findnode error: %v", err)

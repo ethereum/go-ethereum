@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 var (
@@ -102,6 +103,10 @@ type Config struct {
 
 	// Listener address for the V5 discovery protocol UDP traffic.
 	DiscoveryV5Addr string
+
+	// Restrict communication to white listed IP networks.
+	// The whitelist only applies when non-nil.
+	NetRestrict *netutil.Netlist
 
 	// BootstrapNodes used to establish connectivity with the rest of the network.
 	BootstrapNodes []*discover.Node

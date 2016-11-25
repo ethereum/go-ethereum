@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -45,6 +46,7 @@ const (
 	bucketRefreshInterval = 1 * time.Minute
 	seedCount             = 30
 	seedMaxAge            = 5 * 24 * time.Hour
+	lowPort               = 1024
 )
 
 const testTopic = "foo"
@@ -62,8 +64,9 @@ func debugLog(s string) {
 
 // Network manages the table and all protocol interaction.
 type Network struct {
-	db   *nodeDB // database of known nodes
-	conn transport
+	db          *nodeDB // database of known nodes
+	conn        transport
+	netrestrict *netutil.Netlist
 
 	closed           chan struct{}          // closed when loop is done
 	closeReq         chan struct{}          // 'request to close'
@@ -132,7 +135,7 @@ type timeoutEvent struct {
 	node *Node
 }
 
-func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, dbPath string) (*Network, error) {
+func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, dbPath string, netrestrict *netutil.Netlist) (*Network, error) {
 	ourID := PubkeyID(&ourPubkey)
 
 	var db *nodeDB
@@ -147,6 +150,7 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, natm nat.Interface, d
 	net := &Network{
 		db:               db,
 		conn:             conn,
+		netrestrict:      netrestrict,
 		tab:              tab,
 		topictab:         newTopicTable(db, tab.self),
 		ticketStore:      newTicketStore(),
@@ -684,16 +688,22 @@ func (net *Network) internNodeFromDB(dbn *Node) *Node {
 	return n
 }
 
-func (net *Network) internNodeFromNeighbours(rn rpcNode) (n *Node, err error) {
+func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n *Node, err error) {
 	if rn.ID == net.tab.self.ID {
 		return nil, errors.New("is self")
+	}
+	if rn.UDP <= lowPort {
+		return nil, errors.New("low port")
 	}
 	n = net.nodes[rn.ID]
 	if n == nil {
 		// We haven't seen this node before.
-		n, err = nodeFromRPC(rn)
-		n.state = unknown
+		n, err = nodeFromRPC(sender, rn)
+		if net.netrestrict != nil && !net.netrestrict.Contains(n.IP) {
+			return n, errors.New("not contained in netrestrict whitelist")
+		}
 		if err == nil {
+			n.state = unknown
 			net.nodes[n.ID] = n
 		}
 		return n, err
@@ -1095,7 +1105,7 @@ func (net *Network) handleQueryEvent(n *Node, ev nodeEvent, pkt *ingressPacket) 
 		net.conn.sendNeighbours(n, results)
 		return n.state, nil
 	case neighborsPacket:
-		err := net.handleNeighboursPacket(n, pkt.data.(*neighbors))
+		err := net.handleNeighboursPacket(n, pkt)
 		return n.state, err
 	case neighboursTimeout:
 		if n.pendingNeighbours != nil {
@@ -1182,17 +1192,18 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-func (net *Network) handleNeighboursPacket(n *Node, req *neighbors) error {
+func (net *Network) handleNeighboursPacket(n *Node, pkt *ingressPacket) error {
 	if n.pendingNeighbours == nil {
 		return errNoQuery
 	}
 	net.abortTimedEvent(n, neighboursTimeout)
 
+	req := pkt.data.(*neighbors)
 	nodes := make([]*Node, len(req.Nodes))
 	for i, rn := range req.Nodes {
-		nn, err := net.internNodeFromNeighbours(rn)
+		nn, err := net.internNodeFromNeighbours(pkt.remoteAddr, rn)
 		if err != nil {
-			glog.V(logger.Debug).Infof("invalid neighbour from %x: %v", n.ID[:8], err)
+			glog.V(logger.Debug).Infof("invalid neighbour (%v) from %x@%v: %v", rn.IP, n.ID[:8], pkt.remoteAddr, err)
 			continue
 		}
 		nodes[i] = nn

@@ -165,6 +165,7 @@ func (n *Node) Start() error {
 		TrustedNodes:     n.config.TrusterNodes(),
 		NodeDatabase:     n.config.NodeDB(),
 		ListenAddr:       n.config.ListenAddr,
+		NetRestrict:      n.config.NetRestrict,
 		NAT:              n.config.NAT,
 		Dialer:           n.config.Dialer,
 		NoDial:           n.config.NoDial,

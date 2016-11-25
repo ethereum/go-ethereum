@@ -28,7 +28,7 @@ import (
 
 func TestNetwork_Lookup(t *testing.T) {
 	key, _ := crypto.GenerateKey()
-	network, err := newNetwork(lookupTestnet, key.PublicKey, nil, "")
+	network, err := newNetwork(lookupTestnet, key.PublicKey, nil, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestNetwork_Lookup(t *testing.T) {
 	// 	t.Fatalf("lookup on empty table returned %d results: %#v", len(results), results)
 	// }
 	// seed table with initial node (otherwise lookup will terminate immediately)
-	seeds := []*Node{NewNode(lookupTestnet.dists[256][0], net.IP{}, 256, 999)}
+	seeds := []*Node{NewNode(lookupTestnet.dists[256][0], net.IP{10, 0, 2, 99}, lowPort+256, 999)}
 	if err := network.SetFallbackNodes(seeds); err != nil {
 		t.Fatal(err)
 	}
@@ -272,13 +272,13 @@ func (tn *preminedTestnet) sendFindnode(to *Node, target NodeID) {
 func (tn *preminedTestnet) sendFindnodeHash(to *Node, target common.Hash) {
 	// current log distance is encoded in port number
 	// fmt.Println("findnode query at dist", toaddr.Port)
-	if to.UDP == 0 {
-		panic("query to node at distance 0")
+	if to.UDP <= lowPort {
+		panic("query to node at or below distance 0")
 	}
 	next := to.UDP - 1
 	var result []rpcNode
-	for i, id := range tn.dists[to.UDP] {
-		result = append(result, nodeToRPC(NewNode(id, net.ParseIP("127.0.0.1"), next, uint16(i)+1)))
+	for i, id := range tn.dists[to.UDP-lowPort] {
+		result = append(result, nodeToRPC(NewNode(id, net.ParseIP("10.0.2.99"), next, uint16(i)+1+lowPort)))
 	}
 	injectResponse(tn.net, to, neighborsPacket, &neighbors{Nodes: result})
 }
@@ -296,14 +296,14 @@ func (tn *preminedTestnet) send(to *Node, ptype nodeEvent, data interface{}) (ha
 		// ignored
 	case findnodeHashPacket:
 		// current log distance is encoded in port number
-		// fmt.Println("findnode query at dist", toaddr.Port)
-		if to.UDP == 0 {
-			panic("query to node at distance 0")
+		// fmt.Println("findnode query at dist", toaddr.Port-lowPort)
+		if to.UDP <= lowPort {
+			panic("query to node at or below  distance 0")
 		}
 		next := to.UDP - 1
 		var result []rpcNode
-		for i, id := range tn.dists[to.UDP] {
-			result = append(result, nodeToRPC(NewNode(id, net.ParseIP("127.0.0.1"), next, uint16(i)+1)))
+		for i, id := range tn.dists[to.UDP-lowPort] {
+			result = append(result, nodeToRPC(NewNode(id, net.ParseIP("10.0.2.99"), next, uint16(i)+1+lowPort)))
 		}
 		injectResponse(tn.net, to, neighborsPacket, &neighbors{Nodes: result})
 	default:
@@ -328,8 +328,11 @@ func (tn *preminedTestnet) sendTopicRegister(to *Node, topics []Topic, idx int, 
 	panic("sendTopicRegister called")
 }
 
-func (*preminedTestnet) Close()                  {}
-func (*preminedTestnet) localAddr() *net.UDPAddr { return new(net.UDPAddr) }
+func (*preminedTestnet) Close() {}
+
+func (*preminedTestnet) localAddr() *net.UDPAddr {
+	return &net.UDPAddr{IP: net.ParseIP("10.0.1.1"), Port: 40000}
+}
 
 // mine generates a testnet struct literal with nodes at
 // various distances to the given target.

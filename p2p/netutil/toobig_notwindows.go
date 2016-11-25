@@ -14,27 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//+build windows
+//+build !windows
 
-package discv5
+package netutil
 
-import (
-	"net"
-	"os"
-	"syscall"
-)
-
-const _WSAEMSGSIZE = syscall.Errno(10040)
-
-// reports whether err indicates that a UDP packet didn't
-// fit the receive buffer. On Windows, WSARecvFrom returns
-// code WSAEMSGSIZE and no data if this happens.
+// isPacketTooBig reports whether err indicates that a UDP packet didn't
+// fit the receive buffer. There is no such error on
+// non-Windows platforms.
 func isPacketTooBig(err error) bool {
-	if opErr, ok := err.(*net.OpError); ok {
-		if scErr, ok := opErr.Err.(*os.SyscallError); ok {
-			return scErr.Err == _WSAEMSGSIZE
-		}
-		return opErr.Err == _WSAEMSGSIZE
-	}
 	return false
 }
