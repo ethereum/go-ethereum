@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	mrand "math/rand"
 	"sync"
 	"time"
 
@@ -81,6 +82,9 @@ func NewWhisper(server MailServer) *Whisper {
 		Length:  NumberOfMessageCodes,
 		Run:     whisper.HandlePeer,
 	}
+
+	seed := time.Now().Unix()
+	mrand.Seed(seed)
 
 	return whisper
 }
@@ -177,12 +181,23 @@ func (w *Whisper) GetIdentity(pubKey string) *ecdsa.PrivateKey {
 }
 
 func (w *Whisper) GenerateSymKey(name string) error {
-	buf := make([]byte, aesKeyLength*2)
-	_, err := crand.Read(buf) // todo: check how safe is this function
+	const size = aesKeyLength * 2
+	buf := make([]byte, size)
+	buf2 := make([]byte, size)
+	_, err := crand.Read(buf)
 	if err != nil {
 		return err
 	} else if !validateSymmetricKey(buf) {
-		return fmt.Errorf("crypto/rand failed to generate random data")
+		return fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
+	}
+
+	randomize(buf2)
+	if !validateSymmetricKey(buf2) {
+		return fmt.Errorf("error in GenerateSymKey: math/rand failed to generate random data")
+	}
+
+	for i := 0; i < size; i++ {
+		buf[i] ^= buf2[i]
 	}
 
 	key := buf[:aesKeyLength]
