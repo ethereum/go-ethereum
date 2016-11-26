@@ -419,7 +419,7 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		return fmt.Errorf("oversized Version")
 	}
 
-	if len(envelope.AESNonce) > 12 {
+	if len(envelope.AESNonce) > AESNonceMaxLength {
 		// the standard AES GSM nonce size is 12,
 		// but const gcmStandardNonceSize cannot be accessed directly
 		return fmt.Errorf("oversized AESNonce")

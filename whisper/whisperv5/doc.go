@@ -51,10 +51,11 @@ const (
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
 
-	TopicLength     = 4
-	signatureLength = 65
-	aesKeyLength    = 32
-	saltLength      = 12
+	TopicLength       = 4
+	signatureLength   = 65
+	aesKeyLength      = 32
+	saltLength        = 12
+	AESNonceMaxLength = 12
 
 	MaxMessageLength = 0xFFFF // todo: remove this restriction after testing in morden and analizing stats. this should be regulated by MinimumPoW.
 	MinimumPoW       = 10.0   // todo: review
