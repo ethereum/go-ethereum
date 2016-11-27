@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -63,20 +64,12 @@ func (n BlockNonce) Uint64() uint64 {
 
 // MarshalJSON implements json.Marshaler
 func (n BlockNonce) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"0x%x"`, n)), nil
+	return hexutil.Bytes(n[:]).MarshalJSON()
 }
 
 // UnmarshalJSON implements json.Unmarshaler
 func (n *BlockNonce) UnmarshalJSON(input []byte) error {
-	var b hexBytes
-	if err := b.UnmarshalJSON(input); err != nil {
-		return err
-	}
-	if len(b) != 8 {
-		return errBadNonceSize
-	}
-	copy((*n)[:], b)
-	return nil
+	return hexutil.UnmarshalJSON("BlockNonce", input, n[:])
 }
 
 // Header represents a block header in the Ethereum blockchain.
@@ -106,12 +99,12 @@ type jsonHeader struct {
 	TxHash      *common.Hash    `json:"transactionsRoot"`
 	ReceiptHash *common.Hash    `json:"receiptsRoot"`
 	Bloom       *Bloom          `json:"logsBloom"`
-	Difficulty  *hexBig         `json:"difficulty"`
-	Number      *hexBig         `json:"number"`
-	GasLimit    *hexBig         `json:"gasLimit"`
-	GasUsed     *hexBig         `json:"gasUsed"`
-	Time        *hexBig         `json:"timestamp"`
-	Extra       *hexBytes       `json:"extraData"`
+	Difficulty  *hexutil.Big    `json:"difficulty"`
+	Number      *hexutil.Big    `json:"number"`
+	GasLimit    *hexutil.Big    `json:"gasLimit"`
+	GasUsed     *hexutil.Big    `json:"gasUsed"`
+	Time        *hexutil.Big    `json:"timestamp"`
+	Extra       *hexutil.Bytes  `json:"extraData"`
 	MixDigest   *common.Hash    `json:"mixHash"`
 	Nonce       *BlockNonce     `json:"nonce"`
 }
@@ -151,12 +144,12 @@ func (h *Header) MarshalJSON() ([]byte, error) {
 		TxHash:      &h.TxHash,
 		ReceiptHash: &h.ReceiptHash,
 		Bloom:       &h.Bloom,
-		Difficulty:  (*hexBig)(h.Difficulty),
-		Number:      (*hexBig)(h.Number),
-		GasLimit:    (*hexBig)(h.GasLimit),
-		GasUsed:     (*hexBig)(h.GasUsed),
-		Time:        (*hexBig)(h.Time),
-		Extra:       (*hexBytes)(&h.Extra),
+		Difficulty:  (*hexutil.Big)(h.Difficulty),
+		Number:      (*hexutil.Big)(h.Number),
+		GasLimit:    (*hexutil.Big)(h.GasLimit),
+		GasUsed:     (*hexutil.Big)(h.GasUsed),
+		Time:        (*hexutil.Big)(h.Time),
+		Extra:       (*hexutil.Bytes)(&h.Extra),
 		MixDigest:   &h.MixDigest,
 		Nonce:       &h.Nonce,
 	})
