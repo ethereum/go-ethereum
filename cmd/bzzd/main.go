@@ -23,6 +23,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -140,7 +141,8 @@ func bzzd(ctx *cli.Context) error {
 
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
-		injectBootnodes(stack.Server(), ctx.GlobalStringSlice(utils.BootnodesFlag.Name))
+		bootnodes := strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
+		injectBootnodes(stack.Server(), bootnodes)
 	} else {
 		injectBootnodes(stack.Server(), defaultBootnodes)
 	}
@@ -243,6 +245,7 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 		n, err := discover.ParseNode(url)
 		if err != nil {
 			glog.Errorf("invalid bootnode %q", err)
+			continue
 		}
 		srv.AddPeer(n)
 	}
