@@ -95,6 +95,7 @@ type bzz struct {
 	errors     *errs.Errors         // errors table
 	backend    chequebook.Backend
 	lastActive time.Time
+	NetworkId  uint64
 
 	swap        *swap.Swap          // swap instance for the peer connection
 	swapParams  *bzzswap.SwapParams // swap settings both local and remote
@@ -126,7 +127,7 @@ on each peer connection
 The Run function of the Bzz protocol class creates a bzz instance
 which will represent the peer for the swarm hive and all peer-aware components
 */
-func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams) (p2p.Protocol, error) {
+func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkId uint64) (p2p.Protocol, error) {
 
 	// a single global request db is created for all peer connections
 	// this is to persist delivery backlog and aid syncronisation
@@ -134,13 +135,15 @@ func Bzz(cloud StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess 
 	if err != nil {
 		return p2p.Protocol{}, fmt.Errorf("error setting up request db: %v", err)
 	}
-
+	if networkId == 0 {
+		networkId = NetworkId
+	}
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return run(requestDb, cloud, backend, hive, dbaccess, sp, sy, p, rw)
+			return run(requestDb, cloud, backend, hive, dbaccess, sp, sy, networkId, p, rw)
 		},
 	}, nil
 }
@@ -157,7 +160,7 @@ the main protocol loop that
  * whenever the loop terminates, the peer will disconnect with Subprotocol error
  * whenever handlers return an error the loop terminates
 */
-func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook.Backend, hive *Hive, dbaccess *DbAccess, sp *bzzswap.SwapParams, sy *SyncParams, networkId uint64, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzz{
 		storage:   depo,
@@ -175,6 +178,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook
 		syncParams:  sy,
 		swapEnabled: hive.swapEnabled,
 		syncEnabled: true,
+		NetworkId:   networkId,
 	}
 
 	// handle handshake
@@ -340,7 +344,7 @@ func (self *bzz) handleStatus() (err error) {
 		Version:   uint64(Version),
 		ID:        "honey",
 		Addr:      self.selfAddr(),
-		NetworkId: uint64(NetworkId),
+		NetworkId: uint64(self.NetworkId),
 		Swap: &bzzswap.SwapProfile{
 			Profile:    self.swapParams.Profile,
 			PayProfile: self.swapParams.PayProfile,
@@ -372,8 +376,8 @@ func (self *bzz) handleStatus() (err error) {
 		return self.protoError(ErrDecode, " %v: %v", msg, err)
 	}
 
-	if status.NetworkId != NetworkId {
-		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, NetworkId)
+	if status.NetworkId != self.NetworkId {
+		return self.protoError(ErrNetworkIdMismatch, "%d (!= %d)", status.NetworkId, self.NetworkId)
 	}
 
 	if Version != status.Version {

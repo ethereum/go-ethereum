@@ -116,7 +116,7 @@ var (
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 0=Olympic, 1=Frontier, 2=Morden)",
+		Usage: "Network identifier (integer, 0=Olympic (disused), 1=Frontier, 2=Morden (disused), 3=Ropsten)",
 		Value: eth.NetworkId,
 	}
 	OlympicFlag = cli.BoolFlag{
