@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package kademlia
+package network
 
 import (
 	"math/rand"
@@ -89,8 +89,9 @@ func TestRandomAddressAt(t *testing.T) {
 		a = RandomAddress()
 		prox := rand.Intn(255)
 		b := RandomAddressAt(a, prox)
-		if proximity(a, b) != prox {
-			t.Fatalf("incorrect address prox(%v, %v) == %v (expected %v)", a, b, proximity(a, b), prox)
+		p, _ := proximity(a, b)
+		if p != prox {
+			t.Fatalf("incorrect address prox(%v, %v) == %v (expected %v)", a, b, p, prox)
 		}
 	}
 }

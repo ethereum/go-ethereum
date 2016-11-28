@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package kademlia
+package network
 
 import (
 	"fmt"
@@ -22,6 +22,12 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/logger/glog"
+)
+
+var (
+	zeroAddr = &common.Hash{}
+	zeros    = zeroAddr.Hex()[2:]
 )
 
 type Address common.Hash
@@ -63,16 +69,22 @@ binary representation of the x^y.
 
 (0 farthest, 255 closest, 256 self)
 */
-func proximity(one, other Address) (ret int) {
-	for i := 0; i < len(one); i++ {
+func proximity(one, other Address) (ret int, eq bool) {
+	return posProximity(one, other, 0)
+}
+
+// posProximity(a, b, pos) returns proximity order of b wrt a (symmetric) pretending
+// the first pos bits match, checking only bits at index >= pos
+func posProximity(one, other Address, pos int) (ret int, eq bool) {
+	for i := pos / 8; i < len(one); i++ {
 		oxo := one[i] ^ other[i]
-		for j := 0; j < 8; j++ {
+		for j := pos % 8; j < 8; j++ {
 			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
-				return i*8 + j
+				return i*8 + j, false
 			}
 		}
 	}
-	return len(one) * 8
+	return len(one) * 8, true
 }
 
 // Address.ProxCmp compares the distances a->target and b->target.
@@ -96,7 +108,7 @@ func (target Address) ProxCmp(a, b Address) int {
 // if prox is negative a random address is generated
 func RandomAddressAt(self Address, prox int) (addr Address) {
 	addr = self
-	var pos int
+	pos := -1
 	if prox >= 0 {
 		pos = prox / 8
 		trans := prox % 8
@@ -118,18 +130,18 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 
 // KeyRange(a0, a1, proxLimit) returns the address inclusive address
 // range that contain addresses closer to one than other
-func KeyRange(one, other Address, proxLimit int) (start, stop Address) {
-	prox := proximity(one, other)
-	if prox >= proxLimit {
-		prox = proxLimit
-	}
-	start = CommonBitsAddrByte(one, other, byte(0x00), prox)
-	stop = CommonBitsAddrByte(one, other, byte(0xff), prox)
-	return
-}
+// func KeyRange(one, other Address, proxLimit int) (start, stop Address) {
+// 	prox := proximity(one, other)
+// 	if prox >= proxLimit {
+// 		prox = proxLimit
+// 	}
+// 	start = CommonBitsAddrByte(one, other, byte(0x00), prox)
+// 	stop = CommonBitsAddrByte(one, other, byte(0xff), prox)
+// 	return
+// }
 
 func CommonBitsAddrF(self, other Address, f func() byte, p int) (addr Address) {
-	prox := proximity(self, other)
+	prox, _ := proximity(self, other)
 	var pos int
 	if p <= prox {
 		prox = p
@@ -170,4 +182,58 @@ func CommonBitsAddrByte(self, other Address, b byte, prox int) (addr Address) {
 // randomAddressAt() generates a random address
 func RandomAddress() Address {
 	return RandomAddressAt(Address{}, -1)
+}
+
+// wraps an Address to implement the PbVal interface
+type PbAddress struct {
+	Address
+}
+
+// Prefix(addr, pos) return the proximity order of addr wrt to
+// the pinned address of the tree
+// assuming it is greater than or  equal to pos
+func (self *PbAddress) Prefix(val PbVal, pos int) (po int, eq bool) {
+	return posProximity(self.Address, val.(*PbAddress).Address, pos)
+}
+
+type BinAddr struct {
+	addr []bool
+}
+
+func NewBinAddr(s string) *BinAddr {
+	return NewBinAddrXOR(s, zeros[:len(s)])
+}
+
+func NewBinAddrXOR(s, t string) *BinAddr {
+	if len(s) != len(t) {
+		panic("lengths do not match")
+	}
+	addr := make([]bool, len(s))
+	for i, _ := range addr {
+		addr[i] = s[i] != t[i]
+	}
+	return &BinAddr{addr}
+}
+
+func (self *BinAddr) String() string {
+	a := self.addr
+	s := []byte(zeros)[:len(a)]
+	for i, one := range a {
+		if one {
+			s[i] = byte('1')
+			// glog.V(6).Infof("%v", s)
+		}
+	}
+	return string(s)
+}
+
+func (self *BinAddr) Prefix(val PbVal, pos int) (po int, eq bool) {
+	a := self.addr
+	b := val.(*BinAddr).addr
+	for po = pos; po < len(b); po++ {
+		if a[po] != b[po] {
+			return po, false
+		}
+	}
+	return po, true
 }
