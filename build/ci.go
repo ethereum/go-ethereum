@@ -72,6 +72,9 @@ var (
 		executablePath("abigen"),
 		executablePath("evm"),
 		executablePath("geth"),
+		executablePath("bzzd"),
+		executablePath("bzzhash"),
+		executablePath("bzzup"),
 		executablePath("rlpdump"),
 	}
 
@@ -88,6 +91,18 @@ var (
 		{
 			Name:        "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+		},
+		{
+			Name:        "bzzd",
+			Description: "Ethereum Swarm daemon",
+		},
+		{
+			Name:        "bzzup",
+			Description: "Ethereum Swarm command line file/directory uploader",
+		},
+		{
+			Name:        "bzzhash",
+			Description: "Ethereum Swarm file/directory hash calculator",
 		},
 		{
 			Name:        "abigen",
