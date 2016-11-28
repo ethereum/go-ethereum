@@ -176,7 +176,11 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	}
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		client, err := ethclient.Dial(ethapi)
+		if ethapi == "" {
+			err = fmt.Errorf("use ethapi flag to connect to a an eth client and talk to the blockchain")
+		} else {
+			client, err := ethclient.Dial(ethapi)
+		}
 		if err != nil {
 			utils.Fatalf("Can't connect: %v", err)
 		}
