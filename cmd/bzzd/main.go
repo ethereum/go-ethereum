@@ -66,9 +66,9 @@ var (
 		Name:  "bzzconfig",
 		Usage: "Swarm config file path (datadir/bzz)",
 	}
-	SwarmSwapDisabled = cli.BoolFlag{
-		Name:  "bzznoswap",
-		Usage: "Swarm SWAP disabled (default false)",
+	SwarmSwapEnabled = cli.BoolFlag{
+		Name:  "bzzswap",
+		Usage: "Swarm SWAP enabled (default false)",
 	}
 	SwarmSyncDisabled = cli.BoolFlag{
 		Name:  "bzznosync",
@@ -110,7 +110,7 @@ func init() {
 		// bzzd-specific flags
 		EthAPI,
 		SwarmConfigPathFlag,
-		SwarmSwapDisabled,
+		SwarmSwapEnabled,
 		SwarmSyncDisabled,
 		SwarmPortFlag,
 		SwarmAccountFlag,
@@ -167,7 +167,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
 	}
-	swapEnabled := !ctx.GlobalBool(SwarmSwapDisabled.Name)
+	swapEnabled := ctx.GlobalBool(SwarmSwapEnabled.Name)
 	syncEnabled := !ctx.GlobalBool(SwarmSyncDisabled.Name)
 
 	ethapi := ctx.GlobalString(EthAPI.Name)
