@@ -287,7 +287,7 @@ func toFilterArg(q ethereum.FilterQuery) interface{} {
 	arg := map[string]interface{}{
 		"fromBlock": toBlockNumArg(q.FromBlock),
 		"toBlock":   toBlockNumArg(q.ToBlock),
-		"addresses": q.Addresses,
+		"address":   q.Addresses,
 		"topics":    q.Topics,
 	}
 	if q.FromBlock == nil {
