@@ -38,12 +38,6 @@ web3._extend({
 	methods:
 	[
 		new web3._extend.Method({
-			name: 'blockNetworkRead',
-			call: 'bzz_blockNetworkRead',
-			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
 			name: 'syncEnabled',
 			call: 'bzz_syncEnabled',
 			params: 1,
@@ -68,15 +62,9 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
-			name: 'retrieve',
-			call: 'bzz_retrieve',
+			name: 'resolve',
+			call: 'bzz_resolve',
 			params: 1,
-			inputFormatter: [null]
-		}),
-		new web3._extend.Method({
-			name: 'store',
-			call: 'bzz_store',
-			params: 2,
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
