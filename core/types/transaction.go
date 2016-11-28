@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -69,15 +70,15 @@ type txdata struct {
 
 type jsonTransaction struct {
 	Hash         *common.Hash    `json:"hash"`
-	AccountNonce *hexUint64      `json:"nonce"`
-	Price        *hexBig         `json:"gasPrice"`
-	GasLimit     *hexBig         `json:"gas"`
+	AccountNonce *hexutil.Uint64 `json:"nonce"`
+	Price        *hexutil.Big    `json:"gasPrice"`
+	GasLimit     *hexutil.Big    `json:"gas"`
 	Recipient    *common.Address `json:"to"`
-	Amount       *hexBig         `json:"value"`
-	Payload      *hexBytes       `json:"input"`
-	V            *hexBig         `json:"v"`
-	R            *hexBig         `json:"r"`
-	S            *hexBig         `json:"s"`
+	Amount       *hexutil.Big    `json:"value"`
+	Payload      *hexutil.Bytes  `json:"input"`
+	V            *hexutil.Big    `json:"v"`
+	R            *hexutil.Big    `json:"r"`
+	S            *hexutil.Big    `json:"s"`
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -170,15 +171,15 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal(&jsonTransaction{
 		Hash:         &hash,
-		AccountNonce: (*hexUint64)(&tx.data.AccountNonce),
-		Price:        (*hexBig)(tx.data.Price),
-		GasLimit:     (*hexBig)(tx.data.GasLimit),
+		AccountNonce: (*hexutil.Uint64)(&tx.data.AccountNonce),
+		Price:        (*hexutil.Big)(tx.data.Price),
+		GasLimit:     (*hexutil.Big)(tx.data.GasLimit),
 		Recipient:    tx.data.Recipient,
-		Amount:       (*hexBig)(tx.data.Amount),
-		Payload:      (*hexBytes)(&tx.data.Payload),
-		V:            (*hexBig)(tx.data.V),
-		R:            (*hexBig)(tx.data.R),
-		S:            (*hexBig)(tx.data.S),
+		Amount:       (*hexutil.Big)(tx.data.Amount),
+		Payload:      (*hexutil.Bytes)(&tx.data.Payload),
+		V:            (*hexutil.Big)(tx.data.V),
+		R:            (*hexutil.Big)(tx.data.R),
+		S:            (*hexutil.Big)(tx.data.S),
 	})
 }
 

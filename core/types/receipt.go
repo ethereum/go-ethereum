@@ -24,6 +24,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -49,12 +50,12 @@ type Receipt struct {
 
 type jsonReceipt struct {
 	PostState         *common.Hash    `json:"root"`
-	CumulativeGasUsed *hexBig         `json:"cumulativeGasUsed"`
+	CumulativeGasUsed *hexutil.Big    `json:"cumulativeGasUsed"`
 	Bloom             *Bloom          `json:"logsBloom"`
 	Logs              *vm.Logs        `json:"logs"`
 	TxHash            *common.Hash    `json:"transactionHash"`
 	ContractAddress   *common.Address `json:"contractAddress"`
-	GasUsed           *hexBig         `json:"gasUsed"`
+	GasUsed           *hexutil.Big    `json:"gasUsed"`
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
@@ -90,12 +91,12 @@ func (r *Receipt) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal(&jsonReceipt{
 		PostState:         &root,
-		CumulativeGasUsed: (*hexBig)(r.CumulativeGasUsed),
+		CumulativeGasUsed: (*hexutil.Big)(r.CumulativeGasUsed),
 		Bloom:             &r.Bloom,
 		Logs:              &r.Logs,
 		TxHash:            &r.TxHash,
 		ContractAddress:   &r.ContractAddress,
-		GasUsed:           (*hexBig)(r.GasUsed),
+		GasUsed:           (*hexutil.Big)(r.GasUsed),
 	})
 }
 

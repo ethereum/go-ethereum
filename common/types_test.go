@@ -18,7 +18,10 @@ package common
 
 import (
 	"math/big"
+	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestBytesConversion(t *testing.T) {
@@ -38,19 +41,26 @@ func TestHashJsonValidation(t *testing.T) {
 	var tests = []struct {
 		Prefix string
 		Size   int
-		Error  error
+		Error  string
 	}{
-		{"", 2, hashJsonLengthErr},
-		{"", 62, hashJsonLengthErr},
-		{"", 66, hashJsonLengthErr},
-		{"", 65, hashJsonLengthErr},
-		{"0X", 64, nil},
-		{"0x", 64, nil},
-		{"0x", 62, hashJsonLengthErr},
+		{"", 62, hexutil.ErrMissingPrefix.Error()},
+		{"0x", 66, "hex string has length 66, want 64 for Hash"},
+		{"0x", 63, hexutil.ErrOddLength.Error()},
+		{"0x", 0, "hex string has length 0, want 64 for Hash"},
+		{"0x", 64, ""},
+		{"0X", 64, ""},
 	}
-	for i, test := range tests {
-		if err := h.UnmarshalJSON(append([]byte(test.Prefix), make([]byte, test.Size)...)); err != test.Error {
-			t.Errorf("test #%d: error mismatch: have %v, want %v", i, err, test.Error)
+	for _, test := range tests {
+		input := `"` + test.Prefix + strings.Repeat("0", test.Size) + `"`
+		err := h.UnmarshalJSON([]byte(input))
+		if err == nil {
+			if test.Error != "" {
+				t.Errorf("%s: error mismatch: have nil, want %q", input, test.Error)
+			}
+		} else {
+			if err.Error() != test.Error {
+				t.Errorf("%s: error mismatch: have %q, want %q", input, err, test.Error)
+			}
 		}
 	}
 }

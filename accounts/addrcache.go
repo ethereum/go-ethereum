@@ -225,7 +225,7 @@ func (ac *addrCache) scan() ([]Account, error) {
 		buf     = new(bufio.Reader)
 		addrs   []Account
 		keyJSON struct {
-			Address common.Address `json:"address"`
+			Address string `json:"address"`
 		}
 	)
 	for _, fi := range files {
@@ -241,15 +241,16 @@ func (ac *addrCache) scan() ([]Account, error) {
 		}
 		buf.Reset(fd)
 		// Parse the address.
-		keyJSON.Address = common.Address{}
+		keyJSON.Address = ""
 		err = json.NewDecoder(buf).Decode(&keyJSON)
+		addr := common.HexToAddress(keyJSON.Address)
 		switch {
 		case err != nil:
 			glog.V(logger.Debug).Infof("can't decode key %s: %v", path, err)
-		case (keyJSON.Address == common.Address{}):
+		case (addr == common.Address{}):
 			glog.V(logger.Debug).Infof("can't decode key %s: missing or zero address", path)
 		default:
-			addrs = append(addrs, Account{Address: keyJSON.Address, File: path})
+			addrs = append(addrs, Account{Address: addr, File: path})
 		}
 		fd.Close()
 	}
