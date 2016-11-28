@@ -87,6 +87,7 @@ func init() {
 	// Override flag defaults so bzzd can run alongside geth.
 	utils.ListenPortFlag.Value = 30399
 	utils.IPCPathFlag.Value = utils.DirectoryString{Value: "bzzd.ipc"}
+	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, web3"
 
 	// Set up the cli app.
 	app.Commands = nil
