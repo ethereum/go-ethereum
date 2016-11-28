@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 var (
@@ -89,9 +90,13 @@ func LocalEnv() Environment {
 		}
 	}
 	if env.Tag == "" {
-		env.Tag = RunGit("for-each-ref", "--points-at=HEAD", "--count=1", "--format=%(refname:short)", "refs/tags")
+		env.Tag = firstLine(RunGit("tag", "-l", "--points-at", "HEAD"))
 	}
 	return env
+}
+
+func firstLine(s string) string {
+	return strings.Split(s, "\n")[0]
 }
 
 func applyEnvFlags(env Environment) Environment {
