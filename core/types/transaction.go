@@ -233,6 +233,8 @@ func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amo
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
 func (tx *Transaction) CheckNonce() bool   { return true }
 
+// Get the recipient address of this transaction.
+// It returns nil if the transaction is a contract creation transaction.
 func (tx *Transaction) To() *common.Address {
 	if tx.data.Recipient == nil {
 		return nil
