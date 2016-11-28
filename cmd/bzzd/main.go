@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -62,16 +63,21 @@ var (
 		Name:  "bzzport",
 		Usage: "Swarm local http api port",
 	}
+	SwarmNetworkIdFlag = cli.IntFlag{
+		Name:  "bzznetworkid",
+		Usage: "Network identifier (integer, default 322=swarm testnet)",
+		Value: network.NetworkId,
+	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
 		Usage: "Swarm config file path (datadir/bzz)",
 	}
 	SwarmSwapEnabled = cli.BoolFlag{
-		Name:  "bzzswap",
+		Name:  "swap",
 		Usage: "Swarm SWAP enabled (default false)",
 	}
 	SwarmSyncDisabled = cli.BoolFlag{
-		Name:  "bzznosync",
+		Name:  "nosync",
 		Usage: "Swarm Syncing disabled (default false)",
 	}
 	EthAPI = cli.StringFlag{
@@ -115,6 +121,7 @@ func init() {
 		SwarmSyncDisabled,
 		SwarmPortFlag,
 		SwarmAccountFlag,
+		SwarmNetworkIdFlag,
 		ChequebookAddrFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
@@ -160,7 +167,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if bzzdir == "" {
 		bzzdir = stack.InstanceDir()
 	}
-	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey)
+	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
 	}
@@ -172,15 +179,13 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	syncEnabled := !ctx.GlobalBool(SwarmSyncDisabled.Name)
 
 	ethapi := ctx.GlobalString(EthAPI.Name)
-	if ethapi == "" {
-		utils.Fatalf("Option %q must not be empty", EthAPI.Name)
-	}
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
+		var client *ethclient.Client
 		if ethapi == "" {
 			err = fmt.Errorf("use ethapi flag to connect to a an eth client and talk to the blockchain")
 		} else {
-			client, err := ethclient.Dial(ethapi)
+			client, err = ethclient.Dial(ethapi)
 		}
 		if err != nil {
 			utils.Fatalf("Can't connect: %v", err)

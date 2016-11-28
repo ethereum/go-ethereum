@@ -83,7 +83,8 @@ var (
     "Port": "8500",
     "PublicKey": "0x045f5cfd26692e48d0017d380349bcf50982488bc11b5145f3ddf88b24924299048450542d43527fbe29a5cb32f38d62755393ac002e6bfdd71b8d7ba725ecd7a3",
     "BzzKey": "0xe861964402c0b78e2d44098329b8545726f215afa737d803714a4338552fcb81",
-    "EnsRoot": "0xd344889e0be3e9ef6c26b0f60ef66a32e83c1b69"
+    "EnsRoot": "0xd344889e0be3e9ef6c26b0f60ef66a32e83c1b69",
+    "NetworkId": 323
 }`
 )
 
@@ -95,7 +96,7 @@ func TestConfigWriteRead(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	prvkey := crypto.ToECDSA(common.Hex2Bytes(hexprvkey))
-	orig, err := NewConfig(tmp, common.Address{}, prvkey)
+	orig, err := NewConfig(tmp, common.Address{}, prvkey, 323)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -109,7 +110,7 @@ func TestConfigWriteRead(t *testing.T) {
 		t.Fatalf("default config mismatch:\nexpected: %v\ngot: %v", exp, string(data))
 	}
 
-	conf, err := NewConfig(tmp, common.Address{}, prvkey)
+	conf, err := NewConfig(tmp, common.Address{}, prvkey, 323)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
