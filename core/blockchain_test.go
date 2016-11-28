@@ -1136,13 +1136,14 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 func TestEIP155Transition(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
-		db, _   = ethdb.NewMemDatabase()
-		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-		address = crypto.PubkeyToAddress(key.PublicKey)
-		funds   = big.NewInt(1000000000)
-		genesis = WriteGenesisBlockForTesting(db, GenesisAccount{address, funds})
-		config  = &params.ChainConfig{ChainId: big.NewInt(1), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
-		mux     event.TypeMux
+		db, _      = ethdb.NewMemDatabase()
+		key, _     = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address    = crypto.PubkeyToAddress(key.PublicKey)
+		funds      = big.NewInt(1000000000)
+		deleteAddr = common.Address{1}
+		genesis    = WriteGenesisBlockForTesting(db, GenesisAccount{address, funds}, GenesisAccount{deleteAddr, new(big.Int)})
+		config     = &params.ChainConfig{ChainId: big.NewInt(1), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
+		mux        event.TypeMux
 	)
 
 	blockchain, _ := NewBlockChain(db, config, FakePow{}, &mux)
@@ -1229,5 +1230,68 @@ func TestEIP155Transition(t *testing.T) {
 	_, err := blockchain.InsertChain(blocks)
 	if err != types.ErrInvalidChainId {
 		t.Error("expected error:", types.ErrInvalidChainId)
+	}
+}
+
+func TestEIP161AccountRemoval(t *testing.T) {
+	// Configure and generate a sample block chain
+	var (
+		db, _   = ethdb.NewMemDatabase()
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		address = crypto.PubkeyToAddress(key.PublicKey)
+		funds   = big.NewInt(1000000000)
+		theAddr = common.Address{1}
+		genesis = WriteGenesisBlockForTesting(db, GenesisAccount{address, funds})
+		config  = &params.ChainConfig{
+			ChainId:        big.NewInt(1),
+			HomesteadBlock: new(big.Int),
+			EIP155Block:    new(big.Int),
+			EIP158Block:    big.NewInt(2),
+		}
+		mux event.TypeMux
+
+		blockchain, _ = NewBlockChain(db, config, FakePow{}, &mux)
+	)
+	blocks, _ := GenerateChain(config, genesis, db, 3, func(i int, block *BlockGen) {
+		var (
+			tx     *types.Transaction
+			err    error
+			signer = types.NewEIP155Signer(config.ChainId)
+		)
+		switch i {
+		case 0:
+			tx, err = types.NewTransaction(block.TxNonce(address), theAddr, new(big.Int), big.NewInt(21000), new(big.Int), nil).SignECDSA(signer, key)
+		case 1:
+			tx, err = types.NewTransaction(block.TxNonce(address), theAddr, new(big.Int), big.NewInt(21000), new(big.Int), nil).SignECDSA(signer, key)
+		case 2:
+			tx, err = types.NewTransaction(block.TxNonce(address), theAddr, new(big.Int), big.NewInt(21000), new(big.Int), nil).SignECDSA(signer, key)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		block.AddTx(tx)
+	})
+	// account must exist pre eip 161
+	if _, err := blockchain.InsertChain(types.Blocks{blocks[0]}); err != nil {
+		t.Fatal(err)
+	}
+	if !blockchain.stateCache.Exist(theAddr) {
+		t.Error("expected account to exist")
+	}
+
+	// account needs to be deleted post eip 161
+	if _, err := blockchain.InsertChain(types.Blocks{blocks[1]}); err != nil {
+		t.Fatal(err)
+	}
+	if blockchain.stateCache.Exist(theAddr) {
+		t.Error("account should not expect")
+	}
+
+	// account musn't be created post eip 161
+	if _, err := blockchain.InsertChain(types.Blocks{blocks[2]}); err != nil {
+		t.Fatal(err)
+	}
+	if blockchain.stateCache.Exist(theAddr) {
+		t.Error("account should not expect")
 	}
 }
