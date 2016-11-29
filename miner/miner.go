@@ -187,6 +187,11 @@ func (self *Miner) Pending() (*types.Block, *state.StateDB) {
 	return self.worker.pending()
 }
 
+// PendingBlock returns the currently pending block.
+func (self *Miner) PendingBlock() *types.Block {
+	return self.worker.pendingBlock()
+}
+
 func (self *Miner) SetEtherbase(addr common.Address) {
 	self.coinbase = addr
 	self.worker.setEtherbase(addr)
