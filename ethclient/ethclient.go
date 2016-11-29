@@ -112,7 +112,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		for i := range reqs {
 			reqs[i] = rpc.BatchElem{
 				Method: "eth_getUncleByBlockHashAndIndex",
-				Args:   []interface{}{body.Hash, fmt.Sprintf("%#x", i)},
+				Args:   []interface{}{body.Hash, hexutil.EncodeUint64(uint64(i))},
 				Result: &uncles[i],
 			}
 		}
@@ -196,7 +196,7 @@ func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
 	}
-	return fmt.Sprintf("%#x", number)
+	return hexutil.EncodeBig(number)
 }
 
 type rpcProgress struct {
