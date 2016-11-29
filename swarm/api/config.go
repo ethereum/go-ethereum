@@ -54,11 +54,12 @@ type Config struct {
 	PublicKey string
 	BzzKey    string
 	EnsRoot   common.Address
+	NetworkId uint64
 }
 
 // config is agnostic to where private key is coming from
 // so managing accounts is outside swarm and left to wrappers
-func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (self *Config, err error) {
+func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64) (self *Config, err error) {
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
 	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
 	err = os.MkdirAll(dirpath, os.ModePerm)
@@ -82,6 +83,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		PublicKey:     pubkeyhex,
 		BzzKey:        keyhex,
 		EnsRoot:       toyNetEnsRoot,
+		NetworkId:     networkId,
 	}
 	data, err = ioutil.ReadFile(confpath)
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -38,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -61,17 +63,22 @@ var (
 		Name:  "bzzport",
 		Usage: "Swarm local http api port",
 	}
+	SwarmNetworkIdFlag = cli.IntFlag{
+		Name:  "bzznetworkid",
+		Usage: "Network identifier (integer, default 322=swarm testnet)",
+		Value: network.NetworkId,
+	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
 		Usage: "Swarm config file path (datadir/bzz)",
 	}
-	SwarmSwapDisabled = cli.BoolFlag{
-		Name:  "bzznoswap",
-		Usage: "Swarm SWAP disabled (default false)",
+	SwarmSwapEnabled = cli.BoolFlag{
+		Name:  "swap",
+		Usage: "Swarm SWAP enabled (default false)",
 	}
-	SwarmSyncDisabled = cli.BoolFlag{
-		Name:  "bzznosync",
-		Usage: "Swarm Syncing disabled (default false)",
+	SwarmSyncEnabled = cli.BoolTFlag{
+		Name:  "sync",
+		Usage: "Swarm Syncing enabled (default true)",
 	}
 	EthAPI = cli.StringFlag{
 		Name:  "ethapi",
@@ -86,6 +93,7 @@ func init() {
 	// Override flag defaults so bzzd can run alongside geth.
 	utils.ListenPortFlag.Value = 30399
 	utils.IPCPathFlag.Value = utils.DirectoryString{Value: "bzzd.ipc"}
+	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, web3"
 
 	// Set up the cli app.
 	app.Commands = nil
@@ -96,21 +104,24 @@ func init() {
 		utils.BootnodesFlag,
 		utils.KeyStoreDirFlag,
 		utils.ListenPortFlag,
+		utils.NoDiscoverFlag,
+		utils.DiscoveryV5Flag,
 		utils.NetrestrictFlag,
-		utils.MaxPeersFlag,
-		utils.NATFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
+		utils.MaxPeersFlag,
+		utils.NATFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		// bzzd-specific flags
 		EthAPI,
 		SwarmConfigPathFlag,
-		SwarmSwapDisabled,
-		SwarmSyncDisabled,
+		SwarmSwapEnabled,
+		SwarmSyncEnabled,
 		SwarmPortFlag,
 		SwarmAccountFlag,
+		SwarmNetworkIdFlag,
 		ChequebookAddrFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
@@ -138,7 +149,8 @@ func bzzd(ctx *cli.Context) error {
 
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
-		injectBootnodes(stack.Server(), ctx.GlobalStringSlice(utils.BootnodesFlag.Name))
+		bootnodes := strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
+		injectBootnodes(stack.Server(), bootnodes)
 	} else {
 		injectBootnodes(stack.Server(), defaultBootnodes)
 	}
@@ -155,7 +167,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if bzzdir == "" {
 		bzzdir = stack.InstanceDir()
 	}
-	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey)
+	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
 	}
@@ -163,16 +175,18 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
 	}
-	swapEnabled := !ctx.GlobalBool(SwarmSwapDisabled.Name)
-	syncEnabled := !ctx.GlobalBool(SwarmSyncDisabled.Name)
+	swapEnabled := ctx.GlobalBool(SwarmSwapEnabled.Name)
+	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabled.Name)
 
 	ethapi := ctx.GlobalString(EthAPI.Name)
-	if ethapi == "" {
-		utils.Fatalf("Option %q must not be empty", EthAPI.Name)
-	}
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		client, err := ethclient.Dial(ethapi)
+		var client *ethclient.Client
+		if ethapi == "" {
+			err = fmt.Errorf("use ethapi flag to connect to a an eth client and talk to the blockchain")
+		} else {
+			client, err = ethclient.Dial(ethapi)
+		}
 		if err != nil {
 			utils.Fatalf("Can't connect: %v", err)
 		}
@@ -241,6 +255,7 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 		n, err := discover.ParseNode(url)
 		if err != nil {
 			glog.Errorf("invalid bootnode %q", err)
+			continue
 		}
 		srv.AddPeer(n)
 	}

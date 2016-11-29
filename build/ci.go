@@ -72,6 +72,9 @@ var (
 		executablePath("abigen"),
 		executablePath("evm"),
 		executablePath("geth"),
+		executablePath("bzzd"),
+		executablePath("bzzhash"),
+		executablePath("bzzup"),
 		executablePath("rlpdump"),
 	}
 
@@ -88,6 +91,18 @@ var (
 		{
 			Name:        "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+		},
+		{
+			Name:        "bzzd",
+			Description: "Ethereum Swarm daemon",
+		},
+		{
+			Name:        "bzzup",
+			Description: "Ethereum Swarm command line file/directory uploader",
+		},
+		{
+			Name:        "bzzhash",
+			Description: "Ethereum Swarm file/directory hash calculator",
 		},
 		{
 			Name:        "abigen",
@@ -811,13 +826,12 @@ func doXCodeFramework(cmdline []string) {
 	// Prepare and upload a PodSpec to CocoaPods
 	if *deploy != "" {
 		meta := newPodMetadata(env, archive)
-		build.Render("build/pod.podspec", meta.Name+".podspec", 0755, meta)
-		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec", "--allow-warnings", "--verbose")
+		build.Render("build/pod.podspec", "Geth.podspec", 0755, meta)
+		build.MustRunCommand("pod", *deploy, "push", "Geth.podspec", "--allow-warnings", "--verbose")
 	}
 }
 
 type podMetadata struct {
-	Name         string
 	Version      string
 	Commit       string
 	Archive      string
@@ -850,14 +864,13 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 			}
 		}
 	}
-	name := "Geth"
+	version := build.VERSION()
 	if isUnstableBuild(env) {
-		name += "Develop"
+		version += "-unstable." + env.Buildnum
 	}
 	return podMetadata{
-		Name:         name,
 		Archive:      archive,
-		Version:      build.VERSION(),
+		Version:      version,
 		Commit:       env.Commit,
 		Contributors: contribs,
 	}

@@ -1,5 +1,5 @@
 Pod::Spec.new do |spec|
-  spec.name         = '{{.Name}}'
+  spec.name         = 'Geth'
   spec.version      = '{{.Version}}'
   spec.license      = { :type => 'GNU Lesser General Public License, Version 3.0' }
   spec.homepage     = 'https://github.com/ethereum/go-ethereum'

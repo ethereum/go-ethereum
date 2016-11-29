@@ -263,6 +263,13 @@ func (s *VMState) Exist(addr common.Address) bool {
 	return res
 }
 
+// Empty returns true if the account at the given address is considered empty
+func (s *VMState) Empty(addr common.Address) bool {
+	so, err := s.state.GetStateObject(s.ctx, addr)
+	s.errHandler(err)
+	return so == nil || so.empty()
+}
+
 // HasSuicided returns true if the given account has been marked for deletion
 // or false if the account does not exist
 func (s *VMState) HasSuicided(addr common.Address) bool {

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {
@@ -51,6 +52,7 @@ func BenchmarkMipmaps(b *testing.B) {
 
 	var (
 		db, _   = ethdb.NewLDBDatabase(dir, 0, 0)
+		mux     = new(event.TypeMux)
 		backend = &testBackend{mux, db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
@@ -126,6 +128,7 @@ func TestFilters(t *testing.T) {
 
 	var (
 		db, _   = ethdb.NewLDBDatabase(dir, 0, 0)
+		mux     = new(event.TypeMux)
 		backend = &testBackend{mux, db}
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		addr    = crypto.PubkeyToAddress(key1.PublicKey)

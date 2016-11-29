@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -77,20 +78,12 @@ func (b Bloom) TestBytes(test []byte) bool {
 
 // MarshalJSON encodes b as a hex string with 0x prefix.
 func (b Bloom) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%#x"`, b[:])), nil
+	return hexutil.Bytes(b[:]).MarshalJSON()
 }
 
 // UnmarshalJSON b as a hex string with 0x prefix.
 func (b *Bloom) UnmarshalJSON(input []byte) error {
-	var dec hexBytes
-	if err := dec.UnmarshalJSON(input); err != nil {
-		return err
-	}
-	if len(dec) != bloomLength {
-		return fmt.Errorf("invalid bloom size, want %d bytes", bloomLength)
-	}
-	copy((*b)[:], dec)
-	return nil
+	return hexutil.UnmarshalJSON("Bloom", input, b[:])
 }
 
 func CreateBloom(receipts Receipts) Bloom {
