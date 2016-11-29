@@ -144,17 +144,12 @@ func (s *Service) loop() {
 				if err = s.report(in, out); err != nil {
 					glog.V(logger.Warn).Infof("Full stats report failed: %v", err)
 				}
-			case <-headSub.Chan():
-				// Exhaust events to avoid reporting too frequently
-				for exhausted := false; !exhausted; {
-					select {
-					case <-headSub.Chan():
-					default:
-						exhausted = true
-					}
-				}
-				if err = s.reportBlock(out); err != nil {
+			case head := <-headSub.Chan():
+				if err = s.reportBlock(out, head.Data.(core.ChainHeadEvent).Block); err != nil {
 					glog.V(logger.Warn).Infof("Block stats report failed: %v", err)
+				}
+				if err = s.reportPending(out); err != nil {
+					glog.V(logger.Warn).Infof("Post-block transaction stats report failed: %v", err)
 				}
 			case <-txSub.Chan():
 				// Exhaust events to avoid reporting too frequently
@@ -245,7 +240,7 @@ func (s *Service) report(in *json.Decoder, out *json.Encoder) error {
 	if err := s.reportLatency(in, out); err != nil {
 		return err
 	}
-	if err := s.reportBlock(out); err != nil {
+	if err := s.reportBlock(out, nil); err != nil {
 		return err
 	}
 	if err := s.reportPending(out); err != nil {
@@ -326,7 +321,7 @@ func (s uncleStats) MarshalJSON() ([]byte, error) {
 }
 
 // reportBlock retrieves the current chain head and repors it to the stats server.
-func (s *Service) reportBlock(out *json.Encoder) error {
+func (s *Service) reportBlock(out *json.Encoder, block *types.Block) error {
 	// Gather the head block infos from the local blockchain
 	var (
 		head   *types.Header
@@ -336,16 +331,21 @@ func (s *Service) reportBlock(out *json.Encoder) error {
 	)
 	if s.eth != nil {
 		// Full nodes have all needed information available
-		block := s.eth.BlockChain().CurrentBlock()
-
-		head = s.eth.BlockChain().CurrentHeader()
+		if block == nil {
+			block = s.eth.BlockChain().CurrentBlock()
+		}
+		head = block.Header()
 		td = s.eth.BlockChain().GetTd(head.Hash(), head.Number.Uint64())
 
 		txs = block.Transactions()
 		uncles = block.Uncles()
 	} else {
 		// Light nodes would need on-demand lookups for transactions/uncles, skip
-		head = s.les.BlockChain().CurrentHeader()
+		if block != nil {
+			head = block.Header()
+		} else {
+			head = s.les.BlockChain().CurrentHeader()
+		}
 		td = s.les.BlockChain().GetTd(head.Hash(), head.Number.Uint64())
 	}
 	// Assemble the block stats report and send it to the server
