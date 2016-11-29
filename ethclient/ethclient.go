@@ -123,6 +123,9 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 			if reqs[i].Error != nil {
 				return nil, reqs[i].Error
 			}
+			if uncles[i] == nil {
+				return nil, fmt.Errorf("got null header for uncle %d of block %x", i, body.Hash[:])
+			}
 		}
 	}
 	return types.NewBlockWithHeader(head).WithBody(body.Transactions, uncles), nil
