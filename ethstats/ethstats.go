@@ -292,12 +292,15 @@ func (s *Service) reportLatency(in *json.Decoder, out *json.Encoder) error {
 
 // blockStats is the information to report about individual blocks.
 type blockStats struct {
-	Number    *big.Int    `json:"number"`
-	Hash      common.Hash `json:"hash"`
-	Diff      string      `json:"difficulty"`
-	TotalDiff string      `json:"totalDifficulty"`
-	Txs       txStats     `json:"transactions"`
-	Uncles    uncleStats  `json:"uncles"`
+	Number    *big.Int       `json:"number"`
+	Hash      common.Hash    `json:"hash"`
+	Miner     common.Address `json:"miner"`
+	GasUsed   *big.Int       `json:"gasUsed"`
+	GasLimit  *big.Int       `json:"gasLimit"`
+	Diff      string         `json:"difficulty"`
+	TotalDiff string         `json:"totalDifficulty"`
+	Txs       txStats        `json:"transactions"`
+	Uncles    uncleStats     `json:"uncles"`
 }
 
 // txStats is a custom wrapper around a transaction array to force serializing
@@ -351,6 +354,9 @@ func (s *Service) reportBlock(out *json.Encoder) error {
 		"block": &blockStats{
 			Number:    head.Number,
 			Hash:      head.Hash(),
+			Miner:     head.Coinbase,
+			GasUsed:   new(big.Int).Set(head.GasUsed),
+			GasLimit:  new(big.Int).Set(head.GasLimit),
 			Diff:      head.Difficulty.String(),
 			TotalDiff: td.String(),
 			Txs:       txs,
