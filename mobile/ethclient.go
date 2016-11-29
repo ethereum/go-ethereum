@@ -73,7 +73,8 @@ func (ec *EthereumClient) GetHeaderByNumber(ctx *Context, number int64) (*Header
 
 // GetTransactionByHash returns the transaction with the given hash.
 func (ec *EthereumClient) GetTransactionByHash(ctx *Context, hash *Hash) (*Transaction, error) {
-	tx, err := ec.client.TransactionByHash(ctx.context, hash.hash)
+	// TODO(karalabe): handle isPending
+	tx, _, err := ec.client.TransactionByHash(ctx.context, hash.hash)
 	return &Transaction{tx}, err
 }
 
