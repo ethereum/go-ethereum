@@ -188,6 +188,10 @@ func (self *Miner) Pending() (*types.Block, *state.StateDB) {
 }
 
 // PendingBlock returns the currently pending block.
+// 
+// Note, to access both the pending block and the pending state 
+// simultaneously, please use Pending(), as the pending state can 
+// change between multiple method calls
 func (self *Miner) PendingBlock() *types.Block {
 	return self.worker.pendingBlock()
 }
