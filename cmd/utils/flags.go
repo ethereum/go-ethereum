@@ -177,15 +177,6 @@ var (
 		Usage: "Number of trie node generations to keep in memory",
 		Value: int(state.MaxTrieCacheGen),
 	}
-	// Fork settings
-	SupportDAOFork = cli.BoolFlag{
-		Name:  "support-dao-fork",
-		Usage: "Updates the chain rules to support the DAO hard-fork",
-	}
-	OpposeDAOFork = cli.BoolFlag{
-		Name:  "oppose-dao-fork",
-		Usage: "Updates the chain rules to oppose the DAO hard-fork",
-	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
@@ -900,13 +891,6 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 			config.EIP158Block = params.MainNetSpuriousDragon
 			config.ChainId = params.MainNetChainID
 		}
-	}
-	// Force override any existing configs if explicitly requested
-	switch {
-	case ctx.GlobalBool(SupportDAOFork.Name):
-		config.DAOForkSupport = true
-	case ctx.GlobalBool(OpposeDAOFork.Name):
-		config.DAOForkSupport = false
 	}
 	return config
 }

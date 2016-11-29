@@ -140,8 +140,6 @@ participating.
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
-		utils.SupportDAOFork,
-		utils.OpposeDAOFork,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
 		utils.AutoDAGFlag,
