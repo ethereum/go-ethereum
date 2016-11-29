@@ -237,6 +237,7 @@ func TestWallet(t *testing.T) {
 }
 
 func TestStateTestsRandom(t *testing.T) {
+	t.Skip()
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: big.NewInt(1150000),
 	}
