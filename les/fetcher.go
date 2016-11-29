@@ -53,6 +53,7 @@ type fetchRequest struct {
 type fetchResponse struct {
 	reqID   uint64
 	headers []*types.Header
+	peer    *peer
 }
 
 func newLightFetcher(pm *ProtocolManager) *lightFetcher {
@@ -148,8 +149,8 @@ func (f *lightFetcher) nextRequest() (*peer, *announceData) {
 	return bestPeer, res
 }
 
-func (f *lightFetcher) deliverHeaders(reqID uint64, headers []*types.Header) {
-	f.deliverChn <- fetchResponse{reqID: reqID, headers: headers}
+func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types.Header) {
+	f.deliverChn <- fetchResponse{reqID: reqID, headers: headers, peer: peer}
 }
 
 func (f *lightFetcher) requestedID(reqID uint64) bool {
@@ -280,11 +281,16 @@ func (f *lightFetcher) syncLoop() {
 			//fmt.Println("<-f.deliverChn", f.syncing)
 			f.reqMu.Lock()
 			req, ok := f.requested[resp.reqID]
-			delete(f.requested, resp.reqID)
+			if ok && req.peer != resp.peer {
+				ok = false
+			}
+			if ok {
+				delete(f.requested, resp.reqID)
+			}
 			f.reqMu.Unlock()
 			if !ok || !(f.syncing || f.processResponse(req, resp)) {
 				//fmt.Println("processResponse fail")
-				f.pm.removePeer(req.peer.id)
+				f.pm.removePeer(resp.peer.id)
 			}
 		case <-f.syncDone:
 			//fmt.Println("<-f.syncDone", f.syncing)

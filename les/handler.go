@@ -559,7 +559,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 		if pm.fetcher.requestedID(resp.ReqID) {
-			pm.fetcher.deliverHeaders(resp.ReqID, resp.Headers)
+			pm.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 		} else {
 			err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
 			if err != nil {
