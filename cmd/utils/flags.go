@@ -125,7 +125,7 @@ var (
 	}
 	TestNetFlag = cli.BoolFlag{
 		Name:  "testnet",
-		Usage: "Morden network: pre-configured test network with modified starting nonces (replay protection)",
+		Usage: "Ropsten network: pre-configured test network",
 	}
 	DevModeFlag = cli.BoolFlag{
 		Name:  "dev",
