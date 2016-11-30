@@ -316,7 +316,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		root := header.Root
-		trie, _ := trie.New(root, db)
+		trie, _ := trie.New(root, db, 0)
 
 		for _, acc := range accounts {
 			req := ProofReq{
