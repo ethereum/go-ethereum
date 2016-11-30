@@ -73,7 +73,7 @@ func NewEnvelope(ttl uint32, topic TopicType, salt []byte, aesNonce []byte, msg 
 }
 
 func (e *Envelope) IsSymmetric() bool {
-	return e.AESNonce != nil
+	return len(e.AESNonce) > 0
 }
 
 func (e *Envelope) isAsymmetric() bool {
