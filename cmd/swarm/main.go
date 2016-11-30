@@ -82,15 +82,15 @@ var (
 		Name:  "bzzconfig",
 		Usage: "Swarm config file path (datadir/bzz)",
 	}
-	SwarmSwapEnabled = cli.BoolFlag{
+	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:  "swap",
 		Usage: "Swarm SWAP enabled (default false)",
 	}
-	SwarmSyncEnabled = cli.BoolTFlag{
+	SwarmSyncEnabledFlag = cli.BoolTFlag{
 		Name:  "sync",
 		Usage: "Swarm Syncing enabled (default true)",
 	}
-	EthAPI = cli.StringFlag{
+	EthAPIFlag = cli.StringFlag{
 		Name:  "ethapi",
 		Usage: "URL of the Ethereum API provider",
 		Value: node.DefaultIPCEndpoint("geth"),
@@ -111,6 +111,10 @@ var (
 	SwarmUploadDefaultPath = cli.StringFlag{
 		Name:  "defaultpath",
 		Usage: "path to file served for empty url path (none)",
+	}
+	CorsStringFlag = cli.StringFlag{
+		Name:  "corsdomain",
+		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied seperated by a ',')",
 	}
 )
 
@@ -171,10 +175,11 @@ Prints the swarm hash of file or directory.
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		// bzzd-specific flags
-		EthAPI,
+		CorsStringFlag,
+		EthAPIFlag,
 		SwarmConfigPathFlag,
-		SwarmSwapEnabled,
-		SwarmSyncEnabled,
+		SwarmSwapEnabledFlag,
+		SwarmSyncEnabledFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
 		SwarmNetworkIdFlag,
@@ -252,10 +257,11 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
 	}
-	swapEnabled := ctx.GlobalBool(SwarmSwapEnabled.Name)
-	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabled.Name)
+	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
+	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 
-	ethapi := ctx.GlobalString(EthAPI.Name)
+	ethapi := ctx.GlobalString(EthAPIFlag.Name)
+	cors := ctx.GlobalString(CorsStringFlag.Name)
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
 		var client *ethclient.Client
@@ -265,7 +271,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 				utils.Fatalf("Can't connect: %v", err)
 			}
 		}
-		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled)
+		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)
