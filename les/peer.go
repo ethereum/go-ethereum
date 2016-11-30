@@ -51,9 +51,8 @@ type peer struct {
 
 	id string
 
-	firstHeadInfo, headInfo *announceData
-	headInfoLen             int
-	lock                    sync.RWMutex
+	headInfo *announceData
+	lock     sync.RWMutex
 
 	announceChn chan announceData
 
@@ -109,67 +108,6 @@ func (p *peer) headBlockInfo() blockInfo {
 	defer p.lock.RUnlock()
 
 	return blockInfo{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td}
-}
-
-func (p *peer) addNotify(announce *announceData) bool {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	if announce.Td.Cmp(p.headInfo.Td) < 1 {
-		return false
-	}
-	if p.headInfoLen >= maxHeadInfoLen {
-		//return false
-		p.firstHeadInfo = p.firstHeadInfo.next
-		p.headInfoLen--
-	}
-	if announce.haveHeaders == 0 {
-		hh := p.headInfo.Number - announce.ReorgDepth
-		if p.headInfo.haveHeaders < hh {
-			hh = p.headInfo.haveHeaders
-		}
-		announce.haveHeaders = hh
-	}
-	p.headInfo.next = announce
-	p.headInfo = announce
-	p.headInfoLen++
-	return true
-}
-
-func (p *peer) gotHeader(hash common.Hash, number uint64, td *big.Int) bool {
-	h := p.firstHeadInfo
-	ptr := 0
-	for h != nil {
-		if h.Hash == hash {
-			if h.Number != number || h.Td.Cmp(td) != 0 {
-				return false
-			}
-			h.headKnown = true
-			h.haveHeaders = h.Number
-			p.firstHeadInfo = h
-			p.headInfoLen -= ptr
-			last := h
-			h = h.next
-			// propagate haveHeaders through the chain
-			for h != nil {
-				hh := last.Number - h.ReorgDepth
-				if last.haveHeaders < hh {
-					hh = last.haveHeaders
-				}
-				if hh > h.haveHeaders {
-					h.haveHeaders = hh
-				} else {
-					return true
-				}
-				last = h
-				h = h.next
-			}
-			return true
-		}
-		h = h.next
-		ptr++
-	}
-	return true
 }
 
 // Td retrieves the current total difficulty of a peer.
@@ -455,9 +393,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcCosts = MRC.decode()
 	}
 
-	p.firstHeadInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
-	p.headInfo = p.firstHeadInfo
-	p.headInfoLen = 1
+	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
 	return nil
 }
 
