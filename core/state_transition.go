@@ -235,6 +235,8 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 		if err != nil {
 			ret = nil
 			glog.V(logger.Core).Infoln("VM create err:", err)
+		} else if ret == nil { // contract deployed without code
+			ret = []byte{}
 		}
 	} else {
 		// Increment the nonce for the next transaction

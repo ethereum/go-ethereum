@@ -97,7 +97,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 		return nil, nil, nil, err
 	}
 
-	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, msg, header, cfg), msg, gp)
+	ret, gas, err := ApplyMessage(NewEnv(statedb, config, bc, msg, header, cfg), msg, gp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -107,7 +107,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 	receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
-	if MessageCreatesContract(msg) {
+
+	// ret is only not nil when the contract is deployed successful.
+	if MessageCreatesContract(msg) && ret != nil {
 		receipt.ContractAddress = crypto.CreateAddress(msg.From(), tx.Nonce())
 	}
 
