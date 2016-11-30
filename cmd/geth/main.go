@@ -20,20 +20,15 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/contracts/release"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
@@ -64,59 +59,26 @@ func init() {
 	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
+		// See chaincmd.go:
+		initCommand,
 		importCommand,
 		exportCommand,
 		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
+		// See monitorcmd.go:
 		monitorCommand,
+		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
+		// See consolecmd.go:
 		consoleCommand,
 		attachCommand,
 		javascriptCommand,
-		{
-			Action:    makedag,
-			Name:      "makedag",
-			Usage:     "Generate ethash DAG (for testing)",
-			ArgsUsage: "<blockNum> <outputDir>",
-			Category:  "MISCELLANEOUS COMMANDS",
-			Description: `
-The makedag command generates an ethash DAG in /tmp/dag.
-
-This command exists to support the system testing project.
-Regular users do not need to execute it.
-`,
-		},
-		{
-			Action:    version,
-			Name:      "version",
-			Usage:     "Print version numbers",
-			ArgsUsage: " ",
-			Category:  "MISCELLANEOUS COMMANDS",
-			Description: `
-The output of this command is supposed to be machine-readable.
-`,
-		},
-		{
-			Action:    initGenesis,
-			Name:      "init",
-			Usage:     "Bootstrap and initialize a new genesis block",
-			ArgsUsage: "<genesisPath>",
-			Category:  "BLOCKCHAIN COMMANDS",
-			Description: `
-The init command initializes a new genesis block and definition for the network.
-This is a destructive action and changes the network in which you will be
-participating.
-`,
-		},
-		{
-			Action:    license,
-			Name:      "license",
-			Usage:     "Display license information",
-			ArgsUsage: " ",
-			Category:  "MISCELLANEOUS COMMANDS",
-		},
+		// See misccmd.go:
+		makedagCommand,
+		versionCommand,
+		licenseCommand,
 	}
 
 	app.Flags = []cli.Flag{
@@ -230,30 +192,6 @@ func geth(ctx *cli.Context) error {
 	return nil
 }
 
-// initGenesis will initialise the given JSON format genesis file and writes it as
-// the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) error {
-	genesisPath := ctx.Args().First()
-	if len(genesisPath) == 0 {
-		utils.Fatalf("must supply path to genesis JSON file")
-	}
-
-	stack := makeFullNode(ctx)
-	chaindb := utils.MakeChainDatabase(ctx, stack)
-
-	genesisFile, err := os.Open(genesisPath)
-	if err != nil {
-		utils.Fatalf("failed to read genesis file: %v", err)
-	}
-
-	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
-	if err != nil {
-		utils.Fatalf("failed to write genesis block: %v", err)
-	}
-	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
-	return nil
-}
-
 func makeFullNode(ctx *cli.Context) *node.Node {
 	// Create the default extradata and construct the base node
 	var clientInfo = struct {
@@ -327,66 +265,4 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
-}
-
-func makedag(ctx *cli.Context) error {
-	args := ctx.Args()
-	wrongArgs := func() {
-		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
-	}
-	switch {
-	case len(args) == 2:
-		blockNum, err := strconv.ParseUint(args[0], 0, 64)
-		dir := args[1]
-		if err != nil {
-			wrongArgs()
-		} else {
-			dir = filepath.Clean(dir)
-			// seems to require a trailing slash
-			if !strings.HasSuffix(dir, "/") {
-				dir = dir + "/"
-			}
-			_, err = ioutil.ReadDir(dir)
-			if err != nil {
-				utils.Fatalf("Can't find dir")
-			}
-			fmt.Println("making DAG, this could take awhile...")
-			ethash.MakeDAG(blockNum, dir)
-		}
-	default:
-		wrongArgs()
-	}
-	return nil
-}
-
-func version(ctx *cli.Context) error {
-	fmt.Println(strings.Title(clientIdentifier))
-	fmt.Println("Version:", params.Version)
-	if gitCommit != "" {
-		fmt.Println("Git Commit:", gitCommit)
-	}
-	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
-	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
-	fmt.Println("Go Version:", runtime.Version())
-	fmt.Println("OS:", runtime.GOOS)
-	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
-	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
-	return nil
-}
-
-func license(_ *cli.Context) error {
-	fmt.Println(`Geth is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-Geth is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with geth. If not, see <http://www.gnu.org/licenses/>.
-`)
-	return nil
 }
