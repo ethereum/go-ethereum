@@ -34,11 +34,10 @@ type BlockFetcher interface {
 // ToEVMContext creates a new context for use in the EVM.
 func ToEVMContext(msg Message, header *types.Header, chain BlockFetcher) vm.Context {
 	return vm.Context{
-		CallContext: EVMCallContext{
-			CanTransfer: CanTransfer,
-			Transfer:    Transfer,
-			GetHashFn:   GetHashFn(header, chain),
-		},
+		CanTransfer: CanTransfer,
+		Transfer:    Transfer,
+		GetHash:     GetHashFn(header, chain),
+
 		Origin:      msg.From(),
 		Coinbase:    header.Coinbase,
 		BlockNumber: new(big.Int).Set(header.Number),

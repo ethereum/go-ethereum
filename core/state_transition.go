@@ -244,8 +244,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 			glog.V(logger.Core).Infoln("VM call err:", err)
 		}
 	}
-
-	if err != nil && IsValueTransferErr(err) {
+	if err == vm.ErrInsufficientBalance {
 		return nil, nil, nil, InvalidTxError(err)
 	}
 

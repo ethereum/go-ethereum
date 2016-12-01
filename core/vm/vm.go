@@ -38,9 +38,9 @@ type Config struct {
 	ForceJit bool
 	// Tracer is the op code logger
 	Tracer Tracer
-	// Test enforces certain (generic) JSON test rules
-	// see core/vm/environment.go
-	Test bool
+	// NoRecursion disabled EVM call, callcode,
+	// delegate call and create.
+	NoRecursion bool
 }
 
 // EVM is used to run Ethereum based contracts and will utilise the

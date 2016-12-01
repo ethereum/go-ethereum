@@ -94,6 +94,4 @@ type CallContext interface {
 	DelegateCall(env *Environment, me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
 	// Create a new contract
 	Create(env *Environment, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
-	// GetHash returns the hash corresponding to n
-	GetHash(n uint64) common.Hash
 }

@@ -180,7 +180,7 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 				return true
 			}
 		}
-		return db.GetBalance(address).Cmp(amount) >= 0
+		return core.CanTransfer(db, address, amount)
 	}
 	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 		if vmTest {
@@ -190,13 +190,12 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 	}
 
 	context := vm.Context{
-		CallContext: core.EVMCallContext{
-			CanTransfer: canTransfer,
-			Transfer:    transfer,
-			GetHashFn: func(n uint64) common.Hash {
-				return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
-			},
+		CanTransfer: canTransfer,
+		Transfer:    transfer,
+		GetHash: func(n uint64) common.Hash {
+			return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 		},
+
 		Origin:      origin,
 		Coinbase:    common.HexToAddress(envValues["currentCoinbase"]),
 		BlockNumber: common.Big(envValues["currentNumber"]),
@@ -208,5 +207,5 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 	if context.GasPrice == nil {
 		context.GasPrice = new(big.Int)
 	}
-	return vm.NewEnvironment(context, statedb, chainConfig, vm.Config{Test: vmTest}), msg
+	return vm.NewEnvironment(context, statedb, chainConfig, vm.Config{NoRecursion: vmTest}), msg
 }
