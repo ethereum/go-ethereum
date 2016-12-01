@@ -22,7 +22,6 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	mrand "math/rand"
 	"sync"
 	"time"
 
@@ -82,9 +81,6 @@ func NewWhisper(server MailServer) *Whisper {
 		Length:  NumberOfMessageCodes,
 		Run:     whisper.HandlePeer,
 	}
-
-	seed := time.Now().Unix()
-	mrand.Seed(seed)
 
 	return whisper
 }
