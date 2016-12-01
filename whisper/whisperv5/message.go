@@ -130,7 +130,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		randomize(buf[1:]) // change to: err = mrand.Read(buf[1:])
+		randomize(buf[1:])
 		buf[0] = byte(padSize)
 		if params.Padding != nil {
 			copy(buf[1:], params.Padding)
@@ -208,7 +208,10 @@ func (msg *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte,
 	_, err = crand.Read(nonce)
 	if err != nil {
 		return nil, nil, err
+	} else if !validateSymmetricKey(nonce) {
+		return nil, nil, errors.New("crypto/rand failed to generate nonce")
 	}
+
 	msg.Raw = aesgcm.Seal(nil, nonce, msg.Raw, nil)
 	return salt, nonce, nil
 }

@@ -165,6 +165,9 @@ func (p *Peer) broadcast() error {
 			p.mark(envelope)
 		}
 	}
+	if len(transmit) == 0 {
+		return nil
+	}
 	// Transmit the unknown batch (potentially empty)
 	if err := p2p.Send(p.ws, messagesCode, transmit); err != nil {
 		return err

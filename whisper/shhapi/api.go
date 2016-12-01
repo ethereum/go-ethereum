@@ -149,13 +149,13 @@ func (api *PublicWhisperAPI) DeleteSymKey(name string) error {
 
 // NewWhisperFilter creates and registers a new message filter to watch for inbound whisper messages.
 // Returns the ID of the newly created Filter.
-func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, error) {
+func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 	if api.whisper == nil {
-		return nil, whisperOffLineErr
+		return 0, whisperOffLineErr
 	}
 
 	filter := whisperv5.Filter{
-		Src:       crypto.ToECDSAPub(args.From),
+		Src:       crypto.ToECDSAPub(common.FromHex(args.From)),
 		KeySym:    api.whisper.GetSymKey(args.KeyName),
 		PoW:       args.PoW,
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
@@ -173,39 +173,39 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 	if len(args.Topics) == 0 {
 		info := "NewFilter: at least one topic must be specified"
 		glog.V(logger.Error).Infof(info)
-		return nil, errors.New(info)
+		return 0, errors.New(info)
 	}
 
 	if len(args.KeyName) != 0 && len(filter.KeySym) == 0 {
 		info := "NewFilter: key was not found by name: " + args.KeyName
 		glog.V(logger.Error).Infof(info)
-		return nil, errors.New(info)
+		return 0, errors.New(info)
 	}
 
 	if len(args.To) == 0 && len(filter.KeySym) == 0 {
 		info := "NewFilter: filter must contain either symmetric or asymmetric key"
 		glog.V(logger.Error).Infof(info)
-		return nil, errors.New(info)
+		return 0, errors.New(info)
 	}
 
 	if len(args.To) != 0 && len(filter.KeySym) != 0 {
 		info := "NewFilter: filter must not contain both symmetric and asymmetric key"
 		glog.V(logger.Error).Infof(info)
-		return nil, errors.New(info)
+		return 0, errors.New(info)
 	}
 
 	if len(args.To) > 0 {
-		dst := crypto.ToECDSAPub(args.To)
+		dst := crypto.ToECDSAPub(common.FromHex(args.To))
 		if !whisperv5.ValidatePublicKey(dst) {
 			info := "NewFilter: Invalid 'To' address"
 			glog.V(logger.Error).Infof(info)
-			return nil, errors.New(info)
+			return 0, errors.New(info)
 		}
 		filter.KeyAsym = api.whisper.GetIdentity(string(args.To))
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)
-			return nil, errors.New(info)
+			return 0, errors.New(info)
 		}
 	}
 
@@ -213,22 +213,22 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (*rpc.HexNumber, 
 		if !whisperv5.ValidatePublicKey(filter.Src) {
 			info := "NewFilter: Invalid 'From' address"
 			glog.V(logger.Error).Infof(info)
-			return nil, errors.New(info)
+			return 0, errors.New(info)
 		}
 	}
 
 	id := api.whisper.Watch(&filter)
-	return rpc.NewHexNumber(id), nil
+	return id, nil
 }
 
 // UninstallFilter disables and removes an existing filter.
-func (api *PublicWhisperAPI) UninstallFilter(filterId rpc.HexNumber) {
-	api.whisper.Unwatch(filterId.Int())
+func (api *PublicWhisperAPI) UninstallFilter(filterId uint32) {
+	api.whisper.Unwatch(filterId)
 }
 
 // GetFilterChanges retrieves all the new messages matched by a filter since the last retrieval.
-func (api *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []WhisperMessage {
-	f := api.whisper.GetFilter(filterId.Int())
+func (api *PublicWhisperAPI) GetFilterChanges(filterId uint32) []WhisperMessage {
+	f := api.whisper.GetFilter(filterId)
 	if f != nil {
 		newMail := f.Retrieve()
 		return toWhisperMessages(newMail)
@@ -237,8 +237,8 @@ func (api *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []WhisperM
 }
 
 // GetMessages retrieves all the known messages that match a specific filter.
-func (api *PublicWhisperAPI) GetMessages(filterId rpc.HexNumber) []WhisperMessage {
-	all := api.whisper.Messages(filterId.Int())
+func (api *PublicWhisperAPI) GetMessages(filterId uint32) []WhisperMessage {
+	all := api.whisper.Messages(filterId)
 	return toWhisperMessages(all)
 }
 
@@ -259,7 +259,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 
 	params := whisperv5.MessageParams{
 		TTL:      args.TTL,
-		Dst:      crypto.ToECDSAPub(args.To),
+		Dst:      crypto.ToECDSAPub(common.FromHex(args.To)),
 		KeySym:   api.whisper.GetSymKey(args.KeyName),
 		Topic:    args.Topic,
 		Payload:  args.Payload,
@@ -269,7 +269,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	if len(args.From) > 0 {
-		pub := crypto.ToECDSAPub(args.From)
+		pub := crypto.ToECDSAPub(common.FromHex(args.From))
 		if !whisperv5.ValidatePublicKey(pub) {
 			info := "Post: Invalid 'From' address"
 			glog.V(logger.Error).Infof(info)
@@ -284,7 +284,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	filter := api.whisper.GetFilter(args.FilterID)
-	if filter == nil && args.FilterID > -1 {
+	if filter == nil && args.FilterID > 0 {
 		info := fmt.Sprintf("Post: wrong filter id %d", args.FilterID)
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
@@ -321,13 +321,13 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		return errors.New(info)
 	}
 
-	if len(args.To) == 0 && len(args.KeyName) == 0 {
+	if len(args.To) == 0 && len(params.KeySym) == 0 {
 		info := "Post: message must be encrypted either symmetrically or asymmetrically"
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 
-	if len(args.To) != 0 && len(args.KeyName) != 0 {
+	if len(args.To) != 0 && len(params.KeySym) != 0 {
 		info := "Post: ambigous encryption method requested"
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
@@ -368,60 +368,21 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 
 type PostArgs struct {
 	TTL      uint32              `json:"ttl"`
-	From     rpc.HexBytes        `json:"from"`
-	To       rpc.HexBytes        `json:"to"`
+	From     string              `json:"from"`
+	To       string              `json:"to"`
 	KeyName  string              `json:"keyname"`
 	Topic    whisperv5.TopicType `json:"topic"`
 	Padding  rpc.HexBytes        `json:"padding"`
 	Payload  rpc.HexBytes        `json:"payload"`
 	WorkTime uint32              `json:"worktime"`
 	PoW      float64             `json:"pow"`
-	FilterID int                 `json:"filter"`
-	PeerID   rpc.HexBytes        `json:"directP2P"`
-}
-
-func (args *PostArgs) UnmarshalJSON(data []byte) (err error) {
-	var obj struct {
-		TTL      uint32              `json:"ttl"`
-		From     rpc.HexBytes        `json:"from"`
-		To       rpc.HexBytes        `json:"to"`
-		KeyName  string              `json:"keyname"`
-		Topic    whisperv5.TopicType `json:"topic"`
-		Payload  rpc.HexBytes        `json:"payload"`
-		Padding  rpc.HexBytes        `json:"padding"`
-		WorkTime uint32              `json:"worktime"`
-		PoW      float64             `json:"pow"`
-		FilterID rpc.HexBytes        `json:"filter"`
-		PeerID   rpc.HexBytes        `json:"directP2P"`
-	}
-
-	if err := json.Unmarshal(data, &obj); err != nil {
-		return err
-	}
-
-	args.TTL = obj.TTL
-	args.From = obj.From
-	args.To = obj.To
-	args.KeyName = obj.KeyName
-	args.Topic = obj.Topic
-	args.Payload = obj.Payload
-	args.Padding = obj.Padding
-	args.WorkTime = obj.WorkTime
-	args.PoW = obj.PoW
-	args.FilterID = -1
-	args.PeerID = obj.PeerID
-
-	if obj.FilterID != nil {
-		x := whisperv5.BytesToIntBigEndian(obj.FilterID)
-		args.FilterID = int(x)
-	}
-
-	return nil
+	FilterID uint32              `json:"filterID"`
+	PeerID   rpc.HexBytes        `json:"peerID"`
 }
 
 type WhisperFilterArgs struct {
-	To        []byte
-	From      []byte
+	To        string
+	From      string
 	KeyName   string
 	PoW       float64
 	Topics    []whisperv5.TopicType
@@ -433,8 +394,8 @@ type WhisperFilterArgs struct {
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	// Unmarshal the JSON message and sanity check
 	var obj struct {
-		To        rpc.HexBytes  `json:"to"`
-		From      rpc.HexBytes  `json:"from"`
+		To        string        `json:"to"`
+		From      string        `json:"from"`
 		KeyName   string        `json:"keyname"`
 		PoW       float64       `json:"pow"`
 		Topics    []interface{} `json:"topics"`

@@ -57,17 +57,15 @@ func generateMessageParams() (*MessageParams, error) {
 	return &p, nil
 }
 
-func singleMessageTest(x *testing.T, symmetric bool) {
+func singleMessageTest(t *testing.T, symmetric bool) {
 	params, err := generateMessageParams()
 	if err != nil {
-		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		x.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed GenerateKey with seed %d: %s.", seed, err)
 	}
 
 	if !symmetric {
@@ -85,8 +83,7 @@ func singleMessageTest(x *testing.T, symmetric bool) {
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		x.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
 	var decrypted *ReceivedMessage
@@ -97,57 +94,49 @@ func singleMessageTest(x *testing.T, symmetric bool) {
 	}
 
 	if err != nil {
-		x.Errorf("failed to encrypt with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed to encrypt with seed %d: %s.", seed, err)
 	}
 
 	if !decrypted.Validate() {
-		x.Errorf("failed to validate with seed %d.", seed)
-		return
+		t.Fatalf("failed to validate with seed %d.", seed)
 	}
 
 	padsz := len(decrypted.Padding)
 	if bytes.Compare(steg[:padsz], decrypted.Padding) != 0 {
-		x.Errorf("failed with seed %d: compare padding.", seed)
-		return
+		t.Fatalf("failed with seed %d: compare padding.", seed)
 	}
 	if bytes.Compare(text, decrypted.Payload) != 0 {
-		x.Errorf("failed with seed %d: compare payload.", seed)
-		return
+		t.Fatalf("failed with seed %d: compare payload.", seed)
 	}
 	if !isMessageSigned(decrypted.Raw[0]) {
-		x.Errorf("failed with seed %d: unsigned.", seed)
-		return
+		t.Fatalf("failed with seed %d: unsigned.", seed)
 	}
 	if len(decrypted.Signature) != signatureLength {
-		x.Errorf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
-		return
+		t.Fatalf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 	}
 	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
-		x.Errorf("failed with seed %d: signature mismatch.", seed)
-		return
+		t.Fatalf("failed with seed %d: signature mismatch.", seed)
 	}
 }
 
-func TestMessageEncryption(x *testing.T) {
+func TestMessageEncryption(t *testing.T) {
 	InitSingleTest()
 
 	var symmetric bool
 	for i := 0; i < 256; i++ {
-		singleMessageTest(x, symmetric)
+		singleMessageTest(t, symmetric)
 		symmetric = !symmetric
 	}
 }
 
-func TestMessageWrap(x *testing.T) {
+func TestMessageWrap(t *testing.T) {
 	seed = int64(1777444222)
 	rand.Seed(seed)
 	target := 128.0
 
 	params, err := generateMessageParams()
 	if err != nil {
-		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
 	msg := NewSentMessage(params)
@@ -156,26 +145,23 @@ func TestMessageWrap(x *testing.T) {
 	params.PoW = target
 	env, err := msg.Wrap(params)
 	if err != nil {
-		x.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
 	pow := env.PoW()
 	if pow < target {
-		x.Errorf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
-		return
+		t.Fatalf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
 	}
 }
 
-func TestMessageSeal(x *testing.T) {
+func TestMessageSeal(t *testing.T) {
 	// this test depends on deterministic choice of seed (1976726903)
 	seed = int64(1976726903)
 	rand.Seed(seed)
 
 	params, err := generateMessageParams()
 	if err != nil {
-		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
 	msg := NewSentMessage(params)
@@ -187,8 +173,7 @@ func TestMessageSeal(x *testing.T) {
 
 	env := NewEnvelope(params.TTL, params.Topic, salt, aesnonce, msg)
 	if err != nil {
-		x.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
 	env.Expiry = uint32(seed) // make it deterministic
@@ -200,8 +185,7 @@ func TestMessageSeal(x *testing.T) {
 	env.calculatePoW(0)
 	pow := env.PoW()
 	if pow < target {
-		x.Errorf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
-		return
+		t.Fatalf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
 	}
 
 	params.WorkTime = 1
@@ -210,32 +194,29 @@ func TestMessageSeal(x *testing.T) {
 	env.calculatePoW(0)
 	pow = env.PoW()
 	if pow < 2*target {
-		x.Errorf("failed Wrap with seed %d: pow too small %f.", seed, pow)
-		return
+		t.Fatalf("failed Wrap with seed %d: pow too small %f.", seed, pow)
 	}
 }
 
-func TestEnvelopeOpen(x *testing.T) {
+func TestEnvelopeOpen(t *testing.T) {
 	InitSingleTest()
 
 	var symmetric bool
 	for i := 0; i < 256; i++ {
-		singleEnvelopeOpenTest(x, symmetric)
+		singleEnvelopeOpenTest(t, symmetric)
 		symmetric = !symmetric
 	}
 }
 
-func singleEnvelopeOpenTest(x *testing.T, symmetric bool) {
+func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 	params, err := generateMessageParams()
 	if err != nil {
-		x.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		x.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed GenerateKey with seed %d: %s.", seed, err)
 	}
 
 	if !symmetric {
@@ -253,54 +234,43 @@ func singleEnvelopeOpenTest(x *testing.T, symmetric bool) {
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		x.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
 	f := Filter{KeyAsym: key, KeySym: params.KeySym}
 	decrypted := env.Open(&f)
 	if decrypted == nil {
-		x.Errorf("failed to open with seed %d.", seed)
-		return
+		t.Fatalf("failed to open with seed %d.", seed)
 	}
 
 	padsz := len(decrypted.Padding)
 	if bytes.Compare(steg[:padsz], decrypted.Padding) != 0 {
-		x.Errorf("failed with seed %d: compare padding.", seed)
-		return
+		t.Fatalf("failed with seed %d: compare padding.", seed)
 	}
 	if bytes.Compare(text, decrypted.Payload) != 0 {
-		x.Errorf("failed with seed %d: compare payload.", seed)
-		return
+		t.Fatalf("failed with seed %d: compare payload.", seed)
 	}
 	if !isMessageSigned(decrypted.Raw[0]) {
-		x.Errorf("failed with seed %d: unsigned.", seed)
-		return
+		t.Fatalf("failed with seed %d: unsigned.", seed)
 	}
 	if len(decrypted.Signature) != signatureLength {
-		x.Errorf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
-		return
+		t.Fatalf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 	}
 	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
-		x.Errorf("failed with seed %d: signature mismatch.", seed)
-		return
+		t.Fatalf("failed with seed %d: signature mismatch.", seed)
 	}
 	if decrypted.isAsymmetricEncryption() == symmetric {
-		x.Errorf("failed with seed %d: asymmetric %v vs. %v.", seed, decrypted.isAsymmetricEncryption(), symmetric)
-		return
+		t.Fatalf("failed with seed %d: asymmetric %v vs. %v.", seed, decrypted.isAsymmetricEncryption(), symmetric)
 	}
 	if decrypted.isSymmetricEncryption() != symmetric {
-		x.Errorf("failed with seed %d: symmetric %v vs. %v.", seed, decrypted.isSymmetricEncryption(), symmetric)
-		return
+		t.Fatalf("failed with seed %d: symmetric %v vs. %v.", seed, decrypted.isSymmetricEncryption(), symmetric)
 	}
 	if !symmetric {
 		if decrypted.Dst == nil {
-			x.Errorf("failed with seed %d: dst is nil.", seed)
-			return
+			t.Fatalf("failed with seed %d: dst is nil.", seed)
 		}
 		if !isPubKeyEqual(decrypted.Dst, &key.PublicKey) {
-			x.Errorf("failed with seed %d: Dst.", seed)
-			return
+			t.Fatalf("failed with seed %d: Dst.", seed)
 		}
 	}
 }
