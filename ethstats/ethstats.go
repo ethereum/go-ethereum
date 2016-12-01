@@ -145,13 +145,21 @@ func (s *Service) loop() {
 					glog.V(logger.Warn).Infof("Full stats report failed: %v", err)
 				}
 			case head := <-headSub.Chan():
+				if head == nil { // node stopped
+					conn.Close()
+					return
+				}
 				if err = s.reportBlock(out, head.Data.(core.ChainHeadEvent).Block); err != nil {
 					glog.V(logger.Warn).Infof("Block stats report failed: %v", err)
 				}
 				if err = s.reportPending(out); err != nil {
 					glog.V(logger.Warn).Infof("Post-block transaction stats report failed: %v", err)
 				}
-			case <-txSub.Chan():
+			case ev := <-txSub.Chan():
+				if ev == nil { // node stopped
+					conn.Close()
+					return
+				}
 				// Exhaust events to avoid reporting too frequently
 				for exhausted := false; !exhausted; {
 					select {
