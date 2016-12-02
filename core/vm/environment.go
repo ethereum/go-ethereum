@@ -287,6 +287,12 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 		// Nothing should be returned when an error is thrown.
 		return nil, addr, err
 	}
+	// If the vm returned with an error the return value should be set to nil.
+	// This isn't consensus critical but merely to for behaviour reasons such as
+	// tests, RPC calls, etc.
+	if err != nil {
+		ret = nil
+	}
 
 	return ret, addr, err
 }

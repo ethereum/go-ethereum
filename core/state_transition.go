@@ -224,33 +224,31 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 		return nil, nil, nil, InvalidTxError(err)
 	}
 
-	vmenv := self.env
-	//var addr common.Address
+	var (
+		vmenv = self.env
+		// vm errors do not effect consensus and are therefor
+		// not assigned to err, except for insufficient balance
+		// error.
+		vmerr error
+	)
 	if contractCreation {
-		ret, _, err = vmenv.Create(sender, self.data, self.gas, self.value)
+		ret, _, vmerr = vmenv.Create(sender, self.data, self.gas, self.value)
 		if homestead && err == vm.CodeStoreOutOfGasError {
 			self.gas = Big0
-		}
-
-		if err != nil {
-			ret = nil
-			glog.V(logger.Core).Infoln("VM create err:", err)
 		}
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, err = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
-		if err != nil {
-			glog.V(logger.Core).Infoln("VM call err:", err)
+		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
+	}
+	if vmerr != nil {
+		glog.V(logger.Core).Infoln("vm returned with error:", err)
+		// The only possible consensus-error would be if there wasn't
+		// sufficient balance to make the transfer happen. The first
+		// balance transfer may never fail.
+		if vmerr == vm.ErrInsufficientBalance {
+			return nil, nil, nil, InvalidTxError(vmerr)
 		}
-	}
-	if err == vm.ErrInsufficientBalance {
-		return nil, nil, nil, InvalidTxError(err)
-	}
-
-	// We aren't interested in errors here. Errors returned by the VM are non-consensus errors and therefor shouldn't bubble up
-	if err != nil {
-		err = nil
 	}
 
 	requiredGas = new(big.Int).Set(self.gasUsed())
