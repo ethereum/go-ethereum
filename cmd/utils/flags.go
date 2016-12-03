@@ -878,9 +878,6 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 		} else {
 			// Homestead fork
 			config.HomesteadBlock = params.MainNetHomesteadBlock
-			// DAO fork
-			config.DAOForkBlock = params.MainNetDAOForkBlock
-			config.DAOForkSupport = true
 
 			// DoS reprice fork
 			config.EIP150Block = params.MainNetHomesteadGasRepriceBlock

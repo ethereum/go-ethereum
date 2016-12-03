@@ -134,8 +134,6 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 			ChainConfig: &params.ChainConfig{
 				ChainId:        big.NewInt(config.EthereumChainConfig.ChainID),
 				HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
-				DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
-				DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
 				EIP150Block:    big.NewInt(config.EthereumChainConfig.EIP150Block),
 				EIP150Hash:     config.EthereumChainConfig.EIP150Hash.hash,
 				EIP155Block:    big.NewInt(config.EthereumChainConfig.EIP155Block),

@@ -29,8 +29,6 @@ func MainnetChainConfig() *ChainConfig {
 	return &ChainConfig{
 		ChainID:        params.MainNetChainID.Int64(),
 		HomesteadBlock: params.MainNetHomesteadBlock.Int64(),
-		DAOForkBlock:   params.MainNetDAOForkBlock.Int64(),
-		DAOForkSupport: true,
 		EIP150Block:    params.MainNetHomesteadGasRepriceBlock.Int64(),
 		EIP150Hash:     Hash{params.MainNetHomesteadGasRepriceHash},
 		EIP155Block:    params.MainNetSpuriousDragon.Int64(),
@@ -49,8 +47,6 @@ func TestnetChainConfig() *ChainConfig {
 	return &ChainConfig{
 		ChainID:        params.TestNetChainID.Int64(),
 		HomesteadBlock: params.TestNetHomesteadBlock.Int64(),
-		DAOForkBlock:   0,
-		DAOForkSupport: true,
 		EIP150Block:    params.TestNetHomesteadGasRepriceBlock.Int64(),
 		EIP150Hash:     Hash{params.TestNetHomesteadGasRepriceHash},
 		EIP155Block:    params.TestNetSpuriousDragon.Int64(),
@@ -67,8 +63,6 @@ func TestnetGenesis() string {
 type ChainConfig struct {
 	ChainID        int64 // Chain ID for replay protection
 	HomesteadBlock int64 // Homestead switch block
-	DAOForkBlock   int64 // TheDAO hard-fork switch block
-	DAOForkSupport bool  // Whether the nodes supports or opposes the DAO hard-fork
 	EIP150Block    int64 // Homestead gas reprice switch block
 	EIP150Hash     Hash  // Homestead gas reprice switch block hash
 	EIP155Block    int64 // Replay protection switch block

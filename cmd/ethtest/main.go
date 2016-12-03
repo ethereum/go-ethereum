@@ -74,12 +74,12 @@ func runTestWithReader(test string, r io.Reader) error {
 	var err error
 	switch strings.ToLower(test) {
 	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
-		err = tests.RunBlockTestWithReader(params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, params.MainNetHomesteadGasRepriceBlock, r, skipTests)
+		err = tests.RunBlockTestWithReader(params.MainNetHomesteadBlock, params.MainNetHomesteadGasRepriceBlock, r, skipTests)
 	case "st", "state", "statetest", "statetests":
-		rs := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock, DAOForkBlock: params.MainNetDAOForkBlock, DAOForkSupport: true, EIP150Block: params.MainNetHomesteadGasRepriceBlock}
+		rs := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock, EIP150Block: params.MainNetHomesteadGasRepriceBlock}
 		err = tests.RunStateTestWithReader(rs, r, skipTests)
 	case "tx", "transactiontest", "transactiontests":
-		rs := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock, DAOForkBlock: params.MainNetDAOForkBlock, DAOForkSupport: true, EIP150Block: params.MainNetHomesteadGasRepriceBlock}
+		rs := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock, EIP150Block: params.MainNetHomesteadGasRepriceBlock}
 		err = tests.RunTransactionTestsWithReader(rs, r, skipTests)
 	case "vm", "vmtest", "vmtests":
 		err = tests.RunVmTestWithReader(r, skipTests)

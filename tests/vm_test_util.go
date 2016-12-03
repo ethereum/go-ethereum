@@ -227,8 +227,6 @@ func RunVm(state *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, 
 
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: params.MainNetHomesteadBlock,
-		DAOForkBlock:   params.MainNetDAOForkBlock,
-		DAOForkSupport: true,
 	}
 	vmenv := NewEnvFromMap(chainConfig, state, env, exec)
 	vmenv.vmTest = true

@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -32,7 +33,6 @@ import (
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/pow"
 	"github.com/ubiq/go-ubiq/rlp"
-	"github.com/hashicorp/golang-lru"
 	"golang.org/x/net/context"
 )
 
@@ -106,17 +106,10 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 
 	if bc.genesisBlock.Hash() == (common.Hash{212, 229, 103, 64, 248, 118, 174, 248, 192, 16, 184, 106, 64, 213, 245, 103, 69, 161, 24, 208, 144, 106, 52, 230, 154, 236, 140, 13, 177, 203, 143, 163}) {
 		// add trusted CHT
-		if config.DAOForkSupport {
-			WriteTrustedCht(bc.chainDb, TrustedCht{
-				Number: 637,
-				Root:   common.HexToHash("01e408d9b1942f05dba1a879f3eaafe34d219edaeb8223fecf1244cc023d3e23"),
-			})
-		} else {
-			WriteTrustedCht(bc.chainDb, TrustedCht{
-				Number: 523,
-				Root:   common.HexToHash("c035076523faf514038f619715de404a65398c51899b5dccca9c05b00bc79315"),
-			})
-		}
+		WriteTrustedCht(bc.chainDb, TrustedCht{
+			Number: 523,
+			Root:   common.HexToHash("c035076523faf514038f619715de404a65398c51899b5dccca9c05b00bc79315"),
+		})
 		glog.V(logger.Info).Infoln("Added trusted CHT for mainnet")
 	} else {
 		if bc.genesisBlock.Hash() == (common.Hash{12, 215, 134, 162, 66, 93, 22, 241, 82, 198, 88, 49, 108, 66, 62, 108, 225, 24, 30, 21, 195, 41, 88, 38, 215, 201, 144, 76, 186, 156, 227, 3}) {

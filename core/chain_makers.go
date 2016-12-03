@@ -38,8 +38,6 @@ import (
 func MakeChainConfig() *params.ChainConfig {
 	return &params.ChainConfig{
 		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
 	}
 }
 
@@ -188,17 +186,6 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Dat
 		// Mutate the state and block according to any hard-fork specs
 		if config == nil {
 			config = MakeChainConfig()
-		}
-		if daoBlock := config.DAOForkBlock; daoBlock != nil {
-			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-			if h.Number.Cmp(daoBlock) >= 0 && h.Number.Cmp(limit) < 0 {
-				if config.DAOForkSupport {
-					h.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-				}
-			}
-		}
-		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(h.Number) == 0 {
-			ApplyDAOHardFork(statedb)
 		}
 		// Execute any user modifications to the block and finalize it
 		if gen != nil {

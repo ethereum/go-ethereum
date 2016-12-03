@@ -27,8 +27,6 @@ import (
 var MainnetChainConfig = &ChainConfig{
 	ChainId:        MainNetChainID,
 	HomesteadBlock: MainNetHomesteadBlock,
-	DAOForkBlock:   MainNetDAOForkBlock,
-	DAOForkSupport: true,
 	EIP150Block:    MainNetHomesteadGasRepriceBlock,
 	EIP150Hash:     MainNetHomesteadGasRepriceHash,
 	EIP155Block:    MainNetSpuriousDragon,
@@ -39,8 +37,6 @@ var MainnetChainConfig = &ChainConfig{
 var TestnetChainConfig = &ChainConfig{
 	ChainId:        big.NewInt(3),
 	HomesteadBlock: big.NewInt(0),
-	DAOForkBlock:   nil,
-	DAOForkSupport: true,
 	EIP150Block:    big.NewInt(0),
 	EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 	EIP155Block:    big.NewInt(10),
@@ -56,8 +52,6 @@ type ChainConfig struct {
 	ChainId *big.Int `json:"chainId"` // Chain id identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock"` // Homestead switch block (nil = no fork, 0 = already homestead)
-	DAOForkBlock   *big.Int `json:"daoForkBlock"`   // TheDAO hard-fork switch block (nil = no fork)
-	DAOForkSupport bool     `json:"daoForkSupport"` // Whether the nodes supports or opposes the DAO hard-fork
 
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
 	EIP150Block *big.Int    `json:"eip150Block"` // EIP150 HF block (nil = no fork)
@@ -69,11 +63,9 @@ type ChainConfig struct {
 
 // String implements the Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v EIP150: %v EIP155: %v EIP158: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
-		c.DAOForkBlock,
-		c.DAOForkSupport,
 		c.EIP150Block,
 		c.EIP155Block,
 		c.EIP158Block,
@@ -81,7 +73,7 @@ func (c *ChainConfig) String() string {
 }
 
 var (
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int), new(big.Int)}
+	TestChainConfig = &ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), common.Hash{}, new(big.Int), new(big.Int)}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
