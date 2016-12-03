@@ -205,8 +205,6 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 
 func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
-	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	root, _ := statedb.Commit(false)

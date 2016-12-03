@@ -90,8 +90,8 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	defer func() { evm.env.Depth-- }()
 
 	if contract.CodeAddr != nil {
-		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
-			return evm.RunPrecompiled(p, input, contract)
+		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
+			return RunPrecompiledContract(p, input, contract)
 		}
 	}
 
@@ -191,16 +191,4 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		}
 	}
 	return nil, nil
-}
-
-// RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
-func (evm *EVM) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.Gas(len(input))
-	if contract.UseGas(gas) {
-		ret = p.Call(input)
-
-		return ret, nil
-	} else {
-		return nil, OutOfGasError
-	}
 }

@@ -113,7 +113,7 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 		snapshotPreTransfer = env.StateDB.Snapshot()
 	)
 	if !env.StateDB.Exist(addr) {
-		if Precompiled[addr.Str()] == nil && env.ChainConfig().IsEIP158(env.BlockNumber) && value.BitLen() == 0 {
+		if PrecompiledContracts[addr] == nil && env.ChainConfig().IsEIP158(env.BlockNumber) && value.BitLen() == 0 {
 			caller.ReturnGas(gas)
 			return nil, nil
 		}
