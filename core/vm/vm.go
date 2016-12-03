@@ -124,10 +124,10 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	}()
 
 	if glog.V(logger.Debug) {
-		glog.Infof("running byte VM %x\n", codehash[:4])
+		glog.Infof("evm running: %x\n", codehash[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("byte VM %x done. time: %v\n", codehash[:4], time.Since(tstart))
+			glog.Infof("evm done: %x. time: %v\n", codehash[:4], time.Since(tstart))
 		}()
 	}
 
@@ -158,6 +158,8 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		// the operation
 		if operation.memorySize != nil {
 			memorySize = operation.memorySize(stack)
+			// memory is expanded in words of 32 bytes. Gas
+			// is also calculated in words.
 			memorySize.Mul(toWordSize(memorySize), big.NewInt(32))
 		}
 
