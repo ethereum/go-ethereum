@@ -37,20 +37,20 @@ type Filter struct {
 }
 
 type Filters struct {
-	id       int
-	watchers map[int]*Filter
+	id       uint32 // can contain any value except zero
+	watchers map[uint32]*Filter
 	whisper  *Whisper
 	mutex    sync.RWMutex
 }
 
 func NewFilters(w *Whisper) *Filters {
 	return &Filters{
-		watchers: make(map[int]*Filter),
+		watchers: make(map[uint32]*Filter),
 		whisper:  w,
 	}
 }
 
-func (fs *Filters) Install(watcher *Filter) int {
+func (fs *Filters) Install(watcher *Filter) uint32 {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
@@ -58,19 +58,18 @@ func (fs *Filters) Install(watcher *Filter) int {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	fs.watchers[fs.id] = watcher
-	ret := fs.id
 	fs.id++
-	return ret
+	fs.watchers[fs.id] = watcher
+	return fs.id
 }
 
-func (fs *Filters) Uninstall(id int) {
+func (fs *Filters) Uninstall(id uint32) {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	delete(fs.watchers, id)
 }
 
-func (fs *Filters) Get(i int) *Filter {
+func (fs *Filters) Get(i uint32) *Filter {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 	return fs.watchers[i]
@@ -143,18 +142,9 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		// if Dst match, ignore the topic
-		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst)
+		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
-		// check if that both the key and the topic match
-		if f.SymKeyHash == msg.SymKeyHash {
-			for _, t := range f.Topics {
-				if t == msg.Topic {
-					return true
-				}
-			}
-			return false
-		}
+		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
 	}
 	return false
 }
@@ -164,25 +154,25 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 		return false
 	}
 
-	encryptionMethodMatch := false
 	if f.expectsAsymmetricEncryption() && envelope.isAsymmetric() {
-		encryptionMethodMatch = true
-		if f.Topics == nil {
-			// wildcard
+		return f.MatchTopic(envelope.Topic)
+	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
+		return f.MatchTopic(envelope.Topic)
+	}
+	return false
+}
+
+func (f *Filter) MatchTopic(topic TopicType) bool {
+	if len(f.Topics) == 0 {
+		// any topic matches
+		return true
+	}
+
+	for _, t := range f.Topics {
+		if t == topic {
 			return true
 		}
-	} else if f.expectsSymmetricEncryption() && envelope.IsSymmetric() {
-		encryptionMethodMatch = true
 	}
-
-	if encryptionMethodMatch {
-		for _, t := range f.Topics {
-			if t == envelope.Topic {
-				return true
-			}
-		}
-	}
-
 	return false
 }
 

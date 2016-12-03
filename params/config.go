@@ -17,6 +17,7 @@
 package params
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ubiq/go-ubiq/common"
@@ -36,14 +37,14 @@ var MainnetChainConfig = &ChainConfig{
 
 // TestnetChainConfig is the chain parameters to run a node on the test network.
 var TestnetChainConfig = &ChainConfig{
-	ChainId:        TestNetChainID,
-	HomesteadBlock: TestNetHomesteadBlock,
-	DAOForkBlock:   TestNetDAOForkBlock,
-	DAOForkSupport: false,
-	EIP150Block:    TestNetHomesteadGasRepriceBlock,
-	EIP150Hash:     TestNetHomesteadGasRepriceHash,
-	EIP155Block:    TestNetSpuriousDragon,
-	EIP158Block:    TestNetSpuriousDragon,
+	ChainId:        big.NewInt(3),
+	HomesteadBlock: big.NewInt(0),
+	DAOForkBlock:   nil,
+	DAOForkSupport: true,
+	EIP150Block:    big.NewInt(0),
+	EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+	EIP155Block:    big.NewInt(10),
+	EIP158Block:    big.NewInt(10),
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -64,6 +65,19 @@ type ChainConfig struct {
 
 	EIP155Block *big.Int `json:"eip155Block"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block"` // EIP158 HF block
+}
+
+// String implements the Stringer interface.
+func (c *ChainConfig) String() string {
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+		c.ChainId,
+		c.HomesteadBlock,
+		c.DAOForkBlock,
+		c.DAOForkSupport,
+		c.EIP150Block,
+		c.EIP155Block,
+		c.EIP158Block,
+	)
 }
 
 var (

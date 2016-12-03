@@ -146,6 +146,7 @@ func fillBucket(tab *Table, ld int) (last *Node) {
 func nodeAtDistance(base common.Hash, ld int) (n *Node) {
 	n = new(Node)
 	n.sha = hashAtDistance(base, ld)
+	n.IP = net.IP{10, 0, 2, byte(ld)}
 	copy(n.ID[:], n.sha[:]) // ensure the node still has a unique ID
 	return n
 }

@@ -2,12 +2,11 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: gubiq gubiq-cross evm all test clean
+.PHONY: gubiq android ios gubiq-cross evm all test clean
 .PHONY: gubiq-linux gubiq-linux-386 gubiq-linux-amd64 gubiq-linux-mips64 gubiq-linux-mips64le
 .PHONY: gubiq-linux-arm gubiq-linux-arm-5 gubiq-linux-arm-6 gubiq-linux-arm-7 gubiq-linux-arm64
 .PHONY: gubiq-darwin gubiq-darwin-386 gubiq-darwin-amd64
 .PHONY: gubiq-windows gubiq-windows-386 gubiq-windows-amd64
-.PHONY: gubiq-android gubiq-ios
 
 GOBIN = build/bin
 GO ?= latest
@@ -20,10 +19,20 @@ gubiq:
 evm:
 	build/env.sh go run build/ci.go install ./cmd/evm
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/evm to start the evm."
+	@echo "Run \"$(GOBIN)/evm\" to start the evm."
 
 all:
 	build/env.sh go run build/ci.go install
+
+android:
+	build/env.sh go run build/ci.go aar --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/gubiq.aar\" to use the library."
+
+ios:
+	build/env.sh go run build/ci.go xcode --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/Gubiq.framework\" to use the library."
 
 test: all
 	build/env.sh go run build/ci.go test
@@ -112,13 +121,3 @@ gubiq-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=windows/amd64 -v ./cmd/gubiq
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/gubiq-windows-* | grep amd64
-
-gubiq-android:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=android-21/aar -v ./cmd/gubiq
-	@echo "Android cross compilation done:"
-	@ls -ld $(GOBIN)/gubiq-android-*
-
-gubiq-ios:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=ios-7.0/framework -v ./cmd/gubiq
-	@echo "iOS framework cross compilation done:"
-	@ls -ld $(GOBIN)/gubiq-ios-*

@@ -177,12 +177,13 @@ func (w *Whisper) GetIdentity(pubKey string) *ecdsa.PrivateKey {
 }
 
 func (w *Whisper) GenerateSymKey(name string) error {
-	buf := make([]byte, aesKeyLength*2)
-	_, err := crand.Read(buf) // todo: check how safe is this function
+	const size = aesKeyLength * 2
+	buf := make([]byte, size)
+	_, err := crand.Read(buf)
 	if err != nil {
 		return err
 	} else if !validateSymmetricKey(buf) {
-		return fmt.Errorf("crypto/rand failed to generate random data")
+		return fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
 	key := buf[:aesKeyLength]
@@ -245,16 +246,16 @@ func (w *Whisper) GetSymKey(name string) []byte {
 
 // Watch installs a new message handler to run in case a matching packet arrives
 // from the whisper network.
-func (w *Whisper) Watch(f *Filter) int {
+func (w *Whisper) Watch(f *Filter) uint32 {
 	return w.filters.Install(f)
 }
 
-func (w *Whisper) GetFilter(id int) *Filter {
+func (w *Whisper) GetFilter(id uint32) *Filter {
 	return w.filters.Get(id)
 }
 
 // Unwatch removes an installed message handler.
-func (w *Whisper) Unwatch(id int) {
+func (w *Whisper) Unwatch(id uint32) {
 	w.filters.Uninstall(id)
 }
 
@@ -404,7 +405,7 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		return fmt.Errorf("oversized Version")
 	}
 
-	if len(envelope.AESNonce) > 12 {
+	if len(envelope.AESNonce) > AESNonceMaxLength {
 		// the standard AES GSM nonce size is 12,
 		// but const gcmStandardNonceSize cannot be accessed directly
 		return fmt.Errorf("oversized AESNonce")
@@ -507,7 +508,7 @@ func (w *Whisper) Envelopes() []*Envelope {
 }
 
 // Messages retrieves all the decrypted messages matching a filter id.
-func (w *Whisper) Messages(id int) []*ReceivedMessage {
+func (w *Whisper) Messages(id uint32) []*ReceivedMessage {
 	result := make([]*ReceivedMessage, 0)
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()

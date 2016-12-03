@@ -28,11 +28,11 @@ var topicStringTests = []struct {
 	{topic: TopicType{0xf2, 0x6e, 0x77, 0x79}, str: "0xf26e7779"},
 }
 
-func TestTopicString(x *testing.T) {
+func TestTopicString(t *testing.T) {
 	for i, tst := range topicStringTests {
 		s := tst.topic.String()
 		if s != tst.str {
-			x.Errorf("failed test %d: have %s, want %s.", i, s, tst.str)
+			t.Fatalf("failed test %d: have %s, want %s.", i, s, tst.str)
 		}
 	}
 }
@@ -53,11 +53,11 @@ var bytesToTopicTests = []struct {
 	{topic: TopicType{0x00, 0x00, 0x00, 0x00}, data: nil},
 }
 
-func TestBytesToTopic(x *testing.T) {
+func TestBytesToTopic(t *testing.T) {
 	for i, tst := range bytesToTopicTests {
-		t := BytesToTopic(tst.data)
-		if t != tst.topic {
-			x.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
+		top := BytesToTopic(tst.data)
+		if top != tst.topic {
+			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }
@@ -99,38 +99,38 @@ var unmarshalTestsUgly = []struct {
 	{topic: TopicType{0x01, 0x00, 0x00, 0x00}, data: []byte("00000001")},
 }
 
-func TestUnmarshalTestsGood(x *testing.T) {
+func TestUnmarshalTestsGood(t *testing.T) {
 	for i, tst := range unmarshalTestsGood {
-		var t TopicType
-		err := t.UnmarshalJSON(tst.data)
+		var top TopicType
+		err := top.UnmarshalJSON(tst.data)
 		if err != nil {
-			x.Errorf("failed test %d. input: %v.", i, tst.data)
-		} else if t != tst.topic {
-			x.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			t.Fatalf("failed test %d. input: %v.", i, tst.data)
+		} else if top != tst.topic {
+			t.Fatalf("failed test %d: have %v, want %v.", i, t, tst.topic)
 		}
 	}
 }
 
-func TestUnmarshalTestsBad(x *testing.T) {
+func TestUnmarshalTestsBad(t *testing.T) {
 	// in this test UnmarshalJSON() is supposed to fail
 	for i, tst := range unmarshalTestsBad {
-		var t TopicType
-		err := t.UnmarshalJSON(tst.data)
+		var top TopicType
+		err := top.UnmarshalJSON(tst.data)
 		if err == nil {
-			x.Errorf("failed test %d. input: %v.", i, tst.data)
+			t.Fatalf("failed test %d. input: %v.", i, tst.data)
 		}
 	}
 }
 
-func TestUnmarshalTestsUgly(x *testing.T) {
+func TestUnmarshalTestsUgly(t *testing.T) {
 	// in this test UnmarshalJSON() is NOT supposed to fail, but result should be wrong
 	for i, tst := range unmarshalTestsUgly {
-		var t TopicType
-		err := t.UnmarshalJSON(tst.data)
+		var top TopicType
+		err := top.UnmarshalJSON(tst.data)
 		if err != nil {
-			x.Errorf("failed test %d. input: %v.", i, tst.data)
-		} else if t == tst.topic {
-			x.Errorf("failed test %d: have %v, want %v.", i, t, tst.topic)
+			t.Fatalf("failed test %d. input: %v.", i, tst.data)
+		} else if top == tst.topic {
+			t.Fatalf("failed test %d: have %v, want %v.", i, top, tst.topic)
 		}
 	}
 }

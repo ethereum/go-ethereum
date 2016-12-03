@@ -73,7 +73,7 @@ func NewEnvelope(ttl uint32, topic TopicType, salt []byte, aesNonce []byte, msg 
 }
 
 func (e *Envelope) IsSymmetric() bool {
-	return e.AESNonce != nil
+	return len(e.AESNonce) > 0
 }
 
 func (e *Envelope) isAsymmetric() bool {
@@ -131,7 +131,7 @@ func (e *Envelope) calculatePoW(diff uint32) {
 	h = crypto.Keccak256(buf)
 	firstBit := common.FirstBitSet(common.BigD(h))
 	x := math.Pow(2, float64(firstBit))
-	x /= float64(len(e.Data))
+	x /= float64(len(e.Data)) // we only count e.Data, other variable-sized members are checked in Whisper.add()
 	x /= float64(e.TTL + diff)
 	e.pow = x
 }

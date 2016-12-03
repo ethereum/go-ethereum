@@ -40,8 +40,7 @@ func BenchmarkEncryptionSym(b *testing.B) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		b.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 
 	for i := 0; i < b.N; i++ {
@@ -60,13 +59,11 @@ func BenchmarkEncryptionAsym(b *testing.B) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		b.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		b.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed GenerateKey with seed %d: %s.", seed, err)
 	}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
@@ -75,8 +72,7 @@ func BenchmarkEncryptionAsym(b *testing.B) {
 		msg := NewSentMessage(params)
 		_, err := msg.Wrap(params)
 		if err != nil {
-			b.Errorf("failed Wrap with seed %d: %s.", seed, err)
-			return
+			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		}
 	}
 }
@@ -86,22 +82,19 @@ func BenchmarkDecryptionSymValid(b *testing.B) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		b.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		b.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 	f := Filter{KeySym: params.KeySym}
 
 	for i := 0; i < b.N; i++ {
 		msg := env.Open(&f)
 		if msg == nil {
-			b.Errorf("failed to open with seed %d.", seed)
-			return
+			b.Fatalf("failed to open with seed %d.", seed)
 		}
 	}
 }
@@ -111,22 +104,19 @@ func BenchmarkDecryptionSymInvalid(b *testing.B) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		b.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		b.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 	f := Filter{KeySym: []byte("arbitrary stuff here")}
 
 	for i := 0; i < b.N; i++ {
 		msg := env.Open(&f)
 		if msg != nil {
-			b.Errorf("opened envelope with invalid key, seed: %d.", seed)
-			return
+			b.Fatalf("opened envelope with invalid key, seed: %d.", seed)
 		}
 	}
 }
@@ -136,13 +126,11 @@ func BenchmarkDecryptionAsymValid(b *testing.B) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		b.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		b.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed GenerateKey with seed %d: %s.", seed, err)
 	}
 	f := Filter{KeyAsym: key}
 	params.KeySym = nil
@@ -150,15 +138,13 @@ func BenchmarkDecryptionAsymValid(b *testing.B) {
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		b.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
 	for i := 0; i < b.N; i++ {
 		msg := env.Open(&f)
 		if msg == nil {
-			b.Errorf("fail to open, seed: %d.", seed)
-			return
+			b.Fatalf("fail to open, seed: %d.", seed)
 		}
 	}
 }
@@ -168,35 +154,30 @@ func BenchmarkDecryptionAsymInvalid(b *testing.B) {
 
 	params, err := generateMessageParams()
 	if err != nil {
-		b.Errorf("failed generateMessageParams with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		b.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed GenerateKey with seed %d: %s.", seed, err)
 	}
 	params.KeySym = nil
 	params.Dst = &key.PublicKey
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
 	if err != nil {
-		b.Errorf("failed Wrap with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 	}
 
 	key, err = crypto.GenerateKey()
 	if err != nil {
-		b.Errorf("failed GenerateKey with seed %d: %s.", seed, err)
-		return
+		b.Fatalf("failed GenerateKey with seed %d: %s.", seed, err)
 	}
 	f := Filter{KeyAsym: key}
 
 	for i := 0; i < b.N; i++ {
 		msg := env.Open(&f)
 		if msg != nil {
-			b.Errorf("opened envelope with invalid key, seed: %d.", seed)
-			return
+			b.Fatalf("opened envelope with invalid key, seed: %d.", seed)
 		}
 	}
 }

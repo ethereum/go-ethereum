@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ubiq/go-ubiq/cmd/utils"
+	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/rpc"
 )
 

@@ -111,7 +111,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "NonZeroValue_CALL_ToEmpty"*/ {
+		if skipTest[name] /*|| name != "EXP_Empty"*/ {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}

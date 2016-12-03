@@ -46,15 +46,16 @@ const (
 	messagesCode         = 1
 	p2pCode              = 2
 	mailRequestCode      = 3
-	NumberOfMessageCodes = 4
+	NumberOfMessageCodes = 32
 
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
 
-	TopicLength     = 4
-	signatureLength = 65
-	aesKeyLength    = 32
-	saltLength      = 12
+	TopicLength       = 4
+	signatureLength   = 65
+	aesKeyLength      = 32
+	saltLength        = 12
+	AESNonceMaxLength = 12
 
 	MaxMessageLength = 0xFFFF // todo: remove this restriction after testing in morden and analizing stats. this should be regulated by MinimumPoW.
 	MinimumPoW       = 10.0   // todo: review

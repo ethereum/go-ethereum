@@ -35,9 +35,8 @@ const (
 	port = "8500"
 )
 
-//  by default ens root is  north internal
 var (
-	toyNetEnsRoot = common.HexToAddress("0xd344889e0be3e9ef6c26b0f60ef66a32e83c1b69")
+	ensRootAddress = common.HexToAddress("0x112234455c3a32fd11230c42e7bccd4a84e02010")
 )
 
 // separate bzz directories
@@ -54,11 +53,12 @@ type Config struct {
 	PublicKey string
 	BzzKey    string
 	EnsRoot   common.Address
+	NetworkId uint64
 }
 
 // config is agnostic to where private key is coming from
 // so managing accounts is outside swarm and left to wrappers
-func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (self *Config, err error) {
+func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64) (self *Config, err error) {
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
 	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
 	err = os.MkdirAll(dirpath, os.ModePerm)
@@ -81,7 +81,8 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		Swap:          swap.DefaultSwapParams(contract, prvKey),
 		PublicKey:     pubkeyhex,
 		BzzKey:        keyhex,
-		EnsRoot:       toyNetEnsRoot,
+		EnsRoot:       ensRootAddress,
+		NetworkId:     networkId,
 	}
 	data, err = ioutil.ReadFile(confpath)
 	if err != nil {
@@ -111,7 +112,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 	self.Swap.SetKey(prvKey)
 
 	if (self.EnsRoot == common.Address{}) {
-		self.EnsRoot = toyNetEnsRoot
+		self.EnsRoot = ensRootAddress
 	}
 
 	return

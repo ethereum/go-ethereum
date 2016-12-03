@@ -39,7 +39,7 @@ The go-ubiq project comes with several wrappers/executables found in the `cmd` d
 | `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow insolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
 | `gubiqrpctest` | Developer utility tool to support our [ubiq/rpc-test](https://github.com/ubiq/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ubiq/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ubiq/rpc-tests/blob/master/README.md) for details. |
 | `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ubiq/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
-| `bzzd`    | swarm daemon. This is the entrypoint for the swarm network. `bzzd --help` for command line options. See http://swarm-guide.readthedocs.io for swarm documentation. |
+| `bzzd`    | swarm daemon. This is the entrypoint for the swarm network. `bzzd --help` for command line options. See https://swarm-guide.readthedocs.io for swarm documentation. |
 | `bzzup`   | swarm command line file uploader. `bzzup --help` for command line options |
 | `bzzhash`   | command to calculate the swarm hash of a file or directory. `bzzhash --help` for command line options |
 
@@ -107,9 +107,9 @@ them.*
 One of the quickest ways to get Ethereum up and running on your machine is by using Docker:
 
 ```
-docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
+docker run -d --name ubiq-node -v /Users/alice/ubiq:/root \
            -p 8588:8588 -p 30388:30388 \
-           ethereum/client-go --fast --cache=512
+           ubiq/client-go --fast --cache=512
 ```
 
 This will start gubiq in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.

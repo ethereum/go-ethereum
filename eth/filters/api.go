@@ -17,7 +17,6 @@
 package filters
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
@@ -239,11 +239,17 @@ func (api *PublicFilterAPI) Logs(ctx context.Context, crit FilterCriteria) (*rpc
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	rpcSub := notifier.CreateSubscription()
+	var (
+		rpcSub      = notifier.CreateSubscription()
+		matchedLogs = make(chan []Log)
+	)
+
+	logsSub, err := api.events.SubscribeLogs(crit, matchedLogs)
+	if err != nil {
+		return nil, err
+	}
 
 	go func() {
-		matchedLogs := make(chan []Log)
-		logsSub := api.events.SubscribeLogs(crit, matchedLogs)
 
 		for {
 			select {
@@ -276,18 +282,20 @@ type FilterCriteria struct {
 // used to retrieve logs when the state changes. This method cannot be
 // used to fetch logs that are already stored in the state.
 //
-// https://github.com/ubiq/wiki/wiki/JSON-RPC#eth_newfilter
-func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) rpc.ID {
-	var (
-		logs    = make(chan []Log)
-		logsSub = api.events.SubscribeLogs(crit, logs)
-	)
-
-	if crit.FromBlock == nil {
-		crit.FromBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
-	}
-	if crit.ToBlock == nil {
-		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
+// Default criteria for the from and to block are "latest".
+// Using "latest" as block number will return logs for mined blocks.
+// Using "pending" as block number returns logs for not yet mined (pending) blocks.
+// In case logs are removed (chain reorg) previously returned logs are returned
+// again but with the removed property set to true.
+//
+// In case "fromBlock" > "toBlock" an error is returned.
+//
+// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_newfilter
+func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
+	logs := make(chan []Log)
+	logsSub, err := api.events.SubscribeLogs(crit, logs)
+	if err != nil {
+		return rpc.ID(""), err
 	}
 
 	api.filtersMu.Lock()
@@ -312,7 +320,7 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) rpc.ID {
 		}
 	}()
 
-	return logsSub.ID
+	return logsSub.ID, nil
 }
 
 // GetLogs returns logs matching the given argument that are stored within the state.
@@ -363,28 +371,38 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]Log
 	api.filtersMu.Unlock()
 
 	if !found || f.typ != LogsSubscription {
-		return []Log{}, nil
+		return nil, fmt.Errorf("filter not found")
 	}
 
 	filter := New(api.backend, api.useMipMap)
-	filter.SetBeginBlock(f.crit.FromBlock.Int64())
-	filter.SetEndBlock(f.crit.ToBlock.Int64())
+	if f.crit.FromBlock != nil {
+		filter.SetBeginBlock(f.crit.FromBlock.Int64())
+	} else {
+		filter.SetBeginBlock(rpc.LatestBlockNumber.Int64())
+	}
+	if f.crit.ToBlock != nil {
+		filter.SetEndBlock(f.crit.ToBlock.Int64())
+	} else {
+		filter.SetEndBlock(rpc.LatestBlockNumber.Int64())
+	}
 	filter.SetAddresses(f.crit.Addresses)
 	filter.SetTopics(f.crit.Topics)
 
-	logs, err := filter.Find(ctx)
-	return returnLogs(logs), err
+	logs, err:= filter.Find(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return returnLogs(logs), nil
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
 // last time is was called. This can be used for polling.
 //
 // For pending transaction and block filters the result is []common.Hash.
-// (pending)Log filters return []Log. If the filter could not be found
-// []interface{}{} is returned.
+// (pending)Log filters return []Log.
 //
 // https://github.com/ubiq/wiki/wiki/JSON-RPC#eth_getfilterchanges
-func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) interface{} {
+func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	api.filtersMu.Lock()
 	defer api.filtersMu.Unlock()
 
@@ -400,15 +418,15 @@ func (api *PublicFilterAPI) GetFilterChanges(id rpc.ID) interface{} {
 		case PendingTransactionsSubscription, BlocksSubscription:
 			hashes := f.hashes
 			f.hashes = nil
-			return returnHashes(hashes)
-		case PendingLogsSubscription, LogsSubscription:
+			return returnHashes(hashes), nil
+		case LogsSubscription:
 			logs := f.logs
 			f.logs = nil
-			return returnLogs(logs)
+			return returnLogs(logs), nil
 		}
 	}
 
-	return []interface{}{}
+	return []interface{}{}, fmt.Errorf("filter not found")
 }
 
 // returnHashes is a helper that will return an empty hash array case the given hash array is nil,
@@ -443,15 +461,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if raw.From == nil || raw.From.Int64() < 0 {
-		args.FromBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
-	} else {
+	if raw.From != nil {
 		args.FromBlock = big.NewInt(raw.From.Int64())
 	}
 
-	if raw.ToBlock == nil || raw.ToBlock.Int64() < 0 {
-		args.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
-	} else {
+	if raw.ToBlock != nil {
 		args.ToBlock = big.NewInt(raw.ToBlock.Int64())
 	}
 
@@ -459,52 +473,28 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 	if raw.Addresses != nil {
 		// raw.Address can contain a single address or an array of addresses
-		var addresses []common.Address
-		if strAddrs, ok := raw.Addresses.([]interface{}); ok {
-			for i, addr := range strAddrs {
+		switch rawAddr := raw.Addresses.(type) {
+		case []interface{}:
+			for i, addr := range rawAddr {
 				if strAddr, ok := addr.(string); ok {
-					if len(strAddr) >= 2 && strAddr[0] == '0' && (strAddr[1] == 'x' || strAddr[1] == 'X') {
-						strAddr = strAddr[2:]
+					addr, err := decodeAddress(strAddr)
+					if err != nil {
+						return fmt.Errorf("invalid address at index %d: %v", i, err)
 					}
-					if decAddr, err := hex.DecodeString(strAddr); err == nil {
-						addresses = append(addresses, common.BytesToAddress(decAddr))
-					} else {
-						return fmt.Errorf("invalid address given")
-					}
+					args.Addresses = append(args.Addresses, addr)
 				} else {
-					return fmt.Errorf("invalid address on index %d", i)
+					return fmt.Errorf("non-string address at index %d", i)
 				}
 			}
-		} else if singleAddr, ok := raw.Addresses.(string); ok {
-			if len(singleAddr) >= 2 && singleAddr[0] == '0' && (singleAddr[1] == 'x' || singleAddr[1] == 'X') {
-				singleAddr = singleAddr[2:]
+		case string:
+			addr, err := decodeAddress(rawAddr)
+			if err != nil {
+				return fmt.Errorf("invalid address: %v", err)
 			}
-			if decAddr, err := hex.DecodeString(singleAddr); err == nil {
-				addresses = append(addresses, common.BytesToAddress(decAddr))
-			} else {
-				return fmt.Errorf("invalid address given")
-			}
-		} else {
-			return errors.New("invalid address(es) given")
+			args.Addresses = []common.Address{addr}
+		default:
+			return errors.New("invalid addresses in query")
 		}
-		args.Addresses = addresses
-	}
-
-	// helper function which parses a string to a topic hash
-	topicConverter := func(raw string) (common.Hash, error) {
-		if len(raw) == 0 {
-			return common.Hash{}, nil
-		}
-		if len(raw) >= 2 && raw[0] == '0' && (raw[1] == 'x' || raw[1] == 'X') {
-			raw = raw[2:]
-		}
-		if len(raw) != 2*common.HashLength {
-			return common.Hash{}, errors.New("invalid topic(s)")
-		}
-		if decAddr, err := hex.DecodeString(raw); err == nil {
-			return common.BytesToHash(decAddr), nil
-		}
-		return common.Hash{}, errors.New("invalid topic(s)")
 	}
 
 	// topics is an array consisting of strings and/or arrays of strings.
@@ -512,20 +502,25 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 	if len(raw.Topics) > 0 {
 		args.Topics = make([][]common.Hash, len(raw.Topics))
 		for i, t := range raw.Topics {
-			if t == nil { // ignore topic when matching logs
+			switch topic := t.(type) {
+			case nil:
+				// ignore topic when matching logs
 				args.Topics[i] = []common.Hash{common.Hash{}}
-			} else if topic, ok := t.(string); ok { // match specific topic
-				top, err := topicConverter(topic)
+
+			case string:
+				// match specific topic
+				top, err := decodeTopic(topic)
 				if err != nil {
 					return err
 				}
 				args.Topics[i] = []common.Hash{top}
-			} else if topics, ok := t.([]interface{}); ok { // or case e.g. [null, "topic0", "topic1"]
-				for _, rawTopic := range topics {
+			case []interface{}:
+				// or case e.g. [null, "topic0", "topic1"]
+				for _, rawTopic := range topic {
 					if rawTopic == nil {
 						args.Topics[i] = append(args.Topics[i], common.Hash{})
 					} else if topic, ok := rawTopic.(string); ok {
-						parsed, err := topicConverter(topic)
+						parsed, err := decodeTopic(topic)
 						if err != nil {
 							return err
 						}
@@ -534,11 +529,27 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 						return fmt.Errorf("invalid topic(s)")
 					}
 				}
-			} else {
+			default:
 				return fmt.Errorf("invalid topic(s)")
 			}
 		}
 	}
 
 	return nil
+}
+
+func decodeAddress(s string) (common.Address, error) {
+	b, err := hexutil.Decode(s)
+	if err == nil && len(b) != common.AddressLength {
+		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
+	}
+	return common.BytesToAddress(b), err
+}
+
+func decodeTopic(s string) (common.Hash, error) {
+	b, err := hexutil.Decode(s)
+	if err == nil && len(b) != common.HashLength {
+		err = fmt.Errorf("hex has invalid length %d after decoding", len(b))
+	}
+	return common.BytesToHash(b), err
 }

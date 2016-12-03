@@ -42,11 +42,11 @@ func TestUnmarshalJSONNewFilterArgs(t *testing.T) {
 	if err := json.Unmarshal([]byte("{}"), &test0); err != nil {
 		t.Fatal(err)
 	}
-	if test0.FromBlock.Int64() != rpc.LatestBlockNumber.Int64() {
-		t.Fatalf("expected %d, got %d", rpc.LatestBlockNumber, test0.FromBlock)
+	if test0.FromBlock != nil {
+		t.Fatalf("expected nil, got %d", test0.FromBlock)
 	}
-	if test0.ToBlock.Int64() != rpc.LatestBlockNumber.Int64() {
-		t.Fatalf("expected %d, got %d", rpc.LatestBlockNumber, test0.ToBlock)
+	if test0.ToBlock != nil {
+		t.Fatalf("expected nil, got %d", test0.ToBlock)
 	}
 	if len(test0.Addresses) != 0 {
 		t.Fatalf("expected 0 addresses, got %d", len(test0.Addresses))

@@ -683,7 +683,7 @@ func TestEIP158Create(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "stCreateTest.json")
@@ -696,7 +696,7 @@ func TestEIP158Specific(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "stEIP158SpecificTest.json")
@@ -709,7 +709,7 @@ func TestEIP158NonZeroCalls(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "stNonZeroCallsTest.json")
@@ -722,7 +722,7 @@ func TestEIP158ZeroCalls(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "stZeroCallsTest.json")
@@ -735,7 +735,7 @@ func TestEIP158_150Specific(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stEIPSpecificTest.json")
@@ -748,7 +748,7 @@ func TestEIP158_150SingleCodeGasPrice(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stEIPsingleCodeGasPrices.json")
@@ -761,7 +761,7 @@ func TestEIP158_150MemExpandingCalls(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "EIP150", "stMemExpandingEIPCalls.json")
@@ -774,7 +774,7 @@ func TestEIP158HomesteadStateSystemOperations(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stSystemOperationsTest.json")
@@ -787,7 +787,7 @@ func TestEIP158HomesteadStatePreCompiledContracts(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stPreCompiledContracts.json")
@@ -800,7 +800,7 @@ func TestEIP158HomesteadStateRecursiveCreate(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stSpecialTest.json")
@@ -813,7 +813,7 @@ func TestEIP158HomesteadStateRefund(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stRefundTest.json")
@@ -826,7 +826,7 @@ func TestEIP158HomesteadStateInitCode(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stInitCodeTest.json")
@@ -839,7 +839,7 @@ func TestEIP158HomesteadStateLog(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stLogTests.json")
@@ -852,7 +852,7 @@ func TestEIP158HomesteadStateTransaction(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stTransactionTest.json")
@@ -865,7 +865,7 @@ func TestEIP158HomesteadCallCreateCallCode(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallCreateCallCodeTest.json")
@@ -878,7 +878,7 @@ func TestEIP158HomesteadCallCodes(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallCodes.json")
@@ -891,7 +891,7 @@ func TestEIP158HomesteadMemory(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stMemoryTest.json")
@@ -904,7 +904,7 @@ func TestEIP158HomesteadMemoryStress(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
@@ -920,7 +920,7 @@ func TestEIP158HomesteadQuadraticComplexity(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	if os.Getenv("TEST_VM_COMPLEX") == "" {
@@ -936,7 +936,7 @@ func TestEIP158HomesteadWallet(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stWalletTest.json")
@@ -949,7 +949,7 @@ func TestEIP158HomesteadDelegateCodes(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallDelegateCodes.json")
@@ -962,7 +962,7 @@ func TestEIP158HomesteadDelegateCodesCallCode(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stCallDelegateCodesCallCode.json")
@@ -975,7 +975,7 @@ func TestEIP158HomesteadBounds(t *testing.T) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: new(big.Int),
 		EIP150Block:    big.NewInt(2457000),
-		EIP158Block:    big.NewInt(3500000),
+		EIP158Block:    params.MainNetSpuriousDragon,
 	}
 
 	fn := filepath.Join(stateTestDir, "EIP158", "Homestead", "stBoundsTest.json")

@@ -50,8 +50,6 @@ type Miner struct {
 
 	worker *worker
 
-	MinAcceptedGasPrice *big.Int
-
 	threads  int
 	coinbase common.Address
 	mining   int32
@@ -107,12 +105,15 @@ out:
 	}
 }
 
+func (m *Miner) GasPrice() *big.Int {
+	return new(big.Int).Set(m.worker.gasPrice)
+}
+
 func (m *Miner) SetGasPrice(price *big.Int) {
 	// FIXME block tests set a nil gas price. Quick dirty fix
 	if price == nil {
 		return
 	}
-
 	m.worker.setGasPrice(price)
 }
 
@@ -184,6 +185,15 @@ func (self *Miner) SetExtra(extra []byte) error {
 // Pending returns the currently pending block and associated state.
 func (self *Miner) Pending() (*types.Block, *state.StateDB) {
 	return self.worker.pending()
+}
+
+// PendingBlock returns the currently pending block.
+// 
+// Note, to access both the pending block and the pending state 
+// simultaneously, please use Pending(), as the pending state can 
+// change between multiple method calls
+func (self *Miner) PendingBlock() *types.Block {
+	return self.worker.pendingBlock()
 }
 
 func (self *Miner) SetEtherbase(addr common.Address) {

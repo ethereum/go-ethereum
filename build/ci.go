@@ -29,8 +29,8 @@ Available commands are:
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
    nsis                                                                                      -- creates a Windows NSIS installer
-   aar        [ -sign key-id ] [-deploy repo] [ -upload dest ]                               -- creates an Android archive
-   xcode      [ -sign key-id ] [-deploy repo] [ -upload dest ]                               -- creates an iOS XCode framework
+   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an Android archive
+   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an iOS XCode framework
    xgo        [ options ]                                                                    -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
@@ -72,6 +72,9 @@ var (
 		executablePath("abigen"),
 		executablePath("evm"),
 		executablePath("gubiq"),
+		executablePath("bzzd"),
+		executablePath("bzzhash"),
+		executablePath("bzzup"),
 		executablePath("rlpdump"),
 	}
 
@@ -88,6 +91,18 @@ var (
 		{
 			Name:        "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
+		},
+		{
+			Name:        "bzzd",
+			Description: "Ethereum Swarm daemon",
+		},
+		{
+			Name:        "bzzup",
+			Description: "Ethereum Swarm command line file/directory uploader",
+		},
+		{
+			Name:        "bzzhash",
+			Description: "Ethereum Swarm file/directory hash calculator",
 		},
 		{
 			Name:        "abigen",
@@ -459,7 +474,7 @@ func makeWorkdir(wdflag string) string {
 }
 
 func isUnstableBuild(env build.Environment) bool {
-	if env.Branch != "master" && env.Tag != "" {
+	if env.Tag != "" {
 		return false
 	}
 	return true
@@ -654,6 +669,7 @@ func doWindowsInstaller(cmdline []string) {
 
 func doAndroidArchive(cmdline []string) {
 	var (
+		local  = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
 		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. ANDROID_SIGNING_KEY)`)
 		deploy = flag.String("deploy", "", `Destination to deploy the archive (usually "https://oss.sonatype.org")`)
 		upload = flag.String("upload", "", `Destination to upload the archive (usually "gubiqstore/builds")`)
@@ -666,6 +682,11 @@ func doAndroidArchive(cmdline []string) {
 	build.MustRun(gomobileTool("init"))
 	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ubiq/go-ubiq/mobile"))
 
+	if *local {
+		// If we're building locally, copy bundle to build dir and skip Maven
+		os.Rename("gubiq.aar", filepath.Join(GOBIN, "gubiq.aar"))
+		return
+	}
 	meta := newMavenMetadata(env)
 	build.Render("build/mvn.pom", meta.Package+".pom", 0755, meta)
 
@@ -744,7 +765,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 				continue
 			}
 			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+>)")
+			re := regexp.MustCompile("([^<]+) <(.+)>")
 			parts := re.FindStringSubmatch(line)
 			if len(parts) == 3 {
 				contribs = append(contribs, mavenContributor{Name: parts[1], Email: parts[2]})
@@ -768,6 +789,7 @@ func newMavenMetadata(env build.Environment) mavenMetadata {
 
 func doXCodeFramework(cmdline []string) {
 	var (
+		local  = flag.Bool("local", false, `Flag whether we're only doing a local build (skip Maven artifacts)`)
 		signer = flag.String("signer", "", `Environment variable holding the signing key (e.g. IOS_SIGNING_KEY)`)
 		deploy = flag.String("deploy", "", `Destination to deploy the archive (usually "trunk")`)
 		upload = flag.String("upload", "", `Destination to upload the archives (usually "gubiqstore/builds")`)
@@ -777,12 +799,19 @@ func doXCodeFramework(cmdline []string) {
 
 	// Build the iOS XCode framework
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
+	build.MustRun(gomobileTool("init"))
+	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ubiq/go-ubiq/mobile")
 
+	if *local {
+		// If we're building locally, use the build folder and stop afterwards
+		bind.Dir, _ = filepath.Abs(GOBIN)
+		build.MustRun(bind)
+		return
+	}
 	archive := "gubiq-" + archiveBasename("ios", env)
 	if err := os.Mkdir(archive, os.ModePerm); err != nil {
 		log.Fatal(err)
 	}
-	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ubiq/go-ubiq/mobile")
 	bind.Dir, _ = filepath.Abs(archive)
 	build.MustRun(bind)
 	build.MustRunCommand("tar", "-zcvf", archive+".tar.gz", archive)
@@ -796,16 +825,16 @@ func doXCodeFramework(cmdline []string) {
 	}
 	// Prepare and upload a PodSpec to CocoaPods
 	if *deploy != "" {
-		meta := newPodMetadata(env)
-		build.Render("build/pod.podspec", meta.Name+".podspec", 0755, meta)
-		build.MustRunCommand("pod", *deploy, "push", meta.Name+".podspec", "--allow-warnings", "--verbose")
+		meta := newPodMetadata(env, archive)
+		build.Render("build/pod.podspec", "Gubiq.podspec", 0755, meta)
+		build.MustRunCommand("pod", *deploy, "push", "Gubiq.podspec", "--allow-warnings", "--verbose")
 	}
 }
 
 type podMetadata struct {
-	Name         string
 	Version      string
 	Commit       string
+	Archive      string
 	Contributors []podContributor
 }
 
@@ -814,7 +843,7 @@ type podContributor struct {
 	Email string
 }
 
-func newPodMetadata(env build.Environment) podMetadata {
+func newPodMetadata(env build.Environment, archive string) podMetadata {
 	// Collect the list of authors from the repo root
 	contribs := []podContributor{}
 	if authors, err := os.Open("AUTHORS"); err == nil {
@@ -828,20 +857,20 @@ func newPodMetadata(env build.Environment) podMetadata {
 				continue
 			}
 			// Split the author and insert as a contributor
-			re := regexp.MustCompile("([^<]+) <(.+>)")
+			re := regexp.MustCompile("([^<]+) <(.+)>")
 			parts := re.FindStringSubmatch(line)
 			if len(parts) == 3 {
 				contribs = append(contribs, podContributor{Name: parts[1], Email: parts[2]})
 			}
 		}
 	}
-	name := "Gubiq"
+	version := build.VERSION()
 	if isUnstableBuild(env) {
-		name += "Develop"
+		version += "-unstable." + env.Buildnum
 	}
 	return podMetadata{
-		Name:         name,
-		Version:      archiveVersion(env),
+		Archive:      archive,
+		Version:      version,
 		Commit:       env.Commit,
 		Contributors: contribs,
 	}

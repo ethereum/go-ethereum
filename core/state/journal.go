@@ -67,10 +67,13 @@ type (
 	addLogChange struct {
 		txhash common.Hash
 	}
+	touchChange struct {
+		account *common.Address
+		prev    bool
+	}
 )
 
 func (ch createObjectChange) undo(s *StateDB) {
-	s.GetStateObject(*ch.account).deleted = true
 	delete(s.stateObjects, *ch.account)
 	delete(s.stateObjectsDirty, *ch.account)
 }
@@ -84,6 +87,15 @@ func (ch suicideChange) undo(s *StateDB) {
 	if obj != nil {
 		obj.suicided = ch.prev
 		obj.setBalance(ch.prevbalance)
+	}
+}
+
+var ripemd = common.HexToAddress("0000000000000000000000000000000000000003")
+
+func (ch touchChange) undo(s *StateDB) {
+	if !ch.prev && *ch.account != ripemd {
+		delete(s.stateObjects, *ch.account)
+		delete(s.stateObjectsDirty, *ch.account)
 	}
 }
 

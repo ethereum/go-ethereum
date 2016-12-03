@@ -34,10 +34,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// The starting nonce determines the default nonce when new accounts are being
-// created.
-var StartingNonce uint64
-
 // Trie cache generation limit after which to evic trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
@@ -239,7 +235,7 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 		return stateObject.Nonce()
 	}
 
-	return StartingNonce
+	return 0
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
@@ -423,7 +419,7 @@ func (self *StateDB) MarkStateObjectDirty(addr common.Address) {
 func (self *StateDB) createObject(addr common.Address) (newobj, prev *StateObject) {
 	prev = self.GetStateObject(addr)
 	newobj = newObject(self, addr, Account{}, self.MarkStateObjectDirty)
-	newobj.setNonce(StartingNonce) // sets the object to dirty
+	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
 		if glog.V(logger.Core) {
 			glog.Infof("(+) %x\n", addr)

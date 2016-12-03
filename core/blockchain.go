@@ -152,9 +152,14 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash, _ := range BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
-			glog.V(logger.Error).Infof("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4])
-			bc.SetHead(header.Number.Uint64() - 1)
-			glog.V(logger.Error).Infoln("Chain rewind was successful, resuming normal operation")
+			// get the canonical block corresponding to the offending header's number
+			headerByNumber := bc.GetHeaderByNumber(header.Number.Uint64())
+			// make sure the headerByNumber (if present) is in our current canonical chain
+			if headerByNumber != nil && headerByNumber.Hash() == header.Hash() {
+				glog.V(logger.Error).Infof("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4])
+				bc.SetHead(header.Number.Uint64() - 1)
+				glog.V(logger.Error).Infoln("Chain rewind was successful, resuming normal operation")
+			}
 		}
 	}
 	// Take ownership of this particular state
@@ -878,7 +883,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		if BadHashes[block.Hash()] {
 			err := BadHashError(block.Hash())
-			reportBlock(block, err)
+			self.reportBlock(block, nil, err)
 			return i, err
 		}
 		// Stage 1 validation of the block using the chain's validator
@@ -910,7 +915,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				continue
 			}
 
-			reportBlock(block, err)
+			self.reportBlock(block, nil, err)
 
 			return i, err
 		}
@@ -924,19 +929,19 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			err = self.stateCache.Reset(chain[i-1].Root())
 		}
 		if err != nil {
-			reportBlock(block, err)
+			self.reportBlock(block, nil, err)
 			return i, err
 		}
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, vm.Config{})
 		if err != nil {
-			reportBlock(block, err)
+			self.reportBlock(block, receipts, err)
 			return i, err
 		}
 		// Validate the state using the default validator
 		err = self.Validator().ValidateState(block, self.GetBlock(block.ParentHash(), block.NumberU64()-1), self.stateCache, receipts, usedGas)
 		if err != nil {
-			reportBlock(block, err)
+			self.reportBlock(block, receipts, err)
 			return i, err
 		}
 		// Write state changes to database
@@ -1207,10 +1212,23 @@ func (self *BlockChain) update() {
 }
 
 // reportBlock logs a bad block error.
-func reportBlock(block *types.Block, err error) {
+func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	if glog.V(logger.Error) {
-		glog.Errorf("Bad block #%v (%s)\n", block.Number(), block.Hash().Hex())
-		glog.Errorf("    %v", err)
+		var receiptString string
+		for _, receipt := range receipts {
+			receiptString += fmt.Sprintf("\t%v\n", receipt)
+		}
+		glog.Errorf(`
+########## BAD BLOCK #########
+Chain config: %v
+
+Number: %v
+Hash: 0x%x
+%v
+
+Error: %v
+##############################
+`, bc.config, block.Number(), block.Hash(), receiptString, err)
 	}
 }
 

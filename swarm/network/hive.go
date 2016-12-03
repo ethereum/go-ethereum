@@ -26,6 +26,7 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/p2p/discover"
+	"github.com/ubiq/go-ubiq/p2p/netutil"
 	"github.com/ubiq/go-ubiq/swarm/network/kademlia"
 	"github.com/ubiq/go-ubiq/swarm/storage"
 )
@@ -288,6 +289,10 @@ func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
 func (self *Hive) HandlePeersMsg(req *peersMsgData, from *peer) {
 	var nrs []*kademlia.NodeRecord
 	for _, p := range req.Peers {
+		if err := netutil.CheckRelayIP(from.remoteAddr.IP, p.IP); err != nil {
+			glog.V(logger.Detail).Infof("invalid peer IP %v from %v: %v", from.remoteAddr.IP, p.IP, err)
+			continue
+		}
 		nrs = append(nrs, newNodeRecord(p))
 	}
 	self.kad.Add(nrs)

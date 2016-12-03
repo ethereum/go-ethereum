@@ -31,8 +31,6 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/common/httpclient"
-	"github.com/ubiq/go-ubiq/common/registrar/ethreg"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/eth/downloader"
@@ -127,7 +125,6 @@ type Ethereum struct {
 
 	eventMux       *event.TypeMux
 	pow            *ethash.Ethash
-	httpclient     *httpclient.HTTPClient
 	accountManager *accounts.Manager
 
 	ApiBackend *EthApiBackend
@@ -173,7 +170,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		pow:            pow,
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
-		httpclient:     httpclient.New(config.DocRoot),
 		netVersionId:   config.NetworkId,
 		NatSpec:        config.NatSpec,
 		PowTest:        config.PowTest,
@@ -217,6 +213,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	core.WriteChainConfig(chainDb, genesis.Hash(), config.ChainConfig)
 
 	eth.chainConfig = config.ChainConfig
+
+	glog.V(logger.Info).Infoln("Chain config:", eth.chainConfig)
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux())
 	if err != nil {
@@ -354,10 +352,6 @@ func (s *Ethereum) APIs() []rpc.API {
 			Version:   "1.0",
 			Service:   s.netRPCService,
 			Public:    true,
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   ethreg.NewPrivateRegistarAPI(s.chainConfig, s.blockchain, s.chainDb, s.txPool, s.accountManager),
 		},
 	}...)
 }
@@ -523,12 +517,6 @@ func (self *Ethereum) StopAutoDAG() {
 		self.autodagquit = nil
 	}
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
-}
-
-// HTTPClient returns the light http client used for fetching offchain docs
-// (natspec, source for verification)
-func (self *Ethereum) HTTPClient() *httpclient.HTTPClient {
-	return self.httpclient
 }
 
 // dagFiles(epoch) returns the two alternative DAG filenames (not a path)

@@ -26,7 +26,6 @@ import (
 	"github.com/ubiq/go-ubiq/accounts"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/compiler"
-	"github.com/ubiq/go-ubiq/common/httpclient"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/eth"
@@ -62,7 +61,6 @@ type LightEthereum struct {
 
 	eventMux       *event.TypeMux
 	pow            *ethash.Ethash
-	httpclient     *httpclient.HTTPClient
 	accountManager *accounts.Manager
 	solcPath       string
 	solc           *compiler.Solidity
@@ -96,7 +94,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		accountManager: ctx.AccountManager,
 		pow:            pow,
 		shutdownChan:   make(chan bool),
-		httpclient:     httpclient.New(config.DocRoot),
 		netVersionId:   config.NetworkId,
 		NatSpec:        config.NatSpec,
 		PowTest:        config.PowTest,
@@ -183,6 +180,7 @@ func (s *LightEthereum) BlockChain() *light.LightChain      { return s.blockchai
 func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
 func (s *LightEthereum) LesVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

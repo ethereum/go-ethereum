@@ -14,23 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-ethereum commands.
-package utils
+package params
 
-import (
-	"fmt"
-	"runtime"
-
-	"github.com/ubiq/go-ubiq/logger"
-	"github.com/ubiq/go-ubiq/logger/glog"
-	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/rlp"
-)
+import "fmt"
 
 const (
 	VersionMajor = 1          // Major version component of the current release
 	VersionMinor = 5          // Minor version component of the current release
-	VersionPatch = 3          // Patch version component of the current release
+	VersionPatch = 5          // Patch version component of the current release
 	VersionMeta  = "unstable" // Version metadata to append to the version string
 )
 
@@ -42,23 +33,3 @@ var Version = func() string {
 	}
 	return v
 }()
-
-// MakeDefaultExtraData returns the default Ethereum block extra data blob.
-func MakeDefaultExtraData(clientIdentifier string) []byte {
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
-	}
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		return nil
-	}
-	return extra
-}

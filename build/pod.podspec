@@ -1,5 +1,5 @@
 Pod::Spec.new do |spec|
-  spec.name         = '{{.Name}}'
+  spec.name         = 'Gubiq'
   spec.version      = '{{.Version}}'
   spec.license      = { :type => 'GNU Lesser General Public License, Version 3.0' }
   spec.homepage     = 'https://github.com/ubiq/go-ubiq'
@@ -14,9 +14,9 @@ Pod::Spec.new do |spec|
 	spec.ios.vendored_frameworks = 'Frameworks/Gubiq.framework'
 
 	spec.prepare_command = <<-CMD
-    curl https://gubiqstore.blob.core.windows.net/builds/gubiq-ios-all-{{.Version}}.tar.gz | tar -xvz
+    curl https://gubiqstore.blob.core.windows.net/builds/{{.Archive}}.tar.gz | tar -xvz
     mkdir Frameworks
-    mv gubiq-ios-all-{{.Version}}/Gubiq.framework Frameworks
-    rm -rf gubiq-ios-all-{{.Version}}
+    mv {{.Archive}}/Gubiq.framework Frameworks
+    rm -rf {{.Archive}}
   CMD
 end
