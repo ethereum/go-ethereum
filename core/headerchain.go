@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/ethdb"
@@ -34,7 +35,6 @@ import (
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/pow"
-	"github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -517,5 +517,5 @@ func (v *headerValidator) ValidateHeader(header, parent *types.Header, checkPow 
 	if v.hc.HasHeader(header.Hash()) {
 		return nil
 	}
-	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
+	return ValidateHeaderHeaderChain(v.config, v.Pow, header, parent, checkPow, false, v.hc)
 }

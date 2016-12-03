@@ -161,7 +161,7 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 		manager.removePeer)
 
 	validator := func(block *types.Block, parent *types.Block) error {
-		return core.ValidateHeader(config, pow, block.Header(), parent.Header(), true, false)
+		return core.ValidateHeader(config, pow, block.Header(), parent.Header(), true, false, blockchain)
 	}
 	heighter := func() uint64 {
 		return blockchain.CurrentBlock().NumberU64()
