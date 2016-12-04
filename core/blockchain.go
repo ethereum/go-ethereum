@@ -24,6 +24,7 @@ import (
 	"math/big"
 	mrand "math/rand"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,6 +60,7 @@ const (
 	blockCacheLimit     = 256
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
+	medianTimeBlocks    = 11
 	// must be bumped when consensus algorithm is changed, this forces the upgradedb
 	// command to be run (forces the blocks to be imported again using the new algorithm)
 	BlockChainVersion = 3
@@ -518,6 +520,37 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash) bool {
 	// Ensure the associated state is also present
 	_, err := state.New(block.Root(), bc.chainDb)
 	return err == nil
+}
+
+// calcPastMedianTime calculates the median time of the previous few blocks
+// prior to, and including, the passed block node.
+//
+// Modified from btcsuite
+func (bc *BlockChain) CalcPastMedianTime(number uint64) *big.Int {
+	// Genesis block.
+	if number == 0 {
+		return bc.Genesis().Time()
+	}
+
+	timestamps := make([]*big.Int, medianTimeBlocks)
+	numNodes := 0
+	iterNode := bc.GetBlockByNumber(number)
+
+	ancestors := make(map[common.Hash]*types.Block)
+	for i, ancestor := range bc.GetBlocksFromHash(iterNode.Hash(), medianTimeBlocks) {
+		ancestors[ancestor.Hash()] = ancestor
+		timestamps[i] = ancestor.Time()
+		numNodes++
+	}
+
+	// Prune the slice to the actual number of available timestamps which
+	// will be fewer than desired near the beginning of the block chain
+	// and sort them.
+	timestamps = timestamps[:numNodes]
+	sort.Sort(BigIntSlice(timestamps))
+
+	medianTimestamp := timestamps[numNodes/2]
+	return medianTimestamp
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -1332,3 +1365,10 @@ func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 
 // Config retrieves the blockchain's chain configuration.
 func (self *BlockChain) Config() *params.ChainConfig { return self.config }
+
+// BigIntSlice attaches the methods of sort.Interface to []*big.Int, sorting in increasing order.
+type BigIntSlice []*big.Int
+
+func (s BigIntSlice) Len() int           { return len(s) }
+func (s BigIntSlice) Less(i, j int) bool { return s[i].Cmp(s[j]) < 0 }
+func (s BigIntSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
