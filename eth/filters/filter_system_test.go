@@ -74,10 +74,10 @@ func TestBlockSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux   = new(event.TypeMux)
-		db, _ = ethdb.NewMemDatabase()
+		mux     = new(event.TypeMux)
+		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api   = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false)
 
 		genesis     = core.WriteGenesisBlockForTesting(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
@@ -128,10 +128,10 @@ func TestPendingTxFilter(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux   = new(event.TypeMux)
-		db, _ = ethdb.NewMemDatabase()
+		mux     = new(event.TypeMux)
+		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api   = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), new(big.Int), new(big.Int), nil),
@@ -178,10 +178,10 @@ func TestPendingTxFilter(t *testing.T) {
 // If not it must return an error.
 func TestLogFilterCreation(t *testing.T) {
 	var (
-		mux   = new(event.TypeMux)
-		db, _ = ethdb.NewMemDatabase()
+		mux     = new(event.TypeMux)
+		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api   = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -223,10 +223,10 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux   = new(event.TypeMux)
-		db, _ = ethdb.NewMemDatabase()
+		mux     = new(event.TypeMux)
+		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api   = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false)
 	)
 
 	// different situations where log filter creation should fail.
@@ -249,10 +249,10 @@ func TestLogFilter(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux   = new(event.TypeMux)
-		db, _ = ethdb.NewMemDatabase()
+		mux     = new(event.TypeMux)
+		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api   = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -321,14 +321,14 @@ func TestLogFilter(t *testing.T) {
 	}
 
 	for i, tt := range testCases {
-		var fetched []Log
+		var fetched []*vm.Log
 		for { // fetch all expected logs
 			results, err := api.GetFilterChanges(tt.id)
 			if err != nil {
 				t.Fatalf("Unable to fetch logs: %v", err)
 			}
 
-			fetched = append(fetched, results.([]Log)...)
+			fetched = append(fetched, results.([]*vm.Log)...)
 			if len(fetched) >= len(tt.expected) {
 				break
 			}
@@ -345,7 +345,7 @@ func TestLogFilter(t *testing.T) {
 			if fetched[l].Removed {
 				t.Errorf("expected log not to be removed for log %d in case %d", l, i)
 			}
-			if !reflect.DeepEqual(fetched[l].Log, tt.expected[l]) {
+			if !reflect.DeepEqual(fetched[l], tt.expected[l]) {
 				t.Errorf("invalid log on index %d for case %d", l, i)
 			}
 		}
@@ -357,10 +357,10 @@ func TestPendingLogsSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux   = new(event.TypeMux)
-		db, _ = ethdb.NewMemDatabase()
+		mux     = new(event.TypeMux)
+		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api   = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -397,7 +397,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		testCases = []struct {
 			crit     FilterCriteria
 			expected vm.Logs
-			c        chan []Log
+			c        chan []*vm.Log
 			sub      *Subscription
 		}{
 			// match all
@@ -423,7 +423,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 	// on slow machines this could otherwise lead to missing events when the subscription is created after
 	// (some) events are posted.
 	for i := range testCases {
-		testCases[i].c = make(chan []Log)
+		testCases[i].c = make(chan []*vm.Log)
 		testCases[i].sub, _ = api.events.SubscribeLogs(testCases[i].crit, testCases[i].c)
 	}
 
@@ -431,7 +431,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		i := n
 		tt := test
 		go func() {
-			var fetched []Log
+			var fetched []*vm.Log
 		fetchLoop:
 			for {
 				logs := <-tt.c
@@ -449,7 +449,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 				if fetched[l].Removed {
 					t.Errorf("expected log not to be removed for log %d in case %d", l, i)
 				}
-				if !reflect.DeepEqual(fetched[l].Log, tt.expected[l]) {
+				if !reflect.DeepEqual(fetched[l], tt.expected[l]) {
 					t.Errorf("invalid log on index %d for case %d", l, i)
 				}
 			}

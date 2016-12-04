@@ -19,7 +19,6 @@
 package filters
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -60,42 +59,12 @@ var (
 	ErrInvalidSubscriptionID = errors.New("invalid id")
 )
 
-// Log is a helper that can hold additional information about vm.Log
-// necessary for the RPC interface.
-type Log struct {
-	*vm.Log
-	Removed bool `json:"removed"`
-}
-
-// MarshalJSON returns *l as the JSON encoding of l.
-func (l *Log) MarshalJSON() ([]byte, error) {
-	fields := map[string]interface{}{
-		"address":          l.Address,
-		"data":             fmt.Sprintf("0x%x", l.Data),
-		"blockNumber":      nil,
-		"logIndex":         fmt.Sprintf("%#x", l.Index),
-		"blockHash":        nil,
-		"transactionHash":  l.TxHash,
-		"transactionIndex": fmt.Sprintf("%#x", l.TxIndex),
-		"topics":           l.Topics,
-		"removed":          l.Removed,
-	}
-
-	// mined logs
-	if l.BlockHash != (common.Hash{}) {
-		fields["blockNumber"] = fmt.Sprintf("%#x", l.BlockNumber)
-		fields["blockHash"] = l.BlockHash
-	}
-
-	return json.Marshal(fields)
-}
-
 type subscription struct {
 	id        rpc.ID
 	typ       Type
 	created   time.Time
 	logsCrit  FilterCriteria
-	logs      chan []Log
+	logs      chan []*vm.Log
 	hashes    chan common.Hash
 	headers   chan *types.Header
 	installed chan struct{} // closed when the filter is installed
@@ -182,7 +151,7 @@ func (es *EventSystem) subscribe(sub *subscription) *Subscription {
 // SubscribeLogs creates a subscription that will write all logs matching the
 // given criteria to the given logs channel. Default value for the from and to
 // block is "latest". If the fromBlock > toBlock an error is returned.
-func (es *EventSystem) SubscribeLogs(crit FilterCriteria, logs chan []Log) (*Subscription, error) {
+func (es *EventSystem) SubscribeLogs(crit FilterCriteria, logs chan []*vm.Log) (*Subscription, error) {
 	var from, to rpc.BlockNumber
 	if crit.FromBlock == nil {
 		from = rpc.LatestBlockNumber
@@ -220,7 +189,7 @@ func (es *EventSystem) SubscribeLogs(crit FilterCriteria, logs chan []Log) (*Sub
 
 // subscribeMinedPendingLogs creates a subscription that returned mined and
 // pending logs that match the given criteria.
-func (es *EventSystem) subscribeMinedPendingLogs(crit FilterCriteria, logs chan []Log) *Subscription {
+func (es *EventSystem) subscribeMinedPendingLogs(crit FilterCriteria, logs chan []*vm.Log) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       MinedAndPendingLogsSubscription,
@@ -238,7 +207,7 @@ func (es *EventSystem) subscribeMinedPendingLogs(crit FilterCriteria, logs chan 
 
 // subscribeLogs creates a subscription that will write all logs matching the
 // given criteria to the given logs channel.
-func (es *EventSystem) subscribeLogs(crit FilterCriteria, logs chan []Log) *Subscription {
+func (es *EventSystem) subscribeLogs(crit FilterCriteria, logs chan []*vm.Log) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       LogsSubscription,
@@ -256,7 +225,7 @@ func (es *EventSystem) subscribeLogs(crit FilterCriteria, logs chan []Log) *Subs
 
 // subscribePendingLogs creates a subscription that writes transaction hashes for
 // transactions that enter the transaction pool.
-func (es *EventSystem) subscribePendingLogs(crit FilterCriteria, logs chan []Log) *Subscription {
+func (es *EventSystem) subscribePendingLogs(crit FilterCriteria, logs chan []*vm.Log) *Subscription {
 	sub := &subscription{
 		id:        rpc.NewID(),
 		typ:       PendingLogsSubscription,
@@ -279,7 +248,7 @@ func (es *EventSystem) SubscribeNewHeads(headers chan *types.Header) *Subscripti
 		id:        rpc.NewID(),
 		typ:       BlocksSubscription,
 		created:   time.Now(),
-		logs:      make(chan []Log),
+		logs:      make(chan []*vm.Log),
 		hashes:    make(chan common.Hash),
 		headers:   headers,
 		installed: make(chan struct{}),
@@ -296,7 +265,7 @@ func (es *EventSystem) SubscribePendingTxEvents(hashes chan common.Hash) *Subscr
 		id:        rpc.NewID(),
 		typ:       PendingTransactionsSubscription,
 		created:   time.Now(),
-		logs:      make(chan []Log),
+		logs:      make(chan []*vm.Log),
 		hashes:    hashes,
 		headers:   make(chan *types.Header),
 		installed: make(chan struct{}),
@@ -319,7 +288,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev *event.Event) {
 		if len(e) > 0 {
 			for _, f := range filters[LogsSubscription] {
 				if ev.Time.After(f.created) {
-					if matchedLogs := filterLogs(convertLogs(e, false), f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics); len(matchedLogs) > 0 {
+					if matchedLogs := filterLogs(e, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics); len(matchedLogs) > 0 {
 						f.logs <- matchedLogs
 					}
 				}
@@ -328,7 +297,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev *event.Event) {
 	case core.RemovedLogsEvent:
 		for _, f := range filters[LogsSubscription] {
 			if ev.Time.After(f.created) {
-				if matchedLogs := filterLogs(convertLogs(e.Logs, true), f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics); len(matchedLogs) > 0 {
+				if matchedLogs := filterLogs(e.Logs, f.logsCrit.FromBlock, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics); len(matchedLogs) > 0 {
 					f.logs <- matchedLogs
 				}
 			}
@@ -336,7 +305,7 @@ func (es *EventSystem) broadcast(filters filterIndex, ev *event.Event) {
 	case core.PendingLogsEvent:
 		for _, f := range filters[PendingLogsSubscription] {
 			if ev.Time.After(f.created) {
-				if matchedLogs := filterLogs(convertLogs(e.Logs, false), nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics); len(matchedLogs) > 0 {
+				if matchedLogs := filterLogs(e.Logs, nil, f.logsCrit.ToBlock, f.logsCrit.Addresses, f.logsCrit.Topics); len(matchedLogs) > 0 {
 					f.logs <- matchedLogs
 				}
 			}
@@ -401,25 +370,22 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 }
 
 // filter logs of a single header in light client mode
-func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []Log {
-	//fmt.Println("lightFilterLogs", header.Number.Uint64(), remove)
+func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []*vm.Log {
 	if bloomFilter(header.Bloom, addresses, topics) {
-		//fmt.Println("bloom match")
 		// Get the logs of the block
 		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 		receipts, err := es.backend.GetReceipts(ctx, header.Hash())
 		if err != nil {
 			return nil
 		}
-		var unfiltered []Log
+		var unfiltered []*vm.Log
 		for _, receipt := range receipts {
-			rl := make([]Log, len(receipt.Logs))
-			for i, l := range receipt.Logs {
-				rl[i] = Log{l, remove}
+			for _, log := range receipt.Logs {
+				logcopy := *log
+				logcopy.Removed = remove
+				unfiltered = append(unfiltered, &logcopy)
 			}
-			unfiltered = append(unfiltered, rl...)
 		}
-
 		logs := filterLogs(unfiltered, nil, nil, addresses, topics)
 		return logs
 	}
@@ -464,14 +430,4 @@ func (es *EventSystem) eventLoop() {
 			close(f.err)
 		}
 	}
-}
-
-// convertLogs is a helper utility that converts vm.Logs to []filter.Log.
-func convertLogs(in vm.Logs, removed bool) []Log {
-
-	logs := make([]Log, len(in))
-	for i, l := range in {
-		logs[i] = Log{l, removed}
-	}
-	return logs
 }

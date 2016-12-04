@@ -61,7 +61,6 @@ type ChainEvent struct {
 
 type ChainSideEvent struct {
 	Block *types.Block
-	Logs  vm.Logs
 }
 
 type PendingBlockEvent struct {

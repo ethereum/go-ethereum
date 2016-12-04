@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -38,7 +39,7 @@ type Backend interface {
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 }
 
-// Filter can be used to retrieve and filter logs
+// Filter can be used to retrieve and filter logs.
 type Filter struct {
 	backend   Backend
 	useMipMap bool
@@ -85,7 +86,7 @@ func (f *Filter) SetTopics(topics [][]common.Hash) {
 }
 
 // Run filters logs with the current parameters set
-func (f *Filter) Find(ctx context.Context) ([]Log, error) {
+func (f *Filter) Find(ctx context.Context) ([]*vm.Log, error) {
 	head, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if head == nil {
 		return nil, nil
@@ -110,7 +111,7 @@ func (f *Filter) Find(ctx context.Context) ([]Log, error) {
 	return f.mipFind(beginBlockNo, endBlockNo, 0), nil
 }
 
-func (f *Filter) mipFind(start, end uint64, depth int) (logs []Log) {
+func (f *Filter) mipFind(start, end uint64, depth int) (logs []*vm.Log) {
 	level := core.MIPMapLevels[depth]
 	// normalise numerator so we can work in level specific batches and
 	// work with the proper range checks
@@ -141,7 +142,7 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []Log) {
 	return logs
 }
 
-func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []Log, err error) {
+func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*vm.Log, err error) {
 	for i := start; i <= end; i++ {
 		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
 		if header == nil || err != nil {
@@ -156,13 +157,9 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []Log, er
 			if err != nil {
 				return nil, err
 			}
-			var unfiltered []Log
+			var unfiltered []*vm.Log
 			for _, receipt := range receipts {
-				rl := make([]Log, len(receipt.Logs))
-				for i, l := range receipt.Logs {
-					rl[i] = Log{l, false}
-				}
-				unfiltered = append(unfiltered, rl...)
+				unfiltered = append(unfiltered, ([]*vm.Log)(receipt.Logs)...)
 			}
 			logs = append(logs, filterLogs(unfiltered, nil, nil, f.addresses, f.topics)...)
 		}
@@ -181,15 +178,15 @@ func includes(addresses []common.Address, a common.Address) bool {
 	return false
 }
 
-func filterLogs(logs []Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []Log {
-	var ret []Log
-	// Filter the logs for interesting stuff
+// filterLogs creates a slice of logs matching the given criteria.
+func filterLogs(logs []*vm.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*vm.Log {
+	var ret []*vm.Log
 Logs:
 	for _, log := range logs {
-		if fromBlock != nil && fromBlock.Int64() >= 0 && uint64(fromBlock.Int64()) > log.BlockNumber {
+		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {
 			continue
 		}
-		if toBlock != nil && toBlock.Int64() >= 0 && uint64(toBlock.Int64()) < log.BlockNumber {
+		if toBlock != nil && toBlock.Int64() >= 0 && toBlock.Uint64() < log.BlockNumber {
 			continue
 		}
 
