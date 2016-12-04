@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	big8  = big.NewInt(8)
+	big2  = big.NewInt(2)
 	big32 = big.NewInt(32)
 )
 
@@ -124,10 +124,10 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 	reward := new(big.Int).Set(BlockReward)
 	r := new(big.Int)
 	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
+		r.Add(uncle.Number, big2)
 		r.Sub(r, header.Number)
 		r.Mul(r, BlockReward)
-		r.Div(r, big8)
+		r.Div(r, big2)
 		statedb.AddBalance(uncle.Coinbase, r)
 
 		r.Div(BlockReward, big32)
