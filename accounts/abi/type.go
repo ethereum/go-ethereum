@@ -33,7 +33,7 @@ const (
 	FixedBytesTy
 	BytesTy
 	HashTy
-	RealTy
+	FixedPointTy
 )
 
 // Type is the reflection of the supported argument type
@@ -46,6 +46,7 @@ type Type struct {
 	Kind reflect.Kind
 	Type reflect.Type
 	Size int
+	DecimalSize int // Determines the length of the binary coded decimal in fixed point types. 
 	T    byte // Our own type checking
 
 	stringKind string // holds the unparsed string for deriving signatures
@@ -57,16 +58,16 @@ var (
 	// Types can be in the format of:
 	//
 	// 	Input  = Type [ "[" [ Number ] "]" ] Name .
-	// 	Type   = [ "u" ] "int" [ Number ] .
+	// 	Type   = [ "u" ] "int" [ Number ] [ x ] [ Number ].
 	//
 	// Examples:
 	//
-	//      string     int       uint       real
+	//      string     int       uint       fixed
 	//      string32   int8      uint8      uint[]
-	//      address    int256    uint256    real[2]
+	//      address    int256    uint256    fixed128x128[2]
 	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
 	// typeRegex parses the abi sub types
-	typeRegex = regexp.MustCompile("([a-zA-Z]+)([0-9]*)?")
+	typeRegex = regexp.MustCompile("([a-zA-Z]+)([0-9]*)?x?([0-9]*)?")
 )
 
 // NewType creates a new reflection type of abi type given in t.
