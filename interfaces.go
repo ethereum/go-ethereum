@@ -152,6 +152,9 @@ type FilterQuery struct {
 
 // LogFilterer provides access to contract log events using a one-off query or continuous
 // event subscription.
+//
+// Logs received through a streaming query subscription may have Removed set to true,
+// indicating that the log was reverted due to a chain reorganisation.
 type LogFilterer interface {
 	FilterLogs(ctx context.Context, q FilterQuery) ([]vm.Log, error)
 	SubscribeFilterLogs(ctx context.Context, q FilterQuery, ch chan<- vm.Log) (Subscription, error)
