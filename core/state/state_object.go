@@ -152,7 +152,9 @@ func (c *StateObject) touch() {
 	c.touched = true
 }
 
-func (c *StateObject) getTrie(db trie.Database) *trie.SecureTrie {
+// GetTrie returns the current instantiated trie or creates a new one
+// using the data's root to initialise the trie.
+func (c *StateObject) GetTrie(db trie.Database) *trie.SecureTrie {
 	if c.trie == nil {
 		var err error
 		c.trie, err = trie.NewSecure(c.data.Root, db, 0)
@@ -171,7 +173,7 @@ func (self *StateObject) GetState(db trie.Database, key common.Hash) common.Hash
 		return value
 	}
 	// Load from DB in case it is missing.
-	if enc := self.getTrie(db).Get(key[:]); len(enc) > 0 {
+	if enc := self.GetTrie(db).Get(key[:]); len(enc) > 0 {
 		_, content, _, err := rlp.Split(enc)
 		if err != nil {
 			self.setError(err)
@@ -206,7 +208,7 @@ func (self *StateObject) setState(key, value common.Hash) {
 
 // updateTrie writes cached storage modifications into the object's storage trie.
 func (self *StateObject) updateTrie(db trie.Database) {
-	tr := self.getTrie(db)
+	tr := self.GetTrie(db)
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
 		if (value == common.Hash{}) {
@@ -388,7 +390,7 @@ func (self *StateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
 		cb(h, value)
 	}
 
-	it := self.getTrie(self.db.db).Iterator()
+	it := self.GetTrie(self.db.db).Iterator()
 	for it.Next() {
 		// ignore cached values
 		key := common.BytesToHash(self.trie.GetKey(it.Key))

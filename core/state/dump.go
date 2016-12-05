@@ -61,7 +61,7 @@ func (self *StateDB) RawDump() Dump {
 			Code:     common.Bytes2Hex(obj.Code(self.db)),
 			Storage:  make(map[string]string),
 		}
-		storageIt := obj.getTrie(self.db).Iterator()
+		storageIt := obj.GetTrie(self.db).Iterator()
 		for storageIt.Next() {
 			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}
