@@ -385,6 +385,11 @@ web3._extend({
 			call: 'debug_traceTransaction',
 			params: 2,
 			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'storageRangeAt',
+			call: 'debug_storageRangeAt',
+			params: 6,
 		})
 	],
 	properties: []
