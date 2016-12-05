@@ -24,6 +24,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/params"
 	"github.com/ubiq/go-ubiq/pow"
@@ -31,10 +32,40 @@ import (
 )
 
 var (
-	ExpDiffPeriod = big.NewInt(100000)
-	big10         = big.NewInt(10)
-	bigMinus99    = big.NewInt(-99)
+	ExpDiffPeriod       = big.NewInt(100000)
+	big88               = big.NewInt(88)
+	bigMinus99          = big.NewInt(-99)
+	nPowAveragingWindow = big.NewInt(21)
+	nPowMaxAdjustDown   = big.NewInt(16) // 16% adjustment down
+	nPowMaxAdjustUp     = big.NewInt(8)  // 8% adjustment up
 )
+
+func AveragingWindowTimespan() *big.Int {
+	x := new(big.Int)
+	return x.Mul(nPowAveragingWindow, big88)
+}
+
+func MinActualTimespan() *big.Int {
+	// (AveragingWindowTimespan() * (100 - nPowMaxAdjustUp  )) / 100
+	x := new(big.Int)
+	y := new(big.Int)
+	z := new(big.Int)
+	x.Sub(big.NewInt(100), nPowMaxAdjustUp)
+	y.Mul(AveragingWindowTimespan(), x)
+	z.Div(y, big.NewInt(100))
+	return z
+}
+
+func MaxActualTimespan() *big.Int {
+	// (AveragingWindowTimespan() * (100 + nPowMaxAdjustDown)) / 100
+	x := new(big.Int)
+	y := new(big.Int)
+	z := new(big.Int)
+	x.Add(big.NewInt(100), nPowMaxAdjustDown)
+	y.Mul(AveragingWindowTimespan(), x)
+	z.Div(y, big.NewInt(100))
+	return z
+}
 
 // BlockValidator is responsible for validating block headers, uncles and
 // processed state.
@@ -310,85 +341,98 @@ func ValidateHeaderHeaderChain(config *params.ChainConfig, pow pow.PoW, header *
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
+// Rewritten to be based on Digibyte's Digishield v3 retargeting
 func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
-	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.mediawiki
-	// algorithm:
-	// diff = (parent_diff +
-	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	//        ) + 2^(periodCount - 2)
-
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parentTime)
-
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
-	y := new(big.Int)
+	nFirstBlock := new(big.Int)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow)
 
-	// 1 - (block_timestamp -parent_timestamp) // 10
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
-	x.Sub(common.Big1, x)
+	glog.V(logger.Debug).Infof("CalcDifficulty parentNumber: %v parentDiff: %v\n", parentNumber, parentDiff)
 
-	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
+	// Check we have enough blocks
+	if parentNumber.Cmp(nPowAveragingWindow) < 1 {
+		glog.V(logger.Debug).Infof("CalcDifficulty: parentNumber(%+x) < nPowAveragingWindow(%+x)\n", parentNumber, nPowAveragingWindow)
+		x.Set(parentDiff)
+		return x
 	}
 
-	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDiff, params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parentDiff, x)
+	// Limit adjustment step
+	// Use medians to prevent time-warp attacks
+	// nActualTimespan := nLastBlockTime - nFirstBlockTime
+	nLastBlockTime := bc.CalcPastMedianTime(parentNumber.Uint64())
+	nFirstBlockTime := bc.CalcPastMedianTime(nFirstBlock.Uint64())
+	nActualTimespan := new(big.Int)
+	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
+	glog.V(logger.Debug).Infof("CalcDifficulty nActualTimespan = %v before dampening\n", nActualTimespan)
+
+	// nActualTimespan = AveragingWindowTimespan() + (nActualTimespan-AveragingWindowTimespan())/4
+	y := new(big.Int)
+	y.Sub(nActualTimespan, AveragingWindowTimespan())
+	y.Div(y, big.NewInt(4))
+	nActualTimespan.Add(y, AveragingWindowTimespan())
+	glog.V(logger.Debug).Infof("CalcDifficulty nActualTimespan = %v before bounds\n", nActualTimespan)
+
+	if nActualTimespan.Cmp(MinActualTimespan()) < 0 {
+		nActualTimespan.Set(MinActualTimespan())
+		glog.V(logger.Debug).Infoln("CalcDifficulty Minimum Timespan set")
+	} else if nActualTimespan.Cmp(MaxActualTimespan()) > 0 {
+		nActualTimespan.Set(MaxActualTimespan())
+		glog.V(logger.Debug).Infoln("CalcDifficulty Maximum Timespan set")
+	}
+
+	glog.V(logger.Debug).Infof("CalcDifficulty nActualTimespan = %v final\n", nActualTimespan)
+
+	// Retarget
+	x.Mul(parentDiff, AveragingWindowTimespan())
+	glog.V(logger.Debug).Infoln("CalcDifficulty parentDiff * AveragingWindowTimespan:", x)
+
+	x.Div(x, nActualTimespan)
+	glog.V(logger.Debug).Infoln("CalcDifficulty x / nActualTimespan:", x)
 
 	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty) < 0 {
 		x.Set(params.MinimumDifficulty)
 	}
 
-	// for the exponential factor
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-
-	// the exponential factor, commonly referred to as "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(common.Big1) > 0 {
-		y.Sub(periodCount, common.Big2)
-		y.Exp(common.Big2, y, nil)
-		x.Add(x, y)
-	}
-
 	return x
 }
 
 func CalcDifficultyHeaderChain(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parentTime)
-
+	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
-	y := new(big.Int)
+	nFirstBlock := new(big.Int)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow)
 
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
-	x.Sub(common.Big1, x)
-
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
+	// Check we have enough blocks
+	if parentNumber.Cmp(nPowAveragingWindow) < 1 {
+		x.Set(parentDiff)
+		return x
 	}
 
-	y.Div(parentDiff, params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parentDiff, x)
+	nLastBlockTime := hc.CalcPastMedianTime(parentNumber.Uint64())
+	nFirstBlockTime := hc.CalcPastMedianTime(nFirstBlock.Uint64())
+	nActualTimespan := new(big.Int)
+	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
 
+	y := new(big.Int)
+	y.Sub(nActualTimespan, AveragingWindowTimespan())
+	y.Div(y, big.NewInt(4))
+	nActualTimespan.Add(y, AveragingWindowTimespan())
+
+	if nActualTimespan.Cmp(MinActualTimespan()) < 0 {
+		nActualTimespan.Set(MinActualTimespan())
+	} else if nActualTimespan.Cmp(MaxActualTimespan()) > 0 {
+		nActualTimespan.Set(MaxActualTimespan())
+	}
+
+	// Retarget
+	x.Mul(parentDiff, AveragingWindowTimespan())
+	x.Div(x, nActualTimespan)
+
+	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty) < 0 {
 		x.Set(params.MinimumDifficulty)
-	}
-
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-
-	if periodCount.Cmp(common.Big1) > 0 {
-		y.Sub(periodCount, common.Big2)
-		y.Exp(common.Big2, y, nil)
-		x.Add(x, y)
 	}
 
 	return x
@@ -402,7 +446,7 @@ func CalcDifficultyLegacy(config *params.ChainConfig, time, parentTime uint64, p
 	y := new(big.Int)
 
 	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
+	x.Div(x, big88)
 	x.Sub(common.Big1, x)
 
 	if x.Cmp(bigMinus99) < 0 {
@@ -415,15 +459,6 @@ func CalcDifficultyLegacy(config *params.ChainConfig, time, parentTime uint64, p
 
 	if x.Cmp(params.MinimumDifficulty) < 0 {
 		x.Set(params.MinimumDifficulty)
-	}
-
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-
-	if periodCount.Cmp(common.Big1) > 0 {
-		y.Sub(periodCount, common.Big2)
-		y.Exp(common.Big2, y, nil)
-		x.Add(x, y)
 	}
 
 	return x

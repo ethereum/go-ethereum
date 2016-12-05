@@ -359,7 +359,7 @@ func (hc *HeaderChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []co
 
 func (hc *HeaderChain) GetBlockHeadersFromHash(hash common.Hash, max uint64) []*types.Header {
 	// Get the origin header from which to fetch
-	header := hc.GetHeader(hash)
+	header := hc.GetHeaderByHash(hash)
 	if header == nil {
 		return nil
 	}
@@ -367,10 +367,10 @@ func (hc *HeaderChain) GetBlockHeadersFromHash(hash common.Hash, max uint64) []*
 	chain := make([]*types.Header, 0, max)
 	for i := uint64(0); i < max; i++ {
 		next := header.ParentHash
-		if header = hc.GetHeader(next); header == nil {
+		if header = hc.GetHeaderByHash(next); header == nil {
 			break
 		}
-		chain = append(chain, hc.GetHeader(next))
+		chain = append(chain, hc.GetHeaderByHash(next))
 		if header.Number.Cmp(common.Big0) == 0 {
 			break
 		}
