@@ -81,6 +81,7 @@ func TestTypeCheck(t *testing.T) {
 		{"bytes", common.Hash{1}, ""},
 		{"string", "hello world", ""},
 		{"bytes32[]", [][32]byte{[32]byte{}}, ""},
+		{"function", [24]byte{}, ""},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
@@ -197,6 +198,13 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			"interface",
 			"",
 		},
+		{
+			`[ { "type": "function" } ]`,
+			pad([]byte{1}, 32, false),
+			[24]byte{1},
+			"function",
+			"",
+		},
 	} {
 		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
 		abi, err := JSON(strings.NewReader(abiDefinition))
@@ -253,6 +261,10 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			outvar = v
 		case "hash":
 			var v common.Hash
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "function":
+			var v [24]byte
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
 			outvar = v
 		case "interface":
@@ -333,6 +345,7 @@ func TestPack(t *testing.T) {
 		{"uint256[]", []*big.Int{big.NewInt(1), big.NewInt(2)}, formatSliceOutput([]byte{1}, []byte{2})},
 		{"address[]", []common.Address{common.Address{1}, common.Address{2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
 		{"bytes32[]", []common.Hash{common.Hash{1}, common.Hash{2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
+		{"function", [24]byte{1}, pad([]byte{1}, 32, false)},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {

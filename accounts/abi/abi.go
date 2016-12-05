@@ -169,7 +169,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 // argument in T.
 func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	// we need to treat slices differently
-	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy {
+	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy && t.Type.T != FunctionTy {
 		return toGoSlice(i, t, output)
 	}
 
@@ -233,7 +233,7 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 		return common.BytesToAddress(returnOutput), nil
 	case HashTy:
 		return common.BytesToHash(returnOutput), nil
-	case BytesTy, FixedBytesTy:
+	case BytesTy, FixedBytesTy, FunctionTy:
 		return returnOutput, nil
 	case StringTy:
 		return string(returnOutput), nil
