@@ -162,6 +162,7 @@ func run(ctx *cli.Context) error {
 			Origin:   sender.Address(),
 			State:    statedb,
 			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
+			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
 			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
 				Tracer: logger,
@@ -175,6 +176,7 @@ func run(ctx *cli.Context) error {
 			Origin:   sender.Address(),
 			State:    statedb,
 			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
+			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
 			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
 				Tracer: logger,

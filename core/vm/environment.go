@@ -74,17 +74,20 @@ type Environment struct {
 }
 
 // NewEnvironment retutrns a new EVM environment.
-func NewEnvironment(context Context, statedb StateDB, chainConfig *params.ChainConfig, vmCfg Config) *Environment {
+func NewEnvironment(context Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *Environment {
 	env := &Environment{
 		Context:     context,
 		StateDB:     statedb,
-		vmConfig:    vmCfg,
+		vmConfig:    vmConfig,
 		chainConfig: chainConfig,
 	}
-	env.evm = New(env, vmCfg)
+	env.evm = New(env, vmConfig)
 	return env
 }
 
+// Call executes the contract associated with the addr with the given input as paramaters. It also handles any
+// necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
+// case of an execution error or failed value transfer.
 func (env *Environment) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) ([]byte, error) {
 	if env.vmConfig.NoRecursion && env.Depth > 0 {
 		caller.ReturnGas(gas)
@@ -140,7 +143,11 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 	return ret, err
 }
 
-// Take another's contract code and execute within our own context
+// CallCode executes the contract associated with the addr with the given input as paramaters. It also handles any
+// necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
+// case of an execution error or failed value transfer.
+//
+// CallCode differs from Call in the sense that it executes the given address' code with the caller as context.
 func (env *Environment) CallCode(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) ([]byte, error) {
 	if env.vmConfig.NoRecursion && env.Depth > 0 {
 		caller.ReturnGas(gas)
@@ -182,7 +189,11 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, input 
 	return ret, err
 }
 
-// Same as CallCode except sender and value is propagated from parent to child scope
+// DelegateCall executes the contract associated with the addr with the given input as paramaters.
+// It reverses the state in case of an execution error.
+//
+// DelegateCall differs from CallCode in the sense that it executes the given address' code with the caller as context
+// and the caller is set to the caller of the caller.
 func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas *big.Int) ([]byte, error) {
 	if env.vmConfig.NoRecursion && env.Depth > 0 {
 		caller.ReturnGas(gas)
@@ -217,7 +228,7 @@ func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, in
 	return ret, err
 }
 
-// Create a new contract
+// Create creates a new contract using code as deployment code.
 func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.Int) ([]byte, common.Address, error) {
 	if env.vmConfig.NoRecursion && env.Depth > 0 {
 		caller.ReturnGas(gas)

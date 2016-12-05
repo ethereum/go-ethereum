@@ -112,7 +112,7 @@ func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state et
 	from.SetBalance(common.MaxBig)
 	vmError := func() error { return nil }
 
-	context := core.ToEVMContext(msg, header, b.eth.BlockChain())
+	context := core.NewEVMContext(msg, header, b.eth.BlockChain())
 	return vm.NewEnvironment(context, statedb, b.eth.chainConfig, vm.Config{}), vmError, nil
 }
 

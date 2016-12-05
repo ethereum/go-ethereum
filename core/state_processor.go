@@ -97,7 +97,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 		return nil, nil, nil, err
 	}
 	// Create a new context to be used in the EVM environment
-	context := ToEVMContext(msg, header, bc)
+	context := NewEVMContext(msg, header, bc)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEnvironment(context, statedb, config, vm.Config{})

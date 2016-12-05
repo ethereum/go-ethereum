@@ -98,7 +98,7 @@ func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state et
 	from.SetBalance(common.MaxBig)
 
 	vmstate := light.NewVMState(ctx, stateDb)
-	context := core.ToEVMContext(msg, header, b.eth.blockchain)
+	context := core.NewEVMContext(msg, header, b.eth.blockchain)
 	return vm.NewEnvironment(context, vmstate, b.eth.chainConfig, vm.Config{}), vmstate.Error, nil
 }
 

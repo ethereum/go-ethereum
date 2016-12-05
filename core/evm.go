@@ -1,5 +1,4 @@
 // Copyright 2014 The go-ethereum Authors
-
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -26,13 +25,13 @@ import (
 )
 
 // BlockFetcher retrieves headers by their hash
-type BlockFetcher interface {
+type HeaderFetcher interface {
 	// GetHeader returns the hash corresponding to their hash
 	GetHeader(common.Hash, uint64) *types.Header
 }
 
-// ToEVMContext creates a new context for use in the EVM.
-func ToEVMContext(msg Message, header *types.Header, chain BlockFetcher) vm.Context {
+// NewEVMContext creates a new context for use in the EVM.
+func NewEVMContext(msg Message, header *types.Header, chain HeaderFetcher) vm.Context {
 	return vm.Context{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
@@ -48,10 +47,8 @@ func ToEVMContext(msg Message, header *types.Header, chain BlockFetcher) vm.Cont
 	}
 }
 
-// GetHashFn returns a function for which the VM env can query block hashes through
-// up to the limit defined by the Yellow Paper and uses the given block chain
-// to query for information.
-func GetHashFn(ref *types.Header, chain BlockFetcher) func(n uint64) common.Hash {
+// GetHashFn returns a GetHashFunc which retrieves header hashes by number
+func GetHashFn(ref *types.Header, chain HeaderFetcher) func(n uint64) common.Hash {
 	return func(n uint64) common.Hash {
 		for header := chain.GetHeader(ref.ParentHash, ref.Number.Uint64()-1); header != nil; header = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
 			if header.Number.Uint64() == n {
@@ -64,6 +61,7 @@ func GetHashFn(ref *types.Header, chain BlockFetcher) func(n uint64) common.Hash
 }
 
 // CanTransfer checks wether there are enough funds in the address' account to make a transfer.
+// This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
 }
