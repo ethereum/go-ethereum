@@ -988,7 +988,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				glog.Infof("inserted forked block #%d [%x…] (TD=%v) in %9v: %3d txs %d uncles.", block.Number(), block.Hash().Bytes()[0:4], block.Difficulty(), common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), len(block.Uncles()))
 			}
 			blockInsertTimer.UpdateSince(bstart)
-			events = append(events, ChainSideEvent{block, logs})
+			events = append(events, ChainSideEvent{block})
 
 		case SplitStatTy:
 			events = append(events, ChainSplitEvent{block, logs})
@@ -1062,24 +1062,25 @@ func countTransactions(chain []*types.Block) (c int) {
 // event about them
 func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	var (
-		newChain          types.Blocks
-		oldChain          types.Blocks
-		commonBlock       *types.Block
-		oldStart          = oldBlock
-		newStart          = newBlock
-		deletedTxs        types.Transactions
-		deletedLogs       vm.Logs
-		deletedLogsByHash = make(map[common.Hash]vm.Logs)
+		newChain    types.Blocks
+		oldChain    types.Blocks
+		commonBlock *types.Block
+		oldStart    = oldBlock
+		newStart    = newBlock
+		deletedTxs  types.Transactions
+		deletedLogs vm.Logs
 		// collectLogs collects the logs that were generated during the
 		// processing of the block that corresponds with the given hash.
 		// These logs are later announced as deleted.
 		collectLogs = func(h common.Hash) {
-			// Coalesce logs
+			// Coalesce logs and set 'Removed'.
 			receipts := GetBlockReceipts(self.chainDb, h, self.hc.GetBlockNumber(h))
 			for _, receipt := range receipts {
-				deletedLogs = append(deletedLogs, receipt.Logs...)
-
-				deletedLogsByHash[h] = receipt.Logs
+				for _, log := range receipt.Logs {
+					del := *log
+					del.Removed = true
+					deletedLogs = append(deletedLogs, &del)
+				}
 			}
 		}
 	)
@@ -1173,7 +1174,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(oldChain) > 0 {
 		go func() {
 			for _, block := range oldChain {
-				self.eventMux.Post(ChainSideEvent{Block: block, Logs: deletedLogsByHash[block.Hash()]})
+				self.eventMux.Post(ChainSideEvent{Block: block})
 			}
 		}()
 	}
