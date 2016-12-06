@@ -225,7 +225,11 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	from.SetBalance(common.MaxBig)
 	// Execute the call.
 	msg := callmsg{call}
-	vmenv := core.NewEnv(statedb, chainConfig, b.blockchain, msg, block.Header(), vm.Config{})
+
+	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain)
+	// Create a new environment which holds all relevant information
+	// about the transaction and calling mechanisms.
+	vmenv := vm.NewEnvironment(evmContext, statedb, chainConfig, vm.Config{})
 	gaspool := new(core.GasPool).AddGas(common.MaxBig)
 	ret, gasUsed, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
 	return ret, gasUsed, err

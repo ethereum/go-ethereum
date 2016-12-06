@@ -124,7 +124,7 @@ func (sw *stackWrapper) toValue(vm *otto.Otto) otto.Value {
 
 // dbWrapper provides a JS wrapper around vm.Database
 type dbWrapper struct {
-	db vm.Database
+	db vm.StateDB
 }
 
 // getBalance retrieves an account's balance
@@ -278,11 +278,11 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution
-func (jst *JavascriptTracer) CaptureState(env vm.Environment, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+func (jst *JavascriptTracer) CaptureState(env *vm.Environment, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	if jst.err == nil {
 		jst.memory.memory = memory
 		jst.stack.stack = stack
-		jst.db.db = env.Db()
+		jst.db.db = env.StateDB
 
 		ocw := &opCodeWrapper{op}
 

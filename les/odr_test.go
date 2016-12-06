@@ -115,12 +115,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
 			statedb, err := state.New(header.Root, db)
+
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(common.MaxBig)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data, false)}
-				vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
+
+				context := core.NewEVMContext(msg, header, bc)
+				vmenv := vm.NewEnvironment(context, statedb, config, vm.Config{})
+
+				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
@@ -128,16 +133,20 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewLightState(light.StateTrieID(header), lc.Odr())
+			vmstate := light.NewVMState(ctx, state)
 			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
 			if err == nil {
 				from.SetBalance(common.MaxBig)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data, false)}
 
-				vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
+				context := core.NewEVMContext(msg, header, lc)
+				vmenv := vm.NewEnvironment(context, vmstate, config, vm.Config{})
+
+				//vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
-				if vmenv.Error() == nil {
+				if vmstate.Error() == nil {
 					res = append(res, ret...)
 				}
 			}

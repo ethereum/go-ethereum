@@ -141,6 +141,15 @@ func (self *LightState) AddBalance(ctx context.Context, addr common.Address, amo
 	return err
 }
 
+// SubBalance adds the given amount to the balance of the specified account
+func (self *LightState) SubBalance(ctx context.Context, addr common.Address, amount *big.Int) error {
+	stateObject, err := self.GetOrNewStateObject(ctx, addr)
+	if err == nil && stateObject != nil {
+		stateObject.SubBalance(amount)
+	}
+	return err
+}
+
 // SetNonce sets the nonce of the specified account
 func (self *LightState) SetNonce(ctx context.Context, addr common.Address, nonce uint64) error {
 	stateObject, err := self.GetOrNewStateObject(ctx, addr)

@@ -88,7 +88,7 @@ func (b *LesApiBackend) GetTd(blockHash common.Hash) *big.Int {
 	return b.eth.blockchain.GetTdByHash(blockHash)
 }
 
-func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (vm.Environment, func() error, error) {
+func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header) (*vm.Environment, func() error, error) {
 	stateDb := state.(*light.LightState).Copy()
 	addr := msg.From()
 	from, err := stateDb.GetOrNewStateObject(ctx, addr)
@@ -96,8 +96,10 @@ func (b *LesApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state et
 		return nil, nil, err
 	}
 	from.SetBalance(common.MaxBig)
-	env := light.NewEnv(ctx, stateDb, b.eth.chainConfig, b.eth.blockchain, msg, header, vm.Config{})
-	return env, env.Error, nil
+
+	vmstate := light.NewVMState(ctx, stateDb)
+	context := core.NewEVMContext(msg, header, b.eth.blockchain)
+	return vm.NewEnvironment(context, vmstate, b.eth.chainConfig, vm.Config{}), vmstate.Error, nil
 }
 
 func (b *LesApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {

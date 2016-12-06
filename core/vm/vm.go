@@ -30,10 +30,17 @@ import (
 
 // Config are the configuration options for the EVM
 type Config struct {
-	Debug     bool
+	// Debug enabled debugging EVM options
+	Debug bool
+	// EnableJit enabled the JIT VM
 	EnableJit bool
-	ForceJit  bool
-	Tracer    Tracer
+	// ForceJit forces the JIT VM
+	ForceJit bool
+	// Tracer is the op code logger
+	Tracer Tracer
+	// NoRecursion disabled EVM call, callcode,
+	// delegate call and create.
+	NoRecursion bool
 }
 
 // EVM is used to run Ethereum based contracts and will utilise the
@@ -41,26 +48,26 @@ type Config struct {
 // The EVM will run the byte code VM or JIT VM based on the passed
 // configuration.
 type EVM struct {
-	env       Environment
+	env       *Environment
 	jumpTable vmJumpTable
 	cfg       Config
 	gasTable  params.GasTable
 }
 
 // New returns a new instance of the EVM.
-func New(env Environment, cfg Config) *EVM {
+func New(env *Environment, cfg Config) *EVM {
 	return &EVM{
 		env:       env,
-		jumpTable: newJumpTable(env.ChainConfig(), env.BlockNumber()),
+		jumpTable: newJumpTable(env.ChainConfig(), env.BlockNumber),
 		cfg:       cfg,
-		gasTable:  env.ChainConfig().GasTable(env.BlockNumber()),
+		gasTable:  env.ChainConfig().GasTable(env.BlockNumber),
 	}
 }
 
 // Run loops and evaluates the contract's code with the given input data
 func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
-	evm.env.SetDepth(evm.env.Depth() + 1)
-	defer evm.env.SetDepth(evm.env.Depth() - 1)
+	evm.env.Depth++
+	defer func() { evm.env.Depth-- }()
 
 	if contract.CodeAddr != nil {
 		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
@@ -117,10 +124,9 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		code       = contract.Code
 		instrCount = 0
 
-		op      OpCode         // current opcode
-		mem     = NewMemory()  // bound memory
-		stack   = newstack()   // local stack
-		statedb = evm.env.Db() // current state
+		op    OpCode        // current opcode
+		mem   = NewMemory() // bound memory
+		stack = newstack()  // local stack
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
 		pc = uint64(0) // program counter
@@ -146,7 +152,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), err)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth, err)
 		}
 	}()
 
@@ -174,7 +180,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		op = contract.GetOp(pc)
 		//fmt.Printf("OP %d %v\n", op, op)
 		// calculate the new memory size and gas price for the current executing opcode
-		newMemSize, cost, err = calculateGasAndSize(evm.gasTable, evm.env, contract, caller, op, statedb, mem, stack)
+		newMemSize, cost, err = calculateGasAndSize(evm.gasTable, evm.env, contract, caller, op, mem, stack)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +195,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		mem.Resize(newMemSize.Uint64())
 		// Add a log message
 		if evm.cfg.Debug {
-			err = evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth(), nil)
+			err = evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -242,7 +248,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 
 // calculateGasAndSize calculates the required given the opcode and stack items calculates the new memorysize for
 // the operation. This does not reduce gas or resizes the memory.
-func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Contract, caller ContractRef, op OpCode, statedb Database, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
+func calculateGasAndSize(gasTable params.GasTable, env *Environment, contract *Contract, caller ContractRef, op OpCode, mem *Memory, stack *Stack) (*big.Int, *big.Int, error) {
 	var (
 		gas                 = new(big.Int)
 		newMemSize *big.Int = new(big.Int)
@@ -260,21 +266,21 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 			gas.Set(gasTable.Suicide)
 			var (
 				address = common.BigToAddress(stack.data[len(stack.data)-1])
-				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
+				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber)
 			)
 
 			if eip158 {
 				// if empty and transfers value
-				if env.Db().Empty(address) && statedb.GetBalance(contract.Address()).BitLen() > 0 {
+				if env.StateDB.Empty(address) && env.StateDB.GetBalance(contract.Address()).BitLen() > 0 {
 					gas.Add(gas, gasTable.CreateBySuicide)
 				}
-			} else if !env.Db().Exist(address) {
+			} else if !env.StateDB.Exist(address) {
 				gas.Add(gas, gasTable.CreateBySuicide)
 			}
 		}
 
-		if !statedb.HasSuicided(contract.Address()) {
-			statedb.AddRefund(params.SuicideRefundGas)
+		if !env.StateDB.HasSuicided(contract.Address()) {
+			env.StateDB.AddRefund(params.SuicideRefundGas)
 		}
 	case EXTCODESIZE:
 		gas.Set(gasTable.ExtcodeSize)
@@ -323,7 +329,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
-		val := statedb.GetState(contract.Address(), common.BigToHash(x))
+		val := env.StateDB.GetState(contract.Address(), common.BigToHash(x))
 
 		// This checks for 3 scenario's and calculates gas accordingly
 		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
@@ -333,7 +339,7 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 			// 0 => non 0
 			g = params.SstoreSetGas
 		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
-			statedb.AddRefund(params.SstoreRefundGas)
+			env.StateDB.AddRefund(params.SstoreRefundGas)
 
 			g = params.SstoreClearGas
 		} else {
@@ -394,13 +400,13 @@ func calculateGasAndSize(gasTable params.GasTable, env Environment, contract *Co
 		if op == CALL {
 			var (
 				address = common.BigToAddress(stack.data[len(stack.data)-2])
-				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber())
+				eip158  = env.ChainConfig().IsEIP158(env.BlockNumber)
 			)
 			if eip158 {
-				if env.Db().Empty(address) && transfersValue {
+				if env.StateDB.Empty(address) && transfersValue {
 					gas.Add(gas, params.CallNewAccountGas)
 				}
-			} else if !env.Db().Exist(address) {
+			} else if !env.StateDB.Exist(address) {
 				gas.Add(gas, params.CallNewAccountGas)
 			}
 		}

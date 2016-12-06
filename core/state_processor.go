@@ -96,28 +96,36 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, msg, header, cfg), msg, gp)
+	// Create a new context to be used in the EVM environment
+	context := NewEVMContext(msg, header, bc)
+	// Create a new environment which holds all relevant information
+	// about the transaction and calling mechanisms.
+	vmenv := vm.NewEnvironment(context, statedb, config, vm.Config{})
+	// Apply the transaction to the current state (included in the env)
+	_, gas, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
+	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+	// based on the eip phase, we're passing wether the root touch-delete accounts.
 	receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
-	if MessageCreatesContract(msg) {
-		receipt.ContractAddress = crypto.CreateAddress(msg.From(), tx.Nonce())
+	// if the transaction created a contract, store the creation address in the receipt.
+	if msg.To() == nil {
+		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 	}
 
-	logs := statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
+	// Set the receipt logs and create a bloom for filtering
+	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
 
-	return receipt, logs, gas, err
+	return receipt, receipt.Logs, gas, err
 }
 
 // AccumulateRewards credits the coinbase of the given block with the

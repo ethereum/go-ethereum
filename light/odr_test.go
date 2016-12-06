@@ -157,6 +157,8 @@ func (callmsg) CheckNonce() bool { return false }
 func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) []byte {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
 
+	config := params.TestChainConfig
+
 	var res []byte
 	for i := 0; i < 3; i++ {
 		data[35] = byte(i)
@@ -168,7 +170,10 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 				from.SetBalance(common.MaxBig)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
-				vmenv := core.NewEnv(statedb, testChainConfig(), bc, msg, header, vm.Config{})
+
+				context := core.NewEVMContext(msg, header, bc)
+				vmenv := vm.NewEnvironment(context, statedb, config, vm.Config{})
+
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
@@ -176,15 +181,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := NewLightState(StateTrieID(header), lc.Odr())
+			vmstate := NewVMState(ctx, state)
 			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
 			if err == nil {
 				from.SetBalance(common.MaxBig)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
-				vmenv := NewEnv(ctx, state, testChainConfig(), lc, msg, header, vm.Config{})
+				context := core.NewEVMContext(msg, header, lc)
+				vmenv := vm.NewEnvironment(context, vmstate, config, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
-				if vmenv.Error() == nil {
+				if vmstate.Error() == nil {
 					res = append(res, ret...)
 				}
 			}

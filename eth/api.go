@@ -515,9 +515,11 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 		if err != nil {
 			return nil, fmt.Errorf("sender retrieval failed: %v", err)
 		}
+		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain())
+
 		// Mutate the state if we haven't reached the tracing transaction yet
 		if uint64(idx) < txIndex {
-			vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{})
+			vmenv := vm.NewEnvironment(context, stateDb, api.config, vm.Config{})
 			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				return nil, fmt.Errorf("mutation failed: %v", err)
@@ -525,8 +527,8 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 			stateDb.DeleteSuicides()
 			continue
 		}
-		// Otherwise trace the transaction and return
-		vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{Debug: true, Tracer: tracer})
+
+		vmenv := vm.NewEnvironment(context, stateDb, api.config, vm.Config{Debug: true, Tracer: tracer})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)

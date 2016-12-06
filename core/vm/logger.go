@@ -65,7 +65,7 @@ type StructLog struct {
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Tracer interface {
-	CaptureState(env Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
+	CaptureState(env *Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -94,7 +94,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 // captureState logs a new structured log message and pushes it out to the environment
 //
 // captureState also tracks SSTORE ops to track dirty values.
-func (l *StructLogger) CaptureState(env Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
+func (l *StructLogger) CaptureState(env *Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return TraceLimitReachedError
@@ -144,7 +144,7 @@ func (l *StructLogger) CaptureState(env Environment, pc uint64, op OpCode, gas, 
 			storage = make(Storage)
 			// Get the contract account and loop over each storage entry. This may involve looping over
 			// the trie and is a very expensive process.
-			env.Db().GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
+			env.StateDB.GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
 				storage[key] = value
 				// Return true, indicating we'd like to continue.
 				return true
@@ -155,7 +155,7 @@ func (l *StructLogger) CaptureState(env Environment, pc uint64, op OpCode, gas, 
 		}
 	}
 	// create a new snaptshot of the EVM.
-	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, env.Depth(), err}
+	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, env.Depth, err}
 
 	l.logs = append(l.logs, log)
 	return nil

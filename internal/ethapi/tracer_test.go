@@ -25,61 +25,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
-
-type Env struct {
-	gasLimit *big.Int
-	depth    int
-	evm      *vm.EVM
-}
-
-func NewEnv(config *vm.Config) *Env {
-	env := &Env{gasLimit: big.NewInt(10000), depth: 0}
-	env.evm = vm.New(env, *config)
-	return env
-}
-
-func (self *Env) ChainConfig() *params.ChainConfig {
-	return params.TestChainConfig
-}
-func (self *Env) Vm() vm.Vm              { return self.evm }
-func (self *Env) Origin() common.Address { return common.Address{} }
-func (self *Env) BlockNumber() *big.Int  { return big.NewInt(0) }
-
-//func (self *Env) PrevHash() []byte      { return self.parent }
-func (self *Env) Coinbase() common.Address { return common.Address{} }
-func (self *Env) SnapshotDatabase() int    { return 0 }
-func (self *Env) RevertToSnapshot(int)     {}
-func (self *Env) Time() *big.Int           { return big.NewInt(time.Now().Unix()) }
-func (self *Env) Difficulty() *big.Int     { return big.NewInt(0) }
-func (self *Env) Db() vm.Database          { return nil }
-func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
-func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
-func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
-}
-func (self *Env) AddLog(log *vm.Log) {
-}
-func (self *Env) Depth() int     { return self.depth }
-func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
-	return true
-}
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {}
-func (self *Env) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	return nil, nil
-}
-func (self *Env) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	return nil, nil
-}
-func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
-	return nil, common.Address{}, nil
-}
-func (self *Env) DelegateCall(me vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
-	return nil, nil
-}
 
 type account struct{}
 
@@ -91,17 +38,17 @@ func (account) SetBalance(*big.Int)                                 {}
 func (account) SetNonce(uint64)                                     {}
 func (account) Balance() *big.Int                                   { return nil }
 func (account) Address() common.Address                             { return common.Address{} }
-func (account) ReturnGas(*big.Int, *big.Int)                        {}
+func (account) ReturnGas(*big.Int)                                  {}
 func (account) SetCode(common.Hash, []byte)                         {}
 func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 
 func runTrace(tracer *JavascriptTracer) (interface{}, error) {
-	env := NewEnv(&vm.Config{Debug: true, Tracer: tracer})
+	env := vm.NewEnvironment(vm.Context{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
-	contract := vm.NewContract(account{}, account{}, big.NewInt(0), env.GasLimit(), big.NewInt(1))
+	contract := vm.NewContract(account{}, account{}, big.NewInt(0), big.NewInt(10000))
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
-	_, err := env.Vm().Run(contract, []byte{})
+	_, err := env.EVM().Run(contract, []byte{})
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +133,8 @@ func TestHaltBetweenSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	env := NewEnv(&vm.Config{Debug: true, Tracer: tracer})
-	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0), big.NewInt(0))
+	env := vm.NewEnvironment(vm.Context{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
+	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0))
 
 	tracer.CaptureState(env, 0, 0, big.NewInt(0), big.NewInt(0), nil, nil, contract, 0, nil)
 	timeout := errors.New("stahp")
