@@ -350,7 +350,7 @@ func (f *lightFetcher) request(p *peer, n *fetcherTreeNode, amount uint64) (uint
 		return 0, false
 	}
 
-	reqID := f.odr.getNextReqID()
+	reqID := getNextReqID()
 	n.requested = true
 	cost := p.GetRequestCost(GetBlockHeadersMsg, int(amount))
 	p.fcServer.SendRequest(reqID, cost)

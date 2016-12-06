@@ -338,13 +338,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	glog.V(logger.Debug).Infof("LES: register peer %v", p.id)
 	if pm.lightSync {
 		requestHeadersByHash := func(origin common.Hash, amount int, skip int, reverse bool) error {
-			reqID := pm.odr.getNextReqID()
+			reqID := getNextReqID()
 			cost := p.GetRequestCost(GetBlockHeadersMsg, amount)
 			p.fcServer.SendRequest(reqID, cost)
 			return p.RequestHeadersByHash(reqID, cost, origin, amount, skip, reverse)
 		}
 		requestHeadersByNumber := func(origin uint64, amount int, skip int, reverse bool) error {
-			reqID := pm.odr.getNextReqID()
+			reqID := getNextReqID()
 			cost := p.GetRequestCost(GetBlockHeadersMsg, amount)
 			p.fcServer.SendRequest(reqID, cost)
 			return p.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse)
