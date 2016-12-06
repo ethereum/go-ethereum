@@ -91,8 +91,8 @@ func NewAccountManager(keydir string, scryptN, scryptP int) *AccountManager {
 }
 
 // HasAddress reports whether a key with the given address is present.
-func (am *AccountManager) HasAddress(addr *Address) bool {
-	return am.manager.HasAddress(addr.address)
+func (am *AccountManager) HasAddress(address *Address) bool {
+	return am.manager.HasAddress(address.address)
 }
 
 // GetAccounts returns all key files present in the directory.
@@ -102,32 +102,32 @@ func (am *AccountManager) GetAccounts() *Accounts {
 
 // DeleteAccount deletes the key matched by account if the passphrase is correct.
 // If a contains no filename, the address must match a unique key.
-func (am *AccountManager) DeleteAccount(a *Account, passphrase string) error {
+func (am *AccountManager) DeleteAccount(account *Account, passphrase string) error {
 	return am.manager.DeleteAccount(accounts.Account{
-		Address: a.account.Address,
-		File:    a.account.File,
+		Address: account.account.Address,
+		File:    account.account.File,
 	}, passphrase)
 }
 
 // Sign signs hash with an unlocked private key matching the given address.
-func (am *AccountManager) Sign(addr *Address, hash []byte) (signature []byte, _ error) {
-	return am.manager.Sign(addr.address, hash)
+func (am *AccountManager) Sign(address *Address, hash []byte) (signature []byte, _ error) {
+	return am.manager.Sign(address.address, hash)
 }
 
 // SignWithPassphrase signs hash if the private key matching the given address can be
 // decrypted with the given passphrase.
-func (am *AccountManager) SignWithPassphrase(addr *Address, passphrase string, hash []byte) (signature []byte, _ error) {
-	return am.manager.SignWithPassphrase(addr.address, passphrase, hash)
+func (am *AccountManager) SignWithPassphrase(address *Address, passphrase string, hash []byte) (signature []byte, _ error) {
+	return am.manager.SignWithPassphrase(address.address, passphrase, hash)
 }
 
 // Unlock unlocks the given account indefinitely.
-func (am *AccountManager) Unlock(a *Account, passphrase string) error {
-	return am.manager.TimedUnlock(a.account, passphrase, 0)
+func (am *AccountManager) Unlock(account *Account, passphrase string) error {
+	return am.manager.TimedUnlock(account.account, passphrase, 0)
 }
 
 // Lock removes the private key with the given address from memory.
-func (am *AccountManager) Lock(addr *Address) error {
-	return am.manager.Lock(addr.address)
+func (am *AccountManager) Lock(address *Address) error {
+	return am.manager.Lock(address.address)
 }
 
 // TimedUnlock unlocks the given account with the passphrase. The account
@@ -152,8 +152,8 @@ func (am *AccountManager) NewAccount(passphrase string) (*Account, error) {
 }
 
 // ExportKey exports as a JSON key, encrypted with newPassphrase.
-func (am *AccountManager) ExportKey(a *Account, passphrase, newPassphrase string) (key []byte, _ error) {
-	return am.manager.Export(a.account, passphrase, newPassphrase)
+func (am *AccountManager) ExportKey(account *Account, passphrase, newPassphrase string) (key []byte, _ error) {
+	return am.manager.Export(account.account, passphrase, newPassphrase)
 }
 
 // ImportKey stores the given encrypted JSON key into the key directory.
@@ -166,8 +166,8 @@ func (am *AccountManager) ImportKey(keyJSON []byte, passphrase, newPassphrase st
 }
 
 // Update changes the passphrase of an existing account.
-func (am *AccountManager) Update(a *Account, passphrase, newPassphrase string) error {
-	return am.manager.Update(a.account, passphrase, newPassphrase)
+func (am *AccountManager) Update(account *Account, passphrase, newPassphrase string) error {
+	return am.manager.Update(account.account, passphrase, newPassphrase)
 }
 
 // ImportPreSaleKey decrypts the given Ethereum presale wallet and stores
