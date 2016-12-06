@@ -31,15 +31,15 @@ import (
 // Signer is an interaface defining the callback when a contract requires a
 // method to sign the transaction before submission.
 type Signer interface {
-	Sign(*Address, *Transaction) (*Transaction, error)
+	Sign(*Address, *Transaction) (tx *Transaction, _ error)
 }
 
 type signer struct {
 	sign bind.SignerFn
 }
 
-func (s *signer) Sign(addr *Address, tx *Transaction) (*Transaction, error) {
-	sig, err := s.sign(types.HomesteadSigner{}, addr.address, tx.tx)
+func (s *signer) Sign(addr *Address, unsignedTx *Transaction) (signedTx *Transaction, _ error) {
+	sig, err := s.sign(types.HomesteadSigner{}, addr.address, unsignedTx.tx)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ type BoundContract struct {
 
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a wrapper.
-func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client *EthereumClient, args *Interfaces) (*BoundContract, error) {
+func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client *EthereumClient, args *Interfaces) (contract *BoundContract, _ error) {
 	// Convert all the deployment parameters to Go types
 	params := make([]interface{}, len(args.objects))
 	for i, obj := range args.objects {
@@ -137,7 +137,7 @@ func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client 
 
 // BindContract creates a low level contract interface through which calls and
 // transactions may be made through.
-func BindContract(address *Address, abiJSON string, client *EthereumClient) (*BoundContract, error) {
+func BindContract(address *Address, abiJSON string, client *EthereumClient) (contract *BoundContract, _ error) {
 	parsed, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, err
@@ -179,24 +179,24 @@ func (c *BoundContract) Call(opts *CallOpts, out *Interfaces, method string, arg
 }
 
 // Transact invokes the (paid) contract method with params as input values.
-func (c *BoundContract) Transact(opts *TransactOpts, method string, args *Interfaces) (*Transaction, error) {
+func (c *BoundContract) Transact(opts *TransactOpts, method string, args *Interfaces) (tx *Transaction, _ error) {
 	params := make([]interface{}, len(args.objects))
 	for i, obj := range args.objects {
 		params[i] = obj
 	}
-	tx, err := c.contract.Transact(&opts.opts, method, params)
+	rawTx, err := c.contract.Transact(&opts.opts, method, params)
 	if err != nil {
 		return nil, err
 	}
-	return &Transaction{tx}, nil
+	return &Transaction{rawTx}, nil
 }
 
 // Transfer initiates a plain transaction to move funds to the contract, calling
 // its default method if one is available.
-func (c *BoundContract) Transfer(opts *TransactOpts) (*Transaction, error) {
-	tx, err := c.contract.Transfer(&opts.opts)
+func (c *BoundContract) Transfer(opts *TransactOpts) (tx *Transaction, _ error) {
+	rawTx, err := c.contract.Transfer(&opts.opts)
 	if err != nil {
 		return nil, err
 	}
-	return &Transaction{tx}, nil
+	return &Transaction{rawTx}, nil
 }

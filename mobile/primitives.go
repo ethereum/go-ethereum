@@ -32,7 +32,7 @@ func (s *Strings) Size() int {
 }
 
 // Get returns the string at the given index from the slice.
-func (s *Strings) Get(index int) (string, error) {
+func (s *Strings) Get(index int) (str string, _ error) {
 	if index < 0 || index >= len(s.strs) {
 		return "", errors.New("index out of bounds")
 	}
