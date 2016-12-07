@@ -51,7 +51,7 @@ type Whisper struct {
 	symKeys     map[string][]byte
 	keyMu       sync.RWMutex
 
-	envelopes   map[common.Hash]*Envelope        // Pool of messages currently tracked by this node
+	envelopes   map[common.Hash]*Envelope        // Pool of envelopes currently tracked by this node
 	messages    map[common.Hash]*ReceivedMessage // Pool of successfully decrypted messages, which are not expired yet
 	expirations map[uint32]*set.SetNonTS         // Message expiration pool
 	poolMu      sync.RWMutex                     // Mutex to sync the message and expiration pools
@@ -64,7 +64,8 @@ type Whisper struct {
 	messageQueue chan QueueItem
 	quit         chan struct{}
 
-	test bool
+	overflow bool
+	test     bool
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -78,7 +79,7 @@ func NewWhisper(server MailServer) *Whisper {
 		expirations:  make(map[uint32]*set.SetNonTS),
 		peers:        make(map[*Peer]struct{}),
 		mailServer:   server,
-		messageQueue: make(chan QueueItem, 1024),
+		messageQueue: make(chan QueueItem, messageQueueLimit),
 		quit:         make(chan struct{}),
 	}
 	whisper.filters = NewFilters(whisper)
@@ -397,7 +398,7 @@ func (wh *Whisper) add(envelope *Envelope) error {
 
 	if sent > now {
 		if sent-SynchAllowance > now {
-			return fmt.Errorf("message created in the future")
+			return fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
 		} else {
 			// recalculate PoW, adjusted for the time difference, plus one second for latency
 			envelope.calculatePoW(sent - now + 1)
@@ -408,30 +409,31 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		if envelope.Expiry+SynchAllowance*2 < now {
 			return fmt.Errorf("very old message")
 		} else {
+			glog.V(logger.Debug).Infof("expired envelope dropped [%x]", envelope.Hash())
 			return nil // drop envelope without error
 		}
 	}
 
 	if len(envelope.Data) > MaxMessageLength {
-		return fmt.Errorf("huge messages are not allowed")
+		return fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
 	if len(envelope.Version) > 4 {
-		return fmt.Errorf("oversized Version")
+		return fmt.Errorf("oversized version [%x]", envelope.Hash())
 	}
 
 	if len(envelope.AESNonce) > AESNonceMaxLength {
 		// the standard AES GSM nonce size is 12,
 		// but const gcmStandardNonceSize cannot be accessed directly
-		return fmt.Errorf("oversized AESNonce")
+		return fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
 	}
 
 	if len(envelope.Salt) > saltLength {
-		return fmt.Errorf("oversized Salt")
+		return fmt.Errorf("oversized salt [%x]", envelope.Hash())
 	}
 
 	if envelope.PoW() < MinimumPoW && !wh.test {
-		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f", envelope.PoW())
+		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash())
 		return nil // drop envelope without error
 	}
 
@@ -451,10 +453,10 @@ func (wh *Whisper) add(envelope *Envelope) error {
 	wh.poolMu.Unlock()
 
 	if alreadyCached {
-		glog.V(logger.Detail).Infof("whisper envelope already cached: %x\n", envelope)
+		glog.V(logger.Detail).Infof("whisper envelope already cached [%x]\n", envelope.Hash())
 	} else {
+		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
 		wh.postEvent(envelope, messagesCode) // notify the local node about the new message
-		glog.V(logger.Detail).Infof("cached whisper envelope %v\n", envelope)
 	}
 	return nil
 }
@@ -465,8 +467,25 @@ func (w *Whisper) postEvent(envelope *Envelope, messageCode uint64) {
 	// currently supported version, we can not decrypt it,
 	// and therefore just ignore this message
 	if envelope.Ver() <= EnvelopeVersion {
+		w.checkOverflow()
 		i := QueueItem{hash: envelope.Hash(), code: messageCode}
 		w.messageQueue <- i
+	}
+}
+
+// checkOverflow checks if message queue overflow occurs and reports it if necessary.
+func (w *Whisper) checkOverflow() {
+	queueSize := len(w.messageQueue)
+
+	if queueSize == messageQueueLimit {
+		if !w.overflow {
+			w.overflow = true
+			glog.V(logger.Warn).Infoln("message queue overflow")
+		}
+	} else if queueSize <= messageQueueLimit/2 {
+		if w.overflow {
+			w.overflow = false
+		}
 	}
 }
 

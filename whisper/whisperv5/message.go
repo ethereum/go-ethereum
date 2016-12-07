@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains the Whisper protocol Message element. For formal details please see
-// the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
-// todo: fix the spec link, and move it to doc.go
+// Contains the Whisper protocol Message element.
 
 package whisperv5
 
@@ -256,7 +254,11 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	}
 
 	envelope = NewEnvelope(options.TTL, options.Topic, salt, nonce, msg)
-	envelope.Seal(options)
+	err = envelope.Seal(options)
+	if err != nil {
+		return nil, err
+	}
+
 	return envelope, nil
 }
 
