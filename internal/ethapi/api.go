@@ -1273,8 +1273,12 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sig
 
 // PendingTransactions returns the transactions that are in the transaction pool and have a from address that is one of
 // the accounts this node manages.
-func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
-	pending := s.b.GetPoolTransactions()
+func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, error) {
+	pending, err := s.b.GetPoolTransactions()
+	if err != nil {
+		return nil, err
+	}
+
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
@@ -1286,13 +1290,17 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
 			transactions = append(transactions, newRPCPendingTransaction(tx))
 		}
 	}
-	return transactions
+	return transactions, nil
 }
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove the given transaction from the
 // pool and reinsert it with the new gas price and limit.
 func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, tx Tx, gasPrice, gasLimit *rpc.HexNumber) (common.Hash, error) {
-	pending := s.b.GetPoolTransactions()
+	pending, err := s.b.GetPoolTransactions()
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	for _, p := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
 		if p.Protected() {
