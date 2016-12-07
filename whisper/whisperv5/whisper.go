@@ -22,6 +22,7 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -34,6 +35,11 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 	set "gopkg.in/fatih/set.v0"
 )
+
+type QueueItem struct {
+	hash common.Hash
+	code uint64
+}
 
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
@@ -55,7 +61,9 @@ type Whisper struct {
 
 	mailServer MailServer
 
-	quit chan struct{}
+	messageQueue chan QueueItem
+	quit         chan struct{}
+
 	test bool
 }
 
@@ -63,14 +71,15 @@ type Whisper struct {
 // Param s should be passed if you want to implement mail server, otherwise nil.
 func NewWhisper(server MailServer) *Whisper {
 	whisper := &Whisper{
-		privateKeys: make(map[string]*ecdsa.PrivateKey),
-		symKeys:     make(map[string][]byte),
-		envelopes:   make(map[common.Hash]*Envelope),
-		messages:    make(map[common.Hash]*ReceivedMessage),
-		expirations: make(map[uint32]*set.SetNonTS),
-		peers:       make(map[*Peer]struct{}),
-		mailServer:  server,
-		quit:        make(chan struct{}),
+		privateKeys:  make(map[string]*ecdsa.PrivateKey),
+		symKeys:      make(map[string][]byte),
+		envelopes:    make(map[common.Hash]*Envelope),
+		messages:     make(map[common.Hash]*ReceivedMessage),
+		expirations:  make(map[uint32]*set.SetNonTS),
+		peers:        make(map[*Peer]struct{}),
+		mailServer:   server,
+		messageQueue: make(chan QueueItem, 1024),
+		quit:         make(chan struct{}),
 	}
 	whisper.filters = NewFilters(whisper)
 
@@ -270,6 +279,12 @@ func (w *Whisper) Send(envelope *Envelope) error {
 func (w *Whisper) Start(*p2p.Server) error {
 	glog.V(logger.Info).Infoln("Whisper started")
 	go w.update()
+
+	numCPU := runtime.NumCPU()
+	for i := 0; i < numCPU; i++ {
+		go w.processQueue()
+	}
+
 	return nil
 }
 
@@ -444,14 +459,30 @@ func (wh *Whisper) add(envelope *Envelope) error {
 	return nil
 }
 
-// postEvent delivers the message to the watchers.
+// postEvent queues the message for further processing.
 func (w *Whisper) postEvent(envelope *Envelope, messageCode uint64) {
 	// if the version of incoming message is higher than
 	// currently supported version, we can not decrypt it,
 	// and therefore just ignore this message
 	if envelope.Ver() <= EnvelopeVersion {
-		// todo: review if you need an additional thread here
-		go w.filters.NotifyWatchers(envelope, messageCode)
+		i := QueueItem{hash: envelope.Hash(), code: messageCode}
+		w.messageQueue <- i
+	}
+}
+
+// processQueue delivers the messages to the watchers during the lifetime of the whisper node.
+func (w *Whisper) processQueue() {
+	for {
+		select {
+		case <-w.quit:
+			return
+
+		case i := <-w.messageQueue:
+			w.poolMu.Lock()
+			e := w.envelopes[i.hash]
+			w.poolMu.Unlock()
+			w.filters.NotifyWatchers(e, i.code)
+		}
 	}
 }
 
