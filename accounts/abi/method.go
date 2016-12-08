@@ -117,7 +117,7 @@ func (m Method) String() string {
 	if m.Payable {
 		payable = "payable "
 	}
-	return fmt.Sprintf("function %v(%v) %sreturns(%v)", m.Name, strings.Join(inputs, ", "), constant, payable, strings.Join(outputs, ", "))
+	return fmt.Sprintf("function %v(%v)%s %sreturns(%v)", m.Name, strings.Join(inputs, ", "), constant, payable, strings.Join(outputs, ", "))
 }
 
 func (m Method) Id() []byte {
