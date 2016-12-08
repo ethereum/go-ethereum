@@ -93,7 +93,7 @@ func (t *Topics) Size() int {
 }
 
 // Get returns the topic list at the given index from the slice.
-func (t *Topics) Get(index int) (*Hashes, error) {
+func (t *Topics) Get(index int) (hashes *Hashes, _ error) {
 	if index < 0 || index >= len(t.topics) {
 		return nil, errors.New("index out of bounds")
 	}

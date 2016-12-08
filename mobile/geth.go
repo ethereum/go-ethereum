@@ -99,7 +99,7 @@ type Node struct {
 }
 
 // NewNode creates and configures a new Geth node.
-func NewNode(datadir string, config *NodeConfig) (*Node, error) {
+func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -124,7 +124,7 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 		NAT:              nat.Any(),
 		MaxPeers:         config.MaxPeers,
 	}
-	stack, err := node.New(nodeConf)
+	rawStack, err := node.New(nodeConf)
 	if err != nil {
 		return nil, err
 	}
@@ -153,14 +153,14 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 			GpobaseStepUp:           100,
 			GpobaseCorrectionFactor: 110,
 		}
-		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)
 		}); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
-			if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 				var lesServ *les.LightEthereum
 				ctx.Service(&lesServ)
 
@@ -172,11 +172,11 @@ func NewNode(datadir string, config *NodeConfig) (*Node, error) {
 	}
 	// Register the Whisper protocol if requested
 	if config.WhisperEnabled {
-		if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisperv2.New(), nil }); err != nil {
+		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) { return whisperv2.New(), nil }); err != nil {
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
-	return &Node{stack}, nil
+	return &Node{rawStack}, nil
 }
 
 // Start creates a live P2P node and starts running it.
@@ -191,7 +191,7 @@ func (n *Node) Stop() error {
 }
 
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.
-func (n *Node) GetEthereumClient() (*EthereumClient, error) {
+func (n *Node) GetEthereumClient() (client *EthereumClient, _ error) {
 	rpc, err := n.node.Attach()
 	if err != nil {
 		return nil, err

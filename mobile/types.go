@@ -89,7 +89,7 @@ func (h *Headers) Size() int {
 }
 
 // Get returns the header at the given index from the slice.
-func (h *Headers) Get(index int) (*Header, error) {
+func (h *Headers) Get(index int) (header *Header, _ error) {
 	if index < 0 || index >= len(h.headers) {
 		return nil, errors.New("index out of bounds")
 	}
@@ -142,7 +142,7 @@ func (tx *Transaction) GetHash() *Hash    { return &Hash{tx.tx.Hash()} }
 func (tx *Transaction) GetSigHash() *Hash { return &Hash{tx.tx.SigHash(types.HomesteadSigner{})} }
 func (tx *Transaction) GetCost() *BigInt  { return &BigInt{tx.tx.Cost()} }
 
-func (tx *Transaction) GetFrom() (*Address, error) {
+func (tx *Transaction) GetFrom() (address *Address, _ error) {
 	from, err := types.Sender(types.HomesteadSigner{}, tx.tx)
 	return &Address{from}, err
 }
@@ -154,25 +154,25 @@ func (tx *Transaction) GetTo() *Address {
 	return nil
 }
 
-func (tx *Transaction) WithSignature(sig []byte) (*Transaction, error) {
-	t, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
-	return &Transaction{t}, err
+func (tx *Transaction) WithSignature(sig []byte) (signedTx *Transaction, _ error) {
+	rawTx, err := tx.tx.WithSignature(types.HomesteadSigner{}, sig)
+	return &Transaction{rawTx}, err
 }
 
 // Transactions represents a slice of transactions.
 type Transactions struct{ txs types.Transactions }
 
 // Size returns the number of transactions in the slice.
-func (t *Transactions) Size() int {
-	return len(t.txs)
+func (txs *Transactions) Size() int {
+	return len(txs.txs)
 }
 
 // Get returns the transaction at the given index from the slice.
-func (t *Transactions) Get(index int) (*Transaction, error) {
-	if index < 0 || index >= len(t.txs) {
+func (txs *Transactions) Get(index int) (tx *Transaction, _ error) {
+	if index < 0 || index >= len(txs.txs) {
 		return nil, errors.New("index out of bounds")
 	}
-	return &Transaction{t.txs[index]}, nil
+	return &Transaction{txs.txs[index]}, nil
 }
 
 // Receipt represents the results of a transaction.

@@ -48,7 +48,7 @@ func (l *Logs) Size() int {
 }
 
 // Get returns the log at the given index from the slice.
-func (l *Logs) Get(index int) (*Log, error) {
+func (l *Logs) Get(index int) (log *Log, _ error) {
 	if index < 0 || index >= len(l.logs) {
 		return nil, errors.New("index out of bounds")
 	}

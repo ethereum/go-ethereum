@@ -53,7 +53,7 @@ type Enode struct {
 // and UDP discovery port 30301.
 //
 //    enode://<hex node id>@10.3.58.6:30303?discport=30301
-func NewEnode(rawurl string) (*Enode, error) {
+func NewEnode(rawurl string) (enode *Enode, _ error) {
 	node, err := discv5.ParseNode(rawurl)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (e *Enodes) Size() int {
 }
 
 // Get returns the enode at the given index from the slice.
-func (e *Enodes) Get(index int) (*Enode, error) {
+func (e *Enodes) Get(index int) (enode *Enode, _ error) {
 	if index < 0 || index >= len(e.nodes) {
 		return nil, errors.New("index out of bounds")
 	}

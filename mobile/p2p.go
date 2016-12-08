@@ -66,7 +66,7 @@ func (pi *PeerInfos) Size() int {
 }
 
 // Get returns the peer info at the given index from the slice.
-func (pi *PeerInfos) Get(index int) (*PeerInfo, error) {
+func (pi *PeerInfos) Get(index int) (info *PeerInfo, _ error) {
 	if index < 0 || index >= len(pi.infos) {
 		return nil, errors.New("index out of bounds")
 	}

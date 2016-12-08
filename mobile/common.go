@@ -33,18 +33,18 @@ type Hash struct {
 }
 
 // NewHashFromBytes converts a slice of bytes to a hash value.
-func NewHashFromBytes(hash []byte) (*Hash, error) {
+func NewHashFromBytes(binary []byte) (hash *Hash, _ error) {
 	h := new(Hash)
-	if err := h.SetBytes(hash); err != nil {
+	if err := h.SetBytes(binary); err != nil {
 		return nil, err
 	}
 	return h, nil
 }
 
 // NewHashFromHex converts a hex string to a hash value.
-func NewHashFromHex(hash string) (*Hash, error) {
+func NewHashFromHex(hex string) (hash *Hash, _ error) {
 	h := new(Hash)
-	if err := h.SetHex(hash); err != nil {
+	if err := h.SetHex(hex); err != nil {
 		return nil, err
 	}
 	return h, nil
@@ -95,7 +95,7 @@ func (h *Hashes) Size() int {
 }
 
 // Get returns the hash at the given index from the slice.
-func (h *Hashes) Get(index int) (*Hash, error) {
+func (h *Hashes) Get(index int) (hash *Hash, _ error) {
 	if index < 0 || index >= len(h.hashes) {
 		return nil, errors.New("index out of bounds")
 	}
@@ -108,18 +108,18 @@ type Address struct {
 }
 
 // NewAddressFromBytes converts a slice of bytes to a hash value.
-func NewAddressFromBytes(address []byte) (*Address, error) {
+func NewAddressFromBytes(binary []byte) (address *Address, _ error) {
 	a := new(Address)
-	if err := a.SetBytes(address); err != nil {
+	if err := a.SetBytes(binary); err != nil {
 		return nil, err
 	}
 	return a, nil
 }
 
 // NewAddressFromHex converts a hex string to a address value.
-func NewAddressFromHex(address string) (*Address, error) {
+func NewAddressFromHex(hex string) (address *Address, _ error) {
 	a := new(Address)
-	if err := a.SetHex(address); err != nil {
+	if err := a.SetHex(hex); err != nil {
 		return nil, err
 	}
 	return a, nil
@@ -170,7 +170,7 @@ func (a *Addresses) Size() int {
 }
 
 // Get returns the address at the given index from the slice.
-func (a *Addresses) Get(index int) (*Address, error) {
+func (a *Addresses) Get(index int) (address *Address, _ error) {
 	if index < 0 || index >= len(a.addresses) {
 		return nil, errors.New("index out of bounds")
 	}
