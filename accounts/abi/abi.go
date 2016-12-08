@@ -348,6 +348,7 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		Type     string
 		Name     string
 		Constant bool
+		Payable  bool
 		Indexed  bool
 		Inputs   []Argument
 		Outputs  []Argument
@@ -363,13 +364,15 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 		switch field.Type {
 		case "constructor":
 			abi.Constructor = Method{
-				Inputs: field.Inputs,
+				Inputs:  field.Inputs,
+				Payable: field.Payable,
 			}
 		// empty defaults to function according to the abi spec
 		case "function", "":
 			abi.Methods[field.Name] = Method{
 				Name:    field.Name,
 				Const:   field.Constant,
+				Payable: field.Payable,
 				Inputs:  field.Inputs,
 				Outputs: field.Outputs,
 			}

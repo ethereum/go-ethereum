@@ -31,10 +31,14 @@ import (
 // from the storage and therefor requires no Tx to be send to the
 // network. A method such as `Transact` does require a Tx and thus will
 // be flagged `true`.
+// If the method is `Payable` then ether can be sent along to the contract
+// with the method call. In the event that it is not `Payable` and ether
+// is sent along with the call, the method will throw and not execute the call.
 // Input specifies the required input parameters for this gives method.
 type Method struct {
 	Name    string
 	Const   bool
+	Payable bool
 	Inputs  []Argument
 	Outputs []Argument
 }
@@ -106,11 +110,14 @@ func (m Method) String() string {
 		}
 		outputs[i] += output.Type.String()
 	}
-	constant := ""
+	constant, payable := "", ""
 	if m.Const {
 		constant = "constant "
 	}
-	return fmt.Sprintf("function %v(%v) %sreturns(%v)", m.Name, strings.Join(inputs, ", "), constant, strings.Join(outputs, ", "))
+	if m.Payable {
+		payable = "payable "
+	}
+	return fmt.Sprintf("function %v(%v) %sreturns(%v)", m.Name, strings.Join(inputs, ", "), constant, payable, strings.Join(outputs, ", "))
 }
 
 func (m Method) Id() []byte {
