@@ -47,7 +47,7 @@ func main() {
 
 	var (
 		file   = flag.Arg(0)
-		client = &client{api: *bzzapiFlag}
+		client = &client{api: strings.TrimSuffix(*bzzapiFlag, "/")}
 		mroot  manifest
 	)
 	fi, err := os.Stat(file)
