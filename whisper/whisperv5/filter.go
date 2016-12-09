@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 type Filter struct {
@@ -82,8 +83,9 @@ func (fs *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
 
 	fs.mutex.RLock()
 	var msg *ReceivedMessage
-	for _, watcher := range fs.watchers {
+	for j, watcher := range fs.watchers {
 		if messageCode == p2pCode && !watcher.AcceptP2P {
+			glog.V(9).Infof("msg [%x], filter [%d]: p2p messages are not allowed \n", env.Hash(), j)
 			continue
 		}
 
@@ -94,6 +96,11 @@ func (fs *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
 			match = watcher.MatchEnvelope(env)
 			if match {
 				msg = env.Open(watcher)
+				if msg == nil {
+					glog.V(9).Infof("msg [%x], filter [%d]: failed to open \n", env.Hash(), j)
+				}
+			} else {
+				glog.V(9).Infof("msg [%x], filter [%d]: does not match \n", env.Hash(), j)
 			}
 		}
 
@@ -141,12 +148,12 @@ func (f *Filter) MatchMessage(msg *ReceivedMessage) bool {
 	if f.PoW > 0 && msg.PoW < f.PoW {
 		return false
 	}
-	if f.Src != nil && !isPubKeyEqual(msg.Src, f.Src) {
+	if f.Src != nil && !IsPubKeyEqual(msg.Src, f.Src) {
 		return false
 	}
 
 	if f.expectsAsymmetricEncryption() && msg.isAsymmetricEncryption() {
-		return isPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
+		return IsPubKeyEqual(&f.KeyAsym.PublicKey, msg.Dst) && f.MatchTopic(msg.Topic)
 	} else if f.expectsSymmetricEncryption() && msg.isSymmetricEncryption() {
 		return f.SymKeyHash == msg.SymKeyHash && f.MatchTopic(msg.Topic)
 	}
@@ -180,7 +187,7 @@ func (f *Filter) MatchTopic(topic TopicType) bool {
 	return false
 }
 
-func isPubKeyEqual(a, b *ecdsa.PublicKey) bool {
+func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	if !ValidatePublicKey(a) {
 		return false
 	} else if !ValidatePublicKey(b) {

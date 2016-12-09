@@ -116,7 +116,7 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 	if len(decrypted.Signature) != signatureLength {
 		t.Fatalf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 	}
-	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
+	if !IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
 		t.Fatalf("failed with seed %d: signature mismatch.", seed)
 	}
 }
@@ -268,7 +268,7 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 	if len(decrypted.Signature) != signatureLength {
 		t.Fatalf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 	}
-	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
+	if !IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
 		t.Fatalf("failed with seed %d: signature mismatch.", seed)
 	}
 	if decrypted.isAsymmetricEncryption() == symmetric {
@@ -281,7 +281,7 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 		if decrypted.Dst == nil {
 			t.Fatalf("failed with seed %d: dst is nil.", seed)
 		}
-		if !isPubKeyEqual(decrypted.Dst, &key.PublicKey) {
+		if !IsPubKeyEqual(decrypted.Dst, &key.PublicKey) {
 			t.Fatalf("failed with seed %d: Dst.", seed)
 		}
 	}
