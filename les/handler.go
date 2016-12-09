@@ -267,9 +267,9 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	} else {
 		if topicDisc != nil {
 			go func() {
-				glog.V(logger.Debug).Infoln("Starting registering topic", string(lesTopic))
+				glog.V(logger.Info).Infoln("Starting registering topic", string(lesTopic))
 				topicDisc.RegisterTopic(lesTopic, pm.quitSync)
-				glog.V(logger.Debug).Infoln("Stopped registering topic", string(lesTopic))
+				glog.V(logger.Info).Infoln("Stopped registering topic", string(lesTopic))
 			}()
 		}
 		go func() {

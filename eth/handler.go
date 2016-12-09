@@ -87,6 +87,8 @@ type ProtocolManager struct {
 	quitSync    chan struct{}
 	noMorePeers chan struct{}
 
+	lesServer LesServer
+
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
@@ -171,7 +173,7 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 		return blockchain.CurrentBlock().NumberU64()
 	}
 	inserter := func(blocks types.Blocks) (int, error) {
-		atomic.StoreUint32(&manager.synced, 1) // Mark initial sync done on any fetcher import
+		manager.setSynced() // Mark initial sync done on any fetcher import
 		return manager.insertChain(blocks)
 	}
 	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
