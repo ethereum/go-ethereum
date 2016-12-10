@@ -25,7 +25,8 @@ Section "Uninstall"
   ${un.EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"
 
   # Remove install directory from PATH
-  ${un.EnvVarUpdate} $0 "PATH" "R" "HKLM" $INSTDIR
+  Push "$INSTDIR"
+  Call un.RemoveFromPath
 
   # Cleanup registry (deletes all sub keys)
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${GROUPNAME} ${APPNAME}"

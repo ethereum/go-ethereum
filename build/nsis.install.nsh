@@ -37,8 +37,9 @@ Section "Geth" GETH_IDX
   ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\geth.ipc"
   ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "A" "HKLM" "\\.\pipe\geth.ipc"
 
-  # Add geth to PATH
-  ${EnvVarUpdate} $0 "PATH" "A" "HKLM" $INSTDIR
+  # Add instdir to PATH
+  Push "$INSTDIR"
+  Call AddToPath
 SectionEnd
 
 # Install optional develop tools.
