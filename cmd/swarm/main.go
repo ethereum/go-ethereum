@@ -43,11 +43,14 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-const clientIdentifier = "bzzd"
+const (
+	clientIdentifier = "swarm"
+	versionString    = "0.2"
+)
 
 var (
 	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-	app       = utils.NewApp(gitCommit, "Ethereum Swarm server daemon")
+	app       = utils.NewApp(gitCommit, "Ethereum Swarm")
 )
 
 var (
@@ -85,6 +88,19 @@ var (
 		Usage: "URL of the Ethereum API provider",
 		Value: node.DefaultIPCEndpoint("geth"),
 	}
+	SwarmApiFlag = cli.StringFlag{
+		Name:  "bzzapi",
+		Usage: "Swarm HTTP endpoint",
+		Value: "http://127.0.0.1:8500",
+	}
+	SwarmRecursiveUploadFlag = cli.BoolFlag{
+		Name:  "recursive",
+		Usage: "Upload directories recursively",
+	}
+	SwarmWantManifestFlag = cli.BoolTFlag{
+		Name:  "manifest",
+		Usage: "Automatic manifest upload",
+	}
 )
 
 var defaultBootnodes = []string{}
@@ -96,8 +112,39 @@ func init() {
 	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, web3"
 
 	// Set up the cli app.
-	app.Commands = nil
 	app.Action = bzzd
+	app.HideVersion = true // we have a command to print the version
+	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
+	app.Commands = []cli.Command{
+		cli.Command{
+			Action:    version,
+			Name:      "version",
+			Usage:     "Print version numbers",
+			ArgsUsage: " ",
+			Description: `
+The output of this command is supposed to be machine-readable.
+`,
+		},
+		cli.Command{
+			Action:    upload,
+			Name:      "up",
+			Usage:     "upload a file or directory to swarm using the HTTP API",
+			ArgsUsage: " <file>",
+			Description: `
+"upload a file or directory to swarm using the HTTP API and prints the root hash",
+`,
+		},
+		cli.Command{
+			Action:    hash,
+			Name:      "hash",
+			Usage:     "print the swarm hash of a file or directory",
+			ArgsUsage: " <file>",
+			Description: `
+Prints the swarm hash of file or directory.
+`,
+		},
+	}
+
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
 		utils.DataDirFlag,
@@ -123,6 +170,10 @@ func init() {
 		SwarmAccountFlag,
 		SwarmNetworkIdFlag,
 		ChequebookAddrFlag,
+		// upload flags
+		SwarmApiFlag,
+		SwarmRecursiveUploadFlag,
+		SwarmWantManifestFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -140,6 +191,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func version(ctx *cli.Context) error {
+	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println("Version:", versionString)
+	if gitCommit != "" {
+		fmt.Println("Git Commit:", gitCommit)
+	}
+	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Go Version:", runtime.Version())
+	fmt.Println("OS:", runtime.GOOS)
+	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
+	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+	return nil
 }
 
 func bzzd(ctx *cli.Context) error {

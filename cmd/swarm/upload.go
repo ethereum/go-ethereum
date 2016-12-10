@@ -20,7 +20,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -30,24 +29,24 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/urfave/cli.v1"
 )
 
-func main() {
+func upload(ctx *cli.Context) {
+	args := ctx.Args()
 	var (
-		bzzapiFlag    = flag.String("bzzapi", "http://127.0.0.1:8500", "Swarm HTTP endpoint")
-		recursiveFlag = flag.Bool("recursive", false, "Upload directories recursively")
-		manifestFlag  = flag.Bool("manifest", true, "Skip automatic manifest upload")
+		bzzapi       = ctx.GlobalString(SwarmApiFlag.Name)
+		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
+		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 	)
-	log.SetOutput(os.Stderr)
-	log.SetFlags(0)
-	flag.Parse()
-	if flag.NArg() != 1 {
+	if len(args) != 1 {
 		log.Fatal("need filename as the first and only argument")
 	}
 
 	var (
-		file   = flag.Arg(0)
-		client = &client{api: *bzzapiFlag}
+		file   = args[0]
+		client = &client{api: bzzapi}
 		mroot  manifest
 	)
 	fi, err := os.Stat(file)
@@ -55,13 +54,13 @@ func main() {
 		log.Fatal(err)
 	}
 	if fi.IsDir() {
-		if !*recursiveFlag {
+		if !recursive {
 			log.Fatal("argument is a directory and recursive upload is disabled")
 		}
 		mroot, err = client.uploadDirectory(file)
 	} else {
 		mroot, err = client.uploadFile(file, fi)
-		if *manifestFlag {
+		if wantManifest {
 			// Wrap the raw file entry in a proper manifest so both hashes get printed.
 			mroot = manifest{Entries: []manifest{mroot}}
 		}
@@ -69,7 +68,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("upload failed:", err)
 	}
-	if *manifestFlag {
+	if wantManifest {
 		hash, err := client.uploadManifest(mroot)
 		if err != nil {
 			log.Fatalln("manifest upload failed:", err)
