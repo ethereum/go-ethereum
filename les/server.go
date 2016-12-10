@@ -349,9 +349,8 @@ func (pm *ProtocolManager) blockLoop() {
 }
 
 var (
-	lastChtKey       = []byte("LastChtNumber") // chtNum (uint64 big endian)
-	chtPrefix        = []byte("cht")           // chtPrefix + chtNum (uint64 big endian) -> trie root hash
-	chtConfirmations = light.ChtFrequency / 2
+	lastChtKey = []byte("LastChtNumber") // chtNum (uint64 big endian)
+	chtPrefix  = []byte("cht")           // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 )
 
 func getChtRoot(db ethdb.Database, num uint64) common.Hash {
@@ -372,8 +371,8 @@ func makeCht(db ethdb.Database) bool {
 	headNum := core.GetBlockNumber(db, headHash)
 
 	var newChtNum uint64
-	if headNum > chtConfirmations {
-		newChtNum = (headNum - chtConfirmations) / light.ChtFrequency
+	if headNum > light.ChtConfirmations {
+		newChtNum = (headNum - light.ChtConfirmations) / light.ChtFrequency
 	}
 
 	var lastChtNum uint64

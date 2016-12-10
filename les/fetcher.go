@@ -200,6 +200,12 @@ func (f *lightFetcher) syncLoop() {
 
 // addPeer adds a new peer to the fetcher's peer set
 func (f *lightFetcher) addPeer(p *peer) {
+	p.lock.Lock()
+	p.hasBlock = func(hash common.Hash, number uint64) bool {
+		return f.peerHasBlock(p, hash, number)
+	}
+	p.lock.Unlock()
+
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -208,6 +214,10 @@ func (f *lightFetcher) addPeer(p *peer) {
 
 // removePeer removes a new peer from the fetcher's peer set
 func (f *lightFetcher) removePeer(p *peer) {
+	p.lock.Lock()
+	p.hasBlock = nil
+	p.lock.Unlock()
+
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -315,7 +325,7 @@ func (f *lightFetcher) announce(p *peer, head *announceData) {
 // based on its announcements
 func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bool {
 	f.lock.Lock()
-	defer f.lock.Lock()
+	defer f.lock.Unlock()
 
 	fp := f.peers[p]
 	if fp == nil || fp.root == nil {

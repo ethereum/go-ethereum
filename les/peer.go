@@ -57,6 +57,7 @@ type peer struct {
 	announceChn chan announceData
 
 	poolEntry *poolEntry
+	hasBlock  func(common.Hash, uint64) bool
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
@@ -135,11 +136,22 @@ func sendResponse(w p2p.MsgWriter, msgcode, reqID, bv uint64, data interface{}) 
 }
 
 func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
 	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
 	if cost > p.fcServerParams.BufLimit {
 		cost = p.fcServerParams.BufLimit
 	}
 	return cost
+}
+
+// HasBlock checks if the peer has a given block
+func (p *peer) HasBlock(hash common.Hash, number uint64) bool {
+	p.lock.RLock()
+	hashBlock := p.hasBlock
+	p.lock.RUnlock()
+	return hashBlock != nil && hashBlock(hash, number)
 }
 
 // SendAnnounce announces the availability of a number of blocks through

@@ -188,6 +188,9 @@ func (self *LesOdr) networkRequest(ctx context.Context, lreq LesOdrRequest) erro
 		var p *peer
 		if self.serverPool != nil {
 			p = self.serverPool.selectPeer(func(p *peer) (bool, uint64) {
+				if !lreq.CanSend(p) {
+					return false, 0
+				}
 				return true, p.fcServer.CanSend(lreq.GetCost(p))
 			})
 		}

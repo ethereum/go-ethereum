@@ -38,8 +38,9 @@ var (
 	ErrNoTrustedCht = errors.New("No trusted canonical hash trie")
 	ErrNoHeader     = errors.New("Header not found")
 
-	ChtFrequency  = uint64(4096)
-	trustedChtKey = []byte("TrustedCHT")
+	ChtFrequency     = uint64(4096)
+	ChtConfirmations = uint64(2048)
+	trustedChtKey    = []byte("TrustedCHT")
 )
 
 type ChtNode struct {
