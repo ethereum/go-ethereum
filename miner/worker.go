@@ -519,7 +519,14 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		core.ApplyDAOHardFork(work.state)
 	}
-	txs := types.NewTransactionsByPriceAndNonce(self.eth.TxPool().Pending())
+
+	pending, err := self.eth.TxPool().Pending()
+	if err != nil {
+		glog.Errorf("Could not fetch pending transactions: %v", err)
+		return
+	}
+
+	txs := types.NewTransactionsByPriceAndNonce(pending)
 	work.commitTransactions(self.mux, txs, self.gasPrice, self.chain)
 
 	self.eth.TxPool().RemoveBatch(work.lowGasTxs)

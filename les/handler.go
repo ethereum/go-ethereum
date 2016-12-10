@@ -88,7 +88,7 @@ type BlockChain interface {
 
 type txPool interface {
 	// AddTransactions should add the given transactions to the pool.
-	AddBatch([]*types.Transaction)
+	AddBatch([]*types.Transaction) error
 }
 
 type ProtocolManager struct {
@@ -879,7 +879,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if reqCnt > maxReqs || reqCnt > MaxTxSend {
 			return errResp(ErrRequestRejected, "")
 		}
-		pm.txpool.AddBatch(txs)
+
+		if err := pm.txpool.AddBatch(txs); err != nil {
+			return errResp(ErrUnexpectedResponse, "msg: %v", err)
+		}
+
 		_, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
 
