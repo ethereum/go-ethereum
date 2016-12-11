@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
+	"github.com/go-ini/ini"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -103,6 +104,11 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	// Config file to use instead of defaults
+	ConfigFileFlag = cli.StringFlag{
+		Name:  "config",
+		Usage: "Config file to load default flag values from",
+	}
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
@@ -412,6 +418,50 @@ var (
 		Value: 110,
 	}
 )
+
+// OverrideDefaults parses a config .ini file if one was specified as a CLI flag
+// and overrides any non-manually set config values.
+func OverrideDefaults(ctx *cli.Context) {
+	// If no override was requested, use hard-coded defaults
+	config := ctx.GlobalString(ConfigFileFlag.Name)
+	if config == "" {
+		return
+	}
+	// Gather all known configuration fields to enforce config validity
+	flags := make(map[string]struct{})
+	for _, flag := range ctx.GlobalFlagNames() {
+		flags[flag] = struct{}{}
+	}
+	// Parse the configuration files and load all fields
+	cfg, err := ini.Load(config)
+	if err != nil {
+		Fatalf("Failed to load initial configurations: %v", err)
+	}
+	overrides := make(map[string]string)
+	for _, sec := range cfg.Sections() {
+		for _, key := range sec.Keys() {
+			name := key.Name()
+			if _, ok := flags[name]; !ok {
+				Fatalf("Unknown configuration entry: %v", name)
+			}
+			if _, duplicate := overrides[name]; duplicate || ctx.GlobalIsSet(name) {
+				overrides[name] = key.Value()
+				continue
+			}
+			ctx.GlobalSet(name, key.Value())
+		}
+	}
+	// If config file values were overridden, warn the user
+	if len(overrides) > 0 {
+		fmt.Println("Config file values overridden via the CLI:")
+		for key, val := range overrides {
+			fmt.Printf("  - %s:\n", key)
+			fmt.Printf("    - Config: %v\n", val)
+			fmt.Printf("    - Manual: %v\n", ctx.GlobalString(key))
+		}
+		fmt.Println()
+	}
+}
 
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
