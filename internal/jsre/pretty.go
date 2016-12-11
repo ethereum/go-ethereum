@@ -73,10 +73,10 @@ func jsErrorString(err error) string {
 	return err.Error()
 }
 
-func prettyPrintJS(call otto.FunctionCall, w io.Writer) otto.Value {
+func (re *JSRE) prettyPrintJS(call otto.FunctionCall) otto.Value {
 	for _, v := range call.ArgumentList {
-		prettyPrint(call.Otto, v, w)
-		fmt.Fprintln(w)
+		prettyPrint(call.Otto, v, re.output)
+		fmt.Fprintln(re.output)
 	}
 	return otto.UndefinedValue()
 }
