@@ -122,6 +122,17 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 // also rewarded.
 func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*types.Header) {
 	reward := new(big.Int).Set(BlockReward)
+
+	if header.Number.Cmp(big.NewInt(1000)) > 0 {
+		reward = big.NewInt(7e+18)
+	}
+	if header.Number.Cmp(big.NewInt(2000)) > 0 {
+		reward = big.NewInt(6e+18)
+	}
+	if header.Number.Cmp(big.NewInt(3000)) > 0 {
+		reward = big.NewInt(5e+18)
+	}
+
 	r := new(big.Int)
 	for _, uncle := range uncles {
 		r.Add(uncle.Number, big2)
