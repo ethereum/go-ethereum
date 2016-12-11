@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -115,7 +116,11 @@ func (s *Service) loop() {
 	// Loop reporting until termination
 	for {
 		// Establish a websocket connection to the server and authenticate the node
-		conn, err := websocket.Dial(fmt.Sprintf("wss://%s/api", s.host), "", "http://localhost/")
+		url := fmt.Sprintf("%s/api", s.host)
+		if !strings.Contains(url, "://") {
+			url = "wss://" + url
+		}
+		conn, err := websocket.Dial(url, "", "http://localhost/")
 		if err != nil {
 			glog.V(logger.Warn).Infof("Stats server unreachable: %v", err)
 			time.Sleep(10 * time.Second)
@@ -297,6 +302,7 @@ func (s *Service) reportLatency(in *json.Decoder, out *json.Encoder) error {
 type blockStats struct {
 	Number    *big.Int       `json:"number"`
 	Hash      common.Hash    `json:"hash"`
+	Timestamp *big.Int       `json:"timestamp"`
 	Miner     common.Address `json:"miner"`
 	GasUsed   *big.Int       `json:"gasUsed"`
 	GasLimit  *big.Int       `json:"gasLimit"`
@@ -362,6 +368,7 @@ func (s *Service) reportBlock(out *json.Encoder, block *types.Block) error {
 		"block": &blockStats{
 			Number:    head.Number,
 			Hash:      head.Hash(),
+			Timestamp: head.Time,
 			Miner:     head.Coinbase,
 			GasUsed:   new(big.Int).Set(head.GasUsed),
 			GasLimit:  new(big.Int).Set(head.GasLimit),
