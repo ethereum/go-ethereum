@@ -332,6 +332,30 @@ func TestUnpackSetInterfaceSlice(t *testing.T) {
 	}
 }
 
+func TestUnpackSetInterfaceArrayOutput(t *testing.T) {
+	var (
+		var1 = new([1]uint32)
+		var2 = new([1]uint32)
+	)
+	out := []interface{}{var1, var2}
+	abi, err := JSON(strings.NewReader(`[{"type":"function", "name":"ints", "outputs":[{"type":"uint32[1]"}, {"type":"uint32[1]"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marshalledReturn := append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...)
+	err = abi.Unpack(&out, "ints", marshalledReturn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if *var1 != [1]uint32{1} {
+		t.Error("expected var1 to be [1], got", *var1)
+	}
+	if *var2 != [1]uint32{2} {
+		t.Error("expected var2 to be [2], got", *var2)
+	}
+}
+
 func TestPack(t *testing.T) {
 	for i, test := range []struct {
 		typ string
