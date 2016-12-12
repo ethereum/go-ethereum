@@ -633,7 +633,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 		"miner":            head.Coinbase,
 		"difficulty":       rpc.NewHexNumber(head.Difficulty),
 		"totalDifficulty":  rpc.NewHexNumber(s.b.GetTd(b.Hash())),
-		"extraData":        rpc.HexBytes(head.Extra),
+		"extraData":        hexutil.Bytes(head.Extra),
 		"size":             rpc.NewHexNumber(b.Size().Int64()),
 		"gasLimit":         rpc.NewHexNumber(head.GasLimit),
 		"gasUsed":          rpc.NewHexNumber(head.GasUsed),
@@ -682,7 +682,7 @@ type RPCTransaction struct {
 	Gas              *rpc.HexNumber  `json:"gas"`
 	GasPrice         *rpc.HexNumber  `json:"gasPrice"`
 	Hash             common.Hash     `json:"hash"`
-	Input            rpc.HexBytes    `json:"input"`
+	Input            hexutil.Bytes   `json:"input"`
 	Nonce            *rpc.HexNumber  `json:"nonce"`
 	To               *common.Address `json:"to"`
 	TransactionIndex *rpc.HexNumber  `json:"transactionIndex"`
@@ -705,7 +705,7 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 		Gas:      rpc.NewHexNumber(tx.Gas()),
 		GasPrice: rpc.NewHexNumber(tx.GasPrice()),
 		Hash:     tx.Hash(),
-		Input:    rpc.HexBytes(tx.Data()),
+		Input:    hexutil.Bytes(tx.Data()),
 		Nonce:    rpc.NewHexNumber(tx.Nonce()),
 		To:       tx.To(),
 		Value:    rpc.NewHexNumber(tx.Value()),
@@ -732,7 +732,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex int) (*RPCTransacti
 			Gas:              rpc.NewHexNumber(tx.Gas()),
 			GasPrice:         rpc.NewHexNumber(tx.GasPrice()),
 			Hash:             tx.Hash(),
-			Input:            rpc.HexBytes(tx.Data()),
+			Input:            hexutil.Bytes(tx.Data()),
 			Nonce:            rpc.NewHexNumber(tx.Nonce()),
 			To:               tx.To(),
 			TransactionIndex: rpc.NewHexNumber(txIndex),
@@ -747,7 +747,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex int) (*RPCTransacti
 }
 
 // newRPCRawTransactionFromBlockIndex returns the bytes of a transaction given a block and a transaction index.
-func newRPCRawTransactionFromBlockIndex(b *types.Block, txIndex int) (rpc.HexBytes, error) {
+func newRPCRawTransactionFromBlockIndex(b *types.Block, txIndex int) (hexutil.Bytes, error) {
 	if txIndex >= 0 && txIndex < len(b.Transactions()) {
 		tx := b.Transactions()[txIndex]
 		return rlp.EncodeToBytes(tx)
@@ -828,7 +828,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context
 }
 
 // GetRawTransactionByBlockNumberAndIndex returns the bytes of the transaction for the given block number and index.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index rpc.HexNumber) (rpc.HexBytes, error) {
+func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index rpc.HexNumber) (hexutil.Bytes, error) {
 	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
 		return newRPCRawTransactionFromBlockIndex(block, index.Int())
 	}
@@ -836,7 +836,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx co
 }
 
 // GetRawTransactionByBlockHashAndIndex returns the bytes of the transaction for the given block hash and index.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index rpc.HexNumber) (rpc.HexBytes, error) {
+func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index rpc.HexNumber) (hexutil.Bytes, error) {
 	if block, _ := s.b.GetBlock(ctx, blockHash); block != nil {
 		return newRPCRawTransactionFromBlockIndex(block, index.Int())
 	}
@@ -909,7 +909,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, txH
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, txHash common.Hash) (rpc.HexBytes, error) {
+func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, txHash common.Hash) (hexutil.Bytes, error) {
 	var tx *types.Transaction
 	var err error
 
@@ -950,7 +950,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 	from, _ := types.Sender(signer, tx)
 
 	fields := map[string]interface{}{
-		"root":              rpc.HexBytes(receipt.PostState),
+		"root":              hexutil.Bytes(receipt.PostState),
 		"blockHash":         txBlock,
 		"blockNumber":       rpc.NewHexNumber(blockIndex),
 		"transactionHash":   txHash,

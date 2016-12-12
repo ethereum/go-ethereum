@@ -23,6 +23,7 @@ import (
 	mathrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -81,7 +82,7 @@ func (api *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
 
 // MarkPeerTrusted marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
-func (api *PublicWhisperAPI) MarkPeerTrusted(peerID rpc.HexBytes) error {
+func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
@@ -92,7 +93,7 @@ func (api *PublicWhisperAPI) MarkPeerTrusted(peerID rpc.HexBytes) error {
 // data contains parameters (time frame, payment details, etc.), required
 // by the remote email-like server. Whisper is not aware about the data format,
 // it will just forward the raw data to the server.
-func (api *PublicWhisperAPI) RequestHistoricMessages(peerID rpc.HexBytes, data rpc.HexBytes) error {
+func (api *PublicWhisperAPI) RequestHistoricMessages(peerID hexutil.Bytes, data hexutil.Bytes) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
@@ -388,12 +389,12 @@ type PostArgs struct {
 	To       string              `json:"to"`
 	KeyName  string              `json:"keyname"`
 	Topic    whisperv5.TopicType `json:"topic"`
-	Padding  rpc.HexBytes        `json:"padding"`
-	Payload  rpc.HexBytes        `json:"payload"`
+	Padding  hexutil.Bytes       `json:"padding"`
+	Payload  hexutil.Bytes       `json:"payload"`
 	WorkTime uint32              `json:"worktime"`
 	PoW      float64             `json:"pow"`
 	FilterID uint32              `json:"filterID"`
-	PeerID   rpc.HexBytes        `json:"peerID"`
+	PeerID   hexutil.Bytes       `json:"peerID"`
 }
 
 type WhisperFilterArgs struct {

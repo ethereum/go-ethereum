@@ -71,25 +71,3 @@ func TestHexNumberMarshalJSON(t *testing.T) {
 		t.Fatalf("Invalid json.Marshal, expected '%s', got '%s'", exp, got)
 	}
 }
-
-var hexBytesTests = []struct{ in, out []byte }{
-	{in: []byte(`"0x"`), out: []byte{}},
-	{in: []byte(`"0x00"`), out: []byte{0}},
-	{in: []byte(`"0x01ff"`), out: []byte{0x01, 0xFF}},
-}
-
-func TestHexBytes(t *testing.T) {
-	for i, test := range hexBytesTests {
-		var dec HexBytes
-		if err := json.Unmarshal(test.in, &dec); err != nil {
-			t.Fatalf("test %d: can't decode: %v", i, err)
-		}
-		enc, _ := json.Marshal(HexBytes(test.out))
-		if !bytes.Equal(dec, test.out) {
-			t.Errorf("test %d: wrong decoded value 0x%x", i, dec)
-		}
-		if !bytes.Equal(enc, test.in) {
-			t.Errorf("test %d: wrong encoded value %#q", i, enc)
-		}
-	}
-}

@@ -17,8 +17,6 @@
 package rpc
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
@@ -273,32 +271,4 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 
 func (bn BlockNumber) Int64() int64 {
 	return (int64)(bn)
-}
-
-// HexBytes JSON-encodes as hex with 0x prefix.
-type HexBytes []byte
-
-func (b HexBytes) MarshalJSON() ([]byte, error) {
-	result := make([]byte, len(b)*2+4)
-	copy(result, `"0x`)
-	hex.Encode(result[3:], b)
-	result[len(result)-1] = '"'
-	return result, nil
-}
-
-func (b *HexBytes) UnmarshalJSON(input []byte) error {
-	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
-		input = input[1 : len(input)-1]
-	}
-	if !bytes.HasPrefix(input, []byte("0x")) {
-		return fmt.Errorf("missing 0x prefix for hex byte array")
-	}
-	input = input[2:]
-	if len(input) == 0 {
-		*b = nil
-		return nil
-	}
-	*b = make([]byte, len(input)/2)
-	_, err := hex.Decode(*b, input)
-	return err
 }
