@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 	"math/big"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/ethereum/ethash"
@@ -217,8 +219,14 @@ func (api *PrivateAdminAPI) ExportChain(file string) (bool, error) {
 	}
 	defer out.Close()
 
+	var writer io.Writer = out
+	if strings.HasSuffix(file, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+
 	// Export the blockchain
-	if err := api.eth.BlockChain().Export(out); err != nil {
+	if err := api.eth.BlockChain().Export(writer); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -243,8 +251,15 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	}
 	defer in.Close()
 
+	var reader io.Reader = in
+	if strings.HasSuffix(file, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return false, err
+		}
+	}
+
 	// Run actual the import in pre-configured batches
-	stream := rlp.NewStream(in, 0)
+	stream := rlp.NewStream(reader, 0)
 
 	blocks, index := make([]*types.Block, 0, 2500), 0
 	for batch := 0; ; batch++ {
