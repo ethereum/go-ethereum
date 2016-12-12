@@ -138,16 +138,12 @@ type ticketStore struct {
 	nextTicketReg     mclock.AbsTime
 
 	searchTopicMap        map[Topic]searchTopic
-	searchTopicList       []Topic
-	searchTopicPtr        int
 	nextTopicQueryCleanup mclock.AbsTime
 	queriesSent           map[*Node]map[common.Hash]sentQuery
-	radiusLookupCnt       int
 }
 
 type searchTopic struct {
-	foundChn chan<- string
-	listIdx  int
+	foundChn chan<- *Node
 }
 
 type sentQuery struct {
@@ -183,23 +179,15 @@ func (s *ticketStore) addTopic(t Topic, register bool) {
 	}
 }
 
-func (s *ticketStore) addSearchTopic(t Topic, foundChn chan<- string) {
+func (s *ticketStore) addSearchTopic(t Topic, foundChn chan<- *Node) {
 	s.addTopic(t, false)
 	if s.searchTopicMap[t].foundChn == nil {
-		s.searchTopicList = append(s.searchTopicList, t)
-		s.searchTopicMap[t] = searchTopic{foundChn: foundChn, listIdx: len(s.searchTopicList) - 1}
+		s.searchTopicMap[t] = searchTopic{foundChn: foundChn}
 	}
 }
 
 func (s *ticketStore) removeSearchTopic(t Topic) {
 	if st := s.searchTopicMap[t]; st.foundChn != nil {
-		lastIdx := len(s.searchTopicList) - 1
-		lastTopic := s.searchTopicList[lastIdx]
-		s.searchTopicList[st.listIdx] = lastTopic
-		sl := s.searchTopicMap[lastTopic]
-		sl.listIdx = st.listIdx
-		s.searchTopicMap[lastTopic] = sl
-		s.searchTopicList = s.searchTopicList[:lastIdx]
 		delete(s.searchTopicMap, t)
 	}
 }
@@ -247,20 +235,13 @@ func (s *ticketStore) nextRegisterLookup() (lookup lookupInfo, delay time.Durati
 	return lookupInfo{}, 40 * time.Second
 }
 
-func (s *ticketStore) nextSearchLookup() lookupInfo {
-	if len(s.searchTopicList) == 0 {
-		return lookupInfo{}
-	}
-	if s.searchTopicPtr >= len(s.searchTopicList) {
-		s.searchTopicPtr = 0
-	}
-	topic := s.searchTopicList[s.searchTopicPtr]
-	s.searchTopicPtr++
-	target := s.radius[topic].nextTarget(s.radiusLookupCnt >= searchForceQuery)
+func (s *ticketStore) nextSearchLookup(topic Topic) lookupInfo {
+	tr := s.radius[topic]
+	target := tr.nextTarget(tr.radiusLookupCnt >= searchForceQuery)
 	if target.radiusLookup {
-		s.radiusLookupCnt++
+		tr.radiusLookupCnt++
 	} else {
-		s.radiusLookupCnt = 0
+		tr.radiusLookupCnt = 0
 	}
 	return target
 }
@@ -662,9 +643,9 @@ func (s *ticketStore) gotTopicNodes(from *Node, hash common.Hash, nodes []rpcNod
 		if ip.IsUnspecified() || ip.IsLoopback() {
 			ip = from.IP
 		}
-		enode := NewNode(node.ID, ip, node.UDP-1, node.TCP-1).String() // subtract one from port while discv5 is running in test mode on UDPport+1
+		n := NewNode(node.ID, ip, node.UDP-1, node.TCP-1) // subtract one from port while discv5 is running in test mode on UDPport+1
 		select {
-		case chn <- enode:
+		case chn <- n:
 		default:
 			return false
 		}
@@ -677,6 +658,8 @@ type topicRadius struct {
 	topicHashPrefix   uint64
 	radius, minRadius uint64
 	buckets           []topicRadiusBucket
+	converged         bool
+	radiusLookupCnt   int
 }
 
 type topicRadiusEvent int
@@ -706,7 +689,7 @@ func (b *topicRadiusBucket) update(now mclock.AbsTime) {
 	b.lastTime = now
 
 	for target, tm := range b.lookupSent {
-		if now-tm > mclock.AbsTime(pingTimeout) {
+		if now-tm > mclock.AbsTime(respTimeout) {
 			b.weights[trNoAdjust] += 1
 			delete(b.lookupSent, target)
 		}
@@ -906,6 +889,7 @@ func (r *topicRadius) recalcRadius() (radius uint64, radiusLookup int) {
 
 	if radiusLookup == -1 {
 		// no more radius lookups needed at the moment, return a radius
+		r.converged = true
 		rad := maxBucket
 		if minRadBucket < rad {
 			rad = minRadBucket
