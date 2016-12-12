@@ -505,3 +505,14 @@ func (self *LightChain) SyncCht(ctx context.Context) bool {
 	}
 	return false
 }
+
+// LockChain locks the chain mutex for reading so that multiple canonical hashes can be
+// retrieved while it is guaranteed that they belong to the same version of the chain
+func (self *LightChain) LockChain() {
+	self.chainmu.RLock()
+}
+
+// UnlockChain unlocks the chain mutex
+func (self *LightChain) UnlockChain() {
+	self.chainmu.RUnlock()
+}

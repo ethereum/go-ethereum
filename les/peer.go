@@ -51,11 +51,13 @@ type peer struct {
 
 	id string
 
-	firstHeadInfo, headInfo *announceData
-	headInfoLen             int
-	lock                    sync.RWMutex
+	headInfo *announceData
+	lock     sync.RWMutex
 
 	announceChn chan announceData
+
+	poolEntry *poolEntry
+	hasBlock  func(common.Hash, uint64) bool
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
@@ -109,67 +111,6 @@ func (p *peer) headBlockInfo() blockInfo {
 	return blockInfo{Hash: p.headInfo.Hash, Number: p.headInfo.Number, Td: p.headInfo.Td}
 }
 
-func (p *peer) addNotify(announce *announceData) bool {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	if announce.Td.Cmp(p.headInfo.Td) < 1 {
-		return false
-	}
-	if p.headInfoLen >= maxHeadInfoLen {
-		//return false
-		p.firstHeadInfo = p.firstHeadInfo.next
-		p.headInfoLen--
-	}
-	if announce.haveHeaders == 0 {
-		hh := p.headInfo.Number - announce.ReorgDepth
-		if p.headInfo.haveHeaders < hh {
-			hh = p.headInfo.haveHeaders
-		}
-		announce.haveHeaders = hh
-	}
-	p.headInfo.next = announce
-	p.headInfo = announce
-	p.headInfoLen++
-	return true
-}
-
-func (p *peer) gotHeader(hash common.Hash, number uint64, td *big.Int) bool {
-	h := p.firstHeadInfo
-	ptr := 0
-	for h != nil {
-		if h.Hash == hash {
-			if h.Number != number || h.Td.Cmp(td) != 0 {
-				return false
-			}
-			h.headKnown = true
-			h.haveHeaders = h.Number
-			p.firstHeadInfo = h
-			p.headInfoLen -= ptr
-			last := h
-			h = h.next
-			// propagate haveHeaders through the chain
-			for h != nil {
-				hh := last.Number - h.ReorgDepth
-				if last.haveHeaders < hh {
-					hh = last.haveHeaders
-				}
-				if hh > h.haveHeaders {
-					h.haveHeaders = hh
-				} else {
-					return true
-				}
-				last = h
-				h = h.next
-			}
-			return true
-		}
-		h = h.next
-		ptr++
-	}
-	return true
-}
-
 // Td retrieves the current total difficulty of a peer.
 func (p *peer) Td() *big.Int {
 	p.lock.RLock()
@@ -195,11 +136,22 @@ func sendResponse(w p2p.MsgWriter, msgcode, reqID, bv uint64, data interface{}) 
 }
 
 func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
 	cost := p.fcCosts[msgcode].baseCost + p.fcCosts[msgcode].reqCost*uint64(amount)
 	if cost > p.fcServerParams.BufLimit {
 		cost = p.fcServerParams.BufLimit
 	}
 	return cost
+}
+
+// HasBlock checks if the peer has a given block
+func (p *peer) HasBlock(hash common.Hash, number uint64) bool {
+	p.lock.RLock()
+	hashBlock := p.hasBlock
+	p.lock.RUnlock()
+	return hashBlock != nil && hashBlock(hash, number)
 }
 
 // SendAnnounce announces the availability of a number of blocks through
@@ -453,9 +405,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcCosts = MRC.decode()
 	}
 
-	p.firstHeadInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
-	p.headInfo = p.firstHeadInfo
-	p.headInfoLen = 1
+	p.headInfo = &announceData{Td: rTd, Hash: rHash, Number: rNum}
 	return nil
 }
 

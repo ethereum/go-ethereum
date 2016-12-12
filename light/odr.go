@@ -48,6 +48,7 @@ type OdrRequest interface {
 // TrieID identifies a state or account storage trie
 type TrieID struct {
 	BlockHash, Root common.Hash
+	BlockNumber     uint64
 	AccKey          []byte
 }
 
@@ -55,9 +56,10 @@ type TrieID struct {
 // header.
 func StateTrieID(header *types.Header) *TrieID {
 	return &TrieID{
-		BlockHash: header.Hash(),
-		AccKey:    nil,
-		Root:      header.Root,
+		BlockHash:   header.Hash(),
+		BlockNumber: header.Number.Uint64(),
+		AccKey:      nil,
+		Root:        header.Root,
 	}
 }
 
@@ -66,9 +68,10 @@ func StateTrieID(header *types.Header) *TrieID {
 // checking Merkle proofs.
 func StorageTrieID(state *TrieID, addr common.Address, root common.Hash) *TrieID {
 	return &TrieID{
-		BlockHash: state.BlockHash,
-		AccKey:    crypto.Keccak256(addr[:]),
-		Root:      root,
+		BlockHash:   state.BlockHash,
+		BlockNumber: state.BlockNumber,
+		AccKey:      crypto.Keccak256(addr[:]),
+		Root:        root,
 	}
 }
 

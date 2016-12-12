@@ -160,6 +160,8 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	pm, db, odr := newTestProtocolManagerMust(t, false, 4, testChainGen)
 	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
+	pool := (*testServerPool)(lpeer)
+	odr.serverPool = pool
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -188,13 +190,13 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	}
 
 	// temporarily remove peer to test odr fails
-	odr.UnregisterPeer(lpeer)
+	odr.serverPool = nil
 	// expect retrievals to fail (except genesis block) without a les peer
 	test(expFail)
-	odr.RegisterPeer(lpeer)
+	odr.serverPool = pool
 	// expect all retrievals to pass
 	test(5)
-	odr.UnregisterPeer(lpeer)
+	odr.serverPool = nil
 	// still expect all retrievals to pass, now data should be cached locally
 	test(5)
 }

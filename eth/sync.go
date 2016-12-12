@@ -181,7 +181,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {
 		return
 	}
-	atomic.StoreUint32(&pm.synced, 1) // Mark initial sync done
+	pm.setSynced() // Mark initial sync done
 
 	// If fast sync was enabled, and we synced up, disable it
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
@@ -190,5 +190,12 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 			glog.V(logger.Info).Infof("fast sync complete, auto disabling")
 			atomic.StoreUint32(&pm.fastSync, 0)
 		}
+	}
+}
+
+// setSynced sets the synced flag and notifies the light server if present
+func (pm *ProtocolManager) setSynced() {
+	if atomic.SwapUint32(&pm.synced, 1) == 0 && pm.lesServer != nil {
+		pm.lesServer.Synced()
 	}
 }
