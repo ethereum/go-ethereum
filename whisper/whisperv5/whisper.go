@@ -36,11 +36,6 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
-type QueueItem struct {
-	hash common.Hash
-	code uint64
-}
-
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
 type Whisper struct {
@@ -61,7 +56,8 @@ type Whisper struct {
 
 	mailServer MailServer
 
-	messageQueue chan QueueItem
+	messageQueue chan *Envelope
+	p2pMsgQueue  chan *Envelope
 	quit         chan struct{}
 
 	overflow bool
@@ -79,7 +75,8 @@ func NewWhisper(server MailServer) *Whisper {
 		expirations:  make(map[uint32]*set.SetNonTS),
 		peers:        make(map[*Peer]struct{}),
 		mailServer:   server,
-		messageQueue: make(chan QueueItem, messageQueueLimit),
+		messageQueue: make(chan *Envelope, messageQueueLimit),
+		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
 		quit:         make(chan struct{}),
 	}
 	whisper.filters = NewFilters(whisper)
@@ -134,7 +131,7 @@ func (w *Whisper) RequestHistoricMessages(peerID []byte, data []byte) error {
 		return err
 	}
 	p.trusted = true
-	return p2p.Send(p.ws, mailRequestCode, data)
+	return p2p.Send(p.ws, p2pRequestCode, data)
 }
 
 func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
@@ -369,7 +366,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 					wh.postEvent(envelope, p2pCode)
 				}
 			}
-		case mailRequestCode:
+		case p2pRequestCode:
 			// Must be processed if mail server is implemented. Otherwise ignore.
 			if wh.mailServer != nil {
 				s := rlp.NewStream(packet.Payload, uint64(packet.Size))
@@ -467,9 +464,12 @@ func (w *Whisper) postEvent(envelope *Envelope, messageCode uint64) {
 	// currently supported version, we can not decrypt it,
 	// and therefore just ignore this message
 	if envelope.Ver() <= EnvelopeVersion {
-		w.checkOverflow()
-		i := QueueItem{hash: envelope.Hash(), code: messageCode}
-		w.messageQueue <- i
+		if messagesCode == messageCode {
+			w.checkOverflow()
+			w.messageQueue <- envelope
+		} else {
+			w.p2pMsgQueue <- envelope
+		}
 	}
 }
 
@@ -491,18 +491,17 @@ func (w *Whisper) checkOverflow() {
 
 // processQueue delivers the messages to the watchers during the lifetime of the whisper node.
 func (w *Whisper) processQueue() {
+	var e *Envelope
 	for {
 		select {
 		case <-w.quit:
 			return
 
-		case i := <-w.messageQueue:
-			w.poolMu.Lock()
-			e := w.envelopes[i.hash]
-			w.poolMu.Unlock()
-			if e != nil {
-				w.filters.NotifyWatchers(e, i.code)
-			}
+		case e = <-w.messageQueue:
+			w.filters.NotifyWatchers(e, false)
+
+		case e = <-w.p2pMsgQueue:
+			w.filters.NotifyWatchers(e, true)
 		}
 	}
 }

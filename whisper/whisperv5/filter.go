@@ -76,11 +76,11 @@ func (fs *Filters) Get(i uint32) *Filter {
 	return fs.watchers[i]
 }
 
-func (fs *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
+func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	fs.mutex.RLock()
 	var msg *ReceivedMessage
 	for j, watcher := range fs.watchers {
-		if messageCode == p2pCode && !watcher.AcceptP2P {
+		if p2pMessage && !watcher.AcceptP2P {
 			glog.V(9).Infof("msg [%x], filter [%d]: p2p messages are not allowed \n", env.Hash(), j)
 			continue
 		}

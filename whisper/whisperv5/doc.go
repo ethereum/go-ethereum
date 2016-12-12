@@ -40,11 +40,11 @@ const (
 	ProtocolVersionStr = "5.0"
 	ProtocolName       = "shh"
 
-	statusCode           = 0
-	messagesCode         = 1
-	p2pCode              = 2
-	mailRequestCode      = 3
-	NumberOfMessageCodes = 32
+	statusCode           = 0 // used by whisper protocol
+	messagesCode         = 1 // normal whisper message
+	p2pCode              = 2 // peer-to-peer message (to be consumed by the peer, but not forwarded any futher)
+	p2pRequestCode       = 3 // peer-to-peer message, used by Dapp protocol
+	NumberOfMessageCodes = 64
 
 	paddingMask   = byte(3)
 	signatureFlag = byte(4)
