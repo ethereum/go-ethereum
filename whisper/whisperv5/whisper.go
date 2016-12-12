@@ -500,7 +500,9 @@ func (w *Whisper) processQueue() {
 			w.poolMu.Lock()
 			e := w.envelopes[i.hash]
 			w.poolMu.Unlock()
-			w.filters.NotifyWatchers(e, i.code)
+			if e != nil {
+				w.filters.NotifyWatchers(e, i.code)
+			}
 		}
 	}
 }

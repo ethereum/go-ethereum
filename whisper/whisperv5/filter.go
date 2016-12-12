@@ -77,10 +77,6 @@ func (fs *Filters) Get(i uint32) *Filter {
 }
 
 func (fs *Filters) NotifyWatchers(env *Envelope, messageCode uint64) {
-	if env == nil {
-		return
-	}
-
 	fs.mutex.RLock()
 	var msg *ReceivedMessage
 	for j, watcher := range fs.watchers {
