@@ -254,13 +254,11 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
 		var client *ethclient.Client
-		if ethapi == "" {
-			err = fmt.Errorf("use ethapi flag to connect to a an eth client and talk to the blockchain")
-		} else {
+		if len(ethapi) > 0 {
 			client, err = ethclient.Dial(ethapi)
-		}
-		if err != nil {
-			utils.Fatalf("Can't connect: %v", err)
+			if err != nil {
+				utils.Fatalf("Can't connect: %v", err)
+			}
 		}
 		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled)
 	}
