@@ -117,7 +117,7 @@ type worker struct {
 	txQueueMu sync.Mutex
 	txQueue   map[common.Hash]*types.Transaction
 
-	minedBlocks *pendingBlockSet // set of locally mined blocks pending canonicalness confirmations
+	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
 
 	// atomic status counters
 	mining int32
@@ -140,7 +140,7 @@ func newWorker(config *params.ChainConfig, coinbase common.Address, eth Backend,
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
 		agents:         make(map[Agent]struct{}),
-		minedBlocks:    newPendingBlockSet(eth.BlockChain(), 5),
+		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), 5),
 		fullValidation: false,
 	}
 	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
@@ -341,7 +341,7 @@ func (self *worker) wait() {
 				}(block, work.state.Logs(), work.receipts)
 			}
 			// Insert the block into the set of pending ones to wait for confirmations
-			self.minedBlocks.Insert(block.NumberU64(), block.Hash())
+			self.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
 			if mustCommitNewWork {
 				self.commitNewWork()
@@ -514,7 +514,7 @@ func (self *worker) commitNewWork() {
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
 		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart))
-		self.minedBlocks.Shift(work.Block.NumberU64() - 1)
+		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)
 }
