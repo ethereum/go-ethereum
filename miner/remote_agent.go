@@ -37,7 +37,7 @@ type hashrate struct {
 type RemoteAgent struct {
 	mu sync.Mutex
 
-	quit     chan struct{}
+	quitCh   chan struct{}
 	workCh   chan *Work
 	returnCh chan<- *Result
 
@@ -76,18 +76,16 @@ func (a *RemoteAgent) Start() {
 	if !atomic.CompareAndSwapInt32(&a.running, 0, 1) {
 		return
 	}
-
-	a.quit = make(chan struct{})
+	a.quitCh = make(chan struct{})
 	a.workCh = make(chan *Work, 1)
-	go a.maintainLoop()
+	go a.loop(a.workCh, a.quitCh)
 }
 
 func (a *RemoteAgent) Stop() {
 	if !atomic.CompareAndSwapInt32(&a.running, 1, 0) {
 		return
 	}
-
-	close(a.quit)
+	close(a.quitCh)
 	close(a.workCh)
 }
 
@@ -148,15 +146,20 @@ func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, hash common.Hash) bool
 	return false
 }
 
-func (a *RemoteAgent) maintainLoop() {
+// loop monitors mining events on the work and quit channels, updating the internal
+// state of the rmeote miner until a termination is requested.
+//
+// Note, the reason the work and quit channels are passed as parameters is because
+// RemoteAgent.Start() constantly recreates these channels, so the loop code cannot
+// assume data stability in these member fields.
+func (a *RemoteAgent) loop(workCh chan *Work, quitCh chan struct{}) {
 	ticker := time.Tick(5 * time.Second)
 
-out:
 	for {
 		select {
-		case <-a.quit:
-			break out
-		case work := <-a.workCh:
+		case <-quitCh:
+			return
+		case work := <-workCh:
 			a.mu.Lock()
 			a.currentWork = work
 			a.mu.Unlock()
