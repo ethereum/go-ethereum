@@ -49,8 +49,15 @@ const (
 )
 
 var (
-	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-	app       = utils.NewApp(gitCommit, "Ethereum Swarm")
+	gitCommit        string // Git SHA1 commit hash of the release (set via linker flags)
+	app              = utils.NewApp(gitCommit, "Ethereum Swarm")
+	testbetBootNodes = []string{
+		"enode://330dce4992f5ec50a4a6f9e16bf35b9d8ee739236b6530e7846fcb058ed24b666e6027513a4b921fd2ec40ff22f6ddec0937bcbc697a8937d9cde83d8fde8a06@13.79.165.39:30403",
+		"enode://7ea1cc1723b4d51f08f76f6380f5f9faa92232313c6568e79ab1e1a98148f7549a3f8d05b2e6f94c10796e015a224ed2e46df7033077d63a888eeec52fae6fd2@13.79.165.39:30404",
+		"enode://4363f21af9e94e32b3ad22d88ed04f6e5bcf9407b7cb38a61216c57bbdcb9d5c5beb4f9aac1b78049e8d3a516097f5b92fc116928e35c92e48fc9b68086b78f5@13.79.165.39:30405",
+		"enode://79b616c70d309b27319461219032ff7f5901c3e522bb5d5b084e4372666f7f006803387e81563bd1bb06937a4adb8efa16c0ea86e921edf49a09e58ac3a90845@13.79.165.39:30406",
+		"enode://83b4df39d90720193717ccd5476feca81a962a31090fc440a9085941fcbfcd765285edb00c549286be33703d9bfb2723576dc85d705c9bfe1a74ee454d61f2cc@13.79.165.39:30407",
+	}
 )
 
 var (
@@ -102,8 +109,6 @@ var (
 		Usage: "Automatic manifest upload",
 	}
 )
-
-var defaultBootnodes = []string{}
 
 func init() {
 	// Override flag defaults so bzzd can run alongside geth.
@@ -211,13 +216,15 @@ func bzzd(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	registerBzzService(ctx, stack)
 	utils.StartNode(stack)
-
+	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
 		bootnodes := strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
 		injectBootnodes(stack.Server(), bootnodes)
 	} else {
-		injectBootnodes(stack.Server(), defaultBootnodes)
+		if networkId == 3 {
+			injectBootnodes(stack.Server(), testbetBootNodes)
+		}
 	}
 
 	stack.Wait()
