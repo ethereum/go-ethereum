@@ -108,6 +108,10 @@ var (
 		Name:  "manifest",
 		Usage: "Automatic manifest upload",
 	}
+	SwarmUploadDefaultPath = cli.StringFlag{
+		Name:  "defaultpath",
+		Usage: "path to file served for empty url path (none)",
+	}
 )
 
 func init() {
@@ -179,6 +183,7 @@ Prints the swarm hash of file or directory.
 		SwarmApiFlag,
 		SwarmRecursiveUploadFlag,
 		SwarmWantManifestFlag,
+		SwarmUploadDefaultPath,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {

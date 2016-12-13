@@ -27,6 +27,8 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/user"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -39,6 +41,7 @@ func upload(ctx *cli.Context) {
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
+		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 	)
 	if len(args) != 1 {
 		log.Fatal("need filename as the first and only argument")
@@ -48,8 +51,9 @@ func upload(ctx *cli.Context) {
 		file   = args[0]
 		client = &client{api: bzzapi}
 		mroot  manifest
+		entry  manifestEntry
 	)
-	fi, err := os.Stat(file)
+	fi, err := os.Stat(expandPath(file))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,28 +61,49 @@ func upload(ctx *cli.Context) {
 		if !recursive {
 			log.Fatal("argument is a directory and recursive upload is disabled")
 		}
-		mroot, err = client.uploadDirectory(file)
+		mroot, err = client.uploadDirectory(file, defaultPath)
 	} else {
-		mroot, err = client.uploadFile(file, fi)
-		if wantManifest {
-			// Wrap the raw file entry in a proper manifest so both hashes get printed.
-			mroot = manifest{Entries: []manifest{mroot}}
-		}
+		entry, err = client.uploadFile(file, fi)
+		mroot = manifest{[]manifestEntry{entry}}
 	}
 	if err != nil {
 		log.Fatalln("upload failed:", err)
 	}
-	if wantManifest {
-		hash, err := client.uploadManifest(mroot)
-		if err != nil {
-			log.Fatalln("manifest upload failed:", err)
-		}
-		mroot.Hash = hash
+	if !wantManifest {
+		// Print the manifest. This is the only output to stdout.
+		mrootJSON, _ := json.MarshalIndent(mroot, "", "  ")
+		fmt.Println(string(mrootJSON))
+		return
 	}
+	hash, err := client.uploadManifest(mroot)
+	if err != nil {
+		log.Fatalln("manifest upload failed:", err)
+	}
+	fmt.Println(hash)
+}
 
-	// Print the manifest. This is the only output to stdout.
-	mrootJSON, _ := json.MarshalIndent(mroot, "", "  ")
-	fmt.Println(string(mrootJSON))
+// Expands a file path
+// 1. replace tilde with users home dir
+// 2. expands embedded environment variables
+// 3. cleans the path, e.g. /a/b/../c -> /a/c
+// Note, it has limitations, e.g. ~someuser/tmp will not be expanded
+func expandPath(p string) string {
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
+		if home := homeDir(); home != "" {
+			p = home + p[1:]
+		}
+	}
+	return path.Clean(os.ExpandEnv(p))
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
 }
 
 // client wraps interaction with the swarm HTTP gateway.
@@ -87,24 +112,40 @@ type client struct {
 }
 
 // manifest is the JSON representation of a swarm manifest.
-type manifest struct {
-	Hash        string     `json:"hash,omitempty"`
-	ContentType string     `json:"contentType,omitempty"`
-	Path        string     `json:"path,omitempty"`
-	Entries     []manifest `json:"entries,omitempty"`
+type manifestEntry struct {
+	Hash        string `json:"hash,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	Path        string `json:"path,omitempty"`
 }
 
-func (c *client) uploadFile(file string, fi os.FileInfo) (manifest, error) {
+// manifest is the JSON representation of a swarm manifest.
+type manifest struct {
+	Entries []manifestEntry `json:"entries,omitempty"`
+}
+
+func (c *client) uploadFile(file string, fi os.FileInfo) (manifestEntry, error) {
 	hash, err := c.uploadFileContent(file, fi)
-	m := manifest{
+	m := manifestEntry{
 		Hash:        hash,
 		ContentType: mime.TypeByExtension(filepath.Ext(fi.Name())),
 	}
 	return m, err
 }
 
-func (c *client) uploadDirectory(dir string) (manifest, error) {
+func (c *client) uploadDirectory(dir string, defaultPath string) (manifest, error) {
 	dirm := manifest{}
+	if len(defaultPath) > 0 {
+		fi, err := os.Stat(defaultPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		entry, err := c.uploadFile(defaultPath, fi)
+		if err != nil {
+			log.Fatal(err)
+		}
+		entry.Path = ""
+		dirm.Entries = append(dirm.Entries, entry)
+	}
 	prefix := filepath.ToSlash(filepath.Clean(dir)) + "/"
 	err := filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
 		if err != nil || fi.IsDir() {
