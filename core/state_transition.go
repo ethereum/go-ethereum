@@ -159,7 +159,7 @@ func (self *StateTransition) to() vm.Account {
 
 func (self *StateTransition) useGas(amount *big.Int) error {
 	if self.gas.Cmp(amount) < 0 {
-		return vm.OutOfGasError
+		return vm.ErrOutOfGas
 	}
 	self.gas.Sub(self.gas, amount)
 
@@ -233,7 +233,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	)
 	if contractCreation {
 		ret, _, vmerr = vmenv.Create(sender, self.data, self.gas, self.value)
-		if homestead && err == vm.CodeStoreOutOfGasError {
+		if homestead && err == vm.ErrCodeStoreOutOfGas {
 			self.gas = Big0
 		}
 	} else {

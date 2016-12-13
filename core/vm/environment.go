@@ -100,7 +100,7 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 	if env.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
-		return nil, DepthError
+		return nil, ErrDepth
 	}
 	if !env.Context.CanTransfer(env.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
@@ -109,8 +109,8 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 	}
 
 	var (
-		to                  Account
-		snapshotPreTransfer = env.StateDB.Snapshot()
+		to       Account
+		snapshot = env.StateDB.Snapshot()
 	)
 	if !env.StateDB.Exist(addr) {
 		if PrecompiledContracts[addr] == nil && env.ChainConfig().IsEIP158(env.BlockNumber) && value.BitLen() == 0 {
@@ -138,7 +138,7 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 	if err != nil {
 		contract.UseGas(contract.Gas)
 
-		env.StateDB.RevertToSnapshot(snapshotPreTransfer)
+		env.StateDB.RevertToSnapshot(snapshot)
 	}
 	return ret, err
 }
@@ -160,7 +160,7 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, input 
 	if env.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
-		return nil, DepthError
+		return nil, ErrDepth
 	}
 	if !env.CanTransfer(env.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
@@ -169,8 +169,8 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, input 
 	}
 
 	var (
-		snapshotPreTransfer = env.StateDB.Snapshot()
-		to                  = env.StateDB.GetAccount(caller.Address())
+		snapshot = env.StateDB.Snapshot()
+		to       = env.StateDB.GetAccount(caller.Address())
 	)
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped environment for this execution context
@@ -183,7 +183,7 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, input 
 	if err != nil {
 		contract.UseGas(contract.Gas)
 
-		env.StateDB.RevertToSnapshot(snapshotPreTransfer)
+		env.StateDB.RevertToSnapshot(snapshot)
 	}
 
 	return ret, err
@@ -205,7 +205,7 @@ func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, in
 	// limit.
 	if env.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
-		return nil, DepthError
+		return nil, ErrDepth
 	}
 
 	var (
@@ -241,7 +241,7 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 	if env.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
-		return nil, common.Address{}, DepthError
+		return nil, common.Address{}, ErrDepth
 	}
 	if !env.CanTransfer(env.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
@@ -253,7 +253,7 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 	nonce := env.StateDB.GetNonce(caller.Address())
 	env.StateDB.SetNonce(caller.Address(), nonce+1)
 
-	snapshotPreTransfer := env.StateDB.Snapshot()
+	snapshot := env.StateDB.Snapshot()
 	var (
 		addr = crypto.CreateAddress(caller.Address(), nonce)
 		to   = env.StateDB.CreateAccount(addr)
@@ -283,7 +283,7 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 		if contract.UseGas(dataGas) {
 			env.StateDB.SetCode(addr, ret)
 		} else {
-			err = CodeStoreOutOfGasError
+			err = ErrCodeStoreOutOfGas
 		}
 	}
 
@@ -291,9 +291,9 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if maxCodeSizeExceeded ||
-		(err != nil && (env.ChainConfig().IsHomestead(env.BlockNumber) || err != CodeStoreOutOfGasError)) {
+		(err != nil && (env.ChainConfig().IsHomestead(env.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
 		contract.UseGas(contract.Gas)
-		env.StateDB.RevertToSnapshot(snapshotPreTransfer)
+		env.StateDB.RevertToSnapshot(snapshot)
 
 		// Nothing should be returned when an error is thrown.
 		return nil, addr, err

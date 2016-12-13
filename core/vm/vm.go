@@ -168,7 +168,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 			// cost is explicitly set so that the capture state defer method cas get the proper cost
 			cost = operation.gasCost(evm.gasTable, evm.env, contract, stack, mem, memorySize)
 			if !contract.UseGas(cost) {
-				return nil, OutOfGasError
+				return nil, ErrOutOfGas
 			}
 		}
 		if memorySize != nil {

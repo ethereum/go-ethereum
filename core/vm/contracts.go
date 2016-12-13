@@ -50,7 +50,7 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contr
 
 		return ret, nil
 	} else {
-		return nil, OutOfGasError
+		return nil, ErrOutOfGas
 	}
 }
 

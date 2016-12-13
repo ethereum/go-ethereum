@@ -97,7 +97,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 func (l *StructLogger) CaptureState(env *Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
-		return TraceLimitReachedError
+		return ErrTraceLimitReached
 	}
 
 	// initialise new changed values storage container for this contract
