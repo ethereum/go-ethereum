@@ -601,7 +601,11 @@ func (self *BlockChain) procFutureBlocks() {
 	}
 	if len(blocks) > 0 {
 		types.BlockBy(types.Number).Sort(blocks)
-		self.InsertChain(blocks)
+
+		// Insert one by one as chain insertion needs contiguous ancestry between blocks
+		for i := range blocks {
+			self.InsertChain(blocks[i : i+1])
+		}
 	}
 }
 
@@ -675,6 +679,18 @@ func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts ty
 // transaction and receipt data.
 // XXX should this be moved to the test?
 func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
+	// Do a sanity check that the provided chain is actually ordered and linked
+	for i := 1; i < len(blockChain); i++ {
+		if blockChain[i].NumberU64() != blockChain[i-1].NumberU64()+1 || blockChain[i].ParentHash() != blockChain[i-1].Hash() {
+			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].NumberU64(),
+				blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
+
+			glog.V(logger.Error).Info(failure.Error())
+			return 0, failure
+		}
+	}
+	// Pre-checks passed, start the block body and receipt imports
 	self.wg.Add(1)
 	defer self.wg.Done()
 
@@ -843,6 +859,18 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 // InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
 // it will return the index number of the failing block as well an error describing what went wrong (for possible errors see core/errors.go).
 func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
+	// Do a sanity check that the provided chain is actually ordered and linked
+	for i := 1; i < len(chain); i++ {
+		if chain[i].NumberU64() != chain[i-1].NumberU64()+1 || chain[i].ParentHash() != chain[i-1].Hash() {
+			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])",
+				i-1, chain[i-1].NumberU64(), chain[i-1].Hash().Bytes()[:4], i, chain[i].NumberU64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash().Bytes()[:4])
+
+			glog.V(logger.Error).Info(failure.Error())
+			return 0, failure
+		}
+	}
+	// Pre-checks passed, start the full block imports
 	self.wg.Add(1)
 	defer self.wg.Done()
 
@@ -916,10 +944,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			}
 
 			self.reportBlock(block, nil, err)
-
 			return i, err
 		}
-
 		// Create a new statedb using the parent block and report an
 		// error if it fails.
 		switch {
