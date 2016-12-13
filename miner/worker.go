@@ -161,6 +161,12 @@ func (self *worker) setEtherbase(addr common.Address) {
 	self.coinbase = addr
 }
 
+func (self *worker) setExtra(extra []byte) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.extra = extra
+}
+
 func (self *worker) pending() (*types.Block, *state.StateDB) {
 	self.currentMu.Lock()
 	defer self.currentMu.Unlock()
