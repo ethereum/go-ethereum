@@ -133,8 +133,12 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []*vm.Log, blockNum
 	for num := start / level * level; num <= end; num += level {
 		// find addresses in bloom filters
 		bloom := core.GetMipmapBloom(f.db, num, level)
+		// Don't bother checking the first time through the loop - we're probably picking
+		// up where a previous run left off.
+		first := true
 		for _, addr := range f.addresses {
-			if bloom.TestBytes(addr[:]) {
+			if first || bloom.TestBytes(addr[:]) {
+				first = false
 				// range check normalised values and make sure that
 				// we're resolving the correct range instead of the
 				// normalised values.
@@ -142,9 +146,14 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []*vm.Log, blockNum
 				end := uint64(math.Min(float64(num+level-1), float64(end)))
 				if depth+1 == len(core.MIPMapLevels) {
 					l, blockNumber, _ := f.getLogs(context.Background(), start, end)
-					return l, blockNumber
+					if len(l) > 0 {
+						return l, blockNumber
+					}
 				} else {
-					return f.mipFind(start, end, depth+1)
+					l, blockNumber := f.mipFind(start, end, depth+1)
+					if len(l) > 0 {
+						return l, blockNumber
+					}
 				}
 			}
 		}
