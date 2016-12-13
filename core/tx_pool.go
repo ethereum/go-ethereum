@@ -124,6 +124,8 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		quit:         make(chan struct{}),
 	}
 
+	pool.resetState()
+
 	pool.wg.Add(2)
 	go pool.eventLoop()
 	go pool.expirationLoop()
@@ -196,12 +198,8 @@ func (pool *TxPool) Stop() {
 }
 
 func (pool *TxPool) State() *state.ManagedState {
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
-
-	if pool.pendingState == nil {
-		pool.resetState()
-	}
+	pool.mu.RLock()
+	defer pool.mu.RUnlock()
 
 	return pool.pendingState
 }
@@ -381,10 +379,6 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 //
 // Note, this method assumes the pool lock is held!
 func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) {
-	// Init delayed since tx pool could have been started before any state sync
-	if pool.pendingState == nil {
-		pool.resetState()
-	}
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
 		pool.pending[addr] = newTxList(true)
