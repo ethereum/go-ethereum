@@ -19,22 +19,21 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"runtime"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"gopkg.in/urfave/cli.v1"
 )
 
-func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: bzzhash <file name>")
-		os.Exit(0)
+func hash(ctx *cli.Context) {
+	args := ctx.Args()
+	if len(args) < 1 {
+		log.Fatal("Usage: swarm hash <file name>")
 	}
-	f, err := os.Open(os.Args[1])
+	f, err := os.Open(args[0])
 	if err != nil {
-		fmt.Println("Error opening file " + os.Args[1])
+		fmt.Println("Error opening file " + args[1])
 		os.Exit(1)
 	}
 
@@ -42,7 +41,7 @@ func main() {
 	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
 	key, err := chunker.Split(f, stat.Size(), nil, nil, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		log.Fatalf("%v\n", err)
 	} else {
 		fmt.Printf("%v\n", key)
 	}
