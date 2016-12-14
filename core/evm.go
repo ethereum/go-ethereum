@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +34,8 @@ type HeaderFetcher interface {
 // NewEVMContext creates a new context for use in the EVM.
 func NewEVMContext(msg Message, header *types.Header, chain HeaderFetcher) vm.Context {
 	return vm.Context{
+		Context: context.TODO(),
+
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),

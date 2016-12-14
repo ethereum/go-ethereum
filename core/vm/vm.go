@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"sync/atomic"
@@ -52,36 +51,18 @@ type Config struct {
 // The EVM will run the byte code VM or JIT VM based on the passed
 // configuration.
 type EVM struct {
-	env       *Environment
-	jumpTable vmJumpTable
-	cfg       Config
-	gasTable  params.GasTable
-
-	// done is an atomic int and is used for
-	// cancellation during RunWithContext.
-	done int32
+	env      *Environment
+	cfg      Config
+	gasTable params.GasTable
 }
 
 // New returns a new instance of the EVM.
 func New(env *Environment, cfg Config) *EVM {
 	return &EVM{
-		env:       env,
-		jumpTable: newJumpTable(env.ChainConfig(), env.BlockNumber),
-		cfg:       cfg,
-		gasTable:  env.ChainConfig().GasTable(env.BlockNumber),
+		env:      env,
+		cfg:      cfg,
+		gasTable: env.ChainConfig().GasTable(env.BlockNumber),
 	}
-}
-
-// RunWithContext allows the EVM to be ran with a cancellation method by passing in a context.Context. The EVM
-// behaves exactly the same as an EVM without a context.
-//
-// RunWithContext is only used for the initial call and shouldn't be called more than once.
-func (evm *EVM) RunWithContext(ctx context.Context, contract *Contract, input []byte) (ret []byte, err error) {
-	go func() {
-		<-ctx.Done()
-		atomic.StoreInt32(&evm.done, 1)
-	}()
-	return evm.Run(contract, input)
 }
 
 // Run loops and evaluates the contract's code with the given input data
@@ -135,16 +116,16 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	// explicit STOP, RETURN or SUICIDE is executed, an error accured during
 	// the execution of one of the operations or until the evm.done is set by
 	// the parent context.Context.
-	for atomic.LoadInt32(&evm.done) == 0 {
+	for atomic.LoadInt32(&evm.env.abort) == 0 {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
 
 		// get the operation from the jump table matching the opcode
-		operation := evm.jumpTable[op]
+		operation := jumpTable[op]
 
 		// if the op is invalid abort the process and return an error
 		if !operation.valid {
-			return nil, fmt.Errorf("Invalid opcode %x", op)
+			return nil, fmt.Errorf("invalid opcode %x", op)
 		}
 
 		// validate the stack and make sure there enough stack items available

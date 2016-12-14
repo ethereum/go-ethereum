@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -52,7 +53,7 @@ func (d dummyStateDB) GetAccount(common.Address) Account {
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEnvironment(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
+		env      = NewEnvironment(Context{Context: context.TODO()}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
@@ -79,7 +80,7 @@ func TestStorageCapture(t *testing.T) {
 	var (
 		ref      = &dummyContractRef{}
 		contract = NewContract(ref, ref, new(big.Int), new(big.Int))
-		env      = NewEnvironment(Context{}, dummyStateDB{ref: ref}, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
+		env      = NewEnvironment(Context{Context: context.TODO()}, dummyStateDB{ref: ref}, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()

@@ -245,70 +245,68 @@ func gasDup(gt params.GasTable, env *Environment, contract *Contract, stack *Sta
 	return GasFastestStep
 }
 
-var gasTable [256]*big.Int
-
-func init() {
-	gasTable[ADD] = GasFastestStep
-	gasTable[LT] = GasFastestStep
-	gasTable[GT] = GasFastestStep
-	gasTable[SLT] = GasFastestStep
-	gasTable[SGT] = GasFastestStep
-	gasTable[EQ] = GasFastestStep
-	gasTable[ISZERO] = GasFastestStep
-	gasTable[SUB] = GasFastestStep
-	gasTable[AND] = GasFastestStep
-	gasTable[OR] = GasFastestStep
-	gasTable[XOR] = GasFastestStep
-	gasTable[NOT] = GasFastestStep
-	gasTable[BYTE] = GasFastestStep
-	gasTable[CALLDATALOAD] = GasFastestStep
-	gasTable[CALLDATACOPY] = GasFastestStep
-	gasTable[MLOAD] = GasFastestStep
-	gasTable[MSTORE] = GasFastestStep
-	gasTable[MSTORE8] = GasFastestStep
-	gasTable[CODECOPY] = GasFastestStep
-	gasTable[MUL] = GasFastStep
-	gasTable[DIV] = GasFastStep
-	gasTable[SDIV] = GasFastStep
-	gasTable[MOD] = GasFastStep
-	gasTable[SMOD] = GasFastStep
-	gasTable[SIGNEXTEND] = GasFastStep
-	gasTable[ADDMOD] = GasMidStep
-	gasTable[MULMOD] = GasMidStep
-	gasTable[JUMP] = GasMidStep
-	gasTable[JUMPI] = GasSlowStep
-	gasTable[EXP] = GasSlowStep
-	gasTable[ADDRESS] = GasQuickStep
-	gasTable[ORIGIN] = GasQuickStep
-	gasTable[CALLER] = GasQuickStep
-	gasTable[CALLVALUE] = GasQuickStep
-	gasTable[CODESIZE] = GasQuickStep
-	gasTable[GASPRICE] = GasQuickStep
-	gasTable[COINBASE] = GasQuickStep
-	gasTable[TIMESTAMP] = GasQuickStep
-	gasTable[NUMBER] = GasQuickStep
-	gasTable[CALLDATASIZE] = GasQuickStep
-	gasTable[DIFFICULTY] = GasQuickStep
-	gasTable[GASLIMIT] = GasQuickStep
-	gasTable[POP] = GasQuickStep
-	gasTable[PC] = GasQuickStep
-	gasTable[MSIZE] = GasQuickStep
-	gasTable[GAS] = GasQuickStep
-	gasTable[BLOCKHASH] = GasExtStep
-	gasTable[BALANCE] = Zero
-	gasTable[EXTCODESIZE] = Zero
-	gasTable[EXTCODECOPY] = Zero
-	gasTable[SLOAD] = params.SloadGas
-	gasTable[SSTORE] = Zero
-	gasTable[SHA3] = params.Sha3Gas
-	gasTable[CREATE] = params.CreateGas
-	gasTable[CALL] = Zero
-	gasTable[CALLCODE] = Zero
-	gasTable[DELEGATECALL] = Zero
-	gasTable[SUICIDE] = Zero
-	gasTable[JUMPDEST] = params.JumpdestGas
-	gasTable[RETURN] = Zero
-	gasTable[PUSH1] = GasFastestStep
-	gasTable[DUP1] = Zero
-	gasTable[STOP] = Zero
+var gasTable = [256]*big.Int{
+	ADD:          GasFastestStep,
+	LT:           GasFastestStep,
+	GT:           GasFastestStep,
+	SLT:          GasFastestStep,
+	SGT:          GasFastestStep,
+	EQ:           GasFastestStep,
+	ISZERO:       GasFastestStep,
+	SUB:          GasFastestStep,
+	AND:          GasFastestStep,
+	OR:           GasFastestStep,
+	XOR:          GasFastestStep,
+	NOT:          GasFastestStep,
+	BYTE:         GasFastestStep,
+	CALLDATALOAD: GasFastestStep,
+	CALLDATACOPY: GasFastestStep,
+	MLOAD:        GasFastestStep,
+	MSTORE:       GasFastestStep,
+	MSTORE8:      GasFastestStep,
+	CODECOPY:     GasFastestStep,
+	MUL:          GasFastStep,
+	DIV:          GasFastStep,
+	SDIV:         GasFastStep,
+	MOD:          GasFastStep,
+	SMOD:         GasFastStep,
+	SIGNEXTEND:   GasFastStep,
+	ADDMOD:       GasMidStep,
+	MULMOD:       GasMidStep,
+	JUMP:         GasMidStep,
+	JUMPI:        GasSlowStep,
+	EXP:          GasSlowStep,
+	ADDRESS:      GasQuickStep,
+	ORIGIN:       GasQuickStep,
+	CALLER:       GasQuickStep,
+	CALLVALUE:    GasQuickStep,
+	CODESIZE:     GasQuickStep,
+	GASPRICE:     GasQuickStep,
+	COINBASE:     GasQuickStep,
+	TIMESTAMP:    GasQuickStep,
+	NUMBER:       GasQuickStep,
+	CALLDATASIZE: GasQuickStep,
+	DIFFICULTY:   GasQuickStep,
+	GASLIMIT:     GasQuickStep,
+	POP:          GasQuickStep,
+	PC:           GasQuickStep,
+	MSIZE:        GasQuickStep,
+	GAS:          GasQuickStep,
+	BLOCKHASH:    GasExtStep,
+	BALANCE:      Zero,
+	EXTCODESIZE:  Zero,
+	EXTCODECOPY:  Zero,
+	SLOAD:        params.SloadGas,
+	SSTORE:       Zero,
+	SHA3:         params.Sha3Gas,
+	CREATE:       params.CreateGas,
+	CALL:         Zero,
+	CALLCODE:     Zero,
+	DELEGATECALL: Zero,
+	SUICIDE:      Zero,
+	JUMPDEST:     params.JumpdestGas,
+	RETURN:       Zero,
+	PUSH1:        GasFastestStep,
+	DUP1:         Zero,
+	STOP:         Zero,
 }

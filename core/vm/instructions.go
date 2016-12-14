@@ -553,6 +553,12 @@ func opCallCode(pc *uint64, env *Environment, contract *Contract, memory *Memory
 }
 
 func opDelegateCall(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// if not homestead return an error. DELEGATECALL is not supported
+	// during pre-homestead.
+	if !env.ChainConfig().IsHomestead(env.BlockNumber) {
+		return nil, fmt.Errorf("invalid opcode %x", DELEGATECALL)
+	}
+
 	gas, to, inOffset, inSize, outOffset, outSize := stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	toAddr := common.BigToAddress(to)
