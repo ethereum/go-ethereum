@@ -112,7 +112,8 @@ var (
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	debDistros = []string{"trusty", "wily", "xenial", "yakkety"}
+	// Note: wily is unsupported because it was officially deprecated on lanchpad.
+	debDistros = []string{"trusty", "xenial", "yakkety"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
