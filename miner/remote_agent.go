@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/pow"
 )
 
 type hashrate struct {
@@ -41,6 +42,7 @@ type RemoteAgent struct {
 	workCh   chan *Work
 	returnCh chan<- *Result
 
+	pow         pow.PoW
 	currentWork *Work
 	work        map[common.Hash]*Work
 
@@ -50,8 +52,9 @@ type RemoteAgent struct {
 	running int32 // running indicates whether the agent is active. Call atomically
 }
 
-func NewRemoteAgent() *RemoteAgent {
+func NewRemoteAgent(pow pow.PoW) *RemoteAgent {
 	return &RemoteAgent{
+		pow:      pow,
 		work:     make(map[common.Hash]*Work),
 		hashrate: make(map[common.Hash]hashrate),
 	}
@@ -126,24 +129,30 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 	return res, errors.New("No work available yet, don't panic.")
 }
 
-// Returns true or false, but does not indicate if the PoW was correct
+// SubmitWork tries to inject a PoW solution tinto the remote agent, returning
+// whether the solution was acceted or not (not can be both a bad PoW as well as
+// any other error, like no work pending).
 func (a *RemoteAgent) SubmitWork(nonce uint64, mixDigest, hash common.Hash) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	// Make sure the work submitted is present
-	if a.work[hash] != nil {
-		block := a.work[hash].Block.WithMiningResult(nonce, mixDigest)
-		a.returnCh <- &Result{a.work[hash], block}
-
-		delete(a.work, hash)
-
-		return true
-	} else {
-		glog.V(logger.Info).Infof("Work was submitted for %x but no pending work found\n", hash)
+	work := a.work[hash]
+	if work == nil {
+		glog.V(logger.Info).Infof("Work was submitted for %x but no pending work found", hash)
+		return false
 	}
+	// Make sure the PoW solutions is indeed valid
+	block := work.Block.WithMiningResult(nonce, mixDigest)
+	if !a.pow.Verify(block) {
+		glog.V(logger.Warn).Infof("Invalid PoW submitted for %x", hash)
+		return false
+	}
+	// Solutions seems to be valid, return to the miner and notify acceptance
+	a.returnCh <- &Result{work, block}
+	delete(a.work, hash)
 
-	return false
+	return true
 }
 
 // loop monitors mining events on the work and quit channels, updating the internal
