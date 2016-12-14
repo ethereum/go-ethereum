@@ -759,7 +759,7 @@ func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n
 		}
 		return n, err
 	}
-	if !bytes.Equal(n.IP, rn.IP) || n.UDP != rn.UDP || n.TCP != rn.TCP {
+	if !n.IP.Equal(rn.IP) || n.UDP != rn.UDP || n.TCP != rn.TCP {
 		err = fmt.Errorf("metadata mismatch: got %v, want %v", rn, n)
 	}
 	return n, err

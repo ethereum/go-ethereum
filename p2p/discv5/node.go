@@ -17,7 +17,6 @@
 package discv5
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
@@ -81,7 +80,7 @@ func (n *Node) addrEqual(a *net.UDPAddr) bool {
 	if ipv4 := a.IP.To4(); ipv4 != nil {
 		ip = ipv4
 	}
-	return n.UDP == uint16(a.Port) && bytes.Equal(n.IP, ip)
+	return n.UDP == uint16(a.Port) && n.IP.Equal(ip)
 }
 
 // Incomplete returns true for nodes with no IP address.
