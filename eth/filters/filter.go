@@ -54,6 +54,8 @@ type Filter struct {
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
+// MipMaps allow past blocks to be searched much more efficiently, and can be enabled
+// any time a filter includes addresses to filter on.
 func New(backend Backend, useMipMap bool) *Filter {
 	return &Filter{
 		backend:   backend,
@@ -85,6 +87,10 @@ func (f *Filter) SetTopics(topics [][]common.Hash) {
 	f.topics = topics
 }
 
+// FindOnce searches the blockchain for matching log entries, returning
+// all matching entries from the first block that contains matches,
+// updating the start point of the filter accordingly. If no results are
+// found, a nil slice is returned.
 func (f *Filter) FindOnce(ctx context.Context) ([]*vm.Log, error) {
 	head, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if head == nil {
@@ -109,7 +115,7 @@ func (f *Filter) FindOnce(ctx context.Context) ([]*vm.Log, error) {
 		f.begin = int64(blockNumber + 1)
 		return logs, err
 	}
-	
+
 	logs, blockNumber := f.mipFind(beginBlockNo, endBlockNo, 0)
 	f.begin = int64(blockNumber + 1)
 	return logs, nil
