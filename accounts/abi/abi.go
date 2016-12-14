@@ -91,9 +91,8 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	// first we need to create a slice of the type
 	var refSlice reflect.Value
 	switch elem.T {
-	case IntTy, UintTy, BoolTy: //we need to create the correct type of array otherwise we see the following issue;
-		//cannot unmarshal []*big.Int in to []uint32 as described in
-		//https://github.com/ethereum/go-ethereum/issues/2802
+	case IntTy, UintTy, BoolTy:
+		// create a new reference slice matching the element type
 		switch t.Type.Kind {
 		case reflect.Bool:
 			refSlice = reflect.ValueOf([]bool(nil))
