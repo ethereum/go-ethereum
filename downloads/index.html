@@ -275,6 +275,9 @@
     </script>
 
     <script type="text/javascript">
+      // Maintain a set of downloadable resources to cross check URL liveliness later
+      var resources = {};
+
       // Maintain a counter for external requests to show a loader modal during
       $('#loader').modal('show');
       $('#loader').attr('data-reqs', '3');
@@ -282,6 +285,19 @@
       var requestDone = function() {
         var reqs = $('#loader').data('reqs');
         if (reqs == 1) {
+          // All requests done, check which primary download buttons can be activated
+          var prefix = "https://gethstore.blob.core.windows.net/builds/";
+
+          if (!($('#download_linux').attr("href").slice(prefix.length) in resources)) {
+            $('#download_linux').addClass("disabled");
+          }
+          if (!($('#download_darwin').attr("href").slice(prefix.length) in resources)) {
+            $('#download_darwin').addClass("disabled");
+          }
+          if (!($('#download_windows').attr("href").slice(prefix.length) in resources)) {
+            $('#download_windows').addClass("disabled");
+          }
+          // Finally hide the load screen
           $('#loader').modal('hide');
         }
         $('#loader').data('reqs', reqs-1);
@@ -307,8 +323,11 @@
           // Iterate over all the blobs and populate the tables
           var blobs = $(data).find('Blob')
           for (var i = 0; i < blobs.length; i++) {
-            // Skip any signatures, those are assumed implicitly
+            // Gather all available resources to later inspection
             var name = $($(blobs[i]).find('Name')[0]).text();
+            resources[name] = true;
+
+            // Skip any signatures, those are assumed implicitly
             if (name.endsWith(".asc")) {
               signatures[name] = true;
               continue;
