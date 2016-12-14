@@ -55,26 +55,20 @@ type Agent interface {
 	GetHashRate() int64
 }
 
-type uint64RingBuffer struct {
-	ints []uint64 //array of all integers in buffer
-	next int      //where is the next insertion? assert 0 <= next < len(ints)
-}
-
 // Work is the workers current environment and holds
 // all of the current state information
 type Work struct {
 	config *params.ChainConfig
 	signer types.Signer
 
-	state            *state.StateDB // apply state changes here
-	ancestors        *set.Set       // ancestor set (used for checking uncle parent validity)
-	family           *set.Set       // family set (used for checking uncle invalidity)
-	uncles           *set.Set       // uncle set
-	tcount           int            // tx count in cycle
-	ownedAccounts    *set.Set
-	lowGasTxs        types.Transactions
-	failedTxs        types.Transactions
-	localMinedBlocks *uint64RingBuffer // the most recent block numbers that were mined locally (used to check block inclusion)
+	state         *state.StateDB // apply state changes here
+	ancestors     *set.Set       // ancestor set (used for checking uncle parent validity)
+	family        *set.Set       // family set (used for checking uncle invalidity)
+	uncles        *set.Set       // uncle set
+	tcount        int            // tx count in cycle
+	ownedAccounts *set.Set
+	lowGasTxs     types.Transactions
+	failedTxs     types.Transactions
 
 	Block *types.Block // the new block
 
@@ -123,6 +117,8 @@ type worker struct {
 	txQueueMu sync.Mutex
 	txQueue   map[common.Hash]*types.Transaction
 
+	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
+
 	// atomic status counters
 	mining int32
 	atWork int32
@@ -144,6 +140,7 @@ func newWorker(config *params.ChainConfig, coinbase common.Address, eth Backend,
 		coinbase:       coinbase,
 		txQueue:        make(map[common.Hash]*types.Transaction),
 		agents:         make(map[Agent]struct{}),
+		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), 5),
 		fullValidation: false,
 	}
 	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
@@ -269,18 +266,6 @@ func (self *worker) update() {
 	}
 }
 
-func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
-	if prevMinedBlocks == nil {
-		minedBlocks = &uint64RingBuffer{next: 0, ints: make([]uint64, miningLogAtDepth+1)}
-	} else {
-		minedBlocks = prevMinedBlocks
-	}
-
-	minedBlocks.ints[minedBlocks.next] = blockNumber
-	minedBlocks.next = (minedBlocks.next + 1) % len(minedBlocks.ints)
-	return minedBlocks
-}
-
 func (self *worker) wait() {
 	for {
 		mustCommitNewWork := true
@@ -355,17 +340,8 @@ func (self *worker) wait() {
 					}
 				}(block, work.state.Logs(), work.receipts)
 			}
-
-			// check staleness and display confirmation
-			var stale, confirm string
-			canonBlock := self.chain.GetBlockByNumber(block.NumberU64())
-			if canonBlock != nil && canonBlock.Hash() != block.Hash() {
-				stale = "stale "
-			} else {
-				confirm = "Wait 5 blocks for confirmation"
-				work.localMinedBlocks = newLocalMinedBlock(block.Number().Uint64(), work.localMinedBlocks)
-			}
-			glog.V(logger.Info).Infof("🔨  Mined %sblock (#%v / %x). %s", stale, block.Number(), block.Hash().Bytes()[:4], confirm)
+			// Insert the block into the set of pending ones to wait for confirmations
+			self.unconfirmed.Insert(block.NumberU64(), block.Hash())
 
 			if mustCommitNewWork {
 				self.commitNewWork()
@@ -417,9 +393,6 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	// Keep track of transactions which return errors so they can be removed
 	work.tcount = 0
 	work.ownedAccounts = accountAddressesSet(accounts)
-	if self.current != nil {
-		work.localMinedBlocks = self.current.localMinedBlocks
-	}
 	self.current = work
 	return nil
 }
@@ -433,38 +406,6 @@ func (w *worker) setGasPrice(p *big.Int) {
 	w.gasPrice = gasprice(p, pct)
 
 	w.mux.Post(core.GasPriceChanged{Price: w.gasPrice})
-}
-
-func (self *worker) isBlockLocallyMined(current *Work, deepBlockNum uint64) bool {
-	//Did this instance mine a block at {deepBlockNum} ?
-	var isLocal = false
-	for idx, blockNum := range current.localMinedBlocks.ints {
-		if deepBlockNum == blockNum {
-			isLocal = true
-			current.localMinedBlocks.ints[idx] = 0 //prevent showing duplicate logs
-			break
-		}
-	}
-	//Short-circuit on false, because the previous and following tests must both be true
-	if !isLocal {
-		return false
-	}
-
-	//Does the block at {deepBlockNum} send earnings to my coinbase?
-	var block = self.chain.GetBlockByNumber(deepBlockNum)
-	return block != nil && block.Coinbase() == self.coinbase
-}
-
-func (self *worker) logLocalMinedBlocks(current, previous *Work) {
-	if previous != nil && current.localMinedBlocks != nil {
-		nextBlockNum := current.Block.NumberU64()
-		for checkBlockNum := previous.Block.NumberU64(); checkBlockNum < nextBlockNum; checkBlockNum++ {
-			inspectBlockNum := checkBlockNum - miningLogAtDepth
-			if self.isBlockLocallyMined(current, inspectBlockNum) {
-				glog.V(logger.Info).Infof("🔨 🔗  Mined %d blocks back: block #%v", miningLogAtDepth, inspectBlockNum)
-			}
-		}
-	}
 }
 
 func (self *worker) commitNewWork() {
@@ -513,7 +454,6 @@ func (self *worker) commitNewWork() {
 			}
 		}
 	}
-	previous := self.current
 	// Could potentially happen if starting to mine in an odd state.
 	err := self.makeCurrent(parent, header)
 	if err != nil {
@@ -574,7 +514,7 @@ func (self *worker) commitNewWork() {
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
 		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart))
-		self.logLocalMinedBlocks(work, previous)
+		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)
 }
