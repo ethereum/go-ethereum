@@ -20,22 +20,23 @@ package flowcontrol
 import (
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 const rcConst = 1000000
 
 type cmNode struct {
-	node                       *ClientNode
-	lastUpdate                 int64
-	reqAccepted                int64
-	serving, recharging        bool
-	rcWeight                   uint64
-	rcValue, rcDelta           int64
-	finishRecharge, startValue int64
+	node                         *ClientNode
+	lastUpdate                   mclock.AbsTime
+	serving, recharging          bool
+	rcWeight                     uint64
+	rcValue, rcDelta, startValue int64
+	finishRecharge               mclock.AbsTime
 }
 
-func (node *cmNode) update(time int64) {
-	dt := time - node.lastUpdate
+func (node *cmNode) update(time mclock.AbsTime) {
+	dt := int64(time - node.lastUpdate)
 	node.rcValue += node.rcDelta * dt / rcConst
 	node.lastUpdate = time
 	if node.recharging && time >= node.finishRecharge {
@@ -62,7 +63,7 @@ func (node *cmNode) set(serving bool, simReqCnt, sumWeight uint64) {
 	}
 	if node.recharging {
 		node.rcDelta = -int64(node.node.cm.rcRecharge * node.rcWeight / sumWeight)
-		node.finishRecharge = node.lastUpdate + node.rcValue*rcConst/(-node.rcDelta)
+		node.finishRecharge = node.lastUpdate + mclock.AbsTime(node.rcValue*rcConst/(-node.rcDelta))
 	}
 }
 
@@ -73,7 +74,7 @@ type ClientManager struct {
 	maxSimReq, maxRcSum              uint64
 	rcRecharge                       uint64
 	resumeQueue                      chan chan bool
-	time                             int64
+	time                             mclock.AbsTime
 }
 
 func NewClientManager(rcTarget, maxSimReq, maxRcSum uint64) *ClientManager {
@@ -98,7 +99,7 @@ func (self *ClientManager) Stop() {
 }
 
 func (self *ClientManager) addNode(cnode *ClientNode) *cmNode {
-	time := getTime()
+	time := mclock.Now()
 	node := &cmNode{
 		node:           cnode,
 		lastUpdate:     time,
@@ -109,7 +110,7 @@ func (self *ClientManager) addNode(cnode *ClientNode) *cmNode {
 	defer self.lock.Unlock()
 
 	self.nodes[node] = struct{}{}
-	self.update(getTime())
+	self.update(mclock.Now())
 	return node
 }
 
@@ -117,14 +118,14 @@ func (self *ClientManager) removeNode(node *cmNode) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	time := getTime()
+	time := mclock.Now()
 	self.stop(node, time)
 	delete(self.nodes, node)
 	self.update(time)
 }
 
 // recalc sumWeight
-func (self *ClientManager) updateNodes(time int64) (rce bool) {
+func (self *ClientManager) updateNodes(time mclock.AbsTime) (rce bool) {
 	var sumWeight, rcSum uint64
 	for node, _ := range self.nodes {
 		rc := node.recharging
@@ -142,7 +143,7 @@ func (self *ClientManager) updateNodes(time int64) (rce bool) {
 	return
 }
 
-func (self *ClientManager) update(time int64) {
+func (self *ClientManager) update(time mclock.AbsTime) {
 	for {
 		firstTime := time
 		for node, _ := range self.nodes {
@@ -172,7 +173,7 @@ func (self *ClientManager) queueProc() {
 		for {
 			time.Sleep(time.Millisecond * 10)
 			self.lock.Lock()
-			self.update(getTime())
+			self.update(mclock.Now())
 			cs := self.canStartReq()
 			self.lock.Unlock()
 			if cs {
@@ -183,7 +184,7 @@ func (self *ClientManager) queueProc() {
 	}
 }
 
-func (self *ClientManager) accept(node *cmNode, time int64) bool {
+func (self *ClientManager) accept(node *cmNode, time mclock.AbsTime) bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -205,7 +206,7 @@ func (self *ClientManager) accept(node *cmNode, time int64) bool {
 	return true
 }
 
-func (self *ClientManager) stop(node *cmNode, time int64) {
+func (self *ClientManager) stop(node *cmNode, time mclock.AbsTime) {
 	if node.serving {
 		self.update(time)
 		self.simReqCnt--
@@ -214,7 +215,7 @@ func (self *ClientManager) stop(node *cmNode, time int64) {
 	}
 }
 
-func (self *ClientManager) processed(node *cmNode, time int64) (rcValue, rcCost uint64) {
+func (self *ClientManager) processed(node *cmNode, time mclock.AbsTime) (rcValue, rcCost uint64) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
