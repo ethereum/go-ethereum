@@ -292,9 +292,12 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 // safely used to calculate a signature from. The hash is calulcated with:
 // keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
 func signHash(message string) []byte {
-	data := common.FromHex(message)
 	// Give context to the signed message. This prevents an adversery to sign a tx.
 	// It has no cryptographic purpose.
+	data := common.FromHex(message)
+	if len(data) == 0 {
+		data = []byte(message)
+	}
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
 	// Always hash, this prevents choosen plaintext attacks that can extract key information
 	return crypto.Keccak256([]byte(msg))
