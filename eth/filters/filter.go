@@ -54,8 +54,8 @@ type Filter struct {
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
-// MipMaps allow past blocks to be searched much more efficiently, and can be enabled
-// any time a filter includes addresses to filter on.
+// MipMaps allow past blocks to be searched much more efficiently, but are not available
+// to light clients.
 func New(backend Backend, useMipMap bool) *Filter {
 	return &Filter{
 		backend:   backend,
