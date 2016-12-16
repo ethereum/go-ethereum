@@ -129,10 +129,6 @@ func TestInvalidTransactions(t *testing.T) {
 	pool, key := setupTxPool()
 
 	tx := transaction(0, big.NewInt(100), key)
-	if err := pool.Add(tx); err != ErrNonExistentAccount {
-		t.Error("expected", ErrNonExistentAccount)
-	}
-
 	from, _ := deriveSender(tx)
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(from, big.NewInt(1))
