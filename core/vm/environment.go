@@ -81,7 +81,7 @@ func NewEnvironment(context Context, statedb StateDB, chainConfig *params.ChainC
 		vmConfig:    vmConfig,
 		chainConfig: chainConfig,
 	}
-	env.evm = New(env, vmConfig)
+	env.evm = NewJit(env, vmConfig)
 	return env
 }
 

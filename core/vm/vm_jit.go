@@ -14,376 +14,466 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build evmjit
-
 package vm
 
 /*
 
-void* evmjit_create();
-int   evmjit_run(void* _jit, void* _data, void* _env);
-void  evmjit_destroy(void* _jit);
+#include <evmjit.h>
+#include <stdlib.h>
 
-// Shared library evmjit (e.g. libevmjit.so) is expected to be installed in /usr/local/lib
-// More: https://github.com/ethereum/evmjit
-#cgo LDFLAGS: -levmjit
+static union evm_variant query_gateway(struct evm_env* env,
+                                        enum evm_query_key key,
+                                        union evm_variant arg)
+{
+	void query(void*, size_t, int, void*);
+
+	union evm_variant result;
+	query(&result, (size_t)env, key, &arg);
+	return result;
+}
+
+extern void update(void* env, int key, void* arg1, void* arg2);
+static void update_gateway(struct evm_env* env,
+                                        enum evm_update_key key,
+                                        union evm_variant arg1,
+                                        union evm_variant arg2)
+{
+	update(env, key, &arg1, &arg2);
+}
+
+typedef long long int64;
+
+extern int64 call(
+    void* env,
+    int kind,
+    int64 gas,
+    void* address,
+    void* value,
+    void* input,
+    size_t input_size,
+    void* output,
+    size_t output_size);
+static int64_t call_gateway(
+    struct evm_env* env,
+    enum evm_call_kind kind,
+    int64_t gas,
+    struct evm_uint160be address,
+    struct evm_uint256be value,
+    uint8_t const* input,
+    size_t input_size,
+    uint8_t* output,
+    size_t output_size)
+{
+	return call(env, kind, gas, &address, &value, (void*)input, input_size, output, output_size);
+}
+
+static struct evm_instance* new_evmjit()
+{
+	struct evm_factory factory = evmjit_get_factory();
+	return factory.create(query_gateway, update_gateway, call_gateway);
+}
+
+static struct evm_result evm_execute(struct evm_instance* instance,
+                                     struct evm_env* env,
+                                     enum evm_mode mode,
+                                     struct evm_uint256be code_hash,
+                                     uint8_t const* code,
+                                     size_t code_size,
+                                     int64_t gas,
+                                     uint8_t const* input,
+                                     size_t input_size,
+                                     struct evm_uint256be value)
+{
+	return instance->execute(instance, env, mode, code_hash, code, code_size, gas, input, input_size, value);
+}
+
+#cgo CFLAGS:  -I/home/chfast/Projects/ethereum/evmjit/include
+#cgo LDFLAGS: -levmjit-standalone -lstdc++ -lm -ldl -L/home/chfast/Projects/ethereum/evmjit/build/release-llvm/libevmjit
 */
 import "C"
 
-/*
 import (
-	"bytes"
-	"errors"
 	"fmt"
+	"math"
 	"math/big"
+	"reflect"
+	"sync"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type JitVm struct {
-	env        Environment
-	me         ContextRef
-	callerAddr []byte
-	price      *big.Int
-	data       RuntimeData
+type EVMJIT struct {
+	jit  *C.struct_evm_instance
+	env  *Environment
 }
 
-type i256 [32]byte
-
-type RuntimeData struct {
-	gas          int64
-	gasPrice     int64
-	callData     *byte
-	callDataSize uint64
-	address      i256
-	caller       i256
-	origin       i256
-	callValue    i256
-	coinBase     i256
-	difficulty   i256
-	gasLimit     i256
-	number       uint64
-	timestamp    int64
-	code         *byte
-	codeSize     uint64
-	codeHash     i256
+type EVMCContext struct {
+	contract *Contract
+	env      *Environment
 }
 
-func hash2llvm(h []byte) i256 {
-	var m i256
-	copy(m[len(m)-len(h):], h) // right aligned copy
-	return m
+func NewJit(env *Environment, cfg Config) *EVMJIT {
+	// FIXME: Destroy the jit later.
+	return &EVMJIT{C.new_evmjit(), env}
 }
 
-func llvm2hash(m *i256) []byte {
-	return C.GoBytes(unsafe.Pointer(m), C.int(len(m)))
-}
 
-func llvm2hashRef(m *i256) []byte {
-	return (*[1 << 30]byte)(unsafe.Pointer(m))[:len(m):len(m)]
-}
+var contextMap = make(map[uintptr]*EVMCContext)
+var contextMapMu sync.Mutex
 
-func address2llvm(addr []byte) i256 {
-	n := hash2llvm(addr)
-	bswap(&n)
-	return n
-}
+func pinCtx(ctx *EVMCContext) uintptr {
+	contextMapMu.Lock()
 
-// bswap swap bytes of the 256-bit integer on LLVM side
-// TODO: Do not change memory on LLVM side, that can conflict with memory access optimizations
-func bswap(m *i256) *i256 {
-	for i, l := 0, len(m); i < l/2; i++ {
-		m[i], m[l-i-1] = m[l-i-1], m[i]
+	// Find empty slot in the map starting from the map length.
+	id := uintptr(len(contextMap))
+	for contextMap[id] != nil {
+		id++
 	}
-	return m
+	contextMap[id] = ctx
+	contextMapMu.Unlock()
+	return id
 }
 
-func trim(m []byte) []byte {
-	skip := 0
-	for i := 0; i < len(m); i++ {
-		if m[i] == 0 {
-			skip++
-		} else {
-			break
+func unpinCtx(id uintptr) {
+	contextMapMu.Lock()
+	delete(contextMap, id)
+	contextMapMu.Unlock()
+}
+
+func getCtx(id uintptr) *EVMCContext {
+	contextMapMu.Lock()
+	defer contextMapMu.Unlock()
+	return contextMap[id]
+}
+
+func HashToEvmc(hash common.Hash) C.struct_evm_uint256be {
+	return C.struct_evm_uint256be{bytes: *(*[32]C.uint8_t)(unsafe.Pointer(&hash[0]))}
+}
+
+func BigToEvmc(i *big.Int) C.struct_evm_uint256be {
+	return HashToEvmc(common.BigToHash(i))
+}
+
+func assert(cond bool, msg string) {
+	if !cond {
+		panic(fmt.Sprintf("Assertion failure! %v", msg))
+	}
+}
+
+type MemoryRef struct {
+	ptr *C.uint8_t
+	len int
+}
+
+func GoByteSlice(data unsafe.Pointer, size C.size_t) []byte {
+	var sliceHeader reflect.SliceHeader
+	sliceHeader.Data = uintptr(data)
+	sliceHeader.Len = int(size)
+	sliceHeader.Cap = int(size)
+	return *(*[]byte)(unsafe.Pointer(&sliceHeader))
+}
+
+//export query
+func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointer) {
+	// Represent the result memory as Go slice of 32 bytes.
+	result := GoByteSlice(pResult, 32)
+	// Or as pointer to int64.
+	pInt64Result := (*int64)(pResult)
+
+	// Copy the argument to [32]byte array.
+	arg := *(*[32]byte)(pArg)
+
+	// Get the execution context.
+	ctx := getCtx(ctxIdx)
+
+	switch key {
+	case C.EVM_SLOAD:
+		val := ctx.env.StateDB.GetState(ctx.contract.Address(), arg)
+		copy(result, val[:])
+		// fmt.Printf("EVMJIT SLOAD %x : %x\n", arg, result)
+	case C.EVM_ADDRESS:
+		addr := ctx.contract.Address()
+		copy(result[12:], addr[:])
+		// fmt.Printf("ADDRESS %x : %x\n", addr, result[12:])
+	case C.EVM_CALLER:
+		addr := ctx.contract.Caller()
+		copy(result[12:], addr[:])
+	case C.EVM_ORIGIN:
+		addr := ctx.env.Origin
+		copy(result[12:], addr[:])
+	case C.EVM_GAS_PRICE:
+		val := common.BigToHash(ctx.env.GasPrice)
+		copy(result, val[:])
+	case C.EVM_COINBASE:
+		addr := ctx.env.Coinbase
+		copy(result[12:], addr[:])
+	case C.EVM_DIFFICULTY:
+		val := common.BigToHash(ctx.env.Difficulty)
+		copy(result, val[:])
+	case C.EVM_GAS_LIMIT:
+		*pInt64Result = ctx.env.GasLimit.Int64()
+		// fmt.Printf("GASLIMIT %d %d\n", *pInt64Result, ctx.env.GasLimit())
+	case C.EVM_NUMBER:
+		*pInt64Result = ctx.env.BlockNumber.Int64()
+	case C.EVM_TIMESTAMP:
+		*pInt64Result = ctx.env.Time.Int64()
+	case C.EVM_CODE_BY_ADDRESS:
+		var addr common.Address
+		copy(addr[:], arg[12:])
+		code := ctx.env.StateDB.GetCode(addr)
+		pResAsMemRef := (*MemoryRef)(pResult)
+		pResAsMemRef.ptr = ptr(code)
+		pResAsMemRef.len = len(code)
+		// fmt.Printf("EXTCODE %x : %d\n", addr, pResAsMemRef.len)
+	case C.EVM_CODE_SIZE:
+		var addr common.Address
+		copy(addr[:], arg[12:])
+		pInt64Result := (*int64)(pResult)
+		*pInt64Result = int64(ctx.env.StateDB.GetCodeSize(addr))
+		// fmt.Printf("EXTCODESIZE %x : %d\n", addr, *pInt64Result)
+	case C.EVM_BALANCE:
+		var addr common.Address
+		copy(addr[:], arg[12:])
+		balance := ctx.env.StateDB.GetBalance(addr)
+		val := common.BigToHash(balance)
+		copy(result, val[:])
+	case C.EVM_BLOCKHASH:
+		n := *(*int64)(pArg)
+		b := ctx.env.BlockNumber.Int64()
+		a := b - 256
+		var hash common.Hash
+		if n >= a && n < b {
+			hash = ctx.env.GetHash(uint64(n))
 		}
-	}
-	return m[skip:]
-}
-
-func getDataPtr(m []byte) *byte {
-	var p *byte
-	if len(m) > 0 {
-		p = &m[0]
-	}
-	return p
-}
-
-func big2llvm(n *big.Int) i256 {
-	m := hash2llvm(n.Bytes())
-	bswap(&m)
-	return m
-}
-
-func llvm2big(m *i256) *big.Int {
-	n := big.NewInt(0)
-	for i := 0; i < len(m); i++ {
-		b := big.NewInt(int64(m[i]))
-		b.Lsh(b, uint(i)*8)
-		n.Add(n, b)
-	}
-	return n
-}
-
-// llvm2bytesRef creates a []byte slice that references byte buffer on LLVM side (as of that not controller by GC)
-// User must ensure that referenced memory is available to Go until the data is copied or not needed any more
-func llvm2bytesRef(data *byte, length uint64) []byte {
-	if length == 0 {
-		return nil
-	}
-	if data == nil {
-		panic("Unexpected nil data pointer")
-	}
-	return (*[1 << 30]byte)(unsafe.Pointer(data))[:length:length]
-}
-
-func untested(condition bool, message string) {
-	if condition {
-		panic("Condition `" + message + "` tested. Remove assert.")
-	}
-}
-
-func assert(condition bool, message string) {
-	if !condition {
-		panic("Assert `" + message + "` failed!")
-	}
-}
-
-func NewJitVm(env Environment) *JitVm {
-	return &JitVm{env: env}
-}
-
-func (self *JitVm) Run(me, caller ContextRef, code []byte, value, gas, price *big.Int, callData []byte) (ret []byte, err error) {
-	// TODO: depth is increased but never checked by VM. VM should not know about it at all.
-	self.env.SetDepth(self.env.Depth() + 1)
-
-	// TODO: Move it to Env.Call() or sth
-	if Precompiled[string(me.Address())] != nil {
-		// if it's address of precompiled contract
-		// fallback to standard VM
-		stdVm := New(self.env)
-		return stdVm.Run(me, caller, code, value, gas, price, callData)
-	}
-
-	if self.me != nil {
-		panic("JitVm.Run() can be called only once per JitVm instance")
-	}
-
-	self.me = me
-	self.callerAddr = caller.Address()
-	self.price = price
-
-	self.data.gas = gas.Int64()
-	self.data.gasPrice = price.Int64()
-	self.data.callData = getDataPtr(callData)
-	self.data.callDataSize = uint64(len(callData))
-	self.data.address = address2llvm(self.me.Address())
-	self.data.caller = address2llvm(caller.Address())
-	self.data.origin = address2llvm(self.env.Origin())
-	self.data.callValue = big2llvm(value)
-	self.data.coinBase = address2llvm(self.env.Coinbase())
-	self.data.difficulty = big2llvm(self.env.Difficulty())
-	self.data.gasLimit = big2llvm(self.env.GasLimit())
-	self.data.number = self.env.BlockNumber().Uint64()
-	self.data.timestamp = self.env.Time()
-	self.data.code = getDataPtr(code)
-	self.data.codeSize = uint64(len(code))
-	self.data.codeHash = hash2llvm(crypto.Keccak256(code)) // TODO: Get already computed hash?
-
-	jit := C.evmjit_create()
-	retCode := C.evmjit_run(jit, unsafe.Pointer(&self.data), unsafe.Pointer(self))
-
-	if retCode < 0 {
-		err = errors.New("OOG from JIT")
-		gas.SetInt64(0) // Set gas to 0, JIT does not bother
-	} else {
-		gas.SetInt64(self.data.gas)
-		if retCode == 1 { // RETURN
-			ret = C.GoBytes(unsafe.Pointer(self.data.callData), C.int(self.data.callDataSize))
-		} else if retCode == 2 { // SUICIDE
-			// TODO: Suicide support logic should be moved to Env to be shared by VM implementations
-			state := self.Env().State()
-			receiverAddr := llvm2hashRef(bswap(&self.data.address))
-			receiver := state.GetOrNewStateObject(receiverAddr)
-			balance := state.GetBalance(me.Address())
-			receiver.AddBalance(balance)
-			state.Delete(me.Address())
+		copy(result, hash[:])
+		// fmt.Printf("BLOCKHASH %x : %x (%d, %d, %d)\n", result, hash, n, a, b)
+	case C.EVM_ACCOUNT_EXISTS:
+		var addr common.Address
+		copy(addr[:], arg[12:])
+		eip158 := ctx.env.ChainConfig().IsEIP158(ctx.env.BlockNumber)
+		var exist int64
+		if eip158 {
+			if !ctx.env.StateDB.Empty(addr) {
+				exist = 1
+			}
+		} else if ctx.env.StateDB.Exist(addr) {
+			exist = 1
 		}
-	}
+		*pInt64Result = exist
+		// fmt.Printf("EXISTS? %x : %v\n", addr, exist)
+	case C.EVM_CALL_DEPTH:
+		*pInt64Result = int64(ctx.env.Depth - 1)
 
-	C.evmjit_destroy(jit)
-	return
-}
-
-func (self *JitVm) Printf(format string, v ...interface{}) VirtualMachine {
-	return self
-}
-
-func (self *JitVm) Endl() VirtualMachine {
-	return self
-}
-
-func (self *JitVm) Env() Environment {
-	return self.env
-}
-
-//export env_sha3
-func env_sha3(dataPtr *byte, length uint64, resultPtr unsafe.Pointer) {
-	data := llvm2bytesRef(dataPtr, length)
-	hash := crypto.Keccak256(data)
-	result := (*i256)(resultPtr)
-	*result = hash2llvm(hash)
-}
-
-//export env_sstore
-func env_sstore(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, valuePtr unsafe.Pointer) {
-	vm := (*JitVm)(vmPtr)
-	index := llvm2hash(bswap((*i256)(indexPtr)))
-	value := llvm2hash(bswap((*i256)(valuePtr)))
-	value = trim(value)
-	if len(value) == 0 {
-		prevValue := vm.env.State().GetState(vm.me.Address(), index)
-		if len(prevValue) != 0 {
-			vm.Env().State().Refund(vm.callerAddr, GasSStoreRefund)
-		}
-	}
-
-	vm.env.State().SetState(vm.me.Address(), index, value)
-}
-
-//export env_sload
-func env_sload(vmPtr unsafe.Pointer, indexPtr unsafe.Pointer, resultPtr unsafe.Pointer) {
-	vm := (*JitVm)(vmPtr)
-	index := llvm2hash(bswap((*i256)(indexPtr)))
-	value := vm.env.State().GetState(vm.me.Address(), index)
-	result := (*i256)(resultPtr)
-	*result = hash2llvm(value)
-	bswap(result)
-}
-
-//export env_balance
-func env_balance(_vm unsafe.Pointer, _addr unsafe.Pointer, _result unsafe.Pointer) {
-	vm := (*JitVm)(_vm)
-	addr := llvm2hash((*i256)(_addr))
-	balance := vm.Env().State().GetBalance(addr)
-	result := (*i256)(_result)
-	*result = big2llvm(balance)
-}
-
-//export env_blockhash
-func env_blockhash(_vm unsafe.Pointer, _number unsafe.Pointer, _result unsafe.Pointer) {
-	vm := (*JitVm)(_vm)
-	number := llvm2big((*i256)(_number))
-	result := (*i256)(_result)
-
-	currNumber := vm.Env().BlockNumber()
-	limit := big.NewInt(0).Sub(currNumber, big.NewInt(256))
-	if number.Cmp(limit) >= 0 && number.Cmp(currNumber) < 0 {
-		hash := vm.Env().GetHash(uint64(number.Int64()))
-		*result = hash2llvm(hash)
-	} else {
-		*result = i256{}
+	default:
+		// fmt.Printf("Unhandled %d\n", key)
 	}
 }
 
-//export env_call
-func env_call(_vm unsafe.Pointer, _gas *int64, _receiveAddr unsafe.Pointer, _value unsafe.Pointer, inDataPtr unsafe.Pointer, inDataLen uint64, outDataPtr *byte, outDataLen uint64, _codeAddr unsafe.Pointer) bool {
-	vm := (*JitVm)(_vm)
+//export update
+func update(pCtx unsafe.Pointer, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.Pointer) {
+	arg1 := *(*[32]byte)(pArg1)
+	arg2 := *(*[32]byte)(pArg2)
+	ctx := getCtx(uintptr(pCtx))
 
-	//fmt.Printf("env_call (depth %d)\n", vm.Env().Depth())
-
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Recovered in env_call (depth %d, out %p %d): %s\n", vm.Env().Depth(), outDataPtr, outDataLen, r)
+	switch key {
+	case C.EVM_SSTORE:
+		val := ctx.env.StateDB.GetState(ctx.contract.Address(), arg1)
+		ctx.env.StateDB.SetState(ctx.contract.Address(), arg1, arg2)
+		if !common.EmptyHash(val) && common.EmptyHash(arg2) {
+			// panic("SSTORE REFUND")
+			ctx.env.StateDB.AddRefund(params.SstoreRefundGas)
 		}
-	}()
-
-	balance := vm.Env().State().GetBalance(vm.me.Address())
-	value := llvm2big((*i256)(_value))
-
-	if balance.Cmp(value) >= 0 {
-		receiveAddr := llvm2hash((*i256)(_receiveAddr))
-		inData := C.GoBytes(inDataPtr, C.int(inDataLen))
-		outData := llvm2bytesRef(outDataPtr, outDataLen)
-		codeAddr := llvm2hash((*i256)(_codeAddr))
-		gas := big.NewInt(*_gas)
-		var out []byte
-		var err error
-		if bytes.Equal(codeAddr, receiveAddr) {
-			out, err = vm.env.Call(vm.me, codeAddr, inData, gas, vm.price, value)
-		} else {
-			out, err = vm.env.CallCode(vm.me, codeAddr, inData, gas, vm.price, value)
+		// fmt.Printf("EVMJIT STORE %x : %x [%x, %d]\n", arg1, arg2, ctx.contract.Address(), int(uintptr(pEnv)))
+	case C.EVM_LOG:
+		dataRef := (*MemoryRef)(pArg1)
+		topicsRef := (*MemoryRef)(pArg2)
+		data := C.GoBytes(unsafe.Pointer(dataRef.ptr), C.int(dataRef.len))
+		// FIXME: Avoid double copy of topics.
+		tData := C.GoBytes(unsafe.Pointer(topicsRef.ptr), C.int(topicsRef.len))
+		nTopics := topicsRef.len / 32
+		topics := make([]common.Hash, nTopics)
+		for i := 0; i < nTopics; i++ {
+			copy(topics[i][:], tData[i*32:(i+1)*32])
 		}
-		*_gas = gas.Int64()
+		log := NewLog(ctx.contract.Address(), topics, data, ctx.env.BlockNumber.Uint64())
+		ctx.env.StateDB.AddLog(log)
+	case C.EVM_SELFDESTRUCT:
+		db := ctx.env.StateDB
+		addr := ctx.contract.Address()
+		if !db.HasSuicided(addr) {
+			db.AddRefund(params.SuicideRefundGas)
+		}
+		balance := db.GetBalance(addr)
+		beneficiary := common.BytesToAddress(arg1[12:])
+		db.AddBalance(beneficiary, balance)
+		db.Suicide(addr)
+	}
+}
+
+//export call
+func call(
+	pCtx unsafe.Pointer,
+	kind int32,
+	gas int64,
+	pAddr unsafe.Pointer,
+	pValue unsafe.Pointer,
+	pInput unsafe.Pointer,
+	inputSize C.size_t,
+	pOutput unsafe.Pointer,
+	outputSize C.size_t) int64 {
+
+	ctx := getCtx(uintptr(pCtx))
+	address := *(*[20]byte)(pAddr)
+	value := (*(*common.Hash)(pValue)).Big()
+	input := GoByteSlice(pInput, inputSize)
+	output := GoByteSlice(pOutput, outputSize)
+	bigGas := new(big.Int).SetInt64(gas)
+
+	// FIXME: C.EVM_CALL_FAILURE not available.
+	const callFailure = math.MinInt64
+
+	switch kind {
+	case C.EVM_CALL:
+		// fmt.Printf("CALL(gas %d, %x)\n", bigGas, address)
+		ctx.contract.Gas.SetInt64(0)
+		ret, err := ctx.env.Call(ctx.contract, address, input, bigGas, value)
+		gasLeft := ctx.contract.Gas.Int64()
+		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
+		// fmt.Printf("Gas left %d\n", gasLeft)
 		if err == nil {
-			copy(outData, out)
-			return true
+			copy(output, ret)
+			assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
+			// This can happen for precompiled contracts:
+			// if (gasLeft == gas) {
+			// 	assert(len(output) == 0, fmt.Sprintf("Non-zero output: %d %x", len(output), output))
+			// }
+			return gasLeft
+		}
+		return gasLeft | callFailure
+	case C.EVM_CALLCODE:
+		// fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, address, value)
+		ctx.contract.Gas.SetInt64(0)
+		ret, err := ctx.env.CallCode(ctx.contract, address, input, bigGas, value)
+		gasLeft := ctx.contract.Gas.Int64()
+		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
+		// fmt.Printf("Gas left %d\n", gasLeft)
+		if err == nil {
+			copy(output, ret)
+			return gasLeft
+		} else {
+			// fmt.Printf("Error: %v\n", err)
+		}
+		return gasLeft | callFailure
+	case C.EVM_DELEGATECALL:
+		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
+		ctx.contract.Gas.SetInt64(0)
+		ret, err := ctx.env.DelegateCall(ctx.contract, address, input, bigGas)
+		gasLeft := ctx.contract.Gas.Int64()
+		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
+		// fmt.Printf("Gas left %d\n", gasLeft)
+		if err == nil {
+			copy(output, ret)
+			return gasLeft
+		}
+		return gasLeft | callFailure
+	case C.EVM_CREATE:
+		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
+		ctx.contract.Gas.SetInt64(0)
+		_, addr, err := ctx.env.Create(ctx.contract, input, bigGas, value)
+		gasLeft := ctx.contract.Gas.Int64()
+		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
+		if (ctx.env.ChainConfig().IsHomestead(ctx.env.BlockNumber) && err == CodeStoreOutOfGasError) ||
+			(err != nil && err != CodeStoreOutOfGasError) {
+			return callFailure
+		} else {
+			copy(output, addr[:])
+			return gasLeft
+		}
+	}
+	return 0
+}
+
+func ptr(bytes []byte) *C.uint8_t {
+	header := *(*reflect.SliceHeader)(unsafe.Pointer(&bytes))
+	return (*C.uint8_t)(unsafe.Pointer(header.Data))
+}
+
+func getMode(env *Environment) C.enum_evm_mode {
+	n := env.BlockNumber
+	if env.ChainConfig().IsEIP158(n) {
+		return C.EVM_CLEARING
+	}
+	if env.ChainConfig().IsEIP150(n) {
+		return C.EVM_ANTI_DOS
+	}
+	if env.ChainConfig().IsHomestead(n) {
+		return C.EVM_HOMESTEAD
+	}
+	return C.EVM_FRONTIER
+}
+
+func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error) {
+	evm.env.Depth++
+	defer func() { evm.env.Depth-- }()
+
+	if contract.CodeAddr != nil {
+		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
+			return evm.RunPrecompiled(p, input, contract)
 		}
 	}
 
-	return false
+	// Don't bother with the execution if there's no code.
+	if len(contract.Code) == 0 {
+		return nil, nil
+	}
+
+	code := contract.Code
+	codePtr := (*C.uint8_t)(unsafe.Pointer(&code[0]))
+	codeSize := C.size_t(len(code))
+	codeHash := HashToEvmc(crypto.Keccak256Hash(code))
+	gas := C.int64_t(contract.Gas.Int64())
+	inputPtr := ptr(input)
+	inputLen := C.size_t(len(input))
+	value := BigToEvmc(contract.value)
+	mode := getMode(evm.env)
+	// fmt.Printf("EVMJIT pre Run (gas %d %d mode: %d, env: %d) %x\n", contract.Gas, gas, mode, env, evm.contract.Address())
+
+	// Create context for this execution.
+	ctxId := pinCtx(&EVMCContext{contract, evm.env})
+
+	r := C.evm_execute(evm.jit, unsafe.Pointer(ctxId), mode, codeHash, codePtr, codeSize, gas, inputPtr, inputLen, value)
+
+	unpinCtx(ctxId)
+
+	// fmt.Printf("EVMJIT Run %d %d %x\n", r.code, r.gas_left, evm.contract.Address())
+	if r.gas_left > gas {
+		panic("OOPS")
+	}
+	contract.Gas.SetInt64(int64(r.gas_left))
+	// fmt.Printf("Gas left: %d\n", contract.Gas)
+	output := C.GoBytes(unsafe.Pointer(r.output_data), C.int(r.output_size))
+
+	if r.code != 0 {
+		// FIXME: Produce better error messages.
+		err = OutOfGasError
+	}
+
+	if r.internal_memory != nil {
+		C.free(r.internal_memory)
+	}
+	return output, err
 }
 
-//export env_create
-func env_create(_vm unsafe.Pointer, _gas *int64, _value unsafe.Pointer, initDataPtr unsafe.Pointer, initDataLen uint64, _result unsafe.Pointer) {
-	vm := (*JitVm)(_vm)
-
-	value := llvm2big((*i256)(_value))
-	initData := C.GoBytes(initDataPtr, C.int(initDataLen)) // TODO: Unnecessary if low balance
-	result := (*i256)(_result)
-	*result = i256{}
-
-	gas := big.NewInt(*_gas)
-	ret, suberr, ref := vm.env.Create(vm.me, nil, initData, gas, vm.price, value)
-	if suberr == nil {
-		dataGas := big.NewInt(int64(len(ret))) // TODO: Not the best design. env.Create can do it, it has the reference to gas counter
-		dataGas.Mul(dataGas, params.CreateDataGas)
-		gas.Sub(gas, dataGas)
-		*result = hash2llvm(ref.Address())
+func (evm *EVMJIT) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
+	// fmt.Printf("PRECOMPILED %x\n", *contract.CodeAddr)
+	gas := p.Gas(len(input))
+	if contract.UseGas(gas) {
+		ret = p.Call(input)
+		return ret, nil
+	} else {
+		return nil, OutOfGasError
 	}
-	*_gas = gas.Int64()
 }
-
-//export env_log
-func env_log(_vm unsafe.Pointer, dataPtr unsafe.Pointer, dataLen uint64, _topic1 unsafe.Pointer, _topic2 unsafe.Pointer, _topic3 unsafe.Pointer, _topic4 unsafe.Pointer) {
-	vm := (*JitVm)(_vm)
-
-	data := C.GoBytes(dataPtr, C.int(dataLen))
-
-	topics := make([][]byte, 0, 4)
-	if _topic1 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic1)))
-	}
-	if _topic2 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic2)))
-	}
-	if _topic3 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic3)))
-	}
-	if _topic4 != nil {
-		topics = append(topics, llvm2hash((*i256)(_topic4)))
-	}
-
-	vm.Env().AddLog(state.NewLog(vm.me.Address(), topics, data, vm.env.BlockNumber().Uint64()))
-}
-
-//export env_extcode
-func env_extcode(_vm unsafe.Pointer, _addr unsafe.Pointer, o_size *uint64) *byte {
-	vm := (*JitVm)(_vm)
-	addr := llvm2hash((*i256)(_addr))
-	code := vm.Env().State().GetCode(addr)
-	*o_size = uint64(len(code))
-	return getDataPtr(code)
-}*/
