@@ -29,9 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// Config are the configuration options for the EVM
+// Config are the configuration options for the Interpreter
 type Config struct {
-	// Debug enabled debugging EVM options
+	// Debug enabled debugging Interpreter options
 	Debug bool
 	// EnableJit enabled the JIT VM
 	EnableJit bool
@@ -39,26 +39,26 @@ type Config struct {
 	ForceJit bool
 	// Tracer is the op code logger
 	Tracer Tracer
-	// NoRecursion disabled EVM call, callcode,
+	// NoRecursion disabled Interpreter call, callcode,
 	// delegate call and create.
 	NoRecursion bool
 	// Disable gas metering
 	DisableGasMetering bool
 }
 
-// EVM is used to run Ethereum based contracts and will utilise the
+// Interpreter is used to run Ethereum based contracts and will utilise the
 // passed environment to query external sources for state information.
-// The EVM will run the byte code VM or JIT VM based on the passed
+// The Interpreter will run the byte code VM or JIT VM based on the passed
 // configuration.
-type EVM struct {
-	env      *Environment
+type Interpreter struct {
+	env      *EVM
 	cfg      Config
 	gasTable params.GasTable
 }
 
-// New returns a new instance of the EVM.
-func New(env *Environment, cfg Config) *EVM {
-	return &EVM{
+// NewInterpreter returns a new instance of the Interpreter.
+func NewInterpreter(env *EVM, cfg Config) *Interpreter {
+	return &Interpreter{
 		env:      env,
 		cfg:      cfg,
 		gasTable: env.ChainConfig().GasTable(env.BlockNumber),
@@ -66,7 +66,7 @@ func New(env *Environment, cfg Config) *EVM {
 }
 
 // Run loops and evaluates the contract's code with the given input data
-func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
+func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
 	evm.env.Depth++
 	defer func() { evm.env.Depth-- }()
 
@@ -112,7 +112,7 @@ func (evm *EVM) Run(contract *Contract, input []byte) (ret []byte, err error) {
 		}()
 	}
 
-	// The EVM main run loop (contextual). This loop runs until either an
+	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SUICIDE is executed, an error accured during
 	// the execution of one of the operations or until the evm.done is set by
 	// the parent context.Context.

@@ -278,7 +278,7 @@ func wrapError(context string, err error) error {
 }
 
 // CaptureState implements the Tracer interface to trace a single step of VM execution
-func (jst *JavascriptTracer) CaptureState(env *vm.Environment, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
+func (jst *JavascriptTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost *big.Int, memory *vm.Memory, stack *vm.Stack, contract *vm.Contract, depth int, err error) error {
 	if jst.err == nil {
 		jst.memory.memory = memory
 		jst.stack.stack = stack

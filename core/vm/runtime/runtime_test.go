@@ -56,7 +56,7 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-func TestEnvironment(t *testing.T) {
+func TestEVM(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("crashed with: %v", r)

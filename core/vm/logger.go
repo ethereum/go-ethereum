@@ -45,7 +45,7 @@ type LogConfig struct {
 	Limit          int  // maximum length of output, but zero means unlimited
 }
 
-// StructLog is emitted to the Environment each cycle and lists information about the current internal state
+// StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
 	Pc      uint64
@@ -65,7 +65,7 @@ type StructLog struct {
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Tracer interface {
-	CaptureState(env *Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
+	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -94,7 +94,7 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 // captureState logs a new structured log message and pushes it out to the environment
 //
 // captureState also tracks SSTORE ops to track dirty values.
-func (l *StructLogger) CaptureState(env *Environment, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
+func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
 		return ErrTraceLimitReached

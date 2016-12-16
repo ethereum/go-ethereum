@@ -34,12 +34,12 @@ func memoryGasCost(mem *Memory, newMemSize *big.Int) *big.Int {
 }
 
 func makeGenericGasFunc(op OpCode) gasFunc {
-	return func(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+	return func(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 		return gasTable[op]
 	}
 }
 
-func gasCalldataCopy(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasCalldataCopy(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
 	gas.Add(gas, gasTable[CALLDATACOPY])
 	words := toWordSize(stack.Back(2))
@@ -47,7 +47,7 @@ func gasCalldataCopy(gt params.GasTable, env *Environment, contract *Contract, s
 	return gas.Add(gas, words.Mul(words, params.CopyGas))
 }
 
-func gasSStore(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasSStore(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	var (
 		y, x = stack.Back(1), stack.Back(0)
 		val  = env.StateDB.GetState(contract.Address(), common.BigToHash(x))
@@ -70,7 +70,7 @@ func gasSStore(gt params.GasTable, env *Environment, contract *Contract, stack *
 }
 
 func makeGasLog(n uint) gasFunc {
-	return func(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+	return func(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 		mSize := stack.Back(1)
 
 		gas := new(big.Int).Add(memoryGasCost(mem, memorySize), params.LogGas)
@@ -80,14 +80,14 @@ func makeGasLog(n uint) gasFunc {
 	}
 }
 
-func gasSha3(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasSha3(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
 	gas.Add(gas, gasTable[SHA3])
 	words := toWordSize(stack.Back(1))
 	return gas.Add(gas, words.Mul(words, params.Sha3WordGas))
 }
 
-func gasCodeCopy(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasCodeCopy(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
 	gas.Add(gas, gasTable[CODECOPY])
 	words := toWordSize(stack.Back(2))
@@ -95,7 +95,7 @@ func gasCodeCopy(gt params.GasTable, env *Environment, contract *Contract, stack
 	return gas.Add(gas, words.Mul(words, params.CopyGas))
 }
 
-func gasExtCodeCopy(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasExtCodeCopy(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
 	gas.Add(gas, gt.ExtcodeCopy)
 	words := toWordSize(stack.Back(3))
@@ -103,42 +103,42 @@ func gasExtCodeCopy(gt params.GasTable, env *Environment, contract *Contract, st
 	return gas.Add(gas, words.Mul(words, params.CopyGas))
 }
 
-func gasMLoad(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasMLoad(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return new(big.Int).Add(gasTable[MLOAD], memoryGasCost(mem, memorySize))
 }
 
-func gasMStore8(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasMStore8(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return new(big.Int).Add(gasTable[MSTORE8], memoryGasCost(mem, memorySize))
 }
 
-func gasMStore(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasMStore(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return new(big.Int).Add(gasTable[MSTORE], memoryGasCost(mem, memorySize))
 }
 
-func gasCreate(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasCreate(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return new(big.Int).Add(gasTable[CREATE], memoryGasCost(mem, memorySize))
 }
 
-func gasBalance(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasBalance(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return gt.Balance
 }
 
-func gasExtCodeSize(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasExtCodeSize(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return gt.ExtcodeSize
 }
 
-func gasSLoad(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasSLoad(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return gt.SLoad
 }
 
-func gasExp(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasExp(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	expByteLen := int64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 	gas := big.NewInt(expByteLen)
 	gas.Mul(gas, gt.ExpByte)
 	return gas.Add(gas, gasTable[EXP])
 }
 
-func gasCall(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasCall(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := new(big.Int).Set(gt.Calls)
 
 	transfersValue := stack.Back(2).BitLen() > 0
@@ -170,7 +170,7 @@ func gasCall(gt params.GasTable, env *Environment, contract *Contract, stack *St
 	return gas.Add(gas, cg)
 }
 
-func gasCallCode(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasCallCode(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := new(big.Int).Set(gt.Calls)
 	if stack.Back(2).BitLen() > 0 {
 		gas.Add(gas, params.CallValueTransferGas)
@@ -189,11 +189,11 @@ func gasCallCode(gt params.GasTable, env *Environment, contract *Contract, stack
 	return gas.Add(gas, cg)
 }
 
-func gasReturn(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasReturn(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return new(big.Int).Add(gasTable[RETURN], memoryGasCost(mem, memorySize))
 }
 
-func gasSuicide(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasSuicide(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := new(big.Int)
 	// EIP150 homestead gas reprice fork:
 	if env.ChainConfig().IsEIP150(env.BlockNumber) {
@@ -219,7 +219,7 @@ func gasSuicide(gt params.GasTable, env *Environment, contract *Contract, stack 
 	return gas
 }
 
-func gasDelegateCall(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasDelegateCall(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := new(big.Int).Add(gt.Calls, memoryGasCost(mem, memorySize))
 
 	cg := callGas(gt, contract.Gas, gas, stack.data[stack.len()-1])
@@ -233,15 +233,15 @@ func gasDelegateCall(gt params.GasTable, env *Environment, contract *Contract, s
 	return gas.Add(gas, cg)
 }
 
-func gasPush(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasPush(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return GasFastestStep
 }
 
-func gasSwap(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasSwap(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return GasFastestStep
 }
 
-func gasDup(gt params.GasTable, env *Environment, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
+func gasDup(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return GasFastestStep
 }
 

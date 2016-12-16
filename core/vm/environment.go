@@ -58,10 +58,10 @@ type Context struct {
 	Difficulty  *big.Int       // Provides information for DIFFICULTY
 }
 
-// Environment provides information about external sources for the EVM
+// EVM provides information about external sources for the EVM
 //
-// The Environment should never be reused and is not thread safe.
-type Environment struct {
+// The EVM should never be reused and is not thread safe.
+type EVM struct {
 	// Context provides auxiliary blockchain related information
 	Context
 	// StateDB gives access to the underlying state
@@ -76,7 +76,7 @@ type Environment struct {
 	vmConfig Config
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
-	evm Vm
+	interpreter EVMInterpreter
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
@@ -84,27 +84,27 @@ type Environment struct {
 	quit chan struct{}
 }
 
-// NewEnvironment retutrns a new EVM environment.
-func NewEnvironment(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *Environment {
-	env := &Environment{
+// NewEVM retutrns a new EVM evmironment.
+func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
+	evm := &EVM{
 		Context:     ctx,
 		StateDB:     statedb,
 		vmConfig:    vmConfig,
 		chainConfig: chainConfig,
 	}
 
-	env.evm = New(env, vmConfig)
-	return env
+	evm.interpreter = NewInterpreter(evm, vmConfig)
+	return evm
 }
 
-func (env *Environment) init() {
-	env.quit = make(chan struct{})
+func (evm *EVM) init() {
+	evm.quit = make(chan struct{})
 	go func() {
 		select {
-		case <-env.quit:
+		case <-evm.quit:
 			return
-		case <-env.Context.Done():
-			atomic.StoreInt32(&env.abort, 1)
+		case <-evm.Context.Done():
+			atomic.StoreInt32(&evm.abort, 1)
 		}
 	}()
 }
@@ -112,13 +112,13 @@ func (env *Environment) init() {
 // Call executes the contract associated with the addr with the given input as paramaters. It also handles any
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
-func (env *Environment) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	if env.Depth == 0 {
-		env.init()
-		defer close(env.quit)
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
+	if evm.Depth == 0 {
+		evm.init()
+		defer close(evm.quit)
 	}
 
-	if env.vmConfig.NoRecursion && env.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, nil
@@ -126,12 +126,12 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if env.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
 		return nil, ErrDepth
 	}
-	if !env.Context.CanTransfer(env.StateDB, caller.Address(), value) {
+	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
 
 		return nil, ErrInsufficientBalance
@@ -139,35 +139,35 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 
 	var (
 		to       Account
-		snapshot = env.StateDB.Snapshot()
+		snapshot = evm.StateDB.Snapshot()
 	)
-	if !env.StateDB.Exist(addr) {
-		if PrecompiledContracts[addr] == nil && env.ChainConfig().IsEIP158(env.BlockNumber) && value.BitLen() == 0 {
+	if !evm.StateDB.Exist(addr) {
+		if PrecompiledContracts[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.BitLen() == 0 {
 			caller.ReturnGas(gas)
 			return nil, nil
 		}
 
-		to = env.StateDB.CreateAccount(addr)
+		to = evm.StateDB.CreateAccount(addr)
 	} else {
-		to = env.StateDB.GetAccount(addr)
+		to = evm.StateDB.GetAccount(addr)
 	}
-	env.Transfer(env.StateDB, caller.Address(), to.Address(), value)
+	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// initialise a new contract and set the code that is to be used by the
-	// E The contract is a scoped environment for this execution context
+	// E The contract is a scoped evmironment for this execution context
 	// only.
 	contract := NewContract(caller, to, value, gas)
-	contract.SetCallCode(&addr, env.StateDB.GetCodeHash(addr), env.StateDB.GetCode(addr))
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 	defer contract.Finalise()
 
-	ret, err = env.EVM().Run(contract, input)
+	ret, err = evm.interpreter.Run(contract, input)
 	// When an error was returned by the EVM or when setting the creation code
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if err != nil {
 		contract.UseGas(contract.Gas)
 
-		env.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot)
 	}
 	return ret, err
 }
@@ -177,13 +177,13 @@ func (env *Environment) Call(caller ContractRef, addr common.Address, input []by
 // case of an execution error or failed value transfer.
 //
 // CallCode differs from Call in the sense that it executes the given address' code with the caller as context.
-func (env *Environment) CallCode(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	if env.Depth == 0 {
-		env.init()
-		defer close(env.quit)
+func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
+	if evm.Depth == 0 {
+		evm.init()
+		defer close(evm.quit)
 	}
 
-	if env.vmConfig.NoRecursion && env.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, nil
@@ -191,33 +191,33 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, input 
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if env.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
 		return nil, ErrDepth
 	}
-	if !env.CanTransfer(env.StateDB, caller.Address(), value) {
+	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
 
-		return nil, fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", value, env.StateDB.GetBalance(caller.Address()))
+		return nil, fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", value, evm.StateDB.GetBalance(caller.Address()))
 	}
 
 	var (
-		snapshot = env.StateDB.Snapshot()
-		to       = env.StateDB.GetAccount(caller.Address())
+		snapshot = evm.StateDB.Snapshot()
+		to       = evm.StateDB.GetAccount(caller.Address())
 	)
 	// initialise a new contract and set the code that is to be used by the
-	// E The contract is a scoped environment for this execution context
+	// E The contract is a scoped evmironment for this execution context
 	// only.
 	contract := NewContract(caller, to, value, gas)
-	contract.SetCallCode(&addr, env.StateDB.GetCodeHash(addr), env.StateDB.GetCode(addr))
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 	defer contract.Finalise()
 
-	ret, err = env.EVM().Run(contract, input)
+	ret, err = evm.interpreter.Run(contract, input)
 	if err != nil {
 		contract.UseGas(contract.Gas)
 
-		env.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot)
 	}
 
 	return ret, err
@@ -228,13 +228,13 @@ func (env *Environment) CallCode(caller ContractRef, addr common.Address, input 
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with the caller as context
 // and the caller is set to the caller of the caller.
-func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
-	if env.Depth == 0 {
-		env.init()
-		defer close(env.quit)
+func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
+	if evm.Depth == 0 {
+		evm.init()
+		defer close(evm.quit)
 	}
 
-	if env.vmConfig.NoRecursion && env.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, nil
@@ -242,39 +242,39 @@ func (env *Environment) DelegateCall(caller ContractRef, addr common.Address, in
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if env.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 		return nil, ErrDepth
 	}
 
 	var (
-		snapshot = env.StateDB.Snapshot()
-		to       = env.StateDB.GetAccount(caller.Address())
+		snapshot = evm.StateDB.Snapshot()
+		to       = evm.StateDB.GetAccount(caller.Address())
 	)
 
 	// Iinitialise a new contract and make initialise the delegate values
 	contract := NewContract(caller, to, caller.Value(), gas).AsDelegate()
-	contract.SetCallCode(&addr, env.StateDB.GetCodeHash(addr), env.StateDB.GetCode(addr))
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 	defer contract.Finalise()
 
-	ret, err = env.EVM().Run(contract, input)
+	ret, err = evm.interpreter.Run(contract, input)
 	if err != nil {
 		contract.UseGas(contract.Gas)
 
-		env.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot)
 	}
 
 	return ret, err
 }
 
 // Create creates a new contract using code as deployment code.
-func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.Int) (ret []byte, contractAddr common.Address, err error) {
-	if env.Depth == 0 {
-		env.init()
-		defer close(env.quit)
+func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (ret []byte, contractAddr common.Address, err error) {
+	if evm.Depth == 0 {
+		evm.init()
+		defer close(evm.quit)
 	}
 
-	if env.vmConfig.NoRecursion && env.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, nil
@@ -282,37 +282,37 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if env.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.Depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, ErrDepth
 	}
-	if !env.CanTransfer(env.StateDB, caller.Address(), value) {
+	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, ErrInsufficientBalance
 	}
 
 	// Create a new account on the state
-	nonce := env.StateDB.GetNonce(caller.Address())
-	env.StateDB.SetNonce(caller.Address(), nonce+1)
+	nonce := evm.StateDB.GetNonce(caller.Address())
+	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 
-	snapshot := env.StateDB.Snapshot()
+	snapshot := evm.StateDB.Snapshot()
 	contractAddr = crypto.CreateAddress(caller.Address(), nonce)
-	to := env.StateDB.CreateAccount(contractAddr)
-	if env.ChainConfig().IsEIP158(env.BlockNumber) {
-		env.StateDB.SetNonce(contractAddr, 1)
+	to := evm.StateDB.CreateAccount(contractAddr)
+	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
+		evm.StateDB.SetNonce(contractAddr, 1)
 	}
-	env.Transfer(env.StateDB, caller.Address(), to.Address(), value)
+	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
 	// initialise a new contract and set the code that is to be used by the
-	// E The contract is a scoped environment for this execution context
+	// E The contract is a scoped evmironment for this execution context
 	// only.
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&contractAddr, crypto.Keccak256Hash(code), code)
 	defer contract.Finalise()
 
-	ret, err = env.EVM().Run(contract, nil)
+	ret, err = evm.interpreter.Run(contract, nil)
 
 	// check whether the max code size has been exceeded
 	maxCodeSizeExceeded := len(ret) > params.MaxCodeSize
@@ -324,7 +324,7 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 		dataGas := big.NewInt(int64(len(ret)))
 		dataGas.Mul(dataGas, params.CreateDataGas)
 		if contract.UseGas(dataGas) {
-			env.StateDB.SetCode(contractAddr, ret)
+			evm.StateDB.SetCode(contractAddr, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
 		}
@@ -334,9 +334,9 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 	// above we revert to the snapshot and consume any gas remaining. Additionally
 	// when we're in homestead this also counts for code storage gas errors.
 	if maxCodeSizeExceeded ||
-		(err != nil && (env.ChainConfig().IsHomestead(env.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
+		(err != nil && (evm.ChainConfig().IsHomestead(evm.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
 		contract.UseGas(contract.Gas)
-		env.StateDB.RevertToSnapshot(snapshot)
+		evm.StateDB.RevertToSnapshot(snapshot)
 
 		// Nothing should be returned when an error is thrown.
 		return nil, contractAddr, err
@@ -351,8 +351,8 @@ func (env *Environment) Create(caller ContractRef, code []byte, gas, value *big.
 	return ret, contractAddr, err
 }
 
-// ChainConfig returns the environment's chain configuration
-func (env *Environment) ChainConfig() *params.ChainConfig { return env.chainConfig }
+// ChainConfig returns the evmironment's chain configuration
+func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-// EVM returns the environments EVM
-func (env *Environment) EVM() Vm { return env.evm }
+// Interpreter returns the EVM interpreter
+func (evm *EVM) Interpreter() EVMInterpreter { return evm.interpreter }

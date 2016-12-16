@@ -26,25 +26,25 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func opAdd(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opAdd(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	stack.push(U256(x.Add(x, y)))
 	return nil, nil
 }
 
-func opSub(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSub(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	stack.push(U256(x.Sub(x, y)))
 	return nil, nil
 }
 
-func opMul(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMul(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	stack.push(U256(x.Mul(x, y)))
 	return nil, nil
 }
 
-func opDiv(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opDiv(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	if y.Cmp(common.Big0) != 0 {
 		stack.push(U256(x.Div(x, y)))
@@ -54,7 +54,7 @@ func opDiv(pc *uint64, env *Environment, contract *Contract, memory *Memory, sta
 	return nil, nil
 }
 
-func opSdiv(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSdiv(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := S256(stack.pop()), S256(stack.pop())
 	if y.Cmp(common.Big0) == 0 {
 		stack.push(new(big.Int))
@@ -75,7 +75,7 @@ func opSdiv(pc *uint64, env *Environment, contract *Contract, memory *Memory, st
 	return nil, nil
 }
 
-func opMod(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMod(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	if y.Cmp(common.Big0) == 0 {
 		stack.push(new(big.Int))
@@ -85,7 +85,7 @@ func opMod(pc *uint64, env *Environment, contract *Contract, memory *Memory, sta
 	return nil, nil
 }
 
-func opSmod(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSmod(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := S256(stack.pop()), S256(stack.pop())
 
 	if y.Cmp(common.Big0) == 0 {
@@ -106,13 +106,13 @@ func opSmod(pc *uint64, env *Environment, contract *Contract, memory *Memory, st
 	return nil, nil
 }
 
-func opExp(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opExp(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	base, exponent := stack.pop(), stack.pop()
 	stack.push(math.Exp(base, exponent))
 	return nil, nil
 }
 
-func opSignExtend(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSignExtend(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	back := stack.pop()
 	if back.Cmp(big.NewInt(31)) < 0 {
 		bit := uint(back.Uint64()*8 + 7)
@@ -130,13 +130,13 @@ func opSignExtend(pc *uint64, env *Environment, contract *Contract, memory *Memo
 	return nil, nil
 }
 
-func opNot(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opNot(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x := stack.pop()
 	stack.push(U256(x.Not(x)))
 	return nil, nil
 }
 
-func opLt(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opLt(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	if x.Cmp(y) < 0 {
 		stack.push(big.NewInt(1))
@@ -146,7 +146,7 @@ func opLt(pc *uint64, env *Environment, contract *Contract, memory *Memory, stac
 	return nil, nil
 }
 
-func opGt(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opGt(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	if x.Cmp(y) > 0 {
 		stack.push(big.NewInt(1))
@@ -156,7 +156,7 @@ func opGt(pc *uint64, env *Environment, contract *Contract, memory *Memory, stac
 	return nil, nil
 }
 
-func opSlt(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSlt(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := S256(stack.pop()), S256(stack.pop())
 	if x.Cmp(S256(y)) < 0 {
 		stack.push(big.NewInt(1))
@@ -166,7 +166,7 @@ func opSlt(pc *uint64, env *Environment, contract *Contract, memory *Memory, sta
 	return nil, nil
 }
 
-func opSgt(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSgt(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := S256(stack.pop()), S256(stack.pop())
 	if x.Cmp(y) > 0 {
 		stack.push(big.NewInt(1))
@@ -176,7 +176,7 @@ func opSgt(pc *uint64, env *Environment, contract *Contract, memory *Memory, sta
 	return nil, nil
 }
 
-func opEq(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opEq(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	if x.Cmp(y) == 0 {
 		stack.push(big.NewInt(1))
@@ -186,7 +186,7 @@ func opEq(pc *uint64, env *Environment, contract *Contract, memory *Memory, stac
 	return nil, nil
 }
 
-func opIszero(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opIszero(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x := stack.pop()
 	if x.Cmp(common.Big0) > 0 {
 		stack.push(new(big.Int))
@@ -196,22 +196,22 @@ func opIszero(pc *uint64, env *Environment, contract *Contract, memory *Memory, 
 	return nil, nil
 }
 
-func opAnd(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opAnd(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	stack.push(x.And(x, y))
 	return nil, nil
 }
-func opOr(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opOr(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	stack.push(x.Or(x, y))
 	return nil, nil
 }
-func opXor(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opXor(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
 	stack.push(x.Xor(x, y))
 	return nil, nil
 }
-func opByte(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opByte(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	th, val := stack.pop(), stack.pop()
 	if th.Cmp(big.NewInt(32)) < 0 {
 		byte := big.NewInt(int64(common.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
@@ -221,7 +221,7 @@ func opByte(pc *uint64, env *Environment, contract *Contract, memory *Memory, st
 	}
 	return nil, nil
 }
-func opAddmod(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opAddmod(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y, z := stack.pop(), stack.pop(), stack.pop()
 	if z.Cmp(Zero) > 0 {
 		add := x.Add(x, y)
@@ -232,7 +232,7 @@ func opAddmod(pc *uint64, env *Environment, contract *Contract, memory *Memory, 
 	}
 	return nil, nil
 }
-func opMulmod(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMulmod(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y, z := stack.pop(), stack.pop(), stack.pop()
 	if z.Cmp(Zero) > 0 {
 		mul := x.Mul(x, y)
@@ -244,7 +244,7 @@ func opMulmod(pc *uint64, env *Environment, contract *Contract, memory *Memory, 
 	return nil, nil
 }
 
-func opSha3(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSha3(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.pop(), stack.pop()
 	hash := crypto.Keccak256(memory.Get(offset.Int64(), size.Int64()))
 
@@ -252,12 +252,12 @@ func opSha3(pc *uint64, env *Environment, contract *Contract, memory *Memory, st
 	return nil, nil
 }
 
-func opAddress(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opAddress(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(common.Bytes2Big(contract.Address().Bytes()))
 	return nil, nil
 }
 
-func opBalance(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opBalance(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	addr := common.BigToAddress(stack.pop())
 	balance := env.StateDB.GetBalance(addr)
 
@@ -265,32 +265,32 @@ func opBalance(pc *uint64, env *Environment, contract *Contract, memory *Memory,
 	return nil, nil
 }
 
-func opOrigin(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opOrigin(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(env.Origin.Big())
 	return nil, nil
 }
 
-func opCaller(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCaller(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(contract.Caller().Big())
 	return nil, nil
 }
 
-func opCallValue(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCallValue(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(new(big.Int).Set(contract.value))
 	return nil, nil
 }
 
-func opCalldataLoad(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCalldataLoad(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(common.Bytes2Big(getData(contract.Input, stack.pop(), common.Big32)))
 	return nil, nil
 }
 
-func opCalldataSize(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCalldataSize(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(big.NewInt(int64(len(contract.Input))))
 	return nil, nil
 }
 
-func opCalldataCopy(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCalldataCopy(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
 		mOff = stack.pop()
 		cOff = stack.pop()
@@ -300,20 +300,20 @@ func opCalldataCopy(pc *uint64, env *Environment, contract *Contract, memory *Me
 	return nil, nil
 }
 
-func opExtCodeSize(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opExtCodeSize(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	addr := common.BigToAddress(stack.pop())
 	l := big.NewInt(int64(env.StateDB.GetCodeSize(addr)))
 	stack.push(l)
 	return nil, nil
 }
 
-func opCodeSize(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCodeSize(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	l := big.NewInt(int64(len(contract.Code)))
 	stack.push(l)
 	return nil, nil
 }
 
-func opCodeCopy(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCodeCopy(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
 		mOff = stack.pop()
 		cOff = stack.pop()
@@ -325,7 +325,7 @@ func opCodeCopy(pc *uint64, env *Environment, contract *Contract, memory *Memory
 	return nil, nil
 }
 
-func opExtCodeCopy(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opExtCodeCopy(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
 		addr = common.BigToAddress(stack.pop())
 		mOff = stack.pop()
@@ -338,12 +338,12 @@ func opExtCodeCopy(pc *uint64, env *Environment, contract *Contract, memory *Mem
 	return nil, nil
 }
 
-func opGasprice(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opGasprice(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(new(big.Int).Set(env.GasPrice))
 	return nil, nil
 }
 
-func opBlockhash(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opBlockhash(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	num := stack.pop()
 
 	n := new(big.Int).Sub(env.BlockNumber, common.Big257)
@@ -355,71 +355,71 @@ func opBlockhash(pc *uint64, env *Environment, contract *Contract, memory *Memor
 	return nil, nil
 }
 
-func opCoinbase(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCoinbase(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(env.Coinbase.Big())
 	return nil, nil
 }
 
-func opTimestamp(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opTimestamp(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(U256(new(big.Int).Set(env.Time)))
 	return nil, nil
 }
 
-func opNumber(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opNumber(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(U256(new(big.Int).Set(env.BlockNumber)))
 	return nil, nil
 }
 
-func opDifficulty(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opDifficulty(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(U256(new(big.Int).Set(env.Difficulty)))
 	return nil, nil
 }
 
-func opGasLimit(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opGasLimit(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(U256(new(big.Int).Set(env.GasLimit)))
 	return nil, nil
 }
 
-func opPop(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opPop(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.pop()
 	return nil, nil
 }
 
-func opMload(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMload(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset := stack.pop()
 	val := common.BigD(memory.Get(offset.Int64(), 32))
 	stack.push(val)
 	return nil, nil
 }
 
-func opMstore(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMstore(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// pop value of the stack
 	mStart, val := stack.pop(), stack.pop()
 	memory.Set(mStart.Uint64(), 32, common.BigToBytes(val, 256))
 	return nil, nil
 }
 
-func opMstore8(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMstore8(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	off, val := stack.pop().Int64(), stack.pop().Int64()
 	memory.store[off] = byte(val & 0xff)
 	return nil, nil
 }
 
-func opSload(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSload(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := env.StateDB.GetState(contract.Address(), loc).Big()
 	stack.push(val)
 	return nil, nil
 }
 
-func opSstore(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSstore(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	loc := common.BigToHash(stack.pop())
 	val := stack.pop()
 	env.StateDB.SetState(contract.Address(), loc, common.BigToHash(val))
 	return nil, nil
 }
 
-func opJump(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opJump(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	pos := stack.pop()
 	if !contract.jumpdests.has(contract.CodeHash, contract.Code, pos) {
 		nop := contract.GetOp(pos.Uint64())
@@ -428,7 +428,7 @@ func opJump(pc *uint64, env *Environment, contract *Contract, memory *Memory, st
 	*pc = pos.Uint64()
 	return nil, nil
 }
-func opJumpi(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opJumpi(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	pos, cond := stack.pop(), stack.pop()
 	if cond.Cmp(common.BigTrue) >= 0 {
 		if !contract.jumpdests.has(contract.CodeHash, contract.Code, pos) {
@@ -441,26 +441,26 @@ func opJumpi(pc *uint64, env *Environment, contract *Contract, memory *Memory, s
 	}
 	return nil, nil
 }
-func opJumpdest(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opJumpdest(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	return nil, nil
 }
 
-func opPc(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opPc(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(new(big.Int).SetUint64(*pc))
 	return nil, nil
 }
 
-func opMsize(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opMsize(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(big.NewInt(int64(memory.Len())))
 	return nil, nil
 }
 
-func opGas(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opGas(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	stack.push(new(big.Int).Set(contract.Gas))
 	return nil, nil
 }
 
-func opCreate(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCreate(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
 		value        = stack.pop()
 		offset, size = stack.pop(), stack.pop()
@@ -488,7 +488,7 @@ func opCreate(pc *uint64, env *Environment, contract *Contract, memory *Memory, 
 	return nil, nil
 }
 
-func opCall(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCall(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	gas := stack.pop()
 	// pop gas and value of the stack.
 	addr, value := stack.pop(), stack.pop()
@@ -520,7 +520,7 @@ func opCall(pc *uint64, env *Environment, contract *Contract, memory *Memory, st
 	return nil, nil
 }
 
-func opCallCode(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opCallCode(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	gas := stack.pop()
 	// pop gas and value of the stack.
 	addr, value := stack.pop(), stack.pop()
@@ -552,7 +552,7 @@ func opCallCode(pc *uint64, env *Environment, contract *Contract, memory *Memory
 	return nil, nil
 }
 
-func opDelegateCall(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opDelegateCall(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	// if not homestead return an error. DELEGATECALL is not supported
 	// during pre-homestead.
 	if !env.ChainConfig().IsHomestead(env.BlockNumber) {
@@ -573,18 +573,18 @@ func opDelegateCall(pc *uint64, env *Environment, contract *Contract, memory *Me
 	return nil, nil
 }
 
-func opReturn(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opReturn(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.pop(), stack.pop()
 	ret := memory.GetPtr(offset.Int64(), size.Int64())
 
 	return ret, nil
 }
 
-func opStop(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opStop(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	return nil, nil
 }
 
-func opSuicide(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+func opSuicide(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	balance := env.StateDB.GetBalance(contract.Address())
 	env.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance)
 
@@ -597,7 +597,7 @@ func opSuicide(pc *uint64, env *Environment, contract *Contract, memory *Memory,
 
 // make log instruction function
 func makeLog(size int) executionFunc {
-	return func(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	return func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		topics := make([]common.Hash, size)
 		mStart, mSize := stack.pop(), stack.pop()
 		for i := 0; i < size; i++ {
@@ -613,7 +613,7 @@ func makeLog(size int) executionFunc {
 
 // make push instruction function
 func makePush(size uint64, bsize *big.Int) executionFunc {
-	return func(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	return func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		byts := getData(contract.Code, new(big.Int).SetUint64(*pc+1), bsize)
 		stack.push(common.Bytes2Big(byts))
 		*pc += size
@@ -623,7 +623,7 @@ func makePush(size uint64, bsize *big.Int) executionFunc {
 
 // make push instruction function
 func makeDup(size int64) executionFunc {
-	return func(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	return func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		stack.dup(int(size))
 		return nil, nil
 	}
@@ -633,7 +633,7 @@ func makeDup(size int64) executionFunc {
 func makeSwap(size int64) executionFunc {
 	// switch n + 1 otherwise n would be swapped with n
 	size += 1
-	return func(pc *uint64, env *Environment, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	return func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		stack.swap(int(size))
 		return nil, nil
 	}
