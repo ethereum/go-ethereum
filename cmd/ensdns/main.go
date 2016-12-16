@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of the go-ethereum library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-ethereum library is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -85,9 +85,24 @@ func (ed *ENSDNS) Handle(w dns.ResponseWriter, r *dns.Msg) {
 		if err != nil {
 			log.Printf("Error resolving query %v: %v", question, err)
 			m.Rcode = dns.RcodeServerFailure
+			break
 		}
+
+		// If no answer is found, and this wasn't a CNAME or * query, try looking for CNAMEs
+		if len(answers) == 0 && question.Qtype != dns.TypeCNAME && question.Qtype != dns.TypeANY {
+			question.Qtype = dns.TypeCNAME
+			answers, err = ed.resolve(question)
+			if err != nil {
+				log.Printf("Error resolving query %v: %v", question, err)
+				m.Rcode = dns.RcodeServerFailure
+				break
+			}
+		}
+
 		m.Answer = append(m.Answer, answers...)
+		m.Authoritative = true
 	}
+
 	w.WriteMsg(m)
 }
 
