@@ -67,8 +67,8 @@ func NewInterpreter(env *EVM, cfg Config) *Interpreter {
 
 // Run loops and evaluates the contract's code with the given input data
 func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
-	evm.env.Depth++
-	defer func() { evm.env.Depth-- }()
+	evm.env.depth++
+	defer func() { evm.env.depth-- }()
 
 	if contract.CodeAddr != nil {
 		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
@@ -100,7 +100,7 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth, err)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
 		}
 	}()
 
@@ -157,7 +157,7 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		}
 
 		if evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.Depth, err)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
 		}
 
 		// execute the operation

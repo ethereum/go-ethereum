@@ -155,7 +155,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost *b
 		}
 	}
 	// create a new snaptshot of the EVM.
-	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, env.Depth, err}
+	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, env.depth, err}
 
 	l.logs = append(l.logs, log)
 	return nil

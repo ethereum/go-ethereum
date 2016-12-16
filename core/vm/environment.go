@@ -67,7 +67,7 @@ type EVM struct {
 	// StateDB gives access to the underlying state
 	StateDB StateDB
 	// Depth is the current call stack
-	Depth int
+	depth int
 
 	// chainConfig contains information about the current chain
 	chainConfig *params.ChainConfig
@@ -113,12 +113,12 @@ func (evm *EVM) init() {
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	if evm.Depth == 0 {
+	if evm.depth == 0 {
 		evm.init()
 		defer close(evm.quit)
 	}
 
-	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, nil
@@ -126,7 +126,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
 		return nil, ErrDepth
@@ -178,12 +178,12 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 //
 // CallCode differs from Call in the sense that it executes the given address' code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	if evm.Depth == 0 {
+	if evm.depth == 0 {
 		evm.init()
 		defer close(evm.quit)
 	}
 
-	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, nil
@@ -191,7 +191,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
 		return nil, ErrDepth
@@ -229,12 +229,12 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with the caller as context
 // and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
-	if evm.Depth == 0 {
+	if evm.depth == 0 {
 		evm.init()
 		defer close(evm.quit)
 	}
 
-	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, nil
@@ -242,7 +242,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 		return nil, ErrDepth
 	}
@@ -269,12 +269,12 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (ret []byte, contractAddr common.Address, err error) {
-	if evm.Depth == 0 {
+	if evm.depth == 0 {
 		evm.init()
 		defer close(evm.quit)
 	}
 
-	if evm.vmConfig.NoRecursion && evm.Depth > 0 {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, nil
@@ -282,7 +282,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.Depth > int(params.CallCreateDepth.Int64()) {
+	if evm.depth > int(params.CallCreateDepth.Int64()) {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, ErrDepth
