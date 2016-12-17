@@ -16,17 +16,12 @@
 
 package main
 
-//go:generate abigen --sol contract/ens.sol --pkg contract --out contract/ens.go
-//go:generate abigen --sol contract/resolver.sol --pkg contract --out contract/resolver.go
-
 import (
 	"encoding/hex"
+	"errors"
 	"flag"
 	"log"
-	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -36,10 +31,13 @@ import (
 	"github.com/miekg/dns"
 )
 
+const NotAuthoritative = errors.New("No resolver for this domain")
+const NoSuchName = errors.New("Name not found")
+
 var (
-	gethAddressFlag     = flag.String("geth", "ws://localhost:8546", "Path to connect to geth on")
+	ethapiFlag          = flag.String("ethapi", "ws://localhost:8546", "Path to connect to Ethereum node on")
 	registryAddressFlag = flag.String("registry", "", "Address of ENS registry")
-	listenAddressFlag   = flag.String("address", ":8053", "Address and port to listen on")
+	listenAddressFlag   = flag.String("address", ":53", "Address and port to listen on")
 )
 
 func nameHash(name string) common.Hash {
@@ -172,9 +170,9 @@ func serve(addr string) {
 func main() {
 	flag.Parse()
 
-	client, err := ethclient.Dial(*gethAddressFlag)
+	client, err := ethclient.Dial(*ethapiFlag)
 	if err != nil {
-		log.Fatalf("Error connecting to geth: %v", err)
+		log.Fatalf("Error connecting to Ethereum API: %v", err)
 	}
 
 	ensdns, err := New(client, common.HexToAddress(*registryAddressFlag))
@@ -187,8 +185,5 @@ func main() {
 
 	log.Printf("Listening on %s", *listenAddressFlag)
 
-	sig := make(chan os.Signal)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	s := <-sig
-	log.Printf("Signal (%s) received, stopping\n", s)
+	select {}
 }
