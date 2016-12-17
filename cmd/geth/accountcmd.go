@@ -98,7 +98,9 @@ And finally. DO NOT FORGET YOUR PASSWORD.
 				Usage:     "Print account addresses",
 				ArgsUsage: " ",
 				Description: `
-TODO: Please write this
+    geth account list
+
+Lists every account with its index, address and path to the file.
 `,
 			},
 			{
@@ -181,7 +183,7 @@ nodes.
 func accountList(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	for i, acct := range stack.AccountManager().Accounts() {
-		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
+		fmt.Printf("Index: %d, Address: {%x}, File: %s\n", i, acct.Address, acct.File)
 	}
 	return nil
 }
@@ -279,7 +281,8 @@ func accountCreate(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: {%x}\n", account.Address)
+	index := len(stack.AccountManager().Accounts()) - 1
+	fmt.Printf("Index: %d, Address: {%x}, File: %s\n", index, account.Address, account.File)
 	return nil
 }
 

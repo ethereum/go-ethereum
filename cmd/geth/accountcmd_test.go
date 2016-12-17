@@ -53,15 +53,15 @@ func TestAccountList(t *testing.T) {
 	defer geth.expectExit()
 	if runtime.GOOS == "windows" {
 		geth.expect(`
-Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} {{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
-Account #1: {f466859ead1932d743d622cb74fc058882e8648a} {{.Datadir}}\keystore\aaa
-Account #2: {289d485d9771714cce91d3393d764e1311907acc} {{.Datadir}}\keystore\zzz
+Index: 0, Address: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8}, File: {{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Index: 1, Address: {f466859ead1932d743d622cb74fc058882e8648a}, File: {{.Datadir}}\keystore\aaa
+Index: 2, Address: {289d485d9771714cce91d3393d764e1311907acc}, File: {{.Datadir}}\keystore\zzz
 `)
 	} else {
 		geth.expect(`
-Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} {{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
-Account #1: {f466859ead1932d743d622cb74fc058882e8648a} {{.Datadir}}/keystore/aaa
-Account #2: {289d485d9771714cce91d3393d764e1311907acc} {{.Datadir}}/keystore/zzz
+Index: 0, Address: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8}, File: {{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Index: 1, Address: {f466859ead1932d743d622cb74fc058882e8648a}, File: {{.Datadir}}/keystore/aaa
+Index: 2, Address: {289d485d9771714cce91d3393d764e1311907acc}, File: {{.Datadir}}/keystore/zzz
 `)
 	}
 }
@@ -75,7 +75,11 @@ Your new account is locked with a password. Please give a password. Do not forge
 Passphrase: {{.InputLine "foobar"}}
 Repeat passphrase: {{.InputLine "foobar"}}
 `)
-	geth.expectRegexp(`Address: \{[0-9a-f]{40}\}\n`)
+	if runtime.GOOS == "windows" {
+		geth.expectRegexp(`Index: [0-9], Address: \{[0-9a-f]{40}\}, File: (.*)\\keystore\\[0-9a-zA-z-.]{77}\n`)
+	} else {
+		geth.expectRegexp(`Index: [0-9], Address: \{[0-9a-f]{40}\}, File: (.*)/keystore/[0-9a-zA-z-.]{77}\n`)
+	}
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
