@@ -73,11 +73,11 @@ func (api *PublicWhisperAPI) Stop() error {
 }
 
 // Version returns the Whisper version this node offers.
-func (api *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
+func (api *PublicWhisperAPI) Version() (hexutil.Uint, error) {
 	if api.whisper == nil {
-		return rpc.NewHexNumber(0), whisperOffLineErr
+		return 0, whisperOffLineErr
 	}
-	return rpc.NewHexNumber(api.whisper.Version()), nil
+	return hexutil.Uint(api.whisper.Version()), nil
 }
 
 // MarkPeerTrusted marks specific peer trusted, which will allow it

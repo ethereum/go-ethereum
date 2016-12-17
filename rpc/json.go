@@ -257,8 +257,8 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) 
 	return requests, true, nil
 }
 
-// ParseRequestArguments tries to parse the given params (json.RawMessage) with the given types. It returns the parsed
-// values or an error when the parsing failed.
+// ParseRequestArguments tries to parse the given params (json.RawMessage) with the given
+// types. It returns the parsed values or an error when the parsing failed.
 func (c *jsonCodec) ParseRequestArguments(argTypes []reflect.Type, params interface{}) ([]reflect.Value, Error) {
 	if args, ok := params.(json.RawMessage); !ok {
 		return nil, &invalidParamsError{"Invalid params supplied"}
