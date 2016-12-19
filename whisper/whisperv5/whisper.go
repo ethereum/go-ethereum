@@ -363,7 +363,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 					return fmt.Errorf("garbage received (directMessage)")
 				}
 				for _, envelope := range envelopes {
-					wh.postEvent(envelope, p2pCode)
+					wh.postEvent(envelope, true)
 				}
 			}
 		case p2pRequestCode:
@@ -453,22 +453,22 @@ func (wh *Whisper) add(envelope *Envelope) error {
 		glog.V(logger.Detail).Infof("whisper envelope already cached [%x]\n", envelope.Hash())
 	} else {
 		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
-		wh.postEvent(envelope, messagesCode) // notify the local node about the new message
+		wh.postEvent(envelope, false) // notify the local node about the new message
 	}
 	return nil
 }
 
 // postEvent queues the message for further processing.
-func (w *Whisper) postEvent(envelope *Envelope, messageCode uint64) {
+func (w *Whisper) postEvent(envelope *Envelope, isP2P bool) {
 	// if the version of incoming message is higher than
 	// currently supported version, we can not decrypt it,
 	// and therefore just ignore this message
 	if envelope.Ver() <= EnvelopeVersion {
-		if messagesCode == messageCode {
+		if isP2P {
+			w.p2pMsgQueue <- envelope
+		} else {
 			w.checkOverflow()
 			w.messageQueue <- envelope
-		} else {
-			w.p2pMsgQueue <- envelope
 		}
 	}
 }
