@@ -55,6 +55,22 @@ func APIs() []rpc.API {
 	}
 }
 
+// Start starts the Whisper worker threads.
+func (api *PublicWhisperAPI) Start() error {
+	if api.whisper == nil {
+		return whisperOffLineErr
+	}
+	return api.whisper.Start(nil)
+}
+
+// Stop stops the Whisper worker threads.
+func (api *PublicWhisperAPI) Stop() error {
+	if api.whisper == nil {
+		return whisperOffLineErr
+	}
+	return api.whisper.Stop()
+}
+
 // Version returns the Whisper version this node offers.
 func (api *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
 	if api.whisper == nil {

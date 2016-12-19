@@ -30,11 +30,15 @@ func copyFromBuf(dst []byte, src []byte, beg int) int {
 }
 
 func generateMessageParams() (*MessageParams, error) {
+	// set all the parameters except p.Dst
+
 	buf := make([]byte, 1024)
 	randomize(buf)
 	sz := rand.Intn(400)
 
 	var p MessageParams
+	p.PoW = 0.01
+	p.WorkTime = 1
 	p.TTL = uint32(rand.Intn(1024))
 	p.Payload = make([]byte, sz)
 	p.Padding = make([]byte, padSizeLimitUpper)
@@ -52,8 +56,6 @@ func generateMessageParams() (*MessageParams, error) {
 		return nil, err
 	}
 
-	// p.Dst, p.PoW, p.WorkTime are not set
-	p.PoW = 0.01
 	return &p, nil
 }
 
@@ -114,7 +116,7 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 	if len(decrypted.Signature) != signatureLength {
 		t.Fatalf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 	}
-	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
+	if !IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
 		t.Fatalf("failed with seed %d: signature mismatch.", seed)
 	}
 }
@@ -151,6 +153,16 @@ func TestMessageWrap(t *testing.T) {
 	pow := env.PoW()
 	if pow < target {
 		t.Fatalf("failed Wrap with seed %d: pow < target (%f vs. %f).", seed, pow, target)
+	}
+
+	// set PoW target too high, expect error
+	msg2 := NewSentMessage(params)
+	params.TTL = 1000000
+	params.WorkTime = 1
+	params.PoW = 10000000.0
+	env, err = msg2.Wrap(params)
+	if err == nil {
+		t.Fatalf("unexpectedly reached the PoW target with seed %d.", seed)
 	}
 }
 
@@ -256,7 +268,7 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 	if len(decrypted.Signature) != signatureLength {
 		t.Fatalf("failed with seed %d: signature len %d.", seed, len(decrypted.Signature))
 	}
-	if !isPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
+	if !IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
 		t.Fatalf("failed with seed %d: signature mismatch.", seed)
 	}
 	if decrypted.isAsymmetricEncryption() == symmetric {
@@ -269,8 +281,37 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 		if decrypted.Dst == nil {
 			t.Fatalf("failed with seed %d: dst is nil.", seed)
 		}
-		if !isPubKeyEqual(decrypted.Dst, &key.PublicKey) {
+		if !IsPubKeyEqual(decrypted.Dst, &key.PublicKey) {
 			t.Fatalf("failed with seed %d: Dst.", seed)
 		}
+	}
+}
+
+func TestEncryptWithZeroKey(t *testing.T) {
+	InitSingleTest()
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	msg := NewSentMessage(params)
+
+	params.KeySym = make([]byte, aesKeyLength)
+	_, err = msg.Wrap(params)
+	if err == nil {
+		t.Fatalf("wrapped with zero key, seed: %d.", seed)
+	}
+
+	params.KeySym = make([]byte, 0)
+	_, err = msg.Wrap(params)
+	if err == nil {
+		t.Fatalf("wrapped with empty key, seed: %d.", seed)
+	}
+
+	params.KeySym = nil
+	_, err = msg.Wrap(params)
+	if err == nil {
+		t.Fatalf("wrapped with nil key, seed: %d.", seed)
 	}
 }

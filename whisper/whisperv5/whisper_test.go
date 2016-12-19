@@ -19,6 +19,7 @@ package whisperv5
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -307,5 +308,58 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 	if k2 != nil {
 		t.Fatalf("failed to delete second key: second key is not nil.")
+	}
+}
+
+func TestExpiry(t *testing.T) {
+	InitSingleTest()
+
+	w := NewWhisper(nil)
+	w.test = true
+	w.Start(nil)
+	defer w.Stop()
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	params.TTL = 1
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("failed to send envelope with seed %d: %s.", seed, err)
+	}
+
+	// wait till received or timeout
+	var received, expired bool
+	for j := 0; j < 20; j++ {
+		time.Sleep(100 * time.Millisecond)
+		if len(w.Envelopes()) > 0 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// wait till expired or timeout
+	for j := 0; j < 20; j++ {
+		time.Sleep(100 * time.Millisecond)
+		if len(w.Envelopes()) == 0 {
+			expired = true
+			break
+		}
+	}
+
+	if !expired {
+		t.Fatalf("expire failed, seed: %d.", seed)
 	}
 }
