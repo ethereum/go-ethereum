@@ -37,15 +37,14 @@ import (
 
 var (
 	// Transaction Pool Errors
-	ErrInvalidSender      = errors.New("Invalid sender")
-	ErrNonce              = errors.New("Nonce too low")
-	ErrCheap              = errors.New("Gas price too low for acceptance")
-	ErrBalance            = errors.New("Insufficient balance")
-	ErrNonExistentAccount = errors.New("Account does not exist or account balance too low")
-	ErrInsufficientFunds  = errors.New("Insufficient funds for gas * price + value")
-	ErrIntrinsicGas       = errors.New("Intrinsic gas too low")
-	ErrGasLimit           = errors.New("Exceeds block gas limit")
-	ErrNegativeValue      = errors.New("Negative value")
+	ErrInvalidSender     = errors.New("Invalid sender")
+	ErrNonce             = errors.New("Nonce too low")
+	ErrCheap             = errors.New("Gas price too low for acceptance")
+	ErrBalance           = errors.New("Insufficient balance")
+	ErrInsufficientFunds = errors.New("Insufficient funds for gas * price + value")
+	ErrIntrinsicGas      = errors.New("Intrinsic gas too low")
+	ErrGasLimit          = errors.New("Exceeds block gas limit")
+	ErrNegativeValue     = errors.New("Negative value")
 )
 
 var (
@@ -287,13 +286,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	if err != nil {
 		return ErrInvalidSender
 	}
-
-	// Make sure the account exist. Non existent accounts
-	// haven't got funds and well therefor never pass.
-	if !currentState.Exist(from) {
-		return ErrNonExistentAccount
-	}
-
 	// Last but not least check for nonce errors
 	if currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonce
