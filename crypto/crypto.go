@@ -167,25 +167,20 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 }
 
+// ValidateSignatureValues verifies whether the signature values are valid with
+// the given chain rules. The v value is assumed to be the canonical secp256k1
+// value of either 0 or 1.
 func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	if r.Cmp(common.Big1) < 0 || s.Cmp(common.Big1) < 0 {
 		return false
 	}
-	vint := uint32(v)
 	// reject upper range of s values (ECDSA malleability)
 	// see discussion in secp256k1/libsecp256k1/include/secp256k1.h
 	if homestead && s.Cmp(secp256k1.HalfN) > 0 {
 		return false
 	}
 	// Frontier: allow s to be in full N range
-	if s.Cmp(secp256k1.N) >= 0 {
-		return false
-	}
-	if r.Cmp(secp256k1.N) < 0 && (vint == 27 || vint == 28) {
-		return true
-	} else {
-		return false
-	}
+	return r.Cmp(secp256k1.N) < 0 && s.Cmp(secp256k1.N) < 0 && (v == 0 || v == 1)
 }
 
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {

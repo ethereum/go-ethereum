@@ -138,17 +138,16 @@ func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
 		return nil, ErrInvalidChainId
 	}
 
-	V := byte((new(big.Int).Sub(tx.data.V, s.chainIdMul).Uint64()) - 35 + 27)
+	V := byte(new(big.Int).Sub(tx.data.V, s.chainIdMul).Uint64() - 35)
 	if !crypto.ValidateSignatureValues(V, tx.data.R, tx.data.S, true) {
 		return nil, ErrInvalidSig
 	}
-
 	// encode the signature in uncompressed format
 	R, S := tx.data.R.Bytes(), tx.data.S.Bytes()
 	sig := make([]byte, 65)
 	copy(sig[32-len(R):32], R)
 	copy(sig[64-len(S):64], S)
-	sig[64] = V - 27
+	sig[64] = V
 
 	// recover the public key from the signature
 	hash := s.Hash(tx)
@@ -238,7 +237,7 @@ func (hs HomesteadSigner) PublicKey(tx *Transaction) ([]byte, error) {
 	if tx.data.V.BitLen() > 8 {
 		return nil, ErrInvalidSig
 	}
-	V := byte(tx.data.V.Uint64())
+	V := byte(tx.data.V.Uint64() - 27)
 	if !crypto.ValidateSignatureValues(V, tx.data.R, tx.data.S, true) {
 		return nil, ErrInvalidSig
 	}
@@ -247,7 +246,7 @@ func (hs HomesteadSigner) PublicKey(tx *Transaction) ([]byte, error) {
 	sig := make([]byte, 65)
 	copy(sig[32-len(r):32], r)
 	copy(sig[64-len(s):64], s)
-	sig[64] = V - 27
+	sig[64] = V
 
 	// recover the public key from the snature
 	hash := hs.Hash(tx)
@@ -308,7 +307,7 @@ func (fs FrontierSigner) PublicKey(tx *Transaction) ([]byte, error) {
 		return nil, ErrInvalidSig
 	}
 
-	V := byte(tx.data.V.Uint64())
+	V := byte(tx.data.V.Uint64() - 27)
 	if !crypto.ValidateSignatureValues(V, tx.data.R, tx.data.S, false) {
 		return nil, ErrInvalidSig
 	}
@@ -317,7 +316,7 @@ func (fs FrontierSigner) PublicKey(tx *Transaction) ([]byte, error) {
 	sig := make([]byte, 65)
 	copy(sig[32-len(r):32], r)
 	copy(sig[64-len(s):64], s)
-	sig[64] = V - 27
+	sig[64] = V
 
 	// recover the public key from the snature
 	hash := fs.Hash(tx)

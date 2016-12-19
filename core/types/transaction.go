@@ -199,9 +199,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 
 	var V byte
 	if isProtectedV((*big.Int)(dec.V)) {
-		V = byte((new(big.Int).Sub((*big.Int)(dec.V), deriveChainId((*big.Int)(dec.V))).Uint64()) - 35 + 27)
+		V = byte((new(big.Int).Sub((*big.Int)(dec.V), deriveChainId((*big.Int)(dec.V))).Uint64()) - 35)
 	} else {
-		V = byte(((*big.Int)(dec.V)).Uint64())
+		V = byte(((*big.Int)(dec.V)).Uint64() - 27)
 	}
 	if !crypto.ValidateSignatureValues(V, (*big.Int)(dec.R), (*big.Int)(dec.S), false) {
 		return ErrInvalidSig

@@ -181,38 +181,38 @@ func TestValidateSignatureValues(t *testing.T) {
 	secp256k1nMinus1 := new(big.Int).Sub(secp256k1.N, common.Big1)
 
 	// correct v,r,s
-	check(true, 27, one, one)
-	check(true, 28, one, one)
+	check(true, 0, one, one)
+	check(true, 1, one, one)
 	// incorrect v, correct r,s,
-	check(false, 30, one, one)
-	check(false, 26, one, one)
+	check(false, 2, one, one)
+	check(false, 3, one, one)
 
 	// incorrect v, combinations of incorrect/correct r,s at lower limit
+	check(false, 2, zero, zero)
+	check(false, 2, zero, one)
+	check(false, 2, one, zero)
+	check(false, 2, one, one)
+
+	// correct v for any combination of incorrect r,s
 	check(false, 0, zero, zero)
 	check(false, 0, zero, one)
 	check(false, 0, one, zero)
-	check(false, 0, one, one)
 
-	// correct v for any combination of incorrect r,s
-	check(false, 27, zero, zero)
-	check(false, 27, zero, one)
-	check(false, 27, one, zero)
-
-	check(false, 28, zero, zero)
-	check(false, 28, zero, one)
-	check(false, 28, one, zero)
+	check(false, 1, zero, zero)
+	check(false, 1, zero, one)
+	check(false, 1, one, zero)
 
 	// correct sig with max r,s
-	check(true, 27, secp256k1nMinus1, secp256k1nMinus1)
+	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 27, secp256k1.N, secp256k1nMinus1)
-	check(false, 27, secp256k1nMinus1, secp256k1.N)
-	check(false, 27, secp256k1.N, secp256k1.N)
+	check(false, 0, secp256k1.N, secp256k1nMinus1)
+	check(false, 0, secp256k1nMinus1, secp256k1.N)
+	check(false, 0, secp256k1.N, secp256k1.N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone
-	check(false, 27, minusOne, one)
-	check(false, 27, one, minusOne)
+	check(false, 0, minusOne, one)
+	check(false, 0, one, minusOne)
 }
 
 func checkhash(t *testing.T, name string, f func([]byte) []byte, msg, exp []byte) {
