@@ -99,6 +99,7 @@ type TxPool struct {
 	queue   map[common.Address]*txList         // Queued but non-processable transactions
 	all     map[common.Hash]*types.Transaction // All transactions to allow lookups
 	beats   map[common.Address]time.Time       // Last heartbeat from each known account
+	txSeen  map[common.Hash]time.Time          // Time when a transaction enters in the pool
 
 	wg   sync.WaitGroup // for shutdown sync
 	quit chan struct{}
@@ -114,6 +115,7 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		queue:        make(map[common.Address]*txList),
 		all:          make(map[common.Hash]*types.Transaction),
 		beats:        make(map[common.Address]time.Time),
+		txSeen:       make(map[common.Hash]time.Time),
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
@@ -261,6 +263,11 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 	return pending, nil
 }
 
+// Returns the time when the transaction was added to the pool
+func (pool *TxPool) TxSeen(hash common.Hash) time.Time {
+	return pool.txSeen[hash]
+}
+
 // SetLocal marks a transaction as local, skipping gas price
 //  check against local miner minimum in the future
 func (pool *TxPool) SetLocal(tx *types.Transaction) {
@@ -370,9 +377,12 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 	// Discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
+		delete(pool.txSeen, old.Hash())
+
 		queuedReplaceCounter.Inc(1)
 	}
 	pool.all[hash] = tx
+	pool.txSeen[hash] = time.Now()
 }
 
 // promoteTx adds a transaction to the pending (processable) list of transactions.
@@ -398,6 +408,9 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 		pendingReplaceCounter.Inc(1)
 	}
 	pool.all[hash] = tx // Failsafe to work around direct pending inserts (tests)
+	if pool.txSeen[hash].IsZero() {
+		pool.txSeen[hash] = time.Now()
+	}
 
 	// Set the potentially new pending nonce and notify any subsystems of the new tx
 	pool.beats[addr] = time.Now()
@@ -484,6 +497,7 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 
 	// Remove it from the list of known transactions
 	delete(pool.all, hash)
+	delete(pool.txSeen, hash)
 
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
@@ -526,6 +540,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 				glog.Infof("Removed old queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			delete(pool.txSeen, tx.Hash())
 		}
 		// Drop all transactions that are too costly (low balance)
 		drops, _ := list.Filter(state.GetBalance(addr))
@@ -534,6 +549,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 				glog.Infof("Removed unpayable queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			delete(pool.txSeen, tx.Hash())
 			queuedNofundsCounter.Inc(1)
 		}
 		// Gather all executable transactions and promote them
@@ -549,6 +565,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 				glog.Infof("Removed cap-exceeding queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			delete(pool.txSeen, tx.Hash())
 			queuedRLCounter.Inc(1)
 		}
 		queued += uint64(list.Len())
@@ -663,6 +680,7 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 				glog.Infof("Removed old pending transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			delete(pool.txSeen, tx.Hash())
 		}
 		// Drop all transactions that are too costly (low balance), and queue any invalids back for later
 		drops, invalids := list.Filter(state.GetBalance(addr))
@@ -671,6 +689,8 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 				glog.Infof("Removed unpayable pending transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
+			delete(pool.txSeen, tx.Hash())
+
 			pendingNofundsCounter.Inc(1)
 		}
 		for _, tx := range invalids {

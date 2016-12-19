@@ -69,6 +69,9 @@ type chainInsertFn func(types.Blocks) (int, error)
 // peerDropFn is a callback type for dropping a peer detected as malicious.
 type peerDropFn func(id string)
 
+// calcDlyBstBlkFn is called to determine how long is delayed a propagation of a new block.
+type calcDlyBstBlkFn func(block *types.Block) time.Duration
+
 // announce is the hash notification of the availability of a new block in the
 // network.
 type announce struct {
@@ -136,6 +139,7 @@ type Fetcher struct {
 	chainHeight    chainHeightFn      // Retrieves the current chain's height
 	insertChain    chainInsertFn      // Injects a batch of blocks into the chain
 	dropPeer       peerDropFn         // Drops a peer for misbehaving
+	calcDlyBstBlk  calcDlyBstBlkFn    // Calculates the delay to broadcast a packet.
 
 	// Testing hooks
 	announceChangeHook func(common.Hash, bool) // Method to call upon adding or deleting a hash from the announce list
@@ -146,7 +150,7 @@ type Fetcher struct {
 }
 
 // New creates a block fetcher to retrieve blocks based on hash announcements.
-func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, dropPeer peerDropFn) *Fetcher {
+func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlock blockBroadcasterFn, chainHeight chainHeightFn, insertChain chainInsertFn, dropPeer peerDropFn, calcDlyBstBlk calcDlyBstBlkFn) *Fetcher {
 	return &Fetcher{
 		notify:         make(chan *announce),
 		inject:         make(chan *inject),
@@ -166,6 +170,7 @@ func New(getBlock blockRetrievalFn, validateBlock blockValidatorFn, broadcastBlo
 		getBlock:       getBlock,
 		validateBlock:  validateBlock,
 		broadcastBlock: broadcastBlock,
+		calcDlyBstBlk:  calcDlyBstBlk,
 		chainHeight:    chainHeight,
 		insertChain:    insertChain,
 		dropPeer:       dropPeer,
@@ -669,6 +674,9 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 		case nil:
 			// All ok, quickly propagate to our peers
 			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+			glog.V(logger.Debug).Infof("DelayEmpty: Before Delay Broadcast. #%d", block.NumberU64())
+			time.Sleep(f.calcDlyBstBlk(block));
+			glog.V(logger.Debug).Infof("DelayEmpty: After Delay Broadcast. #%d", block.NumberU64())
 			go f.broadcastBlock(block, true)
 
 		case core.BlockFutureErr:

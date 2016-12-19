@@ -176,7 +176,8 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 		manager.setSynced() // Mark initial sync done on any fetcher import
 		return manager.insertChain(blocks)
 	}
-	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
+
+	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer, manager.CalcDelayBroadcastBlock)
 
 	if blockchain.Genesis().Hash().Hex() == defaultGenesisHash && networkId == 1 {
 		glog.V(logger.Debug).Infoln("Bad Block Reporting is enabled")
@@ -787,4 +788,103 @@ func (self *ProtocolManager) NodeInfo() *EthNodeInfo {
 		Genesis:    self.blockchain.Genesis().Hash(),
 		Head:       currentBlock.Hash(),
 	}
+}
+
+func (self *ProtocolManager) CalcDelayBroadcastBlock(block *types.Block) time.Duration {
+
+	TIME_TO_BE_CONSIDERED_OLD_TRANSACTION := 8 * time.Second
+	MAX_DELAY := 30 * time.Second
+
+	getBlockTx := func(h1 common.Hash) *types.Transaction {
+		for _, tx := range block.Transactions() {
+			h2 := tx.Hash();
+			if h1 == h2 {
+				return tx
+			}
+		}
+		return nil;
+	}
+
+	hash := block.Hash()
+	pending, _ := self.txpool.Pending()
+	nIncludedTransactions := 0
+	includedTransactionsGas := big.NewInt(0)
+	nNotIncludedOldTransactions := 0
+	notIncludedOldTransactionsGas := big.NewInt(0)
+	totalTx := 0
+
+	includedTxs := make(map[common.Hash]*big.Int)
+
+	for _, list := range pending {
+		for _, tx := range list {
+
+			txHash := tx.Hash()
+			txSeen := self.txpool.TxSeen(txHash)
+
+			glog.V(logger.Debug).Infof("DelayEmpty TxHash: %x Time Elapsed: %f ",txHash[:4], time.Since(txSeen).Seconds())
+
+			blockTx := getBlockTx(txHash)
+
+			if blockTx != nil {
+				nIncludedTransactions ++;
+				includedTransactionsGas.Add(includedTransactionsGas , blockTx.Gas());
+			} else {
+				if (time.Since(txSeen) > TIME_TO_BE_CONSIDERED_OLD_TRANSACTION) {
+					nNotIncludedOldTransactions ++
+					notIncludedOldTransactionsGas.Add(notIncludedOldTransactionsGas, tx.Gas())
+					includedTxs[txHash] = tx.Gas()
+				}
+			}
+			totalTx ++
+
+		}
+	}
+
+
+	missusedGas := new(big.Int).Sub( block.GasLimit() , includedTransactionsGas );
+
+	// Remove not included that does not fit in the block
+	for _, g := range includedTxs {
+		if g.Cmp(missusedGas) > 0 {
+			nNotIncludedOldTransactions --
+			notIncludedOldTransactionsGas.Sub(notIncludedOldTransactionsGas, g)
+			glog.V(logger.Debug).Infof("DelayEmpty Big Tx not accounted")
+		}
+	}
+
+	// If less of the 25%  of the block is missusedGas just propagate fast.
+	// This percentage shuld be adjusted.
+	if new(big.Float).SetInt(missusedGas).Cmp(
+			new(big.Float).Mul(
+				new(big.Float).SetInt( block.GasLimit() ) ,
+				new(big.Float).SetFloat64(0.4)  )) < 0 {
+		return 0;
+	}
+
+	factor1, _ := new(big.Float).Quo(
+		new(big.Float).SetInt(notIncludedOldTransactionsGas) ,
+
+		new(big.Float).Mul(
+			new(big.Float).SetInt( block.GasLimit() ),
+			new(big.Float).SetFloat64(0.75))).Float64()
+
+	if factor1 > 1 {
+		factor1 = 1
+	}
+
+
+	factor2, _ := new(big.Float).Quo(
+		new(big.Float).SetInt(missusedGas),
+		new(big.Float).SetInt( block.GasLimit() )).Float64()
+
+
+	delay := time.Duration( float64(MAX_DELAY.Nanoseconds()) * factor1 * factor2) * time.Nanosecond;
+
+	glog.V(logger.Debug).Infof("DelayEmpty IncludedTxGas: %d, NotIncludedTxGas: %d",includedTransactionsGas.Int64(), notIncludedOldTransactionsGas.Int64())
+	glog.V(logger.Debug).Infof("DelayEmpty TxBlock: %d, TxPending: %d TxIncluded: %d TxNotIncluded: %d",block.Transactions().Len(), totalTx, nIncludedTransactions, nNotIncludedOldTransactions)
+	glog.V(logger.Debug).Infof("DelayEmpty Missussed #%d  Factor1: %f Factor2: %f",missusedGas.Int64(), factor1, factor2)
+	glog.V(logger.Debug).Infof("DelayEmpty block #%d [%x…] Delay: %f",block.NumberU64(), hash[:4], delay.Seconds())
+
+	return delay;
+
 }
