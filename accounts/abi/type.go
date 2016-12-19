@@ -33,7 +33,7 @@ const (
 	FixedBytesTy
 	BytesTy
 	HashTy
-	FixedPointTy
+	FixedpointTy
 )
 
 // Type is the reflection of the supported argument type
@@ -46,7 +46,6 @@ type Type struct {
 	Kind reflect.Kind
 	Type reflect.Type
 	Size int
-	DecimalSize int // Determines the length of the binary coded decimal in fixed point types. 
 	T    byte // Our own type checking
 
 	stringKind string // holds the unparsed string for deriving signatures
@@ -65,9 +64,9 @@ var (
 	//      string     int       uint       fixed
 	//      string32   int8      uint8      uint[]
 	//      address    int256    uint256    fixed128x128[2]
-	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
+	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)\\])?")
 	// typeRegex parses the abi sub types
-	typeRegex = regexp.MustCompile("([a-zA-Z]+)([0-9]*)?x?([0-9]*)?")
+	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
 )
 
 // NewType creates a new reflection type of abi type given in t.
@@ -98,7 +97,7 @@ func NewType(t string) (typ Type, err error) {
 	parsedType := typeRegex.FindAllStringSubmatch(res[1], -1)[0]
 	// varSize is the size of the variable
 	var varSize int
-	if len(parsedType[2]) > 0 {
+	if len(parsedType[3]) > 0 {
 		var err error
 		varSize, err = strconv.Atoi(parsedType[2])
 		if err != nil {
