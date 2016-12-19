@@ -752,23 +752,35 @@ func TestDefaultFunctionParsing(t *testing.T) {
 func TestBareEvents(t *testing.T) {
 	const definition = `[
 	{ "type" : "event", "name" : "balance" },
-	{ "type" : "event", "name" : "name" }]`
+	{ "type" : "event", "name" : "name" },
+	{ "type" : "event", "name" : "anon", "anonymous" : true}]`
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(abi.Events) != 2 {
-		t.Error("expected 2 events")
+	if len(abi.Events) != 3 {
+		t.Error("expected 3 events")
 	}
 
 	if _, ok := abi.Events["balance"]; !ok {
 		t.Error("expected 'balance' event to be present")
 	}
 
-	if _, ok := abi.Events["name"]; !ok {
+	if ev, ok := abi.Events["name"]; !ok {
 		t.Error("expected 'name' event to be present")
+	} else if ev.Anonymous {
+		t.Errorf("expected 'name' to have the Anonymous field set to false")
+	}
+
+	anonEvent, ok := abi.Events["anon"]
+	if ok {
+		if !anonEvent.Anonymous {
+			t.Errorf("expected anon event to have the Anonymous field set to true")
+		}
+	} else {
+		t.Errorf("expected 'anon' event to be present")
 	}
 }
 
