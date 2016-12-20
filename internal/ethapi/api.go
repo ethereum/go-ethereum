@@ -485,7 +485,7 @@ type CallArgs struct {
 	Gas      hexutil.Big     `json:"gas"`
 	GasPrice hexutil.Big     `json:"gasPrice"`
 	Value    hexutil.Big     `json:"value"`
-	Data     string          `json:"data"`
+	Data     hexutil.Bytes   `json:"data"`
 }
 
 func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (string, *big.Int, error) {
@@ -517,7 +517,7 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	if gasPrice.Cmp(common.Big0) == 0 {
 		gasPrice = new(big.Int).Mul(big.NewInt(50), common.Shannon)
 	}
-	msg := types.NewMessage(addr, args.To, 0, args.Value.ToInt(), gas, gasPrice, common.FromHex(args.Data), false)
+	msg := types.NewMessage(addr, args.To, 0, args.Value.ToInt(), gas, gasPrice, args.Data, false)
 
 	// Execute the call and return
 	vmenv, vmError, err := s.b.GetVMEnv(ctx, msg, state, header)
@@ -1056,9 +1056,9 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
-func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encodedTx string) (string, error) {
+func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encodedTx hexutil.Bytes) (string, error) {
 	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(common.FromHex(encodedTx), tx); err != nil {
+	if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
 		return "", err
 	}
 

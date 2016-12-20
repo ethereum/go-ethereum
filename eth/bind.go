@@ -84,7 +84,7 @@ func toCallArgs(msg ethereum.CallMsg) ethapi.CallArgs {
 	args := ethapi.CallArgs{
 		To:   msg.To,
 		From: msg.From,
-		Data: common.ToHex(msg.Data),
+		Data: msg.Data,
 	}
 	if msg.Gas != nil {
 		args.Gas = hexutil.Big(*msg.Gas)
@@ -135,6 +135,6 @@ func (b *ContractBackend) EstimateGas(ctx context.Context, msg ethereum.CallMsg)
 // into the pending pool for execution.
 func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	raw, _ := rlp.EncodeToBytes(tx)
-	_, err := b.txapi.SendRawTransaction(ctx, common.ToHex(raw))
+	_, err := b.txapi.SendRawTransaction(ctx, raw)
 	return err
 }
