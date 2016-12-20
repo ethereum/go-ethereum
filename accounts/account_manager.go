@@ -137,7 +137,7 @@ func (am *Manager) DeleteAccount(a Account, passphrase string) error {
 }
 
 // Sign calculates a ECDSA signature for the given hash. The produced signature
-// is in the canonical secp256k1 format (V = 0 or 1).
+// is in the [R || S || V] format where V is 0 or 1.
 func (am *Manager) Sign(addr common.Address, hash []byte) ([]byte, error) {
 	am.mu.RLock()
 	defer am.mu.RUnlock()
@@ -151,7 +151,7 @@ func (am *Manager) Sign(addr common.Address, hash []byte) ([]byte, error) {
 
 // SignWithPassphrase signs hash if the private key matching the given address
 // can be decrypted with the given passphrase. The produced signature is in the
-// canonical secp256k1 format (V = 0 or 1).
+// [R || S || V] format where V is 0 or 1.
 func (am *Manager) SignWithPassphrase(addr common.Address, passphrase string, hash []byte) (signature []byte, err error) {
 	_, key, err := am.getDecryptedKey(Account{Address: addr}, passphrase)
 	if err != nil {

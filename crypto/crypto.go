@@ -168,8 +168,7 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 }
 
 // ValidateSignatureValues verifies whether the signature values are valid with
-// the given chain rules. The v value is assumed to be the canonical secp256k1
-// value of either 0 or 1.
+// the given chain rules. The v value is assumed to be either 0 or 1.
 func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	if r.Cmp(common.Big1) < 0 || s.Cmp(common.Big1) < 0 {
 		return false
@@ -200,9 +199,7 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 // be aware that the given hash cannot be choosen by an adversery. Common
 // solution is to hash any input before calculating the signature.
 //
-// The produced signature is in the canonical secp256k1 format (V = 0 or 1),
-// which can be transformed into the proper Ethereum signature accoring to
-// the yellow paper within the transaction signer.
+// The produced signature is in the [R || S || V] format where V is 0 or 1.
 func Sign(data []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(data) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(data))

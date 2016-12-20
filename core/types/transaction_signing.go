@@ -161,8 +161,8 @@ func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
 	return pub, nil
 }
 
-// WithSignature returns a new transaction with the given signature.
-// This signature needs to be in the canonical secp256k1 form (v = 0 or 1).
+// WithSignature returns a new transaction with the given signature. This signature
+// needs to be in the [R || S || V] format where V is 0 or 1.
 func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
@@ -211,8 +211,8 @@ func (s HomesteadSigner) Equal(s2 Signer) bool {
 	return ok
 }
 
-// WithSignature returns a new transaction with the given snature.
-// This signature needs to be in the canonical secp256k1 form (v = 0 or 1).
+// WithSignature returns a new transaction with the given signature. This signature
+// needs to be in the [R || S || V] format where V is 0 or 1.
 func (hs HomesteadSigner) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
@@ -267,8 +267,8 @@ func (s FrontierSigner) Equal(s2 Signer) bool {
 	return ok
 }
 
-// WithSignature returns a new transaction with the given snature.
-// This signature needs to be in the canonical secp256k1 form (v = 0 or 1).
+// WithSignature returns a new transaction with the given signature. This signature
+// needs to be in the [R || S || V] format where V is 0 or 1.
 func (fs FrontierSigner) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
 	if len(sig) != 65 {
 		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
