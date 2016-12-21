@@ -50,7 +50,7 @@ func TestnetChainConfig() *ChainConfig {
 		ChainID:        params.TestNetChainID.Int64(),
 		HomesteadBlock: params.TestNetHomesteadBlock.Int64(),
 		DAOForkBlock:   0,
-		DAOForkSupport: true,
+		DAOForkSupport: false,
 		EIP150Block:    params.TestNetHomesteadGasRepriceBlock.Int64(),
 		EIP150Hash:     Hash{params.TestNetHomesteadGasRepriceHash},
 		EIP155Block:    params.TestNetSpuriousDragon.Int64(),
