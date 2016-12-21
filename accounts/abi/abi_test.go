@@ -425,8 +425,8 @@ const jsondata = `
 
 const jsondata2 = `
 [
-	{ "type" : "function", "name" : "balance", "constant" : true },
-	{ "type" : "function", "name" : "send", "constant" : false, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
+	{ "type" : "function", "name" : "balance", "constant" : true, "payable" : false},
+	{ "type" : "function", "name" : "send", "constant" : false, "payable": true, "inputs" : [ { "name" : "amount", "type" : "uint256" } ] },
 	{ "type" : "function", "name" : "test", "constant" : false, "inputs" : [ { "name" : "number", "type" : "uint32" } ] },
 	{ "type" : "function", "name" : "string", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "string" } ] },
 	{ "type" : "function", "name" : "bool", "constant" : false, "inputs" : [ { "name" : "inputs", "type" : "bool" } ] },
@@ -446,10 +446,10 @@ func TestReader(t *testing.T) {
 	exp := ABI{
 		Methods: map[string]Method{
 			"balance": Method{
-				"balance", true, nil, nil,
+				"balance", true, false, nil, nil,
 			},
 			"send": Method{
-				"send", false, []Argument{
+				"send", false, true, []Argument{
 					Argument{"amount", Uint256, false},
 				}, nil,
 			},
@@ -549,7 +549,7 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
-	m := Method{"foo", false, []Argument{Argument{"bar", String, false}, Argument{"baz", String, false}}, nil}
+	m := Method{"foo", false, false, []Argument{Argument{"bar", String, false}, Argument{"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -561,7 +561,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint")
-	m = Method{"foo", false, []Argument{Argument{"bar", uintt, false}}, nil}
+	m = Method{"foo", false, false, []Argument{Argument{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
