@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -209,6 +210,19 @@ var (
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
 		Usage: "Block extra data set by the miner (default = client version)",
+	}
+	StrategyZerodiffEnabledFlag = cli.BoolFlag{
+		Name:  "miner.zerodiff",
+		Usage: "Enables the base zero-diff miner strategy (private networks)",
+	}
+	StrategyZerodiffInstantTxsFlag = cli.BoolFlag{
+		Name:  "miner.zerodiff.instanttxs",
+		Usage: "Ignores zero-diff delays if block contains transactions (private networks)",
+	}
+	StrategyZerodiffMinEtherFlag = cli.IntFlag{
+		Name:  "miner.zerodiff.minether",
+		Usage: "Ignores zero-diff delays if miner balance is below threshold (private networks)",
+		Value: 0,
 	}
 	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
@@ -636,6 +650,24 @@ func MakeMinerExtra(extra []byte, ctx *cli.Context) []byte {
 	return extra
 }
 
+// MakeMinerStrategies assembles any miner strategies from the set command line
+// flags.
+func MakeMinerStrategies(ctx *cli.Context) []*miner.Strategy {
+	var strategies []*miner.Strategy
+
+	// If zero-diff mining is requested, assemble it
+	var (
+		zerodiffBaseline   = ctx.GlobalBool(StrategyZerodiffEnabledFlag.Name)
+		zerodiffInstanttxs = ctx.GlobalBool(StrategyZerodiffInstantTxsFlag.Name)
+		zerodiffThreshold  = ctx.GlobalInt(StrategyZerodiffMinEtherFlag.Name)
+	)
+	if zerodiffBaseline || zerodiffInstanttxs || zerodiffThreshold > 0 {
+		threshold := new(big.Int).Mul(big.NewInt(int64(zerodiffThreshold)), common.Ether)
+		strategies = append(strategies, miner.NewZeroDiffStrategy(zerodiffInstanttxs, threshold))
+	}
+	return strategies
+}
+
 // MakePasswordList reads password lines from the file specified by --password.
 func MakePasswordList(ctx *cli.Context) []string {
 	path := ctx.GlobalString(PasswordFileFlag.Name)
@@ -737,6 +769,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		DatabaseHandles:         MakeDatabaseHandles(),
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
+		MinerStrategies:         MakeMinerStrategies(ctx),
 		ExtraData:               MakeMinerExtra(extra, ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),

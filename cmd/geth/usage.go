@@ -140,6 +140,14 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "MINER STRATEGY",
+		Flags: []cli.Flag{
+			utils.StrategyZerodiffEnabledFlag,
+			utils.StrategyZerodiffInstantTxsFlag,
+			utils.StrategyZerodiffMinEtherFlag,
+		},
+	},
+	{
 		Name: "GAS PRICE ORACLE",
 		Flags: []cli.Flag{
 			utils.GpoMinGasPriceFlag,

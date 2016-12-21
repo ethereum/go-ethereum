@@ -60,12 +60,12 @@ type Miner struct {
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, pow pow.PoW, strategies []*Strategy) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		pow:      pow,
-		worker:   newWorker(config, common.Address{}, eth, mux),
+		worker:   newWorker(config, common.Address{}, eth, mux, strategies),
 		canStart: 1,
 	}
 	go miner.update()

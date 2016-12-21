@@ -83,10 +83,11 @@ type Config struct {
 	PowShared bool
 	ExtraData []byte
 
-	Etherbase    common.Address
-	GasPrice     *big.Int
-	MinerThreads int
-	SolcPath     string
+	Etherbase       common.Address
+	GasPrice        *big.Int
+	MinerThreads    int
+	MinerStrategies []*miner.Strategy
+	SolcPath        string
 
 	GpoMinGasPrice          *big.Int
 	GpoMaxGasPrice          *big.Int
@@ -242,7 +243,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.pow)
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.pow, config.MinerStrategies)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
