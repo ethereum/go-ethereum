@@ -233,12 +233,19 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   &Info{self.config, chequebook.ContractParams},
 			Public:    true,
 		},
+		{
+			Namespace: "bzz",
+			Version:   "0.1",
+			Service:   api.NewEns(self.api),
+			Public:    true,
+		},
 		// admin APIs
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
 			Service:   api.NewFileSystem(self.api),
-			Public:    false},
+			Public:    false,
+		},
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
