@@ -99,7 +99,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				"[BZZ] Swarm: Protocol error in request `%s`.",
 				uri,
 			)
-			http.Error(w, "BZZ protocol error", http.StatusBadRequest)
+			http.Error(w, "Invalid request URL: need access protocol (bzz:/, bzzr:/, bzzi:/) as first element in path.", http.StatusBadRequest)
 			return
 		}
 	}
@@ -187,6 +187,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			reader := a.Retrieve(key)
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
+			if err != nil {
+				glog.V(logger.Debug).Infof("Could not determine size: %v", err.Error())
+				//An error on call to Size means we don't have the root chunk
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
 			glog.V(logger.Debug).Infof("Reading %d bytes.", size)
 
 			// setting mime type
@@ -229,6 +235,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			}
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
+			if err != nil {
+				glog.V(logger.Debug).Infof("Could not determine size: %v", err.Error())
+				//An error on call to Size means we don't have the root chunk
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
 			glog.V(logger.Debug).Infof("Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status)
 
 			http.ServeContent(w, r, path, forever(), reader)
