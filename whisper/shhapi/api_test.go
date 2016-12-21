@@ -277,6 +277,9 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("failed to create API.")
 	}
 
+	api.Start()
+	defer api.Stop()
+
 	sig, err := api.NewIdentity()
 	if err != nil {
 		t.Fatalf("failed NewIdentity: %s.", err)
@@ -375,6 +378,9 @@ func TestIntegrationSym(t *testing.T) {
 		t.Fatalf("failed to create API.")
 	}
 
+	api.Start()
+	defer api.Stop()
+
 	keyname := "schluessel"
 	err := api.GenerateSymKey(keyname)
 	if err != nil {
@@ -470,6 +476,9 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
+
+	api.Start()
+	defer api.Stop()
 
 	keyname := "schluessel"
 	err := api.GenerateSymKey(keyname)

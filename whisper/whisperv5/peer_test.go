@@ -118,6 +118,7 @@ func initialize(t *testing.T) {
 		var node TestNode
 		node.shh = NewWhisper(nil)
 		node.shh.test = true
+		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey, Topics: topics}
@@ -166,6 +167,7 @@ func stopServers() {
 		n := nodes[i]
 		if n != nil {
 			n.shh.Unwatch(n.filerId)
+			n.shh.Stop()
 			n.server.Stop()
 		}
 	}

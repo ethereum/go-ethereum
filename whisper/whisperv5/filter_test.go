@@ -139,7 +139,7 @@ func TestComparePubKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate second key with seed %d: %s.", seed, err)
 	}
-	if isPubKeyEqual(&key1.PublicKey, &key2.PublicKey) {
+	if IsPubKeyEqual(&key1.PublicKey, &key2.PublicKey) {
 		t.Fatalf("public keys are equal, seed %d.", seed)
 	}
 
@@ -149,7 +149,7 @@ func TestComparePubKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate third key with seed %d: %s.", seed, err)
 	}
-	if isPubKeyEqual(&key1.PublicKey, &key3.PublicKey) {
+	if IsPubKeyEqual(&key1.PublicKey, &key3.PublicKey) {
 		t.Fatalf("key1 == key3, seed %d.", seed)
 	}
 }
@@ -540,7 +540,7 @@ func TestWatchers(t *testing.T) {
 	}
 
 	for i = 0; i < NumMessages; i++ {
-		filters.NotifyWatchers(envelopes[i], messagesCode)
+		filters.NotifyWatchers(envelopes[i], false)
 	}
 
 	var total int
@@ -593,7 +593,7 @@ func TestWatchers(t *testing.T) {
 	}
 
 	for i = 0; i < NumMessages; i++ {
-		filters.NotifyWatchers(envelopes[i], messagesCode)
+		filters.NotifyWatchers(envelopes[i], false)
 	}
 
 	for i = 0; i < NumFilters; i++ {
@@ -629,7 +629,7 @@ func TestWatchers(t *testing.T) {
 	// test AcceptP2P
 
 	total = 0
-	filters.NotifyWatchers(envelopes[0], p2pCode)
+	filters.NotifyWatchers(envelopes[0], true)
 
 	for i = 0; i < NumFilters; i++ {
 		mail = tst[i].f.Retrieve()
@@ -646,7 +646,7 @@ func TestWatchers(t *testing.T) {
 	}
 	f.AcceptP2P = true
 	total = 0
-	filters.NotifyWatchers(envelopes[0], p2pCode)
+	filters.NotifyWatchers(envelopes[0], true)
 
 	for i = 0; i < NumFilters; i++ {
 		mail = tst[i].f.Retrieve()

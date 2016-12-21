@@ -43,11 +43,21 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-const clientIdentifier = "bzzd"
+const (
+	clientIdentifier = "swarm"
+	versionString    = "0.2"
+)
 
 var (
-	gitCommit string // Git SHA1 commit hash of the release (set via linker flags)
-	app       = utils.NewApp(gitCommit, "Ethereum Swarm server daemon")
+	gitCommit        string // Git SHA1 commit hash of the release (set via linker flags)
+	app              = utils.NewApp(gitCommit, "Ethereum Swarm")
+	testbetBootNodes = []string{
+		"enode://ec8ae764f7cb0417bdfb009b9d0f18ab3818a3a4e8e7c67dd5f18971a93510a2e6f43cd0b69a27e439a9629457ea804104f37c85e41eed057d3faabbf7744cdf@13.74.157.139:30429",
+		"enode://c2e1fceb3bf3be19dff71eec6cccf19f2dbf7567ee017d130240c670be8594bc9163353ca55dd8df7a4f161dd94b36d0615c17418b5a3cdcbb4e9d99dfa4de37@13.74.157.139:30430",
+		"enode://fe29b82319b734ce1ec68b84657d57145fee237387e63273989d354486731e59f78858e452ef800a020559da22dcca759536e6aa5517c53930d29ce0b1029286@13.74.157.139:30431",
+		"enode://1d7187e7bde45cf0bee489ce9852dd6d1a0d9aa67a33a6b8e6db8a4fbc6fcfa6f0f1a5419343671521b863b187d1c73bad3603bae66421d157ffef357669ddb8@13.74.157.139:30432",
+		"enode://0e4cba800f7b1ee73673afa6a4acead4018f0149d2e3216be3f133318fd165b324cd71b81fbe1e80deac8dbf56e57a49db7be67f8b9bc81bd2b7ee496434fb5d@13.74.157.139:30433",
+	}
 )
 
 var (
@@ -65,7 +75,7 @@ var (
 	}
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:  "bzznetworkid",
-		Usage: "Network identifier (integer, default 322=swarm testnet)",
+		Usage: "Network identifier (integer, default 3=swarm testnet)",
 		Value: network.NetworkId,
 	}
 	SwarmConfigPathFlag = cli.StringFlag{
@@ -85,9 +95,24 @@ var (
 		Usage: "URL of the Ethereum API provider",
 		Value: node.DefaultIPCEndpoint("geth"),
 	}
+	SwarmApiFlag = cli.StringFlag{
+		Name:  "bzzapi",
+		Usage: "Swarm HTTP endpoint",
+		Value: "http://127.0.0.1:8500",
+	}
+	SwarmRecursiveUploadFlag = cli.BoolFlag{
+		Name:  "recursive",
+		Usage: "Upload directories recursively",
+	}
+	SwarmWantManifestFlag = cli.BoolTFlag{
+		Name:  "manifest",
+		Usage: "Automatic manifest upload",
+	}
+	SwarmUploadDefaultPath = cli.StringFlag{
+		Name:  "defaultpath",
+		Usage: "path to file served for empty url path (none)",
+	}
 )
-
-var defaultBootnodes = []string{}
 
 func init() {
 	// Override flag defaults so bzzd can run alongside geth.
@@ -96,8 +121,39 @@ func init() {
 	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, web3"
 
 	// Set up the cli app.
-	app.Commands = nil
 	app.Action = bzzd
+	app.HideVersion = true // we have a command to print the version
+	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
+	app.Commands = []cli.Command{
+		cli.Command{
+			Action:    version,
+			Name:      "version",
+			Usage:     "Print version numbers",
+			ArgsUsage: " ",
+			Description: `
+The output of this command is supposed to be machine-readable.
+`,
+		},
+		cli.Command{
+			Action:    upload,
+			Name:      "up",
+			Usage:     "upload a file or directory to swarm using the HTTP API",
+			ArgsUsage: " <file>",
+			Description: `
+"upload a file or directory to swarm using the HTTP API and prints the root hash",
+`,
+		},
+		cli.Command{
+			Action:    hash,
+			Name:      "hash",
+			Usage:     "print the swarm hash of a file or directory",
+			ArgsUsage: " <file>",
+			Description: `
+Prints the swarm hash of file or directory.
+`,
+		},
+	}
+
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
 		utils.DataDirFlag,
@@ -123,6 +179,11 @@ func init() {
 		SwarmAccountFlag,
 		SwarmNetworkIdFlag,
 		ChequebookAddrFlag,
+		// upload flags
+		SwarmApiFlag,
+		SwarmRecursiveUploadFlag,
+		SwarmWantManifestFlag,
+		SwarmUploadDefaultPath,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -142,17 +203,33 @@ func main() {
 	}
 }
 
+func version(ctx *cli.Context) error {
+	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println("Version:", versionString)
+	if gitCommit != "" {
+		fmt.Println("Git Commit:", gitCommit)
+	}
+	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Go Version:", runtime.Version())
+	fmt.Println("OS:", runtime.GOOS)
+	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
+	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+	return nil
+}
+
 func bzzd(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	registerBzzService(ctx, stack)
 	utils.StartNode(stack)
-
+	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
 		bootnodes := strings.Split(ctx.GlobalString(utils.BootnodesFlag.Name), ",")
 		injectBootnodes(stack.Server(), bootnodes)
 	} else {
-		injectBootnodes(stack.Server(), defaultBootnodes)
+		if networkId == 3 {
+			injectBootnodes(stack.Server(), testbetBootNodes)
+		}
 	}
 
 	stack.Wait()
@@ -182,13 +259,11 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
 		var client *ethclient.Client
-		if ethapi == "" {
-			err = fmt.Errorf("use ethapi flag to connect to a an eth client and talk to the blockchain")
-		} else {
+		if len(ethapi) > 0 {
 			client, err = ethclient.Dial(ethapi)
-		}
-		if err != nil {
-			utils.Fatalf("Can't connect: %v", err)
+			if err != nil {
+				utils.Fatalf("Can't connect: %v", err)
+			}
 		}
 		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled)
 	}

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -289,14 +290,14 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 }
 
 // signHash is a helper function that calculates a hash for the given message that can be
-// safely used to calculate a signature from. The hash is calulcated with:
-// keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
-func signHash(message string) []byte {
-	data := common.FromHex(message)
-	// Give context to the signed message. This prevents an adversery to sign a tx.
-	// It has no cryptographic purpose.
+// safely used to calculate a signature from.
+//
+// The hash is calulcated as
+//   keccak256("\x19Ethereum Signed Message:\n"${message length}${message}).
+//
+// This gives context to the signed message and prevents signing of transactions.
+func signHash(data []byte) []byte {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	// Always hash, this prevents choosen plaintext attacks that can extract key information
 	return crypto.Keccak256([]byte(msg))
 }
 
@@ -306,13 +307,8 @@ func signHash(message string) []byte {
 // The key used to calculate the signature is decrypted with the given password.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
-func (s *PrivateAccountAPI) Sign(ctx context.Context, message string, addr common.Address, passwd string) (string, error) {
-	hash := signHash(message)
-	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, hash)
-	if err != nil {
-		return "0x", err
-	}
-	return common.ToHex(signature), nil
+func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
+	return s.b.AccountManager().SignWithPassphrase(addr, passwd, signHash(data))
 }
 
 // EcRecover returns the address for the account that was used to create the signature.
@@ -322,29 +318,20 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, message string, addr commo
 // addr = ecrecover(hash, signature)
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
-func (s *PrivateAccountAPI) EcRecover(ctx context.Context, message string, signature string) (common.Address, error) {
-	var (
-		hash = signHash(message)
-		sig  = common.FromHex(signature)
-	)
-
+func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 	if len(sig) != 65 {
 		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
 	}
-
 	// see crypto.Ecrecover description
 	if sig[64] == 27 || sig[64] == 28 {
 		sig[64] -= 27
 	}
-
-	rpk, err := crypto.Ecrecover(hash, sig)
+	rpk, err := crypto.Ecrecover(signHash(data), sig)
 	if err != nil {
 		return common.Address{}, err
 	}
-
 	pubKey := crypto.ToECDSAPub(rpk)
 	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-
 	return recoveredAddr, nil
 }
 
@@ -1116,10 +1103,8 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 // The account associated with addr must be unlocked.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
-func (s *PublicTransactionPoolAPI) Sign(addr common.Address, message string) (string, error) {
-	hash := signHash(message)
-	signature, err := s.b.AccountManager().SignEthereum(addr, hash)
-	return common.ToHex(signature), err
+func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
+	return s.b.AccountManager().SignEthereum(addr, signHash(data))
 }
 
 // SignTransactionArgs represents the arguments to sign a transaction.
@@ -1273,8 +1258,12 @@ func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args Sig
 
 // PendingTransactions returns the transactions that are in the transaction pool and have a from address that is one of
 // the accounts this node manages.
-func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
-	pending := s.b.GetPoolTransactions()
+func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, error) {
+	pending, err := s.b.GetPoolTransactions()
+	if err != nil {
+		return nil, err
+	}
+
 	transactions := make([]*RPCTransaction, 0, len(pending))
 	for _, tx := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
@@ -1286,13 +1275,17 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() []*RPCTransaction {
 			transactions = append(transactions, newRPCPendingTransaction(tx))
 		}
 	}
-	return transactions
+	return transactions, nil
 }
 
 // Resend accepts an existing transaction and a new gas price and limit. It will remove the given transaction from the
 // pool and reinsert it with the new gas price and limit.
 func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, tx Tx, gasPrice, gasLimit *rpc.HexNumber) (common.Hash, error) {
-	pending := s.b.GetPoolTransactions()
+	pending, err := s.b.GetPoolTransactions()
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	for _, p := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
 		if p.Protected() {

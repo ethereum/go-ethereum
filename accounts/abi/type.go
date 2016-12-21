@@ -33,7 +33,7 @@ const (
 	FixedBytesTy
 	BytesTy
 	HashTy
-	RealTy
+	FixedpointTy
 )
 
 // Type is the reflection of the supported argument type
@@ -57,16 +57,16 @@ var (
 	// Types can be in the format of:
 	//
 	// 	Input  = Type [ "[" [ Number ] "]" ] Name .
-	// 	Type   = [ "u" ] "int" [ Number ] .
+	// 	Type   = [ "u" ] "int" [ Number ] [ x ] [ Number ].
 	//
 	// Examples:
 	//
-	//      string     int       uint       real
+	//      string     int       uint       fixed
 	//      string32   int8      uint8      uint[]
-	//      address    int256    uint256    real[2]
-	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
+	//      address    int256    uint256    fixed128x128[2]
+	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)\\])?")
 	// typeRegex parses the abi sub types
-	typeRegex = regexp.MustCompile("([a-zA-Z]+)([0-9]*)?")
+	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
 )
 
 // NewType creates a new reflection type of abi type given in t.
@@ -97,7 +97,7 @@ func NewType(t string) (typ Type, err error) {
 	parsedType := typeRegex.FindAllStringSubmatch(res[1], -1)[0]
 	// varSize is the size of the variable
 	var varSize int
-	if len(parsedType[2]) > 0 {
+	if len(parsedType[3]) > 0 {
 		var err error
 		varSize, err = strconv.Atoi(parsedType[2])
 		if err != nil {

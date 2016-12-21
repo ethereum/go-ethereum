@@ -72,9 +72,7 @@ var (
 		executablePath("abigen"),
 		executablePath("evm"),
 		executablePath("geth"),
-		executablePath("bzzd"),
-		executablePath("bzzhash"),
-		executablePath("bzzup"),
+		executablePath("swarm"),
 		executablePath("rlpdump"),
 	}
 
@@ -93,16 +91,8 @@ var (
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			Name:        "bzzd",
-			Description: "Ethereum Swarm daemon",
-		},
-		{
-			Name:        "bzzup",
-			Description: "Ethereum Swarm command line file/directory uploader",
-		},
-		{
-			Name:        "bzzhash",
-			Description: "Ethereum Swarm file/directory hash calculator",
+			Name:        "swarm",
+			Description: "Ethereum Swarm daemon and tools",
 		},
 		{
 			Name:        "abigen",
@@ -112,7 +102,8 @@ var (
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	debDistros = []string{"trusty", "wily", "xenial", "yakkety"}
+	// Note: wily is unsupported because it was officially deprecated on lanchpad.
+	debDistros = []string{"trusty", "xenial", "yakkety"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -638,6 +629,7 @@ func doWindowsInstaller(cmdline []string) {
 	build.Render("build/nsis.geth.nsi", filepath.Join(*workdir, "geth.nsi"), 0644, nil)
 	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
+	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
 	build.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll", 0755)
 	build.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING", 0755)

@@ -224,6 +224,17 @@ type WhCallback func(*types.Header) error
 // of the header retrieval mechanisms already need to verfy nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, writeHeader WhCallback) (int, error) {
+	// Do a sanity check that the provided chain is actually ordered and linked
+	for i := 1; i < len(chain); i++ {
+		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
+			// Chain broke ancestry, log a messge (programming error) and skip insertion
+			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])",
+				i-1, chain[i-1].Number.Uint64(), chain[i-1].Hash().Bytes()[:4], i, chain[i].Number.Uint64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash.Bytes()[:4])
+
+			glog.V(logger.Error).Info(failure.Error())
+			return 0, failure
+		}
+	}
 	// Collect some import statistics to report on
 	stats := struct{ processed, ignored int }{}
 	start := time.Now()

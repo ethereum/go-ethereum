@@ -13,15 +13,15 @@ matrix:
       go: 1.6.2
     - os: linux
       dist: trusty
-      go: 1.7
+      go: 1.7.4
     - os: osx
-      go: 1.7
+      go: 1.7.4
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.7
+      go: 1.7.4
       env:
         - ubuntu-ppa
         - azure-linux
@@ -55,7 +55,7 @@ matrix:
 
     # This builder does the OSX Azure, Android Maven and Azure and iOS CocoaPods and Azure uploads
     - os: osx
-      go: 1.7
+      go: 1.7.4
       env:
         - azure-osx
         - mobile
