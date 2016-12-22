@@ -21,56 +21,20 @@ package vm
 #include <evmjit.h>
 #include <stdlib.h>
 
-static union evm_variant query_gateway(struct evm_env* env,
-                                        enum evm_query_key key,
-                                        union evm_variant arg)
-{
-	void query(void*, size_t, int, void*);
-
-	union evm_variant result;
-	query(&result, (size_t)env, key, &arg);
-	return result;
-}
-
-extern void update(void* env, int key, void* arg1, void* arg2);
-static void update_gateway(struct evm_env* env,
-                                        enum evm_update_key key,
-                                        union evm_variant arg1,
-                                        union evm_variant arg2)
-{
-	update(env, key, &arg1, &arg2);
-}
-
-typedef long long int64;
-
-extern int64 call(
-    void* env,
-    int kind,
-    int64 gas,
-    void* address,
-    void* value,
-    void* input,
-    size_t input_size,
-    void* output,
-    size_t output_size);
-static int64_t call_gateway(
-    struct evm_env* env,
-    enum evm_call_kind kind,
-    int64_t gas,
-    struct evm_uint160be address,
-    struct evm_uint256be value,
-    uint8_t const* input,
-    size_t input_size,
-    uint8_t* output,
-    size_t output_size)
-{
-	return call(env, kind, gas, &address, &value, (void*)input, input_size, output, output_size);
-}
 
 static struct evm_instance* new_evmjit()
 {
+	// Declare exported Go functions. The are ABI compatible with C callbacks
+	// but differ by type names and const pointers.
+	void query(void*, size_t, int, void*);
+	void update(size_t env, int key, void* arg1, void* arg2);
+	long long call(void* env, int kind, long long gas, void* address,
+		void* value, void* input, size_t input_size, void* output,
+		size_t output_size);
+
 	struct evm_factory factory = evmjit_get_factory();
-	return factory.create(query_gateway, update_gateway, call_gateway);
+	return factory.create((evm_query_fn)query, (evm_update_fn)update,
+		(evm_call_fn)call);
 }
 
 static struct evm_result evm_execute(struct evm_instance* instance,
@@ -183,44 +147,39 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 	// Or as pointer to int64.
 	pInt64Result := (*int64)(pResult)
 
-	// Copy the argument to [32]byte array.
-	arg := *(*[32]byte)(pArg)
-
 	// Get the execution context.
 	ctx := getCtx(ctxIdx)
 
 	switch key {
 	case C.EVM_SLOAD:
+		arg := *(*[32]byte)(pArg)
 		val := ctx.env.StateDB.GetState(ctx.contract.Address(), arg)
 		copy(result, val[:])
 		// fmt.Printf("EVMJIT SLOAD %x : %x\n", arg, result)
 	case C.EVM_ADDRESS:
 		addr := ctx.contract.Address()
 		copy(result[12:], addr[:])
-		// fmt.Printf("ADDRESS %x : %x\n", addr, result[12:])
 	case C.EVM_CALLER:
 		addr := ctx.contract.Caller()
 		copy(result[12:], addr[:])
 	case C.EVM_ORIGIN:
-		addr := ctx.env.Origin
-		copy(result[12:], addr[:])
+		copy(result[12:], ctx.env.Origin[:])
 	case C.EVM_GAS_PRICE:
 		val := common.BigToHash(ctx.env.GasPrice)
 		copy(result, val[:])
 	case C.EVM_COINBASE:
-		addr := ctx.env.Coinbase
-		copy(result[12:], addr[:])
+		copy(result[12:], ctx.env.Coinbase[:])
 	case C.EVM_DIFFICULTY:
 		val := common.BigToHash(ctx.env.Difficulty)
 		copy(result, val[:])
 	case C.EVM_GAS_LIMIT:
 		*pInt64Result = ctx.env.GasLimit.Int64()
-		// fmt.Printf("GASLIMIT %d %d\n", *pInt64Result, ctx.env.GasLimit())
 	case C.EVM_NUMBER:
 		*pInt64Result = ctx.env.BlockNumber.Int64()
 	case C.EVM_TIMESTAMP:
 		*pInt64Result = ctx.env.Time.Int64()
 	case C.EVM_CODE_BY_ADDRESS:
+		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
 		copy(addr[:], arg[12:])
 		code := ctx.env.StateDB.GetCode(addr)
@@ -229,12 +188,14 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 		pResAsMemRef.len = len(code)
 		// fmt.Printf("EXTCODE %x : %d\n", addr, pResAsMemRef.len)
 	case C.EVM_CODE_SIZE:
+		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
 		copy(addr[:], arg[12:])
 		pInt64Result := (*int64)(pResult)
 		*pInt64Result = int64(ctx.env.StateDB.GetCodeSize(addr))
 		// fmt.Printf("EXTCODESIZE %x : %d\n", addr, *pInt64Result)
 	case C.EVM_BALANCE:
+		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
 		copy(addr[:], arg[12:])
 		balance := ctx.env.StateDB.GetBalance(addr)
@@ -251,6 +212,7 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 		copy(result, hash[:])
 		// fmt.Printf("BLOCKHASH %x : %x (%d, %d, %d)\n", result, hash, n, a, b)
 	case C.EVM_ACCOUNT_EXISTS:
+		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
 		copy(addr[:], arg[12:])
 		eip158 := ctx.env.ChainConfig().IsEIP158(ctx.env.BlockNumber)
@@ -268,22 +230,21 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 		*pInt64Result = int64(ctx.env.Depth - 1)
 
 	default:
-		// fmt.Printf("Unhandled %d\n", key)
+		panic(fmt.Sprintf("Unhandled EVM-C query %d\n", key))
 	}
 }
 
 //export update
-func update(pCtx unsafe.Pointer, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.Pointer) {
-	arg1 := *(*[32]byte)(pArg1)
-	arg2 := *(*[32]byte)(pArg2)
-	ctx := getCtx(uintptr(pCtx))
+func update(ctxIdx uintptr, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.Pointer) {
+	ctx := getCtx(ctxIdx)
 
 	switch key {
 	case C.EVM_SSTORE:
-		val := ctx.env.StateDB.GetState(ctx.contract.Address(), arg1)
-		ctx.env.StateDB.SetState(ctx.contract.Address(), arg1, arg2)
-		if !common.EmptyHash(val) && common.EmptyHash(arg2) {
-			// panic("SSTORE REFUND")
+		key := *(*[32]byte)(pArg1)
+		newVal := *(*[32]byte)(pArg2)
+		oldVal := ctx.env.StateDB.GetState(ctx.contract.Address(), key)
+		ctx.env.StateDB.SetState(ctx.contract.Address(), key, newVal)
+		if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
 			ctx.env.StateDB.AddRefund(params.SstoreRefundGas)
 		}
 		// fmt.Printf("EVMJIT STORE %x : %x [%x, %d]\n", arg1, arg2, ctx.contract.Address(), int(uintptr(pEnv)))
@@ -301,13 +262,14 @@ func update(pCtx unsafe.Pointer, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.P
 		log := NewLog(ctx.contract.Address(), topics, data, ctx.env.BlockNumber.Uint64())
 		ctx.env.StateDB.AddLog(log)
 	case C.EVM_SELFDESTRUCT:
+		arg := GoByteSlice(pArg1, 32)
 		db := ctx.env.StateDB
 		addr := ctx.contract.Address()
 		if !db.HasSuicided(addr) {
 			db.AddRefund(params.SuicideRefundGas)
 		}
 		balance := db.GetBalance(addr)
-		beneficiary := common.BytesToAddress(arg1[12:])
+		beneficiary := common.BytesToAddress(arg[12:])
 		db.AddBalance(beneficiary, balance)
 		db.Suicide(addr)
 	}
@@ -457,7 +419,7 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	output := C.GoBytes(unsafe.Pointer(r.output_data), C.int(r.output_size))
 
 	if r.code != 0 {
-		// FIXME: Produce better error messages.
+		// EVMJIT does not informs about the kind of the EVM expection.
 		err = OutOfGasError
 	}
 
