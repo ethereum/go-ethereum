@@ -38,17 +38,17 @@ static struct evm_instance* new_evmjit()
 }
 
 static struct evm_result evm_execute(struct evm_instance* instance,
-                                     struct evm_env* env,
-                                     enum evm_mode mode,
-                                     struct evm_uint256be code_hash,
-                                     uint8_t const* code,
-                                     size_t code_size,
-                                     int64_t gas,
-                                     uint8_t const* input,
-                                     size_t input_size,
-                                     struct evm_uint256be value)
+	struct evm_env* env, enum evm_mode mode, struct evm_uint256be code_hash,
+	uint8_t const* code, size_t code_size, int64_t gas, uint8_t const* input,
+	size_t input_size, struct evm_uint256be value)
 {
-	return instance->execute(instance, env, mode, code_hash, code, code_size, gas, input, input_size, value);
+	return instance->execute(instance, env, mode, code_hash, code, code_size,
+		gas, input, input_size, value);
+}
+
+static void evm_release_result(struct evm_result* result)
+{
+	result->release(result);
 }
 
 #cgo CFLAGS:  -I/home/chfast/Projects/ethereum/evmjit/include
@@ -58,7 +58,6 @@ import "C"
 
 import (
 	"fmt"
-	"math"
 	"math/big"
 	"reflect"
 	"sync"
@@ -294,9 +293,6 @@ func call(
 	output := GoByteSlice(pOutput, outputSize)
 	bigGas := new(big.Int).SetInt64(gas)
 
-	// FIXME: C.EVM_CALL_FAILURE not available.
-	const callFailure = math.MinInt64
-
 	switch kind {
 	case C.EVM_CALL:
 		// fmt.Printf("CALL(gas %d, %x)\n", bigGas, address)
@@ -308,13 +304,9 @@ func call(
 		if err == nil {
 			copy(output, ret)
 			assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-			// This can happen for precompiled contracts:
-			// if (gasLeft == gas) {
-			// 	assert(len(output) == 0, fmt.Sprintf("Non-zero output: %d %x", len(output), output))
-			// }
 			return gasLeft
 		}
-		return gasLeft | callFailure
+		return gasLeft | C.EVM_CALL_FAILURE
 	case C.EVM_CALLCODE:
 		// fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, address, value)
 		ctx.contract.Gas.SetInt64(0)
@@ -328,7 +320,7 @@ func call(
 		} else {
 			// fmt.Printf("Error: %v\n", err)
 		}
-		return gasLeft | callFailure
+		return gasLeft | C.EVM_CALL_FAILURE
 	case C.EVM_DELEGATECALL:
 		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
 		ctx.contract.Gas.SetInt64(0)
@@ -340,7 +332,7 @@ func call(
 			copy(output, ret)
 			return gasLeft
 		}
-		return gasLeft | callFailure
+		return gasLeft | C.EVM_CALL_FAILURE
 	case C.EVM_CREATE:
 		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
 		ctx.contract.Gas.SetInt64(0)
@@ -349,7 +341,7 @@ func call(
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
 		if (ctx.env.ChainConfig().IsHomestead(ctx.env.BlockNumber) && err == CodeStoreOutOfGasError) ||
 			(err != nil && err != CodeStoreOutOfGasError) {
-			return callFailure
+			return C.EVM_CALL_FAILURE
 		} else {
 			copy(output, addr[:])
 			return gasLeft
@@ -423,14 +415,11 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 		err = OutOfGasError
 	}
 
-	if r.internal_memory != nil {
-		C.free(r.internal_memory)
-	}
+	C.evm_release_result(&r)
 	return output, err
 }
 
 func (evm *EVMJIT) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
-	// fmt.Printf("PRECOMPILED %x\n", *contract.CodeAddr)
 	gas := p.Gas(len(input))
 	if contract.UseGas(gas) {
 		ret = p.Call(input)
