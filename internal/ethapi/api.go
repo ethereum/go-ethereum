@@ -464,7 +464,7 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 // block numbers are also allowed.
 func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*big.Int, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
-	if state == nil || err != nil {
+	if err != nil {
 		return nil, err
 	}
 	b := state.GetBalance(address)
@@ -551,7 +551,11 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, bloc
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
-	if state == nil || err != nil {
+	if err != nil {
+		return nil, err
+	}
+	res, err := state.GetCode(ctx, address)
+	if len(res) == 0 || err != nil { // backwards compatibility
 		return nil, err
 	}
 	code := state.GetCode(address)
@@ -563,7 +567,11 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 // numbers are also allowed.
 func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNr rpc.BlockNumber) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
-	if state == nil || err != nil {
+	if err != nil {
+		return nil, err
+	}
+	res, err := state.GetState(ctx, address, common.HexToHash(key))
+	if err != nil {
 		return nil, err
 	}
 	res := state.GetState(address, common.HexToHash(key))
@@ -584,9 +592,10 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
-	if state == nil || err != nil {
+	if err != nil {
 		return nil, common.Big0, err
 	}
+
 	// Set sender address or use a default if none specified
 	addr := args.From
 	if addr == (common.Address{}) {
@@ -940,7 +949,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx cont
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
 func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Uint64, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
-	if state == nil || err != nil {
+	if err != nil {
 		return nil, err
 	}
 	nonce := state.GetNonce(address)
