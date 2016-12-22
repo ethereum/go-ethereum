@@ -1,17 +1,14 @@
-FROM ubuntu:wily
-MAINTAINER caktux
+FROM ubuntu:xenial
 
-ENV DEBIAN_FRONTEND noninteractive
-
-RUN apt-get update && \
-    apt-get upgrade -q -y && \
-    apt-get dist-upgrade -q -y && \
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 923F6CA9 && \
-    echo "deb http://ppa.launchpad.net/ethereum/ethereum/ubuntu wily main" | tee -a /etc/apt/sources.list.d/ethereum.list && \
-    apt-get update && \
-    apt-get install -q -y geth
+RUN \
+  apt-get update && apt-get install -y golang git make gcc build-essential ca-certificates --no-install-recommends && \
+  git clone --depth 1 https://github.com/ethereum/go-ethereum && \
+  (cd go-ethereum && make geth) && cp go-ethereum/build/bin/geth /geth && \
+  apt-get remove -y golang git make gcc build-essential ca-certificates && apt-get clean && \
+  apt-get autoremove -y && rm -rf /go-ethereum && rm -rf /var/cache/apt/*
 
 EXPOSE 8545
+EXPOSE 8546
 EXPOSE 30303
 
-ENTRYPOINT ["/usr/bin/geth"]
+ENTRYPOINT ["/geth"]
