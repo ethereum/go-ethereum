@@ -370,9 +370,22 @@ func (self *worker) wait() {
 
 // push sends a new work task to currently live miner agents.
 func (self *worker) push(work *Work) {
+	// If there are no agents mining, bail out
 	if atomic.LoadInt32(&self.mining) != 1 {
 		return
 	}
+	// Iterate over all miner strategies and ensure none denies this block
+	for _, strat := range self.strategies {
+		if strat.OnMinedBlock != nil {
+			glog.V(logger.Debug).Infof("Passing mining request #%d [%x…] to strategy %s", work.Block.Number(), work.Block.Hash().Bytes()[:4], strat.Name)
+			if err := strat.OnNewWork(self.mux, self.chain, work.Block); err != nil {
+				glog.V(logger.Debug).Infof("Mining request #%d [%x…] denied by strategy %s: %v", work.Block.Number(), work.Block.Hash().Bytes()[:4], strat.Name, err)
+				return
+			}
+			glog.V(logger.Debug).Infof("Mining request #%d [%x…] accepted by strategy %s", work.Block.Number(), work.Block.Hash().Bytes()[:4], strat.Name)
+		}
+	}
+	// Block accepted for mining, proceed
 	for agent := range self.agents {
 		atomic.AddInt32(&self.atWork, 1)
 		if ch := agent.Work(); ch != nil {
@@ -534,7 +547,7 @@ func (self *worker) commitNewWork() {
 		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
-	self.push(work)
+	go self.push(work)
 }
 
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
