@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -69,8 +70,8 @@ func (s *PublicEthereumAPI) Coinbase() (common.Address, error) {
 }
 
 // Hashrate returns the POW hashrate
-func (s *PublicEthereumAPI) Hashrate() *rpc.HexNumber {
-	return rpc.NewHexNumber(s.e.Miner().HashRate())
+func (s *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
+	return hexutil.Uint64(s.e.Miner().HashRate())
 }
 
 // PublicMinerAPI provides an API to control the miner.
@@ -95,8 +96,8 @@ func (s *PublicMinerAPI) Mining() bool {
 
 // SubmitWork can be used by external miner to submit their POW solution. It returns an indication if the work was
 // accepted. Note, this is not an indication if the provided work was valid!
-func (s *PublicMinerAPI) SubmitWork(nonce rpc.HexNumber, solution, digest common.Hash) bool {
-	return s.agent.SubmitWork(nonce.Uint64(), digest, solution)
+func (s *PublicMinerAPI) SubmitWork(nonce hexutil.Uint64, solution, digest common.Hash) bool {
+	return s.agent.SubmitWork(uint64(nonce), digest, solution)
 }
 
 // GetWork returns a work package for external miner. The work package consists of 3 strings
@@ -119,8 +120,8 @@ func (s *PublicMinerAPI) GetWork() (work [3]string, err error) {
 // SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined
 // hash rate of all miners which submit work through this node. It accepts the miner hash rate and an identifier which
 // must be unique between nodes.
-func (s *PublicMinerAPI) SubmitHashrate(hashrate rpc.HexNumber, id common.Hash) bool {
-	s.agent.SubmitHashrate(id, hashrate.Uint64())
+func (s *PublicMinerAPI) SubmitHashrate(hashrate hexutil.Uint64, id common.Hash) bool {
+	s.agent.SubmitHashrate(id, uint64(hashrate))
 	return true
 }
 
@@ -137,18 +138,15 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 
 // Start the miner with the given number of threads. If threads is nil the number of
 // workers started is equal to the number of logical CPU's that are usable by this process.
-func (s *PrivateMinerAPI) Start(threads *rpc.HexNumber) (bool, error) {
+func (s *PrivateMinerAPI) Start(threads *hexutil.Uint) (bool, error) {
 	s.e.StartAutoDAG()
-
+	var err error
 	if threads == nil {
-		threads = rpc.NewHexNumber(runtime.NumCPU())
+		err = s.e.StartMining(runtime.NumCPU())
+	} else {
+		err = s.e.StartMining(int(*threads))
 	}
-
-	err := s.e.StartMining(threads.Int())
-	if err == nil {
-		return true, nil
-	}
-	return false, err
+	return err == nil, err
 }
 
 // Stop the miner
@@ -166,8 +164,8 @@ func (s *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 }
 
 // SetGasPrice sets the minimum accepted gas price for the miner.
-func (s *PrivateMinerAPI) SetGasPrice(gasPrice rpc.HexNumber) bool {
-	s.e.Miner().SetGasPrice(gasPrice.BigInt())
+func (s *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
+	s.e.Miner().SetGasPrice((*big.Int)(&gasPrice))
 	return true
 }
 

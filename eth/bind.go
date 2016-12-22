@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -83,16 +84,16 @@ func toCallArgs(msg ethereum.CallMsg) ethapi.CallArgs {
 	args := ethapi.CallArgs{
 		To:   msg.To,
 		From: msg.From,
-		Data: common.ToHex(msg.Data),
+		Data: msg.Data,
 	}
 	if msg.Gas != nil {
-		args.Gas = *rpc.NewHexNumber(msg.Gas)
+		args.Gas = hexutil.Big(*msg.Gas)
 	}
 	if msg.GasPrice != nil {
-		args.GasPrice = *rpc.NewHexNumber(msg.GasPrice)
+		args.GasPrice = hexutil.Big(*msg.GasPrice)
 	}
 	if msg.Value != nil {
-		args.Value = *rpc.NewHexNumber(msg.Value)
+		args.Value = hexutil.Big(*msg.Value)
 	}
 	return args
 }
@@ -106,9 +107,12 @@ func toBlockNumber(num *big.Int) rpc.BlockNumber {
 
 // PendingAccountNonce implements bind.ContractTransactor retrieving the current
 // pending nonce associated with an account.
-func (b *ContractBackend) PendingNonceAt(ctx context.Context, account common.Address) (uint64, error) {
+func (b *ContractBackend) PendingNonceAt(ctx context.Context, account common.Address) (nonce uint64, err error) {
 	out, err := b.txapi.GetTransactionCount(ctx, account, rpc.PendingBlockNumber)
-	return out.Uint64(), err
+	if out != nil {
+		nonce = uint64(*out)
+	}
+	return nonce, err
 }
 
 // SuggestGasPrice implements bind.ContractTransactor retrieving the currently
@@ -124,13 +128,13 @@ func (b *ContractBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error)
 // should provide a basis for setting a reasonable default.
 func (b *ContractBackend) EstimateGas(ctx context.Context, msg ethereum.CallMsg) (*big.Int, error) {
 	out, err := b.bcapi.EstimateGas(ctx, toCallArgs(msg))
-	return out.BigInt(), err
+	return out.ToInt(), err
 }
 
 // SendTransaction implements bind.ContractTransactor injects the transaction
 // into the pending pool for execution.
 func (b *ContractBackend) SendTransaction(ctx context.Context, tx *types.Transaction) error {
 	raw, _ := rlp.EncodeToBytes(tx)
-	_, err := b.txapi.SendRawTransaction(ctx, common.ToHex(raw))
+	_, err := b.txapi.SendRawTransaction(ctx, raw)
 	return err
 }
