@@ -198,6 +198,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'fastSync',
+			call: 'admin_fastSync',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'sleepBlocks',
 			call: 'admin_sleepBlocks',
 			params: 2

@@ -25,6 +25,8 @@ import (
 	"math/big"
 	"os"
 	"runtime"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/ethash"
@@ -274,6 +276,23 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 		blocks = blocks[:0]
 	}
 	return true, nil
+}
+
+// FastSync reenables fast sync for a shot shot sync round. Use with extreme caution.
+func (api *PrivateAdminAPI) FastSync() {
+	// Create a diplaimer warning message for the user
+	message1 := fmt.Sprintf("Re-enabling fast sync. If you don't know what this means, quit now!")
+	message2 := fmt.Sprintf("After fast sync completes, check eth.getBlock('latest') against an explorer!")
+	separator := strings.Repeat("-", len(message2))
+
+	glog.V(logger.Warn).Info(separator)
+	glog.V(logger.Warn).Info(message1)
+	glog.V(logger.Warn).Info(message2)
+	glog.V(logger.Warn).Info(separator)
+
+	// Reenable fast sync and abort any currently running sync cycle
+	atomic.StoreUint32(&api.eth.protocolManager.fastSync, 1)
+	api.eth.protocolManager.downloader.Cancel()
 }
 
 // PublicDebugAPI is the collection of Etheruem full node APIs exposed
