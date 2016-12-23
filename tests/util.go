@@ -18,7 +18,6 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -191,8 +190,6 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 	}
 
 	context := vm.Context{
-		Context: context.TODO(),
-
 		CanTransfer: canTransfer,
 		Transfer:    transfer,
 		GetHash: func(n uint64) common.Hash {

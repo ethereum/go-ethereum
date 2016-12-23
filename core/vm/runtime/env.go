@@ -17,7 +17,6 @@
 package runtime
 
 import (
-	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,7 +27,6 @@ import (
 
 func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
 	context := vm.Context{
-		Context:     context.TODO(),
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
 		GetHash:     func(uint64) common.Hash { return common.Hash{} },

@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"context"
 	"fmt"
 	"math/big"
 	"sync/atomic"
@@ -37,7 +36,6 @@ type (
 
 // Context provides the EVM with auxilary information. Once provided it shouldn't be modified.
 type Context struct {
-	context.Context
 	// CanTransfer returns whether the account contains
 	// sufficient ether to transfer the value
 	CanTransfer CanTransferFunc
@@ -80,8 +78,6 @@ type EVM struct {
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
-
-	quit chan struct{}
 }
 
 // NewEVM retutrns a new EVM evmironment.
@@ -97,27 +93,16 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 	return evm
 }
 
-func (evm *EVM) init() {
-	evm.quit = make(chan struct{})
-	go func() {
-		select {
-		case <-evm.quit:
-			return
-		case <-evm.Context.Done():
-			atomic.StoreInt32(&evm.abort, 1)
-		}
-	}()
+// Cancel cancels any running EVM operation. This may be called concurrently and it's safe to be
+// called multiple times.
+func (evm *EVM) Cancel() {
+	atomic.StoreInt32(&evm.abort, 1)
 }
 
 // Call executes the contract associated with the addr with the given input as paramaters. It also handles any
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	if evm.depth == 0 {
-		evm.init()
-		defer close(evm.quit)
-	}
-
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
@@ -178,11 +163,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 //
 // CallCode differs from Call in the sense that it executes the given address' code with the caller as context.
 func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
-	if evm.depth == 0 {
-		evm.init()
-		defer close(evm.quit)
-	}
-
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
@@ -229,11 +209,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with the caller as context
 // and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
-	if evm.depth == 0 {
-		evm.init()
-		defer close(evm.quit)
-	}
-
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
@@ -269,11 +244,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (ret []byte, contractAddr common.Address, err error) {
-	if evm.depth == 0 {
-		evm.init()
-		defer close(evm.quit)
-	}
-
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
