@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper/whisperv2"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
@@ -207,4 +208,9 @@ func (n *Node) GetNodeInfo() *NodeInfo {
 // GetPeersInfo returns an array of metadata objects describing connected peers.
 func (n *Node) GetPeersInfo() *PeerInfos {
 	return &PeerInfos{n.node.Server().PeersInfo()}
+}
+
+
+func (n *Node) Verbosity(level int) {
+	glog.SetV(level)
 }
