@@ -209,8 +209,3 @@ func (n *Node) GetNodeInfo() *NodeInfo {
 func (n *Node) GetPeersInfo() *PeerInfos {
 	return &PeerInfos{n.node.Server().PeersInfo()}
 }
-
-//Verbosity sets the global verbosity level.
-func (n *Node) Verbosity(level int) {
-	glog.SetV(level)
-}
