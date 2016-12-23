@@ -33,15 +33,15 @@ func memoryGasCost(mem *Memory, newMemSize *big.Int) *big.Int {
 	return gas
 }
 
-func makeGenericGasFunc(op OpCode) gasFunc {
+func constGasFunc(gas *big.Int) gasFunc {
 	return func(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
-		return gasTable[op]
+		return gas
 	}
 }
 
 func gasCalldataCopy(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
-	gas.Add(gas, gasTable[CALLDATACOPY])
+	gas.Add(gas, GasFastestStep)
 	words := toWordSize(stack.Back(2))
 
 	return gas.Add(gas, words.Mul(words, params.CopyGas))
@@ -82,14 +82,14 @@ func makeGasLog(n uint) gasFunc {
 
 func gasSha3(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
-	gas.Add(gas, gasTable[SHA3])
+	gas.Add(gas, params.Sha3Gas)
 	words := toWordSize(stack.Back(1))
 	return gas.Add(gas, words.Mul(words, params.Sha3WordGas))
 }
 
 func gasCodeCopy(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	gas := memoryGasCost(mem, memorySize)
-	gas.Add(gas, gasTable[CODECOPY])
+	gas.Add(gas, GasFastestStep)
 	words := toWordSize(stack.Back(2))
 
 	return gas.Add(gas, words.Mul(words, params.CopyGas))
@@ -104,19 +104,19 @@ func gasExtCodeCopy(gt params.GasTable, env *EVM, contract *Contract, stack *Sta
 }
 
 func gasMLoad(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
-	return new(big.Int).Add(gasTable[MLOAD], memoryGasCost(mem, memorySize))
+	return new(big.Int).Add(GasFastestStep, memoryGasCost(mem, memorySize))
 }
 
 func gasMStore8(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
-	return new(big.Int).Add(gasTable[MSTORE8], memoryGasCost(mem, memorySize))
+	return new(big.Int).Add(GasFastestStep, memoryGasCost(mem, memorySize))
 }
 
 func gasMStore(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
-	return new(big.Int).Add(gasTable[MSTORE], memoryGasCost(mem, memorySize))
+	return new(big.Int).Add(GasFastestStep, memoryGasCost(mem, memorySize))
 }
 
 func gasCreate(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
-	return new(big.Int).Add(gasTable[CREATE], memoryGasCost(mem, memorySize))
+	return new(big.Int).Add(params.CreateGas, memoryGasCost(mem, memorySize))
 }
 
 func gasBalance(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
@@ -135,7 +135,7 @@ func gasExp(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem 
 	expByteLen := int64((stack.data[stack.len()-2].BitLen() + 7) / 8)
 	gas := big.NewInt(expByteLen)
 	gas.Mul(gas, gt.ExpByte)
-	return gas.Add(gas, gasTable[EXP])
+	return gas.Add(gas, GasSlowStep)
 }
 
 func gasCall(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
@@ -190,7 +190,7 @@ func gasCallCode(gt params.GasTable, env *EVM, contract *Contract, stack *Stack,
 }
 
 func gasReturn(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
-	return new(big.Int).Add(gasTable[RETURN], memoryGasCost(mem, memorySize))
+	return memoryGasCost(mem, memorySize)
 }
 
 func gasSuicide(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
@@ -243,70 +243,4 @@ func gasSwap(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem
 
 func gasDup(gt params.GasTable, env *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize *big.Int) *big.Int {
 	return GasFastestStep
-}
-
-var gasTable = [256]*big.Int{
-	ADD:          GasFastestStep,
-	LT:           GasFastestStep,
-	GT:           GasFastestStep,
-	SLT:          GasFastestStep,
-	SGT:          GasFastestStep,
-	EQ:           GasFastestStep,
-	ISZERO:       GasFastestStep,
-	SUB:          GasFastestStep,
-	AND:          GasFastestStep,
-	OR:           GasFastestStep,
-	XOR:          GasFastestStep,
-	NOT:          GasFastestStep,
-	BYTE:         GasFastestStep,
-	CALLDATALOAD: GasFastestStep,
-	CALLDATACOPY: GasFastestStep,
-	MLOAD:        GasFastestStep,
-	MSTORE:       GasFastestStep,
-	MSTORE8:      GasFastestStep,
-	CODECOPY:     GasFastestStep,
-	MUL:          GasFastStep,
-	DIV:          GasFastStep,
-	SDIV:         GasFastStep,
-	MOD:          GasFastStep,
-	SMOD:         GasFastStep,
-	SIGNEXTEND:   GasFastStep,
-	ADDMOD:       GasMidStep,
-	MULMOD:       GasMidStep,
-	JUMP:         GasMidStep,
-	JUMPI:        GasSlowStep,
-	EXP:          GasSlowStep,
-	ADDRESS:      GasQuickStep,
-	ORIGIN:       GasQuickStep,
-	CALLER:       GasQuickStep,
-	CALLVALUE:    GasQuickStep,
-	CODESIZE:     GasQuickStep,
-	GASPRICE:     GasQuickStep,
-	COINBASE:     GasQuickStep,
-	TIMESTAMP:    GasQuickStep,
-	NUMBER:       GasQuickStep,
-	CALLDATASIZE: GasQuickStep,
-	DIFFICULTY:   GasQuickStep,
-	GASLIMIT:     GasQuickStep,
-	POP:          GasQuickStep,
-	PC:           GasQuickStep,
-	MSIZE:        GasQuickStep,
-	GAS:          GasQuickStep,
-	BLOCKHASH:    GasExtStep,
-	BALANCE:      Zero,
-	EXTCODESIZE:  Zero,
-	EXTCODECOPY:  Zero,
-	SLOAD:        params.SloadGas,
-	SSTORE:       Zero,
-	SHA3:         params.Sha3Gas,
-	CREATE:       params.CreateGas,
-	CALL:         Zero,
-	CALLCODE:     Zero,
-	DELEGATECALL: Zero,
-	SUICIDE:      Zero,
-	JUMPDEST:     params.JumpdestGas,
-	RETURN:       Zero,
-	PUSH1:        GasFastestStep,
-	DUP1:         Zero,
-	STOP:         Zero,
 }
