@@ -236,7 +236,7 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
-			Service:   api.NewEns(self.api),
+			Service:   self.dns,
 			Public:    true,
 		},
 		// admin APIs
