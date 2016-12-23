@@ -303,8 +303,19 @@ func (self *worker) wait() {
 						l.BlockHash = block.Hash()
 					}
 				}
+
+				txIndex := func(blck *types.Block, txHash common.Hash) int {
+					for i, tx := range blck.Transactions() {
+						if tx.Hash() == txHash {
+							return i
+						}
+					}
+					return 0
+				}
+
 				for _, log := range work.state.Logs() {
 					log.BlockHash = block.Hash()
+					log.TxIndex = uint(txIndex(block, log.TxHash))
 				}
 
 				// check if canon block and write transactions
