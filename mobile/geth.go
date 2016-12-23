@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper/whisperv2"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
