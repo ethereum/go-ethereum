@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -135,8 +136,8 @@ func (s *LightDummyAPI) Coinbase() (common.Address, error) {
 }
 
 // Hashrate returns the POW hashrate
-func (s *LightDummyAPI) Hashrate() *rpc.HexNumber {
-	return rpc.NewHexNumber(0)
+func (s *LightDummyAPI) Hashrate() hexutil.Uint {
+	return 0
 }
 
 // Mining returns an indication if this node is currently mining.

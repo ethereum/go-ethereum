@@ -752,23 +752,58 @@ func TestDefaultFunctionParsing(t *testing.T) {
 func TestBareEvents(t *testing.T) {
 	const definition = `[
 	{ "type" : "event", "name" : "balance" },
-	{ "type" : "event", "name" : "name" }]`
+	{ "type" : "event", "name" : "anon", "anonymous" : true},
+	{ "type" : "event", "name" : "args", "inputs" : [{ "indexed":false, "name":"arg0", "type":"uint256" }, { "indexed":true, "name":"arg1", "type":"address" }] }
+	]`
+
+	arg0, _ := NewType("uint256")
+	arg1, _ := NewType("address")
+
+	expectedEvents := map[string]struct {
+		Anonymous bool
+		Args      []Argument
+	}{
+		"balance": {false, nil},
+		"anon":    {true, nil},
+		"args": {false, []Argument{
+			Argument{Name: "arg0", Type: arg0, Indexed: false},
+			Argument{Name: "arg1", Type: arg1, Indexed: true},
+		}},
+	}
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(abi.Events) != 2 {
-		t.Error("expected 2 events")
+	if len(abi.Events) != len(expectedEvents) {
+		t.Fatalf("invalid number of events after parsing, want %d, got %d", len(expectedEvents), len(abi.Events))
 	}
 
-	if _, ok := abi.Events["balance"]; !ok {
-		t.Error("expected 'balance' event to be present")
-	}
-
-	if _, ok := abi.Events["name"]; !ok {
-		t.Error("expected 'name' event to be present")
+	for name, exp := range expectedEvents {
+		got, ok := abi.Events[name]
+		if !ok {
+			t.Errorf("could not found event %s", name)
+			continue
+		}
+		if got.Anonymous != exp.Anonymous {
+			t.Errorf("invalid anonymous indication for event %s, want %v, got %v", name, exp.Anonymous, got.Anonymous)
+		}
+		if len(got.Inputs) != len(exp.Args) {
+			t.Errorf("invalid number of args, want %d, got %d", len(exp.Args), len(got.Inputs))
+			continue
+		}
+		for i, arg := range exp.Args {
+			if arg.Name != got.Inputs[i].Name {
+				t.Errorf("events[%s].Input[%d] has an invalid name, want %s, got %s", name, i, arg.Name, got.Inputs[i].Name)
+			}
+			if arg.Indexed != got.Inputs[i].Indexed {
+				t.Errorf("events[%s].Input[%d] has an invalid indexed indication, want %v, got %v", name, i, arg.Indexed, got.Inputs[i].Indexed)
+			}
+			if arg.Type.T != got.Inputs[i].Type.T {
+				t.Errorf("events[%s].Input[%d] has an invalid type, want %x, got %x", name, i, arg.Type.T, got.Inputs[i].Type.T)
+			}
+		}
 	}
 }
 

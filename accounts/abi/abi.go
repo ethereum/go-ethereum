@@ -345,12 +345,13 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
-		Type     string
-		Name     string
-		Constant bool
-		Indexed  bool
-		Inputs   []Argument
-		Outputs  []Argument
+		Type      string
+		Name      string
+		Constant  bool
+		Indexed   bool
+		Anonymous bool
+		Inputs    []Argument
+		Outputs   []Argument
 	}
 
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -375,8 +376,9 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 		case "event":
 			abi.Events[field.Name] = Event{
-				Name:   field.Name,
-				Inputs: field.Inputs,
+				Name:      field.Name,
+				Anonymous: field.Anonymous,
+				Inputs:    field.Inputs,
 			}
 		}
 	}

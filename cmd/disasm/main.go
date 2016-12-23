@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"encoding/hex"
+	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
@@ -32,7 +33,11 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	code = common.Hex2Bytes(string(code[:len(code)-1]))
+	code, err = hex.DecodeString(strings.TrimSpace(string(code[:])))
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
 	fmt.Printf("%x\n", code)
 
 	for pc := uint64(0); pc < uint64(len(code)); pc++ {

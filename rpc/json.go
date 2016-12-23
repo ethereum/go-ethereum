@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -256,8 +257,8 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) 
 	return requests, true, nil
 }
 
-// ParseRequestArguments tries to parse the given params (json.RawMessage) with the given types. It returns the parsed
-// values or an error when the parsing failed.
+// ParseRequestArguments tries to parse the given params (json.RawMessage) with the given
+// types. It returns the parsed values or an error when the parsing failed.
 func (c *jsonCodec) ParseRequestArguments(argTypes []reflect.Type, params interface{}) ([]reflect.Value, Error) {
 	if args, ok := params.(json.RawMessage); !ok {
 		return nil, &invalidParamsError{"Invalid params supplied"}
@@ -266,42 +267,42 @@ func (c *jsonCodec) ParseRequestArguments(argTypes []reflect.Type, params interf
 	}
 }
 
-// parsePositionalArguments tries to parse the given args to an array of values with the given types.
-// It returns the parsed values or an error when the args could not be parsed. Missing optional arguments
-// are returned as reflect.Zero values.
-func parsePositionalArguments(args json.RawMessage, callbackArgs []reflect.Type) ([]reflect.Value, Error) {
-	params := make([]interface{}, 0, len(callbackArgs))
-	for _, t := range callbackArgs {
-		params = append(params, reflect.New(t).Interface())
+// parsePositionalArguments tries to parse the given args to an array of values with the
+// given types. It returns the parsed values or an error when the args could not be
+// parsed. Missing optional arguments are returned as reflect.Zero values.
+func parsePositionalArguments(rawArgs json.RawMessage, types []reflect.Type) ([]reflect.Value, Error) {
+	// Read beginning of the args array.
+	dec := json.NewDecoder(bytes.NewReader(rawArgs))
+	if tok, _ := dec.Token(); tok != json.Delim('[') {
+		return nil, &invalidParamsError{"non-array args"}
 	}
-
-	if err := json.Unmarshal(args, &params); err != nil {
+	// Read args.
+	args := make([]reflect.Value, 0, len(types))
+	for i := 0; dec.More(); i++ {
+		if i >= len(types) {
+			return nil, &invalidParamsError{fmt.Sprintf("too many arguments, want at most %d", len(types))}
+		}
+		argval := reflect.New(types[i])
+		if err := dec.Decode(argval.Interface()); err != nil {
+			return nil, &invalidParamsError{fmt.Sprintf("invalid argument %d: %v", i, err)}
+		}
+		if argval.IsNil() && types[i].Kind() != reflect.Ptr {
+			return nil, &invalidParamsError{fmt.Sprintf("missing value for required argument %d", i)}
+		}
+		args = append(args, argval.Elem())
+	}
+	// Read end of args array.
+	if _, err := dec.Token(); err != nil {
 		return nil, &invalidParamsError{err.Error()}
 	}
-
-	if len(params) > len(callbackArgs) {
-		return nil, &invalidParamsError{fmt.Sprintf("too many params, want %d got %d", len(callbackArgs), len(params))}
-	}
-
-	// assume missing params are null values
-	for i := len(params); i < len(callbackArgs); i++ {
-		params = append(params, nil)
-	}
-
-	argValues := make([]reflect.Value, len(params))
-	for i, p := range params {
-		// verify that JSON null values are only supplied for optional arguments (ptr types)
-		if p == nil && callbackArgs[i].Kind() != reflect.Ptr {
-			return nil, &invalidParamsError{fmt.Sprintf("invalid or missing value for params[%d]", i)}
+	// Set any missing args to nil.
+	for i := len(args); i < len(types); i++ {
+		if types[i].Kind() != reflect.Ptr {
+			return nil, &invalidParamsError{fmt.Sprintf("missing value for required argument %d", i)}
 		}
-		if p == nil {
-			argValues[i] = reflect.Zero(callbackArgs[i])
-		} else { // deref pointers values creates previously with reflect.New
-			argValues[i] = reflect.ValueOf(p).Elem()
-		}
+		args = append(args, reflect.Zero(types[i]))
 	}
-
-	return argValues, nil
+	return args, nil
 }
 
 // CreateResponse will create a JSON-RPC success response with the given id and reply as result.
