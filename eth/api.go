@@ -138,13 +138,13 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 
 // Start the miner with the given number of threads. If threads is nil the number of
 // workers started is equal to the number of logical CPU's that are usable by this process.
-func (s *PrivateMinerAPI) Start(threads *hexutil.Uint) (bool, error) {
+func (s *PrivateMinerAPI) Start(threads *int) (bool, error) {
 	s.e.StartAutoDAG()
 	var err error
 	if threads == nil {
 		err = s.e.StartMining(runtime.NumCPU())
 	} else {
-		err = s.e.StartMining(int(*threads))
+		err = s.e.StartMining(*threads)
 	}
 	return err == nil, err
 }
