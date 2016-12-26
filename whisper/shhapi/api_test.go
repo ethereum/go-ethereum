@@ -39,8 +39,8 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed generateFilter: %s.", err)
 	}
 
-	if ver.Uint64() != whisperv5.ProtocolVersion {
-		t.Fatalf("wrong version: %d.", ver.Uint64())
+	if uint64(ver) != whisperv5.ProtocolVersion {
+		t.Fatalf("wrong version: %d.", ver)
 	}
 
 	mail := api.GetFilterChanges(1)
