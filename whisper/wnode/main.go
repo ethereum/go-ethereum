@@ -132,6 +132,13 @@ func parseArgs() {
 	checkStringArg(argNameTopic, &topicStr)
 	checkStringArg(argNamePub, &pubStr)
 
+	if len(enode) > 0 {
+		prefix := "enode://"
+		if enode[:len(prefix)] != prefix {
+			enode = prefix + enode
+		}
+	}
+
 	if p > 0 {
 		pow = float64(p)
 	}
@@ -317,7 +324,7 @@ func configureChat() {
 
 	if !isAsymmetric && !testMode {
 		fmt.Printf("Please enter the password: ")
-		pass, err := terminal.ReadPassword(syscall.Stdin)
+		pass, err := terminal.ReadPassword(int(syscall.Stdin))
 		fmt.Println()
 		if err != nil {
 			fmt.Printf("Error: %s \n", err)
