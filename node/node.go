@@ -17,6 +17,7 @@
 package node
 
 import (
+	"crypto/tls"
 	"errors"
 	"net"
 	"os"
@@ -407,8 +408,17 @@ func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors
 	if listener, err = net.Listen("tcp", endpoint); err != nil {
 		return err
 	}
+
+	if n.config.TLSEnabled {
+		listener = tls.NewListener(listener, n.config.TLSConfig)
+	}
+
 	go rpc.NewHTTPServer(cors, handler).Serve(listener)
-	glog.V(logger.Info).Infof("HTTP endpoint opened: http://%s", endpoint)
+	if n.config.TLSEnabled {
+		glog.V(logger.Info).Infof("HTTPS endpoint opened: https://%s", endpoint)
+	} else {
+		glog.V(logger.Info).Infof("HTTP endpoint opened: http://%s", endpoint)
+	}
 
 	// All listeners booted successfully
 	n.httpEndpoint = endpoint
@@ -424,7 +434,11 @@ func (n *Node) stopHTTP() {
 		n.httpListener.Close()
 		n.httpListener = nil
 
-		glog.V(logger.Info).Infof("HTTP endpoint closed: http://%s", n.httpEndpoint)
+		if n.config.TLSEnabled {
+			glog.V(logger.Info).Infof("HTTPS endpoint closed: https://%s", n.httpEndpoint)
+		} else {
+			glog.V(logger.Info).Infof("HTTP endpoint closed: http://%s", n.httpEndpoint)
+		}
 	}
 	if n.httpHandler != nil {
 		n.httpHandler.Stop()

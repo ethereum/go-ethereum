@@ -64,7 +64,7 @@ func (hc *httpConn) Close() error {
 }
 
 // DialHTTP creates a new RPC clients that connection to an RPC server over HTTP.
-func DialHTTP(endpoint string) (*Client, error) {
+func DialHTTP(ctx context.Context, endpoint string) (*Client, error) {
 	req, err := http.NewRequest("POST", endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,14 @@ func DialHTTP(endpoint string) (*Client, error) {
 
 	initctx := context.Background()
 	return newClient(initctx, func(context.Context) (net.Conn, error) {
-		return &httpConn{client: new(http.Client), req: req, closed: make(chan struct{})}, nil
+		// configure client capable of TLS handling
+		client := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: TLSConfigFromContext(ctx),
+			},
+		}
+
+		return &httpConn{client: client, req: req, closed: make(chan struct{})}, nil
 	})
 }
 

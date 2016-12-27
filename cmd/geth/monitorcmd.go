@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"context"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/node"
@@ -75,7 +76,7 @@ func monitor(ctx *cli.Context) error {
 	)
 	// Attach to an Ethereum node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
-	if client, err = dialRPC(endpoint); err != nil {
+	if client, err = dialRPCContext(context.Background(), endpoint); err != nil {
 		utils.Fatalf("Unable to attach to geth node: %v", err)
 	}
 	defer client.Close()

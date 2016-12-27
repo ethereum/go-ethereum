@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"crypto/tls"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -156,6 +157,12 @@ type Config struct {
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
 	HTTPModules []string
+
+	// TLSEnabled whether TLSConfig was correctly populated, and server is TLS-enabled node.
+	TLSEnabled bool
+
+	// TLSConfig is used to configure TLS capability of a server
+	TLSConfig *tls.Config
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.

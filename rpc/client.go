@@ -168,7 +168,7 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	}
 	switch u.Scheme {
 	case "http", "https":
-		return DialHTTP(rawurl)
+		return DialHTTP(ctx, rawurl)
 	case "ws", "wss":
 		return DialWebsocket(ctx, rawurl, "")
 	case "":
