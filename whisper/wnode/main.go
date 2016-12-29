@@ -48,16 +48,16 @@ var input *bufio.Reader
 var done chan struct{}
 var server p2p.Server
 var shh *whisper.Whisper
-var asymKey *ecdsa.PrivateKey // used for asymmetric decryption and signing
-var pub *ecdsa.PublicKey      // used for asymmetric encryption
-var symKey []byte             // used for symmetric encryption
+var asymKey, nodeid *ecdsa.PrivateKey // used for asymmetric decryption and signing
+var pub *ecdsa.PublicKey              // used for asymmetric encryption
+var symKey []byte                     // used for symmetric encryption
 var filter whisper.Filter
 var filterID uint32
 var topic whisper.TopicType
 var pow float64 = whisper.MinimumPoW
 var ttl uint32 = 30
 var workTime uint32 = 5
-var ipAddress, enode, salt, topicStr, pubStr string
+var ipAddress, enode, salt, topicStr, pubStr, NodeIdFile string
 
 var bootstrapNode bool // does not actively connect to peers, wait for incoming connections
 var daemonMode bool    // only forward messages, neither send nor track
@@ -65,40 +65,52 @@ var testMode bool      // predefined password, topic, ip and port
 var echoMode bool      // shows params, etc.
 var isAsymmetric bool
 
-var argNameHelp string = "-h"
-var argNameBootstrap string = "-b"
-var argNameDaemon string = "-d"
-var argNameAsymmetric string = "-a"
-var argNameTest string = "-test"
-var argNameEcho string = "-echo"
-var argNameWorkTime string = "-work"
-var argNameTTL string = "-ttl"
-var argNameIP string = "-ip"
-var argNameTopic string = "-topic"
-var argNamePoW string = "-pow"
-var argNameSalt string = "-salt"
-var argNamePub string = "-pub"
-var argNameEnode string = "-enode"
-var quitCommand string = "/q/"
+var (
+	argNameHelp       = "-h"
+	argNameBootstrap  = "-b"
+	argNameDaemon     = "-d"
+	argNameAsymmetric = "-a"
+	argNameTest       = "-test"
+	argNameEcho       = "-echo"
+	argNameWorkTime   = "-work"
+	argNameTTL        = "-ttl"
+	argNameIP         = "-ip"
+	argNameTopic      = "-topic"
+	argNamePoW        = "-pow"
+	argNameSalt       = "-salt"
+	argNamePub        = "-pub"
+	argNameEnode      = "-enode"
+	argNameIdSrc      = "-idfile"
+	quitCommand       = "~q"
+)
+
+func padRight(str string) string {
+	res := str
+	for len(res) < 9 {
+		res += " "
+	}
+	return res
+}
 
 func printHelp() {
 	fmt.Println("wchat is a stand-alone whisper node with command-line interface.")
 	fmt.Println("wchat also allows to set up a chat using either symmetric or asymmetric encryption.\n")
 	fmt.Println("usage: wchat [arguments]")
-	fmt.Printf("    %s\t\t boostrap node: don't actively connect to peers, wait for incoming connections\n", argNameBootstrap)
-	fmt.Printf("    %s\t\t daemon mode: only forward messages, neither send nor decrypt messages \n", argNameDaemon)
-	fmt.Printf("    %s\t\t use asymmetric encryption \n", argNameAsymmetric)
-	fmt.Printf("    %s\t\t test mode: predefined password, topic, ip and port \n", argNameTest)
-	fmt.Printf("    %s\t\t echo mode: shows arguments \n", argNameEcho)
-	fmt.Printf("    %s\t\t work time in seconds (e.g. -w=12) \n", argNameWorkTime)
-	fmt.Printf("    %s\t\t time-to-live for messages in seconds (e.g. -l=30) \n", argNameTTL)
-	fmt.Printf("    %s\t\t IP address and port of this node (e.g. 127.0.0.1:30303) \n", argNameIP)
-	fmt.Printf("    %s\t\t topic in hexadecimal format (e.g. 0f45beef) \n", argNameTopic)
-	fmt.Printf("    %s\t\t public key for asymmetric encryption \n", argNamePub)
-	fmt.Printf("    %s\t\t PoW in integer format \n", argNamePoW)
-	fmt.Printf("    %s\t\t salt \n", argNameSalt)
-	fmt.Printf("    %s\t\t enode \n", argNameEnode)
-	fmt.Printf("    %s\t\t help \n", argNameHelp)
+	fmt.Printf("    %s print this help and exit \n", padRight(argNameHelp))
+	fmt.Printf("    %s boostrap node: don't actively connect to peers, wait for incoming connections\n", padRight(argNameBootstrap))
+	fmt.Printf("    %s daemon mode: only forward messages, neither send nor decrypt messages \n", padRight(argNameDaemon))
+	fmt.Printf("    %s use asymmetric encryption \n", padRight(argNameAsymmetric))
+	fmt.Printf("    %s test mode: predefined password, salt, topic, ip and port \n", padRight(argNameTest))
+	fmt.Printf("    %s echo mode: prints arguments (diagnostic) \n", padRight(argNameEcho))
+	fmt.Printf("    %s IP address and port of this node (e.g. %s=127.0.0.1:30303) \n", padRight(argNameIP), argNameIP)
+	fmt.Printf("    %s time-to-live for messages in seconds (e.g. %s=30) \n", padRight(argNameTTL), argNameTTL)
+	fmt.Printf("    %s PoW in integer format \n", padRight(argNamePoW))
+	fmt.Printf("    %s work time in seconds (e.g. %s=12) \n", padRight(argNameWorkTime), argNameWorkTime)
+	fmt.Printf("    %s salt (for topic and key derivation) \n", padRight(argNameSalt))
+	fmt.Printf("    %s topic in hexadecimal format (e.g. %s=70a4beef) \n", padRight(argNameTopic), argNameTopic)
+	fmt.Printf("    %s public key for asymmetric encryption \n", padRight(argNamePub))
+	fmt.Printf("    %s file name with node id (private key) \n", padRight(argNameIdSrc))
+	fmt.Printf("    %s enode \n", padRight(argNameEnode))
 }
 
 func main() {
@@ -108,11 +120,13 @@ func main() {
 }
 
 func parseArgs() {
+	var err error
 	var p uint32
 	help1 := checkMode(argNameHelp)
 	help2 := checkMode("-help")
 	help3 := checkMode("--help")
-	if help1 || help2 || help3 {
+	help4 := checkMode("-?")
+	if help1 || help2 || help3 || help4 {
 		printHelp()
 		os.Exit(0)
 	}
@@ -131,6 +145,15 @@ func parseArgs() {
 	checkStringArg(argNameSalt, &salt)
 	checkStringArg(argNameTopic, &topicStr)
 	checkStringArg(argNamePub, &pubStr)
+	checkStringArg(argNameIdSrc, &NodeIdFile)
+
+	if len(NodeIdFile) > 0 {
+		nodeid, err = crypto.LoadECDSA(NodeIdFile)
+		if err != nil {
+			fmt.Printf("Failed to load file [%s]: %s.\n", NodeIdFile, err)
+			os.Exit(-1)
+		}
+	}
 
 	if len(enode) > 0 {
 		prefix := "enode://"
@@ -259,12 +282,14 @@ func initialize() {
 	}
 
 	shh = whisper.NewWhisper(nil)
-	myNodeId := shh.NewIdentity()
 	asymKey = shh.NewIdentity()
+	if nodeid == nil {
+		nodeid = shh.NewIdentity()
+	}
 
 	server = p2p.Server{
 		Config: p2p.Config{
-			PrivateKey:     myNodeId,
+			PrivateKey:     nodeid,
 			MaxPeers:       48,
 			Name:           common.MakeName("whisper-go", "5.0"),
 			Protocols:      shh.Protocols(),
