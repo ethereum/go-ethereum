@@ -283,7 +283,7 @@ func initialize() {
 	server = p2p.Server{
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
-			MaxPeers:       48,
+			MaxPeers:       128,
 			Name:           common.MakeName("whisper-go", "5.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     ipAddress,
