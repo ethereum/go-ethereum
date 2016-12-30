@@ -20,7 +20,6 @@
 package main
 
 import (
-	"bufio"
 	"crypto/ecdsa"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -29,10 +28,11 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"syscall"
 	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -41,10 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"golang.org/x/crypto/pbkdf2"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
-var input *bufio.Reader
 var done chan struct{}
 var server p2p.Server
 var shh *whisper.Whisper
@@ -81,7 +79,7 @@ var (
 	argNamePub        = "-pub"
 	argNameEnode      = "-enode"
 	argNameIdSrc      = "-idfile"
-	quitCommand       = "~q"
+	quitCommand       = "~Q"
 )
 
 func padRight(str string) string {
@@ -150,8 +148,7 @@ func parseArgs() {
 	if len(NodeIdFile) > 0 {
 		nodeid, err = crypto.LoadECDSA(NodeIdFile)
 		if err != nil {
-			fmt.Printf("Failed to load file [%s]: %s.\n", NodeIdFile, err)
-			os.Exit(-1)
+			utils.Fatalf("Failed to load file [%s]: %s.", NodeIdFile, err)
 		}
 	}
 
@@ -170,8 +167,7 @@ func parseArgs() {
 		var x []byte
 		x, err := hex.DecodeString(topicStr)
 		if err != nil {
-			fmt.Printf("Failed to parse the topic: %s \n", err)
-			os.Exit(0)
+			utils.Fatalf("Failed to parse the topic: %s", err)
 		}
 		topic = whisper.BytesToTopic(x)
 	}
@@ -179,8 +175,7 @@ func parseArgs() {
 	if isAsymmetric && len(pubStr) > 0 {
 		pub = crypto.ToECDSAPub(common.FromHex(pubStr))
 		if !isKeyValid(pub) {
-			fmt.Println("Error: invalid public key")
-			os.Exit(0)
+			utils.Fatalf("invalid public key")
 		}
 	}
 
@@ -209,8 +204,7 @@ func checkIntArg(pattern string, dst *uint32) {
 			s := arg[sz:]
 			i, err := strconv.ParseUint(s, 10, 0)
 			if err != nil {
-				fmt.Printf("Failed to parse argument %s: %s \n", pattern, err)
-				os.Exit(0)
+				utils.Fatalf("Failed to parse argument %s: %s", pattern, err)
 			}
 			if err == nil && i > 0 {
 				*dst = uint32(i)
@@ -253,7 +247,6 @@ func initialize() {
 	glog.SetToStderr(true)
 
 	done = make(chan struct{})
-	input = bufio.NewReader(os.Stdin)
 	var peers []*discover.Node
 
 	if testMode {
@@ -305,8 +298,7 @@ func initialize() {
 func startServer() {
 	err := server.Start()
 	if err != nil {
-		fmt.Printf("Failed to start Whsiper peer: %s.\n", err)
-		os.Exit(0)
+		utils.Fatalf("Failed to start Whsiper peer: %s.", err)
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
@@ -338,33 +330,27 @@ func configureChat() {
 	}
 
 	if isAsymmetric && len(pubStr) == 0 {
-		fmt.Printf("Please enter the peer's public key: ")
-		pubStr = scanLine()
+		pubStr = scanLine("Please enter the peer's public key: ")
 		pub = crypto.ToECDSAPub(common.FromHex(pubStr))
 		if !isKeyValid(pub) {
-			fmt.Println("Error: invalid public key")
-			os.Exit(0)
+			utils.Fatalf("Error: invalid public key")
 		}
 	}
 
 	if !isAsymmetric && !testMode {
-		fmt.Printf("Please enter the password: ")
-		pass, err := terminal.ReadPassword(int(syscall.Stdin))
-		fmt.Println()
+		pass, err := console.Stdin.PromptPassword("Please enter the password: ")
 		if err != nil {
-			fmt.Printf("Error: %s \n", err)
-			os.Exit(0)
+			utils.Fatalf("Failed to read passphrase: %v", err)
 		}
 
 		if len(salt) == 0 {
-			fmt.Printf("Please enter the salt: ")
-			salt = scanLine()
+			salt = scanLine("Please enter the salt: ")
 		}
 
-		symKey = pbkdf2.Key(pass, []byte(salt), 65356, 32, sha256.New)
+		symKey = pbkdf2.Key([]byte(pass), []byte(salt), 65356, 32, sha256.New)
 
 		if len(topicStr) == 0 {
-			generateTopic(pass, []byte(salt))
+			generateTopic([]byte(pass), []byte(salt))
 		}
 	}
 
@@ -393,8 +379,7 @@ func waitForConnection(timeout bool) {
 		if timeout {
 			cnt++
 			if cnt > 1000 {
-				fmt.Println("Timeout expired, failed to connect")
-				os.Exit(0)
+				utils.Fatalf("Timeout expired, failed to connect")
 			}
 		}
 	}
@@ -413,7 +398,7 @@ func run() {
 	}
 
 	for {
-		s := scanLine()
+		s := scanLine("")
 		if s == quitCommand {
 			fmt.Println("Quit command received")
 			close(done)
@@ -431,15 +416,10 @@ func run() {
 	}
 }
 
-func scanLine() string {
-	txt, err := input.ReadString('\n')
+func scanLine(prompt string) string {
+	txt, err := console.Stdin.PromptInput(prompt)
 	if err != nil {
-		fmt.Printf("input error: %s \n", err)
-		os.Exit(0)
-	}
-	last := len(txt) - 1
-	if txt[last] == '\n' {
-		return txt[:last] // without the trailing newline
+		utils.Fatalf("input error: %s", err)
 	}
 	return txt
 }
@@ -472,8 +452,7 @@ func sendMsg(payload []byte) {
 func messageLoop() {
 	f := shh.GetFilter(filterID)
 	if f == nil {
-		fmt.Println("error: filter is not installed!")
-		os.Exit(0)
+		utils.Fatalf("filter is not installed")
 	}
 
 	ticker := time.NewTicker(time.Millisecond * 50)
