@@ -44,12 +44,11 @@ import (
 )
 
 var done chan struct{}
-var server p2p.Server
+var server *p2p.Server
 var shh *whisper.Whisper
 var asymKey, nodeid *ecdsa.PrivateKey // used for asymmetric decryption and signing
 var pub *ecdsa.PublicKey              // used for asymmetric encryption
 var symKey []byte                     // used for symmetric encryption
-var filter whisper.Filter
 var filterID uint32
 var topic whisper.TopicType
 var pow float64 = whisper.MinimumPoW
@@ -92,7 +91,8 @@ func padRight(str string) string {
 
 func printHelp() {
 	fmt.Println("wchat is a stand-alone whisper node with command-line interface.")
-	fmt.Println("wchat also allows to set up a chat using either symmetric or asymmetric encryption.\n")
+	fmt.Println("wchat also allows to set up a chat using either symmetric or asymmetric encryption.")
+	fmt.Println()
 	fmt.Println("usage: wchat [arguments]")
 	fmt.Printf("    %s print this help and exit \n", padRight(argNameHelp))
 	fmt.Printf("    %s boostrap node: don't actively connect to peers, wait for incoming connections\n", padRight(argNameBootstrap))
@@ -280,7 +280,7 @@ func initialize() {
 		nodeid = shh.NewIdentity()
 	}
 
-	server = p2p.Server{
+	server = &p2p.Server{
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
 			MaxPeers:       128,
@@ -354,8 +354,8 @@ func configureChat() {
 		}
 	}
 
-	filter = whisper.Filter{KeySym: symKey, KeyAsym: asymKey, Topics: []whisper.TopicType{topic}}
-	filterID = shh.Watch(&filter)
+	filter := &whisper.Filter{KeySym: symKey, KeyAsym: asymKey, Topics: []whisper.TopicType{topic}}
+	filterID = shh.Watch(filter)
 }
 
 func generateTopic(password, salt []byte) {
