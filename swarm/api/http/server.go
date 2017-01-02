@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -175,16 +176,40 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 	case r.Method == "GET" || r.Method == "HEAD":
 		path = trailingSlashes.ReplaceAllString(path, "")
 		if raw {
+			var reader storage.LazySectionReader
+			//
+			parsedurl, _ := api.Parse(path)
+			//if err != nil {
+			//	
+			//}
+			
 			// resolving host
-			key, err := a.Resolve(path, nameresolver)
-			if err != nil {
-				glog.V(logger.Error).Infof("%v", err)
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+			if (parsedurl == path) {
+				key, err := a.Resolve(parsedurl, nameresolver)
+				if err != nil {
+					glog.V(logger.Error).Infof("%v", err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				reader = a.Retrieve(key)
+			} else {
+				readertmp, _, status, err := a.Get(path, nameresolver)
+				reader = readertmp
+				if err != nil {
+					if _, ok := err.(api.ErrResolve); ok {
+						glog.V(logger.Debug).Infof("%v", err)
+						status = http.StatusBadRequest
+					} else {
+						glog.V(logger.Debug).Infof("error retrieving '%s': %v", uri, err)
+						status = http.StatusNotFound
+					}
+					http.Error(w, err.Error(), status)
+					return
+				}
 			}
-
+			
 			// retrieving content
-			reader := a.Retrieve(key)
+
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
 			if err != nil {
