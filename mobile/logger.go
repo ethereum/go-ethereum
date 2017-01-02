@@ -14,15 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains all the methods to manage logs on mobile plateforms.
-
 package geth
 
 import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-//Verbosity sets the global verbosity level (between 0 and 6 - see logger/verbosity.go).
+// SetVerbosity sets the global verbosity level (between 0 and 6 - see logger/verbosity.go).
 func SetVerbosity(level int) {
 	glog.SetV(level)
 }
