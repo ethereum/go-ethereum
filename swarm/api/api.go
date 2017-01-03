@@ -19,10 +19,10 @@ package api
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
-	"net/http"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
@@ -156,9 +156,9 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionR
 	}
 
 	glog.V(logger.Detail).Infof("getEntry(%s)", path)
-	
+
 	entry, _ := trie.getEntry(path)
-	
+
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
