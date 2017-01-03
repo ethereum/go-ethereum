@@ -20,6 +20,7 @@ import (
 	"context"
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -74,6 +75,9 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	header, err := b.HeaderByNumber(ctx, blockNr)
 	if err != nil {
 		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, ethereum.NotFound
 	}
 	return light.NewState(ctx, header, b.eth.odr), header, nil
 }

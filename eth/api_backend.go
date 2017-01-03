@@ -18,9 +18,9 @@ package eth
 
 import (
 	"context"
-	"errors"
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -66,10 +66,7 @@ func (b *EthApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNum
 	if blockNr == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock().Header(), nil
 	}
-	if header := b.eth.blockchain.GetHeaderByNumber(uint64(blockNr)); header != nil {
-		return header, nil
-	}
-	return nil, errors.New("non-existent block") // Although only header was requested, the cause is the missing block
+	return b.eth.blockchain.GetHeaderByNumber(uint64(blockNr)), nil
 }
 
 func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error) {
@@ -82,10 +79,7 @@ func (b *EthApiBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 	if blockNr == rpc.LatestBlockNumber {
 		return b.eth.blockchain.CurrentBlock(), nil
 	}
-	if block := b.eth.blockchain.GetBlockByNumber(uint64(blockNr)); block != nil {
-		return block, nil
-	}
-	return nil, errors.New("non-existent block")
+	return b.eth.blockchain.GetBlockByNumber(uint64(blockNr)), nil
 }
 
 func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
@@ -98,6 +92,9 @@ func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	header, err := b.HeaderByNumber(ctx, blockNr)
 	if err != nil {
 		return nil, nil, err
+	}
+	if header == nil {
+		return nil, nil, ethereum.NotFound
 	}
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 	return stateDb, header, err
