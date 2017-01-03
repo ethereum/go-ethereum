@@ -219,7 +219,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			w.Header().Set("Content-Type", mimeType)
 			http.ServeContent(w, r, uri, forever(), reader)
 			glog.V(logger.Debug).Infof("Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType)
-			
+
 			// retrieve path via manifest
 		} else {
 			glog.V(logger.Debug).Infof("Structured GET request '%s' received.", uri)
