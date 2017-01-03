@@ -177,14 +177,9 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		path = trailingSlashes.ReplaceAllString(path, "")
 		if raw {
 			var reader storage.LazySectionReader
-			//
 			parsedurl, _ := api.Parse(path)
-			//if err != nil {
-			//	
-			//}
-			
-			// resolving host
-			if (parsedurl == path) {
+
+			if parsedurl == path {
 				key, err := a.Resolve(parsedurl, nameresolver)
 				if err != nil {
 					glog.V(logger.Error).Infof("%v", err)
@@ -193,21 +188,15 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				}
 				reader = a.Retrieve(key)
 			} else {
+				var status int
 				readertmp, _, status, err := a.Get(path, nameresolver)
-				reader = readertmp
 				if err != nil {
-					if _, ok := err.(api.ErrResolve); ok {
-						glog.V(logger.Debug).Infof("%v", err)
-						status = http.StatusBadRequest
-					} else {
-						glog.V(logger.Debug).Infof("error retrieving '%s': %v", uri, err)
-						status = http.StatusNotFound
-					}
 					http.Error(w, err.Error(), status)
 					return
 				}
+				reader = readertmp
 			}
-			
+
 			// retrieving content
 
 			quitC := make(chan bool)
@@ -230,7 +219,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			w.Header().Set("Content-Type", mimeType)
 			http.ServeContent(w, r, uri, forever(), reader)
 			glog.V(logger.Debug).Infof("Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType)
-
+			
 			// retrieve path via manifest
 		} else {
 			glog.V(logger.Debug).Infof("Structured GET request '%s' received.", uri)
