@@ -44,6 +44,10 @@ type Config struct {
 	NoRecursion bool
 	// Disable gas metering
 	DisableGasMetering bool
+	// JumpTable contains the EVM instruction table. This
+	// may me left uninitialised and will be set the default
+	// table.
+	JumpTable [256]operation
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -58,6 +62,13 @@ type Interpreter struct {
 
 // NewInterpreter returns a new instance of the Interpreter.
 func NewInterpreter(env *EVM, cfg Config) *Interpreter {
+	// We use the STOP instruction whether to see
+	// the jump table was initialised. If it was not
+	// we'll set the default jump table.
+	if !cfg.JumpTable[STOP].valid {
+		cfg.JumpTable = defaultJumpTable
+	}
+
 	return &Interpreter{
 		env:      env,
 		cfg:      cfg,
@@ -121,7 +132,7 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		op = contract.GetOp(pc)
 
 		// get the operation from the jump table matching the opcode
-		operation := jumpTable[op]
+		operation := evm.cfg.JumpTable[op]
 
 		// if the op is invalid abort the process and return an error
 		if !operation.valid {
