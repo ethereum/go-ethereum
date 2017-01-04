@@ -185,7 +185,7 @@ func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (
 // TransactionInBlock returns a single transaction at index in the given block.
 func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
 	var tx *types.Transaction
-	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByBlockHashAndIndex", blockHash, index)
+	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
 	if err == nil {
 		if tx == nil {
 			return nil, ethereum.NotFound
