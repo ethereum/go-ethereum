@@ -55,6 +55,8 @@ type sequentialReader struct {
 	lock   sync.Mutex
 }
 
+// Server is the basic configuration needs for the HTTP server and also
+// includes CORS settings.
 type Server struct {
 	Addr       string
 	CorsString string
