@@ -22,14 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// EVMInterpreter is the basic interface for an implementation of the EVM.
-type EVMInterpreter interface {
-	// Run should execute the given contract with the input given in in
-	// and return the contract execution return bytes or an error if it
-	// failed.
-	Run(c *Contract, in []byte) ([]byte, error)
-}
-
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
 	GetAccount(common.Address) Account
