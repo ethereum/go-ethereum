@@ -20,6 +20,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/ecdsa"
 	"crypto/sha1"
 	"crypto/sha256"
@@ -28,6 +29,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -55,6 +57,7 @@ var pow float64 = whisper.MinimumPoW
 var ttl uint32 = 30
 var workTime uint32 = 5
 var ipAddress, enode, salt, topicStr, pubStr, NodeIdFile string
+var input *bufio.Reader = bufio.NewReader(os.Stdin)
 
 var bootstrapNode bool // does not actively connect to peers, wait for incoming connections
 var daemonMode bool    // only forward messages, neither send nor track
@@ -417,11 +420,15 @@ func run() {
 }
 
 func scanLine(prompt string) string {
-	txt, err := console.Stdin.PromptInput(prompt)
+	if len(prompt) > 0 {
+		fmt.Print(prompt)
+	}
+	//txt, err := console.Stdin.PromptInput(prompt) // todo: delete
+	txt, err := input.ReadString('\n')
 	if err != nil {
 		utils.Fatalf("input error: %s", err)
 	}
-	return txt
+	return strings.TrimRight(txt, "\n\r")
 }
 
 func sendMsg(payload []byte) {
