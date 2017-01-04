@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"fmt"
 	"math/big"
 	"sync/atomic"
 
@@ -102,24 +101,18 @@ func (evm *EVM) Cancel() {
 // Call executes the contract associated with the addr with the given input as parameters. It also handles any
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
-		caller.ReturnGas(gas)
-
-		return nil, nil
+		return nil, gas, nil
 	}
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.depth > int(params.CallCreateDepth.Int64()) {
-		caller.ReturnGas(gas)
-
-		return nil, ErrDepth
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, gas, ErrDepth
 	}
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
-		caller.ReturnGas(gas)
-
-		return nil, ErrInsufficientBalance
+		return nil, gas, ErrInsufficientBalance
 	}
 
 	var (
@@ -128,8 +121,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 	)
 	if !evm.StateDB.Exist(addr) {
 		if PrecompiledContracts[addr] == nil && evm.ChainConfig().IsEIP158(evm.BlockNumber) && value.BitLen() == 0 {
-			caller.ReturnGas(gas)
-			return nil, nil
+			return nil, gas, nil
 		}
 
 		to = evm.StateDB.CreateAccount(addr)
@@ -143,7 +135,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 	// only.
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-	defer contract.Finalise()
 
 	ret, err = evm.interpreter.Run(contract, input)
 	// When an error was returned by the EVM or when setting the creation code
@@ -154,7 +145,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 
 		evm.StateDB.RevertToSnapshot(snapshot)
 	}
-	return ret, err
+	return ret, contract.Gas, err
 }
 
 // CallCode executes the contract associated with the addr with the given input as parameters. It also handles any
@@ -162,24 +153,18 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 // case of an execution error or failed value transfer.
 //
 // CallCode differs from Call in the sense that it executes the given address' code with the caller as context.
-func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
+func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
-		caller.ReturnGas(gas)
-
-		return nil, nil
+		return nil, gas, nil
 	}
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.depth > int(params.CallCreateDepth.Int64()) {
-		caller.ReturnGas(gas)
-
-		return nil, ErrDepth
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, gas, ErrDepth
 	}
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
-		caller.ReturnGas(gas)
-
-		return nil, fmt.Errorf("insufficient funds to transfer value. Req %v, has %v", value, evm.StateDB.GetBalance(caller.Address()))
+		return nil, gas, ErrInsufficientBalance
 	}
 
 	var (
@@ -191,7 +176,6 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	// only.
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-	defer contract.Finalise()
 
 	ret, err = evm.interpreter.Run(contract, input)
 	if err != nil {
@@ -200,7 +184,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 		evm.StateDB.RevertToSnapshot(snapshot)
 	}
 
-	return ret, err
+	return ret, contract.Gas, err
 }
 
 // DelegateCall executes the contract associated with the addr with the given input as parameters.
@@ -208,18 +192,15 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with the caller as context
 // and the caller is set to the caller of the caller.
-func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas *big.Int) (ret []byte, err error) {
+func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
-		caller.ReturnGas(gas)
-
-		return nil, nil
+		return nil, gas, nil
 	}
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.depth > int(params.CallCreateDepth.Int64()) {
-		caller.ReturnGas(gas)
-		return nil, ErrDepth
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, gas, ErrDepth
 	}
 
 	var (
@@ -230,7 +211,6 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	// Iinitialise a new contract and make initialise the delegate values
 	contract := NewContract(caller, to, caller.Value(), gas).AsDelegate()
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-	defer contract.Finalise()
 
 	ret, err = evm.interpreter.Run(contract, input)
 	if err != nil {
@@ -239,28 +219,22 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 		evm.StateDB.RevertToSnapshot(snapshot)
 	}
 
-	return ret, err
+	return ret, contract.Gas, err
 }
 
 // Create creates a new contract using code as deployment code.
-func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (ret []byte, contractAddr common.Address, err error) {
+func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.Int) (ret []byte, contractAddr common.Address, leftOverGas uint64, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
-		caller.ReturnGas(gas)
-
-		return nil, common.Address{}, nil
+		return nil, common.Address{}, gas, nil
 	}
 
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
-	if evm.depth > int(params.CallCreateDepth.Int64()) {
-		caller.ReturnGas(gas)
-
-		return nil, common.Address{}, ErrDepth
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, common.Address{}, gas, ErrDepth
 	}
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
-		caller.ReturnGas(gas)
-
-		return nil, common.Address{}, ErrInsufficientBalance
+		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 
 	// Create a new account on the state
@@ -280,7 +254,6 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 	// only.
 	contract := NewContract(caller, to, value, gas)
 	contract.SetCallCode(&contractAddr, crypto.Keccak256Hash(code), code)
-	defer contract.Finalise()
 
 	ret, err = evm.interpreter.Run(contract, nil)
 
@@ -291,9 +264,8 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 	// be stored due to not enough gas set an error and let it be handled
 	// by the error checking condition below.
 	if err == nil && !maxCodeSizeExceeded {
-		dataGas := big.NewInt(int64(len(ret)))
-		dataGas.Mul(dataGas, params.CreateDataGas)
-		if contract.UseGas(dataGas) {
+		createDataGas := uint64(len(ret)) * params.CreateDataGas
+		if contract.UseGas(createDataGas) {
 			evm.StateDB.SetCode(contractAddr, ret)
 		} else {
 			err = ErrCodeStoreOutOfGas
@@ -305,11 +277,10 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 	// when we're in homestead this also counts for code storage gas errors.
 	if maxCodeSizeExceeded ||
 		(err != nil && (evm.ChainConfig().IsHomestead(evm.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
-		contract.UseGas(contract.Gas)
 		evm.StateDB.RevertToSnapshot(snapshot)
 
 		// Nothing should be returned when an error is thrown.
-		return nil, contractAddr, err
+		return nil, contractAddr, 0, err
 	}
 	// If the vm returned with an error the return value should be set to nil.
 	// This isn't consensus critical but merely to for behaviour reasons such as
@@ -318,7 +289,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 		ret = nil
 	}
 
-	return ret, contractAddr, err
+	return ret, contractAddr, contract.Gas, err
 }
 
 // ChainConfig returns the evmironment's chain configuration
