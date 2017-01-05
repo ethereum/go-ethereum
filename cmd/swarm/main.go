@@ -252,6 +252,10 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
 	}
+	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
+	if networkId > 0 {
+		bzzconfig.NetworkId = networkId
+	}
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabled.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabled.Name)
 
