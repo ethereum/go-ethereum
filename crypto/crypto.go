@@ -167,25 +167,19 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 }
 
+// ValidateSignatureValues verifies whether the signature values are valid with
+// the given chain rules. The v value is assumed to be either 0 or 1.
 func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	if r.Cmp(common.Big1) < 0 || s.Cmp(common.Big1) < 0 {
 		return false
 	}
-	vint := uint32(v)
 	// reject upper range of s values (ECDSA malleability)
 	// see discussion in secp256k1/libsecp256k1/include/secp256k1.h
 	if homestead && s.Cmp(secp256k1.HalfN) > 0 {
 		return false
 	}
 	// Frontier: allow s to be in full N range
-	if s.Cmp(secp256k1.N) >= 0 {
-		return false
-	}
-	if r.Cmp(secp256k1.N) < 0 && (vint == 27 || vint == 28) {
-		return true
-	} else {
-		return false
-	}
+	return r.Cmp(secp256k1.N) < 0 && s.Cmp(secp256k1.N) < 0 && (v == 0 || v == 1)
 }
 
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
@@ -199,14 +193,13 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 }
 
 // Sign calculates an ECDSA signature.
+//
 // This function is susceptible to choosen plaintext attacks that can leak
 // information about the private key that is used for signing. Callers must
 // be aware that the given hash cannot be choosen by an adversery. Common
 // solution is to hash any input before calculating the signature.
 //
-// Note: the calculated signature is not Ethereum compliant. The yellow paper
-// dictates Ethereum singature to have a V value with and offset of 27 v in [27,28].
-// Use SignEthereum to get an Ethereum compliant signature.
+// The produced signature is in the [R || S || V] format where V is 0 or 1.
 func Sign(data []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(data) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(data))
@@ -216,20 +209,6 @@ func Sign(data []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	defer zeroBytes(seckey)
 	sig, err = secp256k1.Sign(data, seckey)
 	return
-}
-
-// SignEthereum calculates an Ethereum ECDSA signature.
-// This function is susceptible to choosen plaintext attacks that can leak
-// information about the private key that is used for signing. Callers must
-// be aware that the given hash cannot be freely choosen by an adversery.
-// Common solution is to hash the message before calculating the signature.
-func SignEthereum(data []byte, prv *ecdsa.PrivateKey) ([]byte, error) {
-	sig, err := Sign(data, prv)
-	if err != nil {
-		return nil, err
-	}
-	sig[64] += 27 // as described in the yellow paper
-	return sig, err
 }
 
 func Encrypt(pub *ecdsa.PublicKey, message []byte) ([]byte, error) {

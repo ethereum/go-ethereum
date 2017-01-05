@@ -89,21 +89,15 @@ func ecrecoverFunc(in []byte) []byte {
 
 	r := common.BytesToBig(in[64:96])
 	s := common.BytesToBig(in[96:128])
-	// Treat V as a 256bit integer
-	vbig := common.Bytes2Big(in[32:64])
-	v := byte(vbig.Uint64())
+	v := in[63] - 27
 
 	// tighter sig s values in homestead only apply to tx sigs
-	if !crypto.ValidateSignatureValues(v, r, s, false) {
+	if common.Bytes2Big(in[32:63]).BitLen() > 0 || !crypto.ValidateSignatureValues(v, r, s, false) {
 		glog.V(logger.Detail).Infof("ECRECOVER error: v, r or s value invalid")
 		return nil
 	}
-
-	// v needs to be at the end and normalized for libsecp256k1
-	vbignormal := new(big.Int).Sub(vbig, big.NewInt(27))
-	vnormal := byte(vbignormal.Uint64())
-	rsv := append(in[64:128], vnormal)
-	pubKey, err := crypto.Ecrecover(in[:32], rsv)
+	// v needs to be at the end for libsecp256k1
+	pubKey, err := crypto.Ecrecover(in[:32], append(in[64:128], v))
 	// make sure the public key is a valid one
 	if err != nil {
 		glog.V(logger.Detail).Infoln("ECRECOVER error: ", err)

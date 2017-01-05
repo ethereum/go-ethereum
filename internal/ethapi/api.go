@@ -287,11 +287,19 @@ func signHash(data []byte) []byte {
 // Sign calculates an Ethereum ECDSA signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
 //
+// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
+// where the V value will be 27 or 28 for legacy reasons.
+//
 // The key used to calculate the signature is decrypted with the given password.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
 func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
-	return s.b.AccountManager().SignWithPassphrase(addr, passwd, signHash(data))
+	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, signHash(data))
+	if err != nil {
+		return nil, err
+	}
+	signature[64] += 27 // SignWithPassphrase uses canonical secp256k1 signatures (v = 0 or 1), transform to yellow paper
+	return signature, nil
 }
 
 // EcRecover returns the address for the account that was used to create the signature.
@@ -300,15 +308,19 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // hash = keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
 // addr = ecrecover(hash, signature)
 //
+// Note, the signature must conform to the secp256k1 curve R, S and V values, where
+// the V value must be be 27 or 28 for legacy reasons.
+//
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 	if len(sig) != 65 {
 		return common.Address{}, fmt.Errorf("signature must be 65 bytes long")
 	}
-	// see crypto.Ecrecover description
-	if sig[64] == 27 || sig[64] == 28 {
-		sig[64] -= 27
+	if sig[64] != 27 && sig[64] != 28 {
+		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
 	}
+	sig[64] -= 27 // Transform yellow paper signatures to canonical secp256k1 form
+
 	rpk, err := crypto.Ecrecover(signHash(data), sig)
 	if err != nil {
 		return common.Address{}, err
@@ -964,7 +976,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
 	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
 
-	signature, err := s.b.AccountManager().SignEthereum(addr, signer.Hash(tx).Bytes())
+	signature, err := s.b.AccountManager().Sign(addr, signer.Hash(tx).Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -1046,11 +1058,10 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	}
 	tx := args.toTransaction()
 	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
-	signature, err := s.b.AccountManager().SignEthereum(args.From, signer.Hash(tx).Bytes())
+	signature, err := s.b.AccountManager().Sign(args.From, signer.Hash(tx).Bytes())
 	if err != nil {
 		return common.Hash{}, err
 	}
-
 	return submitTransaction(ctx, s.b, tx, signature)
 }
 
@@ -1084,11 +1095,19 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 // Sign calculates an ECDSA signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
+// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
+// where the V value will be 27 or 28 for legacy reasons.
+//
 // The account associated with addr must be unlocked.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
 func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
-	return s.b.AccountManager().SignEthereum(addr, signHash(data))
+	signature, err := s.b.AccountManager().Sign(addr, signHash(data))
+	if err == nil {
+		// Sign uses canonical secp256k1 signatures (v = 0 or 1), transform to yellow paper
+		signature[64] += 27
+	}
+	return signature, err
 }
 
 // SignTransactionResult represents a RLP encoded signed transaction.
