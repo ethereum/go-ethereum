@@ -634,7 +634,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		for _, req := range req.Reqs {
 			// Retrieve the requested state entry, stopping if enough was found
 			if header := core.GetHeader(pm.chainDb, req.BHash, core.GetBlockNumber(pm.chainDb, req.BHash)); header != nil {
-				if trie, _ := trie.New(header.Root, pm.chainDb); trie != nil {
+				if trie, _ := trie.New(header.Root, pm.chainDb, 0); trie != nil {
 					sdata := trie.Get(req.AccKey)
 					var acc state.Account
 					if err := rlp.DecodeBytes(sdata, &acc); err == nil {
@@ -761,13 +761,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// Retrieve the requested state entry, stopping if enough was found
 			if header := core.GetHeader(pm.chainDb, req.BHash, core.GetBlockNumber(pm.chainDb, req.BHash)); header != nil {
-				if tr, _ := trie.New(header.Root, pm.chainDb); tr != nil {
+				if tr, _ := trie.New(header.Root, pm.chainDb, 0); tr != nil {
 					if len(req.AccKey) > 0 {
 						sdata := tr.Get(req.AccKey)
 						tr = nil
 						var acc state.Account
 						if err := rlp.DecodeBytes(sdata, &acc); err == nil {
-							tr, _ = trie.New(acc.Root, pm.chainDb)
+							tr, _ = trie.New(acc.Root, pm.chainDb, 0)
 						}
 					}
 					if tr != nil {
@@ -829,7 +829,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 			if header := pm.blockchain.GetHeaderByNumber(req.BlockNum); header != nil {
 				if root := getChtRoot(pm.chainDb, req.ChtNum); root != (common.Hash{}) {
-					if tr, _ := trie.New(root, pm.chainDb); tr != nil {
+					if tr, _ := trie.New(root, pm.chainDb, 0); tr != nil {
 						var encNumber [8]byte
 						binary.BigEndian.PutUint64(encNumber[:], req.BlockNum)
 						proof := tr.Prove(encNumber[:])

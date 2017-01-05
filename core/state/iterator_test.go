@@ -47,7 +47,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 	for _, key := range db.(*ethdb.MemDatabase).Keys() {
-		if bytes.HasPrefix(key, []byte("secure-key-")) {
+		if bytes.HasPrefix(key, []byte("secure-key-")) || bytes.HasPrefix(key, DirectCachePrefix) {
 			continue
 		}
 		if _, ok := hashes[common.BytesToHash(key)]; !ok {

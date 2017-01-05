@@ -50,7 +50,7 @@ func TestProof(t *testing.T) {
 }
 
 func TestOneElementProof(t *testing.T) {
-	trie := new(Trie)
+	trie, _ := New(common.Hash{}, nil, 0)
 	updateString(trie, "k", "v")
 	proof := trie.Prove([]byte("k"))
 	if proof == nil {
@@ -130,7 +130,7 @@ func BenchmarkVerifyProof(b *testing.B) {
 }
 
 func randomTrie(n int) (*Trie, map[string]*kv) {
-	trie := new(Trie)
+	trie, _ := New(common.Hash{}, nil, 0)
 	vals := make(map[string]*kv)
 	for i := byte(0); i < 100; i++ {
 		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
