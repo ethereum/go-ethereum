@@ -74,12 +74,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	for i, tx := range block.Transactions() {
 		//fmt.Println("tx:", i)
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
+		receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		receipts = append(receipts, receipt)
-		allLogs = append(allLogs, logs...)
+		allLogs = append(allLogs, receipt.Logs...)
 	}
 	AccumulateRewards(statedb, header, block.Uncles())
 
@@ -87,24 +87,23 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
-// and uses the input parameters for its environment.
-//
-// ApplyTransactions returns the generated receipts and vm logs during the
-// execution of the state transition phase.
-func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
+// and uses the input parameters for its environment. It returns the receipt
+// for the transaction, gas used and an error if the transaction failed,
+// indicating the block was invalid.
+func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, *big.Int, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEnvironment(context, statedb, config, vm.Config{})
+	vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
 	// Apply the transaction to the current state (included in the env)
 	_, gas, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	// Update the state with pending changes
@@ -125,7 +124,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 
 	glog.V(logger.Debug).Infoln(receipt)
 
-	return receipt, receipt.Logs, gas, err
+	return receipt, gas, err
 }
 
 // AccumulateRewards credits the coinbase of the given block with the

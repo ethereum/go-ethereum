@@ -128,9 +128,9 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
-		if skipTest[name] {
+		if skipTest[name] /*|| name != "loop_stacklimit_1021"*/ {
 			glog.Infoln("Skipping VM test", name)
-			return nil
+			continue
 		}
 
 		if err := runVmTest(test); err != nil {
@@ -225,7 +225,7 @@ func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs
 		value = common.Big(exec["value"])
 	)
 	caller := statedb.GetOrNewStateObject(from)
-	vm.Precompiled = make(map[string]*vm.PrecompiledAccount)
+	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
 	environment, _ := NewEVMEnvironment(true, chainConfig, statedb, env, exec)
 	ret, err := environment.Call(caller, to, data, gas, value)

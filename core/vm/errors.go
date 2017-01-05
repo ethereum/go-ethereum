@@ -16,17 +16,12 @@
 
 package vm
 
-import (
-	"errors"
-	"fmt"
-
-	"github.com/ethereum/go-ethereum/params"
-)
+import "errors"
 
 var (
-	OutOfGasError          = errors.New("Out of gas")
-	CodeStoreOutOfGasError = errors.New("Contract creation code storage out of gas")
-	DepthError             = fmt.Errorf("Max call depth exceeded (%d)", params.CallCreateDepth)
-	TraceLimitReachedError = errors.New("The number of logs reached the specified limit")
+	ErrOutOfGas            = errors.New("out of gas")
+	ErrCodeStoreOutOfGas   = errors.New("contract creation code storage out of gas")
+	ErrDepth               = errors.New("max call depth exceeded")
+	ErrTraceLimitReached   = errors.New("the number of logs reached the specified limit")
 	ErrInsufficientBalance = errors.New("insufficient balance for transfer")
 )

@@ -22,152 +22,838 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-type jumpPtr struct {
-	fn    instrFn
+type (
+	executionFunc       func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
+	gasFunc             func(params.GasTable, *EVM, *Contract, *Stack, *Memory, *big.Int) *big.Int
+	stackValidationFunc func(*Stack) error
+	memorySizeFunc      func(*Stack) *big.Int
+)
+
+type operation struct {
+	// op is the operation function
+	execute executionFunc
+	// gasCost is the gas function and returns the gas required for execution
+	gasCost gasFunc
+	// validateStack validates the stack (size) for the operation
+	validateStack stackValidationFunc
+	// memorySize returns the memory size required for the operation
+	memorySize memorySizeFunc
+	// halts indicates whether the operation shoult halt further execution
+	// and return
+	halts bool
+	// jumps indicates whether operation made a jump. This prevents the program
+	// counter from further incrementing.
+	jumps bool
+	// valid is used to check whether the retrieved operation is valid and known
 	valid bool
 }
 
-type vmJumpTable [256]jumpPtr
+var defaultJumpTable = NewJumpTable()
 
-func newJumpTable(ruleset *params.ChainConfig, blockNumber *big.Int) vmJumpTable {
-	var jumpTable vmJumpTable
+func NewJumpTable() [256]operation {
+	return [256]operation{
+		ADD: operation{
+			execute:       opAdd,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		SUB: operation{
+			execute:       opSub,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		MUL: operation{
+			execute:       opMul,
+			gasCost:       constGasFunc(GasFastStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		DIV: operation{
+			execute:       opDiv,
+			gasCost:       constGasFunc(GasFastStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		SDIV: operation{
+			execute:       opSdiv,
+			gasCost:       constGasFunc(GasFastStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		MOD: operation{
+			execute:       opMod,
+			gasCost:       constGasFunc(GasFastStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		SMOD: operation{
+			execute:       opSmod,
+			gasCost:       constGasFunc(GasFastStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		EXP: operation{
+			execute:       opExp,
+			gasCost:       gasExp,
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		SIGNEXTEND: operation{
+			execute:       opSignExtend,
+			gasCost:       constGasFunc(GasFastStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		NOT: operation{
+			execute:       opNot,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		LT: operation{
+			execute:       opLt,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		GT: operation{
+			execute:       opGt,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		SLT: operation{
+			execute:       opSlt,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		SGT: operation{
+			execute:       opSgt,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		EQ: operation{
+			execute:       opEq,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		ISZERO: operation{
+			execute:       opIszero,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		AND: operation{
+			execute:       opAnd,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		OR: operation{
+			execute:       opOr,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		XOR: operation{
+			execute:       opXor,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		BYTE: operation{
+			execute:       opByte,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		ADDMOD: operation{
+			execute:       opAddmod,
+			gasCost:       constGasFunc(GasMidStep),
+			validateStack: makeStackFunc(3, 1),
+			valid:         true,
+		},
+		MULMOD: operation{
+			execute:       opMulmod,
+			gasCost:       constGasFunc(GasMidStep),
+			validateStack: makeStackFunc(3, 1),
+			valid:         true,
+		},
+		SHA3: operation{
+			execute:       opSha3,
+			gasCost:       gasSha3,
+			validateStack: makeStackFunc(2, 1),
+			memorySize:    memorySha3,
+			valid:         true,
+		},
+		ADDRESS: operation{
+			execute:       opAddress,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		BALANCE: operation{
+			execute:       opBalance,
+			gasCost:       gasBalance,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		ORIGIN: operation{
+			execute:       opOrigin,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		CALLER: operation{
+			execute:       opCaller,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		CALLVALUE: operation{
+			execute:       opCallValue,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		CALLDATALOAD: operation{
+			execute:       opCalldataLoad,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		CALLDATASIZE: operation{
+			execute:       opCalldataSize,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		CALLDATACOPY: operation{
+			execute:       opCalldataCopy,
+			gasCost:       gasCalldataCopy,
+			validateStack: makeStackFunc(3, 1),
+			memorySize:    memoryCalldataCopy,
+			valid:         true,
+		},
+		CODESIZE: operation{
+			execute:       opCodeSize,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		EXTCODESIZE: operation{
+			execute:       opExtCodeSize,
+			gasCost:       gasExtCodeSize,
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		CODECOPY: operation{
+			execute:       opCodeCopy,
+			gasCost:       gasCodeCopy,
+			validateStack: makeStackFunc(3, 0),
+			memorySize:    memoryCodeCopy,
+			valid:         true,
+		},
+		EXTCODECOPY: operation{
+			execute:       opExtCodeCopy,
+			gasCost:       gasExtCodeCopy,
+			validateStack: makeStackFunc(4, 0),
+			memorySize:    memoryExtCodeCopy,
+			valid:         true,
+		},
+		GASPRICE: operation{
+			execute:       opGasprice,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		BLOCKHASH: operation{
+			execute:       opBlockhash,
+			gasCost:       constGasFunc(GasExtStep),
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		COINBASE: operation{
+			execute:       opCoinbase,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		TIMESTAMP: operation{
+			execute:       opTimestamp,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		NUMBER: operation{
+			execute:       opNumber,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		DIFFICULTY: operation{
+			execute:       opDifficulty,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		GASLIMIT: operation{
+			execute:       opGasLimit,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		POP: operation{
+			execute:       opPop,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(1, 0),
+			valid:         true,
+		},
+		MLOAD: operation{
+			execute:       opMload,
+			gasCost:       gasMLoad,
+			validateStack: makeStackFunc(1, 1),
+			memorySize:    memoryMLoad,
+			valid:         true,
+		},
+		MSTORE: operation{
+			execute:       opMstore,
+			gasCost:       gasMStore,
+			validateStack: makeStackFunc(2, 0),
+			memorySize:    memoryMStore,
+			valid:         true,
+		},
+		MSTORE8: operation{
+			execute:       opMstore8,
+			gasCost:       gasMStore8,
+			memorySize:    memoryMStore8,
+			validateStack: makeStackFunc(2, 0),
 
-	// when initialising a new VM execution we must first check the homestead
-	// changes.
-	if ruleset.IsHomestead(blockNumber) {
-		jumpTable[DELEGATECALL] = jumpPtr{opDelegateCall, true}
+			valid: true,
+		},
+		SLOAD: operation{
+			execute:       opSload,
+			gasCost:       gasSLoad,
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		SSTORE: operation{
+			execute:       opSstore,
+			gasCost:       gasSStore,
+			validateStack: makeStackFunc(2, 0),
+			valid:         true,
+		},
+		JUMPDEST: operation{
+			execute:       opJumpdest,
+			gasCost:       constGasFunc(params.JumpdestGas),
+			validateStack: makeStackFunc(0, 0),
+			valid:         true,
+		},
+		PC: operation{
+			execute:       opPc,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		MSIZE: operation{
+			execute:       opMsize,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		GAS: operation{
+			execute:       opGas,
+			gasCost:       constGasFunc(GasQuickStep),
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		CREATE: operation{
+			execute:       opCreate,
+			gasCost:       gasCreate,
+			validateStack: makeStackFunc(3, 1),
+			memorySize:    memoryCreate,
+			valid:         true,
+		},
+		CALL: operation{
+			execute:       opCall,
+			gasCost:       gasCall,
+			validateStack: makeStackFunc(7, 1),
+			memorySize:    memoryCall,
+			valid:         true,
+		},
+		CALLCODE: operation{
+			execute:       opCallCode,
+			gasCost:       gasCallCode,
+			validateStack: makeStackFunc(7, 1),
+			memorySize:    memoryCall,
+			valid:         true,
+		},
+		DELEGATECALL: operation{
+			execute:       opDelegateCall,
+			gasCost:       gasDelegateCall,
+			validateStack: makeStackFunc(6, 1),
+			memorySize:    memoryDelegateCall,
+			valid:         true,
+		},
+		RETURN: operation{
+			execute:       opReturn,
+			gasCost:       gasReturn,
+			validateStack: makeStackFunc(2, 0),
+			memorySize:    memoryReturn,
+			halts:         true,
+			valid:         true,
+		},
+		SUICIDE: operation{
+			execute:       opSuicide,
+			gasCost:       gasSuicide,
+			validateStack: makeStackFunc(1, 0),
+			halts:         true,
+			valid:         true,
+		},
+		JUMP: operation{
+			execute:       opJump,
+			gasCost:       constGasFunc(GasMidStep),
+			validateStack: makeStackFunc(1, 0),
+			jumps:         true,
+			valid:         true,
+		},
+		JUMPI: operation{
+			execute:       opJumpi,
+			gasCost:       constGasFunc(GasSlowStep),
+			validateStack: makeStackFunc(2, 0),
+			jumps:         true,
+			valid:         true,
+		},
+		STOP: operation{
+			execute:       opStop,
+			gasCost:       constGasFunc(Zero),
+			validateStack: makeStackFunc(0, 0),
+			halts:         true,
+			valid:         true,
+		},
+		LOG0: operation{
+			execute:       makeLog(0),
+			gasCost:       makeGasLog(0),
+			validateStack: makeStackFunc(2, 0),
+			memorySize:    memoryLog,
+			valid:         true,
+		},
+		LOG1: operation{
+			execute:       makeLog(1),
+			gasCost:       makeGasLog(1),
+			validateStack: makeStackFunc(3, 0),
+			memorySize:    memoryLog,
+			valid:         true,
+		},
+		LOG2: operation{
+			execute:       makeLog(2),
+			gasCost:       makeGasLog(2),
+			validateStack: makeStackFunc(4, 0),
+			memorySize:    memoryLog,
+			valid:         true,
+		},
+		LOG3: operation{
+			execute:       makeLog(3),
+			gasCost:       makeGasLog(3),
+			validateStack: makeStackFunc(5, 0),
+			memorySize:    memoryLog,
+			valid:         true,
+		},
+		LOG4: operation{
+			execute:       makeLog(4),
+			gasCost:       makeGasLog(4),
+			validateStack: makeStackFunc(6, 0),
+			memorySize:    memoryLog,
+			valid:         true,
+		},
+		SWAP1: operation{
+			execute:       makeSwap(1),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(2, 0),
+			valid:         true,
+		},
+		SWAP2: operation{
+			execute:       makeSwap(2),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(3, 0),
+			valid:         true,
+		},
+		SWAP3: operation{
+			execute:       makeSwap(3),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(4, 0),
+			valid:         true,
+		},
+		SWAP4: operation{
+			execute:       makeSwap(4),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(5, 0),
+			valid:         true,
+		},
+		SWAP5: operation{
+			execute:       makeSwap(5),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(6, 0),
+			valid:         true,
+		},
+		SWAP6: operation{
+			execute:       makeSwap(6),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(7, 0),
+			valid:         true,
+		},
+		SWAP7: operation{
+			execute:       makeSwap(7),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(8, 0),
+			valid:         true,
+		},
+		SWAP8: operation{
+			execute:       makeSwap(8),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(9, 0),
+			valid:         true,
+		},
+		SWAP9: operation{
+			execute:       makeSwap(9),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(10, 0),
+			valid:         true,
+		},
+		SWAP10: operation{
+			execute:       makeSwap(10),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(11, 0),
+			valid:         true,
+		},
+		SWAP11: operation{
+			execute:       makeSwap(11),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(12, 0),
+			valid:         true,
+		},
+		SWAP12: operation{
+			execute:       makeSwap(12),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(13, 0),
+			valid:         true,
+		},
+		SWAP13: operation{
+			execute:       makeSwap(13),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(14, 0),
+			valid:         true,
+		},
+		SWAP14: operation{
+			execute:       makeSwap(14),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(15, 0),
+			valid:         true,
+		},
+		SWAP15: operation{
+			execute:       makeSwap(15),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(16, 0),
+			valid:         true,
+		},
+		SWAP16: operation{
+			execute:       makeSwap(16),
+			gasCost:       gasSwap,
+			validateStack: makeStackFunc(17, 0),
+			valid:         true,
+		},
+		PUSH1: operation{
+			execute:       makePush(1, big.NewInt(1)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH2: operation{
+			execute:       makePush(2, big.NewInt(2)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH3: operation{
+			execute:       makePush(3, big.NewInt(3)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH4: operation{
+			execute:       makePush(4, big.NewInt(4)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH5: operation{
+			execute:       makePush(5, big.NewInt(5)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH6: operation{
+			execute:       makePush(6, big.NewInt(6)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH7: operation{
+			execute:       makePush(7, big.NewInt(7)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH8: operation{
+			execute:       makePush(8, big.NewInt(8)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH9: operation{
+			execute:       makePush(9, big.NewInt(9)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH10: operation{
+			execute:       makePush(10, big.NewInt(10)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH11: operation{
+			execute:       makePush(11, big.NewInt(11)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH12: operation{
+			execute:       makePush(12, big.NewInt(12)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH13: operation{
+			execute:       makePush(13, big.NewInt(13)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH14: operation{
+			execute:       makePush(14, big.NewInt(14)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH15: operation{
+			execute:       makePush(15, big.NewInt(15)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH16: operation{
+			execute:       makePush(16, big.NewInt(16)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH17: operation{
+			execute:       makePush(17, big.NewInt(17)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH18: operation{
+			execute:       makePush(18, big.NewInt(18)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH19: operation{
+			execute:       makePush(19, big.NewInt(19)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH20: operation{
+			execute:       makePush(20, big.NewInt(20)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH21: operation{
+			execute:       makePush(21, big.NewInt(21)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH22: operation{
+			execute:       makePush(22, big.NewInt(22)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH23: operation{
+			execute:       makePush(23, big.NewInt(23)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH24: operation{
+			execute:       makePush(24, big.NewInt(24)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH25: operation{
+			execute:       makePush(25, big.NewInt(25)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH26: operation{
+			execute:       makePush(26, big.NewInt(26)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH27: operation{
+			execute:       makePush(27, big.NewInt(27)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH28: operation{
+			execute:       makePush(28, big.NewInt(28)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH29: operation{
+			execute:       makePush(29, big.NewInt(29)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH30: operation{
+			execute:       makePush(30, big.NewInt(30)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH31: operation{
+			execute:       makePush(31, big.NewInt(31)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		PUSH32: operation{
+			execute:       makePush(32, big.NewInt(32)),
+			gasCost:       gasPush,
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		DUP1: operation{
+			execute:       makeDup(1),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(1, 1),
+			valid:         true,
+		},
+		DUP2: operation{
+			execute:       makeDup(2),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(2, 1),
+			valid:         true,
+		},
+		DUP3: operation{
+			execute:       makeDup(3),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(3, 1),
+			valid:         true,
+		},
+		DUP4: operation{
+			execute:       makeDup(4),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(4, 1),
+			valid:         true,
+		},
+		DUP5: operation{
+			execute:       makeDup(5),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(5, 1),
+			valid:         true,
+		},
+		DUP6: operation{
+			execute:       makeDup(6),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(6, 1),
+			valid:         true,
+		},
+		DUP7: operation{
+			execute:       makeDup(7),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(7, 1),
+			valid:         true,
+		},
+		DUP8: operation{
+			execute:       makeDup(8),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(8, 1),
+			valid:         true,
+		},
+		DUP9: operation{
+			execute:       makeDup(9),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(9, 1),
+			valid:         true,
+		},
+		DUP10: operation{
+			execute:       makeDup(10),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(10, 1),
+			valid:         true,
+		},
+		DUP11: operation{
+			execute:       makeDup(11),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(11, 1),
+			valid:         true,
+		},
+		DUP12: operation{
+			execute:       makeDup(12),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(12, 1),
+			valid:         true,
+		},
+		DUP13: operation{
+			execute:       makeDup(13),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(13, 1),
+			valid:         true,
+		},
+		DUP14: operation{
+			execute:       makeDup(14),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(14, 1),
+			valid:         true,
+		},
+		DUP15: operation{
+			execute:       makeDup(15),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(15, 1),
+			valid:         true,
+		},
+		DUP16: operation{
+			execute:       makeDup(16),
+			gasCost:       gasDup,
+			validateStack: makeStackFunc(16, 1),
+			valid:         true,
+		},
 	}
-
-	jumpTable[ADD] = jumpPtr{opAdd, true}
-	jumpTable[SUB] = jumpPtr{opSub, true}
-	jumpTable[MUL] = jumpPtr{opMul, true}
-	jumpTable[DIV] = jumpPtr{opDiv, true}
-	jumpTable[SDIV] = jumpPtr{opSdiv, true}
-	jumpTable[MOD] = jumpPtr{opMod, true}
-	jumpTable[SMOD] = jumpPtr{opSmod, true}
-	jumpTable[EXP] = jumpPtr{opExp, true}
-	jumpTable[SIGNEXTEND] = jumpPtr{opSignExtend, true}
-	jumpTable[NOT] = jumpPtr{opNot, true}
-	jumpTable[LT] = jumpPtr{opLt, true}
-	jumpTable[GT] = jumpPtr{opGt, true}
-	jumpTable[SLT] = jumpPtr{opSlt, true}
-	jumpTable[SGT] = jumpPtr{opSgt, true}
-	jumpTable[EQ] = jumpPtr{opEq, true}
-	jumpTable[ISZERO] = jumpPtr{opIszero, true}
-	jumpTable[AND] = jumpPtr{opAnd, true}
-	jumpTable[OR] = jumpPtr{opOr, true}
-	jumpTable[XOR] = jumpPtr{opXor, true}
-	jumpTable[BYTE] = jumpPtr{opByte, true}
-	jumpTable[ADDMOD] = jumpPtr{opAddmod, true}
-	jumpTable[MULMOD] = jumpPtr{opMulmod, true}
-	jumpTable[SHA3] = jumpPtr{opSha3, true}
-	jumpTable[ADDRESS] = jumpPtr{opAddress, true}
-	jumpTable[BALANCE] = jumpPtr{opBalance, true}
-	jumpTable[ORIGIN] = jumpPtr{opOrigin, true}
-	jumpTable[CALLER] = jumpPtr{opCaller, true}
-	jumpTable[CALLVALUE] = jumpPtr{opCallValue, true}
-	jumpTable[CALLDATALOAD] = jumpPtr{opCalldataLoad, true}
-	jumpTable[CALLDATASIZE] = jumpPtr{opCalldataSize, true}
-	jumpTable[CALLDATACOPY] = jumpPtr{opCalldataCopy, true}
-	jumpTable[CODESIZE] = jumpPtr{opCodeSize, true}
-	jumpTable[EXTCODESIZE] = jumpPtr{opExtCodeSize, true}
-	jumpTable[CODECOPY] = jumpPtr{opCodeCopy, true}
-	jumpTable[EXTCODECOPY] = jumpPtr{opExtCodeCopy, true}
-	jumpTable[GASPRICE] = jumpPtr{opGasprice, true}
-	jumpTable[BLOCKHASH] = jumpPtr{opBlockhash, true}
-	jumpTable[COINBASE] = jumpPtr{opCoinbase, true}
-	jumpTable[TIMESTAMP] = jumpPtr{opTimestamp, true}
-	jumpTable[NUMBER] = jumpPtr{opNumber, true}
-	jumpTable[DIFFICULTY] = jumpPtr{opDifficulty, true}
-	jumpTable[GASLIMIT] = jumpPtr{opGasLimit, true}
-	jumpTable[POP] = jumpPtr{opPop, true}
-	jumpTable[MLOAD] = jumpPtr{opMload, true}
-	jumpTable[MSTORE] = jumpPtr{opMstore, true}
-	jumpTable[MSTORE8] = jumpPtr{opMstore8, true}
-	jumpTable[SLOAD] = jumpPtr{opSload, true}
-	jumpTable[SSTORE] = jumpPtr{opSstore, true}
-	jumpTable[JUMPDEST] = jumpPtr{opJumpdest, true}
-	jumpTable[PC] = jumpPtr{nil, true}
-	jumpTable[MSIZE] = jumpPtr{opMsize, true}
-	jumpTable[GAS] = jumpPtr{opGas, true}
-	jumpTable[CREATE] = jumpPtr{opCreate, true}
-	jumpTable[CALL] = jumpPtr{opCall, true}
-	jumpTable[CALLCODE] = jumpPtr{opCallCode, true}
-	jumpTable[LOG0] = jumpPtr{makeLog(0), true}
-	jumpTable[LOG1] = jumpPtr{makeLog(1), true}
-	jumpTable[LOG2] = jumpPtr{makeLog(2), true}
-	jumpTable[LOG3] = jumpPtr{makeLog(3), true}
-	jumpTable[LOG4] = jumpPtr{makeLog(4), true}
-	jumpTable[SWAP1] = jumpPtr{makeSwap(1), true}
-	jumpTable[SWAP2] = jumpPtr{makeSwap(2), true}
-	jumpTable[SWAP3] = jumpPtr{makeSwap(3), true}
-	jumpTable[SWAP4] = jumpPtr{makeSwap(4), true}
-	jumpTable[SWAP5] = jumpPtr{makeSwap(5), true}
-	jumpTable[SWAP6] = jumpPtr{makeSwap(6), true}
-	jumpTable[SWAP7] = jumpPtr{makeSwap(7), true}
-	jumpTable[SWAP8] = jumpPtr{makeSwap(8), true}
-	jumpTable[SWAP9] = jumpPtr{makeSwap(9), true}
-	jumpTable[SWAP10] = jumpPtr{makeSwap(10), true}
-	jumpTable[SWAP11] = jumpPtr{makeSwap(11), true}
-	jumpTable[SWAP12] = jumpPtr{makeSwap(12), true}
-	jumpTable[SWAP13] = jumpPtr{makeSwap(13), true}
-	jumpTable[SWAP14] = jumpPtr{makeSwap(14), true}
-	jumpTable[SWAP15] = jumpPtr{makeSwap(15), true}
-	jumpTable[SWAP16] = jumpPtr{makeSwap(16), true}
-	jumpTable[PUSH1] = jumpPtr{makePush(1, big.NewInt(1)), true}
-	jumpTable[PUSH2] = jumpPtr{makePush(2, big.NewInt(2)), true}
-	jumpTable[PUSH3] = jumpPtr{makePush(3, big.NewInt(3)), true}
-	jumpTable[PUSH4] = jumpPtr{makePush(4, big.NewInt(4)), true}
-	jumpTable[PUSH5] = jumpPtr{makePush(5, big.NewInt(5)), true}
-	jumpTable[PUSH6] = jumpPtr{makePush(6, big.NewInt(6)), true}
-	jumpTable[PUSH7] = jumpPtr{makePush(7, big.NewInt(7)), true}
-	jumpTable[PUSH8] = jumpPtr{makePush(8, big.NewInt(8)), true}
-	jumpTable[PUSH9] = jumpPtr{makePush(9, big.NewInt(9)), true}
-	jumpTable[PUSH10] = jumpPtr{makePush(10, big.NewInt(10)), true}
-	jumpTable[PUSH11] = jumpPtr{makePush(11, big.NewInt(11)), true}
-	jumpTable[PUSH12] = jumpPtr{makePush(12, big.NewInt(12)), true}
-	jumpTable[PUSH13] = jumpPtr{makePush(13, big.NewInt(13)), true}
-	jumpTable[PUSH14] = jumpPtr{makePush(14, big.NewInt(14)), true}
-	jumpTable[PUSH15] = jumpPtr{makePush(15, big.NewInt(15)), true}
-	jumpTable[PUSH16] = jumpPtr{makePush(16, big.NewInt(16)), true}
-	jumpTable[PUSH17] = jumpPtr{makePush(17, big.NewInt(17)), true}
-	jumpTable[PUSH18] = jumpPtr{makePush(18, big.NewInt(18)), true}
-	jumpTable[PUSH19] = jumpPtr{makePush(19, big.NewInt(19)), true}
-	jumpTable[PUSH20] = jumpPtr{makePush(20, big.NewInt(20)), true}
-	jumpTable[PUSH21] = jumpPtr{makePush(21, big.NewInt(21)), true}
-	jumpTable[PUSH22] = jumpPtr{makePush(22, big.NewInt(22)), true}
-	jumpTable[PUSH23] = jumpPtr{makePush(23, big.NewInt(23)), true}
-	jumpTable[PUSH24] = jumpPtr{makePush(24, big.NewInt(24)), true}
-	jumpTable[PUSH25] = jumpPtr{makePush(25, big.NewInt(25)), true}
-	jumpTable[PUSH26] = jumpPtr{makePush(26, big.NewInt(26)), true}
-	jumpTable[PUSH27] = jumpPtr{makePush(27, big.NewInt(27)), true}
-	jumpTable[PUSH28] = jumpPtr{makePush(28, big.NewInt(28)), true}
-	jumpTable[PUSH29] = jumpPtr{makePush(29, big.NewInt(29)), true}
-	jumpTable[PUSH30] = jumpPtr{makePush(30, big.NewInt(30)), true}
-	jumpTable[PUSH31] = jumpPtr{makePush(31, big.NewInt(31)), true}
-	jumpTable[PUSH32] = jumpPtr{makePush(32, big.NewInt(32)), true}
-	jumpTable[DUP1] = jumpPtr{makeDup(1), true}
-	jumpTable[DUP2] = jumpPtr{makeDup(2), true}
-	jumpTable[DUP3] = jumpPtr{makeDup(3), true}
-	jumpTable[DUP4] = jumpPtr{makeDup(4), true}
-	jumpTable[DUP5] = jumpPtr{makeDup(5), true}
-	jumpTable[DUP6] = jumpPtr{makeDup(6), true}
-	jumpTable[DUP7] = jumpPtr{makeDup(7), true}
-	jumpTable[DUP8] = jumpPtr{makeDup(8), true}
-	jumpTable[DUP9] = jumpPtr{makeDup(9), true}
-	jumpTable[DUP10] = jumpPtr{makeDup(10), true}
-	jumpTable[DUP11] = jumpPtr{makeDup(11), true}
-	jumpTable[DUP12] = jumpPtr{makeDup(12), true}
-	jumpTable[DUP13] = jumpPtr{makeDup(13), true}
-	jumpTable[DUP14] = jumpPtr{makeDup(14), true}
-	jumpTable[DUP15] = jumpPtr{makeDup(15), true}
-	jumpTable[DUP16] = jumpPtr{makeDup(16), true}
-
-	jumpTable[RETURN] = jumpPtr{nil, true}
-	jumpTable[SUICIDE] = jumpPtr{nil, true}
-	jumpTable[JUMP] = jumpPtr{nil, true}
-	jumpTable[JUMPI] = jumpPtr{nil, true}
-	jumpTable[STOP] = jumpPtr{nil, true}
-
-	return jumpTable
 }

@@ -108,7 +108,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "EXP_Empty"*/ {
+		if skipTest[name] || name != "loop_stacklimit_1021" {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -205,8 +205,6 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 
 func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
 	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
-	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	root, _ := statedb.Commit(false)

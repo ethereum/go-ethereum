@@ -149,7 +149,7 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.Environment, core.Message) {
+func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.EVM, core.Message) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
@@ -207,5 +207,5 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 	if context.GasPrice == nil {
 		context.GasPrice = new(big.Int)
 	}
-	return vm.NewEnvironment(context, statedb, chainConfig, vm.Config{NoRecursion: vmTest}), msg
+	return vm.NewEVM(context, statedb, chainConfig, vm.Config{NoRecursion: vmTest}), msg
 }
