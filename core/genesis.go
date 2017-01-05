@@ -172,7 +172,7 @@ func WriteDefaultGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
 	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultGenesisBlock()))
 }
 
-// WriteTestNetGenesisBlock assembles the Morden test network genesis block and
+// WriteTestNetGenesisBlock assembles the test network genesis block and
 // writes it - along with all associated state - into a chain database.
 func WriteTestNetGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
 	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultTestnetGenesisBlock()))
@@ -198,6 +198,8 @@ func DefaultGenesisBlock() string {
 	return string(blob)
 }
 
+// DefaultTestnetGenesisBlock assembles a JSON string representing the default Ethereum
+// test network genesis block.
 func DefaultTestnetGenesisBlock() string {
 	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultTestnetGenesisBlock)))
 	blob, err := ioutil.ReadAll(reader)

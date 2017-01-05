@@ -925,11 +925,19 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	chainDb = MakeChainDatabase(ctx, stack)
 
 	if ctx.GlobalBool(OlympicFlag.Name) {
+		_, err := core.WriteOlympicGenesisBlock(chainDb)
+		if err != nil {
+			glog.Fatalln(err)
+		}
+	}
+
+	if ctx.GlobalBool(TestNetFlag.Name) {
 		_, err := core.WriteTestNetGenesisBlock(chainDb)
 		if err != nil {
 			glog.Fatalln(err)
 		}
 	}
+
 	chainConfig := MakeChainConfigFromDb(ctx, chainDb)
 
 	pow := pow.PoW(core.FakePow{})
