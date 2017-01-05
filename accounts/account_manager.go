@@ -152,8 +152,8 @@ func (am *Manager) Sign(addr common.Address, hash []byte) ([]byte, error) {
 // SignWithPassphrase signs hash if the private key matching the given address
 // can be decrypted with the given passphrase. The produced signature is in the
 // [R || S || V] format where V is 0 or 1.
-func (am *Manager) SignWithPassphrase(addr common.Address, passphrase string, hash []byte) (signature []byte, err error) {
-	_, key, err := am.getDecryptedKey(Account{Address: addr}, passphrase)
+func (am *Manager) SignWithPassphrase(a Account, passphrase string, hash []byte) (signature []byte, err error) {
+	_, key, err := am.getDecryptedKey(a, passphrase)
 	if err != nil {
 		return nil, err
 	}

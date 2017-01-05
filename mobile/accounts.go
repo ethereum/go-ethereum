@@ -109,15 +109,17 @@ func (am *AccountManager) DeleteAccount(account *Account, passphrase string) err
 	}, passphrase)
 }
 
-// Sign signs hash with an unlocked private key matching the given address.
+// Sign calculates a ECDSA signature for the given hash. The produced signature
+// is in the [R || S || V] format where V is 0 or 1.
 func (am *AccountManager) Sign(address *Address, hash []byte) (signature []byte, _ error) {
 	return am.manager.Sign(address.address, hash)
 }
 
-// SignWithPassphrase signs hash if the private key matching the given address can be
-// decrypted with the given passphrase.
-func (am *AccountManager) SignWithPassphrase(address *Address, passphrase string, hash []byte) (signature []byte, _ error) {
-	return am.manager.SignWithPassphrase(address.address, passphrase, hash)
+// SignWithPassphrase signs hash if the private key matching the given address
+// can be decrypted with the given passphrase. The produced signature is in the
+// [R || S || V] format where V is 0 or 1.
+func (am *AccountManager) SignWithPassphrase(account *Account, passphrase string, hash []byte) (signature []byte, _ error) {
+	return am.manager.SignWithPassphrase(account.account, passphrase, hash)
 }
 
 // Unlock unlocks the given account indefinitely.
@@ -130,15 +132,15 @@ func (am *AccountManager) Lock(address *Address) error {
 	return am.manager.Lock(address.address)
 }
 
-// TimedUnlock unlocks the given account with the passphrase. The account
-// stays unlocked for the duration of timeout. A timeout of 0 unlocks the account
-// until the program exits. The account must match a unique key file.
+// TimedUnlock unlocks the given account with the passphrase. The account stays
+// unlocked for the duration of timeout (nanoseconds). A timeout of 0 unlocks the
+// account until the program exits. The account must match a unique key file.
 //
 // If the account address is already unlocked for a duration, TimedUnlock extends or
 // shortens the active unlock timeout. If the address was previously unlocked
 // indefinitely the timeout is not altered.
-func (am *AccountManager) TimedUnlock(a *Account, passphrase string, timeout int64) error {
-	return am.manager.TimedUnlock(a.account, passphrase, time.Duration(timeout))
+func (am *AccountManager) TimedUnlock(account *Account, passphrase string, timeout int64) error {
+	return am.manager.TimedUnlock(account.account, passphrase, time.Duration(timeout))
 }
 
 // NewAccount generates a new key and stores it into the key directory,
@@ -165,8 +167,8 @@ func (am *AccountManager) ImportKey(keyJSON []byte, passphrase, newPassphrase st
 	return &Account{acc}, nil
 }
 
-// Update changes the passphrase of an existing account.
-func (am *AccountManager) Update(account *Account, passphrase, newPassphrase string) error {
+// UpdateAccount changes the passphrase of an existing account.
+func (am *AccountManager) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
 	return am.manager.Update(account.account, passphrase, newPassphrase)
 }
 

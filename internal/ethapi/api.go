@@ -264,7 +264,7 @@ func (s *PrivateAccountAPI) SendTransaction(ctx context.Context, args SendTxArgs
 	}
 	tx := args.toTransaction()
 	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
-	signature, err := s.am.SignWithPassphrase(args.From, passwd, signer.Hash(tx).Bytes())
+	signature, err := s.am.SignWithPassphrase(accounts.Account{Address: args.From}, passwd, signer.Hash(tx).Bytes())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -294,11 +294,11 @@ func signHash(data []byte) []byte {
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
 func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr common.Address, passwd string) (hexutil.Bytes, error) {
-	signature, err := s.b.AccountManager().SignWithPassphrase(addr, passwd, signHash(data))
+	signature, err := s.b.AccountManager().SignWithPassphrase(accounts.Account{Address: addr}, passwd, signHash(data))
 	if err != nil {
 		return nil, err
 	}
-	signature[64] += 27 // SignWithPassphrase uses canonical secp256k1 signatures (v = 0 or 1), transform to yellow paper
+	signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	return signature, nil
 }
 
@@ -319,7 +319,7 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 	if sig[64] != 27 && sig[64] != 28 {
 		return common.Address{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
 	}
-	sig[64] -= 27 // Transform yellow paper signatures to canonical secp256k1 form
+	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
 	rpk, err := crypto.Ecrecover(signHash(data), sig)
 	if err != nil {
@@ -1104,8 +1104,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes) (hexutil.Bytes, error) {
 	signature, err := s.b.AccountManager().Sign(addr, signHash(data))
 	if err == nil {
-		// Sign uses canonical secp256k1 signatures (v = 0 or 1), transform to yellow paper
-		signature[64] += 27
+		signature[64] += 27 // Transform V from 0/1 to 27/28 according to the yellow paper
 	}
 	return signature, err
 }
