@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -164,7 +165,7 @@ func runVmTest(test VmTest) error {
 		ret  []byte
 		gas  *big.Int
 		err  error
-		logs vm.Logs
+		logs []*types.Log
 	)
 
 	ret, logs, gas, err = RunVm(statedb, env, test.Exec)
@@ -211,7 +212,7 @@ func runVmTest(test VmTest) error {
 	return nil
 }
 
-func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, []*types.Log, *big.Int, error) {
 	chainConfig := &params.ChainConfig{
 		HomesteadBlock: params.MainNetHomesteadBlock,
 		DAOForkBlock:   params.MainNetDAOForkBlock,

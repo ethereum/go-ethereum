@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/net/context"
@@ -42,7 +43,7 @@ func (s *VMState) Error() error {
 	return s.err
 }
 
-func (s *VMState) AddLog(log *vm.Log) {}
+func (s *VMState) AddLog(log *types.Log) {}
 
 // errHandler handles and stores any state error that happens during execution.
 func (s *VMState) errHandler(err error) {

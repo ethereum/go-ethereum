@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package vm
+package types
 
 import (
 	"encoding/json"
@@ -77,10 +77,6 @@ type jsonLog struct {
 	BlockHash   *common.Hash    `json:"blockHash"`
 	Index       *hexutil.Uint   `json:"logIndex"`
 	Removed     bool            `json:"removed"`
-}
-
-func NewLog(address common.Address, topics []common.Hash, data []byte, number uint64) *Log {
-	return &Log{Address: address, Topics: topics, Data: data, BlockNumber: number}
 }
 
 // EncodeRLP implements rlp.Encoder.
@@ -149,8 +145,6 @@ func (l *Log) UnmarshalJSON(input []byte) error {
 	*l = declog
 	return nil
 }
-
-type Logs []*Log
 
 // LogForStorage is a wrapper around a Log that flattens and parses the entire content of
 // a log including non-consensus fields.

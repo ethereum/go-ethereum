@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"golang.org/x/net/context"
 )
 
@@ -156,8 +155,8 @@ type FilterQuery struct {
 // Logs received through a streaming query subscription may have Removed set to true,
 // indicating that the log was reverted due to a chain reorganisation.
 type LogFilterer interface {
-	FilterLogs(ctx context.Context, q FilterQuery) ([]vm.Log, error)
-	SubscribeFilterLogs(ctx context.Context, q FilterQuery, ch chan<- vm.Log) (Subscription, error)
+	FilterLogs(ctx context.Context, q FilterQuery) ([]types.Log, error)
+	SubscribeFilterLogs(ctx context.Context, q FilterQuery, ch chan<- types.Log) (Subscription, error)
 }
 
 // TransactionSender wraps transaction sending. The SendTransaction method injects a

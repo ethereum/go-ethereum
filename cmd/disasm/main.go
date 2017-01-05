@@ -18,10 +18,10 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"encoding/hex"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/core/vm"

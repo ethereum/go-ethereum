@@ -963,7 +963,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (ma
 		"logsBloom":         receipt.Bloom,
 	}
 	if receipt.Logs == nil {
-		fields["logs"] = []vm.Logs{}
+		fields["logs"] = [][]*types.Log{}
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
