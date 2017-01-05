@@ -16,6 +16,10 @@ a code {
 	color: #18bc9c;
 }
 
+.hljs {
+	background-color: inherit;
+}
+
 .jumbotron h2 {
 	margin-top: 21px;
 	margin-bottom: 10px;

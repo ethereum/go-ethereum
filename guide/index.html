@@ -11,6 +11,7 @@
     <link href="../static/styles/bootstrap.min.css" rel="stylesheet" />
     <link href="../static/styles/flatly.min.css" rel="stylesheet" />
     <link href="../static/styles/font-awesome.min.css" rel="stylesheet" />
+    <link href="../static/styles/highlight.min.css" rel="stylesheet" />
 
     <link href="../static/styles/custom/common.css" rel="stylesheet" />
 
@@ -19,6 +20,10 @@
     <script src="../static/scripts/moment.min.js"></script>
     <script src="../static/scripts/marked.min.js"></script>
     <script src="../static/scripts/emojify.min.js"></script>
+    <script src="../static/scripts/highlight.min.js"></script>
+    <script src="../static/scripts/highlight-java.min.js"></script>
+    <script src="../static/scripts/highlight-gradle.min.js"></script>
+    <script src="../static/scripts/highlight-swift.min.js"></script>
 
     <script src="../static/scripts/custom/polyfills.js"></script>
   </head>
@@ -71,6 +76,7 @@
           var toc = $("#toc");
           var menu;
 
+          var head;
           for (var i = 0; i < lines.length; i++) {
             // Skip any empty lines
             var line = lines[i].trim();
@@ -82,9 +88,9 @@
               while (line.length > 0 && line[0] == "#") {
                 line = line.slice(1);
               }
-              line = line.trim();
+              head = line.trim();
               menu = $("<div class='list-group'></div>").appendTo(toc);
-              $("<a href='#' class='list-group-item active'>" + line + "</a>").appendTo(menu);
+              $("<a href='#' class='list-group-item active'>" + head + "</a>").appendTo(menu);
               continue;
             }
             // Otherwise if the line is a link, add a new entry to the sub-menu
@@ -95,7 +101,7 @@
               link = "https://raw.githubusercontent.com/wiki/" + link.slice("https://github.com/".length).replace("wiki/", "") + ".md";
 
               var item = $("<a href='#' class='list-group-item'>" + name + "</a>").appendTo(menu);
-              $(item).click(function(name, link) {
+              $(item).click(function(head, name, link) {
                 return function() {
                   $.ajax({
                     url: link,
@@ -104,31 +110,22 @@
                     },
                     dataType: 'text',
                     success: function(data) {
-                      $('#content').html(marked(data));
+                      $('#content').html("<h1>" + head + ": " + name + "</h1>" + marked(data));
                       emojify.setConfig({img_dir: '../static/images/emoji'});
                       emojify.run(document.getElementById('content'));
+
+                      $('pre code').each(function(i, block) {
+                        console.log("hl", i, block);
+                        hljs.highlightBlock(block);
+                      });
                     }
                   });
                 };
-              }(name, link));
+              }(head, name, link));
             }
           }
-        }
-      });
-    </script>
-
-    <script type="text/javascript">
-      // Download the primary page content of the guide
-      $.ajax({
-        url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Mobile:-Introduction.md',
-        error: function() {
-          alert("Failed to load latest release!");
-        },
-        dataType: 'text',
-        success: function(data) {
-          $('#content').html("<h1>Mobile platforms: Introduction</h1>" + marked(data));
-          emojify.setConfig({img_dir: '../static/images/emoji'});
-          emojify.run(document.getElementById('content'));
+          // Menu constructed, load the first entry
+          console.log(menu.children()[1].click());
         }
       });
     </script>
