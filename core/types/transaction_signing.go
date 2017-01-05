@@ -50,8 +50,8 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	return signer
 }
 
-// SignECDSA signs the transaction using the given signer and private key
-func SignECDSA(s Signer, tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
+// SignTx signs the transaction using the given signer and private key
+func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
 	h := s.Hash(tx)
 	sig, err := crypto.Sign(h[:], prv)
 	if err != nil {
@@ -96,9 +96,8 @@ type Signer interface {
 	Hash(tx *Transaction) common.Hash
 	// PubilcKey returns the public key derived from the signature
 	PublicKey(tx *Transaction) ([]byte, error)
-	// SignECDSA signs the transaction with the given and returns a copy of the tx
-	SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error)
-	// WithSignature returns a copy of the transaction with the given signature
+	// WithSignature returns a copy of the transaction with the given signature.
+	// The signature must be encoded in [R || S || V] format where V is 0 or 1.
 	WithSignature(tx *Transaction, sig []byte) (*Transaction, error)
 	// Checks for equality on the signers
 	Equal(Signer) bool
@@ -122,10 +121,6 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 func (s EIP155Signer) Equal(s2 Signer) bool {
 	eip155, ok := s2.(EIP155Signer)
 	return ok && eip155.chainId.Cmp(s.chainId) == 0
-}
-
-func (s EIP155Signer) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	return SignECDSA(s, tx, prv)
 }
 
 func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
@@ -193,15 +188,6 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 	})
 }
 
-func (s EIP155Signer) SigECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := s.Hash(tx)
-	sig, err := crypto.Sign(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return s.WithSignature(tx, sig)
-}
-
 // HomesteadTransaction implements TransactionInterface using the
 // homestead rules.
 type HomesteadSigner struct{ FrontierSigner }
@@ -222,15 +208,6 @@ func (hs HomesteadSigner) WithSignature(tx *Transaction, sig []byte) (*Transacti
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
 	cpy.data.V = new(big.Int).SetBytes([]byte{sig[64] + 27})
 	return cpy, nil
-}
-
-func (hs HomesteadSigner) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := hs.Hash(tx)
-	sig, err := crypto.Sign(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return hs.WithSignature(tx, sig)
 }
 
 func (hs HomesteadSigner) PublicKey(tx *Transaction) ([]byte, error) {
@@ -278,15 +255,6 @@ func (fs FrontierSigner) WithSignature(tx *Transaction, sig []byte) (*Transactio
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
 	cpy.data.V = new(big.Int).SetBytes([]byte{sig[64] + 27})
 	return cpy, nil
-}
-
-func (fs FrontierSigner) SignECDSA(tx *Transaction, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	h := fs.Hash(tx)
-	sig, err := crypto.Sign(h[:], prv)
-	if err != nil {
-		return nil, err
-	}
-	return fs.WithSignature(tx, sig)
 }
 
 // Hash returns the hash to be sned by the sender.
