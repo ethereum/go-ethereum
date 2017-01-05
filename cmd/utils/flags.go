@@ -337,10 +337,10 @@ var (
 		Usage: "Network listening port",
 		Value: 30303,
 	}
-	BootnodesFlag = cli.StringFlag{
+	BootnodesFlag = cli.StringSliceFlag{
 		Name:  "bootnodes",
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
-		Value: "",
+		Value: nil,
 	}
 	NodeKeyFileFlag = cli.StringFlag{
 		Name:  "nodekey",
@@ -485,17 +485,15 @@ func makeNodeUserIdent(ctx *cli.Context) string {
 // MakeBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
 func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
-	// Return pre-configured nodes if none were manually requested
-	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			return params.TestnetBootnodes
-		}
-		return params.MainnetBootnodes
+	urls := params.MainnetBootnodes
+	if ctx.GlobalIsSet(BootnodesFlag.Name) {
+		urls = ctx.GlobalStringSlice(BootnodesFlag.Name)
+	} else if ctx.GlobalBool(TestNetFlag.Name) {
+		urls = params.TestnetBootnodes
 	}
-	// Otherwise parse and use the CLI bootstrap nodes
-	bootnodes := []*discover.Node{}
 
-	for _, url := range strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",") {
+	bootnodes := make([]*discover.Node, 0, len(urls))
+	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
 			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
@@ -509,14 +507,13 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 // MakeBootstrapNodesV5 creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
 func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
-	// Return pre-configured nodes if none were manually requested
-	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
-		return params.DiscoveryV5Bootnodes
+	urls := params.DiscoveryV5Bootnodes
+	if ctx.GlobalIsSet(BootnodesFlag.Name) {
+		urls = ctx.GlobalStringSlice(BootnodesFlag.Name)
 	}
-	// Otherwise parse and use the CLI bootstrap nodes
-	bootnodes := []*discv5.Node{}
 
-	for _, url := range strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",") {
+	bootnodes := make([]*discv5.Node, 0, len(urls))
+	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
 			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
