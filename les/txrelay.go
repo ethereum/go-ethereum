@@ -138,7 +138,7 @@ func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback 
 	if len(self.txPending) > 0 {
 		txs := make(types.Transactions, len(self.txPending))
 		i := 0
-		for hash, _ := range self.txPending {
+		for hash := range self.txPending {
 			txs[i] = self.txSent[hash].tx
 			i++
 		}

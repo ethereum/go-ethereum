@@ -116,7 +116,7 @@ func (self filterer) Compare(f filter.Filter) bool {
 	topics := make([]Topic, len(filter.matcher.conditions))
 	for i, group := range filter.matcher.conditions {
 		// Message should contain a single topic entry, extract
-		for topics[i], _ = range group {
+		for topics[i] = range group {
 			break
 		}
 	}

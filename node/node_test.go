@@ -166,7 +166,7 @@ func TestServiceLifeCycle(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start protocol stack: %v", err)
 	}
-	for id, _ := range services {
+	for id := range services {
 		if !started[id] {
 			t.Fatalf("service %s: freshly started service not running", id)
 		}
@@ -178,7 +178,7 @@ func TestServiceLifeCycle(t *testing.T) {
 	if err := stack.Stop(); err != nil {
 		t.Fatalf("failed to stop protocol stack: %v", err)
 	}
-	for id, _ := range services {
+	for id := range services {
 		if !stopped[id] {
 			t.Fatalf("service %s: freshly terminated service still running", id)
 		}
@@ -270,7 +270,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 		if err := stack.Start(); err != failure {
 			t.Fatalf("iter %d: stack startup failure mismatch: have %v, want %v", i, err, failure)
 		}
-		for id, _ := range services {
+		for id := range services {
 			if started[id] {
 				t.Fatalf("service %s: started should not have", id)
 			}
@@ -322,7 +322,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 		if err := stack.Start(); err != failure {
 			t.Fatalf("iter %d: stack startup failure mismatch: have %v, want %v", i, err, failure)
 		}
-		for id, _ := range services {
+		for id := range services {
 			if started[id] && !stopped[id] {
 				t.Fatalf("service %s: started but not stopped", id)
 			}
@@ -376,7 +376,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 		if err := stack.Start(); err != nil {
 			t.Fatalf("iter %d: failed to start protocol stack: %v", i, err)
 		}
-		for id, _ := range services {
+		for id := range services {
 			if !started[id] {
 				t.Fatalf("iter %d, service %s: service not running", i, id)
 			}
@@ -397,7 +397,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 				t.Fatalf("iter %d: failure count mismatch: have %d, want %d", i, len(err.Services), 1)
 			}
 		}
-		for id, _ := range services {
+		for id := range services {
 			if !stopped[id] {
 				t.Fatalf("iter %d, service %s: service not terminated", i, id)
 			}

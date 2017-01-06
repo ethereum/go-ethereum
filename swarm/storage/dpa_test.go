@@ -67,7 +67,7 @@ func TestDPArandom(t *testing.T) {
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
 	localStore.memStore = NewMemStore(dbStore, defaultCacheCapacity)
 	resultReader = dpa.Retrieve(key)
-	for i, _ := range resultSlice {
+	for i := range resultSlice {
 		resultSlice[i] = 0
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)
@@ -128,7 +128,7 @@ func TestDPA_capacity(t *testing.T) {
 	dpa.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
 	resultReader = dpa.Retrieve(key)
-	for i, _ := range resultSlice {
+	for i := range resultSlice {
 		resultSlice[i] = 0
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)

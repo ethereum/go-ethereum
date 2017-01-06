@@ -67,10 +67,10 @@ func TestTypeCheck(t *testing.T) {
 		{"uint16[3]", [4]uint16{1, 2, 3}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
 		{"uint16[3]", []uint16{1, 2, 3}, ""},
 		{"uint16[3]", []uint16{1, 2, 3, 4}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
-		{"address[]", []common.Address{common.Address{1}}, ""},
-		{"address[1]", []common.Address{common.Address{1}}, ""},
-		{"address[1]", [1]common.Address{common.Address{1}}, ""},
-		{"address[2]", [1]common.Address{common.Address{1}}, "abi: cannot use [1]array as type [2]array as argument"},
+		{"address[]", []common.Address{{1}}, ""},
+		{"address[1]", []common.Address{{1}}, ""},
+		{"address[1]", [1]common.Address{{1}}, ""},
+		{"address[2]", [1]common.Address{{1}}, "abi: cannot use [1]array as type [2]array as argument"},
 		{"bytes32", [32]byte{}, ""},
 		{"bytes32", [33]byte{}, "abi: cannot use [33]uint8 as type [32]uint8 as argument"},
 		{"bytes32", common.Hash{1}, ""},
@@ -80,7 +80,7 @@ func TestTypeCheck(t *testing.T) {
 		{"bytes", [2]byte{0, 1}, ""},
 		{"bytes", common.Hash{1}, ""},
 		{"string", "hello world", ""},
-		{"bytes32[]", [][32]byte{[32]byte{}}, ""},
+		{"bytes32[]", [][32]byte{{}}, ""},
 		{"function", [24]byte{}, ""},
 	} {
 		typ, err := NewType(test.typ)
@@ -343,8 +343,8 @@ func TestPack(t *testing.T) {
 		{"uint16[]", []uint16{1, 2}, formatSliceOutput([]byte{1}, []byte{2})},
 		{"bytes20", [20]byte{1}, pad([]byte{1}, 32, false)},
 		{"uint256[]", []*big.Int{big.NewInt(1), big.NewInt(2)}, formatSliceOutput([]byte{1}, []byte{2})},
-		{"address[]", []common.Address{common.Address{1}, common.Address{2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
-		{"bytes32[]", []common.Hash{common.Hash{1}, common.Hash{2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
+		{"address[]", []common.Address{{1}, {2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
+		{"bytes32[]", []common.Hash{{1}, {2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
 		{"function", [24]byte{1}, pad([]byte{1}, 32, false)},
 	} {
 		typ, err := NewType(test.typ)
@@ -458,12 +458,12 @@ func TestReader(t *testing.T) {
 	Uint256, _ := NewType("uint256")
 	exp := ABI{
 		Methods: map[string]Method{
-			"balance": Method{
+			"balance": {
 				"balance", true, nil, nil,
 			},
-			"send": Method{
+			"send": {
 				"send", false, []Argument{
-					Argument{"amount", Uint256, false},
+					{"amount", Uint256, false},
 				}, nil,
 			},
 		},
@@ -562,7 +562,7 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
-	m := Method{"foo", false, []Argument{Argument{"bar", String, false}, Argument{"baz", String, false}}, nil}
+	m := Method{"foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -574,7 +574,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint")
-	m = Method{"foo", false, []Argument{Argument{"bar", uintt, false}}, nil}
+	m = Method{"foo", false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -779,8 +779,8 @@ func TestBareEvents(t *testing.T) {
 		"balance": {false, nil},
 		"anon":    {true, nil},
 		"args": {false, []Argument{
-			Argument{Name: "arg0", Type: arg0, Indexed: false},
-			Argument{Name: "arg1", Type: arg1, Indexed: true},
+			{Name: "arg0", Type: arg0, Indexed: false},
+			{Name: "arg1", Type: arg1, Indexed: true},
 		}},
 	}
 

@@ -178,7 +178,7 @@ func testSendTransactions(t *testing.T, protocol int) {
 func TestGetBlockHeadersDataEncodeDecode(t *testing.T) {
 	// Create a "random" hash for testing
 	var hash common.Hash
-	for i, _ := range hash {
+	for i := range hash {
 		hash[i] = byte(i)
 	}
 	// Assemble some table driven tests

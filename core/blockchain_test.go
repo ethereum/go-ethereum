@@ -1107,7 +1107,7 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 
 	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *BlockGen) {})
 
-	for i, _ := range chain {
+	for i := range chain {
 		go func(block *types.Block) {
 			// try to retrieve a block by its canonical hash and see if the block data can be retrieved.
 			for {

@@ -326,7 +326,7 @@ func (s *Service) login(in *json.Decoder, out *json.Encoder) error {
 		Secret: s.pass,
 	}
 	login := map[string][]interface{}{
-		"emit": []interface{}{"hello", auth},
+		"emit": {"hello", auth},
 	}
 	if err := out.Encode(login); err != nil {
 		return err
@@ -365,7 +365,7 @@ func (s *Service) reportLatency(out *json.Encoder) error {
 	start := time.Now()
 
 	ping := map[string][]interface{}{
-		"emit": []interface{}{"node-ping", map[string]string{
+		"emit": {"node-ping", map[string]string{
 			"id":         s.node,
 			"clientTime": start.String(),
 		}},
@@ -383,7 +383,7 @@ func (s *Service) reportLatency(out *json.Encoder) error {
 	}
 	// Send back the measured latency
 	latency := map[string][]interface{}{
-		"emit": []interface{}{"latency", map[string]string{
+		"emit": {"latency", map[string]string{
 			"id":      s.node,
 			"latency": strconv.Itoa(int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000)),
 		}},
@@ -438,7 +438,7 @@ func (s *Service) reportBlock(out *json.Encoder, block *types.Block) error {
 		"block": s.assembleBlockStats(block),
 	}
 	report := map[string][]interface{}{
-		"emit": []interface{}{"block", stats},
+		"emit": {"block", stats},
 	}
 	if err := out.Encode(report); err != nil {
 		return err
@@ -531,7 +531,7 @@ func (s *Service) reportHistory(out *json.Encoder, list []uint64) error {
 		"history": history,
 	}
 	report := map[string][]interface{}{
-		"emit": []interface{}{"history", stats},
+		"emit": {"history", stats},
 	}
 	if err := out.Encode(report); err != nil {
 		return err
@@ -562,7 +562,7 @@ func (s *Service) reportPending(out *json.Encoder) error {
 		},
 	}
 	report := map[string][]interface{}{
-		"emit": []interface{}{"pending", stats},
+		"emit": {"pending", stats},
 	}
 	if err := out.Encode(report); err != nil {
 		return err
@@ -616,7 +616,7 @@ func (s *Service) reportStats(out *json.Encoder) error {
 		},
 	}
 	report := map[string][]interface{}{
-		"emit": []interface{}{"stats", stats},
+		"emit": {"stats", stats},
 	}
 	if err := out.Encode(report); err != nil {
 		return err

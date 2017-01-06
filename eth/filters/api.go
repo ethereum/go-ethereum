@@ -505,7 +505,7 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 			switch topic := t.(type) {
 			case nil:
 				// ignore topic when matching logs
-				args.Topics[i] = []common.Hash{common.Hash{}}
+				args.Topics[i] = []common.Hash{{}}
 
 			case string:
 				// match specific topic

@@ -609,7 +609,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 	if queued > maxQueuedInTotal {
 		// Sort all accounts with queued transactions by heartbeat
 		addresses := make(addresssByHeartbeat, 0, len(pool.queue))
-		for addr, _ := range pool.queue {
+		for addr := range pool.queue {
 			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
 		}
 		sort.Sort(addresses)

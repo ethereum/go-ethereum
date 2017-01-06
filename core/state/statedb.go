@@ -479,7 +479,7 @@ func (self *StateDB) Copy() *StateDB {
 		logSize:           self.logSize,
 	}
 	// Copy the dirty states and logs
-	for addr, _ := range self.stateObjectsDirty {
+	for addr := range self.stateObjectsDirty {
 		state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state, state.MarkStateObjectDirty)
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
@@ -530,7 +530,7 @@ func (self *StateDB) GetRefund() *big.Int {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	for addr, _ := range s.stateObjectsDirty {
+	for addr := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
 		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
 			s.deleteStateObject(stateObject)
@@ -553,7 +553,7 @@ func (s *StateDB) DeleteSuicides() {
 	// Reset refund so that any used-gas calculations can use this method.
 	s.clearJournalAndRefund()
 
-	for addr, _ := range s.stateObjectsDirty {
+	for addr := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
 
 		// If the object has been removed by a suicide

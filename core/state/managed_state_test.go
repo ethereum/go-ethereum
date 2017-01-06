@@ -52,7 +52,7 @@ func TestRemove(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -68,7 +68,7 @@ func TestReuse(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -84,7 +84,7 @@ func TestReuse(t *testing.T) {
 func TestRemoteNonceChange(t *testing.T) {
 	ms, account := create()
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)

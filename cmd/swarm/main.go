@@ -129,7 +129,7 @@ func init() {
 	app.HideVersion = true // we have a command to print the version
 	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
-		cli.Command{
+		{
 			Action:    version,
 			Name:      "version",
 			Usage:     "Print version numbers",
@@ -138,7 +138,7 @@ func init() {
 The output of this command is supposed to be machine-readable.
 `,
 		},
-		cli.Command{
+		{
 			Action:    upload,
 			Name:      "up",
 			Usage:     "upload a file or directory to swarm using the HTTP API",
@@ -147,7 +147,7 @@ The output of this command is supposed to be machine-readable.
 "upload a file or directory to swarm using the HTTP API and prints the root hash",
 `,
 		},
-		cli.Command{
+		{
 			Action:    hash,
 			Name:      "hash",
 			Usage:     "print the swarm hash of a file or directory",

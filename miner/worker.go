@@ -256,7 +256,7 @@ func (self *worker) update() {
 				self.currentMu.Lock()
 
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
-				txs := map[common.Address]types.Transactions{acc: types.Transactions{ev.Tx}}
+				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
 
 				self.current.commitTransactions(self.mux, txset, self.gasPrice, self.chain)

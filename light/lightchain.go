@@ -135,7 +135,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 		return nil, err
 	}
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
-	for hash, _ := range core.BadHashes {
+	for hash := range core.BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			glog.V(logger.Error).Infof("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4])
 			bc.SetHead(header.Number.Uint64() - 1)
