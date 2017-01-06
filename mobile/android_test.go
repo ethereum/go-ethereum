@@ -69,7 +69,7 @@ public class AndroidTest extends InstrumentationTestCase {
 			Hash txHash = new Hash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 
 			// Sign a transaction with a single authorization
-			byte[] signature = am.signWithPassphrase(signer, "Signer password", txHash.getBytes());
+			byte[] signature = am.signPassphrase(signer, "Signer password", txHash.getBytes());
 
 			// Sign a transaction with multiple manually cancelled authorizations
 			am.unlock(signer, "Signer password");

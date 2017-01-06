@@ -115,10 +115,10 @@ func (am *AccountManager) Sign(address *Address, hash []byte) (signature []byte,
 	return am.manager.Sign(address.address, hash)
 }
 
-// SignWithPassphrase signs hash if the private key matching the given address
-// can be decrypted with the given passphrase. The produced signature is in the
+// SignPassphrase signs hash if the private key matching the given address can
+// be decrypted with the given passphrase. The produced signature is in the
 // [R || S || V] format where V is 0 or 1.
-func (am *AccountManager) SignWithPassphrase(account *Account, passphrase string, hash []byte) (signature []byte, _ error) {
+func (am *AccountManager) SignPassphrase(account *Account, passphrase string, hash []byte) (signature []byte, _ error) {
 	return am.manager.SignWithPassphrase(account.account, passphrase, hash)
 }
 
