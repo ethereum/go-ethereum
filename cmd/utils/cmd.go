@@ -67,7 +67,6 @@ func Fatalf(format string, args ...interface{}) {
 		}
 	}
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	logger.Flush()
 	os.Exit(1)
 }
 

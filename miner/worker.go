@@ -39,8 +39,6 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-var jsonlogger = logger.NewJsonLogger()
-
 const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5

@@ -46,9 +46,6 @@ import (
 )
 
 var (
-	chainlogger = logger.NewLogger("CHAIN")
-	jsonlogger  = logger.NewJsonLogger()
-
 	blockInsertTimer = metrics.NewTimer("chain/inserts")
 
 	ErrNoGenesis = errors.New("Genesis not found in chain")
