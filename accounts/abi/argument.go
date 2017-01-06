@@ -31,8 +31,8 @@ type Argument struct {
 
 func (a *Argument) UnmarshalJSON(data []byte) error {
 	var extarg struct {
-		Name string
-		Type string
+		Name    string
+		Type    string
 		Indexed bool
 	}
 	err := json.Unmarshal(data, &extarg)

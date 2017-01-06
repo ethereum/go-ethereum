@@ -1123,15 +1123,20 @@ func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(int, bo
 			callback(i, progressed, errNoFetchesPending)
 			return
 		}
-		if prog, _, err := q.stateScheduler.Process([]trie.SyncResult{result}); err != nil {
-			// Processing a state result failed, bail out
+
+		batch := q.stateDatabase.NewBatch()
+		prog, _, err := q.stateScheduler.Process([]trie.SyncResult{result}, batch)
+		if err != nil {
 			q.stateSchedLock.Unlock()
 			callback(i, progressed, err)
-			return
-		} else if prog {
-			progressed = true
 		}
+		if err = batch.Write(); err != nil {
+			q.stateSchedLock.Unlock()
+			callback(i, progressed, err)
+		}
+
 		// Item processing succeeded, release the lock (temporarily)
+		progressed = progressed || prog
 		q.stateSchedLock.Unlock()
 	}
 	callback(len(results), progressed, nil)

@@ -85,8 +85,8 @@ func NewChainConfig() *ChainConfig {
 // by the foundation running the V5 discovery protocol.
 func FoundationBootnodes() *Enodes {
 	nodes := &Enodes{nodes: make([]*discv5.Node, len(params.DiscoveryV5Bootnodes))}
-	for i, node := range params.DiscoveryV5Bootnodes {
-		nodes.nodes[i] = node
+	for i, url := range params.DiscoveryV5Bootnodes {
+		nodes.nodes[i] = discv5.MustParseNode(url)
 	}
 	return nodes
 }

@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -32,7 +31,7 @@ import (
 type StateSync trie.TrieSync
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
+func NewStateSync(root common.Hash, database trie.DatabaseReader) *StateSync {
 	var syncer *trie.TrieSync
 
 	callback := func(leaf []byte, parent common.Hash) error {
@@ -62,8 +61,8 @@ func (s *StateSync) Missing(max int) []common.Hash {
 // Process injects a batch of retrieved trie nodes data, returning if something
 // was committed to the database and also the index of an entry if processing of
 // it failed.
-func (s *StateSync) Process(list []trie.SyncResult) (bool, int, error) {
-	return (*trie.TrieSync)(s).Process(list)
+func (s *StateSync) Process(list []trie.SyncResult, dbw trie.DatabaseWriter) (bool, int, error) {
+	return (*trie.TrieSync)(s).Process(list, dbw)
 }
 
 // Pending returns the number of state entries currently pending for download.

@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -263,30 +262,30 @@ func TestLogFilter(t *testing.T) {
 		notUsedTopic   = common.HexToHash("0x9999999999999999999999999999999999999999999999999999999999999999")
 
 		// posted twice, once as vm.Logs and once as core.PendingLogsEvent
-		allLogs = vm.Logs{
-			vm.NewLog(firstAddr, []common.Hash{}, []byte(""), 0),
-			vm.NewLog(firstAddr, []common.Hash{firstTopic}, []byte(""), 1),
-			vm.NewLog(secondAddr, []common.Hash{firstTopic}, []byte(""), 1),
-			vm.NewLog(thirdAddress, []common.Hash{secondTopic}, []byte(""), 2),
-			vm.NewLog(thirdAddress, []common.Hash{secondTopic}, []byte(""), 3),
+		allLogs = []*types.Log{
+			{Address: firstAddr},
+			{Address: firstAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 1},
+			{Address: secondAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 1},
+			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 2},
+			{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 3},
 		}
 
-		expectedCase7  = vm.Logs{allLogs[3], allLogs[4], allLogs[0], allLogs[1], allLogs[2], allLogs[3], allLogs[4]}
-		expectedCase11 = vm.Logs{allLogs[1], allLogs[2], allLogs[1], allLogs[2]}
+		expectedCase7  = []*types.Log{allLogs[3], allLogs[4], allLogs[0], allLogs[1], allLogs[2], allLogs[3], allLogs[4]}
+		expectedCase11 = []*types.Log{allLogs[1], allLogs[2], allLogs[1], allLogs[2]}
 
 		testCases = []struct {
 			crit     FilterCriteria
-			expected vm.Logs
+			expected []*types.Log
 			id       rpc.ID
 		}{
 			// match all
 			0: {FilterCriteria{}, allLogs, ""},
 			// match none due to no matching addresses
-			1: {FilterCriteria{Addresses: []common.Address{common.Address{}, notUsedAddress}, Topics: [][]common.Hash{allLogs[0].Topics}}, vm.Logs{}, ""},
+			1: {FilterCriteria{Addresses: []common.Address{common.Address{}, notUsedAddress}, Topics: [][]common.Hash{allLogs[0].Topics}}, []*types.Log{}, ""},
 			// match logs based on addresses, ignore topics
 			2: {FilterCriteria{Addresses: []common.Address{firstAddr}}, allLogs[:2], ""},
 			// match none due to no matching topics (match with address)
-			3: {FilterCriteria{Addresses: []common.Address{secondAddr}, Topics: [][]common.Hash{[]common.Hash{notUsedTopic}}}, vm.Logs{}, ""},
+			3: {FilterCriteria{Addresses: []common.Address{secondAddr}, Topics: [][]common.Hash{[]common.Hash{notUsedTopic}}}, []*types.Log{}, ""},
 			// match logs based on addresses and topics
 			4: {FilterCriteria{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{[]common.Hash{firstTopic, secondTopic}}}, allLogs[3:5], ""},
 			// match logs based on multiple addresses and "or" topics
@@ -321,14 +320,14 @@ func TestLogFilter(t *testing.T) {
 	}
 
 	for i, tt := range testCases {
-		var fetched []*vm.Log
+		var fetched []*types.Log
 		for { // fetch all expected logs
 			results, err := api.GetFilterChanges(tt.id)
 			if err != nil {
 				t.Fatalf("Unable to fetch logs: %v", err)
 			}
 
-			fetched = append(fetched, results.([]*vm.Log)...)
+			fetched = append(fetched, results.([]*types.Log)...)
 			if len(fetched) >= len(tt.expected) {
 				break
 			}
@@ -373,21 +372,21 @@ func TestPendingLogsSubscription(t *testing.T) {
 		notUsedTopic   = common.HexToHash("0x9999999999999999999999999999999999999999999999999999999999999999")
 
 		allLogs = []core.PendingLogsEvent{
-			core.PendingLogsEvent{Logs: vm.Logs{vm.NewLog(firstAddr, []common.Hash{}, []byte(""), 0)}},
-			core.PendingLogsEvent{Logs: vm.Logs{vm.NewLog(firstAddr, []common.Hash{firstTopic}, []byte(""), 1)}},
-			core.PendingLogsEvent{Logs: vm.Logs{vm.NewLog(secondAddr, []common.Hash{firstTopic}, []byte(""), 2)}},
-			core.PendingLogsEvent{Logs: vm.Logs{vm.NewLog(thirdAddress, []common.Hash{secondTopic}, []byte(""), 3)}},
-			core.PendingLogsEvent{Logs: vm.Logs{vm.NewLog(thirdAddress, []common.Hash{secondTopic}, []byte(""), 4)}},
-			core.PendingLogsEvent{Logs: vm.Logs{
-				vm.NewLog(thirdAddress, []common.Hash{firstTopic}, []byte(""), 5),
-				vm.NewLog(thirdAddress, []common.Hash{thirdTopic}, []byte(""), 5),
-				vm.NewLog(thirdAddress, []common.Hash{forthTopic}, []byte(""), 5),
-				vm.NewLog(firstAddr, []common.Hash{firstTopic}, []byte(""), 5),
+			{Logs: []*types.Log{{Address: firstAddr, Topics: []common.Hash{}, BlockNumber: 0}}},
+			{Logs: []*types.Log{{Address: firstAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 1}}},
+			{Logs: []*types.Log{{Address: secondAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 2}}},
+			{Logs: []*types.Log{{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 3}}},
+			{Logs: []*types.Log{{Address: thirdAddress, Topics: []common.Hash{secondTopic}, BlockNumber: 4}}},
+			{Logs: []*types.Log{
+				{Address: thirdAddress, Topics: []common.Hash{firstTopic}, BlockNumber: 5},
+				{Address: thirdAddress, Topics: []common.Hash{thirdTopic}, BlockNumber: 5},
+				{Address: thirdAddress, Topics: []common.Hash{forthTopic}, BlockNumber: 5},
+				{Address: firstAddr, Topics: []common.Hash{firstTopic}, BlockNumber: 5},
 			}},
 		}
 
-		convertLogs = func(pl []core.PendingLogsEvent) vm.Logs {
-			var logs vm.Logs
+		convertLogs = func(pl []core.PendingLogsEvent) []*types.Log {
+			var logs []*types.Log
 			for _, l := range pl {
 				logs = append(logs, l.Logs...)
 			}
@@ -396,18 +395,18 @@ func TestPendingLogsSubscription(t *testing.T) {
 
 		testCases = []struct {
 			crit     FilterCriteria
-			expected vm.Logs
-			c        chan []*vm.Log
+			expected []*types.Log
+			c        chan []*types.Log
 			sub      *Subscription
 		}{
 			// match all
 			{FilterCriteria{}, convertLogs(allLogs), nil, nil},
 			// match none due to no matching addresses
-			{FilterCriteria{Addresses: []common.Address{common.Address{}, notUsedAddress}, Topics: [][]common.Hash{[]common.Hash{}}}, vm.Logs{}, nil, nil},
+			{FilterCriteria{Addresses: []common.Address{common.Address{}, notUsedAddress}, Topics: [][]common.Hash{[]common.Hash{}}}, []*types.Log{}, nil, nil},
 			// match logs based on addresses, ignore topics
 			{FilterCriteria{Addresses: []common.Address{firstAddr}}, append(convertLogs(allLogs[:2]), allLogs[5].Logs[3]), nil, nil},
 			// match none due to no matching topics (match with address)
-			{FilterCriteria{Addresses: []common.Address{secondAddr}, Topics: [][]common.Hash{[]common.Hash{notUsedTopic}}}, vm.Logs{}, nil, nil},
+			{FilterCriteria{Addresses: []common.Address{secondAddr}, Topics: [][]common.Hash{[]common.Hash{notUsedTopic}}}, []*types.Log{}, nil, nil},
 			// match logs based on addresses and topics
 			{FilterCriteria{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{[]common.Hash{firstTopic, secondTopic}}}, append(convertLogs(allLogs[3:5]), allLogs[5].Logs[0]), nil, nil},
 			// match logs based on multiple addresses and "or" topics
@@ -415,7 +414,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 			// block numbers are ignored for filters created with New***Filter, these return all logs that match the given criterias when the state changes
 			{FilterCriteria{Addresses: []common.Address{firstAddr}, FromBlock: big.NewInt(2), ToBlock: big.NewInt(3)}, append(convertLogs(allLogs[:2]), allLogs[5].Logs[3]), nil, nil},
 			// multiple pending logs, should match only 2 topics from the logs in block 5
-			{FilterCriteria{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{[]common.Hash{firstTopic, forthTopic}}}, vm.Logs{allLogs[5].Logs[0], allLogs[5].Logs[2]}, nil, nil},
+			{FilterCriteria{Addresses: []common.Address{thirdAddress}, Topics: [][]common.Hash{[]common.Hash{firstTopic, forthTopic}}}, []*types.Log{allLogs[5].Logs[0], allLogs[5].Logs[2]}, nil, nil},
 		}
 	)
 
@@ -423,7 +422,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 	// on slow machines this could otherwise lead to missing events when the subscription is created after
 	// (some) events are posted.
 	for i := range testCases {
-		testCases[i].c = make(chan []*vm.Log)
+		testCases[i].c = make(chan []*types.Log)
 		testCases[i].sub, _ = api.events.SubscribeLogs(testCases[i].crit, testCases[i].c)
 	}
 
@@ -431,7 +430,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		i := n
 		tt := test
 		go func() {
-			var fetched []*vm.Log
+			var fetched []*types.Log
 		fetchLoop:
 			for {
 				logs := <-tt.c
