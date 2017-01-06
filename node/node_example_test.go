@@ -44,7 +44,7 @@ func (s *SampleService) Stop() error               { fmt.Println("Service stoppi
 func ExampleUsage() {
 	// Create a network node to run protocols with the default values. The below list
 	// is only used to display each of the configuration options. All of these could
-	// have been ommited if the default behavior is desired.
+	// have been omitted if the default behavior is desired.
 	nodeConfig := &node.Config{
 		DataDir:         "",                 // Empty uses ephemeral storage
 		PrivateKey:      nil,                // Nil generates a node key on the fly

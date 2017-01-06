@@ -49,7 +49,7 @@ import (
 
 /*
    TODO:
-   > store private keys in buffer and shuffle (deters persistance on swap disc)
+   > store private keys in buffer and shuffle (deters persistence on swap disc)
    > byte permutation (changing)
    > xor with chaning random block (to deter scanning memory for 0x63) (stream cipher?)
 */

@@ -114,7 +114,7 @@ var (
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
-		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied seperated by a ',')",
+		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
 	}
 )
 

@@ -194,9 +194,9 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 
 // Sign calculates an ECDSA signature.
 //
-// This function is susceptible to choosen plaintext attacks that can leak
+// This function is susceptible to chosen plaintext attacks that can leak
 // information about the private key that is used for signing. Callers must
-// be aware that the given hash cannot be choosen by an adversery. Common
+// be aware that the given hash cannot be chosen by an adversery. Common
 // solution is to hash any input before calculating the signature.
 //
 // The produced signature is in the [R || S || V] format where V is 0 or 1.

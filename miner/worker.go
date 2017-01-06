@@ -492,7 +492,7 @@ func (self *worker) commitNewWork() {
 			}
 			badUncles = append(badUncles, hash)
 		} else {
-			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])
+			glog.V(logger.Debug).Infof("committing %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}

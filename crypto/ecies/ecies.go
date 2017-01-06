@@ -93,7 +93,7 @@ func ImportECDSA(prv *ecdsa.PrivateKey) *PrivateKey {
 }
 
 // Generate an elliptic curve public / private keypair. If params is nil,
-// the recommended default paramters for the key will be chosen.
+// the recommended default parameters for the key will be chosen.
 func GenerateKey(rand io.Reader, curve elliptic.Curve, params *ECIESParams) (prv *PrivateKey, err error) {
 	pb, x, y, err := elliptic.GenerateKey(curve, rand)
 	if err != nil {

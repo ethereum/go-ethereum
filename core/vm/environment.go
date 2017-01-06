@@ -34,7 +34,7 @@ type (
 	GetHashFunc func(uint64) common.Hash
 )
 
-// Context provides the EVM with auxilary information. Once provided it shouldn't be modified.
+// Context provides the EVM with auxiliary information. Once provided it shouldn't be modified.
 type Context struct {
 	// CanTransfer returns whether the account contains
 	// sufficient ether to transfer the value
@@ -99,7 +99,7 @@ func (evm *EVM) Cancel() {
 	atomic.StoreInt32(&evm.abort, 1)
 }
 
-// Call executes the contract associated with the addr with the given input as paramaters. It also handles any
+// Call executes the contract associated with the addr with the given input as parameters. It also handles any
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
 func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
@@ -157,7 +157,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 	return ret, err
 }
 
-// CallCode executes the contract associated with the addr with the given input as paramaters. It also handles any
+// CallCode executes the contract associated with the addr with the given input as parameters. It also handles any
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
 //
@@ -203,7 +203,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	return ret, err
 }
 
-// DelegateCall executes the contract associated with the addr with the given input as paramaters.
+// DelegateCall executes the contract associated with the addr with the given input as parameters.
 // It reverses the state in case of an execution error.
 //
 // DelegateCall differs from CallCode in the sense that it executes the given address' code with the caller as context

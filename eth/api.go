@@ -435,7 +435,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, logConfig *vm.LogConf
 	return true, structLogger.StructLogs(), nil
 }
 
-// callmsg is the message type used for call transations.
+// callmsg is the message type used for call transitions.
 type callmsg struct {
 	addr          common.Address
 	to            *common.Address

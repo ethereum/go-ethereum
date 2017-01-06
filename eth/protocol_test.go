@@ -82,7 +82,7 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 				t.Errorf("test %d: wrong error: got %q, want %q", i, err, test.wantError)
 			}
 		case <-time.After(2 * time.Second):
-			t.Errorf("protocol did not shut down withing 2 seconds")
+			t.Errorf("protocol did not shut down within 2 seconds")
 		}
 		p.close()
 	}

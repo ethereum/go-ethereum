@@ -46,7 +46,7 @@ func newBridge(client *rpc.Client, prompter UserPrompter, printer io.Writer) *br
 }
 
 // NewAccount is a wrapper around the personal.newAccount RPC method that uses a
-// non-echoing password prompt to aquire the passphrase and executes the original
+// non-echoing password prompt to acquire the passphrase and executes the original
 // RPC method (saved in jeth.newAccount) with it to actually execute the RPC call.
 func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	var (
@@ -75,7 +75,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 	default:
 		throwJSException("expected 0 or 1 string argument")
 	}
-	// Password aquired, execute the call and return
+	// Password acquired, execute the call and return
 	ret, err := call.Otto.Call("jeth.newAccount", nil, password)
 	if err != nil {
 		throwJSException(err.Error())
@@ -84,7 +84,7 @@ func (b *bridge) NewAccount(call otto.FunctionCall) (response otto.Value) {
 }
 
 // UnlockAccount is a wrapper around the personal.unlockAccount RPC method that
-// uses a non-echoing password prompt to aquire the passphrase and executes the
+// uses a non-echoing password prompt to acquire the passphrase and executes the
 // original RPC method (saved in jeth.unlockAccount) with it to actually execute
 // the RPC call.
 func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
@@ -127,7 +127,7 @@ func (b *bridge) UnlockAccount(call otto.FunctionCall) (response otto.Value) {
 }
 
 // Sign is a wrapper around the personal.sign RPC method that uses a non-echoing password
-// prompt to aquire the passphrase and executes the original RPC method (saved in
+// prompt to acquire the passphrase and executes the original RPC method (saved in
 // jeth.sign) with it to actually execute the RPC call.
 func (b *bridge) Sign(call otto.FunctionCall) (response otto.Value) {
 	var (

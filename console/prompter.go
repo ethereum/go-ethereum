@@ -44,7 +44,7 @@ type UserPrompter interface {
 	PromptConfirm(prompt string) (bool, error)
 
 	// SetHistory sets the the input scrollback history that the prompter will allow
-	// the user to scoll back to.
+	// the user to scroll back to.
 	SetHistory(history []string)
 
 	// AppendHistory appends an entry to the scrollback history. It should be called
@@ -147,7 +147,7 @@ func (p *terminalPrompter) PromptConfirm(prompt string) (bool, error) {
 }
 
 // SetHistory sets the the input scrollback history that the prompter will allow
-// the user to scoll back to.
+// the user to scroll back to.
 func (p *terminalPrompter) SetHistory(history []string) {
 	p.State.ReadHistory(strings.NewReader(strings.Join(history, "\n")))
 }

@@ -2278,7 +2278,7 @@ var toTwosComplement = function (number) {
  * Checks if the given string is strictly an address
  *
  * @method isStrictAddress
- * @param {String} address the given HEX adress
+ * @param {String} address the given HEX address
  * @return {Boolean}
 */
 var isStrictAddress = function (address) {
@@ -2289,7 +2289,7 @@ var isStrictAddress = function (address) {
  * Checks if the given string is an address
  *
  * @method isAddress
- * @param {String} address the given HEX adress
+ * @param {String} address the given HEX address
  * @return {Boolean}
 */
 var isAddress = function (address) {
@@ -2311,7 +2311,7 @@ var isAddress = function (address) {
  * Checks if the given string is a checksummed address
  *
  * @method isChecksumAddress
- * @param {String} address the given HEX adress
+ * @param {String} address the given HEX address
  * @return {Boolean}
 */
 var isChecksumAddress = function (address) {
@@ -2334,7 +2334,7 @@ var isChecksumAddress = function (address) {
  * Makes a checksum address
  *
  * @method toChecksumAddress
- * @param {String} address the given HEX adress
+ * @param {String} address the given HEX address
  * @return {String}
 */
 var toChecksumAddress = function (address) {
@@ -2356,7 +2356,7 @@ var toChecksumAddress = function (address) {
 };
 
 /**
- * Transforms given string to valid 20 bytes-length addres with 0x prefix
+ * Transforms given string to valid 20 bytes-length address with 0x prefix
  *
  * @method toAddress
  * @param {String} address
@@ -3000,7 +3000,7 @@ var ContractFactory = function (eth, abi) {
 
         if (callback) {
 
-            // wait for the contract address adn check if the code was deployed
+            // wait for the contract address and check if the code was deployed
             this.eth.sendTransaction(options, function (err, hash) {
                 if (err) {
                     callback(err);
@@ -3480,7 +3480,7 @@ Adds the callback and sets up the methods, to iterate over the results.
 
 @method getLogsAtStart
 @param {Object} self
-@param {funciton}
+@param {function}
 */
 var getLogsAtStart = function(self, callback){
     // call getFilterLogs for the first watch callback start
@@ -6429,7 +6429,7 @@ var transferToAddress = function (eth, from, to, value, callback) {
  * @method deposit
  * @param {String} from
  * @param {String} to
- * @param {Value} value to be transfered
+ * @param {Value} value to be transferred
  * @param {String} client unique identifier
  * @param {Function} callback, callback
  */
@@ -13381,10 +13381,10 @@ module.exports = transfer;
              *             equivalent to (a % n) in JavaScript.
              * FLOOR     3 The remainder has the same sign as the divisor (Python %).
              * HALF_EVEN 6 This modulo mode implements the IEEE 754 remainder function.
-             * EUCLID    9 Euclidian division. q = sign(n) * floor(a / abs(n)).
+             * EUCLID    9 Euclidean division. q = sign(n) * floor(a / abs(n)).
              *             The remainder is always positive.
              *
-             * The truncated division, floored division, Euclidian division and IEEE 754 remainder
+             * The truncated division, floored division, Euclidean division and IEEE 754 remainder
              * modes are commonly used for the modulus operation.
              * Although the other rounding modes can also be used, they may not give useful results.
              */
@@ -15002,7 +15002,7 @@ module.exports = transfer;
 
             if ( MODULO_MODE == 9 ) {
 
-                // Euclidian division: q = sign(y) * floor(x / abs(y))
+                // Euclidean division: q = sign(y) * floor(x / abs(y))
                 // r = x - qy    where  0 <= r < abs(y)
                 s = y.s;
                 y.s = 1;

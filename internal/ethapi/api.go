@@ -470,7 +470,7 @@ func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.A
 	return res.Hex(), nil
 }
 
-// callmsg is the message type used for call transations.
+// callmsg is the message type used for call transitions.
 type callmsg struct {
 	addr          common.Address
 	to            *common.Address
@@ -541,14 +541,14 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	if err := vmError(); err != nil {
 		return "0x", common.Big0, err
 	}
-	if len(res) == 0 { // backwards compatability
+	if len(res) == 0 { // backwards compatibility
 		return "0x", gas, err
 	}
 	return common.ToHex(res), gas, err
 }
 
 // Call executes the given transaction on the state for the given block number.
-// It doesn't make and changes in the state/blockchain and is usefull to execute and retrieve values.
+// It doesn't make and changes in the state/blockchain and is useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber) (string, error) {
 	result, _, err := s.doCall(ctx, args, blockNr)
 	return result, err
