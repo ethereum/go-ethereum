@@ -104,10 +104,10 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 	}
 
 	padsz := len(decrypted.Padding)
-	if bytes.Compare(steg[:padsz], decrypted.Padding) != 0 {
+	if !bytes.Equal(steg[:padsz], decrypted.Padding) {
 		t.Fatalf("failed with seed %d: compare padding.", seed)
 	}
-	if bytes.Compare(text, decrypted.Payload) != 0 {
+	if !bytes.Equal(text, decrypted.Payload) {
 		t.Fatalf("failed with seed %d: compare payload.", seed)
 	}
 	if !isMessageSigned(decrypted.Raw[0]) {
@@ -256,10 +256,10 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 	}
 
 	padsz := len(decrypted.Padding)
-	if bytes.Compare(steg[:padsz], decrypted.Padding) != 0 {
+	if !bytes.Equal(steg[:padsz], decrypted.Padding) {
 		t.Fatalf("failed with seed %d: compare padding.", seed)
 	}
-	if bytes.Compare(text, decrypted.Payload) != 0 {
+	if !bytes.Equal(text, decrypted.Payload) {
 		t.Fatalf("failed with seed %d: compare payload.", seed)
 	}
 	if !isMessageSigned(decrypted.Raw[0]) {

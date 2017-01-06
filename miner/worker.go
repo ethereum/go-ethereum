@@ -449,7 +449,7 @@ func (self *worker) commitNewWork() {
 			// Depending whether we support or oppose the fork, override differently
 			if self.config.DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Compare(header.Extra, params.DAOForkBlockExtra) == 0 {
+			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
 			}
 		}

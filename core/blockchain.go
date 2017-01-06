@@ -402,10 +402,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 // Export writes the active chain to the given writer.
 func (self *BlockChain) Export(w io.Writer) error {
-	if err := self.ExportN(w, uint64(0), self.currentBlock.NumberU64()); err != nil {
-		return err
-	}
-	return nil
+	return self.ExportN(w, uint64(0), self.currentBlock.NumberU64())
 }
 
 // ExportN writes a subset of the active chain to the given writer.

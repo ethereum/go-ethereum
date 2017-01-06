@@ -84,7 +84,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 		if nonce := state.GetNonce(acc.address); nonce != acc.nonce {
 			t.Errorf("account %d: nonce mismatch: have %v, want %v", i, nonce, acc.nonce)
 		}
-		if code := state.GetCode(acc.address); bytes.Compare(code, acc.code) != 0 {
+		if code := state.GetCode(acc.address); !bytes.Equal(code, acc.code) {
 			t.Errorf("account %d: code mismatch: have %x, want %x", i, code, acc.code)
 		}
 	}
@@ -294,7 +294,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			// Skim through the accounts and make sure the root hash is not a code node
 			codeHash := false
 			for _, acc := range srcAccounts {
-				if bytes.Compare(root.Bytes(), crypto.Sha3(acc.code)) == 0 {
+				if root == crypto.Keccak256Hash(acc.code) {
 					codeHash = true
 					break
 				}

@@ -218,7 +218,7 @@ func TestServiceRestarts(t *testing.T) {
 	}
 	defer stack.Stop()
 
-	if running != true || started != 1 {
+	if running || started != 1 {
 		t.Fatalf("running/started mismatch: have %v/%d, want true/1", running, started)
 	}
 	// Restart the stack a few times and check successful service restarts
@@ -227,7 +227,7 @@ func TestServiceRestarts(t *testing.T) {
 			t.Fatalf("iter %d: failed to restart stack: %v", i, err)
 		}
 	}
-	if running != true || started != 4 {
+	if !running || started != 4 {
 		t.Fatalf("running/started mismatch: have %v/%d, want true/4", running, started)
 	}
 }

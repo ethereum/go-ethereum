@@ -120,10 +120,7 @@ func (self filterer) Compare(f filter.Filter) bool {
 			break
 		}
 	}
-	if !self.matcher.Matches(topics) {
-		return false
-	}
-	return true
+	return self.matcher.Matches(topics)
 }
 
 // Trigger is called when a filter successfully matches an inbound message.

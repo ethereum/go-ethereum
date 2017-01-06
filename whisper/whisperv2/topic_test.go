@@ -33,13 +33,13 @@ func TestTopicCreation(t *testing.T) {
 	// Create the topics individually
 	for i, tt := range topicCreationTests {
 		topic := NewTopic(tt.data)
-		if bytes.Compare(topic[:], tt.hash[:]) != 0 {
+		if !bytes.Equal(topic[:], tt.hash[:]) {
 			t.Errorf("binary test %d: hash mismatch: have %v, want %v.", i, topic, tt.hash)
 		}
 	}
 	for i, tt := range topicCreationTests {
 		topic := NewTopicFromString(string(tt.data))
-		if bytes.Compare(topic[:], tt.hash[:]) != 0 {
+		if !bytes.Equal(topic[:], tt.hash[:]) {
 			t.Errorf("textual test %d: hash mismatch: have %v, want %v.", i, topic, tt.hash)
 		}
 	}
@@ -55,13 +55,13 @@ func TestTopicCreation(t *testing.T) {
 
 	topics := NewTopics(binaryData...)
 	for i, tt := range topicCreationTests {
-		if bytes.Compare(topics[i][:], tt.hash[:]) != 0 {
+		if !bytes.Equal(topics[i][:], tt.hash[:]) {
 			t.Errorf("binary batch test %d: hash mismatch: have %v, want %v.", i, topics[i], tt.hash)
 		}
 	}
 	topics = NewTopicsFromStrings(textualData...)
 	for i, tt := range topicCreationTests {
-		if bytes.Compare(topics[i][:], tt.hash[:]) != 0 {
+		if !bytes.Equal(topics[i][:], tt.hash[:]) {
 			t.Errorf("textual batch test %d: hash mismatch: have %v, want %v.", i, topics[i], tt.hash)
 		}
 	}

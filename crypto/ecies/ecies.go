@@ -291,9 +291,8 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 
 // Decrypt decrypts an ECIES ciphertext.
 func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err error) {
-	if c == nil || len(c) == 0 {
-		err = ErrInvalidMessage
-		return
+	if len(c) == 0 {
+		return nil, ErrInvalidMessage
 	}
 	params := prv.PublicKey.Params
 	if params == nil {

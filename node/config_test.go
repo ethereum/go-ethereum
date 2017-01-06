@@ -137,7 +137,7 @@ func TestNodeKeyPersistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read previously persisted node key: %v", err)
 	}
-	if bytes.Compare(blob1, blob2) != 0 {
+	if !bytes.Equal(blob1, blob2) {
 		t.Fatalf("persisted node key mismatch: have %x, want %x", blob2, blob1)
 	}
 

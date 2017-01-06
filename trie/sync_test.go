@@ -67,7 +67,7 @@ func checkTrieContents(t *testing.T, db Database, root []byte, content map[strin
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
 	for key, val := range content {
-		if have := trie.Get([]byte(key)); bytes.Compare(have, val) != 0 {
+		if have := trie.Get([]byte(key)); !bytes.Equal(have, val) {
 			t.Errorf("entry %x: content mismatch: have %x, want %x", key, have, val)
 		}
 	}

@@ -217,7 +217,7 @@ func TestValidateSignatureValues(t *testing.T) {
 
 func checkhash(t *testing.T, name string, f func([]byte) []byte, msg, exp []byte) {
 	sum := f(msg)
-	if bytes.Compare(exp, sum) != 0 {
+	if !bytes.Equal(exp, sum) {
 		t.Fatalf("hash %s mismatch: want: %x have: %x", name, exp, sum)
 	}
 }

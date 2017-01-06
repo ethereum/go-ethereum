@@ -239,7 +239,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k1 == nil {
 		t.Fatalf("first key does not exist.")
 	}
-	if bytes.Compare(k1, randomKey) == 0 {
+	if bytes.Equal(k1, randomKey) {
 		t.Fatalf("k1 == randomKey.")
 	}
 	if k2 != nil {
@@ -264,10 +264,10 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k2 == nil {
 		t.Fatalf("k2 does not exist.")
 	}
-	if bytes.Compare(k1, k2) == 0 {
+	if bytes.Equal(k1, k2) {
 		t.Fatalf("k1 == k2.")
 	}
-	if bytes.Compare(k1, randomKey) == 0 {
+	if bytes.Equal(k1, randomKey) {
 		t.Fatalf("k1 == randomKey.")
 	}
 	if len(k1) != aesKeyLength {

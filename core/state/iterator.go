@@ -123,7 +123,7 @@ func (it *NodeIterator) step() error {
 	if !it.dataIt.Next() {
 		it.dataIt = nil
 	}
-	if bytes.Compare(account.CodeHash, emptyCodeHash) != 0 {
+	if !bytes.Equal(account.CodeHash, emptyCodeHash) {
 		it.codeHash = common.BytesToHash(account.CodeHash)
 		it.code, err = it.state.db.Get(account.CodeHash)
 		if err != nil {

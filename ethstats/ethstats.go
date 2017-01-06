@@ -388,10 +388,7 @@ func (s *Service) reportLatency(out *json.Encoder) error {
 			"latency": strconv.Itoa(int((time.Since(start) / time.Duration(2)).Nanoseconds() / 1000000)),
 		}},
 	}
-	if err := out.Encode(latency); err != nil {
-		return err
-	}
-	return nil
+	return out.Encode(latency)
 }
 
 // blockStats is the information to report about individual blocks.
@@ -440,10 +437,7 @@ func (s *Service) reportBlock(out *json.Encoder, block *types.Block) error {
 	report := map[string][]interface{}{
 		"emit": {"block", stats},
 	}
-	if err := out.Encode(report); err != nil {
-		return err
-	}
-	return nil
+	return out.Encode(report)
 }
 
 // assembleBlockStats retrieves any required metadata to report a single block
@@ -497,9 +491,7 @@ func (s *Service) reportHistory(out *json.Encoder, list []uint64) error {
 	indexes := make([]uint64, 0, historyUpdateRange)
 	if len(list) > 0 {
 		// Specific indexes requested, send them back in particular
-		for _, idx := range list {
-			indexes = append(indexes, idx)
-		}
+		indexes = append(indexes, list...)
 	} else {
 		// No indexes requested, send back the top ones
 		var head *types.Header
@@ -533,10 +525,7 @@ func (s *Service) reportHistory(out *json.Encoder, list []uint64) error {
 	report := map[string][]interface{}{
 		"emit": {"history", stats},
 	}
-	if err := out.Encode(report); err != nil {
-		return err
-	}
-	return nil
+	return out.Encode(report)
 }
 
 // pendStats is the information to report about pending transactions.
@@ -564,10 +553,7 @@ func (s *Service) reportPending(out *json.Encoder) error {
 	report := map[string][]interface{}{
 		"emit": {"pending", stats},
 	}
-	if err := out.Encode(report); err != nil {
-		return err
-	}
-	return nil
+	return out.Encode(report)
 }
 
 // blockStats is the information to report about the local node.
@@ -618,8 +604,5 @@ func (s *Service) reportStats(out *json.Encoder) error {
 	report := map[string][]interface{}{
 		"emit": {"stats", stats},
 	}
-	if err := out.Encode(report); err != nil {
-		return err
-	}
-	return nil
+	return out.Encode(report)
 }
