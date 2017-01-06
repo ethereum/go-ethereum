@@ -22,9 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -96,27 +94,16 @@ func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	if solc == "" {
 		solc = "solc"
 	}
-	// Write source to a temporary file. Compiling stdin used to be supported
-	// but seems to produce an exception with solc 0.3.5.
-	infile, err := ioutil.TempFile("", "geth-compile-solidity")
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(infile.Name())
-	if _, err := io.WriteString(infile, source); err != nil {
-		return nil, err
-	}
-	if err := infile.Close(); err != nil {
-		return nil, err
-	}
-
-	return CompileSolidity(solc, infile.Name())
+	args := append(solcParams, "--")
+	cmd := exec.Command(solc, append(args, "-")...)
+	cmd.Stdin = strings.NewReader(source)
+	return runsolc(cmd, source)
 }
 
 // CompileSolidity compiles all given Solidity source files.
 func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, error) {
 	if len(sourcefiles) == 0 {
-		return nil, errors.New("solc: no source ")
+		return nil, errors.New("solc: no source files")
 	}
 	source, err := slurpFiles(sourcefiles)
 	if err != nil {
@@ -125,10 +112,13 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 	if solc == "" {
 		solc = "solc"
 	}
-
-	var stderr, stdout bytes.Buffer
 	args := append(solcParams, "--")
 	cmd := exec.Command(solc, append(args, sourcefiles...)...)
+	return runsolc(cmd, source)
+}
+
+func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
+	var stderr, stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
