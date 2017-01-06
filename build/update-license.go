@@ -294,7 +294,7 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-// fileInfo finds the lowest year in which the given file was commited.
+// fileInfo finds the lowest year in which the given file was committed.
 func fileInfo(file string) (*info, error) {
 	info := &info{file: file, Year: int64(time.Now().Year())}
 	cmd := exec.Command("git", "log", "--follow", "--find-renames=80", "--find-copies=80", "--pretty=format:%ai", "--", file)

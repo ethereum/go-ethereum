@@ -491,7 +491,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	if err := p2p.ExpectMsg(peer.app, GetBlockHeadersMsg, challenge); err != nil {
 		t.Fatalf("challenge mismatch: %v", err)
 	}
-	// Create a block to reply to the challenge if no timeout is simualted
+	// Create a block to reply to the challenge if no timeout is simulated
 	if !timeout {
 		blocks, _ := core.GenerateChain(&params.ChainConfig{}, genesis, db, 1, func(i int, block *core.BlockGen) {
 			if remoteForked {

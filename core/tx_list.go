@@ -216,7 +216,7 @@ func (m *txSortedMap) Flatten() types.Transactions {
 // txList is a "list" of transactions belonging to an account, sorted by account
 // nonce. The same type can be used both for storing contiguous transactions for
 // the executable/pending queue; and for storing gapped transactions for the non-
-// executable/future queue, with minor behavoiral changes.
+// executable/future queue, with minor behavioral changes.
 type txList struct {
 	strict  bool         // Whether nonces are strictly continuous or not
 	txs     *txSortedMap // Heap indexed sorted hash map of the transactions

@@ -178,7 +178,7 @@ func runVmTest(test VmTest) error {
 
 	// Check gas usage
 	if len(test.Gas) == 0 && err == nil {
-		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successfull")
+		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successful")
 	} else {
 		gexp := common.Big(test.Gas)
 		if gexp.Cmp(gas) != 0 {

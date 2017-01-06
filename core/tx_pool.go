@@ -321,7 +321,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 // add validates a transaction and inserts it into the non-executable queue for
 // later pending promotion and execution.
 func (pool *TxPool) add(tx *types.Transaction) error {
-	// If the transaction is alreayd known, discard it
+	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all[hash] != nil {
 		return fmt.Errorf("Known transaction: %x", hash[:4])

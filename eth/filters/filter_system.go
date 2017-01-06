@@ -37,7 +37,7 @@ import (
 type Type byte
 
 const (
-	// UnknownSubscription indicates an unkown subscription type
+	// UnknownSubscription indicates an unknown subscription type
 	UnknownSubscription Type = iota
 	// LogsSubscription queries for new or removed (chain reorg) logs
 	LogsSubscription

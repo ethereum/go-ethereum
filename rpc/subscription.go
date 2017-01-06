@@ -30,7 +30,7 @@ var (
 	ErrSubscriptionNotFound = errors.New("subscription not found")
 )
 
-// ID defines a psuedo random number that is used to identify RPC subscriptions.
+// ID defines a pseudo random number that is used to identify RPC subscriptions.
 type ID string
 
 // a Subscription is created by a notifier and tight to that notifier. The client can use
