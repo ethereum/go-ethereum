@@ -18,7 +18,6 @@ package types
 
 import (
 	"container/heap"
-	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -291,14 +290,6 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	var err error
 	msg.from, err = Sender(s, tx)
 	return msg, err
-}
-
-// SignECDSA signs the transaction using the given signer and private key
-//
-// XXX This only makes for a nice API: NewTx(...).SignECDSA(signer, prv). Should
-// we keep this?
-func (tx *Transaction) SignECDSA(signer Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	return signer.SignECDSA(tx, prv)
 }
 
 // WithSignature returns a new transaction with the given signature.

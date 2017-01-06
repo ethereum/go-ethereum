@@ -74,7 +74,7 @@ func txPoolTestChainGen(i int, block *core.BlockGen) {
 
 func TestTxPool(t *testing.T) {
 	for i, _ := range testTx {
-		testTx[i], _ = types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(types.HomesteadSigner{}, testBankKey)
+		testTx[i], _ = types.SignTx(types.NewTransaction(uint64(i), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	}
 
 	var (
