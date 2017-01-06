@@ -844,7 +844,7 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 		}
 	}
 	// Remove the expired requests from the pending pool
-	for id, _ := range expiries {
+	for id := range expiries {
 		delete(pendPool, id)
 	}
 	return expiries
@@ -1063,7 +1063,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 
 	// If no data was retrieved, mark their hashes as unavailable for the origin peer
 	if len(data) == 0 {
-		for hash, _ := range request.Hashes {
+		for hash := range request.Hashes {
 			request.Peer.MarkLacking(hash)
 		}
 	}

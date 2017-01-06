@@ -433,7 +433,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 			rc <- nn
 		}(nodes[i])
 	}
-	for _ = range nodes {
+	for range nodes {
 		if n := <-rc; n != nil {
 			result = append(result, n)
 		}

@@ -39,8 +39,6 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-var jsonlogger = logger.NewJsonLogger()
-
 const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5
@@ -256,7 +254,7 @@ func (self *worker) update() {
 				self.currentMu.Lock()
 
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
-				txs := map[common.Address]types.Transactions{acc: types.Transactions{ev.Tx}}
+				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
 
 				self.current.commitTransactions(self.mux, txset, self.gasPrice, self.chain)
@@ -449,7 +447,7 @@ func (self *worker) commitNewWork() {
 			// Depending whether we support or oppose the fork, override differently
 			if self.config.DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Compare(header.Extra, params.DAOForkBlockExtra) == 0 {
+			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
 			}
 		}

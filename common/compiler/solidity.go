@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	versionRegexp = regexp.MustCompile("[0-9]+\\.[0-9]+\\.[0-9]+")
+	versionRegexp = regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+`)
 	solcParams    = []string{
 		"--combined-json", "bin,abi,userdoc,devdoc",
 		"--add-std",  // include standard lib contracts

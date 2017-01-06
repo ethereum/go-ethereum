@@ -148,7 +148,7 @@ Passphrase: {{.InputLine "foobar"}}
 		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
 	}
 	for _, m := range wantMessages {
-		if strings.Index(geth.stderrText(), m) == -1 {
+		if !strings.Contains(geth.stderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -193,7 +193,7 @@ Passphrase: {{.InputLine "foobar"}}
 		"Unlocked account 289d485d9771714cce91d3393d764e1311907acc",
 	}
 	for _, m := range wantMessages {
-		if strings.Index(geth.stderrText(), m) == -1 {
+		if !strings.Contains(geth.stderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -212,7 +212,7 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 		"Unlocked account 289d485d9771714cce91d3393d764e1311907acc",
 	}
 	for _, m := range wantMessages {
-		if strings.Index(geth.stderrText(), m) == -1 {
+		if !strings.Contains(geth.stderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}
@@ -260,7 +260,7 @@ In order to avoid this warning, you need to remove the following duplicate key f
 		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
 	}
 	for _, m := range wantMessages {
-		if strings.Index(geth.stderrText(), m) == -1 {
+		if !strings.Contains(geth.stderrText(), m) {
 			t.Errorf("stderr text does not contain %q", m)
 		}
 	}

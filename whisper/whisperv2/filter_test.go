@@ -91,7 +91,7 @@ func TestFilterTopicsCreation(t *testing.T) {
 				continue
 			}
 			for k := 0; k < len(condition); k++ {
-				if bytes.Compare(condition[k][:], tt.filter[j][k][:]) != 0 {
+				if !bytes.Equal(condition[k][:], tt.filter[j][k][:]) {
 					t.Errorf("test %d, condition %d, segment %d: filter mismatch: have 0x%x, want 0x%x", i, j, k, condition[k], tt.filter[j][k])
 				}
 			}
@@ -115,7 +115,7 @@ func TestFilterTopicsCreation(t *testing.T) {
 				continue
 			}
 			for k := 0; k < len(condition); k++ {
-				if bytes.Compare(condition[k][:], tt.filter[j][k][:]) != 0 {
+				if !bytes.Equal(condition[k][:], tt.filter[j][k][:]) {
 					t.Errorf("test %d, condition %d, segment %d: filter mismatch: have 0x%x, want 0x%x", i, j, k, condition[k], tt.filter[j][k])
 				}
 			}
@@ -135,7 +135,7 @@ func TestFilterTopicsCreation(t *testing.T) {
 				continue
 			}
 			for k := 0; k < len(condition); k++ {
-				if bytes.Compare(condition[k][:], tt.filter[j][k][:]) != 0 {
+				if !bytes.Equal(condition[k][:], tt.filter[j][k][:]) {
 					t.Errorf("test %d, condition %d, segment %d: filter mismatch: have 0x%x, want 0x%x", i, j, k, condition[k], tt.filter[j][k])
 				}
 			}
@@ -156,7 +156,7 @@ func TestFilterTopicsCreation(t *testing.T) {
 				continue
 			}
 			for k := 0; k < len(condition); k++ {
-				if bytes.Compare(condition[k][:], tt.filter[j][k][:]) != 0 {
+				if !bytes.Equal(condition[k][:], tt.filter[j][k][:]) {
 					t.Errorf("test %d, condition %d, segment %d: filter mismatch: have 0x%x, want 0x%x", i, j, k, condition[k], tt.filter[j][k])
 				}
 			}

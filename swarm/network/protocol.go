@@ -538,13 +538,6 @@ func (self *bzz) protoError(code int, format string, params ...interface{}) (err
 	return
 }
 
-func (self *bzz) protoErrorDisconnect(err *errs.Error) {
-	err.Log(glog.V(logger.Info))
-	if err.Fatal() {
-		self.peer.Disconnect(p2p.DiscSubprotocolError)
-	}
-}
-
 func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
 		return fmt.Errorf("network write blocked")

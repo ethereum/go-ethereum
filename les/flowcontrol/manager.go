@@ -126,7 +126,7 @@ func (self *ClientManager) removeNode(node *cmNode) {
 // recalc sumWeight
 func (self *ClientManager) updateNodes(time int64) (rce bool) {
 	var sumWeight, rcSum uint64
-	for node, _ := range self.nodes {
+	for node := range self.nodes {
 		rc := node.recharging
 		node.update(time)
 		if rc && !node.recharging {
@@ -145,13 +145,13 @@ func (self *ClientManager) updateNodes(time int64) (rce bool) {
 func (self *ClientManager) update(time int64) {
 	for {
 		firstTime := time
-		for node, _ := range self.nodes {
+		for node := range self.nodes {
 			if node.recharging && node.finishRecharge < firstTime {
 				firstTime = node.finishRecharge
 			}
 		}
 		if self.updateNodes(firstTime) {
-			for node, _ := range self.nodes {
+			for node := range self.nodes {
 				if node.recharging {
 					node.set(node.serving, self.simReqCnt, self.sumWeight)
 				}

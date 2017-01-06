@@ -414,7 +414,7 @@ func (pool *serverPool) loadNodes() {
 // ordered from least to most recently connected.
 func (pool *serverPool) saveNodes() {
 	list := make([]*poolEntry, len(pool.knownQueue.queue))
-	for i, _ := range list {
+	for i := range list {
 		list[i] = pool.knownQueue.fetchOldest()
 	}
 	enc, err := rlp.EncodeToBytes(list)

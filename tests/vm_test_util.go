@@ -172,7 +172,7 @@ func runVmTest(test VmTest) error {
 
 	// Compare expected and actual return
 	rexp := common.FromHex(test.Out)
-	if bytes.Compare(rexp, ret) != 0 {
+	if !bytes.Equal(rexp, ret) {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
 	}
 

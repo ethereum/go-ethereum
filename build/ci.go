@@ -195,7 +195,7 @@ func doInstall(cmdline []string) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			for name, _ := range pkgs {
+			for name := range pkgs {
 				if name == "main" {
 					gobuild := goToolArch(*arch, "build", buildFlags(env)...)
 					gobuild.Args = append(gobuild.Args, "-v")

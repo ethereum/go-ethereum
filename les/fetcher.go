@@ -664,7 +664,7 @@ func (f *lightFetcher) updateMaxConfirmedTd(td *big.Int) {
 			f.lastUpdateStats.next = newEntry
 		}
 		f.lastUpdateStats = newEntry
-		for p, _ := range f.peers {
+		for p := range f.peers {
 			f.checkUpdateStats(p, newEntry)
 		}
 	}

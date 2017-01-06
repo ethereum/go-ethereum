@@ -36,9 +36,9 @@ import (
 )
 
 var (
-	passwordRegexp = regexp.MustCompile("personal.[nus]")
-	onlyWhitespace = regexp.MustCompile("^\\s*$")
-	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
+	passwordRegexp = regexp.MustCompile(`personal.[nus]`)
+	onlyWhitespace = regexp.MustCompile(`^\s*$`)
+	exit           = regexp.MustCompile(`^\s*exit\s*;*\s*$`)
 )
 
 // HistoryFile is the file within the data directory to store input scrollback.
@@ -275,10 +275,7 @@ func (c *Console) Evaluate(statement string) error {
 			fmt.Fprintf(c.printer, "[native] error: %v\n", r)
 		}
 	}()
-	if err := c.jsre.Evaluate(statement, c.printer); err != nil {
-		return err
-	}
-	return nil
+	return c.jsre.Evaluate(statement, c.printer)
 }
 
 // Interactive starts an interactive user session, where input is propted from

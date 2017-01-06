@@ -430,7 +430,7 @@ func TestReceiptStorage(t *testing.T) {
 			rlpHave, _ := rlp.EncodeToBytes(r)
 			rlpWant, _ := rlp.EncodeToBytes(receipt)
 
-			if bytes.Compare(rlpHave, rlpWant) != 0 {
+			if !bytes.Equal(rlpHave, rlpWant) {
 				t.Fatalf("receipt #%d [%x]: receipt mismatch: have %v, want %v", i, receipt.TxHash, r, receipt)
 			}
 		}
@@ -488,7 +488,7 @@ func TestBlockReceiptStorage(t *testing.T) {
 			rlpHave, _ := rlp.EncodeToBytes(rs[i])
 			rlpWant, _ := rlp.EncodeToBytes(receipts[i])
 
-			if bytes.Compare(rlpHave, rlpWant) != 0 {
+			if !bytes.Equal(rlpHave, rlpWant) {
 				t.Fatalf("receipt #%d: receipt mismatch: have %v, want %v", i, rs[i], receipts[i])
 			}
 		}

@@ -67,7 +67,7 @@ func checkTrieContents(t *testing.T, db Database, root []byte, content map[strin
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
 	for key, val := range content {
-		if have := trie.Get([]byte(key)); bytes.Compare(have, val) != 0 {
+		if have := trie.Get([]byte(key)); !bytes.Equal(have, val) {
 			t.Errorf("entry %x: content mismatch: have %x, want %x", key, have, val)
 		}
 	}
@@ -182,7 +182,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
 		results := make([]SyncResult, 0, len(queue))
-		for hash, _ := range queue {
+		for hash := range queue {
 			data, err := srcDb.Get(hash.Bytes())
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
@@ -219,7 +219,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]SyncResult, 0, len(queue)/2+1)
-		for hash, _ := range queue {
+		for hash := range queue {
 			data, err := srcDb.Get(hash.Bytes())
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)

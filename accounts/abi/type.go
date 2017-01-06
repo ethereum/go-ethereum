@@ -65,7 +65,7 @@ var (
 	//      string     int       uint       fixed
 	//      string32   int8      uint8      uint[]
 	//      address    int256    uint256    fixed128x128[2]
-	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)\\])?")
+	fullTypeRegex = regexp.MustCompile(`([a-zA-Z0-9]+)(\[([0-9]*)\])?`)
 	// typeRegex parses the abi sub types
 	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
 )

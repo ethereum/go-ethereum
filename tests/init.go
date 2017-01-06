@@ -87,11 +87,7 @@ func readJsonHttp(uri string, value interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	err = readJson(resp.Body, value)
-	if err != nil {
-		return err
-	}
-	return nil
+	return readJson(resp.Body, value)
 }
 
 func readJsonFile(fn string, value interface{}) error {

@@ -210,7 +210,7 @@ func TestFilters(t *testing.T) {
 
 	filter := New(backend, true)
 	filter.SetAddresses([]common.Address{addr})
-	filter.SetTopics([][]common.Hash{[]common.Hash{hash1, hash2, hash3, hash4}})
+	filter.SetTopics([][]common.Hash{{hash1, hash2, hash3, hash4}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
@@ -221,7 +221,7 @@ func TestFilters(t *testing.T) {
 
 	filter = New(backend, true)
 	filter.SetAddresses([]common.Address{addr})
-	filter.SetTopics([][]common.Hash{[]common.Hash{hash3}})
+	filter.SetTopics([][]common.Hash{{hash3}})
 	filter.SetBeginBlock(900)
 	filter.SetEndBlock(999)
 	logs, _ = filter.Find(context.Background())
@@ -234,7 +234,7 @@ func TestFilters(t *testing.T) {
 
 	filter = New(backend, true)
 	filter.SetAddresses([]common.Address{addr})
-	filter.SetTopics([][]common.Hash{[]common.Hash{hash3}})
+	filter.SetTopics([][]common.Hash{{hash3}})
 	filter.SetBeginBlock(990)
 	filter.SetEndBlock(-1)
 	logs, _ = filter.Find(context.Background())
@@ -246,7 +246,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	filter = New(backend, true)
-	filter.SetTopics([][]common.Hash{[]common.Hash{hash1, hash2}})
+	filter.SetTopics([][]common.Hash{{hash1, hash2}})
 	filter.SetBeginBlock(1)
 	filter.SetEndBlock(10)
 
@@ -257,7 +257,7 @@ func TestFilters(t *testing.T) {
 
 	failHash := common.BytesToHash([]byte("fail"))
 	filter = New(backend, true)
-	filter.SetTopics([][]common.Hash{[]common.Hash{failHash}})
+	filter.SetTopics([][]common.Hash{{failHash}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 
@@ -278,7 +278,7 @@ func TestFilters(t *testing.T) {
 	}
 
 	filter = New(backend, true)
-	filter.SetTopics([][]common.Hash{[]common.Hash{failHash}, []common.Hash{hash1}})
+	filter.SetTopics([][]common.Hash{{failHash}, {hash1}})
 	filter.SetBeginBlock(0)
 	filter.SetEndBlock(-1)
 

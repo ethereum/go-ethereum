@@ -110,7 +110,7 @@ func (m *txSortedMap) Filter(filter func(*types.Transaction) bool) types.Transac
 	// If transactions were removed, the heap and cache are ruined
 	if len(removed) > 0 {
 		*m.index = make([]uint64, 0, len(m.items))
-		for nonce, _ := range m.items {
+		for nonce := range m.items {
 			*m.index = append(*m.index, nonce)
 		}
 		heap.Init(m.index)

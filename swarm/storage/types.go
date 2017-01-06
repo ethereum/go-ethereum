@@ -41,7 +41,7 @@ func (x Key) Size() uint {
 }
 
 func (x Key) isEqual(y Key) bool {
-	return bytes.Compare(x, y) == 0
+	return bytes.Equal(x, y)
 }
 
 func (h Key) bits(i, j uint) uint {
