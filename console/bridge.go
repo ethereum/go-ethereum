@@ -270,18 +270,15 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 			} else {
 				resultVal, err := JSON.Call("parse", string(result))
 				if err != nil {
-					resp = newErrorResponse(call, -32603, err.Error(), &req.Id).Object()
+					setError(resp, -32603, err.Error())
 				} else {
 					resp.Set("result", resultVal)
 				}
 			}
 		case rpc.Error:
-			resp.Set("error", map[string]interface{}{
-				"code":    err.ErrorCode(),
-				"message": err.Error(),
-			})
+			setError(resp, err.ErrorCode(), err.Error())
 		default:
-			resp = newErrorResponse(call, -32603, err.Error(), &req.Id).Object()
+			setError(resp, -32603, err.Error())
 		}
 		resps.Call("push", resp)
 	}
@@ -300,12 +297,8 @@ func (b *bridge) Send(call otto.FunctionCall) (response otto.Value) {
 	return response
 }
 
-func newErrorResponse(call otto.FunctionCall, code int, msg string, id interface{}) otto.Value {
-	// Bundle the error into a JSON RPC call response
-	m := map[string]interface{}{"version": "2.0", "id": id, "error": map[string]interface{}{"code": code, msg: msg}}
-	res, _ := json.Marshal(m)
-	val, _ := call.Otto.Run("(" + string(res) + ")")
-	return val
+func setError(resp *otto.Object, code int, msg string) {
+	resp.Set("error", map[string]interface{}{"code": code, "message": msg})
 }
 
 // throwJSException panics on an otto.Value. The Otto VM will recover from the
