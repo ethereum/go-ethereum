@@ -34,7 +34,7 @@ func main() {
 	}
 	code := strings.TrimSpace(string(in[:]))
 	fmt.Printf("%v\n", code)
-	err = asm.PrettyPrintDisassembledInstructions(code)
+	err = asm.PrintDisassembled(code)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
