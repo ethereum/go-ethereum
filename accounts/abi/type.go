@@ -91,7 +91,12 @@ func NewType(t string) (typ Type, err error) {
 		}
 		typ.Elem = &sliceType
 		typ.stringKind = sliceType.stringKind + t[len(res[1]):]
-		return typ, nil
+		// Altough we know that this is an array, we cannot return
+		// as we don't know the type of the element, however, if it
+		// is still an array, then don't determine the type.
+		if typ.Elem.IsArray || typ.Elem.IsSlice {
+			return typ, nil
+		}
 	}
 
 	// parse the type and size of the abi-type.
@@ -112,7 +117,12 @@ func NewType(t string) (typ Type, err error) {
 		varSize = 256
 		t += "256"
 	}
-	typ.stringKind = t
+
+	// only set stringKind if not array or slice, as for those,
+	// the correct string type has been set
+	if !(typ.IsArray || typ.IsSlice) {
+		typ.stringKind = t
+	}
 
 	switch varType {
 	case "int":
