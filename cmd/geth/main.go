@@ -88,7 +88,6 @@ func init() {
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
 		utils.LightServFlag,
