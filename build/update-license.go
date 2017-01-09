@@ -185,7 +185,7 @@ func getFiles() []string {
 		files = append(files, line)
 	})
 	if err != nil {
-		log.Fatalf("error getting files:", err)
+		log.Fatal("error getting files:", err)
 	}
 	return files
 }
