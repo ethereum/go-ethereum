@@ -241,24 +241,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
-			f, err := os.Create(entry.path) // TODO: path separators
-			if err == nil {
-
-				reader := self.api.dpa.Retrieve(entry.key)
-				writer := bufio.NewWriter(f)
-				size, err := reader.Size(quitC)
-				if err == nil {
-					_, err = io.CopyN(writer, reader, size) // TODO: handle errors
-					err2 := writer.Flush()
-					if err == nil {
-						err = err2
-					}
-					err2 = f.Close()
-					if err == nil {
-						err = err2
-					}
-				}
-			}
+			err := retrieveToFile(quitC, self.api.dpa, entry.key, entry.path)
 			if err != nil {
 				select {
 				case errC <- err:
@@ -279,5 +262,24 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	case <-quitC:
 		return fmt.Errorf("aborted")
 	}
+}
 
+func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Key, path string) error {
+	f, err := os.Create(path) // TODO: path separators
+	if err != nil {
+		return err
+	}
+	reader := dpa.Retrieve(key)
+	writer := bufio.NewWriter(f)
+	size, err := reader.Size(quitC)
+	if err != nil {
+		return err
+	}
+	if _, err = io.CopyN(writer, reader, size); err != nil {
+		return err
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	return f.Close()
 }

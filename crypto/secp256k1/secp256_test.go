@@ -129,17 +129,12 @@ func signAndRecoverWithRandomMessages(t *testing.T, keys func() ([]byte, []byte)
 }
 
 func TestRecoveryOfRandomSignature(t *testing.T) {
-	pubkey1, seckey := GenerateKeyPair()
+	pubkey1, _ := GenerateKeyPair()
 	msg := randentropy.GetEntropyCSPRNG(32)
-	sig, err := Sign(msg, seckey)
-	if err != nil {
-		t.Errorf("signature error: %s", err)
-	}
 
 	for i := 0; i < TestCount; i++ {
-		sig = randSig()
-		pubkey2, _ := RecoverPubkey(msg, sig)
 		// recovery can sometimes work, but if so should always give wrong pubkey
+		pubkey2, _ := RecoverPubkey(msg, randSig())
 		if bytes.Equal(pubkey1, pubkey2) {
 			t.Fatalf("iteration: %d: pubkey mismatch: do NOT want %x: ", i, pubkey2)
 		}

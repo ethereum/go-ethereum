@@ -141,7 +141,7 @@ func TestNotifications(t *testing.T) {
 	}
 
 	var ok bool
-	if subid, ok = response.Result.(string); !ok {
+	if _, ok = response.Result.(string); !ok {
 		t.Fatalf("expected subscription id, got %T", response.Result)
 	}
 

@@ -77,10 +77,8 @@ func singleMessageTest(t *testing.T, symmetric bool) {
 
 	text := make([]byte, 0, 512)
 	steg := make([]byte, 0, 512)
-	raw := make([]byte, 0, 1024)
 	text = append(text, params.Payload...)
 	steg = append(steg, params.Padding...)
-	raw = append(raw, params.Padding...)
 
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)
@@ -238,10 +236,8 @@ func singleEnvelopeOpenTest(t *testing.T, symmetric bool) {
 
 	text := make([]byte, 0, 512)
 	steg := make([]byte, 0, 512)
-	raw := make([]byte, 0, 1024)
 	text = append(text, params.Payload...)
 	steg = append(steg, params.Padding...)
-	raw = append(raw, params.Padding...)
 
 	msg := NewSentMessage(params)
 	env, err := msg.Wrap(params)

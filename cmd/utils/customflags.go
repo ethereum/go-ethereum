@@ -54,15 +54,10 @@ type DirectoryFlag struct {
 }
 
 func (self DirectoryFlag) String() string {
-	var fmtString string
-	fmtString = "%s %v\t%v"
-
+	fmtString := "%s %v\t%v"
 	if len(self.Value.Value) > 0 {
 		fmtString = "%s \"%v\"\t%v"
-	} else {
-		fmtString = "%s %v\t%v"
 	}
-
 	return withEnvHint(self.EnvVar, fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage))
 }
 

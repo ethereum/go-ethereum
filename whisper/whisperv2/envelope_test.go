@@ -47,7 +47,7 @@ func TestEnvelopeOpen(t *testing.T) {
 		t.Fatalf("payload mismatch: have 0x%x, want 0x%x", opened.Payload, message.Payload)
 	}
 	if opened.Sent.Unix() != message.Sent.Unix() {
-		t.Fatalf("send time mismatch: have %d, want %d", opened.Sent, message.Sent)
+		t.Fatalf("send time mismatch: have %v, want %v", opened.Sent, message.Sent)
 	}
 	if opened.TTL/time.Second != DefaultTTL/time.Second {
 		t.Fatalf("message TTL mismatch: have %v, want %v", opened.TTL, DefaultTTL)

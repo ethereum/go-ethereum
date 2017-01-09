@@ -1054,11 +1054,10 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 		start, end := chain[st.lastIndex], chain[index]
 		txcount := countTransactions(chain[st.lastIndex : index+1])
 
-		extra := ""
+		var hashes, extra string
 		if st.queued > 0 || st.ignored > 0 {
 			extra = fmt.Sprintf(" (%d queued %d ignored)", st.queued, st.ignored)
 		}
-		hashes := ""
 		if st.processed > 1 {
 			hashes = fmt.Sprintf("%x… / %x…", start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 		} else {

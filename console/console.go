@@ -226,8 +226,8 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	}
 	// Chunck data to relevant part for autocompletion
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
-	start := 0
-	for start = pos - 1; start > 0; start-- {
+	start := pos - 1
+	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including te dot)
 		if line[start] == '.' || (line[start] >= 'a' && line[start] <= 'z') || (line[start] >= 'A' && line[start] <= 'Z') {
 			continue

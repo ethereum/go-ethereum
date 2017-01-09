@@ -120,8 +120,7 @@ func TestDPA_capacity(t *testing.T) {
 	// check whether it is, indeed, empty
 	dpa.ChunkStore = memStore
 	resultReader = dpa.Retrieve(key)
-	n, err = resultReader.ReadAt(resultSlice, 0)
-	if err == nil {
+	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
 		t.Errorf("Was able to read %d bytes from an empty memStore.", len(slice))
 	}
 	// check how it works with localStore
