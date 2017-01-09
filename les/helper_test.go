@@ -336,10 +336,23 @@ func (p *testPeer) close() {
 	p.app.Close()
 }
 
-type testServerPool peer
+type testServerPool struct {
+	peer *peer
+	lock sync.RWMutex
+}
 
-func (p *testServerPool) selectPeer(func(*peer) (bool, uint64)) *peer {
-	return (*peer)(p)
+func (p *testServerPool) setPeer(peer *peer) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.peer = peer
+}
+
+func (p *testServerPool) selectPeerWait(uint64, func(*peer) (bool, time.Duration), <-chan struct{}) *peer {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.peer
 }
 
 func (p *testServerPool) adjustResponseTime(*poolEntry, time.Duration, bool) {
