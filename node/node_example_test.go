@@ -41,7 +41,7 @@ func (s *SampleService) APIs() []rpc.API           { return nil }
 func (s *SampleService) Start(*p2p.Server) error   { fmt.Println("Service starting..."); return nil }
 func (s *SampleService) Stop() error               { fmt.Println("Service stopping..."); return nil }
 
-func ExampleUsage() {
+func ExampleService() {
 	// Create a network node to run protocols with the default values. The below list
 	// is only used to display each of the configuration options. All of these could
 	// have been omitted if the default behavior is desired.

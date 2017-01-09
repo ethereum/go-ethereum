@@ -50,20 +50,17 @@ func TestWhisperBasic(t *testing.T) {
 
 	peerID := make([]byte, 64)
 	randomize(peerID)
-	peer, err := w.getPeer(peerID)
+	peer, _ := w.getPeer(peerID)
 	if peer != nil {
-		t.Fatalf("failed GetPeer.")
+		t.Fatal("found peer for random key.")
 	}
-	err = w.MarkPeerTrusted(peerID)
-	if err == nil {
+	if err := w.MarkPeerTrusted(peerID); err == nil {
 		t.Fatalf("failed MarkPeerTrusted.")
 	}
-	err = w.RequestHistoricMessages(peerID, peerID)
-	if err == nil {
+	if err := w.RequestHistoricMessages(peerID, peerID); err == nil {
 		t.Fatalf("failed RequestHistoricMessages.")
 	}
-	err = w.SendP2PMessage(peerID, nil)
-	if err == nil {
+	if err := w.SendP2PMessage(peerID, nil); err == nil {
 		t.Fatalf("failed SendP2PMessage.")
 	}
 	exist := w.HasSymKey("non-existing")
@@ -85,11 +82,10 @@ func TestWhisperBasic(t *testing.T) {
 
 	var derived []byte
 	ver := uint64(0xDEADBEEF)
-	derived, err = deriveKeyMaterial(peerID, ver)
-	if err != unknownVersionError(ver) {
+	if _, err := deriveKeyMaterial(peerID, ver); err != unknownVersionError(ver) {
 		t.Fatalf("failed deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
-	derived, err = deriveKeyMaterial(peerID, 0)
+	derived, err := deriveKeyMaterial(peerID, 0)
 	if err != nil {
 		t.Fatalf("failed second deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}

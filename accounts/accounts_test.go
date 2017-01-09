@@ -115,6 +115,9 @@ func TestTimedUnlock(t *testing.T) {
 
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Signing without passphrase fails because account is locked
 	_, err = am.Sign(a1.Address, testSigData)
@@ -147,6 +150,9 @@ func TestOverrideUnlock(t *testing.T) {
 
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Unlock indefinitely.
 	if err = am.TimedUnlock(a1, pass, 5*time.Minute); err != nil {

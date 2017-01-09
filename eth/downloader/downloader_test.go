@@ -650,7 +650,7 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 	}
 	// Verify the state trie too for fast syncs
 	if tester.downloader.mode == FastSync {
-		index := 0
+		var index int
 		if pivot := int(tester.downloader.queue.fastSyncPivot); pivot < common {
 			index = pivot
 		} else {
