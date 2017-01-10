@@ -337,10 +337,10 @@ var (
 		Usage: "Network listening port",
 		Value: 30303,
 	}
-	BootnodesFlag = cli.StringSliceFlag{
+	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
-		Value: nil,
+		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
 		Name:  "nodekey",
@@ -487,7 +487,7 @@ func makeNodeUserIdent(ctx *cli.Context) string {
 func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	urls := params.MainnetBootnodes
 	if ctx.GlobalIsSet(BootnodesFlag.Name) {
-		urls = ctx.GlobalStringSlice(BootnodesFlag.Name)
+		urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
 	} else if ctx.GlobalBool(TestNetFlag.Name) {
 		urls = params.TestnetBootnodes
 	}
@@ -509,7 +509,7 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	urls := params.DiscoveryV5Bootnodes
 	if ctx.GlobalIsSet(BootnodesFlag.Name) {
-		urls = ctx.GlobalStringSlice(BootnodesFlag.Name)
+		urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
 	}
 
 	bootnodes := make([]*discv5.Node, 0, len(urls))
