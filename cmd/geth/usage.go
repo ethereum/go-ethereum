@@ -155,6 +155,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.VMEnableJitFlag,
 			utils.VMForceJitFlag,
 			utils.VMJitCacheFlag,
+			utils.VMEnableDebugFlag,
 		},
 	},
 	{

@@ -67,6 +67,9 @@ type (
 	addLogChange struct {
 		txhash common.Hash
 	}
+	addPreimageChange struct {
+		hash common.Hash
+	}
 	touchChange struct {
 		account *common.Address
 		prev    bool
@@ -126,4 +129,8 @@ func (ch addLogChange) undo(s *StateDB) {
 	} else {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
+}
+
+func (ch addPreimageChange) undo(s *StateDB) {
+	delete(s.preimages, ch.hash)
 }

@@ -560,3 +560,8 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 	}
 	return nil, errors.New("database inconsistency")
 }
+
+func (api *PrivateDebugAPI) GetPreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	db := core.GetPreimageTable(api.eth.ChainDb())
+	return db.Get(hash.Bytes())
+}
