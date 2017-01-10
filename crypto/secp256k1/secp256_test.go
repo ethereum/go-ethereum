@@ -201,32 +201,23 @@ func compactSigCheck(t *testing.T, sig []byte) {
 	}
 }
 
-// godep go test -v -run=XXX -bench=BenchmarkSign
-// add -benchtime=10s to benchmark longer for more accurate average
-
-// to avoid compiler optimizing the benchmarked function call
-var err error
-
 func BenchmarkSign(b *testing.B) {
+	_, seckey := GenerateKeyPair()
+	msg := randentropy.GetEntropyCSPRNG(32)
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
-		_, seckey := GenerateKeyPair()
-		msg := randentropy.GetEntropyCSPRNG(32)
-		b.StartTimer()
-		_, e := Sign(msg, seckey)
-		err = e
-		b.StopTimer()
+		Sign(msg, seckey)
 	}
 }
 
-//godep go test -v -run=XXX -bench=BenchmarkECRec
 func BenchmarkRecover(b *testing.B) {
+	msg := randentropy.GetEntropyCSPRNG(32)
+	_, seckey := GenerateKeyPair()
+	sig, _ := Sign(msg, seckey)
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
-		_, seckey := GenerateKeyPair()
-		msg := randentropy.GetEntropyCSPRNG(32)
-		sig, _ := Sign(msg, seckey)
-		b.StartTimer()
-		_, e := RecoverPubkey(msg, sig)
-		err = e
-		b.StopTimer()
+		RecoverPubkey(msg, sig)
 	}
 }
