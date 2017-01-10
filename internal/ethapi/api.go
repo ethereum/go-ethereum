@@ -19,7 +19,9 @@ package ethapi
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 	"time"
@@ -237,17 +239,18 @@ func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (commo
 // UnlockAccount will unlock the account associated with the given address with
 // the given password for duration seconds. If duration is nil it will use a
 // default of 300 seconds. It returns an indication if the account was unlocked.
-func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *hexutil.Uint) (bool, error) {
+func (s *PrivateAccountAPI) UnlockAccount(addr common.Address, password string, duration *uint64) (bool, error) {
+	const max = uint64(time.Duration(math.MaxInt64) / time.Second)
 	var d time.Duration
 	if duration == nil {
 		d = 300 * time.Second
+	} else if *duration > max {
+		return false, errors.New("unlock duration too large")
 	} else {
 		d = time.Duration(*duration) * time.Second
 	}
-	if err := s.am.TimedUnlock(accounts.Account{Address: addr}, password, d); err != nil {
-		return false, err
-	}
-	return true, nil
+	err := s.am.TimedUnlock(accounts.Account{Address: addr}, password, d)
+	return err == nil, err
 }
 
 // LockAccount will lock the account associated with the given address when it's unlocked.
