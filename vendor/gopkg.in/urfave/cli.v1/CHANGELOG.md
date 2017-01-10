@@ -4,6 +4,57 @@
 
 ## [Unreleased]
 
+## [1.19.1] - 2016-11-21
+
+### Fixed
+
+- Fixes regression introduced in 1.19.0 where using an `ActionFunc` as
+  the `Action` for a command would cause it to error rather than calling the
+  function. Should not have a affected declarative cases using `func(c
+  *cli.Context) err)`.
+- Shell completion now handles the case where the user specifies
+  `--generate-bash-completion` immediately after a flag that takes an argument.
+  Previously it call the application with `--generate-bash-completion` as the
+  flag value.
+
+## [1.19.0] - 2016-11-19
+### Added
+- `FlagsByName` was added to make it easy to sort flags (e.g. `sort.Sort(cli.FlagsByName(app.Flags))`)
+- A `Description` field was added to `App` for a more detailed description of
+  the application (similar to the existing `Description` field on `Command`)
+- Flag type code generation via `go generate`
+- Write to stderr and exit 1 if action returns non-nil error
+- Added support for TOML to the `altsrc` loader
+- `SkipArgReorder` was added to allow users to skip the argument reordering.
+  This is useful if you want to consider all "flags" after an argument as
+  arguments rather than flags (the default behavior of the stdlib `flag`
+  library). This is backported functionality from the [removal of the flag
+  reordering](https://github.com/urfave/cli/pull/398) in the unreleased version
+  2
+- For formatted errors (those implementing `ErrorFormatter`), the errors will
+  be formatted during output. Compatible with `pkg/errors`.
+
+### Changed
+- Raise minimum tested/supported Go version to 1.2+
+
+### Fixed
+- Consider empty environment variables as set (previously environment variables
+  with the equivalent of `""` would be skipped rather than their value used).
+- Return an error if the value in a given environment variable cannot be parsed
+  as the flag type. Previously these errors were silently swallowed.
+- Print full error when an invalid flag is specified (which includes the invalid flag)
+- `App.Writer` defaults to `stdout` when `nil`
+- If no action is specified on a command or app, the help is now printed instead of `panic`ing
+- `App.Metadata` is initialized automatically now (previously was `nil` unless initialized)
+- Correctly show help message if `-h` is provided to a subcommand
+- `context.(Global)IsSet` now respects environment variables. Previously it
+  would return `false` if a flag was specified in the environment rather than
+  as an argument
+- Removed deprecation warnings to STDERR to avoid them leaking to the end-user
+- `altsrc`s import paths were updated to use `gopkg.in/urfave/cli.v1`. This
+  fixes issues that occurred when `gopkg.in/urfave/cli.v1` was imported as well
+  as `altsrc` where Go would complain that the types didn't match
+
 ## [1.18.1] - 2016-08-28
 ### Fixed
 - Removed deprecation warnings to STDERR to avoid them leaking to the end-user (backported)

@@ -343,7 +343,6 @@ func PollEvent() Event {
 			return event
 		}
 	}
-	panic("unreachable")
 }
 
 // Returns the size of the internal back buffer (which is mostly the same as

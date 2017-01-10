@@ -540,7 +540,6 @@ func (pk *PublicKey) VerifySignature(signed hash.Hash, sig *Signature) (err erro
 	default:
 		return errors.SignatureError("Unsupported public key algorithm used in signature")
 	}
-	panic("unreachable")
 }
 
 // VerifySignatureV3 returns nil iff sig is a valid signature, made by this
@@ -585,7 +584,6 @@ func (pk *PublicKey) VerifySignatureV3(signed hash.Hash, sig *SignatureV3) (err 
 	default:
 		panic("shouldn't happen")
 	}
-	panic("unreachable")
 }
 
 // keySignatureHash returns a Hash of the message that needs to be signed for

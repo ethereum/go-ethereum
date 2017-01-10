@@ -5,15 +5,18 @@ import (
 	"io"
 )
 
+// NonColorable hold writer but remove escape sequence.
 type NonColorable struct {
 	out     io.Writer
 	lastbuf bytes.Buffer
 }
 
+// NewNonColorable return new instance of Writer which remove escape sequence from Writer.
 func NewNonColorable(w io.Writer) io.Writer {
 	return &NonColorable{out: w}
 }
 
+// Write write data on console
 func (w *NonColorable) Write(data []byte) (n int, err error) {
 	er := bytes.NewReader(data)
 	var bw [1]byte
