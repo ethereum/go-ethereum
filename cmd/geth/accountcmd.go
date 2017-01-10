@@ -181,7 +181,7 @@ nodes.
 func accountList(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	for i, acct := range stack.AccountManager().Accounts() {
-		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
+		fmt.Printf("Account #%d: %s %s\n", i, crypto.ChecksumAddress(acct.Address), acct.File)
 	}
 	return nil
 }
@@ -279,7 +279,7 @@ func accountCreate(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: {%x}\n", account.Address)
+	fmt.Printf("Address: %s\n", crypto.ChecksumAddress(account.Address))
 	return nil
 }
 
@@ -314,7 +314,7 @@ func importWallet(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
-	fmt.Printf("Address: {%x}\n", acct.Address)
+	fmt.Printf("Address: %s\n", crypto.ChecksumAddress(acct.Address))
 	return nil
 }
 
@@ -333,6 +333,6 @@ func accountImport(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: {%x}\n", acct.Address)
+	fmt.Printf("Address: %s\n", crypto.ChecksumAddress(acct.Address))
 	return nil
 }
