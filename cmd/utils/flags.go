@@ -435,6 +435,21 @@ func OverrideDefaults(ctx *cli.Context) {
 	if config == "" {
 		return
 	}
+	// Ensure the any config file and containing folder can only be written by the current user
+	info, err := os.Stat(config)
+	if err != nil {
+		Fatalf("Failed to retrieve config file stats: %v", err)
+	}
+	if perms := info.Mode().Perm(); perms&0022 > 0 {
+		Fatalf("Config file is publicly or group writeable, refusing to trust it!")
+	}
+	info, err = os.Stat(filepath.Dir(config))
+	if err != nil {
+		Fatalf("Failed to retrieve config folder stats: %v", err)
+	}
+	if perms := info.Mode().Perm(); perms&0022 > 0 {
+		Fatalf("Config folder is publicly or group writeable, refusing to trust it!")
+	}
 	// Gather all known configuration fields to enforce config validity
 	flags := make(map[string]struct{})
 	for _, flag := range ctx.GlobalFlagNames() {
@@ -462,25 +477,6 @@ func OverrideDefaults(ctx *cli.Context) {
 				dangerous[name] = key.Value()
 			}
 			ctx.GlobalSet(name, key.Value())
-		}
-	}
-	// If dangerous flags were specified from a publicly writeable file, abort
-	if len(dangerous) > 0 {
-		// Ensure the file itself can only be written by the current user
-		info, err := os.Stat(config)
-		if err != nil {
-			Fatalf("Failed to retrieve config file stats: %v", err)
-		}
-		if perms := info.Mode().Perm(); perms&0022 > 0 {
-			Fatalf("Config file contains dangerous flags and is publicly (or group) writeable!")
-		}
-		// Ensure the folder containing the config can only be written by the user
-		info, err = os.Stat(filepath.Dir(config))
-		if err != nil {
-			Fatalf("Failed to retrieve config file parent folder stats: %v", err)
-		}
-		if perms := info.Mode().Perm(); perms&0022 > 0 {
-			Fatalf("Config file contains dangerous flags and containing folder is publicly (or group) writeable!")
 		}
 	}
 	// Warn the user in case of some weird configuration combos
