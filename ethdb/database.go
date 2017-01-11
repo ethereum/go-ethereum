@@ -342,7 +342,7 @@ type tableBatch struct {
 }
 
 // NewTableBatch returns a Batch object which prefixes all keys with a given string.
-func NewTableBatch(db Database, prefix string) *Batch {
+func NewTableBatch(db Database, prefix string) Batch {
 	return &tableBatch{db.NewBatch(), prefix}
 }
 
