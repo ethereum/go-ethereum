@@ -419,14 +419,6 @@ var (
 	}
 )
 
-// dangerousFlags is a set of flags considered dangerous that the user is warned
-// about if they are contained within the config file.
-var dangerousFlags = map[string]string{
-	RPCListenAddrFlag.Name: "May allow ousiders to access your node",
-	WSListenAddrFlag.Name:  "May allow ousiders to access your node",
-	IPCPathFlag.Name:       "May allow other users/programs to access your node",
-}
-
 // OverrideDefaults parses a config .ini file if one was specified as a CLI flag
 // and overrides any non-manually set config values.
 func OverrideDefaults(ctx *cli.Context) {
@@ -461,51 +453,65 @@ func OverrideDefaults(ctx *cli.Context) {
 		Fatalf("Failed to load initial configurations: %v", err)
 	}
 	overrides := make(map[string]string)
-	dangerous := make(map[string]string)
-
 	for _, sec := range cfg.Sections() {
 		for _, key := range sec.Keys() {
 			name := key.Name()
 			if _, ok := flags[name]; !ok {
-				Fatalf("Unknown configuration entry: %v", name)
+				Fatalf("Unknown configuration entry: %s", name)
 			}
 			if _, duplicate := overrides[name]; duplicate || ctx.GlobalIsSet(name) {
 				overrides[name] = key.Value()
 				continue
 			}
-			if dangerousFlags[name] != "" {
-				dangerous[name] = key.Value()
-			}
 			ctx.GlobalSet(name, key.Value())
 		}
 	}
-	// Warn the user in case of some weird configuration combos
-	if len(overrides) > 0 || len(dangerous) > 0 {
-		fmt.Println("-----------------------------------------------------------------")
-
-		// If config file values were overridden, warn the user
-		if len(overrides) > 0 {
-			fmt.Println("Config file values overridden via the CLI:")
-			for key, val := range overrides {
-				fmt.Printf("  - %s:\n", key)
-				fmt.Printf("    - Config: %s\n", val)
-				fmt.Printf("    - Manual: %v\n", ctx.GlobalString(key))
-			}
-			fmt.Println()
+	// If config file values were overridden, warn the user
+	if len(overrides) > 0 {
+		fmt.Println("Config file values overridden via the CLI:")
+		for key, val := range overrides {
+			fmt.Printf("  - %s:\n", key)
+			fmt.Printf("    - Config: %s\n", val)
+			fmt.Printf("    - Manual: %v\n", ctx.GlobalString(key))
 		}
-		// If config file contains dangerous flags, warn the user
-		if len(dangerous) > 0 {
-			fmt.Println("Config file contains dangerous flags:")
-			for key, val := range dangerous {
-				fmt.Printf("  - %s:\n", key)
-				fmt.Printf("    - Config: %s\n", val)
-				fmt.Printf("    - Danger: %s\n", dangerousFlags[key])
-			}
-			fmt.Println()
-			fmt.Println("If you don't know what the above flags do, terminate immediately!")
-		}
-		fmt.Println("-----------------------------------------------------------------")
+		fmt.Println()
 	}
+}
+
+// dangerousFlags is a set of flags considered dangerous that the user is warned
+// about if they are contained within the config file.
+var dangerousFlags = map[string]string{
+	RPCListenAddrFlag.Name: "May allow ousiders to access your node",
+	WSListenAddrFlag.Name:  "May allow ousiders to access your node",
+	IPCPathFlag.Name:       "May allow other users/programs to access your node",
+}
+
+// WarnDangerousFlags checks whether the user specified dangerous flags either
+// in a config file or manually on the CLI, and display a warning in such cases.
+func WarnDangerousFlags(ctx *cli.Context) {
+	// Gather any potentially dangerous flags
+	dangerous := make(map[string]string)
+	for _, flag := range ctx.GlobalFlagNames() {
+		fmt.Println(flag, ctx.GlobalIsSet(flag))
+		if ctx.GlobalIsSet(flag) && dangerousFlags[flag] != "" {
+			dangerous[flag] = ctx.GlobalString(flag)
+		}
+	}
+	if len(dangerous) == 0 {
+		return
+	}
+	// Dangerous flags set, warn the user
+	// If config file contains dangerous flags, warn the user
+	fmt.Println("-----------------------------------------------------------------")
+	fmt.Println("Config file contains dangerous flags:")
+	for key, val := range dangerous {
+		fmt.Printf("  - %s:\n", key)
+		fmt.Printf("    - Config: %s\n", val)
+		fmt.Printf("    - Danger: %s\n", dangerousFlags[key])
+	}
+	fmt.Println()
+	fmt.Println("If you don't know what the above flags do, terminate immediately!")
+	fmt.Println("-----------------------------------------------------------------")
 }
 
 // MakeDataDir retrieves the currently requested data directory, terminating

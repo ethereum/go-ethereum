@@ -152,6 +152,7 @@ func init() {
 	app.Before = func(ctx *cli.Context) error {
 		// Override default configs if specified in the config file
 		utils.OverrideDefaults(ctx)
+		utils.WarnDangerousFlags(ctx)
 
 		// Ensure we can utilize all cores and configure any profilers
 		runtime.GOMAXPROCS(runtime.NumCPU())
