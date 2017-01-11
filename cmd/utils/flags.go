@@ -419,6 +419,14 @@ var (
 	}
 )
 
+// dangerousFlags is a set of flags considered dangerous that the user is warned
+// about if they are contained within the config file.
+var dangerousFlags = map[string]string{
+	RPCListenAddrFlag.Name: "May allow ousiders to access your node",
+	WSListenAddrFlag.Name:  "May allow ousiders to access your node",
+	IPCPathFlag.Name:       "May allow other users/programs to access your node",
+}
+
 // OverrideDefaults parses a config .ini file if one was specified as a CLI flag
 // and overrides any non-manually set config values.
 func OverrideDefaults(ctx *cli.Context) {
@@ -438,6 +446,8 @@ func OverrideDefaults(ctx *cli.Context) {
 		Fatalf("Failed to load initial configurations: %v", err)
 	}
 	overrides := make(map[string]string)
+	dangerous := make(map[string]string)
+
 	for _, sec := range cfg.Sections() {
 		for _, key := range sec.Keys() {
 			name := key.Name()
@@ -448,18 +458,57 @@ func OverrideDefaults(ctx *cli.Context) {
 				overrides[name] = key.Value()
 				continue
 			}
+			if dangerousFlags[name] != "" {
+				dangerous[name] = key.Value()
+			}
 			ctx.GlobalSet(name, key.Value())
 		}
 	}
-	// If config file values were overridden, warn the user
-	if len(overrides) > 0 {
-		fmt.Println("Config file values overridden via the CLI:")
-		for key, val := range overrides {
-			fmt.Printf("  - %s:\n", key)
-			fmt.Printf("    - Config: %v\n", val)
-			fmt.Printf("    - Manual: %v\n", ctx.GlobalString(key))
+	// If dangerous flags were specified from a publicly writeable file, abort
+	if len(dangerous) > 0 {
+		// Ensure the file itself can only be written by the current user
+		info, err := os.Stat(config)
+		if err != nil {
+			Fatalf("Failed to retrieve config file stats: %v", err)
 		}
-		fmt.Println()
+		if perms := info.Mode().Perm(); perms&0022 > 0 {
+			Fatalf("Config file contains dangerous flags and is publicly (or group) writeable!")
+		}
+		// Ensure the folder containing the config can only be written by the user
+		info, err = os.Stat(filepath.Dir(config))
+		if err != nil {
+			Fatalf("Failed to retrieve config file parent folder stats: %v", err)
+		}
+		if perms := info.Mode().Perm(); perms&0022 > 0 {
+			Fatalf("Config file contains dangerous flags and containing folder is publicly (or group) writeable!")
+		}
+	}
+	// Warn the user in case of some weird configuration combos
+	if len(overrides) > 0 || len(dangerous) > 0 {
+		fmt.Println("-----------------------------------------------------------------")
+
+		// If config file values were overridden, warn the user
+		if len(overrides) > 0 {
+			fmt.Println("Config file values overridden via the CLI:")
+			for key, val := range overrides {
+				fmt.Printf("  - %s:\n", key)
+				fmt.Printf("    - Config: %s\n", val)
+				fmt.Printf("    - Manual: %v\n", ctx.GlobalString(key))
+			}
+			fmt.Println()
+		}
+		// If config file contains dangerous flags, warn the user
+		if len(dangerous) > 0 {
+			fmt.Println("Config file contains dangerous flags:")
+			for key, val := range dangerous {
+				fmt.Printf("  - %s:\n", key)
+				fmt.Printf("    - Config: %s\n", val)
+				fmt.Printf("    - Danger: %s\n", dangerousFlags[key])
+			}
+			fmt.Println()
+			fmt.Println("If you don't know what the above flags do, terminate immediately!")
+		}
+		fmt.Println("-----------------------------------------------------------------")
 	}
 }
 
