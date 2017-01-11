@@ -175,3 +175,8 @@ func (p *Peer) broadcast() error {
 	glog.V(logger.Detail).Infoln(p.peer, "broadcasted", len(transmit), "message(s)")
 	return nil
 }
+
+func (p *Peer) ID() []byte {
+	id := p.peer.ID()
+	return id[:]
+}
