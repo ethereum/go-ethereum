@@ -306,47 +306,47 @@ func (b *ldbBatch) Write() error {
 	return b.db.Write(b.b, nil)
 }
 
-type DatabaseTable struct {
+type Table struct {
 	db     Database
 	prefix string
 }
 
-func NewDatabaseTable(db Database, prefix string) *DatabaseTable {
-	return &DatabaseTable{
+func NewTable(db Database, prefix string) *Table {
+	return &Table{
 		db:     db,
 		prefix: prefix,
 	}
 }
 
-func (dt *DatabaseTable) Put(key []byte, value []byte) error {
+func (dt *Table) Put(key []byte, value []byte) error {
 	return dt.db.Put(append([]byte(dt.prefix), key...), value)
 }
 
-func (dt *DatabaseTable) Get(key []byte) ([]byte, error) {
+func (dt *Table) Get(key []byte) ([]byte, error) {
 	return dt.db.Get(append([]byte(dt.prefix), key...))
 }
 
-func (dt *DatabaseTable) Delete(key []byte) error {
+func (dt *Table) Delete(key []byte) error {
 	return dt.db.Delete(append([]byte(dt.prefix), key...))
 }
 
-func (dt *DatabaseTable) Close() {
+func (dt *Table) Close() {
 	// Do nothing; don't close the underlying DB.
 }
 
-type databaseTableBatch struct {
+type tableBatch struct {
 	batch  Batch
 	prefix string
 }
 
-func (dt *DatabaseTable) NewBatch() Batch {
-	return &databaseTableBatch{dt.db.NewBatch(), dt.prefix}
+func (dt *Table) NewBatch() Batch {
+	return &tableBatch{dt.db.NewBatch(), dt.prefix}
 }
 
-func (dtb *databaseTableBatch) Put(key, value []byte) error {
-	return dtb.batch.Put(append([]byte(dtb.prefix), key...), value)
+func (tb *tableBatch) Put(key, value []byte) error {
+	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
 }
 
-func (dtb *databaseTableBatch) Write() error {
-	return dtb.batch.Write()
+func (tb *tableBatch) Write() error {
+	return tb.batch.Write()
 }
