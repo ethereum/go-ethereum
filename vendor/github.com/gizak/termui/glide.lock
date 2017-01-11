@@ -1,14 +1,30 @@
-hash: 67a478802ee1d122cf1df063c52458d074864900c96a5cc25dc6be4b7638eb1c
-updated: 2016-04-06T21:16:00.849048757-04:00
+hash: 7a754ba100256404a978b2fc8738aee337beb822458e4b6060399fb89ebd215c
+updated: 2016-11-03T17:39:24.323773674-04:00
 imports:
+- name: github.com/maruel/panicparse
+  version: ad661195ed0e88491e0f14be6613304e3b1141d6
+  subpackages:
+  - stack
 - name: github.com/mattn/go-runewidth
-  version: d6bea18f789704b5f83375793155289da36a3c7f
+  version: 737072b4e32b7a5018b4a7125da8d12de90e8045
 - name: github.com/mitchellh/go-wordwrap
   version: ad45545899c7b13c020ea92b2072220eefad42b8
 - name: github.com/nsf/termbox-go
-  version: 362329b0aa6447eadd52edd8d660ec1dff470295
+  version: b6acae516ace002cb8105a89024544a1480655a5
 - name: golang.org/x/net
-  version: af4fee9d05b66edc24197d189e6118f8ebce8c2b
+  version: 569280fa63be4e201b975e5411e30a92178f0118
   subpackages:
   - websocket
-devImports: []
+testImports:
+- name: github.com/davecgh/go-spew
+  version: 346938d642f2ec3594ed81d874461961cd0faa76
+  subpackages:
+  - spew
+- name: github.com/pmezard/go-difflib
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
+  subpackages:
+  - difflib
+- name: github.com/stretchr/testify
+  version: 976c720a22c8eb4eb6a0b4348ad85ad12491a506
+  subpackages:
+  - assert

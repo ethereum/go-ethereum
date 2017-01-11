@@ -273,8 +273,6 @@ func consumeAll(r io.Reader) (n int64, err error) {
 			return
 		}
 	}
-
-	panic("unreachable")
 }
 
 // packetType represents the numeric ids of the different OpenPGP packet types. See

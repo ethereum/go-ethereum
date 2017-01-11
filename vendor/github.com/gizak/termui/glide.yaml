@@ -6,3 +6,4 @@ import:
 - package: golang.org/x/net
   subpackages:
   - websocket
+- package: github.com/maruel/panicparse
