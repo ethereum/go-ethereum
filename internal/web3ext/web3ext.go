@@ -387,7 +387,7 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
-			name: 'getPreimage',
+			name: 'preimage',
 			call: 'debug_preimage',
 			params: 1,
 			inputFormatter: [null]
