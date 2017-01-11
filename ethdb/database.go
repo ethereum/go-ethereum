@@ -306,31 +306,31 @@ func (b *ldbBatch) Write() error {
 	return b.db.Write(b.b, nil)
 }
 
-type Table struct {
+type table struct {
 	db     Database
 	prefix string
 }
 
-func NewTable(db Database, prefix string) *Table {
-	return &Table{
+func NewTable(db Database, prefix string) *table {
+	return &table{
 		db:     db,
 		prefix: prefix,
 	}
 }
 
-func (dt *Table) Put(key []byte, value []byte) error {
+func (dt *table) Put(key []byte, value []byte) error {
 	return dt.db.Put(append([]byte(dt.prefix), key...), value)
 }
 
-func (dt *Table) Get(key []byte) ([]byte, error) {
+func (dt *table) Get(key []byte) ([]byte, error) {
 	return dt.db.Get(append([]byte(dt.prefix), key...))
 }
 
-func (dt *Table) Delete(key []byte) error {
+func (dt *table) Delete(key []byte) error {
 	return dt.db.Delete(append([]byte(dt.prefix), key...))
 }
 
-func (dt *Table) Close() {
+func (dt *table) Close() {
 	// Do nothing; don't close the underlying DB.
 }
 
@@ -339,7 +339,11 @@ type tableBatch struct {
 	prefix string
 }
 
-func (dt *Table) NewBatch() Batch {
+func NewTableBatch(db Database, prefix string) *tableBatch {
+	return &tableBatch{db.NewBatch(), prefix}
+}
+
+func (dt *table) NewBatch() Batch {
 	return &tableBatch{dt.db.NewBatch(), dt.prefix}
 }
 
