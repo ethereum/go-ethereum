@@ -311,7 +311,9 @@ type table struct {
 	prefix string
 }
 
-func NewTable(db Database, prefix string) *table {
+// NewTable returns a Database object that prefixes all keys with a given
+// string.
+func NewTable(db Database, prefix string) Database {
 	return &table{
 		db:     db,
 		prefix: prefix,
@@ -339,7 +341,8 @@ type tableBatch struct {
 	prefix string
 }
 
-func NewTableBatch(db Database, prefix string) *tableBatch {
+// NewTableBatch returns a Batch object which prefixes all keys with a given string.
+func NewTableBatch(db Database, prefix string) *Batch {
 	return &tableBatch{db.NewBatch(), prefix}
 }
 
