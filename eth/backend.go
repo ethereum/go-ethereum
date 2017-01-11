@@ -98,8 +98,6 @@ type Config struct {
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
 
-	EnableJit               bool
-	ForceJit                bool
 	EnablePreimageRecording bool
 
 	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
