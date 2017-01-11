@@ -600,12 +600,12 @@ func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
 	return types.BytesToBloom(bloomDat)
 }
 
-func GetPreimageTable(db ethdb.Database) ethdb.Database {
-	return ethdb.NewDatabaseTable(db, preimagePrefix)
+func PreimageTable(db ethdb.Database) ethdb.Database {
+	return ethdb.NewTable(db, preimagePrefix)
 }
 
 func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash][]byte) error {
-	table := GetPreimageTable(db)
+	table := PreimageTable(db)
 	batch := table.NewBatch()
 	hitCount := 0
 	for hash, preimage := range preimages {

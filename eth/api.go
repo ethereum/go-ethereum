@@ -562,6 +562,6 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 }
 
 func (api *PrivateDebugAPI) GetPreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
-	db := core.GetPreimageTable(api.eth.ChainDb())
+	db := core.PreimageTable(api.eth.ChainDb())
 	return db.Get(hash.Bytes())
 }

@@ -204,6 +204,7 @@ func (self *StateDB) Logs() []*types.Log {
 	return logs
 }
 
+// AddPreimage records a SHA3 preimage seen by the VM.
 func (self *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := self.preimages[hash]; !ok {
 		self.journal = append(self.journal, addPreimageChange{hash: hash})
@@ -213,6 +214,7 @@ func (self *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
 	}
 }
 
+// Preimages returns a list of SHA3 preimages that have been submitted.
 func (self *StateDB) Preimages() map[common.Hash][]byte {
 	return self.preimages
 }
