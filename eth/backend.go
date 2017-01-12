@@ -180,8 +180,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err := upgradeChainDatabase(chainDb); err != nil {
 		return nil, err
 	}
-	if err := addMipmapBloomBins(chainDb); err != nil {
-		return nil, err
+
+	if !config.LightMode {
+		if err := addMipmapBloomBins(chainDb); err != nil {
+			return nil, err
+		}
 	}
 
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)

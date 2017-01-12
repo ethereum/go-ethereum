@@ -23,7 +23,6 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
+	boom "github.com/tylertreat/BoomFilters"
 )
 
 var (
@@ -691,102 +691,79 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	self.wg.Add(1)
 	defer self.wg.Done()
 
-	// Collect some import statistics to report on
-	stats := struct{ processed, ignored int32 }{}
-	start := time.Now()
+	var (
+		chainLength      = len(blockChain)
+		stats            = struct{ processed, ignored int }{}
+		start            = time.Now()
+		insertedReceipts = make(map[uint64]types.Receipts)
+	)
 
-	// Create the block importing task queue and worker functions
-	tasks := make(chan int, len(blockChain))
-	for i := 0; i < len(blockChain) && i < len(receiptChain); i++ {
-		tasks <- i
+	if len(receiptChain) < chainLength {
+		chainLength = len(receiptChain)
 	}
-	close(tasks)
 
-	errs, failed := make([]error, len(tasks)), int32(0)
-	process := func(worker int) {
-		for index := range tasks {
-			block, receipts := blockChain[index], receiptChain[index]
+	for i := 0; i < chainLength; i++ {
+		batch := self.chainDb.NewBatch()
+		block, receipts := blockChain[i], receiptChain[i]
 
-			// Short circuit insertion if shutting down or processing failed
-			if atomic.LoadInt32(&self.procInterrupt) == 1 {
-				return
-			}
-			if atomic.LoadInt32(&failed) > 0 {
-				return
-			}
-			// Short circuit if the owner header is unknown
-			if !self.HasHeader(block.Hash()) {
-				errs[index] = fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
-				atomic.AddInt32(&failed, 1)
-				return
-			}
-			// Skip if the entire data is already known
-			if self.HasBlock(block.Hash()) {
-				atomic.AddInt32(&stats.ignored, 1)
-				continue
-			}
-			// Compute all the non-consensus fields of the receipts
-			SetReceiptsData(self.config, block, receipts)
-			// Write all the data out into the database
-			if err := WriteBody(self.chainDb, block.Hash(), block.NumberU64(), block.Body()); err != nil {
-				errs[index] = fmt.Errorf("failed to write block body: %v", err)
-				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
-				return
-			}
-			if err := WriteBlockReceipts(self.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write block receipts: %v", err)
-				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
-				return
-			}
-			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write log blooms: %v", err)
-				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
-				return
-			}
-			if err := WriteTransactions(self.chainDb, block); err != nil {
-				errs[index] = fmt.Errorf("failed to write individual transactions: %v", err)
-				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
-				return
-			}
-			if err := WriteReceipts(self.chainDb, receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write individual receipts: %v", err)
-				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
-				return
-			}
-			atomic.AddInt32(&stats.processed, 1)
+		// Short circuit insertion if shutting down or processing failed
+		if atomic.LoadInt32(&self.procInterrupt) == 1 {
+			return 0, nil
 		}
-	}
-	// Start as many worker threads as goroutines allowed
-	pending := new(sync.WaitGroup)
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
-		pending.Add(1)
-		go func(id int) {
-			defer pending.Done()
-			process(id)
-		}(i)
-	}
-	pending.Wait()
 
-	// If anything failed, report
-	if failed > 0 {
-		for i, err := range errs {
-			if err != nil {
-				return i, err
-			}
+		// Short circuit if the owner header is unknown
+		if !self.HasHeader(block.Hash()) {
+			return i, fmt.Errorf("containing header #%d [%x…] unknown", block.Number(), block.Hash().Bytes()[:4])
 		}
+
+		// Skip if the entire data is already known
+		if self.HasBlock(block.Hash()) {
+			stats.ignored += len(receipts)
+			continue
+		}
+
+		// Compute all the non-consensus fields of the receipts
+		SetReceiptsData(self.config, block, receipts)
+
+		// Write all the data out into a batch
+		if err := WriteBodyBatch(batch, block.Hash(), block.NumberU64(), block.Body()); err != nil {
+			err := fmt.Errorf("failed to write block body: %v", err)
+			glog.Fatal(err)
+		}
+		if err := WriteBlockReceiptsBatch(batch, block.Hash(), block.NumberU64(), receipts); err != nil {
+			err := fmt.Errorf("failed to write block receipts: %v", err)
+			glog.Fatal(err)
+		}
+		if err := WriteTransactionsBatch(batch, block); err != nil {
+			err := fmt.Errorf("failed to write individual transactions: %v", err)
+			glog.Fatal(err)
+		}
+		if err := WriteReceiptsBatch(batch, receipts); err != nil {
+			err := fmt.Errorf("failed to write individual receipts: %v", err)
+			glog.Fatal(err)
+		}
+
+		// commit batch to db.
+		if err := batch.Write(); err != nil {
+			glog.Fatalf("failed to write receipts chain into database: %v", err)
+		}
+
+		insertedReceipts[block.NumberU64()] = receipts
+		stats.processed += len(receipts)
 	}
+
+	if err := updateReceiptAddressBlooms(self.chainDb, insertedReceipts); err != nil {
+		glog.Fatalf("failed to write log address index to database: %v", err)
+	}
+
 	if atomic.LoadInt32(&self.procInterrupt) == 1 {
 		glog.V(logger.Debug).Infoln("premature abort during receipt chain processing")
 		return 0, nil
 	}
+
 	// Update the head fast sync block if better
 	self.mu.Lock()
-	head := blockChain[len(errs)-1]
+	head := blockChain[chainLength-1]
 	if self.GetTd(self.currentFastBlock.Hash(), self.currentFastBlock.NumberU64()).Cmp(self.GetTd(head.Hash(), head.NumberU64())) < 0 {
 		if err := WriteHeadFastBlockHash(self.chainDb, head.Hash()); err != nil {
 			glog.Fatalf("failed to update head fast block hash: %v", err)
@@ -796,15 +773,52 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	self.mu.Unlock()
 
 	// Report some public statistics so the user has a clue what's going on
-	first, last := blockChain[0], blockChain[len(blockChain)-1]
+	first, last := blockChain[0], blockChain[chainLength-1]
 
-	ignored := ""
+	ignoredStr := ""
 	if stats.ignored > 0 {
-		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
+		ignoredStr = fmt.Sprintf(" (%d ignored)", stats.ignored)
 	}
-	glog.V(logger.Info).Infof("imported %4d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignored)
+	glog.V(logger.Info).Infof("imported %5d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignoredStr)
 
 	return 0, nil
+}
+
+// updateReceiptAddressBlooms integrates the addresses of all logs in the given set of receipts
+// into the given database.
+func updateReceiptAddressBlooms(chainDb ethdb.Database, receipts map[uint64]types.Receipts) error {
+	blooms := make(map[string]*boom.BloomFilter)
+	for blockNum, receipts := range receipts {
+		for _, receipt := range receipts {
+			for depth := 0; depth < len(AddrBloomMapLevels); depth++ {
+				key := BloomLogsKey(depth, blockNum)
+				f, found := blooms[string(key)]
+				if !found {
+					count, ratio := AddrBloomMapCount[depth], AddrBloomMapRatio[depth]
+					f = boom.NewBloomFilter(count, ratio)
+					if data, err := chainDb.Get(key); err == nil {
+						if err := f.GobDecode(data); err != nil {
+							return err
+						}
+					}
+					blooms[string(key)] = f
+				}
+				for _, log := range receipt.Logs {
+					f.Add(log.Address.Bytes())
+				}
+			}
+		}
+	}
+
+	batch := chainDb.NewBatch()
+	for key, filter := range blooms {
+		data, err := filter.GobEncode()
+		if err != nil {
+			return err
+		}
+		batch.Put([]byte(key), data)
+	}
+	return batch.Write()
 }
 
 // WriteBlock writes the block to the chain.

@@ -71,9 +71,13 @@ func TestMipmapUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bloom := core.GetMipmapBloom(db, 1, core.MIPMapLevels[0])
-	if (bloom == types.Bloom{}) {
-		t.Error("got empty bloom filter")
+	_, bloom, err := core.GetBloomLogs(db, 1, 0)
+	if err != nil {
+		t.Fatalf("could not load bloom: %v", err)
+	}
+
+	if !bloom.Test(addr.Bytes()) {
+		t.Errorf("expected address to be in bloom")
 	}
 
 	data, _ := db.Get([]byte("setting-mipmap-version"))

@@ -17,9 +17,6 @@
 package filters
 
 import (
-	"math"
-	"time"
-
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,9 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/tylertreat/BoomFilters"
 	"golang.org/x/net/context"
 )
 
+// Backend defines the interface the filter packages needs to retrieve logs.
 type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
@@ -38,172 +37,209 @@ type Backend interface {
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 }
 
-// Filter can be used to retrieve and filter logs.
+// Filter can be used to search for particular logs
 type Filter struct {
-	backend   Backend
+	be        Backend
+	crit      FilterCriteria
 	useMipMap bool
-
-	created time.Time
-
-	db         ethdb.Database
-	begin, end int64
-	addresses  []common.Address
-	topics     [][]common.Hash
 }
 
-// New creates a new filter which uses a bloom filter on blocks to figure out whether
-// a particular block is interesting or not.
-// MipMaps allow past blocks to be searched much more efficiently, but are not available
-// to light clients.
-func New(backend Backend, useMipMap bool) *Filter {
+// filterRange helper structure that keeps track of a bloom filter and the range it covers.
+type filterRange struct {
+	begin uint64
+	end   uint64
+	bloom boom.Filter
+}
+
+// New creates a filter that can be used to search for logs that match the given criteria.
+// When `useMipMap` is `true` it uses pre-calculated bloom filters to optimize searching.
+// These pre-calculated bloom filters are not available in light mode and require at least
+// one address in the criteria.
+func New(be Backend, crit FilterCriteria, useMipMap bool) *Filter {
+	if crit.FromBlock == nil || crit.FromBlock.Int64() < 0 {
+		crit.FromBlock = big.NewInt(0)
+	}
 	return &Filter{
-		backend:   backend,
+		be:        be,
 		useMipMap: useMipMap,
-		db:        backend.ChainDb(),
+		crit:      crit,
 	}
 }
 
-// SetBeginBlock sets the earliest block for filtering.
-// -1 = latest block (i.e., the current block)
-// hash = particular hash from-to
-func (f *Filter) SetBeginBlock(begin int64) {
-	f.begin = begin
+// Find returns all logs matching the filter criteria.
+func (f *Filter) Find(ctx context.Context) ([]*types.Log, error) {
+	if f.useMipMap && len(f.crit.Addresses) > 0 {
+		return f.findByAddressIdx(ctx)
+	}
+	return f.findFullRangeScan(ctx)
 }
 
-// SetEndBlock sets the latest block for filtering.
-func (f *Filter) SetEndBlock(end int64) {
-	f.end = end
+// findByAddressIdx returns all logs matching the criteria. It uses an bloom filter based
+// index on log addresses for faster searching (not available in light mode).
+func (f *Filter) findByAddressIdx(ctx context.Context) ([]*types.Log, error) {
+	var (
+		depth      = 0
+		start, end uint64
+		level      = core.AddrBloomMapLevels[depth]
+		logs       []*types.Log
+		filters    = []filterRange{}
+	)
+
+	start = f.crit.FromBlock.Uint64()
+
+	if f.crit.ToBlock.Int64() < 0 {
+		h, err := f.be.HeaderByNumber(ctx, rpc.BlockNumber(f.crit.ToBlock.Int64()))
+		if err != nil {
+			return nil, err
+		}
+		end = h.Number.Uint64()
+	} else {
+		end = f.crit.ToBlock.Uint64()
+	}
+
+	// find top level block ranges that (probably) contains logs from one of the target addresses.
+	for num := (start / level) * level; num <= end; num += level {
+		_, bloom, err := core.GetBloomLogs(f.be.ChainDb(), num, depth)
+		if err != nil {
+			return logs, nil
+		}
+		if f.matchAddress(bloom) {
+			filters = append(filters, filterRange{num, num + core.AddrBloomMapLevels[depth], bloom})
+		}
+	}
+
+	return f.filterRange(ctx, depth+1, filters, start, end)
 }
 
-// SetAddresses matches only logs that are generated from addresses that are included
-// in the given addresses.
-func (f *Filter) SetAddresses(addr []common.Address) {
-	f.addresses = addr
-}
+// filterRange returns the set of logs that match the filter criteria in bf within the block range
+// [start, end]. This is a depth first search to guarantee logs are sorted by block number.
+func (f *Filter) filterRange(ctx context.Context, depth int, filters []filterRange, start, end uint64) ([]*types.Log, error) {
+	var logs []*types.Log
+	for _, filter := range filters {
+		// reached lowest level, do a full block scan on the filter range
+		if depth == len(core.AddrBloomMapLevels) {
+			return f.scanRangeWithFilter(ctx, filter, start, end)
+		}
 
-// SetTopics matches only logs that have topics matching the given topics.
-func (f *Filter) SetTopics(topics [][]common.Hash) {
-	f.topics = topics
-}
+		// narrow search by evicting branches that are guaranteed not to include logs.
+		level := core.AddrBloomMapLevels[depth]
+		for num := (filter.begin / level) * level; num <= end && num < filter.end; num += level {
+			if num+level < start {
+				continue
+			}
+			_, bloom, err := core.GetBloomLogs(f.be.ChainDb(), num, depth)
+			if err != nil {
+				return nil, err
+			}
 
-// FindOnce searches the blockchain for matching log entries, returning
-// all matching entries from the first block that contains matches,
-// updating the start point of the filter accordingly. If no results are
-// found, a nil slice is returned.
-func (f *Filter) FindOnce(ctx context.Context) ([]*types.Log, error) {
-	head, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if head == nil {
-		return nil, nil
+			if f.matchAddress(bloom) {
+				fr := filterRange{num, num + level, bloom}
+				l, err := f.filterRange(ctx, depth+1, []filterRange{fr}, start, end)
+				if err != nil {
+					return nil, err
+				}
+				logs = append(logs, l...)
+			}
+		}
 	}
-	headBlockNumber := head.Number.Uint64()
-
-	var beginBlockNo uint64 = uint64(f.begin)
-	if f.begin == -1 {
-		beginBlockNo = headBlockNumber
-	}
-	var endBlockNo uint64 = uint64(f.end)
-	if f.end == -1 {
-		endBlockNo = headBlockNumber
-	}
-
-	// if no addresses are present we can't make use of fast search which
-	// uses the mipmap bloom filters to check for fast inclusion and uses
-	// higher range probability in order to ensure at least a false positive
-	if !f.useMipMap || len(f.addresses) == 0 {
-		logs, blockNumber, err := f.getLogs(ctx, beginBlockNo, endBlockNo)
-		f.begin = int64(blockNumber + 1)
-		return logs, err
-	}
-
-	logs, blockNumber := f.mipFind(beginBlockNo, endBlockNo, 0)
-	f.begin = int64(blockNumber + 1)
 	return logs, nil
 }
 
-// Run filters logs with the current parameters set
-func (f *Filter) Find(ctx context.Context) (logs []*types.Log, err error) {
-	for {
-		newLogs, err := f.FindOnce(ctx)
-		if len(newLogs) == 0 || err != nil {
-			return logs, err
-		}
-		logs = append(logs, newLogs...)
-	}
-}
-
-func (f *Filter) mipFind(start, end uint64, depth int) (logs []*types.Log, blockNumber uint64) {
-	level := core.MIPMapLevels[depth]
-	// normalise numerator so we can work in level specific batches and
-	// work with the proper range checks
-	for num := start / level * level; num <= end; num += level {
-		// find addresses in bloom filters
-		bloom := core.GetMipmapBloom(f.db, num, level)
-		// Don't bother checking the first time through the loop - we're probably picking
-		// up where a previous run left off.
-		first := true
-		for _, addr := range f.addresses {
-			if first || bloom.TestBytes(addr[:]) {
-				first = false
-				// range check normalised values and make sure that
-				// we're resolving the correct range instead of the
-				// normalised values.
-				start := uint64(math.Max(float64(num), float64(start)))
-				end := uint64(math.Min(float64(num+level-1), float64(end)))
-				if depth+1 == len(core.MIPMapLevels) {
-					l, blockNumber, _ := f.getLogs(context.Background(), start, end)
-					if len(l) > 0 {
-						return l, blockNumber
-					}
-				} else {
-					l, blockNumber := f.mipFind(start, end, depth+1)
-					if len(l) > 0 {
-						return l, blockNumber
-					}
-				}
-			}
-		}
+// logs is a helper that returns all logs in the specified block that matches the filter criteria.
+func (f *Filter) logs(ctx context.Context, blockNum uint64) ([]*types.Log, error) {
+	var logs []*types.Log
+	blockNumber := rpc.BlockNumber(blockNum)
+	header, err := f.be.HeaderByNumber(ctx, blockNumber)
+	if header == nil || err != nil {
+		return logs, err
 	}
 
-	return nil, end
-}
-
-func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.Log, blockNumber uint64, err error) {
-	for i := start; i <= end; i++ {
-		blockNumber := rpc.BlockNumber(i)
-		header, err := f.backend.HeaderByNumber(ctx, blockNumber)
-		if header == nil || err != nil {
-			return logs, end, err
+	if BloomFilter(header.Bloom, f.crit.Addresses, f.crit.Topics) {
+		receipts, err := f.be.GetReceipts(ctx, header.Hash())
+		if err != nil {
+			return nil, err
 		}
 
-		// Use bloom filtering to see if this block is interesting given the
-		// current parameters
-		if f.bloomFilter(header.Bloom) {
-			// Get the logs of the block
-			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
-			if err != nil {
-				return nil, end, err
-			}
-			var unfiltered []*types.Log
-			for _, receipt := range receipts {
-				unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
-			}
-			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
-			if len(logs) > 0 {
-				return logs, uint64(blockNumber), nil
-			}
+		var unfiltered []*types.Log
+		for _, receipt := range receipts {
+			unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
+		}
+		logs = append(logs, filterLogs(unfiltered, nil, nil, f.crit.Addresses, f.crit.Topics)...)
+	}
+	return logs, nil
+}
+
+// scanRangeWithFilter returns all logs matching the bf filter criteria.
+func (f *Filter) scanRangeWithFilter(ctx context.Context, filter filterRange, start, end uint64) ([]*types.Log, error) {
+	if start < filter.begin {
+		start = filter.begin
+	}
+	// in case the toBlock is within the filter range make it inclusive.
+	if end > filter.begin && end <= filter.end {
+		end += 1
+	} else if end > filter.end {
+		end = filter.end
+	}
+
+	var logs []*types.Log
+	for i := start; i < end; i++ {
+		if l, err := f.logs(ctx, i); err == nil {
+			logs = append(logs, l...)
+		} else {
+			return nil, err
 		}
 	}
 
-	return logs, end, nil
+	return logs, nil
 }
 
+// findFullRangeScan performance a naive full blocks scan in the range [start, end] and
+// returns logs matching the filters criteria.
+func (f *Filter) findFullRangeScan(ctx context.Context) ([]*types.Log, error) {
+	var (
+		start = f.crit.FromBlock.Uint64()
+		end   uint64
+		logs  []*types.Log
+	)
+
+	if f.crit.ToBlock.Int64() < 0 {
+		h, err := f.be.HeaderByNumber(ctx, rpc.BlockNumber(f.crit.ToBlock.Int64()))
+		if err != nil {
+			return nil, err
+		}
+		end = h.Number.Uint64()
+	} else {
+		end = f.crit.ToBlock.Uint64()
+	}
+
+	for i := start; i < end; i++ {
+		if l, err := f.logs(ctx, i); err == nil {
+			logs = append(logs, l...)
+		} else {
+			return nil, err
+		}
+	}
+	return logs, nil
+}
+
+// matchAddress returns an indication if at least one of the addresses
+// in bf.addresses is stored in the given bloom.
+func (f *Filter) matchAddress(bloom boom.Filter) bool {
+	for _, addr := range f.crit.Addresses {
+		if bloom.Test(addr.Bytes()) {
+			return true
+		}
+	}
+	return false
+}
+
+// includes returns an indication if a is included in addresses.
 func includes(addresses []common.Address, a common.Address) bool {
 	for _, addr := range addresses {
 		if addr == a {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -251,11 +287,8 @@ Logs:
 	return ret
 }
 
-func (f *Filter) bloomFilter(bloom types.Bloom) bool {
-	return bloomFilter(bloom, f.addresses, f.topics)
-}
-
-func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
+// BloomFilter returns an indication if the given addresses and topics match with the given bloom
+func BloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]common.Hash) bool {
 	if len(addresses) > 0 {
 		var included bool
 		for _, addr := range addresses {
@@ -264,7 +297,6 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 				break
 			}
 		}
-
 		if !included {
 			return false
 		}
@@ -282,6 +314,5 @@ func bloomFilter(bloom types.Bloom, addresses []common.Address, topics [][]commo
 			return false
 		}
 	}
-
 	return true
 }

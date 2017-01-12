@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tylertreat/BoomFilters"
 )
 
 var (
@@ -51,8 +53,10 @@ var (
 	txMetaSuffix   = []byte{0x01}
 	receiptsPrefix = []byte("receipts-")
 
-	mipmapPre    = []byte("mipmap-log-bloom-")
-	MIPMapLevels = []uint64{1000000, 500000, 100000, 50000, 1000}
+	AddrBloomMapPre    = []byte("blm-log-addr-")
+	AddrBloomMapLevels = []uint64{500000, 100000, 25000, 2500, 50}
+	AddrBloomMapCount  = []uint{500000, 250000, 75000, 15000, 2000}
+	AddrBloomMapRatio  = []float64{0.5, 0.5, 0.25, 0.1, 0.01}
 
 	configPrefix = []byte("ethereum-config-") // config prefix for the db
 
@@ -66,11 +70,8 @@ var (
 	oldBlockHashPrefix     = []byte("block-hash-") // [deprecated by the header/block split, remove eventually]
 
 	ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error
-
-	mipmapBloomMu sync.Mutex // protect against race condition when updating mipmap blooms
-
-	preimageCounter    = metrics.NewCounter("db/preimage/total")
-	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
+	preimageCounter        = metrics.NewCounter("db/preimage/total")
+	preimageHitCounter     = metrics.NewCounter("db/preimage/hits")
 )
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -353,22 +354,47 @@ func WriteHeader(db ethdb.Database, header *types.Header) error {
 	return nil
 }
 
-// WriteBody serializes the body of a block into the database.
-func WriteBody(db ethdb.Database, hash common.Hash, number uint64, body *types.Body) error {
+// WriteBodyBatch serializes the body of a block into the batch.
+func WriteBodyBatch(batch ethdb.Batch, hash common.Hash, number uint64, body *types.Body) error {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
 		return err
 	}
-	return WriteBodyRLP(db, hash, number, data)
+	return WriteBodyRLPBatch(batch, hash, number, data)
+}
+
+// WriteBody serializes the body of a block into the database.
+func WriteBody(db ethdb.Database, hash common.Hash, number uint64, body *types.Body) error {
+	batch := db.NewBatch()
+	err := WriteBodyBatch(batch, hash, number, body)
+	if err != nil {
+		return err
+	}
+	if err := batch.Write(); err != nil {
+		glog.Fatalf("failed to store block body into database: %v", err)
+	}
+	return nil
+}
+
+// WriteBodyRLPBatch writes a serialized body of a block into the batch.
+func WriteBodyRLPBatch(batch ethdb.Batch, hash common.Hash, number uint64, rlp rlp.RawValue) error {
+	key := append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
+	if err := batch.Put(key, rlp); err != nil {
+		return fmt.Errorf("failed to store block body into batch: %v", err)
+	}
+	glog.V(logger.Debug).Infof("stored block body [%x…]", hash.Bytes()[:4])
+	return nil
 }
 
 // WriteBodyRLP writes a serialized body of a block into the database.
 func WriteBodyRLP(db ethdb.Database, hash common.Hash, number uint64, rlp rlp.RawValue) error {
-	key := append(append(bodyPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-	if err := db.Put(key, rlp); err != nil {
+	batch := db.NewBatch()
+	if err := WriteBodyRLPBatch(batch, hash, number, rlp); err != nil {
+		return err
+	}
+	if err := batch.Write(); err != nil {
 		glog.Fatalf("failed to store block body into database: %v", err)
 	}
-	glog.V(logger.Debug).Infof("stored block body [%x…]", hash.Bytes()[:4])
 	return nil
 }
 
@@ -399,10 +425,10 @@ func WriteBlock(db ethdb.Database, block *types.Block) error {
 	return nil
 }
 
-// WriteBlockReceipts stores all the transaction receipts belonging to a block
+// WriteBlockReceiptsBatch stores all the transaction receipts belonging to a block
 // as a single receipt slice. This is used during chain reorganisations for
 // rescheduling dropped transactions.
-func WriteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64, receipts types.Receipts) error {
+func WriteBlockReceiptsBatch(batch ethdb.Batch, hash common.Hash, number uint64, receipts types.Receipts) error {
 	// Convert the receipts into their storage form and serialize them
 	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
@@ -414,20 +440,30 @@ func WriteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64, rece
 	}
 	// Store the flattened receipt slice
 	key := append(append(blockReceiptsPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
-	if err := db.Put(key, bytes); err != nil {
-		glog.Fatalf("failed to store block receipts into database: %v", err)
+	if err := batch.Put(key, bytes); err != nil {
+		return err
 	}
 	glog.V(logger.Debug).Infof("stored block receipts [%x…]", hash.Bytes()[:4])
 	return nil
 }
 
-// WriteTransactions stores the transactions associated with a specific block
-// into the given database. Beside writing the transaction, the function also
-// stores a metadata entry along with the transaction, detailing the position
-// of this within the blockchain.
-func WriteTransactions(db ethdb.Database, block *types.Block) error {
+// WriteBlockReceipts stores all the transaction receipts belonging to a block
+// as a single receipt slice. This is used during chain reorganisations for
+// rescheduling dropped transactions.
+func WriteBlockReceipts(db ethdb.Database, hash common.Hash, number uint64, receipts types.Receipts) error {
 	batch := db.NewBatch()
+	err := WriteBlockReceiptsBatch(batch, hash, number, receipts)
+	if err != nil {
+		glog.Fatalf("failed to store block receipts into database: %v", err)
+	}
+	return batch.Write()
+}
 
+// WriteTransactionsBatch stores the transactions associated with a specific
+// block into the given batch. Beside writing the transaction, the function
+// also stores a metadata entry along with the transaction, detailing the
+// position of this within the blockchain.
+func WriteTransactionsBatch(batch ethdb.Batch, block *types.Block) error {
 	// Iterate over each transaction and encode it with its metadata
 	for i, tx := range block.Transactions() {
 		// Encode and queue up the transaction for storage
@@ -456,10 +492,24 @@ func WriteTransactions(db ethdb.Database, block *types.Block) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// WriteTransactions stores the transactions associated with a specific block
+// into the given database. Beside writing the transaction, the function also
+// stores a metadata entry along with the transaction, detailing the position
+// of this within the blockchain.
+func WriteTransactions(db ethdb.Database, block *types.Block) error {
+	batch := db.NewBatch()
+	if err := WriteTransactionsBatch(batch, block); err != nil {
+		return err
+	}
+
 	// Write the scheduled data into the database
 	if err := batch.Write(); err != nil {
 		glog.Fatalf("failed to store transactions into database: %v", err)
 	}
+
 	return nil
 }
 
@@ -473,10 +523,8 @@ func WriteReceipt(db ethdb.Database, receipt *types.Receipt) error {
 	return db.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data)
 }
 
-// WriteReceipts stores a batch of transaction receipts into the database.
-func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
-	batch := db.NewBatch()
-
+// WriteReceipts stores a batch of transaction receipts into the db batch.
+func WriteReceiptsBatch(batch ethdb.Batch, receipts types.Receipts) error {
 	// Iterate over all the receipts and queue them for database injection
 	for _, receipt := range receipts {
 		storageReceipt := (*types.ReceiptForStorage)(receipt)
@@ -487,6 +535,17 @@ func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
 		if err := batch.Put(append(receiptsPrefix, receipt.TxHash.Bytes()...), data); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// WriteReceipts stores a batch of transaction receipts into the database.
+func WriteReceipts(db ethdb.Database, receipts types.Receipts) error {
+	batch := db.NewBatch()
+
+	err := WriteReceiptsBatch(batch, receipts)
+	if err != nil {
+		return err
 	}
 	// Write the scheduled data into the database
 	if err := batch.Write(); err != nil {
@@ -558,46 +617,85 @@ func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *types.Block {
 	return (*types.Block)(&block)
 }
 
-// returns a formatted MIP mapped key by adding prefix, canonical number and level
-//
-// ex. fn(98, 1000) = (prefix || 1000 || 0)
-func mipmapKey(num, level uint64) []byte {
-	lkey := make([]byte, 8)
-	binary.BigEndian.PutUint64(lkey, level)
-	key := new(big.Int).SetUint64(num / level * level)
+// BloomLogsKey returns the key that is used to store the address bloom filter
+// on the given depth and block height.
+func BloomLogsKey(depth int, blockNum uint64) []byte {
+	level := blockNum / AddrBloomMapLevels[depth] * AddrBloomMapLevels[depth]
 
-	return append(mipmapPre, append(lkey, key.Bytes()...)...)
+	lkey := make([]byte, 10)
+	binary.BigEndian.PutUint16(lkey[:2], uint16(depth))
+	binary.BigEndian.PutUint64(lkey[2:], level)
+
+	return append(AddrBloomMapPre, lkey...)
+}
+
+var (
+	addMipMapCacheMu sync.RWMutex
+	addMipMapCache   = make(map[string]*boom.BloomFilter)
+)
+
+func GetBloomLogs(db ethdb.Database, blockNum uint64, depth int) ([]byte, *boom.BloomFilter, error) {
+	key := BloomLogsKey(depth, blockNum)
+
+	addMipMapCacheMu.Lock()
+	defer addMipMapCacheMu.Unlock()
+
+	f, found := addMipMapCache[string(key)]
+	if !found {
+		count, ratio := AddrBloomMapCount[depth], AddrBloomMapRatio[depth]
+		f = boom.NewBloomFilter(count, ratio)
+		if data, err := db.Get(key); err == nil {
+			if err := f.GobDecode(data); err != nil {
+				return nil, nil, err
+			}
+		}
+		addMipMapCache[string(key)] = f
+	}
+
+	return key, f, nil
+}
+
+// WriteMipmapBloomBatch writes each address included in the receipts' logs to the batch.
+func WriteMipmapBloomBatch(db ethdb.Database, batch ethdb.Batch, number uint64, receipts types.Receipts) error {
+	for depth, _ := range AddrBloomMapLevels {
+		key, bloom, err := GetBloomLogs(db, number, depth)
+		if err != nil {
+			return err
+		}
+
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				bloom.Add(log.Address.Bytes())
+			}
+		}
+
+		data, err := bloom.GobEncode()
+		if err != nil {
+			return err
+		}
+
+		batch.Put(key, data)
+		addMipMapCacheMu.Lock()
+		addMipMapCache[string(key)] = bloom
+		addMipMapCacheMu.Unlock()
+	}
+
+	return nil
 }
 
 // WriteMapmapBloom writes each address included in the receipts' logs to the
 // MIP bloom bin.
 func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts) error {
-	mipmapBloomMu.Lock()
-	defer mipmapBloomMu.Unlock()
-
 	batch := db.NewBatch()
-	for _, level := range MIPMapLevels {
-		key := mipmapKey(number, level)
-		bloomDat, _ := db.Get(key)
-		bloom := types.BytesToBloom(bloomDat)
-		for _, receipt := range receipts {
-			for _, log := range receipt.Logs {
-				bloom.Add(log.Address.Big())
-			}
-		}
-		batch.Put(key, bloom.Bytes())
+	err := WriteMipmapBloomBatch(db, batch, number, receipts)
+	if err != nil {
+		return err
 	}
+
 	if err := batch.Write(); err != nil {
-		return fmt.Errorf("mipmap write fail for: %d: %v", number, err)
+		glog.Fatalf("mipmap write fail for: %d: %v", number, err)
 	}
 	return nil
-}
-
-// GetMipmapBloom returns a bloom filter using the number and level as input
-// parameters. For available levels see MIPMapLevels.
-func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
-	bloomDat, _ := db.Get(mipmapKey(number, level))
-	return types.BytesToBloom(bloomDat)
 }
 
 // PreimageTable returns a Database instance with the key prefix for preimage entries.

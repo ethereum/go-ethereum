@@ -20,8 +20,9 @@ package eth
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math/big"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/tylertreat/BoomFilters"
 )
 
 var useSequentialKeys = []byte("dbUpgrade_20160530sequentialKeys")
@@ -313,7 +315,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 }
 
 func addMipmapBloomBins(db ethdb.Database) (err error) {
-	const mipmapVersion uint = 2
+	const mipmapVersion uint = 3
 
 	// check if the version is set. We ignore data for now since there's
 	// only one version so we can easily ignore it for now
@@ -336,21 +338,96 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 			return
 		}
 	}()
+
 	latestHash := core.GetHeadBlockHash(db)
 	latestBlock := core.GetBlock(db, latestHash, core.GetBlockNumber(db, latestHash))
 	if latestBlock == nil { // clean database
 		return
 	}
 
+	type task struct {
+		Start uint64
+		End   uint64
+	}
+
+	var (
+		step        = core.AddrBloomMapLevels[0]
+		processTill = latestBlock.NumberU64() + 1
+		tasks       = make(chan task, 1+ (latestBlock.NumberU64()/step))
+		wg          = sync.WaitGroup{}
+	)
+
+	for i := uint64(0); i <= processTill; i += step {
+		if i+step <= processTill {
+			tasks <- task{i, i + step}
+		} else {
+			tasks <- task{i, processTill}
+		}
+	}
+	close(tasks)
+
+	process := func() {
+		for t := range tasks {
+			type LevelFilter struct {
+				start, end uint64
+				filter     *boom.BloomFilter
+			}
+			filters := make([][]LevelFilter, len(core.AddrBloomMapLevels))
+
+			// 1. create filters
+			for i, level := range core.AddrBloomMapLevels {
+				for n := uint64(0); n < (core.AddrBloomMapLevels[0] / level); n++ {
+					count, ratio := core.AddrBloomMapCount[i], core.AddrBloomMapRatio[i]
+					fil := boom.NewBloomFilter(count, ratio)
+					filters[i] = append(filters[i], LevelFilter{t.Start + (n * level), t.Start + ((n + 1) * level), fil})
+				}
+			}
+
+			// 2. add log addresses to bloom filters
+			for blockNum := t.Start; blockNum < t.End; blockNum++ {
+				hash := core.GetCanonicalHash(db, blockNum)
+				if (hash == common.Hash{}) {
+					glog.Fatalf("chain db corrupted, could not find block %d", blockNum)
+				}
+
+				for depth, lvl := range filters {
+					receipts := core.GetBlockReceipts(db, hash, blockNum)
+					f := lvl[(blockNum-t.Start)/core.AddrBloomMapLevels[depth]].filter
+					for _, receipt := range receipts {
+						for _, log := range receipt.Logs {
+							f.Add(log.Address.Bytes())
+						}
+					}
+				}
+			}
+
+			// 3. update in database
+			batch := db.NewBatch()
+			for depth, lvl := range filters {
+				for _, filterLvl := range lvl {
+					data, err := filterLvl.filter.GobEncode()
+					if err != nil {
+						glog.Fatalf("Could not serialize bloom filter")
+					}
+					batch.Put(core.BloomLogsKey(depth, filterLvl.start), data)
+				}
+			}
+
+			if err := batch.Write(); err != nil {
+				glog.Fatalf("Could not update database: %v", err)
+			}
+		}
+		wg.Done()
+	}
+
 	tstart := time.Now()
 	glog.V(logger.Info).Infoln("upgrading db log bloom bins")
-	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
-		hash := core.GetCanonicalHash(db, i)
-		if (hash == common.Hash{}) {
-			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
-		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
+	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+		wg.Add(1)
+		go process()
 	}
+	wg.Wait()
 	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
+
 	return nil
 }
