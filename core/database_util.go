@@ -600,10 +600,13 @@ func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
 	return types.BytesToBloom(bloomDat)
 }
 
+// PreimageTable returns a Database instance with the key prefix for preimage entries.
 func PreimageTable(db ethdb.Database) ethdb.Database {
 	return ethdb.NewTable(db, preimagePrefix)
 }
 
+// WritePreimages writes the provided set of preimages to the database. `number` is the
+// current block number, and is used for debug messages only.
 func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash][]byte) error {
 	table := PreimageTable(db)
 	batch := table.NewBatch()
@@ -620,7 +623,7 @@ func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash]
 		if err := batch.Write(); err != nil {
 			return fmt.Errorf("preimage write fail for block %d: %v", number, err)
 		}
-		glog.V(logger.Error).Infof("%d preimages in block %d, including %d new", len(preimages), number, hitCount)
+		glog.V(logger.Debug).Infof("%d preimages in block %d, including %d new", len(preimages), number, hitCount)
 	}
 	return nil
 }

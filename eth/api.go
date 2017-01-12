@@ -561,6 +561,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 	return nil, errors.New("database inconsistency")
 }
 
+// Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
 func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	db := core.PreimageTable(api.eth.ChainDb())
 	return db.Get(hash.Bytes())
