@@ -72,14 +72,6 @@ func BenchmarkSha3(b *testing.B) {
 	fmt.Println(amount, ":", time.Since(start))
 }
 
-func Test0Key(t *testing.T) {
-	key := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	_, err := secp256k1.GeneratePubKey(key)
-	if err == nil {
-		t.Errorf("expected error due to zero privkey")
-	}
-}
-
 func TestSign(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
 	addr := common.HexToAddress(testAddrHex)
