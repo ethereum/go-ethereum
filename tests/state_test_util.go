@@ -108,7 +108,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] || name != "loop_stacklimit_1021" {
+		if skipTest[name] {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
