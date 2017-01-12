@@ -72,6 +72,10 @@ var (
 
 // Sign creates a recoverable ECDSA signature.
 // The produced signature is in the 65-byte [R || S || V] format where V is 0 or 1.
+//
+// The caller is responsible for ensuring that msg cannot be chosen
+// directly by an attacker. It is usually preferable to use a cryptographic
+// hash function on any input before handing it to this function.
 func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	if len(msg) != 32 {
 		return nil, ErrInvalidMsgLen
