@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -51,7 +52,6 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
-	"github.com/go-ini/ini"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -448,23 +448,31 @@ func OverrideDefaults(ctx *cli.Context) {
 		flags[flag] = struct{}{}
 	}
 	// Parse the configuration files and load all fields
-	cfg, err := ini.Load(config)
-	if err != nil {
+	var cfg map[string]interface{}
+	if _, err := toml.DecodeFile(config, &cfg); err != nil {
 		Fatalf("Failed to load initial configurations: %v", err)
 	}
 	overrides := make(map[string]string)
-	for _, sec := range cfg.Sections() {
-		for _, key := range sec.Keys() {
-			name := key.Name()
-			if _, ok := flags[name]; !ok {
-				Fatalf("Unknown configuration entry: %s", name)
-			}
-			if _, duplicate := overrides[name]; duplicate || ctx.GlobalIsSet(name) {
-				overrides[name] = key.Value()
-				continue
-			}
-			ctx.GlobalSet(name, key.Value())
+	for key, val := range cfg {
+		// Bail out if the config field does not exist
+		if _, ok := flags[key]; !ok {
+			Fatalf("Unknown configuration entry: %s", key)
 		}
+		// Flatten the config value into its string form
+		var value string
+
+		switch val := (val).(type) {
+		case []string:
+			value = strings.Join(val, ",")
+		default:
+			value = fmt.Sprintf("%v", val)
+		}
+		// Check for duplicate assignments, and set the config field
+		if _, duplicate := overrides[key]; duplicate || ctx.GlobalIsSet(key) {
+			overrides[key] = value
+			continue
+		}
+		ctx.GlobalSet(key, value)
 	}
 	// If config file values were overridden, warn the user
 	if len(overrides) > 0 {
@@ -492,7 +500,6 @@ func WarnDangerousFlags(ctx *cli.Context) {
 	// Gather any potentially dangerous flags
 	dangerous := make(map[string]string)
 	for _, flag := range ctx.GlobalFlagNames() {
-		fmt.Println(flag, ctx.GlobalIsSet(flag))
 		if ctx.GlobalIsSet(flag) && dangerousFlags[flag] != "" {
 			dangerous[flag] = ctx.GlobalString(flag)
 		}
