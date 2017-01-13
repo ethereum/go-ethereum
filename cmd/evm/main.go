@@ -161,7 +161,7 @@ func run(ctx *cli.Context) error {
 			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
 				Tracer:             logger,
-				Debug: ctx.GlobalBool(DebugFlag.Name),
+				Debug:              ctx.GlobalBool(DebugFlag.Name),
 				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
 			},
 		})
@@ -177,7 +177,7 @@ func run(ctx *cli.Context) error {
 			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
 				Tracer:             logger,
-				Debug: ctx.GlobalBool(DebugFlag.Name),
+				Debug:              ctx.GlobalBool(DebugFlag.Name),
 				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
 			},
 		})
