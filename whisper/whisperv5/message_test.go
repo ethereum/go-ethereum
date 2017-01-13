@@ -330,13 +330,13 @@ func TestRlpEncode(t *testing.T) {
 		t.Fatalf("wrapped with zero key, seed: %d.", seed)
 	}
 
-	rlpEncoded, err := rlp.EncodeToBytes(env)
+	raw, err := rlp.EncodeToBytes(env)
 	if err != nil {
 		t.Fatalf("RLP encode failed: %s.", err)
 	}
 
 	var decoded Envelope
-	err = decoded.DecodeBytes(rlpEncoded)
+	rlp.DecodeBytes(raw, &decoded)
 	if err != nil {
 		t.Fatalf("RLP decode failed: %s.", err)
 	}
