@@ -289,27 +289,29 @@ func doTest(cmdline []string) {
 		build.MustRun(goTool("vet", packages...))
 	}
 	if *misspell {
-		// The spell checker doesn't work on packages, gather all .go files for it
-		sources := []string{}
+		// Ensure the spellchecker is available
+		build.MustRun(goTool("get", "github.com/client9/misspell/cmd/misspell"))
+
+		// Windows (AppVeyor) chokes on long argument lists, check packages individualy
 		for _, pkg := range packages {
-			// Gather all the source files of the package
+			// The spell checker doesn't work on packages, gather all .go files for it
 			out, err := goTool("list", "-f", "{{.Dir}}{{range .GoFiles}}\n{{.}}{{end}}{{range .CgoFiles}}\n{{.}}{{end}}{{range .TestGoFiles}}\n{{.}}{{end}}", pkg).CombinedOutput()
 			if err != nil {
 				log.Fatalf("source file listing failed: %v\n%s", err, string(out))
 			}
 			// Retrieve the folder and assemble the source list
 			lines := strings.Split(string(out), "\n")
-
 			root := lines[0]
+
+			sources := make([]string, 0, len(lines)-1)
 			for _, line := range lines[1:] {
 				if line = strings.TrimSpace(line); line != "" {
 					sources = append(sources, filepath.Join(root, line))
 				}
 			}
+			// Run the spell checker for this particular package
+			build.MustRunCommand(filepath.Join(GOBIN, "misspell"), append([]string{"-error"}, sources...)...)
 		}
-		// Download the spell checker tool and run on all source files
-		build.MustRun(goTool("get", "github.com/client9/misspell/cmd/misspell"))
-		build.MustRunCommand(filepath.Join(GOBIN, "misspell"), append([]string{"-error"}, sources...)...)
 	}
 	// Run the actual tests.
 	gotest := goTool("test")
