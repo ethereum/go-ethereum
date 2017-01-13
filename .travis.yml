@@ -90,7 +90,7 @@ install:
   - go get golang.org/x/tools/cmd/cover
 script:
   - go run build/ci.go install
-  - go run build/ci.go test -coverage -vet
+  - go run build/ci.go test -coverage -vet -misspell
 
 notifications:
   webhooks:

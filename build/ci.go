@@ -24,7 +24,7 @@ Usage: go run ci.go <command> <command flags/arguments>
 Available commands are:
 
    install    [-arch architecture] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ packages... ]                                         -- runs the tests
+   test       [ -coverage ] [ -vet ] [ -misspell] [ packages... ]                            -- runs the tests
    archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
@@ -262,6 +262,7 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 func doTest(cmdline []string) {
 	var (
 		vet      = flag.Bool("vet", false, "Whether to run go vet")
+		misspell = flag.Bool("misspell", false, "Whether to run the spell checker")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -287,7 +288,29 @@ func doTest(cmdline []string) {
 	if *vet {
 		build.MustRun(goTool("vet", packages...))
 	}
+	if *misspell {
+		// The spell checker doesn't work on packages, gather all .go files for it
+		sources := []string{}
+		for _, pkg := range packages {
+			// Gather all the source files of the package
+			out, err := goTool("list", "-f", "{{.Dir}}{{range .GoFiles}}\n{{.}}{{end}}{{range .CgoFiles}}\n{{.}}{{end}}{{range .TestGoFiles}}\n{{.}}{{end}}", pkg).CombinedOutput()
+			if err != nil {
+				log.Fatalf("source file listing failed: %v\n%s", err, string(out))
+			}
+			// Retrieve the folder and assemble the source list
+			lines := strings.Split(string(out), "\n")
 
+			root := lines[0]
+			for _, line := range lines[1:] {
+				if line = strings.TrimSpace(line); line != "" {
+					sources = append(sources, filepath.Join(root, line))
+				}
+			}
+		}
+		// Download the spell checker tool and run on all source files
+		build.MustRun(goTool("get", "github.com/client9/misspell/cmd/misspell"))
+		build.MustRunCommand(filepath.Join(GOBIN, "misspell"), append([]string{"-error"}, sources...)...)
+	}
 	// Run the actual tests.
 	gotest := goTool("test")
 	// Test a single package at a time. CI builders are slow
