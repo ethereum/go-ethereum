@@ -27,6 +27,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -49,250 +50,111 @@ import (
 
 const sizeOfInt = 4
 
+var (
+	quitCommand       = "~Q"
+	enodePrefix       = "enode://"
+	mailServerKeyName = "fd8c027e29852ef"
+)
+
 // singletons
 var (
 	server     *p2p.Server
 	shh        *whisper.Whisper
+	done       chan struct{}
+	input      *bufio.Reader = bufio.NewReader(os.Stdin)
 	mailServer WMailServer
-
-	done  chan struct{}
-	input *bufio.Reader = bufio.NewReader(os.Stdin)
 )
 
-// encryption/decryption
+// encryption
 var (
-	pub     *ecdsa.PublicKey
-	asymKey *ecdsa.PrivateKey
-	nodeid  *ecdsa.PrivateKey
-	symKey  []byte
+	symKey     []byte
+	pub        *ecdsa.PublicKey
+	asymKey    *ecdsa.PrivateKey
+	nodeid     *ecdsa.PrivateKey
+	topic      whisper.TopicType
+	filterID   uint32
+	msPassword string
 )
 
-// parameters
+// cmd arguments
 var (
-	filterID uint32
-	topic    whisper.TopicType
-	ttl      uint32 = 30
-	workTime uint32 = 5
-	msPoW    float64
-	timeLow  uint32
-	timeUpp  uint32
-	pow      float64 = whisper.MinimumPoW
+	echoMode       = flag.Bool("e", false, "echo mode: prints some arguments for diagnostics")
+	bootstrapMode  = flag.Bool("b", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
+	forwarderMode  = flag.Bool("f", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
+	mailServerMode = flag.Bool("m", false, "mail server mode: delivers expired messages on demand")
+	requestMail    = flag.Bool("r", false, "request expired messages from the bootstrap server")
+	asymmetricMode = flag.Bool("a", false, "use asymmetric encryption")
+	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
 
-	ipAddress, enode, salt, topicStr, pubStr, NodeIdFile, dbPath, msPassword string
+	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
+	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
+	argPoW       = flag.Float64("pow", whisper.MinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
+	argServerPoW = flag.Float64("mspow", whisper.MinimumPoW, "PoW requirement for Mail Server request")
+
+	argIP     = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
+	argSalt   = flag.String("salt", "", "salt (for topic and key derivation)")
+	argPub    = flag.String("pub", "", "public key for asymmetric encryption")
+	argDBPath = flag.String("dbpath", "", "path to the server's DB directory")
+	argIDFile = flag.String("idfile", "", "file name with node id (private key)")
+	argEnode  = flag.String("boot", "", "bootstrap node you want to connect to (e.g. enode://e454......08d50@52.176.211.200:16428)")
+	argTopic  = flag.String("topic", "", "topic in hexadecimal format (e.g. 70a4beef)")
 )
-
-var (
-	bootstrapMode  bool // does not actively connect to peers, wait for incoming connections
-	forwarderMode  bool // only forward messages, neither send nor track
-	mailServerMode bool // delivers expired messages on demand
-	testMode       bool // predefined password, topic, ip and port
-	echoMode       bool // shows params, etc.
-	isAsymmetric   bool
-	requestMail    bool
-)
-
-var (
-	argNameHelp       = "-h"
-	argBootstrapMode  = "-b"
-	argNameForwarder  = "-f"
-	argNameAsymmetric = "-a"
-	argMailServerMode = "-m"
-	argRequestMail    = "-r"
-	argNameTest       = "-test"
-	argNameEcho       = "-echo"
-	argNameWorkTime   = "-work"
-	argNameTTL        = "-ttl"
-	argNameIP         = "-ip"
-	argNameTopic      = "-topic"
-	argNamePoW        = "-pow"
-	argNameSalt       = "-salt"
-	argNamePub        = "-pub"
-	argNameBoot       = "-boot"
-	argNameIdSrc      = "-idfile"
-	argNameDbPath     = "-dbpath"
-	argNameMSPoW      = "-mspow"
-
-	quitCommand = "~Q"
-	enodePrefix = "enode://"
-)
-
-// this is a temporary stub, will be expanded later
-type WMailServer struct{}
-
-func (s *WMailServer) Archive(env *whisper.Envelope)                                      {}
-func (s *WMailServer) DeliverMail(peer *whisper.Peer, data []byte)                        {}
-func (s *WMailServer) Init(w *whisper.Whisper, path string, password string, pow float64) {}
-func (s *WMailServer) Close()                                                             {}
-
-func padRight(str string) string {
-	res := str
-	for len(res) < 9 {
-		res += " "
-	}
-	return res
-}
-
-func printHelp() {
-	fmt.Println("wnode is a stand-alone whisper node with command-line interface.")
-	fmt.Println()
-	fmt.Println("usage: wnode [arguments]")
-	fmt.Printf("    %s print this help and exit \n", padRight(argNameHelp))
-	fmt.Printf("    %s boostrap node: don't actively connect to peers, wait for incoming connections\n", padRight(argBootstrapMode))
-	fmt.Printf("    %s forwarder mode: only forward messages, neither send nor decrypt messages \n", padRight(argNameForwarder))
-	fmt.Printf("    %s use asymmetric encryption \n", padRight(argNameAsymmetric))
-	fmt.Printf("    %s mail server mode: delivers expired messages on demand \n", padRight(argMailServerMode))
-	fmt.Printf("    %s test mode: predefined password, salt, topic, ip and port \n", padRight(argNameTest))
-	fmt.Printf("    %s echo mode: prints arguments (diagnostic) \n", padRight(argNameEcho))
-	fmt.Printf("    %s IP address and port of this node (e.g. %s=127.0.0.1:30303) \n", padRight(argNameIP), argNameIP)
-	fmt.Printf("    %s time-to-live for messages in seconds (e.g. %s=30) \n", padRight(argNameTTL), argNameTTL)
-	fmt.Printf("    %s PoW in integer format \n", padRight(argNamePoW))
-	fmt.Printf("    %s work time in seconds (e.g. %s=12) \n", padRight(argNameWorkTime), argNameWorkTime)
-	fmt.Printf("    %s salt (for topic and key derivation) \n", padRight(argNameSalt))
-	fmt.Printf("    %s topic in hexadecimal format (e.g. %s=70a4beef) \n", padRight(argNameTopic), argNameTopic)
-	fmt.Printf("    %s public key for asymmetric encryption \n", padRight(argNamePub))
-	fmt.Printf("    %s file name with node id (private key) \n", padRight(argNameIdSrc))
-	fmt.Printf("    %s path to the DB directory \n", padRight(argNameDbPath))
-	fmt.Printf("    %s PoW requirement for Mail Server (int) \n", padRight(argNameMSPoW))
-	fmt.Printf("    %s request old (expired) messages from the bootstrap server \n", padRight(argRequestMail))
-	fmt.Printf("    %s bootstrap node you want to connect to (e.g. %s=enode://e454......08d50@52.176.211.200:16428) \n", padRight(argNameBoot), argNameBoot)
-}
 
 func main() {
-	parseArgs()
+	processArgs()
 	initialize()
 	run()
 }
 
-func parseArgs() {
-	var err error
-	var p, x uint32
-	help1 := checkMode(argNameHelp)
-	help2 := checkMode("-help")
-	help3 := checkMode("--help")
-	help4 := checkMode("-?")
-	if help1 || help2 || help3 || help4 {
-		printHelp()
-		os.Exit(0)
-	}
+func processArgs() {
+	flag.Parse()
 
-	bootstrapMode = checkMode(argBootstrapMode)
-	forwarderMode = checkMode(argNameForwarder)
-	mailServerMode = checkMode(argMailServerMode)
-	testMode = checkMode(argNameTest)
-	echoMode = checkMode(argNameEcho)
-	isAsymmetric = checkMode(argNameAsymmetric)
-	requestMail = checkMode(argRequestMail)
-
-	checkIntArg(argNameTTL, &ttl)
-	checkIntArg(argNameWorkTime, &workTime)
-	checkIntArg(argNamePoW, &p)
-	checkIntArg(argNameMSPoW, &x)
-	checkStringArg(argNameIP, &ipAddress)
-	checkStringArg(argNameBoot, &enode)
-	checkStringArg(argNameSalt, &salt)
-	checkStringArg(argNameTopic, &topicStr)
-	checkStringArg(argNamePub, &pubStr)
-	checkStringArg(argNameIdSrc, &NodeIdFile)
-	checkStringArg(argNameDbPath, &dbPath)
-
-	if len(NodeIdFile) > 0 {
-		nodeid, err = crypto.LoadECDSA(NodeIdFile)
+	if len(*argIDFile) > 0 {
+		var err error
+		nodeid, err = crypto.LoadECDSA(*argIDFile)
 		if err != nil {
-			utils.Fatalf("Failed to load file [%s]: %s.", NodeIdFile, err)
+			utils.Fatalf("Failed to load file [%s]: %s.", *argIDFile, err)
 		}
 	}
 
-	if len(enode) > 0 {
-		if enode[:len(enodePrefix)] != enodePrefix {
-			enode = enodePrefix + enode
+	if len(*argEnode) > 0 {
+		if (*argEnode)[:len(enodePrefix)] != enodePrefix {
+			*argEnode = enodePrefix + *argEnode
 		}
 	}
 
-	if p > 0 {
-		pow = float64(p)
-	}
-
-	if x > 0 {
-		msPoW = float64(x)
-	}
-
-	if len(topicStr) > 0 {
-		var x []byte
-		x, err := hex.DecodeString(topicStr)
+	if len(*argTopic) > 0 {
+		x, err := hex.DecodeString(*argTopic)
 		if err != nil {
 			utils.Fatalf("Failed to parse the topic: %s", err)
 		}
 		topic = whisper.BytesToTopic(x)
 	}
 
-	if isAsymmetric && len(pubStr) > 0 {
-		pub = crypto.ToECDSAPub(common.FromHex(pubStr))
+	if *asymmetricMode && len(*argPub) > 0 {
+		pub = crypto.ToECDSAPub(common.FromHex(*argPub))
 		if !isKeyValid(pub) {
 			utils.Fatalf("invalid public key")
 		}
 	}
 
-	if echoMode {
-		fmt.Printf("ttl = %d \n", ttl)
-		fmt.Printf("workTime = %d \n", workTime)
-		fmt.Printf("pow = %f \n", pow)
-		fmt.Printf("ip = %s \n", ipAddress)
-		fmt.Printf("salt = %s \n", salt)
-		fmt.Printf("topic = %x \n", topic)
-		fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
-		fmt.Printf("boot = %s \n", enode)
+	if *echoMode {
+		echo()
 	}
 }
 
-func checkIntArg(pattern string, dst *uint32) {
-	pattern += "="
-	sz := len(pattern)
-	for _, arg := range os.Args {
-		if len(arg) < sz {
-			continue
-		}
-
-		prefix := arg[:sz]
-		if prefix == pattern {
-			s := arg[sz:]
-			i, err := strconv.ParseUint(s, 10, 0)
-			if err != nil {
-				utils.Fatalf("Failed to parse argument %s: %s", pattern, err)
-			}
-			if err == nil && i > 0 {
-				*dst = uint32(i)
-			}
-			return
-		}
-	}
-}
-
-func checkStringArg(pattern string, dst *string) {
-	pattern += "="
-	sz := len(pattern)
-	for _, arg := range os.Args {
-		if len(arg) < sz {
-			continue
-		}
-
-		prefix := arg[:sz]
-		if prefix == pattern {
-			s := arg[sz:]
-			if len(s) > 0 {
-				*dst = s
-			}
-			return
-		}
-	}
-}
-
-func checkMode(pattern string) bool {
-	for _, arg := range os.Args {
-		if arg == pattern {
-			return true
-		}
-	}
-	return false
+func echo() {
+	fmt.Printf("ttl = %d \n", *argTTL)
+	fmt.Printf("workTime = %d \n", *argWorkTime)
+	fmt.Printf("pow = %f \n", *argPoW)
+	fmt.Printf("mspow = %f \n", *argServerPoW)
+	fmt.Printf("ip = %s \n", *argIP)
+	fmt.Printf("salt = %s \n", *argSalt)
+	fmt.Printf("topic = %x \n", topic)
+	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
+	fmt.Printf("idfile = %s \n", *argIDFile)
+	fmt.Printf("dbpath = %s \n", *argDBPath)
+	fmt.Printf("boot = %s \n", *argEnode)
 }
 
 func initialize() {
@@ -303,39 +165,34 @@ func initialize() {
 	var peers []*discover.Node
 	var err error
 
-	if testMode {
-		password := []byte("this is a test password for symmetric encryption")
-		salt := []byte("this is a test salt for symmetric encryption")
+	if *testMode {
+		password := []byte("test password for symmetric encryption")
+		salt := []byte("test salt for symmetric encryption")
 		symKey = pbkdf2.Key(password, salt, 64, 32, sha256.New)
 		topic = whisper.TopicType{0xFF, 0xFF, 0xFF, 0xFF}
+		msPassword = "mail server test password"
 	}
 
-	if bootstrapMode {
-		if len(ipAddress) == 0 {
-			if testMode {
-				ipAddress = "127.0.0.1:30303"
-			} else {
-				fmt.Printf("Please enter your IP and port (e.g. 127.0.0.1:30303): ")
-				fmt.Scanln(&ipAddress)
-			}
+	if *bootstrapMode {
+		if len(*argIP) == 0 {
+			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30303): ")
 		}
 	} else {
-		if len(enode) == 0 {
-			fmt.Printf("Please enter the peer's enode: ")
-			fmt.Scanln(&enode)
+		if len(*argEnode) == 0 {
+			argEnode = scanLineA("Please enter the peer's enode: ")
 		}
-		peer := discover.MustParseNode(enode)
+		peer := discover.MustParseNode(*argEnode)
 		peers = append(peers, peer)
 	}
 
-	if mailServerMode {
+	if *mailServerMode && len(msPassword) == 0 {
 		msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
 		if err != nil {
 			utils.Fatalf("Failed to read Mail Server password: %s", err)
 		}
 
 		shh = whisper.NewWhisper(&mailServer)
-		mailServer.Init(shh, dbPath, msPassword, msPoW)
+		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
 	} else {
 		shh = whisper.NewWhisper(nil)
 	}
@@ -351,7 +208,7 @@ func initialize() {
 			MaxPeers:       128,
 			Name:           common.MakeName("whisper-go", "5.0"),
 			Protocols:      shh.Protocols(),
-			ListenAddr:     ipAddress,
+			ListenAddr:     *argIP,
 			NAT:            nat.Any(),
 			BootstrapNodes: peers,
 			StaticNodes:    peers,
@@ -369,19 +226,18 @@ func startServer() {
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
 	fmt.Println(server.NodeInfo().Enode)
 
-	if bootstrapMode {
+	if *bootstrapMode {
 		configureNode()
 		fmt.Println("Bootstrap Whisper node started")
-		//waitForConnection(false) // todo: review
 	} else {
 		fmt.Println("Whisper node started")
-		// first see if we can establish connection, then require futher user input
+		// first see if we can establish connection, then ask for user input
 		waitForConnection(true)
 		configureNode()
 	}
 
-	if !forwarderMode {
-		fmt.Printf("Connection is established. Please type the message. To quit type: '%s'\n", quitCommand)
+	if !*forwarderMode {
+		fmt.Printf("Please type the message. To quit type: '%s'\n", quitCommand)
 	}
 }
 
@@ -390,55 +246,44 @@ func isKeyValid(k *ecdsa.PublicKey) bool {
 }
 
 func configureNode() {
-	var i int
-	var s string
 	var err error
 
-	if forwarderMode {
+	if *forwarderMode {
 		return
 	}
 
-	if isAsymmetric && len(pubStr) == 0 {
-		pubStr = scanLine("Please enter the peer's public key: ")
-		pub = crypto.ToECDSAPub(common.FromHex(pubStr))
+	if *asymmetricMode && len(*argPub) == 0 {
+		s := scanLine("Please enter the peer's public key: ")
+		pub = crypto.ToECDSAPub(common.FromHex(s))
 		if !isKeyValid(pub) {
 			utils.Fatalf("Error: invalid public key")
 		}
 	}
 
-	if !isAsymmetric && !testMode && !forwarderMode {
+	if !*asymmetricMode && !*forwarderMode && !*testMode {
 		pass, err := console.Stdin.PromptPassword("Please enter the password: ")
 		if err != nil {
 			utils.Fatalf("Failed to read passphrase: %v", err)
 		}
 
-		if len(salt) == 0 {
-			salt = scanLine("Please enter the salt: ")
+		if len(*argSalt) == 0 {
+			argSalt = scanLineA("Please enter the salt: ")
 		}
 
-		symKey = pbkdf2.Key([]byte(pass), []byte(salt), 65356, 32, sha256.New)
+		symKey = pbkdf2.Key([]byte(pass), []byte(*argSalt), 65356, 32, sha256.New)
 
-		if len(topicStr) == 0 {
-			generateTopic([]byte(pass), []byte(salt))
-		}
-	}
-
-	if mailServerMode {
-		if len(dbPath) == 0 {
-			dbPath = scanLine("Please enter the path to DB file: ")
-		}
-
-		if msPoW == 0.0 {
-			s = scanLine("Please enter the PoW requirement for the Mail Server (int): ")
-			i, err = strconv.Atoi(s)
-			if err != nil {
-				utils.Fatalf("Fail to parse the PoW: %s", err)
-			}
-			msPoW = float64(i)
+		if len(*argTopic) == 0 {
+			generateTopic([]byte(pass), []byte(*argSalt))
 		}
 	}
 
-	if requestMail {
+	if *mailServerMode {
+		if len(*argDBPath) == 0 {
+			argDBPath = scanLineA("Please enter the path to DB file: ")
+		}
+	}
+
+	if *requestMail && len(msPassword) == 0 {
 		msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
 		if err != nil {
 			utils.Fatalf("Failed to read Mail Server password: %s", err)
@@ -485,11 +330,11 @@ func run() {
 	shh.Start(nil)
 	defer shh.Stop()
 
-	if !forwarderMode {
+	if !*forwarderMode {
 		go messageLoop()
 	}
 
-	if requestMail {
+	if *requestMail {
 		requestExpiredMessagesLoop()
 	} else {
 		sendLoop()
@@ -506,7 +351,7 @@ func sendLoop() {
 		}
 		sendMsg([]byte(s))
 
-		if isAsymmetric {
+		if *asymmetricMode {
 			// print your own message for convenience,
 			// because in asymmetric mode it is impossible to decrypt it
 			hour, min, sec := time.Now().Clock()
@@ -520,12 +365,26 @@ func scanLine(prompt string) string {
 	if len(prompt) > 0 {
 		fmt.Print(prompt)
 	}
-	//txt, err := console.Stdin.PromptInput(prompt) // todo: delete
 	txt, err := input.ReadString('\n')
 	if err != nil {
 		utils.Fatalf("input error: %s", err)
 	}
-	return strings.TrimRight(txt, "\n\r")
+	txt = strings.TrimRight(txt, "\n\r")
+	return txt
+}
+
+func scanLineA(prompt string) *string {
+	s := scanLine(prompt)
+	return &s
+}
+
+func scanUint(prompt string) uint32 {
+	s := scanLine(prompt)
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		utils.Fatalf("Fail to parse the lower time limit: %s", err)
+	}
+	return uint32(i)
 }
 
 func sendMsg(payload []byte) {
@@ -535,9 +394,9 @@ func sendMsg(payload []byte) {
 		KeySym:   symKey,
 		Payload:  payload,
 		Topic:    topic,
-		TTL:      ttl,
-		PoW:      pow,
-		WorkTime: workTime,
+		TTL:      uint32(*argTTL),
+		PoW:      *argPoW,
+		WorkTime: uint32(*argWorkTime),
 	}
 
 	msg := whisper.NewSentMessage(&params)
@@ -592,39 +451,33 @@ func printMessageInfo(msg *whisper.ReceivedMessage) {
 
 func requestExpiredMessagesLoop() {
 	var key, peerID []byte
-	err := shh.AddSymKey(argRequestMail, []byte(msPassword))
+	var timeLow, timeUpp, t uint32
+	err := shh.AddSymKey(mailServerKeyName, []byte(msPassword))
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
-	key = shh.GetSymKey(argRequestMail)
-	peerID = extractIdFromEnode(enode)
+	key = shh.GetSymKey(mailServerKeyName)
+	peerID = extractIdFromEnode(*argEnode)
 	shh.MarkPeerTrusted(peerID)
 
 	for {
-		s := scanLine("Please enter the lower limit for the time range (unix timestamp): ")
-		i, err := strconv.Atoi(s)
-		if err != nil {
-			utils.Fatalf("Fail to parse the lower time limit: %s", err)
-		}
-		timeLow = uint32(i)
-
-		s = scanLine("Please enter the upper limit for the time range (unix timestamp): ")
-		i, err = strconv.Atoi(s)
-		if err != nil {
-			utils.Fatalf("Fail to parse the upper time limit: %s", err)
-		}
-		timeUpp = uint32(i)
+		timeLow = scanUint("Please enter the lower limit of the time range (unix timestamp): ")
+		timeUpp = scanUint("Please enter the upper limit of the time range (unix timestamp): ")
+		t = scanUint("Please enter the topic: ")
 		if timeUpp == 0 {
 			timeUpp = 0xFFFFFFFF
 		}
 
-		data := make([]byte, sizeOfInt*2)
+		data := make([]byte, sizeOfInt*3)
 		binary.BigEndian.PutUint32(data, timeLow)
 		binary.BigEndian.PutUint32(data[sizeOfInt:], timeUpp)
-		// todo: add topic
+		binary.BigEndian.PutUint32(data[sizeOfInt*2:], t)
+		if t == 0 {
+			data = data[:sizeOfInt*2]
+		}
 
 		var params whisper.MessageParams
-		params.PoW = msPoW
+		params.PoW = *argServerPoW
 		params.Payload = data
 		params.KeySym = key
 		params.Src = nodeid
@@ -673,3 +526,11 @@ func extractIdFromEnode(s string) []byte {
 
 	return b
 }
+
+// this is a temporary stub, will be expanded later
+type WMailServer struct{}
+
+func (s *WMailServer) Archive(env *whisper.Envelope)                                      {}
+func (s *WMailServer) DeliverMail(peer *whisper.Peer, data []byte)                        {}
+func (s *WMailServer) Init(w *whisper.Whisper, path string, password string, pow float64) {}
+func (s *WMailServer) Close()                                                             {}
