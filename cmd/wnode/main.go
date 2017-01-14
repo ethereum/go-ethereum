@@ -220,7 +220,7 @@ func initialize() {
 func startServer() {
 	err := server.Start()
 	if err != nil {
-		utils.Fatalf("Failed to start Whsiper peer: %s.", err)
+		utils.Fatalf("Failed to start Whisper peer: %s.", err)
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
