@@ -19,6 +19,7 @@ package whisperv5
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/crypto"
@@ -49,20 +50,17 @@ func TestWhisperBasic(t *testing.T) {
 
 	peerID := make([]byte, 64)
 	randomize(peerID)
-	peer, err := w.getPeer(peerID)
+	peer, _ := w.getPeer(peerID)
 	if peer != nil {
-		t.Fatalf("failed GetPeer.")
+		t.Fatal("found peer for random key.")
 	}
-	err = w.MarkPeerTrusted(peerID)
-	if err == nil {
+	if err := w.MarkPeerTrusted(peerID); err == nil {
 		t.Fatalf("failed MarkPeerTrusted.")
 	}
-	err = w.RequestHistoricMessages(peerID, peerID)
-	if err == nil {
+	if err := w.RequestHistoricMessages(peerID, peerID); err == nil {
 		t.Fatalf("failed RequestHistoricMessages.")
 	}
-	err = w.SendP2PMessage(peerID, nil)
-	if err == nil {
+	if err := w.SendP2PMessage(peerID, nil); err == nil {
 		t.Fatalf("failed SendP2PMessage.")
 	}
 	exist := w.HasSymKey("non-existing")
@@ -84,11 +82,10 @@ func TestWhisperBasic(t *testing.T) {
 
 	var derived []byte
 	ver := uint64(0xDEADBEEF)
-	derived, err = deriveKeyMaterial(peerID, ver)
-	if err != unknownVersionError(ver) {
+	if _, err := deriveKeyMaterial(peerID, ver); err != unknownVersionError(ver) {
 		t.Fatalf("failed deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
-	derived, err = deriveKeyMaterial(peerID, 0)
+	derived, err := deriveKeyMaterial(peerID, 0)
 	if err != nil {
 		t.Fatalf("failed second deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
@@ -238,7 +235,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k1 == nil {
 		t.Fatalf("first key does not exist.")
 	}
-	if bytes.Compare(k1, randomKey) == 0 {
+	if bytes.Equal(k1, randomKey) {
 		t.Fatalf("k1 == randomKey.")
 	}
 	if k2 != nil {
@@ -263,10 +260,10 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k2 == nil {
 		t.Fatalf("k2 does not exist.")
 	}
-	if bytes.Compare(k1, k2) == 0 {
+	if bytes.Equal(k1, k2) {
 		t.Fatalf("k1 == k2.")
 	}
-	if bytes.Compare(k1, randomKey) == 0 {
+	if bytes.Equal(k1, randomKey) {
 		t.Fatalf("k1 == randomKey.")
 	}
 	if len(k1) != aesKeyLength {
@@ -307,5 +304,58 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 	if k2 != nil {
 		t.Fatalf("failed to delete second key: second key is not nil.")
+	}
+}
+
+func TestExpiry(t *testing.T) {
+	InitSingleTest()
+
+	w := NewWhisper(nil)
+	w.test = true
+	w.Start(nil)
+	defer w.Stop()
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	params.TTL = 1
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("failed to send envelope with seed %d: %s.", seed, err)
+	}
+
+	// wait till received or timeout
+	var received, expired bool
+	for j := 0; j < 20; j++ {
+		time.Sleep(100 * time.Millisecond)
+		if len(w.Envelopes()) > 0 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// wait till expired or timeout
+	for j := 0; j < 20; j++ {
+		time.Sleep(100 * time.Millisecond)
+		if len(w.Envelopes()) == 0 {
+			expired = true
+			break
+		}
+	}
+
+	if !expired {
+		t.Fatalf("expire failed, seed: %d.", seed)
 	}
 }

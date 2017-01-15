@@ -16,14 +16,12 @@
 
 package vm
 
-import (
-	"errors"
-	"fmt"
+import "errors"
 
-	"github.com/ubiq/go-ubiq/params"
+var (
+	ErrOutOfGas            = errors.New("out of gas")
+	ErrCodeStoreOutOfGas   = errors.New("contract creation code storage out of gas")
+	ErrDepth               = errors.New("max call depth exceeded")
+	ErrTraceLimitReached   = errors.New("the number of logs reached the specified limit")
+	ErrInsufficientBalance = errors.New("insufficient balance for transfer")
 )
-
-var OutOfGasError = errors.New("Out of gas")
-var CodeStoreOutOfGasError = errors.New("Contract creation code storage out of gas")
-var DepthError = fmt.Errorf("Max call depth exceeded (%d)", params.CallCreateDepth)
-var TraceLimitReachedError = errors.New("The number of logs reached the specified limit")

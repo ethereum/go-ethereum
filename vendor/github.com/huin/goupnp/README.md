@@ -8,18 +8,18 @@ Run `go get -u github.com/huin/goupnp`.
 Documentation
 -------------
 
-All doc links below are for ![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg).
-
 Supported DCPs (you probably want to start with one of these):
-* [av1](https://godoc.org/github.com/huin/goupnp/dcps/av1) - Client for UPnP Device Control Protocol MediaServer v1 and MediaRenderer v1.
-* [internetgateway1](https://godoc.org/github.com/huin/goupnp/dcps/internetgateway1) - Client for UPnP Device Control Protocol Internet Gateway Device v1.
-* [internetgateway2](https://godoc.org/github.com/huin/goupnp/dcps/internetgateway2) - Client for UPnP Device Control Protocol Internet Gateway Device v2.
+
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) av1](https://godoc.org/github.com/huin/goupnp/dcps/av1) - Client for UPnP Device Control Protocol MediaServer v1 and MediaRenderer v1.
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) internetgateway1](https://godoc.org/github.com/huin/goupnp/dcps/internetgateway1) - Client for UPnP Device Control Protocol Internet Gateway Device v1.
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) internetgateway2](https://godoc.org/github.com/huin/goupnp/dcps/internetgateway2) - Client for UPnP Device Control Protocol Internet Gateway Device v2.
 
 Core components:
-* [(goupnp)](https://godoc.org/github.com/huin/goupnp) core library - contains datastructures and utilities typically used by the implemented DCPs.
-* [httpu](https://godoc.org/github.com/huin/goupnp/httpu) HTTPU implementation, underlies SSDP.
-* [ssdp](https://godoc.org/github.com/huin/goupnp/ssdp) SSDP client implementation (simple service discovery protocol) - used to discover UPnP services on a network.
-* [soap](https://godoc.org/github.com/huin/goupnp/soap) SOAP client implementation (simple object access protocol) - used to communicate with discovered services.
+
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) (goupnp)](https://godoc.org/github.com/huin/goupnp) core library - contains datastructures and utilities typically used by the implemented DCPs.
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) httpu](https://godoc.org/github.com/huin/goupnp/httpu) HTTPU implementation, underlies SSDP.
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) ssdp](https://godoc.org/github.com/huin/goupnp/ssdp) SSDP client implementation (simple service discovery protocol) - used to discover UPnP services on a network.
+* [![GoDoc](https://godoc.org/github.com/huin/goupnp?status.svg) soap](https://godoc.org/github.com/huin/goupnp/soap) SOAP client implementation (simple object access protocol) - used to communicate with discovered services.
 
 
 Regenerating dcps generated source code:

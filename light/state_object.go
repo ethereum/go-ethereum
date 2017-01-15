@@ -179,7 +179,7 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 }
 
 // ReturnGas returns the gas back to the origin. Used by the Virtual machine or Closures
-func (c *StateObject) ReturnGas(gas, price *big.Int) {}
+func (c *StateObject) ReturnGas(gas *big.Int) {}
 
 // Copy creates a copy of the state object
 func (self *StateObject) Copy() *StateObject {

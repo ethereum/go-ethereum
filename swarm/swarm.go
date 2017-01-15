@@ -52,6 +52,7 @@ type Swarm struct {
 	hive        *network.Hive          // the logistic manager
 	backend     chequebook.Backend     // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
+	corsString  string
 	swapEnabled bool
 }
 
@@ -71,7 +72,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -84,6 +85,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		swapEnabled: swapEnabled,
 		backend:     backend,
 		privateKey:  config.Swap.PrivateKey(),
+		corsString:  cors,
 	}
 	glog.V(logger.Debug).Infof("Setting up Swarm service components")
 
@@ -188,9 +190,15 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	// start swarm http proxy server
 	if self.config.Port != "" {
-		go httpapi.StartHttpServer(self.api, self.config.Port)
+		addr := ":" + self.config.Port
+		go httpapi.StartHttpServer(self.api, &httpapi.Server{Addr: addr, CorsString: self.corsString})
 	}
+
 	glog.V(logger.Debug).Infof("Swarm http proxy started on port: %v", self.config.Port)
+
+	if self.corsString != "" {
+		glog.V(logger.Debug).Infof("Swarm http proxy started with corsdomain:", self.corsString)
+	}
 
 	return nil
 }

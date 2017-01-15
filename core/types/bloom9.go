@@ -22,7 +22,6 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/hexutil"
-	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
 )
 
@@ -95,17 +94,11 @@ func CreateBloom(receipts Receipts) Bloom {
 	return BytesToBloom(bin.Bytes())
 }
 
-func LogsBloom(logs vm.Logs) *big.Int {
+func LogsBloom(logs []*Log) *big.Int {
 	bin := new(big.Int)
 	for _, log := range logs {
-		data := make([]common.Hash, len(log.Topics))
 		bin.Or(bin, bloom9(log.Address.Bytes()))
-
-		for i, topic := range log.Topics {
-			data[i] = topic
-		}
-
-		for _, b := range data {
+		for _, b := range log.Topics {
 			bin.Or(bin, bloom9(b[:]))
 		}
 	}

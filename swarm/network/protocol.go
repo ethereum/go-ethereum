@@ -51,7 +51,7 @@ const (
 	Version            = 0
 	ProtocolLength     = uint64(8)
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
-	NetworkId          = 322
+	NetworkId          = 3
 )
 
 const (
@@ -536,13 +536,6 @@ func (self *bzz) protoError(code int, format string, params ...interface{}) (err
 	err = self.errors.New(code, format, params...)
 	err.Log(glog.V(logger.Info))
 	return
-}
-
-func (self *bzz) protoErrorDisconnect(err *errs.Error) {
-	err.Log(glog.V(logger.Info))
-	if err.Fatal() {
-		self.peer.Disconnect(p2p.DiscSubprotocolError)
-	}
 }
 
 func (self *bzz) send(msg uint64, data interface{}) error {

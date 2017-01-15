@@ -78,7 +78,7 @@ func (bi *BigInts) Size() int {
 }
 
 // Get returns the bigint at the given index from the slice.
-func (bi *BigInts) Get(index int) (*BigInt, error) {
+func (bi *BigInts) Get(index int) (bigint *BigInt, _ error) {
 	if index < 0 || index >= len(bi.bigints) {
 		return nil, errors.New("index out of bounds")
 	}

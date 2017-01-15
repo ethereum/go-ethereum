@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -25,10 +26,12 @@ import (
 	"math/big"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/ethereum/ethash"
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
@@ -67,8 +70,8 @@ func (s *PublicEthereumAPI) Coinbase() (common.Address, error) {
 }
 
 // Hashrate returns the POW hashrate
-func (s *PublicEthereumAPI) Hashrate() *rpc.HexNumber {
-	return rpc.NewHexNumber(s.e.Miner().HashRate())
+func (s *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
+	return hexutil.Uint64(s.e.Miner().HashRate())
 }
 
 // PublicMinerAPI provides an API to control the miner.
@@ -80,7 +83,7 @@ type PublicMinerAPI struct {
 
 // NewPublicMinerAPI create a new PublicMinerAPI instance.
 func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
-	agent := miner.NewRemoteAgent()
+	agent := miner.NewRemoteAgent(e.Pow())
 	e.Miner().Register(agent)
 
 	return &PublicMinerAPI{e, agent}
@@ -93,8 +96,8 @@ func (s *PublicMinerAPI) Mining() bool {
 
 // SubmitWork can be used by external miner to submit their POW solution. It returns an indication if the work was
 // accepted. Note, this is not an indication if the provided work was valid!
-func (s *PublicMinerAPI) SubmitWork(nonce rpc.HexNumber, solution, digest common.Hash) bool {
-	return s.agent.SubmitWork(nonce.Uint64(), digest, solution)
+func (s *PublicMinerAPI) SubmitWork(nonce types.BlockNonce, solution, digest common.Hash) bool {
+	return s.agent.SubmitWork(nonce, digest, solution)
 }
 
 // GetWork returns a work package for external miner. The work package consists of 3 strings
@@ -117,8 +120,8 @@ func (s *PublicMinerAPI) GetWork() (work [3]string, err error) {
 // SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined
 // hash rate of all miners which submit work through this node. It accepts the miner hash rate and an identifier which
 // must be unique between nodes.
-func (s *PublicMinerAPI) SubmitHashrate(hashrate rpc.HexNumber, id common.Hash) bool {
-	s.agent.SubmitHashrate(id, hashrate.Uint64())
+func (s *PublicMinerAPI) SubmitHashrate(hashrate hexutil.Uint64, id common.Hash) bool {
+	s.agent.SubmitHashrate(id, uint64(hashrate))
 	return true
 }
 
@@ -135,18 +138,15 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 
 // Start the miner with the given number of threads. If threads is nil the number of
 // workers started is equal to the number of logical CPU's that are usable by this process.
-func (s *PrivateMinerAPI) Start(threads *rpc.HexNumber) (bool, error) {
+func (s *PrivateMinerAPI) Start(threads *int) (bool, error) {
 	s.e.StartAutoDAG()
-
+	var err error
 	if threads == nil {
-		threads = rpc.NewHexNumber(runtime.NumCPU())
+		err = s.e.StartMining(runtime.NumCPU())
+	} else {
+		err = s.e.StartMining(*threads)
 	}
-
-	err := s.e.StartMining(threads.Int())
-	if err == nil {
-		return true, nil
-	}
-	return false, err
+	return err == nil, err
 }
 
 // Stop the miner
@@ -164,8 +164,8 @@ func (s *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 }
 
 // SetGasPrice sets the minimum accepted gas price for the miner.
-func (s *PrivateMinerAPI) SetGasPrice(gasPrice rpc.HexNumber) bool {
-	s.e.Miner().SetGasPrice(gasPrice.BigInt())
+func (s *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
+	s.e.Miner().SetGasPrice((*big.Int)(&gasPrice))
 	return true
 }
 
@@ -217,8 +217,14 @@ func (api *PrivateAdminAPI) ExportChain(file string) (bool, error) {
 	}
 	defer out.Close()
 
+	var writer io.Writer = out
+	if strings.HasSuffix(file, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+
 	// Export the blockchain
-	if err := api.eth.BlockChain().Export(out); err != nil {
+	if err := api.eth.BlockChain().Export(writer); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -243,8 +249,15 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	}
 	defer in.Close()
 
+	var reader io.Reader = in
+	if strings.HasSuffix(file, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return false, err
+		}
+	}
+
 	// Run actual the import in pre-configured batches
-	stream := rlp.NewStream(in, 0)
+	stream := rlp.NewStream(reader, 0)
 
 	blocks, index := make([]*types.Block, 0, 2500), 0
 	for batch := 0; ; batch++ {
@@ -422,7 +435,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, logConfig *vm.LogConf
 	return true, structLogger.StructLogs(), nil
 }
 
-// callmsg is the message type used for call transations.
+// callmsg is the message type used for call transitions.
 type callmsg struct {
 	addr          common.Address
 	to            *common.Address
@@ -515,9 +528,11 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 		if err != nil {
 			return nil, fmt.Errorf("sender retrieval failed: %v", err)
 		}
+		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain())
+
 		// Mutate the state if we haven't reached the tracing transaction yet
 		if uint64(idx) < txIndex {
-			vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{})
+			vmenv := vm.NewEVM(context, stateDb, api.config, vm.Config{})
 			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				return nil, fmt.Errorf("mutation failed: %v", err)
@@ -525,8 +540,8 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 			stateDb.DeleteSuicides()
 			continue
 		}
-		// Otherwise trace the transaction and return
-		vmenv := core.NewEnv(stateDb, api.config, api.eth.BlockChain(), msg, block.Header(), vm.Config{Debug: true, Tracer: tracer})
+
+		vmenv := vm.NewEVM(context, stateDb, api.config, vm.Config{Debug: true, Tracer: tracer})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)

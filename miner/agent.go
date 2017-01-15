@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ubiq/go-ubiq/common"
+	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/pow"
@@ -112,7 +113,7 @@ func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	// Mine
 	nonce, mixDigest := self.pow.Search(work.Block, stop, self.index)
 	if nonce != 0 {
-		block := work.Block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
+		block := work.Block.WithMiningResult(types.EncodeNonce(nonce), common.BytesToHash(mixDigest))
 		self.returnCh <- &Result{work, block}
 	} else {
 		self.returnCh <- nil

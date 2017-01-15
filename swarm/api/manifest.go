@@ -62,6 +62,11 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 
 	// TODO check size for oversized manifests
 	size, err := manifestReader.Size(quitC)
+	if err != nil { // size == 0
+		// can't determine size means we don't have the root chunk
+		err = fmt.Errorf("Manifest not Found")
+		return
+	}
 	manifestData := make([]byte, size)
 	read, err := manifestReader.Read(manifestData)
 	if int64(read) < size {

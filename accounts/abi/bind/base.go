@@ -170,7 +170,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 	if value == nil {
 		value = new(big.Int)
 	}
-	nonce := uint64(0)
+	var nonce uint64
 	if opts.Nonce == nil {
 		nonce, err = c.transactor.PendingNonceAt(ensureContext(opts.Context), opts.From)
 		if err != nil {

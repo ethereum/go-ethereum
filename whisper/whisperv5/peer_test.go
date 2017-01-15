@@ -118,6 +118,7 @@ func initialize(t *testing.T) {
 		var node TestNode
 		node.shh = NewWhisper(nil)
 		node.shh.test = true
+		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey, Topics: topics}
@@ -166,6 +167,7 @@ func stopServers() {
 		n := nodes[i]
 		if n != nil {
 			n.shh.Unwatch(n.filerId)
+			n.shh.Stop()
 			n.server.Stop()
 		}
 	}
@@ -205,7 +207,7 @@ func checkPropagation(t *testing.T) {
 func validateMail(t *testing.T, index int, mail []*ReceivedMessage) bool {
 	var cnt int
 	for _, m := range mail {
-		if bytes.Compare(m.Payload, expectedMessage) == 0 {
+		if bytes.Equal(m.Payload, expectedMessage) {
 			cnt++
 		}
 	}

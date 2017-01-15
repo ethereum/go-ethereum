@@ -18,8 +18,9 @@ def main(sysargs=sys.argv[:]):
     targets = {
         'vet': _vet,
         'test': _test,
-        'gfmxr': _gfmxr,
+        'gfmrun': _gfmrun,
         'toc': _toc,
+        'gen': _gen,
     }
 
     parser = argparse.ArgumentParser()
@@ -34,7 +35,7 @@ def main(sysargs=sys.argv[:]):
 
 def _test():
     if check_output('go version'.split()).split()[2] < 'go1.2':
-        _run('go test -v .'.split())
+        _run('go test -v .')
         return
 
     coverprofiles = []
@@ -51,29 +52,45 @@ def _test():
         ])
 
     combined_name = _combine_coverprofiles(coverprofiles)
-    _run('go tool cover -func={}'.format(combined_name).split())
+    _run('go tool cover -func={}'.format(combined_name))
     os.remove(combined_name)
 
 
-def _gfmxr():
-    _run(['gfmxr', '-c', str(_gfmxr_count()), '-s', 'README.md'])
+def _gfmrun():
+    go_version = check_output('go version'.split()).split()[2]
+    if go_version < 'go1.3':
+        print('runtests: skip on {}'.format(go_version), file=sys.stderr)
+        return
+    _run(['gfmrun', '-c', str(_gfmrun_count()), '-s', 'README.md'])
 
 
 def _vet():
-    _run('go vet ./...'.split())
+    _run('go vet ./...')
 
 
 def _toc():
-    _run(['node_modules/.bin/markdown-toc', '-i', 'README.md'])
-    _run(['git', 'diff', '--quiet'])
+    _run('node_modules/.bin/markdown-toc -i README.md')
+    _run('git diff --exit-code')
+
+
+def _gen():
+    go_version = check_output('go version'.split()).split()[2]
+    if go_version < 'go1.5':
+        print('runtests: skip on {}'.format(go_version), file=sys.stderr)
+        return
+
+    _run('go generate ./...')
+    _run('git diff --exit-code')
 
 
 def _run(command):
+    if hasattr(command, 'split'):
+        command = command.split()
     print('runtests: {}'.format(' '.join(command)), file=sys.stderr)
     check_call(command)
 
 
-def _gfmxr_count():
+def _gfmrun_count():
     with open('README.md') as infile:
         lines = infile.read().splitlines()
         return len(filter(_is_go_runnable, lines))

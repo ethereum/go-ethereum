@@ -33,7 +33,8 @@ const (
 	FixedBytesTy
 	BytesTy
 	HashTy
-	RealTy
+	FixedpointTy
+	FunctionTy
 )
 
 // Type is the reflection of the supported argument type
@@ -57,16 +58,16 @@ var (
 	// Types can be in the format of:
 	//
 	// 	Input  = Type [ "[" [ Number ] "]" ] Name .
-	// 	Type   = [ "u" ] "int" [ Number ] .
+	// 	Type   = [ "u" ] "int" [ Number ] [ x ] [ Number ].
 	//
 	// Examples:
 	//
-	//      string     int       uint       real
+	//      string     int       uint       fixed
 	//      string32   int8      uint8      uint[]
-	//      address    int256    uint256    real[2]
-	fullTypeRegex = regexp.MustCompile("([a-zA-Z0-9]+)(\\[([0-9]*)?\\])?")
+	//      address    int256    uint256    fixed128x128[2]
+	fullTypeRegex = regexp.MustCompile(`([a-zA-Z0-9]+)(\[([0-9]*)\])?`)
 	// typeRegex parses the abi sub types
-	typeRegex = regexp.MustCompile("([a-zA-Z]+)([0-9]*)?")
+	typeRegex = regexp.MustCompile("([a-zA-Z]+)(([0-9]+)(x([0-9]+))?)?")
 )
 
 // NewType creates a new reflection type of abi type given in t.
@@ -90,14 +91,19 @@ func NewType(t string) (typ Type, err error) {
 		}
 		typ.Elem = &sliceType
 		typ.stringKind = sliceType.stringKind + t[len(res[1]):]
-		return typ, nil
+		// Although we know that this is an array, we cannot return
+		// as we don't know the type of the element, however, if it
+		// is still an array, then don't determine the type.
+		if typ.Elem.IsArray || typ.Elem.IsSlice {
+			return typ, nil
+		}
 	}
 
 	// parse the type and size of the abi-type.
 	parsedType := typeRegex.FindAllStringSubmatch(res[1], -1)[0]
 	// varSize is the size of the variable
 	var varSize int
-	if len(parsedType[2]) > 0 {
+	if len(parsedType[3]) > 0 {
 		var err error
 		varSize, err = strconv.Atoi(parsedType[2])
 		if err != nil {
@@ -111,7 +117,12 @@ func NewType(t string) (typ Type, err error) {
 		varSize = 256
 		t += "256"
 	}
-	typ.stringKind = t
+
+	// only set stringKind if not array or slice, as for those,
+	// the correct string type has been set
+	if !(typ.IsArray || typ.IsSlice) {
+		typ.stringKind = t
+	}
 
 	switch varType {
 	case "int":
@@ -148,6 +159,12 @@ func NewType(t string) (typ Type, err error) {
 			typ.T = FixedBytesTy
 			typ.SliceSize = varSize
 		}
+	case "function":
+		sliceType, _ := NewType("uint8")
+		typ.Elem = &sliceType
+		typ.IsArray = true
+		typ.T = FunctionTy
+		typ.SliceSize = 24
 	default:
 		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
 	}
@@ -168,7 +185,7 @@ func (t Type) pack(v reflect.Value) ([]byte, error) {
 		return nil, err
 	}
 
-	if (t.IsSlice || t.IsArray) && t.T != BytesTy && t.T != FixedBytesTy {
+	if (t.IsSlice || t.IsArray) && t.T != BytesTy && t.T != FixedBytesTy && t.T != FunctionTy {
 		var packed []byte
 
 		for i := 0; i < v.Len(); i++ {

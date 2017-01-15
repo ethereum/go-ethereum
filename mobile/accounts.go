@@ -56,7 +56,7 @@ func (a *Accounts) Size() int {
 }
 
 // Get returns the account at the given index from the slice.
-func (a *Accounts) Get(index int) (*Account, error) {
+func (a *Accounts) Get(index int) (account *Account, _ error) {
 	if index < 0 || index >= len(a.accounts) {
 		return nil, errors.New("index out of bounds")
 	}
@@ -91,8 +91,8 @@ func NewAccountManager(keydir string, scryptN, scryptP int) *AccountManager {
 }
 
 // HasAddress reports whether a key with the given address is present.
-func (am *AccountManager) HasAddress(addr *Address) bool {
-	return am.manager.HasAddress(addr.address)
+func (am *AccountManager) HasAddress(address *Address) bool {
+	return am.manager.HasAddress(address.address)
 }
 
 // GetAccounts returns all key files present in the directory.
@@ -102,43 +102,45 @@ func (am *AccountManager) GetAccounts() *Accounts {
 
 // DeleteAccount deletes the key matched by account if the passphrase is correct.
 // If a contains no filename, the address must match a unique key.
-func (am *AccountManager) DeleteAccount(a *Account, passphrase string) error {
+func (am *AccountManager) DeleteAccount(account *Account, passphrase string) error {
 	return am.manager.DeleteAccount(accounts.Account{
-		Address: a.account.Address,
-		File:    a.account.File,
+		Address: account.account.Address,
+		File:    account.account.File,
 	}, passphrase)
 }
 
-// Sign signs hash with an unlocked private key matching the given address.
-func (am *AccountManager) Sign(addr *Address, hash []byte) ([]byte, error) {
-	return am.manager.Sign(addr.address, hash)
+// Sign calculates a ECDSA signature for the given hash. The produced signature
+// is in the [R || S || V] format where V is 0 or 1.
+func (am *AccountManager) Sign(address *Address, hash []byte) (signature []byte, _ error) {
+	return am.manager.Sign(address.address, hash)
 }
 
-// SignWithPassphrase signs hash if the private key matching the given address can be
-// decrypted with the given passphrase.
-func (am *AccountManager) SignWithPassphrase(addr *Address, passphrase string, hash []byte) ([]byte, error) {
-	return am.manager.SignWithPassphrase(addr.address, passphrase, hash)
+// SignPassphrase signs hash if the private key matching the given address can
+// be decrypted with the given passphrase. The produced signature is in the
+// [R || S || V] format where V is 0 or 1.
+func (am *AccountManager) SignPassphrase(account *Account, passphrase string, hash []byte) (signature []byte, _ error) {
+	return am.manager.SignWithPassphrase(account.account, passphrase, hash)
 }
 
 // Unlock unlocks the given account indefinitely.
-func (am *AccountManager) Unlock(a *Account, passphrase string) error {
-	return am.manager.TimedUnlock(a.account, passphrase, 0)
+func (am *AccountManager) Unlock(account *Account, passphrase string) error {
+	return am.manager.TimedUnlock(account.account, passphrase, 0)
 }
 
 // Lock removes the private key with the given address from memory.
-func (am *AccountManager) Lock(addr *Address) error {
-	return am.manager.Lock(addr.address)
+func (am *AccountManager) Lock(address *Address) error {
+	return am.manager.Lock(address.address)
 }
 
-// TimedUnlock unlocks the given account with the passphrase. The account
-// stays unlocked for the duration of timeout. A timeout of 0 unlocks the account
-// until the program exits. The account must match a unique key file.
+// TimedUnlock unlocks the given account with the passphrase. The account stays
+// unlocked for the duration of timeout (nanoseconds). A timeout of 0 unlocks the
+// account until the program exits. The account must match a unique key file.
 //
 // If the account address is already unlocked for a duration, TimedUnlock extends or
 // shortens the active unlock timeout. If the address was previously unlocked
 // indefinitely the timeout is not altered.
-func (am *AccountManager) TimedUnlock(a *Account, passphrase string, timeout int64) error {
-	return am.manager.TimedUnlock(a.account, passphrase, time.Duration(timeout))
+func (am *AccountManager) TimedUnlock(account *Account, passphrase string, timeout int64) error {
+	return am.manager.TimedUnlock(account.account, passphrase, time.Duration(timeout))
 }
 
 // NewAccount generates a new key and stores it into the key directory,
@@ -152,27 +154,27 @@ func (am *AccountManager) NewAccount(passphrase string) (*Account, error) {
 }
 
 // ExportKey exports as a JSON key, encrypted with newPassphrase.
-func (am *AccountManager) ExportKey(a *Account, passphrase, newPassphrase string) ([]byte, error) {
-	return am.manager.Export(a.account, passphrase, newPassphrase)
+func (am *AccountManager) ExportKey(account *Account, passphrase, newPassphrase string) (key []byte, _ error) {
+	return am.manager.Export(account.account, passphrase, newPassphrase)
 }
 
 // ImportKey stores the given encrypted JSON key into the key directory.
-func (am *AccountManager) ImportKey(keyJSON []byte, passphrase, newPassphrase string) (*Account, error) {
-	account, err := am.manager.Import(keyJSON, passphrase, newPassphrase)
+func (am *AccountManager) ImportKey(keyJSON []byte, passphrase, newPassphrase string) (account *Account, _ error) {
+	acc, err := am.manager.Import(keyJSON, passphrase, newPassphrase)
 	if err != nil {
 		return nil, err
 	}
-	return &Account{account}, nil
+	return &Account{acc}, nil
 }
 
-// Update changes the passphrase of an existing account.
-func (am *AccountManager) Update(a *Account, passphrase, newPassphrase string) error {
-	return am.manager.Update(a.account, passphrase, newPassphrase)
+// UpdateAccount changes the passphrase of an existing account.
+func (am *AccountManager) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
+	return am.manager.Update(account.account, passphrase, newPassphrase)
 }
 
 // ImportPreSaleKey decrypts the given Ethereum presale wallet and stores
 // a key file in the key directory. The key file is encrypted with the same passphrase.
-func (am *AccountManager) ImportPreSaleKey(keyJSON []byte, passphrase string) (*Account, error) {
+func (am *AccountManager) ImportPreSaleKey(keyJSON []byte, passphrase string) (ccount *Account, _ error) {
 	account, err := am.manager.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
 		return nil, err

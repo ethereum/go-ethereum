@@ -26,7 +26,6 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/core/types"
-	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/rlp"
 	"github.com/ubiq/go-ubiq/rpc"
 	"golang.org/x/net/context"
@@ -81,6 +80,8 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	err := ec.c.CallContext(ctx, &raw, method, args...)
 	if err != nil {
 		return nil, err
+	} else if len(raw) == 0 {
+		return nil, ethereum.NotFound
 	}
 	// Decode header and transactions.
 	var head *types.Header
@@ -112,7 +113,7 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 		for i := range reqs {
 			reqs[i] = rpc.BatchElem{
 				Method: "eth_getUncleByBlockHashAndIndex",
-				Args:   []interface{}{body.Hash, fmt.Sprintf("%#x", i)},
+				Args:   []interface{}{body.Hash, hexutil.EncodeUint64(uint64(i))},
 				Result: &uncles[i],
 			}
 		}
@@ -123,6 +124,9 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 			if reqs[i].Error != nil {
 				return nil, reqs[i].Error
 			}
+			if uncles[i] == nil {
+				return nil, fmt.Errorf("got null header for uncle %d of block %x", i, body.Hash[:])
+			}
 		}
 	}
 	return types.NewBlockWithHeader(head).WithBody(body.Transactions, uncles), nil
@@ -132,6 +136,9 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error) {
 	var head *types.Header
 	err := ec.c.CallContext(ctx, &head, "eth_getBlockByHash", hash, false)
+	if err == nil && head == nil {
+		err = ethereum.NotFound
+	}
 	return head, err
 }
 
@@ -140,19 +147,31 @@ func (ec *Client) HeaderByHash(ctx context.Context, hash common.Hash) (*types.He
 func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.Header, error) {
 	var head *types.Header
 	err := ec.c.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
+	if err == nil && head == nil {
+		err = ethereum.NotFound
+	}
 	return head, err
 }
 
 // TransactionByHash returns the transaction with the given hash.
-func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, error) {
-	var tx *types.Transaction
-	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByHash", hash)
-	if err == nil {
-		if _, r, _ := tx.RawSignatureValues(); r == nil {
-			return nil, fmt.Errorf("server returned transaction without signature")
-		}
+func (ec *Client) TransactionByHash(ctx context.Context, hash common.Hash) (tx *types.Transaction, isPending bool, err error) {
+	var raw json.RawMessage
+	err = ec.c.CallContext(ctx, &raw, "eth_getTransactionByHash", hash)
+	if err != nil {
+		return nil, false, err
+	} else if len(raw) == 0 {
+		return nil, false, ethereum.NotFound
 	}
-	return tx, err
+	if err := json.Unmarshal(raw, &tx); err != nil {
+		return nil, false, err
+	} else if _, r, _ := tx.RawSignatureValues(); r == nil {
+		return nil, false, fmt.Errorf("server returned transaction without signature")
+	}
+	var block struct{ BlockHash *common.Hash }
+	if err := json.Unmarshal(raw, &block); err != nil {
+		return nil, false, err
+	}
+	return tx, block.BlockHash == nil, nil
 }
 
 // TransactionCount returns the total number of transactions in the given block.
@@ -165,13 +184,11 @@ func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (
 // TransactionInBlock returns a single transaction at index in the given block.
 func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash, index uint) (*types.Transaction, error) {
 	var tx *types.Transaction
-	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByBlockHashAndIndex", blockHash, index)
+	err := ec.c.CallContext(ctx, &tx, "eth_getTransactionByBlockHashAndIndex", blockHash, hexutil.Uint64(index))
 	if err == nil {
-		var signer types.Signer = types.HomesteadSigner{}
-		if tx.Protected() {
-			signer = types.NewEIP155Signer(tx.ChainId())
-		}
-		if _, r, _ := types.SignatureValues(signer, tx); r == nil {
+		if tx == nil {
+			return nil, ethereum.NotFound
+		} else if _, r, _ := tx.RawSignatureValues(); r == nil {
 			return nil, fmt.Errorf("server returned transaction without signature")
 		}
 	}
@@ -183,8 +200,12 @@ func (ec *Client) TransactionInBlock(ctx context.Context, blockHash common.Hash,
 func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
 	var r *types.Receipt
 	err := ec.c.CallContext(ctx, &r, "eth_getTransactionReceipt", txHash)
-	if err == nil && r != nil && len(r.PostState) == 0 {
-		return nil, fmt.Errorf("server returned receipt without post state")
+	if err == nil {
+		if r == nil {
+			return nil, ethereum.NotFound
+		} else if len(r.PostState) == 0 {
+			return nil, fmt.Errorf("server returned receipt without post state")
+		}
 	}
 	return r, err
 }
@@ -193,7 +214,7 @@ func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
 	}
-	return fmt.Sprintf("%#x", number)
+	return hexutil.EncodeBig(number)
 }
 
 type rpcProgress struct {
@@ -272,14 +293,14 @@ func (ec *Client) NonceAt(ctx context.Context, account common.Address, blockNumb
 // Filters
 
 // FilterLogs executes a filter query.
-func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]vm.Log, error) {
-	var result []vm.Log
+func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
+	var result []types.Log
 	err := ec.c.CallContext(ctx, &result, "eth_getLogs", toFilterArg(q))
 	return result, err
 }
 
 // SubscribeFilterLogs subscribes to the results of a streaming filter query.
-func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- vm.Log) (ethereum.Subscription, error) {
+func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
 	return ec.c.EthSubscribe(ctx, ch, "logs", toFilterArg(q))
 }
 

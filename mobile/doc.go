@@ -51,6 +51,10 @@
 // should not be provided to limit the remote code complexity. Arrays should be
 // avoided as much as possible since they complicate bounds checking.
 //
+// If a method has multiple return values (e.g. some return + an error), those
+// are generated as output arguments in ObjC. To avoid weird generated names like
+// ret_0 for them, please always assign names to output variables if tuples.
+//
 // Note, a panic *cannot* cross over language boundaries, instead will result in
 // an undebuggable SEGFAULT in the process. For error handling only ever use error
 // returns, which may be the only or the second return.

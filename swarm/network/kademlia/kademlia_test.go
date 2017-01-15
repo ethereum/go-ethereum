@@ -58,9 +58,9 @@ func (n *testNode) LastActive() time.Time {
 }
 
 func TestOn(t *testing.T) {
-	addr, ok := gen(Address{}, quickrand).(Address)
-	other, ok := gen(Address{}, quickrand).(Address)
-	if !ok {
+	addr, ok1 := gen(Address{}, quickrand).(Address)
+	other, ok2 := gen(Address{}, quickrand).(Address)
+	if !ok1 || !ok2 {
 		t.Errorf("oops")
 	}
 	kad := New(addr, NewKadParams())

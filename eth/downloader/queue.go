@@ -844,7 +844,7 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 		}
 	}
 	// Remove the expired requests from the pending pool
-	for id, _ := range expiries {
+	for id := range expiries {
 		delete(pendPool, id)
 	}
 	return expiries
@@ -1063,7 +1063,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 
 	// If no data was retrieved, mark their hashes as unavailable for the origin peer
 	if len(data) == 0 {
-		for hash, _ := range request.Hashes {
+		for hash := range request.Hashes {
 			request.Peer.MarkLacking(hash)
 		}
 	}
@@ -1123,15 +1123,20 @@ func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(int, bo
 			callback(i, progressed, errNoFetchesPending)
 			return
 		}
-		if prog, _, err := q.stateScheduler.Process([]trie.SyncResult{result}); err != nil {
-			// Processing a state result failed, bail out
+
+		batch := q.stateDatabase.NewBatch()
+		prog, _, err := q.stateScheduler.Process([]trie.SyncResult{result}, batch)
+		if err != nil {
 			q.stateSchedLock.Unlock()
 			callback(i, progressed, err)
-			return
-		} else if prog {
-			progressed = true
 		}
+		if err = batch.Write(); err != nil {
+			q.stateSchedLock.Unlock()
+			callback(i, progressed, err)
+		}
+
 		// Item processing succeeded, release the lock (temporarily)
+		progressed = progressed || prog
 		q.stateSchedLock.Unlock()
 	}
 	callback(len(results), progressed, nil)

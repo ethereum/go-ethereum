@@ -37,8 +37,9 @@ Section "Gubiq" GETH_IDX
   ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "R" "HKLM" "\\.\pipe\gubiq.ipc"
   ${EnvVarUpdate} $0 "ETHEREUM_SOCKET" "A" "HKLM" "\\.\pipe\gubiq.ipc"
 
-  # Add gubiq to PATH
-  ${EnvVarUpdate} $0 "PATH" "A" "HKLM" $INSTDIR
+  # Add instdir to PATH
+  Push "$INSTDIR"
+  Call AddToPath
 SectionEnd
 
 # Install optional develop tools.

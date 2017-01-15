@@ -22,18 +22,11 @@ import (
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/state"
+	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/params"
 )
-
-// The default, always homestead, rule set for the vm env
-type ruleSet struct{}
-
-func (ruleSet) IsHomestead(*big.Int) bool { return true }
-func (ruleSet) GasTable(*big.Int) params.GasTable {
-	return params.GasTableHomesteadGasRepriceFork
-}
 
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
@@ -49,6 +42,7 @@ type Config struct {
 	Value       *big.Int
 	DisableJit  bool // "disable" so it's enabled by default
 	Debug       bool
+	EVMConfig   vm.Config
 
 	State     *state.StateDB
 	GetHashFn func(n uint64) common.Hash
@@ -121,11 +115,35 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		receiver.Address(),
 		input,
 		cfg.GasLimit,
-		cfg.GasPrice,
 		cfg.Value,
 	)
 
 	return ret, cfg.State, err
+}
+
+// Create executes the code using the EVM create method
+func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
+	if cfg == nil {
+		cfg = new(Config)
+	}
+	setDefaults(cfg)
+
+	if cfg.State == nil {
+		db, _ := ethdb.NewMemDatabase()
+		cfg.State, _ = state.New(common.Hash{}, db)
+	}
+	var (
+		vmenv  = NewEnv(cfg, cfg.State)
+		sender = cfg.State.CreateAccount(cfg.Origin)
+	)
+
+	// Call the code with the given configuration.
+	return vmenv.Create(
+		sender,
+		input,
+		cfg.GasLimit,
+		cfg.Value,
+	)
 }
 
 // Call executes the code given by the contract's address. It will return the
@@ -145,7 +163,6 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, error) {
 		address,
 		input,
 		cfg.GasLimit,
-		cfg.GasPrice,
 		cfg.Value,
 	)
 

@@ -21,12 +21,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcrowley/go-metrics"
 	"github.com/ubiq/go-ubiq/common/hexutil"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/p2p/discover"
-	"github.com/ubiq/go-ubiq/rpc"
-	"github.com/rcrowley/go-metrics"
 )
 
 // PrivateAdminAPI is the collection of administrative API methods exposed only
@@ -75,7 +74,7 @@ func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
 }
 
 // StartRPC starts the HTTP RPC API server.
-func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error) {
+func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -91,7 +90,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *st
 		host = &h
 	}
 	if port == nil {
-		port = rpc.NewHexNumber(api.node.config.HTTPPort)
+		port = &api.node.config.HTTPPort
 	}
 	if cors == nil {
 		cors = &api.node.config.HTTPCors
@@ -105,7 +104,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *st
 		}
 	}
 
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, port.Int()), api.node.rpcAPIs, modules, *cors); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, *cors); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -124,7 +123,7 @@ func (api *PrivateAdminAPI) StopRPC() (bool, error) {
 }
 
 // StartWS starts the websocket RPC API server.
-func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOrigins *string, apis *string) (bool, error) {
+func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
 	defer api.node.lock.Unlock()
 
@@ -140,7 +139,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOr
 		host = &h
 	}
 	if port == nil {
-		port = rpc.NewHexNumber(api.node.config.WSPort)
+		port = &api.node.config.WSPort
 	}
 	if allowedOrigins == nil {
 		allowedOrigins = &api.node.config.WSOrigins
@@ -154,7 +153,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOr
 		}
 	}
 
-	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, port.Int()), api.node.rpcAPIs, modules, *allowedOrigins); err != nil {
+	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, *allowedOrigins); err != nil {
 		return false, err
 	}
 	return true, nil

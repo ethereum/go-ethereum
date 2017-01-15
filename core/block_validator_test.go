@@ -24,11 +24,9 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
-	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
-	"github.com/ubiq/go-ubiq/pow/ezp"
 )
 
 func testChainConfig() *params.ChainConfig {
@@ -49,20 +47,19 @@ func proc() (Validator, *BlockChain) {
 }
 
 func TestNumber(t *testing.T) {
-	pow := ezp.New()
 	_, chain := proc()
 
 	statedb, _ := state.New(chain.Genesis().Root(), chain.chainDb)
 	cfg := testChainConfig()
 	header := makeHeader(cfg, chain.Genesis(), statedb)
 	header.Number = big.NewInt(3)
-	err := ValidateHeader(cfg, pow, header, chain.Genesis().Header(), false, false)
+	err := ValidateHeader(cfg, FakePow{}, header, chain.Genesis().Header(), false, false)
 	if err != BlockNumberErr {
 		t.Errorf("expected block number error, got %q", err)
 	}
 
 	header = makeHeader(cfg, chain.Genesis(), statedb)
-	err = ValidateHeader(cfg, pow, header, chain.Genesis().Header(), false, false)
+	err = ValidateHeader(cfg, FakePow{}, header, chain.Genesis().Header(), false, false)
 	if err == BlockNumberErr {
 		t.Errorf("didn't expect block number error")
 	}
@@ -77,7 +74,7 @@ func TestPutReceipt(t *testing.T) {
 	hash[0] = 2
 
 	receipt := new(types.Receipt)
-	receipt.Logs = vm.Logs{&vm.Log{
+	receipt.Logs = []*types.Log{{
 		Address:     addr,
 		Topics:      []common.Hash{hash},
 		Data:        []byte("hi"),

@@ -38,8 +38,8 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed generateFilter: %s.", err)
 	}
 
-	if ver.Uint64() != whisperv5.ProtocolVersion {
-		t.Fatalf("wrong version: %d.", ver.Uint64())
+	if uint64(ver) != whisperv5.ProtocolVersion {
+		t.Fatalf("wrong version: %d.", ver)
 	}
 
 	mail := api.GetFilterChanges(1)
@@ -252,7 +252,7 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	if a.FilterID != 64 {
 		t.Fatalf("wrong FilterID: %d.", a.FilterID)
 	}
-	if bytes.Compare(a.PeerID[:], a.Topic[:]) != 0 {
+	if !bytes.Equal(a.PeerID[:], a.Topic[:]) {
 		t.Fatalf("wrong PeerID: %x.", a.PeerID)
 	}
 }
@@ -275,6 +275,9 @@ func TestIntegrationAsym(t *testing.T) {
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
+
+	api.Start()
+	defer api.Stop()
 
 	sig, err := api.NewIdentity()
 	if err != nil {
@@ -374,6 +377,9 @@ func TestIntegrationSym(t *testing.T) {
 		t.Fatalf("failed to create API.")
 	}
 
+	api.Start()
+	defer api.Stop()
+
 	keyname := "schluessel"
 	err := api.GenerateSymKey(keyname)
 	if err != nil {
@@ -469,6 +475,9 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
+
+	api.Start()
+	defer api.Stop()
 
 	keyname := "schluessel"
 	err := api.GenerateSymKey(keyname)

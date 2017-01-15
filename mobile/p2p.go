@@ -38,7 +38,7 @@ func (ni *NodeInfo) GetListenerPort() int       { return ni.info.Ports.Listener 
 func (ni *NodeInfo) GetListenerAddress() string { return ni.info.ListenAddr }
 func (ni *NodeInfo) GetProtocols() *Strings {
 	protos := []string{}
-	for proto, _ := range ni.info.Protocols {
+	for proto := range ni.info.Protocols {
 		protos = append(protos, proto)
 	}
 	return &Strings{protos}
@@ -66,7 +66,7 @@ func (pi *PeerInfos) Size() int {
 }
 
 // Get returns the peer info at the given index from the slice.
-func (pi *PeerInfos) Get(index int) (*PeerInfo, error) {
+func (pi *PeerInfos) Get(index int) (info *PeerInfo, _ error) {
 	if index < 0 || index >= len(pi.infos) {
 		return nil, errors.New("index out of bounds")
 	}

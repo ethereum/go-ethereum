@@ -45,6 +45,7 @@ import (
 	"github.com/ubiq/go-ubiq/node"
 	"github.com/ubiq/go-ubiq/p2p"
 	"github.com/ubiq/go-ubiq/params"
+	"github.com/ubiq/go-ubiq/pow"
 	"github.com/ubiq/go-ubiq/rpc"
 )
 
@@ -79,6 +80,7 @@ type Config struct {
 	NatSpec   bool
 	DocRoot   string
 	AutoDAG   bool
+	PowFake   bool
 	PowTest   bool
 	PowShared bool
 	ExtraData []byte
@@ -104,6 +106,7 @@ type Config struct {
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
+	Synced()
 	Stop()
 	Protocols() []p2p.Protocol
 }
@@ -124,7 +127,7 @@ type Ethereum struct {
 	chainDb ethdb.Database // Block chain database
 
 	eventMux       *event.TypeMux
-	pow            *ethash.Ethash
+	pow            pow.PoW
 	accountManager *accounts.Manager
 
 	ApiBackend *EthApiBackend
@@ -138,13 +141,13 @@ type Ethereum struct {
 	solcPath     string
 
 	NatSpec       bool
-	PowTest       bool
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
+	s.protocolManager.lesServer = ls
 }
 
 // New creates a new Ethereum object (including the
@@ -172,7 +175,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		stopDbUpgrade:  stopDbUpgrade,
 		netVersionId:   config.NetworkId,
 		NatSpec:        config.NatSpec,
-		PowTest:        config.PowTest,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
 		AutoDAG:        config.AutoDAG,
@@ -291,15 +293,17 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 }
 
 // CreatePoW creates the required type of PoW instance for an Ethereum service
-func CreatePoW(config *Config) (*ethash.Ethash, error) {
+func CreatePoW(config *Config) (pow.PoW, error) {
 	switch {
+	case config.PowFake:
+		glog.V(logger.Info).Infof("ethash used in fake mode")
+		return pow.PoW(core.FakePow{}), nil
 	case config.PowTest:
 		glog.V(logger.Info).Infof("ethash used in test mode")
 		return ethash.NewForTesting()
 	case config.PowShared:
 		glog.V(logger.Info).Infof("ethash used in shared mode")
 		return ethash.NewShared(), nil
-
 	default:
 		return ethash.New(), nil
 	}
@@ -397,7 +401,7 @@ func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Pow() *ethash.Ethash                { return s.pow }
+func (s *Ethereum) Pow() pow.PoW                       { return s.pow }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }

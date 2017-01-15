@@ -36,9 +36,9 @@ import (
 )
 
 var (
-	passwordRegexp = regexp.MustCompile("personal.[nus]")
-	onlyWhitespace = regexp.MustCompile("^\\s*$")
-	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
+	passwordRegexp = regexp.MustCompile(`personal.[nus]`)
+	onlyWhitespace = regexp.MustCompile(`^\s*$`)
+	exit           = regexp.MustCompile(`^\s*exit\s*;*\s*$`)
 )
 
 // HistoryFile is the file within the data directory to store input scrollback.
@@ -226,8 +226,8 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	}
 	// Chunck data to relevant part for autocompletion
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
-	start := 0
-	for start = pos - 1; start > 0; start-- {
+	start := pos - 1
+	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including te dot)
 		if line[start] == '.' || (line[start] >= 'a' && line[start] <= 'z') || (line[start] >= 'A' && line[start] <= 'Z') {
 			continue
@@ -275,10 +275,7 @@ func (c *Console) Evaluate(statement string) error {
 			fmt.Fprintf(c.printer, "[native] error: %v\n", r)
 		}
 	}()
-	if err := c.jsre.Evaluate(statement, c.printer); err != nil {
-		return err
-	}
-	return nil
+	return c.jsre.Evaluate(statement, c.printer)
 }
 
 // Interactive starts an interactive user session, where input is propted from

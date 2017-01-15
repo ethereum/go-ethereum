@@ -18,7 +18,6 @@ package types
 
 import (
 	"container/heap"
-	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -199,9 +198,9 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 
 	var V byte
 	if isProtectedV((*big.Int)(dec.V)) {
-		V = normaliseV(NewEIP155Signer(deriveChainId((*big.Int)(dec.V))), (*big.Int)(dec.V))
+		V = byte((new(big.Int).Sub((*big.Int)(dec.V), deriveChainId((*big.Int)(dec.V))).Uint64()) - 35)
 	} else {
-		V = byte(((*big.Int)(dec.V)).Uint64())
+		V = byte(((*big.Int)(dec.V)).Uint64() - 27)
 	}
 	if !crypto.ValidateSignatureValues(V, (*big.Int)(dec.R), (*big.Int)(dec.S), false) {
 		return ErrInvalidSig
@@ -272,51 +271,6 @@ func (tx *Transaction) Size() common.StorageSize {
 	return common.StorageSize(c)
 }
 
-/*
-// From returns the address derived from the signature (V, R, S) using secp256k1
-// elliptic curve and an error if it failed deriving or upon an incorrect
-// signature.
-//
-// From Uses the homestead consensus rules to determine whether the signature is
-// valid.
-//
-// From caches the address, allowing it to be used regardless of
-// Frontier / Homestead. however, the first time called it runs
-// signature validations, so we need two versions. This makes it
-// easier to ensure backwards compatibility of things like package rpc
-// where eth_getblockbynumber uses tx.From() and needs to work for
-// both txs before and after the first homestead block. Signatures
-// valid in homestead are a subset of valid ones in Frontier)
-func (tx *Transaction) From() (common.Address, error) {
-	if tx.signer == nil {
-		return common.Address{}, errNoSigner
-	}
-
-	if from := tx.from.Load(); from != nil {
-		return from.(common.Address), nil
-	}
-
-	pubkey, err := tx.signer.PublicKey(tx)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var addr common.Address
-	copy(addr[:], crypto.Keccak256(pubkey[1:])[12:])
-	tx.from.Store(addr)
-	return addr, nil
-}
-
-// SignatureValues returns the ECDSA signature values contained in the transaction.
-func (tx *Transaction) SignatureValues() (v byte, r *big.Int, s *big.Int, err error) {
-	if tx.signer == nil {
-		return 0, nil, nil,errNoSigner
-	}
-
-	return normaliseV(tx.signer, tx.data.V), new(big.Int).Set(tx.data.R),new(big.Int).Set(tx.data.S), nil
-}
-
-*/
-
 // AsMessage returns the transaction as a core.Message.
 //
 // AsMessage requires a signer to derive the sender.
@@ -336,14 +290,6 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	var err error
 	msg.from, err = Sender(s, tx)
 	return msg, err
-}
-
-// SignECDSA signs the transaction using the given signer and private key
-//
-// XXX This only makes for a nice API: NewTx(...).SignECDSA(signer, prv). Should
-// we keep this?
-func (tx *Transaction) SignECDSA(signer Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
-	return signer.SignECDSA(tx, prv)
 }
 
 // WithSignature returns a new transaction with the given signature.

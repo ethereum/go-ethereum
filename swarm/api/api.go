@@ -140,8 +140,11 @@ func (self *Api) Put(content, contentType string) (string, error) {
 // to resolve path to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionReader, mimeType string, status int, err error) {
-
 	key, _, path, err := self.parseAndResolve(uri, nameresolver)
+	if err != nil {
+		return nil, "", 500, fmt.Errorf("can't resolve: %v", err)
+	}
+
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
@@ -166,6 +169,10 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionR
 
 func (self *Api) Modify(uri, contentHash, contentType string, nameresolver bool) (newRootHash string, err error) {
 	root, _, path, err := self.parseAndResolve(uri, nameresolver)
+	if err != nil {
+		return "", fmt.Errorf("can't resolve: %v", err)
+	}
+
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.dpa, root, quitC)
 	if err != nil {

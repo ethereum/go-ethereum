@@ -78,7 +78,7 @@ contract ReleaseOracle {
   }
 
   // signers is an accessor method to retrieve all te signers (public accessor
-  // generates an indexed one, not a retreive-all version).
+  // generates an indexed one, not a retrieve-all version).
   function signers() constant returns(address[]) {
     return voters;
   }
@@ -178,7 +178,7 @@ contract ReleaseOracle {
           voters[i] = voters[voters.length - 1];
           voters.length--;
 
-          delete verProp; // Nuke any version proposal (no suprise releases!)
+          delete verProp; // Nuke any version proposal (no surprise releases!)
           break;
         }
       }

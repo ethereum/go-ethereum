@@ -67,7 +67,7 @@ func (db *MemDatabase) Keys() [][]byte {
 	defer db.lock.RUnlock()
 
 	keys := [][]byte{}
-	for key, _ := range db.db {
+	for key := range db.db {
 		keys = append(keys, []byte(key))
 	}
 	return keys

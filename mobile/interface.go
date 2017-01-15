@@ -131,7 +131,7 @@ func (i *Interfaces) Size() int {
 }
 
 // Get returns the bigint at the given index from the slice.
-func (i *Interfaces) Get(index int) (*Interface, error) {
+func (i *Interfaces) Get(index int) (iface *Interface, _ error) {
 	if index < 0 || index >= len(i.objects) {
 		return nil, errors.New("index out of bounds")
 	}

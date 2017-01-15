@@ -196,7 +196,7 @@ func makeEndpoint(addr *net.UDPAddr, tcpPort uint16) rpcEndpoint {
 }
 
 func (e1 rpcEndpoint) equal(e2 rpcEndpoint) bool {
-	return e1.UDP == e2.UDP && e1.TCP == e2.TCP && bytes.Equal(e1.IP, e2.IP)
+	return e1.UDP == e2.UDP && e1.TCP == e2.TCP && e1.IP.Equal(e2.IP)
 }
 
 func nodeFromRPC(sender *net.UDPAddr, rn rpcNode) (*Node, error) {

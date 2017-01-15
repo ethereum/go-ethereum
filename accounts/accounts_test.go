@@ -95,7 +95,7 @@ func TestSignWithPassphrase(t *testing.T) {
 		t.Fatal("expected account to be locked")
 	}
 
-	_, err = am.SignWithPassphrase(acc.Address, pass, testSigData)
+	_, err = am.SignWithPassphrase(acc, pass, testSigData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestSignWithPassphrase(t *testing.T) {
 		t.Fatal("expected account to be locked")
 	}
 
-	if _, err = am.SignWithPassphrase(acc.Address, "invalid passwd", testSigData); err == nil {
+	if _, err = am.SignWithPassphrase(acc, "invalid passwd", testSigData); err == nil {
 		t.Fatal("expected SignHash to fail with invalid password")
 	}
 }
@@ -115,6 +115,9 @@ func TestTimedUnlock(t *testing.T) {
 
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Signing without passphrase fails because account is locked
 	_, err = am.Sign(a1.Address, testSigData)
@@ -147,6 +150,9 @@ func TestOverrideUnlock(t *testing.T) {
 
 	pass := "foo"
 	a1, err := am.NewAccount(pass)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Unlock indefinitely.
 	if err = am.TimedUnlock(a1, pass, 5*time.Minute); err != nil {

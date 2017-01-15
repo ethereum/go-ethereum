@@ -29,7 +29,7 @@ import (
 var (
 	key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	name   = "my name on ENS"
-	hash   = crypto.Sha3Hash([]byte("my content"))
+	hash   = crypto.Keccak256Hash([]byte("my content"))
 	addr   = crypto.PubkeyToAddress(key.PublicKey)
 )
 

@@ -36,6 +36,7 @@ import (
 
 type LesOdrRequest interface {
 	GetCost(*peer) uint64
+	CanSend(*peer) bool
 	Request(uint64, *peer) error
 	Valid(ethdb.Database, *Msg) bool // if true, keeps the retrieved object
 }
@@ -64,6 +65,11 @@ type BlockRequest light.BlockRequest
 // peer's cost table (implementation of LesOdrRequest)
 func (self *BlockRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetBlockBodiesMsg, 1)
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (self *BlockRequest) CanSend(peer *peer) bool {
+	return peer.HasBlock(self.Hash, self.Number)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -121,6 +127,11 @@ func (self *ReceiptsRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetReceiptsMsg, 1)
 }
 
+// CanSend tells if a certain peer is suitable for serving the given request
+func (self *ReceiptsRequest) CanSend(peer *peer) bool {
+	return peer.HasBlock(self.Hash, self.Number)
+}
+
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *ReceiptsRequest) Request(reqID uint64, peer *peer) error {
 	glog.V(logger.Debug).Infof("ODR: requesting receipts for block %08x from peer %v", self.Hash[:4], peer.id)
@@ -169,6 +180,11 @@ type TrieRequest light.TrieRequest
 // peer's cost table (implementation of LesOdrRequest)
 func (self *TrieRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetProofsMsg, 1)
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (self *TrieRequest) CanSend(peer *peer) bool {
+	return peer.HasBlock(self.Id.BlockHash, self.Id.BlockNumber)
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
@@ -221,6 +237,11 @@ func (self *CodeRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetCodeMsg, 1)
 }
 
+// CanSend tells if a certain peer is suitable for serving the given request
+func (self *CodeRequest) CanSend(peer *peer) bool {
+	return peer.HasBlock(self.Id.BlockHash, self.Id.BlockNumber)
+}
+
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *CodeRequest) Request(reqID uint64, peer *peer) error {
 	glog.V(logger.Debug).Infof("ODR: requesting node data for hash %08x from peer %v", self.Hash[:4], peer.id)
@@ -246,8 +267,7 @@ func (self *CodeRequest) Valid(db ethdb.Database, msg *Msg) bool {
 		return false
 	}
 	data := reply[0]
-	hash := crypto.Sha3Hash(data)
-	if !bytes.Equal(self.Hash[:], hash[:]) {
+	if hash := crypto.Keccak256Hash(data); self.Hash != hash {
 		glog.V(logger.Debug).Infof("ODR: requested hash %08x does not match received data hash %08x", self.Hash[:4], hash[:4])
 		return false
 	}
@@ -272,6 +292,14 @@ type ChtRequest light.ChtRequest
 // peer's cost table (implementation of LesOdrRequest)
 func (self *ChtRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetHeaderProofsMsg, 1)
+}
+
+// CanSend tells if a certain peer is suitable for serving the given request
+func (self *ChtRequest) CanSend(peer *peer) bool {
+	peer.lock.RLock()
+	defer peer.lock.RUnlock()
+
+	return self.ChtNum <= (peer.headInfo.Number-light.ChtConfirmations)/light.ChtFrequency
 }
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)

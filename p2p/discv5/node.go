@@ -17,7 +17,6 @@
 package discv5
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
@@ -81,7 +80,7 @@ func (n *Node) addrEqual(a *net.UDPAddr) bool {
 	if ipv4 := a.IP.To4(); ipv4 != nil {
 		ip = ipv4
 	}
-	return n.UDP == uint16(a.Port) && bytes.Equal(n.IP, ip)
+	return n.UDP == uint16(a.Port) && n.IP.Equal(ip)
 }
 
 // Incomplete returns true for nodes with no IP address.
@@ -263,11 +262,8 @@ func (n NodeID) GoString() string {
 // HexID converts a hex string to a NodeID.
 // The string may be prefixed with 0x.
 func HexID(in string) (NodeID, error) {
-	if strings.HasPrefix(in, "0x") {
-		in = in[2:]
-	}
 	var id NodeID
-	b, err := hex.DecodeString(in)
+	b, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
 		return id, err
 	} else if len(b) != len(id) {

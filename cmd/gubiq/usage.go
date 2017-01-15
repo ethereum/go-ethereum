@@ -67,7 +67,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			utils.NetworkIdFlag,
-			utils.OlympicFlag,
 			utils.TestNetFlag,
 			utils.DevModeFlag,
 			utils.IdentityFlag,

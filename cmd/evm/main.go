@@ -20,21 +20,18 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
-	"runtime"
+	goruntime "runtime"
 	"time"
 
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/common"
-	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
-	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/core/vm"
+	"github.com/ubiq/go-ubiq/core/vm/runtime"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/logger/glog"
-	"github.com/ubiq/go-ubiq/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -46,14 +43,6 @@ var (
 	DebugFlag = cli.BoolFlag{
 		Name:  "debug",
 		Usage: "output full trace logs",
-	}
-	ForceJitFlag = cli.BoolFlag{
-		Name:  "forcejit",
-		Usage: "forces jit compilation",
-	}
-	DisableJitFlag = cli.BoolFlag{
-		Name:  "nojit",
-		Usage: "disabled jit compilation",
 	}
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
@@ -98,6 +87,10 @@ var (
 		Name:  "create",
 		Usage: "indicates the action should be create rather than call",
 	}
+	DisableGasMeteringFlag = cli.BoolFlag{
+		Name:  "nogasmetering",
+		Usage: "disable gas metering",
+	}
 )
 
 func init() {
@@ -105,8 +98,6 @@ func init() {
 		CreateFlag,
 		DebugFlag,
 		VerbosityFlag,
-		ForceJitFlag,
-		DisableJitFlag,
 		SysStatFlag,
 		CodeFlag,
 		CodeFileFlag,
@@ -115,6 +106,7 @@ func init() {
 		ValueFlag,
 		DumpFlag,
 		InputFlag,
+		DisableGasMeteringFlag,
 	}
 	app.Action = run
 }
@@ -128,13 +120,6 @@ func run(ctx *cli.Context) error {
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
 
 	logger := vm.NewStructLogger(nil)
-
-	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), vm.Config{
-		Debug:     ctx.GlobalBool(DebugFlag.Name),
-		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
-		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
-		Tracer:    logger,
-	})
 
 	tstart := time.Now()
 
@@ -168,25 +153,32 @@ func run(ctx *cli.Context) error {
 
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, err = vmenv.Create(
-			sender,
-			input,
-			common.Big(ctx.GlobalString(GasFlag.Name)),
-			common.Big(ctx.GlobalString(PriceFlag.Name)),
-			common.Big(ctx.GlobalString(ValueFlag.Name)),
-		)
+		ret, _, err = runtime.Create(input, &runtime.Config{
+			Origin:   sender.Address(),
+			State:    statedb,
+			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
+			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
+			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
+			EVMConfig: vm.Config{
+				Tracer:             logger,
+				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
+			},
+		})
 	} else {
 		receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
-
 		receiver.SetCode(crypto.Keccak256Hash(code), code)
-		ret, err = vmenv.Call(
-			sender,
-			receiver.Address(),
-			common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
-			common.Big(ctx.GlobalString(GasFlag.Name)),
-			common.Big(ctx.GlobalString(PriceFlag.Name)),
-			common.Big(ctx.GlobalString(ValueFlag.Name)),
-		)
+
+		ret, err = runtime.Call(receiver.Address(), common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
+			Origin:   sender.Address(),
+			State:    statedb,
+			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
+			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
+			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
+			EVMConfig: vm.Config{
+				Tracer:             logger,
+				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
+			},
+		})
 	}
 	vmdone := time.Since(tstart)
 
@@ -197,8 +189,8 @@ func run(ctx *cli.Context) error {
 	vm.StdErrFormat(logger.StructLogs())
 
 	if ctx.GlobalBool(SysStatFlag.Name) {
-		var mem runtime.MemStats
-		runtime.ReadMemStats(&mem)
+		var mem goruntime.MemStats
+		goruntime.ReadMemStats(&mem)
 		fmt.Printf("vm took %v\n", vmdone)
 		fmt.Printf(`alloc:      %d
 tot alloc:  %d
@@ -222,88 +214,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-type VMEnv struct {
-	state *state.StateDB
-	block *types.Block
-
-	transactor *common.Address
-	value      *big.Int
-
-	depth int
-	Gas   *big.Int
-	time  *big.Int
-	logs  []vm.StructLog
-
-	evm *vm.EVM
-}
-
-func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg vm.Config) *VMEnv {
-	env := &VMEnv{
-		state:      state,
-		transactor: &transactor,
-		value:      value,
-		time:       big.NewInt(time.Now().Unix()),
-	}
-
-	env.evm = vm.New(env, cfg)
-	return env
-}
-
-// ruleSet implements vm.ChainConfig and will always default to the homestead rule set.
-type ruleSet struct{}
-
-func (ruleSet) IsHomestead(*big.Int) bool { return true }
-func (ruleSet) GasTable(*big.Int) params.GasTable {
-	return params.GasTableHomesteadGasRepriceFork
-}
-
-func (self *VMEnv) ChainConfig() *params.ChainConfig { return params.TestChainConfig }
-func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
-func (self *VMEnv) Db() vm.Database                  { return self.state }
-func (self *VMEnv) SnapshotDatabase() int            { return self.state.Snapshot() }
-func (self *VMEnv) RevertToSnapshot(snap int)        { self.state.RevertToSnapshot(snap) }
-func (self *VMEnv) Origin() common.Address           { return *self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int            { return common.Big0 }
-func (self *VMEnv) Coinbase() common.Address         { return *self.transactor }
-func (self *VMEnv) Time() *big.Int                   { return self.time }
-func (self *VMEnv) Difficulty() *big.Int             { return common.Big1 }
-func (self *VMEnv) BlockHash() []byte                { return make([]byte, 32) }
-func (self *VMEnv) Value() *big.Int                  { return self.value }
-func (self *VMEnv) GasLimit() *big.Int               { return big.NewInt(1000000000) }
-func (self *VMEnv) VmType() vm.Type                  { return vm.StdVmTy }
-func (self *VMEnv) Depth() int                       { return 0 }
-func (self *VMEnv) SetDepth(i int)                   { self.depth = i }
-func (self *VMEnv) GetHash(n uint64) common.Hash {
-	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
-		return self.block.Hash()
-	}
-	return common.Hash{}
-}
-func (self *VMEnv) AddLog(log *vm.Log) {
-	self.state.AddLog(log)
-}
-func (self *VMEnv) CanTransfer(from common.Address, balance *big.Int) bool {
-	return self.state.GetBalance(from).Cmp(balance) >= 0
-}
-func (self *VMEnv) Transfer(from, to vm.Account, amount *big.Int) {
-	core.Transfer(from, to, amount)
-}
-
-func (self *VMEnv) Call(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	self.Gas = gas
-	return core.Call(self, caller, addr, data, gas, price, value)
-}
-
-func (self *VMEnv) CallCode(caller vm.ContractRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	return core.CallCode(self, caller, addr, data, gas, price, value)
-}
-
-func (self *VMEnv) DelegateCall(caller vm.ContractRef, addr common.Address, data []byte, gas, price *big.Int) ([]byte, error) {
-	return core.DelegateCall(self, caller, addr, data, gas, price)
-}
-
-func (self *VMEnv) Create(caller vm.ContractRef, data []byte, gas, price, value *big.Int) ([]byte, common.Address, error) {
-	return core.Create(self, caller, data, gas, price, value)
 }

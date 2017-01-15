@@ -49,7 +49,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 
 	// Create a "random" unknown hash for testing
 	var unknown common.Hash
-	for i, _ := range unknown {
+	for i := range unknown {
 		unknown[i] = byte(i)
 	}
 	// Create a batch of tests for various scenarios
@@ -189,17 +189,17 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		//{limit + 1, nil, nil, limit},                                  // No more than the possible block count should be returned
 		{0, []common.Hash{bc.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
 		{0, []common.Hash{bc.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},           // A non existent block should not be returned
+		{0, []common.Hash{{}}, []bool{false}, 0},                      // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
-			common.Hash{},
+			{},
 			bc.GetBlockByNumber(1).Hash(),
-			common.Hash{},
+			{},
 			bc.GetBlockByNumber(10).Hash(),
-			common.Hash{},
+			{},
 			bc.GetBlockByNumber(100).Hash(),
-			common.Hash{},
+			{},
 		}, []bool{false, true, false, true, false, true, false}, 3},
 	}
 	// Run each of the tests and verify the results against the chain
@@ -312,7 +312,7 @@ func testGetProofs(t *testing.T, protocol int) {
 	var proofreqs []ProofReq
 	var proofs [][]rlp.RawValue
 
-	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr, common.Address{}}
+	accounts := []common.Address{testBankAddress, acc1Addr, acc2Addr, {}}
 	for i := uint64(0); i <= bc.CurrentBlock().NumberU64(); i++ {
 		header := bc.GetHeaderByNumber(i)
 		root := header.Root

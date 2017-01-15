@@ -354,7 +354,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hasher := s.hashfunc()
 		hasher.Write(data)
 		hash := hasher.Sum(nil)
-		if bytes.Compare(hash, key) != 0 {
+		if !bytes.Equal(hash, key) {
 			s.db.Delete(getDataKey(index.Idx))
 			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
 			return

@@ -18,12 +18,14 @@
 package utils
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
@@ -65,7 +67,6 @@ func Fatalf(format string, args ...interface{}) {
 		}
 	}
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	logger.Flush()
 	os.Exit(1)
 }
 
@@ -93,7 +94,7 @@ func StartNode(stack *node.Node) {
 
 func FormatTransactionData(data string) []byte {
 	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
-		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
+		slice := regexp.MustCompile(`\n|\s`).Split(s, 1000000000)
 		for _, dataItem := range slice {
 			d := common.FormatData(dataItem)
 			ret = append(ret, d...)
@@ -133,7 +134,15 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		return err
 	}
 	defer fh.Close()
-	stream := rlp.NewStream(fh, 0)
+
+	var reader io.Reader = fh
+	if strings.HasSuffix(fn, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return err
+		}
+	}
+
+	stream := rlp.NewStream(reader, 0)
 
 	// Run actual the import.
 	blocks := make(types.Blocks, importBatchSize)
@@ -195,10 +204,18 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		return err
 	}
 	defer fh.Close()
-	if err := blockchain.Export(fh); err != nil {
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+
+	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to ", fn)
+
 	return nil
 }
 
@@ -210,7 +227,14 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		return err
 	}
 	defer fh.Close()
-	if err := blockchain.ExportN(fh, first, last); err != nil {
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+
+	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to ", fn)

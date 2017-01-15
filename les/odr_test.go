@@ -115,12 +115,17 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
 			statedb, err := state.New(header.Root, db)
+
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
 				from.SetBalance(common.MaxBig)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data, false)}
-				vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
+
+				context := core.NewEVMContext(msg, header, bc)
+				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
+
+				//vmenv := core.NewEnv(statedb, config, bc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
@@ -128,16 +133,20 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		} else {
 			header := lc.GetHeaderByHash(bhash)
 			state := light.NewLightState(light.StateTrieID(header), lc.Odr())
+			vmstate := light.NewVMState(ctx, state)
 			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
 			if err == nil {
 				from.SetBalance(common.MaxBig)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(100000), new(big.Int), data, false)}
 
-				vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
+				context := core.NewEVMContext(msg, header, lc)
+				vmenv := vm.NewEVM(context, vmstate, config, vm.Config{})
+
+				//vmenv := light.NewEnv(ctx, state, config, lc, msg, header, vm.Config{})
 				gp := new(core.GasPool).AddGas(common.MaxBig)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
-				if vmenv.Error() == nil {
+				if vmstate.Error() == nil {
 					res = append(res, ret...)
 				}
 			}
@@ -151,6 +160,9 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	pm, db, odr := newTestProtocolManagerMust(t, false, 4, testChainGen)
 	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
+	pool := &testServerPool{}
+	pool.setPeer(lpeer)
+	odr.serverPool = pool
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -179,13 +191,13 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	}
 
 	// temporarily remove peer to test odr fails
-	odr.UnregisterPeer(lpeer)
+	pool.setPeer(nil)
 	// expect retrievals to fail (except genesis block) without a les peer
 	test(expFail)
-	odr.RegisterPeer(lpeer)
+	pool.setPeer(lpeer)
 	// expect all retrievals to pass
 	test(5)
-	odr.UnregisterPeer(lpeer)
+	pool.setPeer(nil)
 	// still expect all retrievals to pass, now data should be cached locally
 	test(5)
 }

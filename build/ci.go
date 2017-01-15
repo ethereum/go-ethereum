@@ -24,7 +24,7 @@ Usage: go run ci.go <command> <command flags/arguments>
 Available commands are:
 
    install    [-arch architecture] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ packages... ]                                         -- runs the tests
+   test       [ -coverage ] [ -vet ] [ -misspell ] [ packages... ]                           -- runs the tests
    archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
@@ -72,9 +72,7 @@ var (
 		executablePath("abigen"),
 		executablePath("evm"),
 		executablePath("gubiq"),
-		executablePath("bzzd"),
-		executablePath("bzzhash"),
-		executablePath("bzzup"),
+		executablePath("swarm"),
 		executablePath("rlpdump"),
 	}
 
@@ -93,16 +91,8 @@ var (
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			Name:        "bzzd",
-			Description: "Ethereum Swarm daemon",
-		},
-		{
-			Name:        "bzzup",
-			Description: "Ethereum Swarm command line file/directory uploader",
-		},
-		{
-			Name:        "bzzhash",
-			Description: "Ethereum Swarm file/directory hash calculator",
+			Name:        "swarm",
+			Description: "Ethereum Swarm daemon and tools",
 		},
 		{
 			Name:        "abigen",
@@ -112,7 +102,8 @@ var (
 
 	// Distros for which packages are created.
 	// Note: vivid is unsupported because there is no golang-1.6 package for it.
-	debDistros = []string{"trusty", "wily", "xenial", "yakkety"}
+	// Note: wily is unsupported because it was officially deprecated on lanchpad.
+	debDistros = []string{"trusty", "xenial", "yakkety"}
 )
 
 var GOBIN, _ = filepath.Abs(filepath.Join("build", "bin"))
@@ -204,7 +195,7 @@ func doInstall(cmdline []string) {
 			if err != nil {
 				log.Fatal(err)
 			}
-			for name, _ := range pkgs {
+			for name := range pkgs {
 				if name == "main" {
 					gobuild := goToolArch(*arch, "build", buildFlags(env)...)
 					gobuild.Args = append(gobuild.Args, "-v")
@@ -271,6 +262,7 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 func doTest(cmdline []string) {
 	var (
 		vet      = flag.Bool("vet", false, "Whether to run go vet")
+		misspell = flag.Bool("misspell", false, "Whether to run the spell checker")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -296,7 +288,9 @@ func doTest(cmdline []string) {
 	if *vet {
 		build.MustRun(goTool("vet", packages...))
 	}
-
+	if *misspell {
+		spellcheck(packages)
+	}
 	// Run the actual tests.
 	gotest := goTool("test")
 	// Test a single package at a time. CI builders are slow
@@ -307,6 +301,34 @@ func doTest(cmdline []string) {
 	}
 	gotest.Args = append(gotest.Args, packages...)
 	build.MustRun(gotest)
+}
+
+// spellcheck runs the client9/misspell spellchecker package on all Go, Cgo and
+// test files in the requested packages.
+func spellcheck(packages []string) {
+	// Ensure the spellchecker is available
+	build.MustRun(goTool("get", "github.com/client9/misspell/cmd/misspell"))
+
+	// Windows chokes on long argument lists, check packages individualy
+	for _, pkg := range packages {
+		// The spell checker doesn't work on packages, gather all .go files for it
+		out, err := goTool("list", "-f", "{{.Dir}}{{range .GoFiles}}\n{{.}}{{end}}{{range .CgoFiles}}\n{{.}}{{end}}{{range .TestGoFiles}}\n{{.}}{{end}}", pkg).CombinedOutput()
+		if err != nil {
+			log.Fatalf("source file listing failed: %v\n%s", err, string(out))
+		}
+		// Retrieve the folder and assemble the source list
+		lines := strings.Split(string(out), "\n")
+		root := lines[0]
+
+		sources := make([]string, 0, len(lines)-1)
+		for _, line := range lines[1:] {
+			if line = strings.TrimSpace(line); line != "" {
+				sources = append(sources, filepath.Join(root, line))
+			}
+		}
+		// Run the spell checker for this particular package
+		build.MustRunCommand(filepath.Join(GOBIN, "misspell"), append([]string{"-error"}, sources...)...)
+	}
 }
 
 // Release Packaging
@@ -332,7 +354,7 @@ func doArchive(cmdline []string) {
 	var (
 		env      = build.Env()
 		base     = archiveBasename(*arch, env)
-		gubiq     = "gubiq-" + base + ext
+		gubiq    = "gubiq-" + base + ext
 		alltools = "gubiq-alltools-" + base + ext
 	)
 	maybeSkipArchive(env)
@@ -612,8 +634,8 @@ func doWindowsInstaller(cmdline []string) {
 
 	// Aggregate binaries that are included in the installer
 	var (
-		devTools []string
-		allTools []string
+		devTools  []string
+		allTools  []string
 		gubiqTool string
 	)
 	for _, file := range allToolsArchiveFiles {
@@ -632,12 +654,13 @@ func doWindowsInstaller(cmdline []string) {
 	// first section contains the gubiq binary, second section holds the dev tools.
 	templateData := map[string]interface{}{
 		"License":  "COPYING",
-		"Gubiq":     gubiqTool,
+		"Gubiq":    gubiqTool,
 		"DevTools": devTools,
 	}
 	build.Render("build/nsis.gubiq.nsi", filepath.Join(*workdir, "gubiq.nsi"), 0644, nil)
 	build.Render("build/nsis.install.nsh", filepath.Join(*workdir, "install.nsh"), 0644, templateData)
 	build.Render("build/nsis.uninstall.nsh", filepath.Join(*workdir, "uninstall.nsh"), 0644, allTools)
+	build.Render("build/nsis.pathupdate.nsh", filepath.Join(*workdir, "PathUpdate.nsh"), 0644, nil)
 	build.Render("build/nsis.envvarupdate.nsh", filepath.Join(*workdir, "EnvVarUpdate.nsh"), 0644, nil)
 	build.CopyFile(filepath.Join(*workdir, "SimpleFC.dll"), "build/nsis.simplefc.dll", 0755)
 	build.CopyFile(filepath.Join(*workdir, "COPYING"), "COPYING", 0755)
@@ -800,7 +823,7 @@ func doXCodeFramework(cmdline []string) {
 	// Build the iOS XCode framework
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
 	build.MustRun(gomobileTool("init"))
-	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "--prefix", "GE", "-v", "github.com/ubiq/go-ubiq/mobile")
+	bind := gomobileTool("bind", "--target", "ios", "--tags", "ios", "-v", "github.com/ubiq/go-ubiq/mobile")
 
 	if *local {
 		// If we're building locally, use the build folder and stop afterwards

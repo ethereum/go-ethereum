@@ -18,7 +18,6 @@ package tests
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"math/big"
@@ -30,8 +29,6 @@ import (
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
-	"github.com/ubiq/go-ubiq/core/vm"
-	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/params"
@@ -111,7 +108,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "EXP_Empty"*/ {
+		if skipTest[name] {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -149,7 +146,7 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 		ret []byte
 		// gas  *big.Int
 		// err  error
-		logs vm.Logs
+		logs []*types.Log
 	)
 
 	ret, logs, _, _ = RunState(chainConfig, statedb, env, test.Transaction)
@@ -162,7 +159,7 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 	} else {
 		rexp = common.FromHex(test.Out)
 	}
-	if bytes.Compare(rexp, ret) != 0 {
+	if !bytes.Equal(rexp, ret) {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
 	}
 
@@ -206,40 +203,20 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 	return nil
 }
 
-func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
-	var (
-		data  = common.FromHex(tx["data"])
-		gas   = common.Big(tx["gasLimit"])
-		price = common.Big(tx["gasPrice"])
-		value = common.Big(tx["value"])
-		nonce = common.Big(tx["nonce"]).Uint64()
-	)
-
-	var to *common.Address
-	if len(tx["to"]) > 2 {
-		t := common.HexToAddress(tx["to"])
-		to = &t
-	}
-	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
+func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, []*types.Log, *big.Int, error) {
+	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
-
-	key, _ := hex.DecodeString(tx["secretKey"])
-	addr := crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
-	message := types.NewMessage(addr, to, nonce, value, gas, price, data, true)
-	vmenv := NewEnvFromMap(chainConfig, statedb, env, tx)
-	vmenv.origin = addr
 
 	root, _ := statedb.Commit(false)
 	statedb.Reset(root)
 
 	snapshot := statedb.Snapshot()
 
-	ret, _, err := core.ApplyMessage(vmenv, message, gaspool)
+	ret, gasUsed, err := core.ApplyMessage(environment, msg, gaspool)
 	if core.IsNonceErr(err) || core.IsInvalidTxErr(err) || core.IsGasLimitErr(err) {
 		statedb.RevertToSnapshot(snapshot)
 	}
-	statedb.Commit(chainConfig.IsEIP158(vmenv.BlockNumber()))
+	statedb.Commit(chainConfig.IsEIP158(environment.Context.BlockNumber))
 
-	return ret, vmenv.state.Logs(), vmenv.Gas, err
+	return ret, statedb.Logs(), gasUsed, err
 }
