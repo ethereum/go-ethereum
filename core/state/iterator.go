@@ -80,7 +80,7 @@ func (it *NodeIterator) step() error {
 	}
 	// If we had data nodes previously, we surely have at least state nodes
 	if it.dataIt != nil {
-		if cont := it.dataIt.Next(); !cont {
+		if cont := it.dataIt.Next(true); !cont {
 			if it.dataIt.Error != nil {
 				return it.dataIt.Error
 			}
@@ -94,7 +94,7 @@ func (it *NodeIterator) step() error {
 		return nil
 	}
 	// Step to the next state trie node, terminating if we're out of nodes
-	if cont := it.stateIt.Next(); !cont {
+	if cont := it.stateIt.Next(true); !cont {
 		if it.stateIt.Error != nil {
 			return it.stateIt.Error
 		}
@@ -120,7 +120,7 @@ func (it *NodeIterator) step() error {
 		return err
 	}
 	it.dataIt = trie.NewNodeIterator(dataTrie)
-	if !it.dataIt.Next() {
+	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
 	if !bytes.Equal(account.CodeHash, emptyCodeHash) {

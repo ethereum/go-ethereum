@@ -40,7 +40,7 @@ func NewIterator(trie *Trie) *Iterator {
 
 // Next moves the iterator forward one key-value entry.
 func (it *Iterator) Next() bool {
-	for it.nodeIt.Next() {
+	for it.nodeIt.Next(true) {
 		if it.nodeIt.Leaf {
 			it.Key = it.makeKey()
 			it.Value = it.nodeIt.LeafBlob
@@ -104,14 +104,15 @@ func NewNodeIterator(trie *Trie) *NodeIterator {
 
 // Next moves the iterator to the next node, returning whether there are any
 // further nodes. In case of an internal error this method returns false and
-// sets the Error field to the encountered failure.
-func (it *NodeIterator) Next() bool {
+// sets the Error field to the encountered failure. If `children` is false,
+// skips iterating over any subnodes of the current node.
+func (it *NodeIterator) Next(children bool) bool {
 	// If the iterator failed previously, don't do anything
 	if it.Error != nil {
 		return false
 	}
 	// Otherwise step forward with the iterator and report any errors
-	if err := it.step(); err != nil {
+	if err := it.step(children); err != nil {
 		it.Error = err
 		return false
 	}
@@ -119,7 +120,7 @@ func (it *NodeIterator) Next() bool {
 }
 
 // step moves the iterator to the next node of the trie.
-func (it *NodeIterator) step() error {
+func (it *NodeIterator) step(children bool) error {
 	if it.trie == nil {
 		// Abort if we reached the end of the iteration
 		return nil
@@ -133,6 +134,11 @@ func (it *NodeIterator) step() error {
 		}
 		it.stack = append(it.stack, state)
 		return nil
+	}
+
+	if !children {
+		// If we're skipping children, pop the current node first
+		it.stack = it.stack[:len(it.stack)-1]
 	}
 
 	// Continue iteration to the next child
