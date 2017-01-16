@@ -1144,22 +1144,22 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 	oldLen := len(oldChain)
 
-	if glog.V(logger.Debug)  || oldLen > 63 {
+	if glog.V(logger.Debug) || oldLen > 63 {
 		commonHash := commonBlock.Hash()
 		commonNumber := commonBlock.Number()
 		newLen := len(newChain)
 
-		newLast   := newChain[0]
-		newFirst  := newChain[newLen-1]
-		oldLast   := oldChain[0]
-		oldFirst  := oldChain[oldLen-1]
-		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks) from #%v-#%v [%x/%x] in favour of #%v-#%v [%x/%x]", 
-				commonNumber, commonHash[:4], 
-				oldLen, newLen,
-				oldFirst.Number(),oldLast.Number(),
-				oldFirst.Hash().Bytes()[:4] ,oldLast.Hash().Bytes()[:4], 
-				newFirst.Number(),newLast.Number(),
-				newFirst.Hash().Bytes()[:4], newLast.Hash().Bytes()[:4])
+		newLast := newChain[0]
+		newFirst := newChain[newLen-1]
+		oldLast := oldChain[0]
+		oldFirst := oldChain[oldLen-1]
+		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks) from #%v-#%v [%x/%x] in favour of #%v-#%v [%x/%x]",
+			commonNumber, commonHash[:4],
+			oldLen, newLen,
+			oldFirst.Number(), oldLast.Number(),
+			oldFirst.Hash().Bytes()[:4], oldLast.Hash().Bytes()[:4],
+			newFirst.Number(), newLast.Number(),
+			newFirst.Hash().Bytes()[:4], newLast.Hash().Bytes()[:4])
 	}
 
 	var addedTxs types.Transactions
