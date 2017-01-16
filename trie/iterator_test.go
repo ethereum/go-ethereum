@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,6 +45,7 @@ func TestIterator(t *testing.T) {
 	found := make(map[string]string)
 	it := NewIterator(trie)
 	for it.Next() {
+		fmt.Printf("%s=%s\n", it.Key, it.Value)
 		found[string(it.Key)] = string(it.Value)
 	}
 

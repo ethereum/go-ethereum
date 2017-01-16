@@ -132,70 +132,63 @@ func (it *NodeIterator) step() error {
 			state.hash = root
 		}
 		it.stack = append(it.stack, state)
-	} else {
-		// Continue iterating at the previous node otherwise.
-		it.stack = it.stack[:len(it.stack)-1]
-		if len(it.stack) == 0 {
-			it.trie = nil
-			return nil
-		}
+		return nil
 	}
 
 	// Continue iteration to the next child
 	for {
+		if len(it.stack) == 0 {
+			it.trie = nil
+			return nil
+		}
 		parent := it.stack[len(it.stack)-1]
 		ancestor := parent.hash
 		if (ancestor == common.Hash{}) {
 			ancestor = parent.parent
 		}
 		if node, ok := parent.node.(*fullNode); ok {
-			// Full node, traverse all children, then the node itself
-			if parent.child >= len(node.Children) {
+			// Full node, iterate over children
+			parent.child++
+			if parent.child < len(node.Children) {
+				it.stack = append(it.stack, &nodeIteratorState{
+					hash:   common.BytesToHash(node.flags.hash),
+					node:   node.Children[parent.child],
+					parent: ancestor,
+					child:  -1,
+				})
 				break
-			}
-			for parent.child++; parent.child < len(node.Children); parent.child++ {
-				if current := node.Children[parent.child]; current != nil {
-					it.stack = append(it.stack, &nodeIteratorState{
-						hash:   common.BytesToHash(node.flags.hash),
-						node:   current,
-						parent: ancestor,
-						child:  -1,
-					})
-					break
-				}
 			}
 		} else if node, ok := parent.node.(*shortNode); ok {
-			// Short node, traverse the pointer singleton child, then the node itself
-			if parent.child >= 0 {
+			// Short node, return the pointer singleton child
+			if parent.child < 0 {
+				parent.child++
+				it.stack = append(it.stack, &nodeIteratorState{
+					hash:   common.BytesToHash(node.flags.hash),
+					node:   node.Val,
+					parent: ancestor,
+					child:  -1,
+				})
 				break
 			}
-			parent.child++
-			it.stack = append(it.stack, &nodeIteratorState{
-				hash:   common.BytesToHash(node.flags.hash),
-				node:   node.Val,
-				parent: ancestor,
-				child:  -1,
-			})
 		} else if hash, ok := parent.node.(hashNode); ok {
-			// Hash node, resolve the hash child from the database, then the node itself
-			if parent.child >= 0 {
+			// Hash node, resolve the hash child from the database
+			if parent.child < 0 {
+				parent.child++
+
+				node, err := it.trie.resolveHash(hash, nil, nil)
+				if err != nil {
+					return err
+				}
+				it.stack = append(it.stack, &nodeIteratorState{
+					hash:   common.BytesToHash(hash),
+					node:   node,
+					parent: ancestor,
+					child:  -1,
+				})
 				break
 			}
-			parent.child++
-
-			node, err := it.trie.resolveHash(hash, nil, nil)
-			if err != nil {
-				return err
-			}
-			it.stack = append(it.stack, &nodeIteratorState{
-				hash:   common.BytesToHash(hash),
-				node:   node,
-				parent: ancestor,
-				child:  -1,
-			})
-		} else {
-			break
 		}
+		it.stack = it.stack[:len(it.stack)-1]
 	}
 	return nil
 }
