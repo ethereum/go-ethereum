@@ -43,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -53,7 +52,7 @@ const sizeOfInt = 4
 var (
 	quitCommand       = "~Q"
 	enodePrefix       = "enode://"
-	mailServerKeyName = "fd8c027e29852ef"
+	mailServerKeyName = "958e04ab302fb36ad2616a352cbac79dfa08f43d325d0833e07061a9ef8c383d"
 )
 
 // singletons
@@ -81,7 +80,7 @@ var (
 	echoMode       = flag.Bool("e", false, "echo mode: prints some arguments for diagnostics")
 	bootstrapMode  = flag.Bool("b", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
 	forwarderMode  = flag.Bool("f", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
-	mailServerMode = flag.Bool("m", false, "mail server mode: delivers expired messages on demand")
+	mailServerMode = flag.Bool("s", false, "mail server mode: delivers expired messages on demand")
 	requestMail    = flag.Bool("r", false, "request expired messages from the bootstrap server")
 	asymmetricMode = flag.Bool("a", false, "use asymmetric encryption")
 	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
@@ -150,7 +149,6 @@ func echo() {
 	fmt.Printf("mspow = %f \n", *argServerPoW)
 	fmt.Printf("ip = %s \n", *argIP)
 	fmt.Printf("salt = %s \n", *argSalt)
-	fmt.Printf("topic = %x \n", topic)
 	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
 	fmt.Printf("idfile = %s \n", *argIDFile)
 	fmt.Printf("dbpath = %s \n", *argDBPath)
@@ -175,7 +173,7 @@ func initialize() {
 
 	if *bootstrapMode {
 		if len(*argIP) == 0 {
-			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30303): ")
+			argIP = scanLineA("Please enter your IP and port (e.g. 127.0.0.1:30348): ")
 		}
 	} else {
 		if len(*argEnode) == 0 {
@@ -185,12 +183,13 @@ func initialize() {
 		peers = append(peers, peer)
 	}
 
-	if *mailServerMode && len(msPassword) == 0 {
-		msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
-		if err != nil {
-			utils.Fatalf("Failed to read Mail Server password: %s", err)
+	if *mailServerMode {
+		if len(msPassword) == 0 {
+			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			if err != nil {
+				utils.Fatalf("Failed to read Mail Server password: %s", err)
+			}
 		}
-
 		shh = whisper.NewWhisper(&mailServer)
 		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
 	} else {
@@ -247,16 +246,29 @@ func isKeyValid(k *ecdsa.PublicKey) bool {
 
 func configureNode() {
 	var err error
+	var p2pAccept bool
 
 	if *forwarderMode {
 		return
 	}
 
-	if *asymmetricMode && len(*argPub) == 0 {
-		s := scanLine("Please enter the peer's public key: ")
-		pub = crypto.ToECDSAPub(common.FromHex(s))
-		if !isKeyValid(pub) {
-			utils.Fatalf("Error: invalid public key")
+	if *asymmetricMode {
+		if len(*argPub) == 0 {
+			s := scanLine("Please enter the peer's public key: ")
+			pub = crypto.ToECDSAPub(common.FromHex(s))
+			if !isKeyValid(pub) {
+				utils.Fatalf("Error: invalid public key")
+			}
+		}
+	}
+
+	if *requestMail {
+		p2pAccept = true
+		if len(msPassword) == 0 {
+			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
+			if err != nil {
+				utils.Fatalf("Failed to read Mail Server password: %s", err)
+			}
 		}
 	}
 
@@ -283,15 +295,14 @@ func configureNode() {
 		}
 	}
 
-	if *requestMail && len(msPassword) == 0 {
-		msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
-		if err != nil {
-			utils.Fatalf("Failed to read Mail Server password: %s", err)
-		}
+	filter := whisper.Filter{
+		KeySym:    symKey,
+		KeyAsym:   asymKey,
+		Topics:    []whisper.TopicType{topic},
+		AcceptP2P: p2pAccept,
 	}
-
-	filter := &whisper.Filter{KeySym: symKey, KeyAsym: asymKey, Topics: []whisper.TopicType{topic}}
-	filterID = shh.Watch(filter)
+	filterID = shh.Watch(&filter)
+	fmt.Printf("Filter is configured for the topic: %x \n", topic)
 }
 
 func generateTopic(password, salt []byte) {
@@ -451,7 +462,10 @@ func printMessageInfo(msg *whisper.ReceivedMessage) {
 
 func requestExpiredMessagesLoop() {
 	var key, peerID []byte
-	var timeLow, timeUpp, t uint32
+	var timeLow, timeUpp uint32
+	var t string
+	var xt, empty whisper.TopicType
+
 	err := shh.AddSymKey(mailServerKeyName, []byte(msPassword))
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for mail request: %s", err)
@@ -463,16 +477,23 @@ func requestExpiredMessagesLoop() {
 	for {
 		timeLow = scanUint("Please enter the lower limit of the time range (unix timestamp): ")
 		timeUpp = scanUint("Please enter the upper limit of the time range (unix timestamp): ")
-		t = scanUint("Please enter the topic: ")
+		t = scanLine("Please enter the topic (hexadecimal): ")
+		if len(t) >= whisper.TopicLength*2 {
+			x, err := hex.DecodeString(t)
+			if err != nil {
+				utils.Fatalf("Failed to parse the topic: %s", err)
+			}
+			xt = whisper.BytesToTopic(x)
+		}
 		if timeUpp == 0 {
 			timeUpp = 0xFFFFFFFF
 		}
 
-		data := make([]byte, sizeOfInt*3)
+		data := make([]byte, sizeOfInt*2+whisper.TopicLength)
 		binary.BigEndian.PutUint32(data, timeLow)
 		binary.BigEndian.PutUint32(data[sizeOfInt:], timeUpp)
-		binary.BigEndian.PutUint32(data[sizeOfInt*2:], t)
-		if t == 0 {
+		copy(data[sizeOfInt*2:], xt[:])
+		if xt == empty {
 			data = data[:sizeOfInt*2]
 		}
 
@@ -489,12 +510,7 @@ func requestExpiredMessagesLoop() {
 			utils.Fatalf("Wrap failed: %s", err)
 		}
 
-		encoded, err := rlp.EncodeToBytes(env)
-		if err != nil {
-			utils.Fatalf("RLP encoding failed: %s", err)
-		}
-
-		err = shh.RequestHistoricMessages(peerID, encoded)
+		err = shh.RequestHistoricMessages(peerID, env)
 		if err != nil {
 			utils.Fatalf("Failed to send P2P message: %s", err)
 		}
@@ -526,11 +542,3 @@ func extractIdFromEnode(s string) []byte {
 
 	return b
 }
-
-// this is a temporary stub, will be expanded later
-type WMailServer struct{}
-
-func (s *WMailServer) Archive(env *whisper.Envelope)                                      {}
-func (s *WMailServer) DeliverMail(peer *whisper.Peer, data []byte)                        {}
-func (s *WMailServer) Init(w *whisper.Whisper, path string, password string, pow float64) {}
-func (s *WMailServer) Close()                                                             {}

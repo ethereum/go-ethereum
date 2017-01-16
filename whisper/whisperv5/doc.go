@@ -83,5 +83,5 @@ func (e unknownVersionError) Error() string {
 // in order to bypass the expiry checks.
 type MailServer interface {
 	Archive(env *Envelope)
-	DeliverMail(whisperPeer *Peer, data []byte)
+	DeliverMail(whisperPeer *Peer, request *Envelope)
 }
