@@ -560,3 +560,87 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 	}
 	return nil, errors.New("database inconsistency")
 }
+
+type StorageRangeAtResult struct {
+	Storage  map[string]string `json:"storage"`
+	Complete bool              `json:"complete"`
+}
+
+// StorageRangeAt returns the storage at the given block height and
+// transaction index (exclusive). It may be limited using the
+// storageAddress, storageAddressEnd (inclusive) and maxResult parameters.
+//
+// StorageRangeAt is currently limited and requires needless iterators
+// due to the limitation of the trie iterator. At present we can't start
+// iterating from any given key, thus we need to loop over any key that's
+// not inclusive in the range of start and end.
+//
+// BUG: Because the state objects make use of the secure storage, iterating
+// trie keys is out of order and will be returned the exact same way.
+func (api *PrivateDebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, txIndex int, contractAddress common.Address, storageAddressStart, storageAddressEnd common.Hash, maxResult int) (interface{}, error) {
+	block := api.eth.BlockChain().GetBlockByHash(blockHash)
+	if block == nil {
+		return nil, fmt.Errorf("block %x not found", blockHash)
+	}
+	// Create the state database to mutate and eventually trace
+	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, fmt.Errorf("block parent %x not found", block.ParentHash())
+	}
+	stateDb, err := api.eth.BlockChain().StateAt(parent.Root())
+	if err != nil {
+		return nil, err
+	}
+
+	result := StorageRangeAtResult{Storage: make(map[string]string)}
+
+	signer := types.MakeSigner(api.config, block.Number())
+	// Mutate the state and trace the selected transaction
+done:
+	for idx, tx := range block.Transactions() {
+		// Assemble the transaction call message
+		msg, err := tx.AsMessage(signer)
+		if err != nil {
+			return nil, fmt.Errorf("sender retrieval failed: %v", err)
+		}
+		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain())
+
+		// Mutate the state if we haven't reached the tracing transaction yet
+		if idx < txIndex {
+			vmenv := vm.NewEnvironment(context, stateDb, api.config, vm.Config{})
+			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
+			if err != nil {
+				return nil, fmt.Errorf("mutation failed: %v", err)
+			}
+			stateDb.DeleteSuicides()
+			continue
+		}
+
+		stateObject := stateDb.GetStateObject(contractAddress)
+		// We need to check if the object exists again. It might have been deleted in between the
+		// transactions.
+		if stateObject != nil {
+			trie := stateObject.GetTrie(api.eth.ChainDb())
+			it := trie.Iterator()
+
+			for it.Next() && len(result.Storage) < maxResult {
+				var (
+					value common.Hash
+					key   = trie.GetKey(it.Key)
+				)
+
+				if bytes.Compare(storageAddressStart[:], key[:]) > 0 {
+					continue
+				}
+				if bytes.Compare(storageAddressEnd[:], key[:]) < 0 {
+					break done
+				}
+
+				rlp.DecodeBytes(it.Value, &value)
+				result.Storage[common.ToHex(key)] = value.Hex()
+			}
+			result.Complete = !it.Next()
+		}
+	}
+	return result, nil
+}
