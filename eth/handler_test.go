@@ -75,7 +75,7 @@ func testGetBlockHeaders(t *testing.T, protocol int) {
 
 	// Create a "random" unknown hash for testing
 	var unknown common.Hash
-	for i, _ := range unknown {
+	for i := range unknown {
 		unknown[i] = byte(i)
 	}
 	// Create a batch of tests for various scenarios
@@ -246,17 +246,17 @@ func testGetBlockBodies(t *testing.T, protocol int) {
 		{limit + 1, nil, nil, limit},                                             // No more than the possible block count should be returned
 		{0, []common.Hash{pm.blockchain.Genesis().Hash()}, []bool{true}, 1},      // The genesis block should be retrievable
 		{0, []common.Hash{pm.blockchain.CurrentBlock().Hash()}, []bool{true}, 1}, // The chains head block should be retrievable
-		{0, []common.Hash{common.Hash{}}, []bool{false}, 0},                      // A non existent block should not be returned
+		{0, []common.Hash{{}}, []bool{false}, 0},                                 // A non existent block should not be returned
 
 		// Existing and non-existing blocks interleaved should not cause problems
 		{0, []common.Hash{
-			common.Hash{},
+			{},
 			pm.blockchain.GetBlockByNumber(1).Hash(),
-			common.Hash{},
+			{},
 			pm.blockchain.GetBlockByNumber(10).Hash(),
-			common.Hash{},
+			{},
 			pm.blockchain.GetBlockByNumber(100).Hash(),
-			common.Hash{},
+			{},
 		}, []bool{false, true, false, true, false, true, false}, 3},
 	}
 	// Run each of the tests and verify the results against the chain
@@ -311,13 +311,13 @@ func testGetNodeData(t *testing.T, protocol int) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
-			tx2, _ := types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, acc1Key)
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
+			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
 		case 2:
@@ -403,13 +403,13 @@ func testGetReceipt(t *testing.T, protocol int) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, testBankKey)
-			tx2, _ := types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, acc1Key)
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
+			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
 		case 2:
@@ -491,7 +491,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	if err := p2p.ExpectMsg(peer.app, GetBlockHeadersMsg, challenge); err != nil {
 		t.Fatalf("challenge mismatch: %v", err)
 	}
-	// Create a block to reply to the challenge if no timeout is simualted
+	// Create a block to reply to the challenge if no timeout is simulated
 	if !timeout {
 		blocks, _ := core.GenerateChain(&params.ChainConfig{}, genesis, db, 1, func(i int, block *core.BlockGen) {
 			if remoteForked {

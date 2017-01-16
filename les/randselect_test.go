@@ -39,7 +39,7 @@ func TestWeightedRandomSelect(t *testing.T) {
 		s := newWeightedRandomSelect()
 		w := -1
 		list := make([]testWrsItem, cnt)
-		for i, _ := range list {
+		for i := range list {
 			list[i] = testWrsItem{idx: i, widx: &w}
 			s.update(&list[i])
 		}

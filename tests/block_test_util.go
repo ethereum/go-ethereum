@@ -552,9 +552,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 // Nothing to see here, please move along...
 func prepInt(base int, s string) string {
 	if base == 16 {
-		if strings.HasPrefix(s, "0x") {
-			s = s[2:]
-		}
+		s = strings.TrimPrefix(s, "0x")
 		if len(s) == 0 {
 			s = "00"
 		}

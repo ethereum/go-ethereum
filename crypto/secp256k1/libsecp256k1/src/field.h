@@ -10,7 +10,7 @@
 /** Field element module.
  *
  *  Field elements can be represented in several ways, but code accessing
- *  it (and implementations) need to take certain properaties into account:
+ *  it (and implementations) need to take certain properties into account:
  *  - Each field element can be normalized or not.
  *  - Each field element has a magnitude, which represents how far away
  *    its representation is away from normalization. Normalized elements
@@ -29,6 +29,8 @@
 #else
 #error "Please select field implementation"
 #endif
+
+#include "util.h"
 
 /** Normalize a field element. */
 static void secp256k1_fe_normalize(secp256k1_fe *r);
@@ -50,6 +52,9 @@ static int secp256k1_fe_normalizes_to_zero_var(secp256k1_fe *r);
 /** Set a field element equal to a small integer. Resulting field element is normalized. */
 static void secp256k1_fe_set_int(secp256k1_fe *r, int a);
 
+/** Sets a field element equal to zero, initializing all fields. */
+static void secp256k1_fe_clear(secp256k1_fe *a);
+
 /** Verify whether a field element is zero. Requires the input to be normalized. */
 static int secp256k1_fe_is_zero(const secp256k1_fe *a);
 
@@ -57,6 +62,9 @@ static int secp256k1_fe_is_zero(const secp256k1_fe *a);
 static int secp256k1_fe_is_odd(const secp256k1_fe *a);
 
 /** Compare two field elements. Requires magnitude-1 inputs. */
+static int secp256k1_fe_equal(const secp256k1_fe *a, const secp256k1_fe *b);
+
+/** Same as secp256k1_fe_equal, but may be variable time. */
 static int secp256k1_fe_equal_var(const secp256k1_fe *a, const secp256k1_fe *b);
 
 /** Compare two field elements. Requires both inputs to be normalized */
@@ -87,10 +95,15 @@ static void secp256k1_fe_mul(secp256k1_fe *r, const secp256k1_fe *a, const secp2
  *  The output magnitude is 1 (but not guaranteed to be normalized). */
 static void secp256k1_fe_sqr(secp256k1_fe *r, const secp256k1_fe *a);
 
-/** Sets a field element to be the (modular) square root (if any exist) of another. Requires the
- *  input's magnitude to be at most 8. The output magnitude is 1 (but not guaranteed to be
- *  normalized). Return value indicates whether a square root was found. */
-static int secp256k1_fe_sqrt_var(secp256k1_fe *r, const secp256k1_fe *a);
+/** If a has a square root, it is computed in r and 1 is returned. If a does not
+ *  have a square root, the root of its negation is computed and 0 is returned.
+ *  The input's magnitude can be at most 8. The output magnitude is 1 (but not
+ *  guaranteed to be normalized). The result in r will always be a square
+ *  itself. */
+static int secp256k1_fe_sqrt(secp256k1_fe *r, const secp256k1_fe *a);
+
+/** Checks whether a field element is a quadratic residue. */
+static int secp256k1_fe_is_quad_var(const secp256k1_fe *a);
 
 /** Sets a field element to be the (modular) inverse of another. Requires the input's magnitude to be
  *  at most 8. The output magnitude is 1 (but not guaranteed to be normalized). */
@@ -102,7 +115,7 @@ static void secp256k1_fe_inv_var(secp256k1_fe *r, const secp256k1_fe *a);
 /** Calculate the (modular) inverses of a batch of field elements. Requires the inputs' magnitudes to be
  *  at most 8. The output magnitudes are 1 (but not guaranteed to be normalized). The inputs and
  *  outputs must not overlap in memory. */
-static void secp256k1_fe_inv_all_var(size_t len, secp256k1_fe *r, const secp256k1_fe *a);
+static void secp256k1_fe_inv_all_var(secp256k1_fe *r, const secp256k1_fe *a, size_t len);
 
 /** Convert a field element to the storage type. */
 static void secp256k1_fe_to_storage(secp256k1_fe_storage *r, const secp256k1_fe *a);

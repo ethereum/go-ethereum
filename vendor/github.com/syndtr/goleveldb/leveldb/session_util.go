@@ -39,6 +39,18 @@ func (s *session) newTemp() storage.FileDesc {
 	return storage.FileDesc{storage.TypeTemp, num}
 }
 
+func (s *session) addFileRef(fd storage.FileDesc, ref int) int {
+	ref += s.fileRef[fd.Num]
+	if ref > 0 {
+		s.fileRef[fd.Num] = ref
+	} else if ref == 0 {
+		delete(s.fileRef, fd.Num)
+	} else {
+		panic(fmt.Sprintf("negative ref: %v", fd))
+	}
+	return ref
+}
+
 // Session state.
 
 // Get current version. This will incr version ref, must call
@@ -46,7 +58,7 @@ func (s *session) newTemp() storage.FileDesc {
 func (s *session) version() *version {
 	s.vmu.Lock()
 	defer s.vmu.Unlock()
-	s.stVersion.ref++
+	s.stVersion.incref()
 	return s.stVersion
 }
 
@@ -59,14 +71,15 @@ func (s *session) tLen(level int) int {
 // Set current version to v.
 func (s *session) setVersion(v *version) {
 	s.vmu.Lock()
-	v.ref = 1 // Holds by session.
-	if old := s.stVersion; old != nil {
-		v.ref++ // Holds by old version.
-		old.next = v
-		old.releaseNB()
+	defer s.vmu.Unlock()
+	// Hold by session. It is important to call this first before releasing
+	// current version, otherwise the still used files might get released.
+	v.incref()
+	if s.stVersion != nil {
+		// Release current version.
+		s.stVersion.releaseNB()
 	}
 	s.stVersion = v
-	s.vmu.Unlock()
 }
 
 // Get current unused file number.

@@ -50,8 +50,6 @@ func upload(ctx *cli.Context) {
 	var (
 		file   = args[0]
 		client = &client{api: bzzapi}
-		mroot  manifest
-		entry  manifestEntry
 	)
 	fi, err := os.Stat(expandPath(file))
 	if err != nil {
@@ -61,14 +59,21 @@ func upload(ctx *cli.Context) {
 		if !recursive {
 			log.Fatal("argument is a directory and recursive upload is disabled")
 		}
-		mroot, err = client.uploadDirectory(file, defaultPath)
-	} else {
-		entry, err = client.uploadFile(file, fi)
-		mroot = manifest{[]manifestEntry{entry}}
+		if !wantManifest {
+			log.Fatal("manifest is required for directory uploads")
+		}
+		mhash, err := client.uploadDirectory(file, defaultPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(mhash)
+		return
 	}
+	entry, err := client.uploadFile(file, fi)
 	if err != nil {
 		log.Fatalln("upload failed:", err)
 	}
+	mroot := manifest{[]manifestEntry{entry}}
 	if !wantManifest {
 		// Print the manifest. This is the only output to stdout.
 		mrootJSON, _ := json.MarshalIndent(mroot, "", "  ")
@@ -123,6 +128,36 @@ type manifest struct {
 	Entries []manifestEntry `json:"entries,omitempty"`
 }
 
+func (c *client) uploadDirectory(dir string, defaultPath string) (string, error) {
+	mhash, err := c.postRaw("application/json", 2, ioutil.NopCloser(bytes.NewReader([]byte("{}"))))
+	if err != nil {
+		return "", fmt.Errorf("failed to upload empty manifest")
+	}
+	if len(defaultPath) > 0 {
+		fi, err := os.Stat(defaultPath)
+		if err != nil {
+			return "", err
+		}
+		mhash, err = c.uploadToManifest(mhash, "", defaultPath, fi)
+		if err != nil {
+			return "", err
+		}
+	}
+	prefix := filepath.ToSlash(filepath.Clean(dir)) + "/"
+	err = filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
+		if err != nil || fi.IsDir() {
+			return err
+		}
+		if !strings.HasPrefix(path, dir) {
+			return fmt.Errorf("path %s outside directory %s", path, dir)
+		}
+		uripath := strings.TrimPrefix(filepath.ToSlash(filepath.Clean(path)), prefix)
+		mhash, err = c.uploadToManifest(mhash, uripath, path, fi)
+		return err
+	})
+	return mhash, err
+}
+
 func (c *client) uploadFile(file string, fi os.FileInfo) (manifestEntry, error) {
 	hash, err := c.uploadFileContent(file, fi)
 	m := manifestEntry{
@@ -130,36 +165,6 @@ func (c *client) uploadFile(file string, fi os.FileInfo) (manifestEntry, error) 
 		ContentType: mime.TypeByExtension(filepath.Ext(fi.Name())),
 	}
 	return m, err
-}
-
-func (c *client) uploadDirectory(dir string, defaultPath string) (manifest, error) {
-	dirm := manifest{}
-	if len(defaultPath) > 0 {
-		fi, err := os.Stat(defaultPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		entry, err := c.uploadFile(defaultPath, fi)
-		if err != nil {
-			log.Fatal(err)
-		}
-		entry.Path = ""
-		dirm.Entries = append(dirm.Entries, entry)
-	}
-	prefix := filepath.ToSlash(filepath.Clean(dir)) + "/"
-	err := filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			return err
-		}
-		if !strings.HasPrefix(path, dir) {
-			return fmt.Errorf("path %s outside directory %s", path, dir)
-		}
-		entry, err := c.uploadFile(path, fi)
-		entry.Path = strings.TrimPrefix(filepath.ToSlash(filepath.Clean(path)), prefix)
-		dirm.Entries = append(dirm.Entries, entry)
-		return err
-	})
-	return dirm, err
 }
 
 func (c *client) uploadFileContent(file string, fi os.FileInfo) (string, error) {
@@ -179,6 +184,31 @@ func (c *client) uploadManifest(m manifest) (string, error) {
 	}
 	log.Println("uploading manifest")
 	return c.postRaw("application/json", int64(len(jsm)), ioutil.NopCloser(bytes.NewReader(jsm)))
+}
+
+func (c *client) uploadToManifest(mhash string, path string, fpath string, fi os.FileInfo) (string, error) {
+	fd, err := os.Open(fpath)
+	if err != nil {
+		return "", err
+	}
+	defer fd.Close()
+	log.Printf("uploading file %s (%d bytes) and adding path %v", fpath, fi.Size(), path)
+	req, err := http.NewRequest("PUT", c.api+"/bzz:/"+mhash+"/"+path, fd)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("content-type", mime.TypeByExtension(filepath.Ext(fi.Name())))
+	req.ContentLength = fi.Size()
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("bad status: %s", resp.Status)
+	}
+	content, err := ioutil.ReadAll(resp.Body)
+	return string(content), err
 }
 
 func (c *client) postRaw(mimetype string, size int64, body io.ReadCloser) (string, error) {

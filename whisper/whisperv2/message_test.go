@@ -40,7 +40,7 @@ func TestMessageSimpleWrap(t *testing.T) {
 	if len(msg.Signature) != 0 {
 		t.Fatalf("signature found for simple wrapping: 0x%x", msg.Signature)
 	}
-	if bytes.Compare(msg.Payload, payload) != 0 {
+	if !bytes.Equal(msg.Payload, payload) {
 		t.Fatalf("payload mismatch after wrapping: have 0x%x, want 0x%x", msg.Payload, payload)
 	}
 	if msg.TTL/time.Second != DefaultTTL/time.Second {
@@ -65,7 +65,7 @@ func TestMessageCleartextSignRecover(t *testing.T) {
 	if msg.Flags&signatureFlag != signatureFlag {
 		t.Fatalf("signature flag mismatch: have %d, want %d", msg.Flags&signatureFlag, signatureFlag)
 	}
-	if bytes.Compare(msg.Payload, payload) != 0 {
+	if !bytes.Equal(msg.Payload, payload) {
 		t.Fatalf("payload mismatch after signing: have 0x%x, want 0x%x", msg.Payload, payload)
 	}
 

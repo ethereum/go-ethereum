@@ -33,7 +33,6 @@ package secp256k1
 
 import (
 	"crypto/elliptic"
-	"io"
 	"math/big"
 	"sync"
 	"unsafe"
@@ -224,6 +223,7 @@ func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 	if len(scalar) > 32 {
 		panic("can't handle scalars > 256 bits")
 	}
+	// NOTE: potential timing issue
 	padded := make([]byte, 32)
 	copy(padded[32-len(scalar):], scalar)
 	scalar = padded
@@ -255,31 +255,6 @@ func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 // an integer in big-endian form.
 func (BitCurve *BitCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
 	return BitCurve.ScalarMult(BitCurve.Gx, BitCurve.Gy, k)
-}
-
-var mask = []byte{0xff, 0x1, 0x3, 0x7, 0xf, 0x1f, 0x3f, 0x7f}
-
-//TODO: double check if it is okay
-// GenerateKey returns a public/private key pair. The private key is generated
-// using the given reader, which must return random data.
-func (BitCurve *BitCurve) GenerateKey(rand io.Reader) (priv []byte, x, y *big.Int, err error) {
-	byteLen := (BitCurve.BitSize + 7) >> 3
-	priv = make([]byte, byteLen)
-
-	for x == nil {
-		_, err = io.ReadFull(rand, priv)
-		if err != nil {
-			return
-		}
-		// We have to mask off any excess bits in the case that the size of the
-		// underlying field is not a whole number of bytes.
-		priv[0] &= mask[BitCurve.BitSize%8]
-		// This is because, in tests, rand will return all zeros and we don't
-		// want to get the point at infinity and loop forever.
-		priv[1] ^= 0x42
-		x, y = BitCurve.ScalarBaseMult(priv)
-	}
-	return
 }
 
 // Marshal converts a point into the form specified in section 4.3.6 of ANSI

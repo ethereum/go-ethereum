@@ -40,7 +40,7 @@ var (
 type peerDropFn func(id string)
 
 type odrPeerSelector interface {
-	selectPeer(func(*peer) (bool, uint64)) *peer
+	selectPeerWait(uint64, func(*peer) (bool, time.Duration), <-chan struct{}) *peer
 	adjustResponseTime(*poolEntry, time.Duration, bool)
 }
 
@@ -116,6 +116,7 @@ func (self *LesOdr) Deliver(peer *peer, msg *Msg) error {
 	if req.valFunc(self.db, msg) {
 		close(delivered)
 		req.lock.Lock()
+		delete(req.sentTo, peer)
 		if req.answered != nil {
 			close(req.answered)
 			req.answered = nil
@@ -150,6 +151,7 @@ func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout cha
 	select {
 	case <-delivered:
 	case <-time.After(hardRequestTimeout):
+		glog.V(logger.Debug).Infof("ODR hard request timeout from peer %v", peer.id)
 		go self.removePeer(peer.id)
 	case <-self.stop:
 		return
@@ -187,12 +189,12 @@ func (self *LesOdr) networkRequest(ctx context.Context, lreq LesOdrRequest) erro
 	for {
 		var p *peer
 		if self.serverPool != nil {
-			p = self.serverPool.selectPeer(func(p *peer) (bool, uint64) {
-				if !lreq.CanSend(p) {
+			p = self.serverPool.selectPeerWait(reqID, func(p *peer) (bool, time.Duration) {
+				if _, ok := exclude[p]; ok || !lreq.CanSend(p) {
 					return false, 0
 				}
 				return true, p.fcServer.CanSend(lreq.GetCost(p))
-			})
+			}, ctx.Done())
 		}
 		if p == nil {
 			select {

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -46,9 +47,6 @@ import (
 )
 
 var (
-	chainlogger = logger.NewLogger("CHAIN")
-	jsonlogger  = logger.NewJsonLogger()
-
 	blockInsertTimer = metrics.NewTimer("chain/inserts")
 
 	ErrNoGenesis = errors.New("Genesis not found in chain")
@@ -150,7 +148,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 		return nil, err
 	}
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
-	for hash, _ := range BadHashes {
+	for hash := range BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			// get the canonical block corresponding to the offending header's number
 			headerByNumber := bc.GetHeaderByNumber(header.Number.Uint64())
@@ -402,10 +400,7 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 // Export writes the active chain to the given writer.
 func (self *BlockChain) Export(w io.Writer) error {
-	if err := self.ExportN(w, uint64(0), self.currentBlock.NumberU64()); err != nil {
-		return err
-	}
-	return nil
+	return self.ExportN(w, uint64(0), self.currentBlock.NumberU64())
 }
 
 // ExportN writes a subset of the active chain to the given writer.
@@ -805,7 +800,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	if stats.ignored > 0 {
 		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
 	}
-	glog.V(logger.Info).Infof("imported %d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignored)
+	glog.V(logger.Info).Infof("imported %4d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignored)
 
 	return 0, nil
 }
@@ -881,9 +876,9 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// faster than direct delivery and requires much less mutex
 	// acquiring.
 	var (
-		stats         = insertStats{startTime: time.Now()}
+		stats         = insertStats{startTime: mclock.Now()}
 		events        = make([]interface{}, 0, len(chain))
-		coalescedLogs vm.Logs
+		coalescedLogs []*types.Log
 		nonceChecked  = make([]bool, len(chain))
 	)
 
@@ -1037,7 +1032,7 @@ type insertStats struct {
 	queued, processed, ignored int
 	usedGas                    uint64
 	lastIndex                  int
-	startTime                  time.Time
+	startTime                  mclock.AbsTime
 }
 
 // statsReportLimit is the time limit during import after which we always print
@@ -1049,28 +1044,24 @@ const statsReportLimit = 8 * time.Second
 func (st *insertStats) report(chain []*types.Block, index int) {
 	// Fetch the timings for the batch
 	var (
-		now     = time.Now()
-		elapsed = now.Sub(st.startTime)
+		now     = mclock.Now()
+		elapsed = time.Duration(now) - time.Duration(st.startTime)
 	)
-	if elapsed == 0 { // Yes Windows, I'm looking at you
-		elapsed = 1
-	}
 	// If we're at the last block of the batch or report period reached, log
 	if index == len(chain)-1 || elapsed >= statsReportLimit {
 		start, end := chain[st.lastIndex], chain[index]
 		txcount := countTransactions(chain[st.lastIndex : index+1])
 
-		extra := ""
+		var hashes, extra string
 		if st.queued > 0 || st.ignored > 0 {
 			extra = fmt.Sprintf(" (%d queued %d ignored)", st.queued, st.ignored)
 		}
-		hashes := ""
 		if st.processed > 1 {
 			hashes = fmt.Sprintf("%x… / %x…", start.Hash().Bytes()[:4], end.Hash().Bytes()[:4])
 		} else {
 			hashes = fmt.Sprintf("%x…", end.Hash().Bytes()[:4])
 		}
-		glog.Infof("imported %d blocks, %5d txs (%7.3f Mg) in %9v (%6.3f Mg/s). #%v [%s]%s", st.processed, txcount, float64(st.usedGas)/1000000, common.PrettyDuration(elapsed), float64(st.usedGas)*1000/float64(elapsed), end.Number(), hashes, extra)
+		glog.Infof("imported %4d blocks, %5d txs (%7.3f Mg) in %9v (%6.3f Mg/s). #%v [%s]%s", st.processed, txcount, float64(st.usedGas)/1000000, common.PrettyDuration(elapsed), float64(st.usedGas)*1000/float64(elapsed), end.Number(), hashes, extra)
 
 		*st = insertStats{startTime: now, lastIndex: index}
 	}
@@ -1094,7 +1085,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		oldStart    = oldBlock
 		newStart    = newBlock
 		deletedTxs  types.Transactions
-		deletedLogs vm.Logs
+		deletedLogs []*types.Log
 		// collectLogs collects the logs that were generated during the
 		// processing of the block that corresponds with the given hash.
 		// These logs are later announced as deleted.
@@ -1210,7 +1201,7 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 
 // postChainEvents iterates over the events generated by a chain insertion and
 // posts them into the event mux.
-func (self *BlockChain) postChainEvents(events []interface{}, logs vm.Logs) {
+func (self *BlockChain) postChainEvents(events []interface{}, logs []*types.Log) {
 	// post event logs for further processing
 	self.eventMux.Post(logs)
 	for _, event := range events {

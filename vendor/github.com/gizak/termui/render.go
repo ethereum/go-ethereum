@@ -1,4 +1,4 @@
-// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
+// Copyright 2016 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
@@ -6,9 +6,19 @@ package termui
 
 import (
 	"image"
+	"io"
 	"sync"
 	"time"
 
+	"fmt"
+
+	"os"
+
+	"runtime/debug"
+
+	"bytes"
+
+	"github.com/maruel/panicparse/stack"
 	tm "github.com/nsf/termbox-go"
 )
 
@@ -89,7 +99,26 @@ func TermHeight() int {
 // Render renders all Bufferer in the given order from left to right,
 // right could overlap on left ones.
 func render(bs ...Bufferer) {
-
+	defer func() {
+		if e := recover(); e != nil {
+			Close()
+			fmt.Fprintf(os.Stderr, "Captured a panic(value=%v) when rendering Bufferer. Exit termui and clean terminal...\nPrint stack trace:\n\n", e)
+			//debug.PrintStack()
+			gs, err := stack.ParseDump(bytes.NewReader(debug.Stack()), os.Stderr)
+			if err != nil {
+				debug.PrintStack()
+				os.Exit(1)
+			}
+			p := &stack.Palette{}
+			buckets := stack.SortBuckets(stack.Bucketize(gs, stack.AnyValue))
+			srcLen, pkgLen := stack.CalcLengths(buckets, false)
+			for _, bucket := range buckets {
+				io.WriteString(os.Stdout, p.BucketHeader(&bucket, false, len(buckets) > 1))
+				io.WriteString(os.Stdout, p.StackLines(&bucket.Signature, srcLen, pkgLen, false))
+			}
+			os.Exit(1)
+		}
+	}()
 	for _, b := range bs {
 
 		buf := b.Buffer()

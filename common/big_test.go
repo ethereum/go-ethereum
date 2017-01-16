@@ -27,7 +27,7 @@ func TestMisc(t *testing.T) {
 	c := []byte{1, 2, 3, 4}
 	z := BitTest(a, 1)
 
-	if z != true {
+	if !z {
 		t.Error("Expected true got", z)
 	}
 
@@ -79,11 +79,11 @@ func TestBigCopy(t *testing.T) {
 	z := BigToBytes(c, 16)
 	zbytes := []byte{232, 212, 165, 16, 0}
 
-	if bytes.Compare(y, ybytes) != 0 {
+	if !bytes.Equal(y, ybytes) {
 		t.Error("Got", ybytes)
 	}
 
-	if bytes.Compare(z, zbytes) != 0 {
+	if !bytes.Equal(z, zbytes) {
 		t.Error("Got", zbytes)
 	}
 }

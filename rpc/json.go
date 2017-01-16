@@ -166,7 +166,7 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 
 	// subscribe are special, they will always use `subscribeMethod` as first param in the payload
 	if in.Method == subscribeMethod {
-		reqs := []rpcRequest{rpcRequest{id: &in.Id, isPubSub: true}}
+		reqs := []rpcRequest{{id: &in.Id, isPubSub: true}}
 		if len(in.Payload) > 0 {
 			// first param must be subscription name
 			var subscribeMethod [1]string
@@ -184,7 +184,7 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 	}
 
 	if in.Method == unsubscribeMethod {
-		return []rpcRequest{rpcRequest{id: &in.Id, isPubSub: true,
+		return []rpcRequest{{id: &in.Id, isPubSub: true,
 			method: unsubscribeMethod, params: in.Payload}}, false, nil
 	}
 
@@ -195,10 +195,10 @@ func parseRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) {
 
 	// regular RPC call
 	if len(in.Payload) == 0 {
-		return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: &in.Id}}, false, nil
+		return []rpcRequest{{service: elems[0], method: elems[1], id: &in.Id}}, false, nil
 	}
 
-	return []rpcRequest{rpcRequest{service: elems[0], method: elems[1], id: &in.Id, params: in.Payload}}, false, nil
+	return []rpcRequest{{service: elems[0], method: elems[1], id: &in.Id, params: in.Payload}}, false, nil
 }
 
 // parseBatchRequest will parse a batch request into a collection of requests from the given RawMessage, an indication

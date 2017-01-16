@@ -23,15 +23,16 @@ applications in an expressive way.
 - [Installation](#installation)
   * [Supported platforms](#supported-platforms)
   * [Using the `v2` branch](#using-the-v2-branch)
-  * [Pinning to the `v1` branch](#pinning-to-the-v1-branch)
+  * [Pinning to the `v1` releases](#pinning-to-the-v1-releases)
 - [Getting Started](#getting-started)
 - [Examples](#examples)
   * [Arguments](#arguments)
   * [Flags](#flags)
     + [Placeholder Values](#placeholder-values)
     + [Alternate Names](#alternate-names)
+    + [Ordering](#ordering)
     + [Values from the Environment](#values-from-the-environment)
-    + [Values from alternate input sources (YAML and others)](#values-from-alternate-input-sources-yaml-and-others)
+    + [Values from alternate input sources (YAML, TOML, and others)](#values-from-alternate-input-sources-yaml-toml-and-others)
   * [Subcommands](#subcommands)
   * [Subcommands categories](#subcommands-categories)
   * [Exit code](#exit-code)
@@ -60,18 +61,16 @@ organized, and expressive!
 
 ## Installation
 
-Make sure you have a working Go environment.  Go version 1.1+ is required for
-core cli, whereas use of the [`./altsrc`](./altsrc) input extensions requires Go
-version 1.2+. [See the install
-instructions](http://golang.org/doc/install.html).
+Make sure you have a working Go environment.  Go version 1.2+ is supported.  [See
+the install instructions for Go](http://golang.org/doc/install.html).
 
 To install cli, simply run:
 ```
 $ go get github.com/urfave/cli
 ```
 
-Make sure your `PATH` includes to the `$GOPATH/bin` directory so your commands
-can be easily used:
+Make sure your `PATH` includes the `$GOPATH/bin` directory so your commands can
+be easily used:
 ```
 export PATH=$PATH:$GOPATH/bin
 ```
@@ -106,11 +105,11 @@ import (
 ...
 ```
 
-### Pinning to the `v1` branch
+### Pinning to the `v1` releases
 
 Similarly to the section above describing use of the `v2` branch, if one wants
 to avoid any unexpected compatibility pains once `v2` becomes `master`, then
-pinning to the `v1` branch is an acceptable option, e.g.:
+pinning to `v1` is an acceptable option, e.g.:
 
 ```
 $ go get gopkg.in/urfave/cli.v1
@@ -123,6 +122,8 @@ import (
 )
 ...
 ```
+
+This will pull the latest tagged `v1` release (e.g. `v1.18.1` at the time of writing).
 
 ## Getting Started
 
@@ -450,6 +451,56 @@ That flag can then be set with `--lang spanish` or `-l spanish`. Note that
 giving two different forms of the same flag in the same command invocation is an
 error.
 
+#### Ordering
+
+Flags for the application and commands are shown in the order they are defined.
+However, it's possible to sort them from outside this library by using `FlagsByName`
+with `sort`.
+
+For example this:
+
+<!-- {
+  "args": ["&#45;&#45;help"],
+  "output": "Load configuration from FILE\n.*Language for the greeting.*"
+} -->
+``` go
+package main
+
+import (
+  "os"
+  "sort"
+
+  "github.com/urfave/cli"
+)
+
+func main() {
+  app := cli.NewApp()
+
+  app.Flags = []cli.Flag {
+    cli.StringFlag{
+      Name: "lang, l",
+      Value: "english",
+      Usage: "Language for the greeting",
+    },
+    cli.StringFlag{
+      Name: "config, c",
+      Usage: "Load configuration from `FILE`",
+    },
+  }
+
+  sort.Sort(cli.FlagsByName(app.Flags))
+
+  app.Run(os.Args)
+}
+```
+
+Will result in help output like:
+
+```
+--config FILE, -c FILE  Load configuration from FILE
+--lang value, -l value  Language for the greeting (default: "english")
+```
+
 #### Values from the Environment
 
 You can also have the default value set from the environment via `EnvVar`.  e.g.
@@ -515,10 +566,14 @@ func main() {
 }
 ```
 
-#### Values from alternate input sources (YAML and others)
+#### Values from alternate input sources (YAML, TOML, and others)
 
 There is a separate package altsrc that adds support for getting flag values
-from other input sources like YAML.
+from other file input sources.
+
+Currently supported input source formats:
+* YAML
+* TOML
 
 In order to get values for a flag from an alternate input source the following
 code would be added to wrap an existing cli.Flag like below:
@@ -540,9 +595,9 @@ the yaml input source for any flags that are defined on that command.  As a note
 the "load" flag used would also have to be defined on the command flags in order
 for this code snipped to work.
 
-Currently only YAML files are supported but developers can add support for other
-input sources by implementing the altsrc.InputSourceContext for their given
-sources.
+Currently only the aboved specified formats are supported but developers can
+add support for other input sources by implementing the
+altsrc.InputSourceContext for their given sources.
 
 Here is a more complete sample of a command using YAML support:
 
@@ -845,7 +900,7 @@ func main() {
 
 ### Generated Help Text
 
-The default help flag (`-h/--help`) is defined as `cli.HelpFlag` and is checked 
+The default help flag (`-h/--help`) is defined as `cli.HelpFlag` and is checked
 by the cli internals in order to print generated help text for the app, command,
 or subcommand, and break execution.
 
@@ -950,12 +1005,12 @@ is checked by the cli internals in order to print the `App.Version` via
 
 #### Customization
 
-The default flag may be cusomized to something other than `-v/--version` by
+The default flag may be customized to something other than `-v/--version` by
 setting `cli.VersionFlag`, e.g.:
 
 <!-- {
   "args": ["&#45;&#45print-version"],
-  "output": "partay version v19\\.99\\.0"
+  "output": "partay version 19\\.99\\.0"
 } -->
 ``` go
 package main
@@ -974,7 +1029,7 @@ func main() {
 
   app := cli.NewApp()
   app.Name = "partay"
-  app.Version = "v19.99.0"
+  app.Version = "19.99.0"
   app.Run(os.Args)
 }
 ```
@@ -983,7 +1038,7 @@ Alternatively, the version printer at `cli.VersionPrinter` may be overridden, e.
 
 <!-- {
   "args": ["&#45;&#45version"],
-  "output": "version=v19\\.99\\.0 revision=fafafaf"
+  "output": "version=19\\.99\\.0 revision=fafafaf"
 } -->
 ``` go
 package main
@@ -1006,7 +1061,7 @@ func main() {
 
   app := cli.NewApp()
   app.Name = "partay"
-  app.Version = "v19.99.0"
+  app.Version = "19.99.0"
   app.Run(os.Args)
 }
 ```
@@ -1085,7 +1140,7 @@ func (g *genericType) String() string {
 func main() {
   app := cli.NewApp()
   app.Name = "kənˈtrīv"
-  app.Version = "v19.99.0"
+  app.Version = "19.99.0"
   app.Compiled = time.Now()
   app.Authors = []cli.Author{
     cli.Author{

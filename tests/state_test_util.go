@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -108,7 +108,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "EXP_Empty"*/ {
+		if skipTest[name] {
 			glog.Infoln("Skipping state test", name)
 			continue
 		}
@@ -146,7 +146,7 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 		ret []byte
 		// gas  *big.Int
 		// err  error
-		logs vm.Logs
+		logs []*types.Log
 	)
 
 	ret, logs, _, _ = RunState(chainConfig, statedb, env, test.Transaction)
@@ -159,7 +159,7 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 	} else {
 		rexp = common.FromHex(test.Out)
 	}
-	if bytes.Compare(rexp, ret) != 0 {
+	if !bytes.Equal(rexp, ret) {
 		return fmt.Errorf("return failed. Expected %x, got %x\n", rexp, ret)
 	}
 
@@ -203,10 +203,8 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 	return nil
 }
 
-func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, vm.Logs, *big.Int, error) {
+func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, []*types.Log, *big.Int, error) {
 	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
-	// Set pre compiled contracts
-	vm.Precompiled = vm.PrecompiledContracts()
 	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
 
 	root, _ := statedb.Commit(false)

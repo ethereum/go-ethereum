@@ -148,7 +148,7 @@ func (peer *Peer) expire() {
 		return true
 	})
 	// Dump all known but unavailable
-	for hash, _ := range unmark {
+	for hash := range unmark {
 		peer.known.Remove(hash)
 	}
 }

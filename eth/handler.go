@@ -607,38 +607,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == NewBlockHashesMsg:
-		// Retrieve and deserialize the remote new block hashes notification
-		type announce struct {
-			Hash   common.Hash
-			Number uint64
-		}
-		var announces = []announce{}
-
-		if p.version < eth62 {
-			// We're running the old protocol, make block number unknown (0)
-			var hashes []common.Hash
-			if err := msg.Decode(&hashes); err != nil {
-				return errResp(ErrDecode, "%v: %v", msg, err)
-			}
-			for _, hash := range hashes {
-				announces = append(announces, announce{hash, 0})
-			}
-		} else {
-			// Otherwise extract both block hash and number
-			var request newBlockHashesData
-			if err := msg.Decode(&request); err != nil {
-				return errResp(ErrDecode, "%v: %v", msg, err)
-			}
-			for _, block := range request {
-				announces = append(announces, announce{block.Hash, block.Number})
-			}
+		var announces newBlockHashesData
+		if err := msg.Decode(&announces); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
 		// Mark the hashes as present at the remote node
 		for _, block := range announces {
 			p.MarkBlock(block.Hash)
 		}
 		// Schedule all the unknown hashes for retrieval
-		unknown := make([]announce, 0, len(announces))
+		unknown := make(newBlockHashesData, 0, len(announces))
 		for _, block := range announces {
 			if !pm.blockchain.HasBlock(block.Hash) {
 				unknown = append(unknown, block)
@@ -772,7 +750,7 @@ func (self *ProtocolManager) txBroadcastLoop() {
 // EthNodeInfo represents a short summary of the Ethereum sub-protocol metadata known
 // about the host peer.
 type EthNodeInfo struct {
-	Network    int         `json:"network"`    // Ethereum network ID (0=Olympic, 1=Frontier, 2=Morden)
+	Network    int         `json:"network"`    // Ethereum network ID (1=Frontier, 2=Morden, Ropsten=3)
 	Difficulty *big.Int    `json:"difficulty"` // Total difficulty of the host's blockchain
 	Genesis    common.Hash `json:"genesis"`    // SHA3 hash of the host's genesis block
 	Head       common.Hash `json:"head"`       // SHA3 hash of the host's best owned block

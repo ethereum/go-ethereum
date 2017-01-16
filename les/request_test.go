@@ -71,7 +71,8 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	pm, db, _ := newTestProtocolManagerMust(t, false, 4, testChainGen)
 	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
-	pool := (*testServerPool)(lpeer)
+	pool := &testServerPool{}
+	pool.setPeer(lpeer)
 	odr.serverPool = pool
 	select {
 	case <-time.After(time.Millisecond * 100):
@@ -102,10 +103,10 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	}
 
 	// temporarily remove peer to test odr fails
-	odr.serverPool = nil
+	pool.setPeer(nil)
 	// expect retrievals to fail (except genesis block) without a les peer
 	test(0)
-	odr.serverPool = pool
+	pool.setPeer(lpeer)
 	// expect all retrievals to pass
 	test(5)
 }

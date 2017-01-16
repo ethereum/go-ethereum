@@ -1,4 +1,4 @@
-// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
+// Copyright 2016 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
@@ -46,7 +46,7 @@ func (b Buffer) Bounds() image.Rectangle {
 			y0 = p.Y
 		}
 	}
-	return image.Rect(x0, y0, x1, y1)
+	return image.Rect(x0, y0, x1+1, y1+1)
 }
 
 // SetArea assigns a new rect area to Buffer b.
@@ -56,7 +56,7 @@ func (b *Buffer) SetArea(r image.Rectangle) {
 }
 
 // Sync sets drawing area to the buffer's bound
-func (b Buffer) Sync() {
+func (b *Buffer) Sync() {
 	b.SetArea(b.Bounds())
 }
 

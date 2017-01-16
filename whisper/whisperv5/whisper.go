@@ -105,7 +105,7 @@ func (w *Whisper) Version() uint {
 func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
 	w.peerMu.Lock()
 	defer w.peerMu.Unlock()
-	for p, _ := range w.peers {
+	for p := range w.peers {
 		id := p.peer.ID()
 		if bytes.Equal(peerID, id[:]) {
 			return p, nil

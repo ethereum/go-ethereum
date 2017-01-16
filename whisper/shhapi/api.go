@@ -178,14 +178,10 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
 		AcceptP2P: args.AcceptP2P,
 	}
-
 	if len(filter.KeySym) > 0 {
 		filter.SymKeyHash = crypto.Keccak256Hash(filter.KeySym)
 	}
-
-	for _, t := range args.Topics {
-		filter.Topics = append(filter.Topics, t)
-	}
+	filter.Topics = append(filter.Topics, args.Topics...)
 
 	if len(args.Topics) == 0 {
 		info := "NewFilter: at least one topic must be specified"

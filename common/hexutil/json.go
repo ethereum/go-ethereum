@@ -237,7 +237,7 @@ func checkJSON(input []byte) (raw []byte, err error) {
 		return nil, errNonString
 	}
 	if len(input) == 2 {
-		return nil, ErrEmptyString
+		return nil, nil // empty strings are allowed
 	}
 	if !bytesHave0xPrefix(input[1:]) {
 		return nil, ErrMissingPrefix
@@ -255,7 +255,7 @@ func checkNumberJSON(input []byte) (raw []byte, err error) {
 	}
 	input = input[1 : len(input)-1]
 	if len(input) == 0 {
-		return nil, ErrEmptyString
+		return nil, nil // empty strings are allowed
 	}
 	if !bytesHave0xPrefix(input) {
 		return nil, ErrMissingPrefix

@@ -423,9 +423,9 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 
 // WithMiningResult returns a new block with the data from b
 // where nonce and mix digest are set to the provided values.
-func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
+func (b *Block) WithMiningResult(nonce BlockNonce, mixDigest common.Hash) *Block {
 	cpy := *b.header
-	binary.BigEndian.PutUint64(cpy.Nonce[:], nonce)
+	cpy.Nonce = nonce
 	cpy.MixDigest = mixDigest
 	return &Block{
 		header:       &cpy,

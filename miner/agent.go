@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/pow"
@@ -112,7 +113,7 @@ func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	// Mine
 	nonce, mixDigest := self.pow.Search(work.Block, stop, self.index)
 	if nonce != 0 {
-		block := work.Block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
+		block := work.Block.WithMiningResult(types.EncodeNonce(nonce), common.BytesToHash(mixDigest))
 		self.returnCh <- &Result{work, block}
 	} else {
 		self.returnCh <- nil

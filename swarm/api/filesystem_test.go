@@ -130,6 +130,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash+"/index.css")
 		exp = expResponse(content, "text/css", 0)
+		checkResponse(t, resp, exp)
 
 		_, _, _, err = api.Get(bzzhash, true)
 		if err == nil {
