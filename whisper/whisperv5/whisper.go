@@ -142,6 +142,10 @@ func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
 	return p2p.Send(p.ws, p2pCode, envelope)
 }
 
+func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
+	return p2p.Send(peer.ws, p2pCode, envelope)
+}
+
 // NewIdentity generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption.
 func (w *Whisper) NewIdentity() *ecdsa.PrivateKey {

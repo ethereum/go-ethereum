@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func copyFromBuf(dst []byte, src []byte, beg int) int {
@@ -309,5 +310,37 @@ func TestEncryptWithZeroKey(t *testing.T) {
 	_, err = msg.Wrap(params)
 	if err == nil {
 		t.Fatalf("wrapped with nil key, seed: %d.", seed)
+	}
+}
+
+func TestRlpEncode(t *testing.T) {
+	InitSingleTest()
+
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("wrapped with zero key, seed: %d.", seed)
+	}
+
+	raw, err := rlp.EncodeToBytes(env)
+	if err != nil {
+		t.Fatalf("RLP encode failed: %s.", err)
+	}
+
+	var decoded Envelope
+	rlp.DecodeBytes(raw, &decoded)
+	if err != nil {
+		t.Fatalf("RLP decode failed: %s.", err)
+	}
+
+	he := env.Hash()
+	hd := decoded.Hash()
+
+	if he != hd {
+		t.Fatalf("Hashes are not equal: %x vs. %x", he, hd)
 	}
 }
