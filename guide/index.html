@@ -63,7 +63,7 @@
     </div>
 
     <script type="text/javascript">
-      // Download the go-ethereum wiki sidebar and convert it into a guide sidebar
+      // Download the developer guide ToC and convert it into a guide sidebar
       $.ajax({
         url: 'https://raw.githubusercontent.com/wiki/ethereum/go-ethereum/Developer-Guide.md',
         error: function() {
@@ -97,12 +97,13 @@
             // Otherwise if the line is a link, add a new entry to the sub-menu
             if (line[0] == "[") {
               var name = /\[(.*)\]/g.exec(line)[1];
+              var id   = (head + "-" + name).split(" ").join("-");
 
               var link = /\((.*)\)/g.exec(line)[1];
               link = "https://raw.githubusercontent.com/wiki/" + link.slice("https://github.com/".length).replace("wiki/", "") + ".md";
 
-              var item = $("<a href='#' class='list-group-item'>" + name + "</a>").appendTo(menu);
-              $(item).click(function(head, name, link) {
+              var item = $("<a id='menu-" + id + "' href='#" + id + "' class='list-group-item'>" + name + "</a>").appendTo(menu);
+              $(item).click(function(id, head, name, link) {
                 return function() {
                   $.ajax({
                     url: link,
@@ -111,22 +112,27 @@
                     },
                     dataType: 'text',
                     success: function(data) {
+                      // Load the wiki page content into the current page
                       $('#content').html("<h1>" + head + ": " + name + "</h1>" + marked(data));
                       emojify.setConfig({img_dir: '../static/images/emoji'});
                       emojify.run(document.getElementById('content'));
 
+                      // Run the syntax highlighter on all code blocks
                       $('pre code').each(function(i, block) {
-                        console.log("hl", i, block);
                         hljs.highlightBlock(block);
                       });
                     }
                   });
                 };
-              }(head, name, link));
+              }(id, head, name, link));
             }
           }
-          // Menu constructed, load the first entry
-          console.log(menu.children()[1].click());
+          // Menu constructed, load the specified entry, or first if non existent
+          if (window.location.hash.length > 1) {
+            $('#menu-' + window.location.hash.split('#')[1])[0].click();
+          } else {
+            $(toc.children()[0]).children()[1].click();
+          }
         }
       });
     </script>
