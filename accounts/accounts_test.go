@@ -53,14 +53,14 @@ func TestManager(t *testing.T) {
 	if err := am.Update(a, "foo", "bar"); err != nil {
 		t.Errorf("Update error: %v", err)
 	}
-	if err := am.DeleteAccount(a, "bar"); err != nil {
-		t.Errorf("DeleteAccount error: %v", err)
+	if err := am.Delete(a, "bar"); err != nil {
+		t.Errorf("Delete error: %v", err)
 	}
 	if common.FileExist(a.File) {
-		t.Errorf("account file %s should be gone after DeleteAccount", a.File)
+		t.Errorf("account file %s should be gone after Delete", a.File)
 	}
 	if am.HasAddress(a.Address) {
-		t.Errorf("HasAccount(%x) should've returned true after DeleteAccount", a.Address)
+		t.Errorf("HasAccount(%x) should've returned true after Delete", a.Address)
 	}
 }
 
