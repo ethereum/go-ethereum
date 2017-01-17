@@ -406,6 +406,9 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	case nil:
 		return false, nil, nil
 
+	case valueNode:
+		return true, nil, nil
+
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
 		// the node and delete from it. This leaves all child nodes on
