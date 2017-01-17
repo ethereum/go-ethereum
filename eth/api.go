@@ -96,8 +96,8 @@ func (s *PublicMinerAPI) Mining() bool {
 
 // SubmitWork can be used by external miner to submit their POW solution. It returns an indication if the work was
 // accepted. Note, this is not an indication if the provided work was valid!
-func (s *PublicMinerAPI) SubmitWork(nonce hexutil.Uint64, solution, digest common.Hash) bool {
-	return s.agent.SubmitWork(uint64(nonce), digest, solution)
+func (s *PublicMinerAPI) SubmitWork(nonce types.BlockNonce, solution, digest common.Hash) bool {
+	return s.agent.SubmitWork(nonce, digest, solution)
 }
 
 // GetWork returns a work package for external miner. The work package consists of 3 strings
@@ -435,7 +435,7 @@ func (api *PrivateDebugAPI) traceBlock(block *types.Block, logConfig *vm.LogConf
 	return true, structLogger.StructLogs(), nil
 }
 
-// callmsg is the message type used for call transations.
+// callmsg is the message type used for call transitions.
 type callmsg struct {
 	addr          common.Address
 	to            *common.Address
@@ -532,7 +532,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 
 		// Mutate the state if we haven't reached the tracing transaction yet
 		if uint64(idx) < txIndex {
-			vmenv := vm.NewEnvironment(context, stateDb, api.config, vm.Config{})
+			vmenv := vm.NewEVM(context, stateDb, api.config, vm.Config{})
 			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 			if err != nil {
 				return nil, fmt.Errorf("mutation failed: %v", err)
@@ -541,7 +541,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 			continue
 		}
 
-		vmenv := vm.NewEnvironment(context, stateDb, api.config, vm.Config{Debug: true, Tracer: tracer})
+		vmenv := vm.NewEVM(context, stateDb, api.config, vm.Config{Debug: true, Tracer: tracer})
 		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
 		if err != nil {
 			return nil, fmt.Errorf("tracing failed: %v", err)

@@ -38,7 +38,7 @@ func (ni *NodeInfo) GetListenerPort() int       { return ni.info.Ports.Listener 
 func (ni *NodeInfo) GetListenerAddress() string { return ni.info.ListenAddr }
 func (ni *NodeInfo) GetProtocols() *Strings {
 	protos := []string{}
-	for proto, _ := range ni.info.Protocols {
+	for proto := range ni.info.Protocols {
 		protos = append(protos, proto)
 	}
 	return &Strings{protos}

@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -71,7 +72,7 @@ type StateDB struct {
 
 	thash, bhash common.Hash
 	txIndex      int
-	logs         map[common.Hash]vm.Logs
+	logs         map[common.Hash][]*types.Log
 	logSize      uint
 
 	// Journal of state modifications. This is the backbone of
@@ -97,7 +98,7 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
-		logs:              make(map[common.Hash]vm.Logs),
+		logs:              make(map[common.Hash][]*types.Log),
 	}, nil
 }
 
@@ -118,7 +119,7 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
-		logs:              make(map[common.Hash]vm.Logs),
+		logs:              make(map[common.Hash][]*types.Log),
 	}, nil
 }
 
@@ -138,7 +139,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.thash = common.Hash{}
 	self.bhash = common.Hash{}
 	self.txIndex = 0
-	self.logs = make(map[common.Hash]vm.Logs)
+	self.logs = make(map[common.Hash][]*types.Log)
 	self.logSize = 0
 	self.clearJournalAndRefund()
 
@@ -175,7 +176,7 @@ func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
 	self.txIndex = ti
 }
 
-func (self *StateDB) AddLog(log *vm.Log) {
+func (self *StateDB) AddLog(log *types.Log) {
 	self.journal = append(self.journal, addLogChange{txhash: self.thash})
 
 	log.TxHash = self.thash
@@ -186,12 +187,12 @@ func (self *StateDB) AddLog(log *vm.Log) {
 	self.logSize++
 }
 
-func (self *StateDB) GetLogs(hash common.Hash) vm.Logs {
+func (self *StateDB) GetLogs(hash common.Hash) []*types.Log {
 	return self.logs[hash]
 }
 
-func (self *StateDB) Logs() vm.Logs {
-	var logs vm.Logs
+func (self *StateDB) Logs() []*types.Log {
+	var logs []*types.Log
 	for _, lgs := range self.logs {
 		logs = append(logs, lgs...)
 	}
@@ -209,7 +210,7 @@ func (self *StateDB) Exist(addr common.Address) bool {
 	return self.GetStateObject(addr) != nil
 }
 
-// Empty returns whether the state object is either non-existant
+// Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (self *StateDB) Empty(addr common.Address) bool {
 	so := self.GetStateObject(addr)
@@ -474,16 +475,16 @@ func (self *StateDB) Copy() *StateDB {
 		stateObjects:      make(map[common.Address]*StateObject, len(self.stateObjectsDirty)),
 		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
 		refund:            new(big.Int).Set(self.refund),
-		logs:              make(map[common.Hash]vm.Logs, len(self.logs)),
+		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:           self.logSize,
 	}
 	// Copy the dirty states and logs
-	for addr, _ := range self.stateObjectsDirty {
+	for addr := range self.stateObjectsDirty {
 		state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state, state.MarkStateObjectDirty)
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
 	for hash, logs := range self.logs {
-		state.logs[hash] = make(vm.Logs, len(logs))
+		state.logs[hash] = make([]*types.Log, len(logs))
 		copy(state.logs[hash], logs)
 	}
 	return state
@@ -529,7 +530,7 @@ func (self *StateDB) GetRefund() *big.Int {
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
 func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
-	for addr, _ := range s.stateObjectsDirty {
+	for addr := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
 		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
 			s.deleteStateObject(stateObject)
@@ -552,7 +553,7 @@ func (s *StateDB) DeleteSuicides() {
 	// Reset refund so that any used-gas calculations can use this method.
 	s.clearJournalAndRefund()
 
-	for addr, _ := range s.stateObjectsDirty {
+	for addr := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
 
 		// If the object has been removed by a suicide

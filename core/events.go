@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // TxPreEvent is posted when a transaction enters the transaction pool.
@@ -32,7 +31,7 @@ type TxPostEvent struct{ Tx *types.Transaction }
 
 // PendingLogsEvent is posted pre mining and notifies of pending logs.
 type PendingLogsEvent struct {
-	Logs vm.Logs
+	Logs []*types.Log
 }
 
 // PendingStateEvent is posted pre mining and notifies of pending state changes.
@@ -45,18 +44,18 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
 // RemovedLogEvent is posted when a reorg happens
-type RemovedLogsEvent struct{ Logs vm.Logs }
+type RemovedLogsEvent struct{ Logs []*types.Log }
 
 // ChainSplit is posted when a new head is detected
 type ChainSplitEvent struct {
 	Block *types.Block
-	Logs  vm.Logs
+	Logs  []*types.Log
 }
 
 type ChainEvent struct {
 	Block *types.Block
 	Hash  common.Hash
-	Logs  vm.Logs
+	Logs  []*types.Log
 }
 
 type ChainSideEvent struct {
@@ -65,7 +64,7 @@ type ChainSideEvent struct {
 
 type PendingBlockEvent struct {
 	Block *types.Block
-	Logs  vm.Logs
+	Logs  []*types.Log
 }
 
 type ChainUncleEvent struct {

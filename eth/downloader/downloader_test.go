@@ -119,7 +119,7 @@ func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, paren
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == dl.genesis && i%3 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-			tx, err := types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil).SignECDSA(signer, testKey)
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
@@ -650,7 +650,7 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 	}
 	// Verify the state trie too for fast syncs
 	if tester.downloader.mode == FastSync {
-		index := 0
+		var index int
 		if pivot := int(tester.downloader.queue.fastSyncPivot); pivot < common {
 			index = pivot
 		} else {

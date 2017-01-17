@@ -207,7 +207,7 @@ func checkPropagation(t *testing.T) {
 func validateMail(t *testing.T, index int, mail []*ReceivedMessage) bool {
 	var cnt int
 	for _, m := range mail {
-		if bytes.Compare(m.Payload, expectedMessage) == 0 {
+		if bytes.Equal(m.Payload, expectedMessage) {
 			cnt++
 		}
 	}

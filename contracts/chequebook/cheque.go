@@ -252,7 +252,7 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 		return nil, fmt.Errorf("amount must be greater than zero (%v)", amount)
 	}
 	if self.balance.Cmp(amount) < 0 {
-		err = fmt.Errorf("insufficent funds to issue cheque for amount: %v. balance: %v", amount, self.balance)
+		err = fmt.Errorf("insufficient funds to issue cheque for amount: %v. balance: %v", amount, self.balance)
 	} else {
 		var sig []byte
 		sent, found := self.sent[beneficiary]
@@ -277,7 +277,7 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 	}
 
 	// auto deposit if threshold is set and balance is less then threshold
-	// note this is called even if issueing cheque fails
+	// note this is called even if issuing cheque fails
 	// so we reattempt depositing
 	if self.threshold != nil {
 		if self.balance.Cmp(self.threshold) < 0 {

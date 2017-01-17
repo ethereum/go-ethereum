@@ -54,8 +54,6 @@ const (
 
 var errServerStopped = errors.New("server stopped")
 
-var srvjslog = logger.NewJsonLogger()
-
 // Config holds Server options.
 type Config struct {
 	// This field must be set to a valid secp256k1 private key.
@@ -737,12 +735,6 @@ func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
 // the peer.
 func (srv *Server) runPeer(p *Peer) {
 	glog.V(logger.Debug).Infof("Added %v\n", p)
-	srvjslog.LogJson(&logger.P2PConnected{
-		RemoteId:            p.ID().String(),
-		RemoteAddress:       p.RemoteAddr().String(),
-		RemoteVersionString: p.Name(),
-		NumConnections:      srv.PeerCount(),
-	})
 
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
@@ -753,10 +745,6 @@ func (srv *Server) runPeer(p *Peer) {
 	srv.delpeer <- p
 
 	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, discreason)
-	srvjslog.LogJson(&logger.P2PDisconnected{
-		RemoteId:       p.ID().String(),
-		NumConnections: srv.PeerCount(),
-	})
 }
 
 // NodeInfo represents a short summary of the information known about the host.

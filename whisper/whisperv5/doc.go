@@ -42,7 +42,7 @@ const (
 
 	statusCode           = 0 // used by whisper protocol
 	messagesCode         = 1 // normal whisper message
-	p2pCode              = 2 // peer-to-peer message (to be consumed by the peer, but not forwarded any futher)
+	p2pCode              = 2 // peer-to-peer message (to be consumed by the peer, but not forwarded any further)
 	p2pRequestCode       = 3 // peer-to-peer message, used by Dapp protocol
 	NumberOfMessageCodes = 64
 

@@ -86,7 +86,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			continue
 		}
 
-		match := false
+		var match bool
 		if msg != nil {
 			match = watcher.MatchMessage(msg)
 		} else {

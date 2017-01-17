@@ -76,9 +76,9 @@ func compressChunk(dat []byte) (ret []byte, n int) {
 		}
 		return []byte{token, byte(j + 2)}, j
 	case len(dat) >= 32:
-		if dat[0] == empty[0] && bytes.Compare(dat[:32], empty) == 0 {
+		if dat[0] == empty[0] && bytes.Equal(dat[:32], empty) {
 			return []byte{token, emptyShaToken}, 32
-		} else if dat[0] == emptyList[0] && bytes.Compare(dat[:32], emptyList) == 0 {
+		} else if dat[0] == emptyList[0] && bytes.Equal(dat[:32], emptyList) {
 			return []byte{token, emptyListShaToken}, 32
 		}
 		fallthrough

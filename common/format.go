@@ -27,7 +27,7 @@ import (
 // the unnecessary precision off from the formatted textual representation.
 type PrettyDuration time.Duration
 
-var prettyDurationRe = regexp.MustCompile("\\.[0-9]+")
+var prettyDurationRe = regexp.MustCompile(`\.[0-9]+`)
 
 // String implements the Stringer interface, allowing pretty printing of duration
 // values rounded to three decimals.

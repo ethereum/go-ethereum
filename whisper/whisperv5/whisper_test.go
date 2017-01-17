@@ -50,12 +50,11 @@ func TestWhisperBasic(t *testing.T) {
 
 	peerID := make([]byte, 64)
 	randomize(peerID)
-	peer, err := w.getPeer(peerID)
+	peer, _ := w.getPeer(peerID)
 	if peer != nil {
-		t.Fatalf("failed GetPeer.")
+		t.Fatal("found peer for random key.")
 	}
-	err = w.MarkPeerTrusted(peerID)
-	if err == nil {
+	if err := w.MarkPeerTrusted(peerID); err == nil {
 		t.Fatalf("failed MarkPeerTrusted.")
 	}
 	exist := w.HasSymKey("non-existing")
@@ -77,11 +76,10 @@ func TestWhisperBasic(t *testing.T) {
 
 	var derived []byte
 	ver := uint64(0xDEADBEEF)
-	derived, err = deriveKeyMaterial(peerID, ver)
-	if err != unknownVersionError(ver) {
+	if _, err := deriveKeyMaterial(peerID, ver); err != unknownVersionError(ver) {
 		t.Fatalf("failed deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
-	derived, err = deriveKeyMaterial(peerID, 0)
+	derived, err := deriveKeyMaterial(peerID, 0)
 	if err != nil {
 		t.Fatalf("failed second deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
@@ -231,7 +229,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k1 == nil {
 		t.Fatalf("first key does not exist.")
 	}
-	if bytes.Compare(k1, randomKey) == 0 {
+	if bytes.Equal(k1, randomKey) {
 		t.Fatalf("k1 == randomKey.")
 	}
 	if k2 != nil {
@@ -256,10 +254,10 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k2 == nil {
 		t.Fatalf("k2 does not exist.")
 	}
-	if bytes.Compare(k1, k2) == 0 {
+	if bytes.Equal(k1, k2) {
 		t.Fatalf("k1 == k2.")
 	}
-	if bytes.Compare(k1, randomKey) == 0 {
+	if bytes.Equal(k1, randomKey) {
 		t.Fatalf("k1 == randomKey.")
 	}
 	if len(k1) != aesKeyLength {

@@ -212,7 +212,7 @@ type hasLenChecker struct {
 
 // The HasLen checker verifies that the obtained value has the
 // provided length. In many cases this is superior to using Equals
-// in conjuction with the len function because in case the check
+// in conjunction with the len function because in case the check
 // fails the value itself will be printed, instead of its length,
 // providing more details for figuring the problem.
 //

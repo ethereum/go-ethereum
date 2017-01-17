@@ -72,30 +72,15 @@ func BenchmarkSha3(b *testing.B) {
 	fmt.Println(amount, ":", time.Since(start))
 }
 
-func Test0Key(t *testing.T) {
-	key := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	_, err := secp256k1.GeneratePubKey(key)
-	if err == nil {
-		t.Errorf("expected error due to zero privkey")
-	}
-}
-
-func testSign(signfn func([]byte, *ecdsa.PrivateKey) ([]byte, error), t *testing.T) {
+func TestSign(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
 	addr := common.HexToAddress(testAddrHex)
 
 	msg := Keccak256([]byte("foo"))
-	sig, err := signfn(msg, key)
+	sig, err := Sign(msg, key)
 	if err != nil {
 		t.Errorf("Sign error: %s", err)
 	}
-
-	// signfn can return a recover id of either [0,1] or [27,28].
-	// In the latter case its an Ethereum signature, adjust recover id.
-	if sig[64] == 27 || sig[64] == 28 {
-		sig[64] -= 27
-	}
-
 	recoveredPub, err := Ecrecover(msg, sig)
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)
@@ -117,32 +102,13 @@ func testSign(signfn func([]byte, *ecdsa.PrivateKey) ([]byte, error), t *testing
 	}
 }
 
-func TestSign(t *testing.T) {
-	testSign(Sign, t)
-}
-
-func TestSignEthereum(t *testing.T) {
-	testSign(SignEthereum, t)
-}
-
-func testInvalidSign(signfn func([]byte, *ecdsa.PrivateKey) ([]byte, error), t *testing.T) {
-	_, err := signfn(make([]byte, 1), nil)
-	if err == nil {
+func TestInvalidSign(t *testing.T) {
+	if _, err := Sign(make([]byte, 1), nil); err == nil {
 		t.Errorf("expected sign with hash 1 byte to error")
 	}
-
-	_, err = signfn(make([]byte, 33), nil)
-	if err == nil {
+	if _, err := Sign(make([]byte, 33), nil); err == nil {
 		t.Errorf("expected sign with hash 33 byte to error")
 	}
-}
-
-func TestInvalidSign(t *testing.T) {
-	testInvalidSign(Sign, t)
-}
-
-func TestInvalidSignEthereum(t *testing.T) {
-	testInvalidSign(SignEthereum, t)
 }
 
 func TestNewContractAddress(t *testing.T) {
@@ -207,43 +173,43 @@ func TestValidateSignatureValues(t *testing.T) {
 	secp256k1nMinus1 := new(big.Int).Sub(secp256k1.N, common.Big1)
 
 	// correct v,r,s
-	check(true, 27, one, one)
-	check(true, 28, one, one)
+	check(true, 0, one, one)
+	check(true, 1, one, one)
 	// incorrect v, correct r,s,
-	check(false, 30, one, one)
-	check(false, 26, one, one)
+	check(false, 2, one, one)
+	check(false, 3, one, one)
 
 	// incorrect v, combinations of incorrect/correct r,s at lower limit
+	check(false, 2, zero, zero)
+	check(false, 2, zero, one)
+	check(false, 2, one, zero)
+	check(false, 2, one, one)
+
+	// correct v for any combination of incorrect r,s
 	check(false, 0, zero, zero)
 	check(false, 0, zero, one)
 	check(false, 0, one, zero)
-	check(false, 0, one, one)
 
-	// correct v for any combination of incorrect r,s
-	check(false, 27, zero, zero)
-	check(false, 27, zero, one)
-	check(false, 27, one, zero)
-
-	check(false, 28, zero, zero)
-	check(false, 28, zero, one)
-	check(false, 28, one, zero)
+	check(false, 1, zero, zero)
+	check(false, 1, zero, one)
+	check(false, 1, one, zero)
 
 	// correct sig with max r,s
-	check(true, 27, secp256k1nMinus1, secp256k1nMinus1)
+	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 27, secp256k1.N, secp256k1nMinus1)
-	check(false, 27, secp256k1nMinus1, secp256k1.N)
-	check(false, 27, secp256k1.N, secp256k1.N)
+	check(false, 0, secp256k1.N, secp256k1nMinus1)
+	check(false, 0, secp256k1nMinus1, secp256k1.N)
+	check(false, 0, secp256k1.N, secp256k1.N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone
-	check(false, 27, minusOne, one)
-	check(false, 27, one, minusOne)
+	check(false, 0, minusOne, one)
+	check(false, 0, one, minusOne)
 }
 
 func checkhash(t *testing.T, name string, f func([]byte) []byte, msg, exp []byte) {
 	sum := f(msg)
-	if bytes.Compare(exp, sum) != 0 {
+	if !bytes.Equal(exp, sum) {
 		t.Fatalf("hash %s mismatch: want: %x have: %x", name, exp, sum)
 	}
 }

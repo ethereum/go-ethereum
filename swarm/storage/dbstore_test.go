@@ -144,7 +144,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 		t.Fatalf("unexpected error creating NewSyncIterator")
 	}
 
-	it, err = m.NewSyncIterator(DbSyncState{
+	it, _ = m.NewSyncIterator(DbSyncState{
 		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
 		First: 2,
@@ -168,7 +168,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 		t.Fatalf("Expected %v chunk, got %v", keys[3], res[1])
 	}
 
-	it, err = m.NewSyncIterator(DbSyncState{
+	it, _ = m.NewSyncIterator(DbSyncState{
 		Start: Key(common.Hex2Bytes("2000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
 		First: 2,

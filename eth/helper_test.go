@@ -124,7 +124,7 @@ func (p *testTxPool) Pending() (map[common.Address]types.Transactions, error) {
 // newTestTransaction create a new dummy transaction.
 func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
 	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = tx.SignECDSA(types.HomesteadSigner{}, from)
+	tx, _ = types.SignTx(tx, types.HomesteadSigner{}, from)
 	return tx
 }
 

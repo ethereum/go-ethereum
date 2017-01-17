@@ -88,7 +88,6 @@ func init() {
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
 		utils.LightServFlag,
@@ -168,7 +167,6 @@ func init() {
 	}
 
 	app.After = func(ctx *cli.Context) error {
-		logger.Flush()
 		debug.Exit()
 		console.Stdin.Close() // Resets terminal mode.
 		return nil

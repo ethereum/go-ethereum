@@ -267,8 +267,7 @@ func (self *CodeRequest) Valid(db ethdb.Database, msg *Msg) bool {
 		return false
 	}
 	data := reply[0]
-	hash := crypto.Sha3Hash(data)
-	if !bytes.Equal(self.Hash[:], hash[:]) {
+	if hash := crypto.Keccak256Hash(data); self.Hash != hash {
 		glog.V(logger.Debug).Infof("ODR: requested hash %08x does not match received data hash %08x", self.Hash[:4], hash[:4])
 		return false
 	}

@@ -316,7 +316,7 @@ func (t *topicTable) collectGarbage() {
 		t.checkDeleteNode(node)
 	}
 
-	for topic, _ := range t.topics {
+	for topic := range t.topics {
 		t.checkDeleteTopic(topic)
 	}
 }

@@ -60,13 +60,13 @@ var unmarshalBytesTests = []unmarshalTest{
 	{input: "", wantErr: errNonString},
 	{input: "null", wantErr: errNonString},
 	{input: "10", wantErr: errNonString},
-	{input: `""`, wantErr: ErrEmptyString},
 	{input: `"0"`, wantErr: ErrMissingPrefix},
 	{input: `"0x0"`, wantErr: ErrOddLength},
 	{input: `"0xxx"`, wantErr: ErrSyntax},
 	{input: `"0x01zz01"`, wantErr: ErrSyntax},
 
 	// valid encoding
+	{input: `""`, want: referenceBytes("")},
 	{input: `"0x"`, want: referenceBytes("")},
 	{input: `"0x02"`, want: referenceBytes("02")},
 	{input: `"0X02"`, want: referenceBytes("02")},
@@ -125,7 +125,6 @@ var unmarshalBigTests = []unmarshalTest{
 	{input: "", wantErr: errNonString},
 	{input: "null", wantErr: errNonString},
 	{input: "10", wantErr: errNonString},
-	{input: `""`, wantErr: ErrEmptyString},
 	{input: `"0"`, wantErr: ErrMissingPrefix},
 	{input: `"0x"`, wantErr: ErrEmptyNumber},
 	{input: `"0x01"`, wantErr: ErrLeadingZero},
@@ -133,6 +132,7 @@ var unmarshalBigTests = []unmarshalTest{
 	{input: `"0x1zz01"`, wantErr: ErrSyntax},
 
 	// valid encoding
+	{input: `""`, want: big.NewInt(0)},
 	{input: `"0x0"`, want: big.NewInt(0)},
 	{input: `"0x2"`, want: big.NewInt(0x2)},
 	{input: `"0x2F2"`, want: big.NewInt(0x2f2)},
@@ -198,7 +198,6 @@ var unmarshalUint64Tests = []unmarshalTest{
 	{input: "", wantErr: errNonString},
 	{input: "null", wantErr: errNonString},
 	{input: "10", wantErr: errNonString},
-	{input: `""`, wantErr: ErrEmptyString},
 	{input: `"0"`, wantErr: ErrMissingPrefix},
 	{input: `"0x"`, wantErr: ErrEmptyNumber},
 	{input: `"0x01"`, wantErr: ErrLeadingZero},
@@ -207,6 +206,7 @@ var unmarshalUint64Tests = []unmarshalTest{
 	{input: `"0x1zz01"`, wantErr: ErrSyntax},
 
 	// valid encoding
+	{input: `""`, want: uint64(0)},
 	{input: `"0x0"`, want: uint64(0)},
 	{input: `"0x2"`, want: uint64(0x2)},
 	{input: `"0x2F2"`, want: uint64(0x2f2)},
