@@ -21,7 +21,7 @@ import "github.com/ethereum/go-ethereum/common"
 // Iterator is a key-value trie iterator that traverses a Trie.
 type Iterator struct {
 	trie   *Trie
-	nodeIt *NodeIterator
+	nodeIt NodeIterator
 
 	Key   []byte // Current data key on which the iterator is positioned on
 	Value []byte // Current data value on which the iterator is positioned on
@@ -39,15 +39,26 @@ func NewIterator(trie *Trie) *Iterator {
 // Next moves the iterator forward one key-value entry.
 func (it *Iterator) Next() bool {
 	for it.nodeIt.Next(true) {
-		if it.nodeIt.Leaf {
-			it.Key = decodeCompact(it.nodeIt.path)
-			it.Value = it.nodeIt.LeafBlob
+		if it.nodeIt.Leaf() {
+			it.Key = decodeCompact(it.nodeIt.Path())
+			it.Value = it.nodeIt.LeafBlob()
 			return true
 		}
 	}
 	it.Key = nil
 	it.Value = nil
 	return false
+}
+
+// NodeIterator is an iterator to traverse the trie pre-order.
+type NodeIterator interface {
+	Hash() common.Hash
+	Parent() common.Hash
+	Leaf() bool
+	LeafBlob() []byte
+	Path() []byte
+	Next(bool) bool
+	Error() error
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -60,48 +71,92 @@ type nodeIteratorState struct {
 	pathlen int         // Length of the path to this node
 }
 
-// NodeIterator is an iterator to traverse the trie post-order.
-type NodeIterator struct {
+type nodeIterator struct {
 	trie  *Trie                // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
 
-	Hash     common.Hash // Hash of the current node being iterated (nil if not standalone)
-	Node     node        // Current node being iterated (internal representation)
-	Parent   common.Hash // Hash of the first full ancestor node (nil if current is the root)
-	Leaf     bool        // Flag whether the current node is a value (data) node
-	LeafBlob []byte      // Data blob contained within a leaf (otherwise nil)
-	path     []byte      // Path to the current node
+	err error // Failure set in case of an internal error in the iterator
 
-	Error error // Failure set in case of an internal error in the iterator
+	path []byte // Path to the current node
 }
 
 // NewNodeIterator creates an post-order trie iterator.
-func NewNodeIterator(trie *Trie) *NodeIterator {
+func NewNodeIterator(trie *Trie) NodeIterator {
 	if trie.Hash() == emptyState {
-		return new(NodeIterator)
+		return new(nodeIterator)
 	}
-	return &NodeIterator{trie: trie}
+	return &nodeIterator{trie: trie}
+}
+
+// Hash returns the hash of the current node
+func (it *nodeIterator) Hash() common.Hash {
+	if it.trie == nil {
+		return common.Hash{}
+	}
+
+	return it.stack[len(it.stack)-1].hash
+}
+
+// Parent returns the hash of the parent node
+func (it *nodeIterator) Parent() common.Hash {
+	if it.trie == nil {
+		return common.Hash{}
+	}
+
+	return it.stack[len(it.stack)-1].parent
+}
+
+// Leaf returns true if the current node is a leaf
+func (it *nodeIterator) Leaf() bool {
+	if it.trie == nil {
+		return false
+	}
+
+	_, ok := it.stack[len(it.stack)-1].node.(valueNode)
+	return ok
+}
+
+// LeafBlob returns the data for the current node, if it is a leaf
+func (it *nodeIterator) LeafBlob() []byte {
+	if it.trie == nil {
+		return nil
+	}
+
+	if node, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
+		return []byte(node)
+	}
+	return nil
+}
+
+// Path returns the hex-encoded path to the current node
+func (it *nodeIterator) Path() []byte {
+	return it.path
+}
+
+// Error returns the error set in case of an internal error in the iterator
+func (it *nodeIterator) Error() error {
+	return it.err
 }
 
 // Next moves the iterator to the next node, returning whether there are any
 // further nodes. In case of an internal error this method returns false and
 // sets the Error field to the encountered failure. If `children` is false,
 // skips iterating over any subnodes of the current node.
-func (it *NodeIterator) Next(children bool) bool {
+func (it *nodeIterator) Next(children bool) bool {
 	// If the iterator failed previously, don't do anything
-	if it.Error != nil {
+	if it.err != nil {
 		return false
 	}
 	// Otherwise step forward with the iterator and report any errors
 	if err := it.step(children); err != nil {
-		it.Error = err
+		it.err = err
 		return false
 	}
-	return it.retrieve()
+	return it.trie != nil
 }
 
 // step moves the iterator to the next node of the trie.
-func (it *NodeIterator) step(children bool) error {
+func (it *nodeIterator) step(children bool) error {
 	if it.trie == nil {
 		// Abort if we reached the end of the iteration
 		return nil
@@ -188,27 +243,4 @@ func (it *NodeIterator) step(children bool) error {
 		it.stack = it.stack[:len(it.stack)-1]
 	}
 	return nil
-}
-
-// retrieve pulls and caches the current trie node the iterator is traversing.
-// In case of a value node, the additional leaf blob is also populated with the
-// data contents for external interpretation.
-//
-// The method returns whether there are any more data left for inspection.
-func (it *NodeIterator) retrieve() bool {
-	// Clear out any previously set values
-	it.Hash, it.Node, it.Parent, it.Leaf, it.LeafBlob = common.Hash{}, nil, common.Hash{}, false, nil
-
-	// If the iteration's done, return no available data
-	if it.trie == nil {
-		return false
-	}
-	// Otherwise retrieve the current node and resolve leaf accessors
-	state := it.stack[len(it.stack)-1]
-
-	it.Hash, it.Node, it.Parent = state.hash, state.node, state.parent
-	if value, ok := it.Node.(valueNode); ok {
-		it.Leaf, it.LeafBlob = true, []byte(value)
-	}
-	return true
 }
