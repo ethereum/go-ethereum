@@ -84,6 +84,7 @@ var (
 	requestMail    = flag.Bool("r", false, "request expired messages from the bootstrap server")
 	asymmetricMode = flag.Bool("a", false, "use asymmetric encryption")
 	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
+	generateKey    = flag.Bool("k", false, "generate and show the private key")
 
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
@@ -162,6 +163,16 @@ func initialize() {
 	done = make(chan struct{})
 	var peers []*discover.Node
 	var err error
+
+	if *generateKey {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			utils.Fatalf("Failed to generate private key: %s", err)
+		}
+		k := hex.EncodeToString(crypto.FromECDSA(key))
+		fmt.Printf("Random private key: %s \n", k)
+		os.Exit(0)
+	}
 
 	if *testMode {
 		password := []byte("test password for symmetric encryption")
