@@ -22,7 +22,6 @@ import "github.com/ethereum/go-ethereum/common"
 type Iterator struct {
 	trie   *Trie
 	nodeIt *NodeIterator
-	keyBuf []byte
 
 	Key   []byte // Current data key on which the iterator is positioned on
 	Value []byte // Current data value on which the iterator is positioned on
@@ -33,7 +32,6 @@ func NewIterator(trie *Trie) *Iterator {
 	return &Iterator{
 		trie:   trie,
 		nodeIt: NewNodeIterator(trie),
-		keyBuf: make([]byte, 0, 64),
 		Key:    nil,
 	}
 }
@@ -42,7 +40,7 @@ func NewIterator(trie *Trie) *Iterator {
 func (it *Iterator) Next() bool {
 	for it.nodeIt.Next(true) {
 		if it.nodeIt.Leaf {
-			it.Key = it.makeKey()
+			it.Key = decodeCompact(it.nodeIt.path)
 			it.Value = it.nodeIt.LeafBlob
 			return true
 		}
@@ -52,32 +50,14 @@ func (it *Iterator) Next() bool {
 	return false
 }
 
-func (it *Iterator) makeKey() []byte {
-	key := it.keyBuf[:0]
-	for _, se := range it.nodeIt.stack {
-		switch node := se.node.(type) {
-		case *fullNode:
-			if se.child <= 16 {
-				key = append(key, byte(se.child))
-			}
-		case *shortNode:
-			if hasTerm(node.Key) {
-				key = append(key, node.Key[:len(node.Key)-1]...)
-			} else {
-				key = append(key, node.Key...)
-			}
-		}
-	}
-	return decodeCompact(key)
-}
-
 // nodeIteratorState represents the iteration state at one particular node of the
 // trie, which can be resumed at a later invocation.
 type nodeIteratorState struct {
-	hash   common.Hash // Hash of the node being iterated (nil if not standalone)
-	node   node        // Trie node being iterated
-	parent common.Hash // Hash of the first full ancestor node (nil if current is the root)
-	child  int         // Child to be processed next
+	hash    common.Hash // Hash of the node being iterated (nil if not standalone)
+	node    node        // Trie node being iterated
+	parent  common.Hash // Hash of the first full ancestor node (nil if current is the root)
+	child   int         // Child to be processed next
+	pathlen int         // Length of the path to this node
 }
 
 // NodeIterator is an iterator to traverse the trie post-order.
@@ -90,6 +70,7 @@ type NodeIterator struct {
 	Parent   common.Hash // Hash of the first full ancestor node (nil if current is the root)
 	Leaf     bool        // Flag whether the current node is a value (data) node
 	LeafBlob []byte      // Data blob contained within a leaf (otherwise nil)
+	path     []byte      // Path to the current node
 
 	Error error // Failure set in case of an internal error in the iterator
 }
@@ -138,6 +119,7 @@ func (it *NodeIterator) step(children bool) error {
 
 	if !children {
 		// If we're skipping children, pop the current node first
+		it.path = it.path[:it.stack[len(it.stack)-1].pathlen]
 		it.stack = it.stack[:len(it.stack)-1]
 	}
 
@@ -157,11 +139,13 @@ func (it *NodeIterator) step(children bool) error {
 			parent.child++
 			if parent.child < len(node.Children) {
 				it.stack = append(it.stack, &nodeIteratorState{
-					hash:   common.BytesToHash(node.flags.hash),
-					node:   node.Children[parent.child],
-					parent: ancestor,
-					child:  -1,
+					hash:    common.BytesToHash(node.flags.hash),
+					node:    node.Children[parent.child],
+					parent:  ancestor,
+					child:   -1,
+					pathlen: len(it.path),
 				})
+				it.path = append(it.path, byte(parent.child))
 				break
 			}
 		} else if node, ok := parent.node.(*shortNode); ok {
@@ -169,31 +153,38 @@ func (it *NodeIterator) step(children bool) error {
 			if parent.child < 0 {
 				parent.child++
 				it.stack = append(it.stack, &nodeIteratorState{
-					hash:   common.BytesToHash(node.flags.hash),
-					node:   node.Val,
-					parent: ancestor,
-					child:  -1,
+					hash:    common.BytesToHash(node.flags.hash),
+					node:    node.Val,
+					parent:  ancestor,
+					child:   -1,
+					pathlen: len(it.path),
 				})
+				if hasTerm(node.Key) {
+					it.path = append(it.path, node.Key[:len(node.Key)-1]...)
+				} else {
+					it.path = append(it.path, node.Key...)
+				}
 				break
 			}
 		} else if hash, ok := parent.node.(hashNode); ok {
 			// Hash node, resolve the hash child from the database
 			if parent.child < 0 {
 				parent.child++
-
 				node, err := it.trie.resolveHash(hash, nil, nil)
 				if err != nil {
 					return err
 				}
 				it.stack = append(it.stack, &nodeIteratorState{
-					hash:   common.BytesToHash(hash),
-					node:   node,
-					parent: ancestor,
-					child:  -1,
+					hash:    common.BytesToHash(hash),
+					node:    node,
+					parent:  ancestor,
+					child:   -1,
+					pathlen: len(it.path),
 				})
 				break
 			}
 		}
+		it.path = it.path[:parent.pathlen]
 		it.stack = it.stack[:len(it.stack)-1]
 	}
 	return nil
