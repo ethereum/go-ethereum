@@ -58,7 +58,8 @@ func TestWhisperBasic(t *testing.T) {
 	if err == nil {
 		t.Fatalf("failed MarkPeerTrusted.")
 	}
-	err = w.RequestHistoricMessages(peerID, peerID)
+	var empty Envelope
+	err = w.RequestHistoricMessages(peerID, &empty)
 	if err == nil {
 		t.Fatalf("failed RequestHistoricMessages.")
 	}
