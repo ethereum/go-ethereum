@@ -350,9 +350,6 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 					return fmt.Errorf("invalid envelope")
 				}
 				p.mark(envelope)
-				if wh.mailServer != nil {
-					wh.mailServer.Archive(envelope)
-				}
 			}
 		case p2pCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
@@ -454,6 +451,9 @@ func (wh *Whisper) add(envelope *Envelope) error {
 	} else {
 		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
 		wh.postEvent(envelope, false) // notify the local node about the new message
+		if wh.mailServer != nil {
+			wh.mailServer.Archive(envelope)
+		}
 	}
 	return nil
 }
