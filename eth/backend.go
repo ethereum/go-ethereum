@@ -78,7 +78,6 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseHandles    int
 
-	NatSpec   bool
 	DocRoot   string
 	AutoDAG   bool
 	PowFake   bool
@@ -140,7 +139,6 @@ type Ethereum struct {
 	etherbase    common.Address
 	solcPath     string
 
-	NatSpec       bool
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
 }
@@ -174,7 +172,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		netVersionId:   config.NetworkId,
-		NatSpec:        config.NatSpec,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
 		AutoDAG:        config.AutoDAG,

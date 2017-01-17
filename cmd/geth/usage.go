@@ -170,7 +170,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Name: "EXPERIMENTAL",
 		Flags: []cli.Flag{
 			utils.WhisperEnabledFlag,
-			utils.NatspecEnabledFlag,
 		},
 	},
 	{

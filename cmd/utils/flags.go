@@ -131,10 +131,6 @@ var (
 		Name:  "identity",
 		Usage: "Custom node name",
 	}
-	NatspecEnabledFlag = cli.BoolFlag{
-		Name:  "natspec",
-		Usage: "Enable NatSpec confirmation notice",
-	}
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
@@ -735,7 +731,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
-		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
