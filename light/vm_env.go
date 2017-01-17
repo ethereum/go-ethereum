@@ -45,6 +45,8 @@ func (s *VMState) Error() error {
 
 func (s *VMState) AddLog(log *types.Log) {}
 
+func (s *VMState) AddPreimage(hash common.Hash, preimage []byte) {}
+
 // errHandler handles and stores any state error that happens during execution.
 func (s *VMState) errHandler(err error) {
 	if err != nil && s.err == nil {

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -39,12 +40,13 @@ var (
 	headBlockKey  = []byte("LastBlock")
 	headFastKey   = []byte("LastFast")
 
-	headerPrefix        = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
-	tdSuffix            = []byte("t") // headerPrefix + num (uint64 big endian) + hash + tdSuffix -> td
-	numSuffix           = []byte("n") // headerPrefix + num (uint64 big endian) + numSuffix -> hash
-	blockHashPrefix     = []byte("H") // blockHashPrefix + hash -> num (uint64 big endian)
-	bodyPrefix          = []byte("b") // bodyPrefix + num (uint64 big endian) + hash -> block body
-	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	headerPrefix        = []byte("h")   // headerPrefix + num (uint64 big endian) + hash -> header
+	tdSuffix            = []byte("t")   // headerPrefix + num (uint64 big endian) + hash + tdSuffix -> td
+	numSuffix           = []byte("n")   // headerPrefix + num (uint64 big endian) + numSuffix -> hash
+	blockHashPrefix     = []byte("H")   // blockHashPrefix + hash -> num (uint64 big endian)
+	bodyPrefix          = []byte("b")   // bodyPrefix + num (uint64 big endian) + hash -> block body
+	blockReceiptsPrefix = []byte("r")   // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
+	preimagePrefix      = "secure-key-" // preimagePrefix + hash -> preimage
 
 	txMetaSuffix   = []byte{0x01}
 	receiptsPrefix = []byte("receipts-")
@@ -66,6 +68,9 @@ var (
 	ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error
 
 	mipmapBloomMu sync.Mutex // protect against race condition when updating mipmap blooms
+
+	preimageCounter    = metrics.NewCounter("db/preimage/total")
+	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
 )
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -593,6 +598,34 @@ func WriteMipmapBloom(db ethdb.Database, number uint64, receipts types.Receipts)
 func GetMipmapBloom(db ethdb.Database, number, level uint64) types.Bloom {
 	bloomDat, _ := db.Get(mipmapKey(number, level))
 	return types.BytesToBloom(bloomDat)
+}
+
+// PreimageTable returns a Database instance with the key prefix for preimage entries.
+func PreimageTable(db ethdb.Database) ethdb.Database {
+	return ethdb.NewTable(db, preimagePrefix)
+}
+
+// WritePreimages writes the provided set of preimages to the database. `number` is the
+// current block number, and is used for debug messages only.
+func WritePreimages(db ethdb.Database, number uint64, preimages map[common.Hash][]byte) error {
+	table := PreimageTable(db)
+	batch := table.NewBatch()
+	hitCount := 0
+	for hash, preimage := range preimages {
+		if _, err := table.Get(hash.Bytes()); err != nil {
+			batch.Put(hash.Bytes(), preimage)
+			hitCount += 1
+		}
+	}
+	preimageCounter.Inc(int64(len(preimages)))
+	preimageHitCounter.Inc(int64(hitCount))
+	if hitCount > 0 {
+		if err := batch.Write(); err != nil {
+			return fmt.Errorf("preimage write fail for block %d: %v", number, err)
+		}
+		glog.V(logger.Debug).Infof("%d preimages in block %d, including %d new", len(preimages), number, hitCount)
+	}
+	return nil
 }
 
 // GetBlockChainVersion reads the version number from db.

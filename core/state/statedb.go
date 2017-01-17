@@ -75,6 +75,8 @@ type StateDB struct {
 	logs         map[common.Hash][]*types.Log
 	logSize      uint
 
+	preimages map[common.Hash][]byte
+
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal        journal
@@ -99,6 +101,7 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash][]*types.Log),
+		preimages:         make(map[common.Hash][]byte),
 	}, nil
 }
 
@@ -120,6 +123,7 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
 		logs:              make(map[common.Hash][]*types.Log),
+		preimages:         make(map[common.Hash][]byte),
 	}, nil
 }
 
@@ -141,6 +145,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.txIndex = 0
 	self.logs = make(map[common.Hash][]*types.Log)
 	self.logSize = 0
+	self.preimages = make(map[common.Hash][]byte)
 	self.clearJournalAndRefund()
 
 	return nil
@@ -197,6 +202,21 @@ func (self *StateDB) Logs() []*types.Log {
 		logs = append(logs, lgs...)
 	}
 	return logs
+}
+
+// AddPreimage records a SHA3 preimage seen by the VM.
+func (self *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
+	if _, ok := self.preimages[hash]; !ok {
+		self.journal = append(self.journal, addPreimageChange{hash: hash})
+		pi := make([]byte, len(preimage))
+		copy(pi, preimage)
+		self.preimages[hash] = pi
+	}
+}
+
+// Preimages returns a list of SHA3 preimages that have been submitted.
+func (self *StateDB) Preimages() map[common.Hash][]byte {
+	return self.preimages
 }
 
 func (self *StateDB) AddRefund(gas *big.Int) {
@@ -477,8 +497,9 @@ func (self *StateDB) Copy() *StateDB {
 		refund:            new(big.Int).Set(self.refund),
 		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:           self.logSize,
+		preimages:         make(map[common.Hash][]byte),
 	}
-	// Copy the dirty states and logs
+	// Copy the dirty states, logs, and preimages
 	for addr := range self.stateObjectsDirty {
 		state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state, state.MarkStateObjectDirty)
 		state.stateObjectsDirty[addr] = struct{}{}
@@ -486,6 +507,9 @@ func (self *StateDB) Copy() *StateDB {
 	for hash, logs := range self.logs {
 		state.logs[hash] = make([]*types.Log, len(logs))
 		copy(state.logs[hash], logs)
+	}
+	for hash, preimage := range self.preimages {
+		state.preimages[hash] = preimage
 	}
 	return state
 }
