@@ -116,14 +116,19 @@ func FirstBitSet(v *big.Int) int {
 //
 // Returns the bytes of a big integer with the size specified by **base**
 // Attempts to pad the byte array with zeros.
+//
+// Note that input arg **num** is expected to be non-nil;
+// nil argument will result in runtime panic.
 func BigToBytes(num *big.Int, base int) []byte {
-	ret := make([]byte, base/8)
+	bytes := num.Bytes()
+	blen := len(bytes)
+	bpb := base / 8
 
-	if len(num.Bytes()) > base/8 {
-		return num.Bytes()
+	if blen > bpb {
+		return bytes
 	}
-
-	return append(ret[:len(ret)-len(num.Bytes())], num.Bytes()...)
+	padBuf := make([]byte, bpb)
+	return append(padBuf[:bpb-blen], bytes...)
 }
 
 // Big copy

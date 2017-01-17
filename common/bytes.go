@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package common contains various helper functions.
 package common
 
 import (
@@ -61,60 +60,29 @@ func NumberToBytes(num interface{}, bits int) []byte {
 	return buf.Bytes()[buf.Len()-(bits/8):]
 }
 
-// Bytes to number
-//
-// Attempts to cast a byte slice to a unsigned integer
+// Converts byte slice to a unsigned integer. Bytes are
+// interpreted as big-endian image of unsigned 64bit integer.
+// Slices less than 8 bytes are left padded before conversion;
+// For slices larger than 8 bytes the trailing bytes are ignored.
 func BytesToNumber(b []byte) uint64 {
-	var number uint64
+	var data = LeftPadBytes(b, 8)
 
-	// Make sure the buffer is 64bits
-	data := make([]byte, 8)
-	data = append(data[:len(b)], b...)
+	var n uint64
+	n |= uint64(data[0]) << 56
+	n |= uint64(data[1]) << 48
+	n |= uint64(data[2]) << 40
+	n |= uint64(data[3]) << 32
+	n |= uint64(data[4]) << 24
+	n |= uint64(data[5]) << 16
+	n |= uint64(data[6]) << 8
+	n |= uint64(data[7])
 
-	buf := bytes.NewReader(data)
-	err := binary.Read(buf, binary.BigEndian, &number)
-	if err != nil {
-		fmt.Println("BytesToNumber failed:", err)
-	}
-
-	return number
+	return n
 }
 
-// Read variable int
-//
-// Read a variable length number in big endian byte order
-func ReadVarInt(buff []byte) (ret uint64) {
-	switch l := len(buff); {
-	case l > 4:
-		d := LeftPadBytes(buff, 8)
-		binary.Read(bytes.NewReader(d), binary.BigEndian, &ret)
-	case l > 2:
-		var num uint32
-		d := LeftPadBytes(buff, 4)
-		binary.Read(bytes.NewReader(d), binary.BigEndian, &num)
-		ret = uint64(num)
-	case l > 1:
-		var num uint16
-		d := LeftPadBytes(buff, 2)
-		binary.Read(bytes.NewReader(d), binary.BigEndian, &num)
-		ret = uint64(num)
-	default:
-		var num uint8
-		binary.Read(bytes.NewReader(buff), binary.BigEndian, &num)
-		ret = uint64(num)
-	}
-
-	return
-}
-
-// Copy bytes
-//
 // Returns an exact copy of the provided bytes
 func CopyBytes(b []byte) (copiedBytes []byte) {
-	copiedBytes = make([]byte, len(b))
-	copy(copiedBytes, b)
-
-	return
+	return append([]byte{}, b...)
 }
 
 func HasHexPrefix(str string) bool {
@@ -137,7 +105,7 @@ func Hex2Bytes(str string) []byte {
 	return h
 }
 
-func Hex2BytesFixed(str string, flen int) []byte {
+func HexToBytesFixed(str string, flen int) []byte {
 	h, _ := hex.DecodeString(str)
 	if len(h) == flen {
 		return h

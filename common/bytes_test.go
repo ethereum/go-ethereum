@@ -39,47 +39,59 @@ func (s *BytesSuite) TestNumberToBytes(c *checker.C) {
 }
 
 func (s *BytesSuite) TestBytesToNumber(c *checker.C) {
-	datasmall := []byte{0xe9, 0x38, 0xe9, 0x38}
-	datalarge := []byte{0xe9, 0x38, 0xe9, 0x38, 0xe9, 0x38, 0xe9, 0x38}
+	data := [][]byte{
+		// check for zero-len
+		[]byte{},
+		// check for len < 8
+		[]byte{0xfe},
+		[]byte{0xca, 0xfe},
+		[]byte{0xca, 0xfe, 0xba, 0xbe},
+		// check case len < 8
+		[]byte{0x7f, 0x6f, 0x5f, 0x4f, 0x3f, 0x2f, 0x1f, 0x0f},
+		// check case len = 8
+		[]byte{0x7f, 0x6f, 0x5f, 0x4f, 0x3f, 0x2f, 0x1f, 0x0f, 0xba, 0xdc, 0x0d},
+	}
+	expected := []uint64{
+		0x0,
+		0xfe,
+		0xcafe,
+		0xcafebabe,
+		0x7f6f5f4f3f2f1f0f,
+		0x7f6f5f4f3f2f1f0f,
+	}
 
-	var expsmall uint64 = 0xe938e938
-	var explarge uint64 = 0x0
+	// assert-test-invariants:
+	c.Assert(len(data[0]), checker.Equals, 0)
+	c.Assert(len(data[1]), checker.Equals, 1)
+	c.Assert(len(data[2]), checker.Equals, 2)
+	c.Assert(len(data[3]), checker.Equals, 4)
+	c.Assert(len(data[4]), checker.Equals, 8)
+	c.Assert(len(data[5]), checker.Equals, 11)
 
-	ressmall := BytesToNumber(datasmall)
-	reslarge := BytesToNumber(datalarge)
+	c.Assert(len(expected), checker.Equals, len(data))
 
-	c.Assert(ressmall, checker.Equals, expsmall)
-	c.Assert(reslarge, checker.Equals, explarge)
-
-}
-
-func (s *BytesSuite) TestReadVarInt(c *checker.C) {
-	data8 := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	data4 := []byte{1, 2, 3, 4}
-	data2 := []byte{1, 2}
-	data1 := []byte{1}
-
-	exp8 := uint64(72623859790382856)
-	exp4 := uint64(16909060)
-	exp2 := uint64(258)
-	exp1 := uint64(1)
-
-	res8 := ReadVarInt(data8)
-	res4 := ReadVarInt(data4)
-	res2 := ReadVarInt(data2)
-	res1 := ReadVarInt(data1)
-
-	c.Assert(res8, checker.Equals, exp8)
-	c.Assert(res4, checker.Equals, exp4)
-	c.Assert(res2, checker.Equals, exp2)
-	c.Assert(res1, checker.Equals, exp1)
+	for i := 0; i < len(data); i++ {
+		have := BytesToNumber(data[i])
+		c.Assert(have, checker.Equals, expected[i])
+	}
 }
 
 func (s *BytesSuite) TestCopyBytes(c *checker.C) {
-	data1 := []byte{1, 2, 3, 4}
-	exp1 := []byte{1, 2, 3, 4}
-	res1 := CopyBytes(data1)
-	c.Assert(res1, checker.DeepEquals, exp1)
+	data := [][]byte{
+		[]byte{0x00, 0x7f, 0x80, 0xff}, // interesting bytes
+		[]byte{},                       // empty case
+	}
+
+	// test
+	for i := 0; i < len(data); i++ {
+		have := CopyBytes(data[i])
+		if data[i] != nil {
+			// make sure we're not just returning the input arg
+			c.Assert(&have, checker.Not(checker.Equals), &data[i])
+		}
+		// verify deep copy
+		c.Assert(have, checker.DeepEquals, data[i])
+	}
 }
 
 func (s *BytesSuite) TestIsHex(c *checker.C) {
