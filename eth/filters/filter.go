@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -91,7 +90,7 @@ func (f *Filter) SetTopics(topics [][]common.Hash) {
 // all matching entries from the first block that contains matches,
 // updating the start point of the filter accordingly. If no results are
 // found, a nil slice is returned.
-func (f *Filter) FindOnce(ctx context.Context) ([]*vm.Log, error) {
+func (f *Filter) FindOnce(ctx context.Context) ([]*types.Log, error) {
 	head, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if head == nil {
 		return nil, nil
@@ -122,7 +121,7 @@ func (f *Filter) FindOnce(ctx context.Context) ([]*vm.Log, error) {
 }
 
 // Run filters logs with the current parameters set
-func (f *Filter) Find(ctx context.Context) (logs []*vm.Log, err error) {
+func (f *Filter) Find(ctx context.Context) (logs []*types.Log, err error) {
 	for {
 		newLogs, err := f.FindOnce(ctx)
 		if len(newLogs) == 0 || err != nil {
@@ -132,7 +131,7 @@ func (f *Filter) Find(ctx context.Context) (logs []*vm.Log, err error) {
 	}
 }
 
-func (f *Filter) mipFind(start, end uint64, depth int) (logs []*vm.Log, blockNumber uint64) {
+func (f *Filter) mipFind(start, end uint64, depth int) (logs []*types.Log, blockNumber uint64) {
 	level := core.MIPMapLevels[depth]
 	// normalise numerator so we can work in level specific batches and
 	// work with the proper range checks
@@ -168,7 +167,7 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []*vm.Log, blockNum
 	return nil, end
 }
 
-func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*vm.Log, blockNumber uint64, err error) {
+func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.Log, blockNumber uint64, err error) {
 	for i := start; i <= end; i++ {
 		blockNumber := rpc.BlockNumber(i)
 		header, err := f.backend.HeaderByNumber(ctx, blockNumber)
@@ -184,9 +183,9 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*vm.Log
 			if err != nil {
 				return nil, end, err
 			}
-			var unfiltered []*vm.Log
+			var unfiltered []*types.Log
 			for _, receipt := range receipts {
-				unfiltered = append(unfiltered, ([]*vm.Log)(receipt.Logs)...)
+				unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
 			}
 			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 			if len(logs) > 0 {
@@ -209,8 +208,8 @@ func includes(addresses []common.Address, a common.Address) bool {
 }
 
 // filterLogs creates a slice of logs matching the given criteria.
-func filterLogs(logs []*vm.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*vm.Log {
-	var ret []*vm.Log
+func filterLogs(logs []*types.Log, fromBlock, toBlock *big.Int, addresses []common.Address, topics [][]common.Hash) []*types.Log {
+	var ret []*types.Log
 Logs:
 	for _, log := range logs {
 		if fromBlock != nil && fromBlock.Int64() >= 0 && fromBlock.Uint64() > log.BlockNumber {

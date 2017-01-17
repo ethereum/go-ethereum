@@ -69,7 +69,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 	var data []byte
 	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
 	pubkeyhex := common.ToHex(pubkey)
-	keyhex := crypto.Sha3Hash(pubkey).Hex()
+	keyhex := crypto.Keccak256Hash(pubkey).Hex()
 
 	self = &Config{
 		SyncParams:    network.NewSyncParams(dirpath),

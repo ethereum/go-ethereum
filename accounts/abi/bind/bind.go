@@ -147,21 +147,21 @@ func bindTypeGo(kind abi.Type) string {
 
 	switch {
 	case strings.HasPrefix(stringKind, "address"):
-		parts := regexp.MustCompile("address(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 2 {
 			return stringKind
 		}
 		return fmt.Sprintf("%scommon.Address", parts[1])
 
 	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile("bytes([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`bytes([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 3 {
 			return stringKind
 		}
 		return fmt.Sprintf("%s[%s]byte", parts[2], parts[1])
 
 	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		parts := regexp.MustCompile("(u)?int([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 4 {
 			return stringKind
 		}
@@ -172,7 +172,7 @@ func bindTypeGo(kind abi.Type) string {
 		return fmt.Sprintf("%s*big.Int", parts[3])
 
 	case strings.HasPrefix(stringKind, "bool") || strings.HasPrefix(stringKind, "string"):
-		parts := regexp.MustCompile("([a-z]+)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`([a-z]+)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 3 {
 			return stringKind
 		}
@@ -191,7 +191,7 @@ func bindTypeJava(kind abi.Type) string {
 
 	switch {
 	case strings.HasPrefix(stringKind, "address"):
-		parts := regexp.MustCompile("address(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`address(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 2 {
 			return stringKind
 		}
@@ -201,7 +201,7 @@ func bindTypeJava(kind abi.Type) string {
 		return fmt.Sprintf("Addresses")
 
 	case strings.HasPrefix(stringKind, "bytes"):
-		parts := regexp.MustCompile("bytes([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`bytes([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 3 {
 			return stringKind
 		}
@@ -211,7 +211,7 @@ func bindTypeJava(kind abi.Type) string {
 		return "byte[]"
 
 	case strings.HasPrefix(stringKind, "int") || strings.HasPrefix(stringKind, "uint"):
-		parts := regexp.MustCompile("(u)?int([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 4 {
 			return stringKind
 		}
@@ -230,7 +230,7 @@ func bindTypeJava(kind abi.Type) string {
 		return fmt.Sprintf("BigInts")
 
 	case strings.HasPrefix(stringKind, "bool"):
-		parts := regexp.MustCompile("bool(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`bool(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 2 {
 			return stringKind
 		}
@@ -240,7 +240,7 @@ func bindTypeJava(kind abi.Type) string {
 		return fmt.Sprintf("bool[]")
 
 	case strings.HasPrefix(stringKind, "string"):
-		parts := regexp.MustCompile("string(\\[[0-9]*\\])?").FindStringSubmatch(stringKind)
+		parts := regexp.MustCompile(`string(\[[0-9]*\])?`).FindStringSubmatch(stringKind)
 		if len(parts) != 2 {
 			return stringKind
 		}
@@ -278,7 +278,7 @@ func namedTypeJava(javaKind string, solKind abi.Type) string {
 	case "bool[]":
 		return "Bools"
 	case "BigInt":
-		parts := regexp.MustCompile("(u)?int([0-9]*)(\\[[0-9]*\\])?").FindStringSubmatch(solKind.String())
+		parts := regexp.MustCompile(`(u)?int([0-9]*)(\[[0-9]*\])?`).FindStringSubmatch(solKind.String())
 		if len(parts) != 4 {
 			return javaKind
 		}

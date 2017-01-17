@@ -114,17 +114,12 @@ type BoundContract struct {
 // DeployContract deploys a contract onto the Ethereum blockchain and binds the
 // deployment address with a wrapper.
 func DeployContract(opts *TransactOpts, abiJSON string, bytecode []byte, client *EthereumClient, args *Interfaces) (contract *BoundContract, _ error) {
-	// Convert all the deployment parameters to Go types
-	params := make([]interface{}, len(args.objects))
-	for i, obj := range args.objects {
-		params[i] = obj
-	}
 	// Deploy the contract to the network
 	parsed, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, err
 	}
-	addr, tx, bound, err := bind.DeployContract(&opts.opts, parsed, bytecode, client.client, params...)
+	addr, tx, bound, err := bind.DeployContract(&opts.opts, parsed, bytecode, client.client, args.objects...)
 	if err != nil {
 		return nil, err
 	}
@@ -159,32 +154,18 @@ func (c *BoundContract) GetDeployer() *Transaction {
 // Call invokes the (constant) contract method with params as input values and
 // sets the output to result.
 func (c *BoundContract) Call(opts *CallOpts, out *Interfaces, method string, args *Interfaces) error {
-	// Convert all the input and output parameters to Go types
-	params := make([]interface{}, len(args.objects))
-	for i, obj := range args.objects {
-		params[i] = obj
-	}
 	results := make([]interface{}, len(out.objects))
-	for i, obj := range out.objects {
-		results[i] = obj
-	}
-	// Execute the call to the contract and wrap any results
-	if err := c.contract.Call(&opts.opts, &results, method, params...); err != nil {
+	copy(results, out.objects)
+	if err := c.contract.Call(&opts.opts, &results, method, args.objects...); err != nil {
 		return err
 	}
-	for i, res := range results {
-		out.objects[i] = res
-	}
+	copy(out.objects, results)
 	return nil
 }
 
 // Transact invokes the (paid) contract method with params as input values.
 func (c *BoundContract) Transact(opts *TransactOpts, method string, args *Interfaces) (tx *Transaction, _ error) {
-	params := make([]interface{}, len(args.objects))
-	for i, obj := range args.objects {
-		params[i] = obj
-	}
-	rawTx, err := c.contract.Transact(&opts.opts, method, params)
+	rawTx, err := c.contract.Transact(&opts.opts, method, args.objects)
 	if err != nil {
 		return nil, err
 	}

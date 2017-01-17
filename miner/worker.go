@@ -39,8 +39,6 @@ import (
 	"gopkg.in/fatih/set.v0"
 )
 
-var jsonlogger = logger.NewJsonLogger()
-
 const (
 	resultQueueSize  = 10
 	miningLogAtDepth = 5
@@ -256,7 +254,7 @@ func (self *worker) update() {
 				self.currentMu.Lock()
 
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
-				txs := map[common.Address]types.Transactions{acc: types.Transactions{ev.Tx}}
+				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
 
 				self.current.commitTransactions(self.mux, txset, self.gasPrice, self.chain)
@@ -327,7 +325,7 @@ func (self *worker) wait() {
 				}
 
 				// broadcast before waiting for validation
-				go func(block *types.Block, logs vm.Logs, receipts []*types.Receipt) {
+				go func(block *types.Block, logs []*types.Log, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{Block: block})
 					self.mux.Post(core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 
@@ -449,7 +447,7 @@ func (self *worker) commitNewWork() {
 			// Depending whether we support or oppose the fork, override differently
 			if self.config.DAOForkSupport {
 				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Compare(header.Extra, params.DAOForkBlockExtra) == 0 {
+			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
 				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
 			}
 		}
@@ -494,7 +492,7 @@ func (self *worker) commitNewWork() {
 			}
 			badUncles = append(badUncles, hash)
 		} else {
-			glog.V(logger.Debug).Infof("commiting %x as uncle\n", hash[:4])
+			glog.V(logger.Debug).Infof("committing %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
@@ -537,7 +535,7 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, gasPrice *big.Int, bc *core.BlockChain) {
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 
-	var coalescedLogs vm.Logs
+	var coalescedLogs []*types.Log
 
 	for {
 		// Retrieve the next transaction and abort if all done
@@ -597,12 +595,12 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
 		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make(vm.Logs, len(coalescedLogs))
+		cpy := make([]*types.Log, len(coalescedLogs))
 		for i, l := range coalescedLogs {
-			cpy[i] = new(vm.Log)
+			cpy[i] = new(types.Log)
 			*cpy[i] = *l
 		}
-		go func(logs vm.Logs, tcount int) {
+		go func(logs []*types.Log, tcount int) {
 			if len(logs) > 0 {
 				mux.Post(core.PendingLogsEvent{Logs: logs})
 			}
@@ -613,10 +611,10 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 	}
 }
 
-func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, vm.Logs) {
+func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, gp *core.GasPool) (error, []*types.Log) {
 	snap := env.state.Snapshot()
 
-	receipt, logs, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, vm.Config{})
+	receipt, _, err := core.ApplyTransaction(env.config, bc, gp, env.state, env.header, tx, env.header.GasUsed, vm.Config{})
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil
@@ -624,7 +622,7 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, g
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 
-	return nil, logs
+	return nil, receipt.Logs
 }
 
 // TODO: remove or use

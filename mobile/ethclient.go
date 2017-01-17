@@ -22,7 +22,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -191,7 +190,7 @@ func (ec *EthereumClient) FilterLogs(ctx *Context, query *FilterQuery) (logs *Lo
 		return nil, err
 	}
 	// Temp hack due to vm.Logs being []*vm.Log
-	res := make(vm.Logs, len(rawLogs))
+	res := make([]*types.Log, len(rawLogs))
 	for i, log := range rawLogs {
 		res[i] = &log
 	}
@@ -208,7 +207,7 @@ type FilterLogsHandler interface {
 // SubscribeFilterLogs subscribes to the results of a streaming filter query.
 func (ec *EthereumClient) SubscribeFilterLogs(ctx *Context, query *FilterQuery, handler FilterLogsHandler, buffer int) (sub *Subscription, _ error) {
 	// Subscribe to the event internally
-	ch := make(chan vm.Log, buffer)
+	ch := make(chan types.Log, buffer)
 	rawSub, err := ec.client.SubscribeFilterLogs(ctx.context, query.query, ch)
 	if err != nil {
 		return nil, err

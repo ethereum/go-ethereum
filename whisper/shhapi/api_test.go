@@ -253,7 +253,7 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	if a.FilterID != 64 {
 		t.Fatalf("wrong FilterID: %d.", a.FilterID)
 	}
-	if bytes.Compare(a.PeerID[:], a.Topic[:]) != 0 {
+	if !bytes.Equal(a.PeerID[:], a.Topic[:]) {
 		t.Fatalf("wrong PeerID: %x.", a.PeerID)
 	}
 }

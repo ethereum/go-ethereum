@@ -339,7 +339,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, w
 	if stats.ignored > 0 {
 		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
 	}
-	glog.V(logger.Info).Infof("imported %d headers%s in %9v. #%v [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+	glog.V(logger.Info).Infof("imported %4d headers%s in %9v. #%v [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
 
 	return 0, nil
 }

@@ -46,6 +46,7 @@ var (
 		{referenceBig("1"), "0x1"},
 		{referenceBig("ff"), "0xff"},
 		{referenceBig("112233445566778899aabbccddeeff"), "0x112233445566778899aabbccddeeff"},
+		{referenceBig("80a7f2c1bcc396c00"), "0x80a7f2c1bcc396c00"},
 	}
 
 	encodeUint64Tests = []marshalTest{

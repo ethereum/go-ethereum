@@ -299,7 +299,7 @@ func TestMatchProtocols(t *testing.T) {
 			}
 		}
 		// Make sure no protocols missed negotiation
-		for name, _ := range tt.Match {
+		for name := range tt.Match {
 			if _, ok := result[name]; !ok {
 				t.Errorf("test %d, proto '%s': not negotiated, should have", i, name)
 				continue

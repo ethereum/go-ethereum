@@ -135,7 +135,7 @@ const (
 	LatestBlockNumber  = BlockNumber(-1)
 )
 
-// UnmarshalJSON parses the given JSON fragement into a BlockNumber. It supports:
+// UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
 // - "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:

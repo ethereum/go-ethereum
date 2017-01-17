@@ -109,13 +109,8 @@ func (b *Big) MarshalJSON() ([]byte, error) {
 	if nbits == 0 {
 		return jsonZero, nil
 	}
-	enc := make([]byte, 3, (nbits/8)*2+4)
-	copy(enc, `"0x`)
-	for i := len(bigint.Bits()) - 1; i >= 0; i-- {
-		enc = strconv.AppendUint(enc, uint64(bigint.Bits()[i]), 16)
-	}
-	enc = append(enc, '"')
-	return enc, nil
+	enc := fmt.Sprintf(`"0x%x"`, bigint)
+	return []byte(enc), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -237,7 +232,7 @@ func checkJSON(input []byte) (raw []byte, err error) {
 		return nil, errNonString
 	}
 	if len(input) == 2 {
-		return nil, ErrEmptyString
+		return nil, nil // empty strings are allowed
 	}
 	if !bytesHave0xPrefix(input[1:]) {
 		return nil, ErrMissingPrefix
@@ -255,7 +250,7 @@ func checkNumberJSON(input []byte) (raw []byte, err error) {
 	}
 	input = input[1 : len(input)-1]
 	if len(input) == 0 {
-		return nil, ErrEmptyString
+		return nil, nil // empty strings are allowed
 	}
 	if !bytesHave0xPrefix(input) {
 		return nil, ErrMissingPrefix

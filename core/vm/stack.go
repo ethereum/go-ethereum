@@ -68,6 +68,11 @@ func (st *Stack) peek() *big.Int {
 	return st.data[st.len()-1]
 }
 
+// Back returns the n'th item in stack
+func (st *Stack) Back(n int) *big.Int {
+	return st.data[st.len()-n-1]
+}
+
 func (st *Stack) require(n int) error {
 	if st.len() < n {
 		return fmt.Errorf("stack underflow (%d <=> %d)", len(st.data), n)

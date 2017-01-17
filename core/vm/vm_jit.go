@@ -44,7 +44,7 @@ import (
 )
 
 type JitVm struct {
-	env        Environment
+	env        EVM
 	me         ContextRef
 	callerAddr []byte
 	price      *big.Int
@@ -161,7 +161,7 @@ func assert(condition bool, message string) {
 	}
 }
 
-func NewJitVm(env Environment) *JitVm {
+func NewJitVm(env EVM) *JitVm {
 	return &JitVm{env: env}
 }
 
@@ -235,7 +235,7 @@ func (self *JitVm) Endl() VirtualMachine {
 	return self
 }
 
-func (self *JitVm) Env() Environment {
+func (self *JitVm) Env() EVM {
 	return self.env
 }
 

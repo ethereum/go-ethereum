@@ -109,7 +109,7 @@ func (curve secgNamedCurve) Equal(curve2 secgNamedCurve) bool {
 	if len(curve) != len(curve2) {
 		return false
 	}
-	for i, _ := range curve {
+	for i := range curve {
 		if curve[i] != curve2[i] {
 			return false
 		}
@@ -157,7 +157,7 @@ func (a asnAlgorithmIdentifier) Cmp(b asnAlgorithmIdentifier) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -306,7 +306,7 @@ func (a asnECDHAlgorithm) Cmp(b asnECDHAlgorithm) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -325,7 +325,7 @@ func (a asnKeyDerivationFunction) Cmp(b asnKeyDerivationFunction) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -360,7 +360,7 @@ func (a asnSymmetricEncryption) Cmp(b asnSymmetricEncryption) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -380,7 +380,7 @@ func (a asnMessageAuthenticationCode) Cmp(b asnMessageAuthenticationCode) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}

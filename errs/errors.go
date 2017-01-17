@@ -19,7 +19,6 @@ package errs
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
@@ -32,15 +31,10 @@ Fields:
 
  Package:
   name of the package/component
-
- Level:
-  a function mapping error code to logger.LogLevel (severity)
-  if not given, errors default to logger.InfoLevel
 */
 type Errors struct {
 	Errors  map[int]string
 	Package string
-	Level   func(code int) logger.LogLevel
 }
 
 /*
@@ -58,7 +52,6 @@ type Error struct {
 	Code    int
 	Name    string
 	Package string
-	level   logger.LogLevel
 	message string
 	format  string
 	params  []interface{}
@@ -69,15 +62,10 @@ func (self *Errors) New(code int, format string, params ...interface{}) *Error {
 	if !ok {
 		panic("invalid error code")
 	}
-	level := logger.InfoLevel
-	if self.Level != nil {
-		level = self.Level(code)
-	}
 	return &Error{
 		Code:    code,
 		Name:    name,
 		Package: self.Package,
-		level:   level,
 		format:  format,
 		params:  params,
 	}
@@ -97,14 +85,4 @@ func (self Error) Log(v glog.Verbose) {
 	if v {
 		v.Infoln(self)
 	}
-}
-
-/*
-err.Fatal() is true if err's severity level is 0 or 1 (logger.ErrorLevel or logger.Silence)
-*/
-func (self *Error) Fatal() (fatal bool) {
-	if self.level < logger.WarnLevel {
-		fatal = true
-	}
-	return
 }
