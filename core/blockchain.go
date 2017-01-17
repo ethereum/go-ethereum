@@ -1088,8 +1088,6 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		newChain    types.Blocks
 		oldChain    types.Blocks
 		commonBlock *types.Block
-		oldStart    = oldBlock
-		newStart    = newBlock
 		deletedTxs  types.Transactions
 		deletedLogs []*types.Log
 		// collectLogs collects the logs that were generated during the
@@ -1130,7 +1128,6 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		return fmt.Errorf("Invalid new chain")
 	}
 
-	numSplit := newBlock.Number()
 	for {
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
@@ -1151,9 +1148,19 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 
-	if glog.V(logger.Debug) {
-		commonHash := commonBlock.Hash()
-		glog.Infof("Chain split detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
+	if oldLen := len(oldChain); oldLen > 63 || glog.V(logger.Debug) {
+		newLen := len(newChain)
+		newLast := newChain[0]
+		newFirst := newChain[newLen-1]
+		oldLast := oldChain[0]
+		oldFirst := oldChain[oldLen-1]
+		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks), rejecting #%v-#%v [%x…/%x…] in favour of #%v-#%v [%x…/%x…]",
+			commonBlock.Number(), commonBlock.Hash().Bytes()[:4],
+			oldLen, newLen,
+			oldFirst.Number(), oldLast.Number(),
+			oldFirst.Hash().Bytes()[:4], oldLast.Hash().Bytes()[:4],
+			newFirst.Number(), newLast.Number(),
+			newFirst.Hash().Bytes()[:4], newLast.Hash().Bytes()[:4])
 	}
 
 	var addedTxs types.Transactions
