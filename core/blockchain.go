@@ -1142,19 +1142,14 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 
-	oldLen := len(oldChain)
-
-	if glog.V(logger.Debug) || oldLen > 63 {
-		commonHash := commonBlock.Hash()
-		commonNumber := commonBlock.Number()
+	if oldLen := len(oldChain); oldLen > 63 || glog.V(logger.Debug) {
 		newLen := len(newChain)
-
 		newLast := newChain[0]
 		newFirst := newChain[newLen-1]
 		oldLast := oldChain[0]
 		oldFirst := oldChain[oldLen-1]
-		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks) from #%v-#%v [%x/%x] in favour of #%v-#%v [%x/%x]",
-			commonNumber, commonHash[:4],
+		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks), rejecting #%v-#%v [%x…/%x…] in favour of #%v-#%v [%x…/%x…]",
+			commonBlock.Number(), commonBlock.Hash().Bytes()[:4],
 			oldLen, newLen,
 			oldFirst.Number(), oldLast.Number(),
 			oldFirst.Hash().Bytes()[:4], oldLast.Hash().Bytes()[:4],
