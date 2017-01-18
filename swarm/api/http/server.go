@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/rs/cors"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/rs/cors"
 )
 
 const (
@@ -195,6 +195,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		}
 	case r.Method == "GET" || r.Method == "HEAD":
 		path = trailingSlashes.ReplaceAllString(path, "")
+		if path == "" {
+			http.Error(w, "Empty path not allowed", http.StatusBadRequest)
+			return
+		}
 		if raw {
 			var reader storage.LazySectionReader
 			parsedurl, _ := api.Parse(path)

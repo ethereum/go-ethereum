@@ -89,6 +89,9 @@ func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error
 	return contentHash[:], err
 }
 func Parse(uri string) (hostPort, path string) {
+	if uri == "" {
+		return
+	}
 	parts := slashes.Split(uri, 3)
 	var i int
 	if len(parts) == 0 {

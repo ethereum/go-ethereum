@@ -9,15 +9,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	//"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func TestBzzrGetPath(t *testing.T) {
+func init() {
+	//glog.SetToStderr(true)
+	//glog.SetV(6)
+}
 
-	glog.SetToStderr(true)
-	glog.SetV(6)
+func TestBzzrGetPath(t *testing.T) {
 
 	var err error
 
@@ -33,6 +35,10 @@ func TestBzzrGetPath(t *testing.T) {
 	testrequests["/"] = 0
 	testrequests["/a"] = 1
 	testrequests["/a/b"] = 2
+	testrequests["/x"] = 0
+	testrequests[""] = 0
+
+	expectedfailrequests := []string{"", "/x"}
 
 	reader := [3]*bytes.Reader{}
 
@@ -73,10 +79,10 @@ func TestBzzrGetPath(t *testing.T) {
 	a := api.NewApi(dpa, nil)
 
 	// iterate port numbers up if fail
-	StartHttpServer(a, "8504")
+	StartHttpServer(a, &Server{Addr: "127.0.0.1:8504", CorsString: ""})
 	// how to wait for ListenAndServe to have initialized? This is pretty cruuuude
 	// if we fix it we don't need maxproxyattempts anymore either
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 	for i := 0; i <= maxproxyattempts; i++ {
 		_, err := http.Get("http://127.0.0.1:8504/bzzr:/" + common.ToHex(key[0])[2:] + "/a")
 		if i == maxproxyattempts {
@@ -90,19 +96,34 @@ func TestBzzrGetPath(t *testing.T) {
 	}
 
 	for k, v := range testrequests {
-		var body []byte
 		var resp *http.Response
-		url := "http://127.0.0.1:8504/bzzr:/" + common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
+		var respbody []byte
+
+		url := "http://127.0.0.1:8504/bzzr:/"
+		if k[:] != "" {
+			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
+		}
 		t.Logf("Sending proxy GET: %v", url)
 		resp, err = http.Get(url)
 		defer resp.Body.Close()
-		body, err = ioutil.ReadAll(resp.Body)
+		respbody, err = ioutil.ReadAll(resp.Body)
 
-		if string(body) != testmanifest[v] {
-			t.Fatalf("Response body does not match, expected: %v, got %v", testmanifest[v], string(body))
+		if string(respbody) != testmanifest[v] {
+			isexpectedfailrequest := false
+
+			for _, r := range expectedfailrequests {
+				if k[:] == r {
+					isexpectedfailrequest = true
+				}
+			}
+			if isexpectedfailrequest {
+				t.Logf("Expected fail request failed as expected: %v", string(respbody))
+			} else {
+				t.Fatalf("Response body does not match, expected: %v, got %v", testmanifest[v], string(respbody))
+			}
+		} else {
+			t.Logf("Response body OK: %v", string(respbody))
 		}
-
-		t.Log(string(body))
 	}
 
 }
