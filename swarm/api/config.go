@@ -86,6 +86,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 	}
 	data, err = ioutil.ReadFile(confpath)
 
+	// if not set in function param, then set default for swarm network, will be overwritten by config file if present
 	if networkId == 0 {
 		self.NetworkId = network.NetworkId
 	}
@@ -117,6 +118,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 		return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
 	}
 
+	// if set in function param, replace id set from config file
 	if networkId != 0 {
 		self.NetworkId = networkId
 	}
