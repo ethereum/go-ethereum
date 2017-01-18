@@ -72,7 +72,7 @@ type ErrResolve error
 
 // DNS Resolver
 func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error) {
-	glog.V(logger.Warn).Infof("Resolving : %v", hostPort)
+	glog.V(logger.Detail).Infof("Resolving : %v", hostPort)
 	if hashMatcher.MatchString(hostPort) || self.dns == nil {
 		glog.V(logger.Detail).Infof("host is a contentHash: '%v'", hostPort)
 		return storage.Key(common.Hex2Bytes(hostPort)), nil
@@ -89,11 +89,11 @@ func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error
 	return contentHash[:], err
 }
 
-func Parse(url string) (hostPost, path string) {
+/*func Parse(url string) (hostPost, path string) {
 	return parse(url)
-}
+}*/
 
-func parse(uri string) (hostPort, path string) {
+func Parse(uri string) (hostPort, path string) {
 	parts := slashes.Split(uri, 3)
 	var i int
 	if len(parts) == 0 {
