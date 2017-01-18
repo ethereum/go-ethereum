@@ -559,8 +559,34 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the given transaction.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*hexutil.Big, error) {
-	_, gas, err := s.doCall(ctx, args, rpc.PendingBlockNumber)
-	return (*hexutil.Big)(gas), err
+	// Binary search the gas requirement, as it may be higher than the amount used
+	var lo, hi uint64
+	if (*big.Int)(&args.Gas).BitLen() > 0 {
+		hi = (*big.Int)(&args.Gas).Uint64()
+	} else {
+		// Retrieve the current pending block to act as the gas ceiling
+		block, err := s.b.BlockByNumber(ctx, rpc.PendingBlockNumber)
+		if err != nil {
+			return nil, err
+		}
+		hi = block.GasLimit().Uint64()
+	}
+	for lo+1 < hi {
+		// Take a guess at the gas, and check transaction validity
+		mid := (hi + lo) / 2
+		(*big.Int)(&args.Gas).SetUint64(mid)
+
+		_, gas, err := s.doCall(ctx, args, rpc.PendingBlockNumber)
+
+		// If the transaction became invalid or used all the gas (failed), raise the gas limit
+		if err != nil || gas.Cmp((*big.Int)(&args.Gas)) == 0 {
+			lo = mid
+			continue
+		}
+		// Otherwise assume the transaction succeeded, lower the gas limit
+		hi = mid
+	}
+	return (*hexutil.Big)(new(big.Int).SetUint64(hi)), nil
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM

@@ -201,10 +201,32 @@ func (b *SimulatedBackend) SuggestGasPrice(ctx context.Context) (*big.Int, error
 func (b *SimulatedBackend) EstimateGas(ctx context.Context, call ethereum.CallMsg) (*big.Int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	defer b.pendingState.RevertToSnapshot(b.pendingState.Snapshot())
 
-	_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
-	return gas, err
+	// Binary search the gas requirement, as it may be higher than the amount used
+	var lo, hi uint64
+	if call.Gas != nil {
+		hi = call.Gas.Uint64()
+	} else {
+		hi = b.pendingBlock.GasLimit().Uint64()
+	}
+	for lo+1 < hi {
+		// Take a guess at the gas, and check transaction validity
+		mid := (hi + lo) / 2
+		call.Gas = new(big.Int).SetUint64(mid)
+
+		snapshot := b.pendingState.Snapshot()
+		_, gas, err := b.callContract(ctx, call, b.pendingBlock, b.pendingState)
+		b.pendingState.RevertToSnapshot(snapshot)
+
+		// If the transaction became invalid or used all the gas (failed), raise the gas limit
+		if err != nil || gas.Cmp(call.Gas) == 0 {
+			lo = mid
+			continue
+		}
+		// Otherwise assume the transaction succeeded, lower the gas limit
+		hi = mid
+	}
+	return new(big.Int).SetUint64(hi), nil
 }
 
 // callContract implemens common code between normal and pending contract calls.
