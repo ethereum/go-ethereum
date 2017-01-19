@@ -206,9 +206,12 @@ func (q *queue) PendingReceipts() int {
 func (q *queue) PendingNodeData() int {
 	q.lock.Lock()
 	defer q.lock.Unlock()
+
 	return q.pendingNodeDataLocked()
 }
 
+// pendingNodeDataLocked retrieves the number of node data entries pending for retrieval.
+// The caller must hold q.lock.
 func (q *queue) pendingNodeDataLocked() int {
 	var n int
 	if q.stateScheduler != nil {
@@ -270,7 +273,6 @@ func (q *queue) Idle() bool {
 	if q.stateScheduler != nil {
 		queued += q.stateScheduler.Pending()
 	}
-
 	return (queued + pending + cached) == 0
 }
 
@@ -1091,10 +1093,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 	// scheduler treats everything as written after Process has returned, but it's
 	// unlikely to be an issue in practice.
 	batch := q.stateDatabase.NewBatch()
-	progressed, i, err := q.stateScheduler.Process(process, batch)
-	if err != nil {
-		return i, err
-	}
+	progressed, _, processErr := q.stateScheduler.Process(process, batch)
 	q.stateWriters += 1
 	go func() {
 		defer func() {
@@ -1105,6 +1104,11 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 			// waiting for completion of the pivot block's state download.
 			q.active.Signal()
 		}()
+		if processErr != nil {
+			// Return processing errors through the callback so the sync gets canceled.
+			callback(len(process), progressed, processErr)
+			return
+		}
 		err := batch.Write()
 		callback(len(process), progressed, err)
 	}()
