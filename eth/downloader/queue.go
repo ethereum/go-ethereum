@@ -1093,7 +1093,7 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 	// scheduler treats everything as written after Process has returned, but it's
 	// unlikely to be an issue in practice.
 	batch := q.stateDatabase.NewBatch()
-	progressed, _, processErr := q.stateScheduler.Process(process, batch)
+	progressed, nproc, procerr := q.stateScheduler.Process(process, batch)
 	q.stateWriters += 1
 	go func() {
 		defer func() {
@@ -1104,9 +1104,9 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 			// waiting for completion of the pivot block's state download.
 			q.active.Signal()
 		}()
-		if processErr != nil {
+		if procerr != nil {
 			// Return processing errors through the callback so the sync gets canceled.
-			callback(len(process), progressed, processErr)
+			callback(nproc, progressed, procerr)
 			return
 		}
 		err := batch.Write()
