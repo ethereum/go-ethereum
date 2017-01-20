@@ -385,6 +385,12 @@ web3._extend({
 			call: 'debug_traceTransaction',
 			params: 2,
 			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'preimage',
+			call: 'debug_preimage',
+			params: 1,
+			inputFormatter: [null]
 		})
 	],
 	properties: []
@@ -407,12 +413,6 @@ web3._extend({
 			call: 'eth_resend',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
-			name: 'getNatSpec',
-			call: 'eth_getNatSpec',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'signTransaction',
@@ -534,12 +534,6 @@ web3._extend({
 			name: 'importRawKey',
 			call: 'personal_importRawKey',
 			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'sendTransaction',
-			call: 'personal_sendTransaction',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
 		new web3._extend.Method({
 			name: 'sign',

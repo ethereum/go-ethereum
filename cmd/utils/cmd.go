@@ -67,7 +67,6 @@ func Fatalf(format string, args ...interface{}) {
 		}
 	}
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	logger.Flush()
 	os.Exit(1)
 }
 
@@ -95,7 +94,7 @@ func StartNode(stack *node.Node) {
 
 func FormatTransactionData(data string) []byte {
 	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
-		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
+		slice := regexp.MustCompile(`\n|\s`).Split(s, 1000000000)
 		for _, dataItem := range slice {
 			d := common.FormatData(dataItem)
 			ret = append(ret, d...)

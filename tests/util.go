@@ -47,7 +47,7 @@ func init() {
 	}
 }
 
-func checkLogs(tlog []Log, logs vm.Logs) error {
+func checkLogs(tlog []Log, logs []*types.Log) error {
 
 	if len(tlog) != len(logs) {
 		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
@@ -70,7 +70,7 @@ func checkLogs(tlog []Log, logs vm.Logs) error {
 					}
 				}
 			}
-			genBloom := common.LeftPadBytes(types.LogsBloom(vm.Logs{logs[i]}).Bytes(), 256)
+			genBloom := common.LeftPadBytes(types.LogsBloom([]*types.Log{logs[i]}).Bytes(), 256)
 
 			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 				return fmt.Errorf("bloom mismatch")
@@ -149,7 +149,7 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.Environment, core.Message) {
+func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.EVM, core.Message) {
 	var (
 		data  = common.FromHex(tx["data"])
 		gas   = common.Big(tx["gasLimit"])
@@ -207,5 +207,5 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 	if context.GasPrice == nil {
 		context.GasPrice = new(big.Int)
 	}
-	return vm.NewEnvironment(context, statedb, chainConfig, vm.Config{NoRecursion: vmTest}), msg
+	return vm.NewEVM(context, statedb, chainConfig, vm.Config{NoRecursion: vmTest}), msg
 }

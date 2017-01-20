@@ -27,7 +27,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/internal/jsre/deps"
 	"github.com/robertkrimen/otto"
+)
+
+var (
+	BigNumber_JS = deps.MustAsset("bignumber.js")
+	Web3_JS      = deps.MustAsset("web3.js")
 )
 
 /*
@@ -71,7 +77,7 @@ func New(assetPath string, output io.Writer) *JSRE {
 	}
 	go re.runEventLoop()
 	re.Set("loadScript", re.loadScript)
-	re.Set("inspect", prettyPrintJS)
+	re.Set("inspect", re.prettyPrintJS)
 	return re
 }
 

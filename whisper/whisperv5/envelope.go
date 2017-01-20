@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains the Whisper protocol Envelope element. For formal details please see
-// the specs at https://github.com/ethereum/wiki/wiki/Whisper-PoC-1-Protocol-Spec#envelopes.
+// Contains the Whisper protocol Envelope element.
 
 package whisperv5
 
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -86,8 +86,8 @@ func (e *Envelope) Ver() uint64 {
 
 // Seal closes the envelope by spending the requested amount of time as a proof
 // of work on hashing the data.
-func (e *Envelope) Seal(options *MessageParams) {
-	var target int
+func (e *Envelope) Seal(options *MessageParams) error {
+	var target, bestBit int
 	if options.PoW == 0 {
 		// adjust for the duration of Seal() execution only if execution time is predefined unconditionally
 		e.Expiry += options.WorkTime
@@ -99,7 +99,7 @@ func (e *Envelope) Seal(options *MessageParams) {
 	h := crypto.Keccak256(e.rlpWithoutNonce())
 	copy(buf[:32], h)
 
-	finish, bestBit := time.Now().Add(time.Duration(options.WorkTime)*time.Second).UnixNano(), 0
+	finish := time.Now().Add(time.Duration(options.WorkTime) * time.Second).UnixNano()
 	for nonce := uint64(0); time.Now().UnixNano() < finish; {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint64(buf[56:], nonce)
@@ -108,12 +108,18 @@ func (e *Envelope) Seal(options *MessageParams) {
 			if firstBit > bestBit {
 				e.EnvNonce, bestBit = nonce, firstBit
 				if target > 0 && bestBit >= target {
-					return
+					return nil
 				}
 			}
 			nonce++
 		}
 	}
+
+	if target > 0 && bestBit < target {
+		return errors.New("Failed to reach the PoW target")
+	}
+
+	return nil
 }
 
 func (e *Envelope) PoW() float64 {

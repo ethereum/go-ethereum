@@ -99,7 +99,7 @@ func (self *NetStore) Put(entry *Chunk) {
 	// handle deliveries
 	if entry.Req != nil {
 		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())
-		// closing C singals to other routines (local requests)
+		// closing C signals to other routines (local requests)
 		// that the chunk is has been retrieved
 		close(entry.Req.C)
 		// deliver the chunk to requesters upstream

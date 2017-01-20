@@ -23,6 +23,7 @@ import (
 	mathrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -55,17 +56,33 @@ func APIs() []rpc.API {
 	}
 }
 
-// Version returns the Whisper version this node offers.
-func (api *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
+// Start starts the Whisper worker threads.
+func (api *PublicWhisperAPI) Start() error {
 	if api.whisper == nil {
-		return rpc.NewHexNumber(0), whisperOffLineErr
+		return whisperOffLineErr
 	}
-	return rpc.NewHexNumber(api.whisper.Version()), nil
+	return api.whisper.Start(nil)
+}
+
+// Stop stops the Whisper worker threads.
+func (api *PublicWhisperAPI) Stop() error {
+	if api.whisper == nil {
+		return whisperOffLineErr
+	}
+	return api.whisper.Stop()
+}
+
+// Version returns the Whisper version this node offers.
+func (api *PublicWhisperAPI) Version() (hexutil.Uint, error) {
+	if api.whisper == nil {
+		return 0, whisperOffLineErr
+	}
+	return hexutil.Uint(api.whisper.Version()), nil
 }
 
 // MarkPeerTrusted marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
-func (api *PublicWhisperAPI) MarkPeerTrusted(peerID rpc.HexBytes) error {
+func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
@@ -76,7 +93,7 @@ func (api *PublicWhisperAPI) MarkPeerTrusted(peerID rpc.HexBytes) error {
 // data contains parameters (time frame, payment details, etc.), required
 // by the remote email-like server. Whisper is not aware about the data format,
 // it will just forward the raw data to the server.
-func (api *PublicWhisperAPI) RequestHistoricMessages(peerID rpc.HexBytes, data rpc.HexBytes) error {
+func (api *PublicWhisperAPI) RequestHistoricMessages(peerID hexutil.Bytes, data hexutil.Bytes) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
@@ -161,14 +178,10 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 		Messages:  make(map[common.Hash]*whisperv5.ReceivedMessage),
 		AcceptP2P: args.AcceptP2P,
 	}
-
 	if len(filter.KeySym) > 0 {
 		filter.SymKeyHash = crypto.Keccak256Hash(filter.KeySym)
 	}
-
-	for _, t := range args.Topics {
-		filter.Topics = append(filter.Topics, t)
-	}
+	filter.Topics = append(filter.Topics, args.Topics...)
 
 	if len(args.Topics) == 0 {
 		info := "NewFilter: at least one topic must be specified"
@@ -372,12 +385,12 @@ type PostArgs struct {
 	To       string              `json:"to"`
 	KeyName  string              `json:"keyname"`
 	Topic    whisperv5.TopicType `json:"topic"`
-	Padding  rpc.HexBytes        `json:"padding"`
-	Payload  rpc.HexBytes        `json:"payload"`
+	Padding  hexutil.Bytes       `json:"padding"`
+	Payload  hexutil.Bytes       `json:"payload"`
 	WorkTime uint32              `json:"worktime"`
 	PoW      float64             `json:"pow"`
 	FilterID uint32              `json:"filterID"`
-	PeerID   rpc.HexBytes        `json:"peerID"`
+	PeerID   hexutil.Bytes       `json:"peerID"`
 }
 
 type WhisperFilterArgs struct {

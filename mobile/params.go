@@ -50,7 +50,7 @@ func TestnetChainConfig() *ChainConfig {
 		ChainID:        params.TestNetChainID.Int64(),
 		HomesteadBlock: params.TestNetHomesteadBlock.Int64(),
 		DAOForkBlock:   0,
-		DAOForkSupport: true,
+		DAOForkSupport: false,
 		EIP150Block:    params.TestNetHomesteadGasRepriceBlock.Int64(),
 		EIP150Hash:     Hash{params.TestNetHomesteadGasRepriceHash},
 		EIP155Block:    params.TestNetSpuriousDragon.Int64(),
@@ -85,8 +85,8 @@ func NewChainConfig() *ChainConfig {
 // by the foundation running the V5 discovery protocol.
 func FoundationBootnodes() *Enodes {
 	nodes := &Enodes{nodes: make([]*discv5.Node, len(params.DiscoveryV5Bootnodes))}
-	for i, node := range params.DiscoveryV5Bootnodes {
-		nodes.nodes[i] = node
+	for i, url := range params.DiscoveryV5Bootnodes {
+		nodes.nodes[i] = discv5.MustParseNode(url)
 	}
 	return nodes
 }

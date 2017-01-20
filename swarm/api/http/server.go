@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/rs/cors"
 )
 
 const (
@@ -53,19 +55,37 @@ type sequentialReader struct {
 	lock   sync.Mutex
 }
 
+// Server is the basic configuration needs for the HTTP server and also
+// includes CORS settings.
+type Server struct {
+	Addr       string
+	CorsString string
+}
+
 // browser API for registering bzz url scheme handlers:
 // https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
 // electron (chromium) api for registering bzz url scheme handlers:
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // starts up http server
-func StartHttpServer(api *api.Api, port string) {
+func StartHttpServer(api *api.Api, server *Server) {
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handler(w, r, api)
 	})
-	go http.ListenAndServe(":"+port, serveMux)
-	glog.V(logger.Info).Infof("Swarm HTTP proxy started on localhost:%s", port)
+	var allowedOrigins []string
+	for _, domain := range strings.Split(server.CorsString, ",") {
+		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
+	}
+	c := cors.New(cors.Options{
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{"POST", "GET", "DELETE", "PATCH", "PUT"},
+		MaxAge:         600,
+	})
+	hdlr := c.Handler(serveMux)
+
+	go http.ListenAndServe(server.Addr, hdlr)
+	glog.V(logger.Info).Infof("Swarm HTTP proxy started on localhost:%s", server.Addr)
 }
 
 func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
@@ -99,7 +119,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				"[BZZ] Swarm: Protocol error in request `%s`.",
 				uri,
 			)
-			http.Error(w, "BZZ protocol error", http.StatusBadRequest)
+			http.Error(w, "Invalid request URL: need access protocol (bzz:/, bzzr:/, bzzi:/) as first element in path.", http.StatusBadRequest)
 			return
 		}
 	}
@@ -187,6 +207,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			reader := a.Retrieve(key)
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
+			if err != nil {
+				glog.V(logger.Debug).Infof("Could not determine size: %v", err.Error())
+				//An error on call to Size means we don't have the root chunk
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
 			glog.V(logger.Debug).Infof("Reading %d bytes.", size)
 
 			// setting mime type
@@ -229,6 +255,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			}
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
+			if err != nil {
+				glog.V(logger.Debug).Infof("Could not determine size: %v", err.Error())
+				//An error on call to Size means we don't have the root chunk
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
 			glog.V(logger.Debug).Infof("Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status)
 
 			http.ServeContent(w, r, path, forever(), reader)

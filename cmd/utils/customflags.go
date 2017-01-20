@@ -23,8 +23,6 @@ import (
 	"os/user"
 	"path"
 	"strings"
-
-	"gopkg.in/urfave/cli.v1"
 )
 
 // Custom type which is registered in the flags library which cli uses for
@@ -46,7 +44,6 @@ func (self *DirectoryString) Set(value string) error {
 // Custom cli.Flag type which expand the received string to an absolute path.
 // e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
-	cli.GenericFlag
 	Name   string
 	Value  DirectoryString
 	Usage  string
@@ -54,15 +51,10 @@ type DirectoryFlag struct {
 }
 
 func (self DirectoryFlag) String() string {
-	var fmtString string
-	fmtString = "%s %v\t%v"
-
+	fmtString := "%s %v\t%v"
 	if len(self.Value.Value) > 0 {
 		fmtString = "%s \"%v\"\t%v"
-	} else {
-		fmtString = "%s %v\t%v"
 	}
-
 	return withEnvHint(self.EnvVar, fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage))
 }
 
@@ -122,7 +114,7 @@ func withEnvHint(envVar, str string) string {
 	return str + envText
 }
 
-func (self DirectoryFlag) getName() string {
+func (self DirectoryFlag) GetName() string {
 	return self.Name
 }
 

@@ -110,7 +110,6 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 	for p, list := range sendTo {
 		cost := p.GetRequestCost(SendTxMsg, len(list))
 		go func(p *peer, list types.Transactions, cost uint64) {
-			p.fcServer.SendRequest(0, cost)
 			p.SendTxs(cost, list)
 		}(p, list, cost)
 	}
@@ -138,7 +137,7 @@ func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback 
 	if len(self.txPending) > 0 {
 		txs := make(types.Transactions, len(self.txPending))
 		i := 0
-		for hash, _ := range self.txPending {
+		for hash := range self.txPending {
 			txs[i] = self.txSent[hash].tx
 			i++
 		}

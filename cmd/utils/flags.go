@@ -21,7 +21,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -34,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -116,12 +116,8 @@ var (
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 0=Olympic (disused), 1=Frontier, 2=Morden (disused), 3=Ropsten)",
+		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten)",
 		Value: eth.NetworkId,
-	}
-	OlympicFlag = cli.BoolFlag{
-		Name:  "olympic",
-		Usage: "Olympic network: pre-configured pre-release test network",
 	}
 	TestNetFlag = cli.BoolFlag{
 		Name:  "testnet",
@@ -134,10 +130,6 @@ var (
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
-	}
-	NatspecEnabledFlag = cli.BoolFlag{
-		Name:  "natspec",
-		Usage: "Enable NatSpec confirmation notice",
 	}
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
@@ -234,6 +226,10 @@ var (
 	VMEnableJitFlag = cli.BoolFlag{
 		Name:  "jitvm",
 		Usage: "Enable the JIT VM",
+	}
+	VMEnableDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Record information useful for VM and contract debugging",
 	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
@@ -485,17 +481,15 @@ func makeNodeUserIdent(ctx *cli.Context) string {
 // MakeBootstrapNodes creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
 func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
-	// Return pre-configured nodes if none were manually requested
-	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			return params.TestnetBootnodes
-		}
-		return params.MainnetBootnodes
+	urls := params.MainnetBootnodes
+	if ctx.GlobalIsSet(BootnodesFlag.Name) {
+		urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
+	} else if ctx.GlobalBool(TestNetFlag.Name) {
+		urls = params.TestnetBootnodes
 	}
-	// Otherwise parse and use the CLI bootstrap nodes
-	bootnodes := []*discover.Node{}
 
-	for _, url := range strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",") {
+	bootnodes := make([]*discover.Node, 0, len(urls))
+	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
 			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
@@ -509,14 +503,13 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 // MakeBootstrapNodesV5 creates a list of bootstrap nodes from the command line
 // flags, reverting to pre-configured ones if none have been specified.
 func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
-	// Return pre-configured nodes if none were manually requested
-	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
-		return params.DiscoveryV5Bootnodes
+	urls := params.DiscoveryV5Bootnodes
+	if ctx.GlobalIsSet(BootnodesFlag.Name) {
+		urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
 	}
-	// Otherwise parse and use the CLI bootstrap nodes
-	bootnodes := []*discv5.Node{}
 
-	for _, url := range strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",") {
+	bootnodes := make([]*discv5.Node, 0, len(urls))
+	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
 			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
@@ -715,7 +708,7 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 // given node.
 func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	// Avoid conflicting network flags
-	networks, netFlags := 0, []cli.BoolFlag{DevModeFlag, TestNetFlag, OlympicFlag}
+	networks, netFlags := 0, []cli.BoolFlag{DevModeFlag, TestNetFlag}
 	for _, flag := range netFlags {
 		if ctx.GlobalBool(flag.Name) {
 			networks++
@@ -738,7 +731,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
-		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
@@ -749,16 +741,11 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
+		EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name),
 	}
 
 	// Override any default configs in dev mode or the test net
 	switch {
-	case ctx.GlobalBool(OlympicFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			ethConf.NetworkId = 1
-		}
-		ethConf.Genesis = core.OlympicGenesisBlock()
-
 	case ctx.GlobalBool(TestNetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			ethConf.NetworkId = 3
@@ -766,7 +753,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		ethConf.Genesis = core.DefaultTestnetGenesisBlock()
 
 	case ctx.GlobalBool(DevModeFlag.Name):
-		ethConf.Genesis = core.OlympicGenesisBlock()
+		ethConf.Genesis = core.DevGenesisBlock()
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
 			ethConf.GasPrice = new(big.Int)
 		}
@@ -823,16 +810,6 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 // SetupNetwork configures the system for either the main net or some test network.
 func SetupNetwork(ctx *cli.Context) {
-	switch {
-	case ctx.GlobalBool(OlympicFlag.Name):
-		params.DurationLimit = big.NewInt(8)
-		params.GenesisGasLimit = big.NewInt(3141592)
-		params.MinGasLimit = big.NewInt(125000)
-		params.MaximumExtraDataSize = big.NewInt(1024)
-		NetworkIdFlag.Value = 0
-		core.BlockReward = big.NewInt(1.5e+18)
-		core.ExpDiffPeriod = big.NewInt(math.MaxInt64)
-	}
 	params.TargetGasLimit = common.String2Big(ctx.GlobalString(TargetGasLimitFlag.Name))
 }
 
@@ -923,19 +900,20 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
-	if ctx.GlobalBool(OlympicFlag.Name) {
+	if ctx.GlobalBool(TestNetFlag.Name) {
 		_, err := core.WriteTestNetGenesisBlock(chainDb)
 		if err != nil {
 			glog.Fatalln(err)
 		}
 	}
+
 	chainConfig := MakeChainConfigFromDb(ctx, chainDb)
 
 	pow := pow.PoW(core.FakePow{})
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
 		pow = ethash.New()
 	}
-	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux))
+	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}

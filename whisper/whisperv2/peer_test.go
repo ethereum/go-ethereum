@@ -221,7 +221,7 @@ func TestPeerMessageExpiration(t *testing.T) {
 		t.Fatalf("peer pool size mismatch: have %v, want %v", peers, 1)
 	}
 	var peer *peer
-	for peer, _ = range tester.client.peers {
+	for peer = range tester.client.peers {
 		break
 	}
 	tester.client.peerMu.RUnlock()

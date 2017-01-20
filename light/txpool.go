@@ -346,19 +346,8 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	if from, err = types.Sender(pool.signer, tx); err != nil {
 		return core.ErrInvalidSender
 	}
-
-	// Make sure the account exist. Non existent accounts
-	// haven't got funds and well therefor never pass.
-	currentState := pool.currentState()
-	if h, err := currentState.HasAccount(ctx, from); err == nil {
-		if !h {
-			return core.ErrNonExistentAccount
-		}
-	} else {
-		return err
-	}
-
 	// Last but not least check for nonce errors
+	currentState := pool.currentState()
 	if n, err := currentState.GetNonce(ctx, from); err == nil {
 		if n > tx.Nonce() {
 			return core.ErrNonce

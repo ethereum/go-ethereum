@@ -62,7 +62,7 @@ func (s *NotificationTestService) SomeSubscription(ctx context.Context, n, val i
 	subscription := notifier.CreateSubscription()
 
 	go func() {
-		// test expects n events, if we begin sending event immediatly some events
+		// test expects n events, if we begin sending event immediately some events
 		// will probably be dropped since the subscription ID might not be send to
 		// the client.
 		time.Sleep(5 * time.Second)
@@ -141,7 +141,7 @@ func TestNotifications(t *testing.T) {
 	}
 
 	var ok bool
-	if subid, ok = response.Result.(string); !ok {
+	if _, ok = response.Result.(string); !ok {
 		t.Fatalf("expected subscription id, got %T", response.Result)
 	}
 

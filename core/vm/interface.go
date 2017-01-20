@@ -20,15 +20,8 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
-
-// Vm is the basic interface for an implementation of the EVM.
-type Vm interface {
-	// Run should execute the given contract with the input given in in
-	// and return the contract execution return bytes or an error if it
-	// failed.
-	Run(c *Contract, in []byte) ([]byte, error)
-}
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
@@ -66,7 +59,8 @@ type StateDB interface {
 	RevertToSnapshot(int)
 	Snapshot() int
 
-	AddLog(*Log)
+	AddLog(*types.Log)
+	AddPreimage(common.Hash, []byte)
 }
 
 // Account represents a contract or basic ethereum account.
@@ -83,15 +77,15 @@ type Account interface {
 	Value() *big.Int
 }
 
-// CallContext provides a basic interface for the EVM calling conventions. The EVM Environment
+// CallContext provides a basic interface for the EVM calling conventions. The EVM EVM
 // depends on this context being implemented for doing subcalls and initialising new EVM contracts.
 type CallContext interface {
 	// Call another contract
-	Call(env *Environment, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
+	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context
-	CallCode(env *Environment, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
+	CallCode(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Same as CallCode except sender and value is propagated from parent to child scope
-	DelegateCall(env *Environment, me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
+	DelegateCall(env *EVM, me ContractRef, addr common.Address, data []byte, gas *big.Int) ([]byte, error)
 	// Create a new contract
-	Create(env *Environment, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
+	Create(env *EVM, me ContractRef, data []byte, gas, value *big.Int) ([]byte, common.Address, error)
 }

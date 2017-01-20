@@ -831,7 +831,7 @@ func (r *topicRadius) recalcRadius() (radius uint64, radiusLookup int) {
 	maxValue := float64(0)
 	now := mclock.Now()
 	v := float64(0)
-	for i, _ := range r.buckets {
+	for i := range r.buckets {
 		r.buckets[i].update(now)
 		v += r.buckets[i].weights[trOutside] - r.buckets[i].weights[trInside]
 		r.buckets[i].value = v

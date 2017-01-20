@@ -483,8 +483,11 @@ func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 	case 1:
 		offset += s.off
 	case 2:
-		if s.chunk == nil {
-			return 0, fmt.Errorf("seek from the end requires rootchunk for size. call Size first")
+		if s.chunk == nil { //seek from the end requires rootchunk for size. call Size first
+			_, err := s.Size(nil)
+			if err != nil {
+				return 0, fmt.Errorf("can't get size: %v", err)
+			}
 		}
 		offset += s.chunk.Size
 	}

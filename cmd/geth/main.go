@@ -88,7 +88,6 @@ func init() {
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.OlympicFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
 		utils.LightServFlag,
@@ -107,7 +106,6 @@ func init() {
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
-		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
 		utils.NetrestrictFlag,
@@ -133,6 +131,7 @@ func init() {
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
 		utils.VMEnableJitFlag,
+		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.EthStatsURLFlag,
@@ -168,7 +167,6 @@ func init() {
 	}
 
 	app.After = func(ctx *cli.Context) error {
-		logger.Flush()
 		debug.Exit()
 		console.Stdin.Close() // Resets terminal mode.
 		return nil

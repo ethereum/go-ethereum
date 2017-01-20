@@ -56,6 +56,16 @@ whiteBackground := red.Add(color.BgWhite)
 whiteBackground.Println("Red text with white background.")
 ```
 
+### Use your own output (io.Writer)
+
+```go
+// Use your own io.Writer output
+color.New(color.FgBlue).Fprintln(myWriter, "blue color!")
+
+blue := color.New(color.FgBlue)
+blue.Fprint(writer, "This will print text in blue.")
+```
+
 ### Custom print functions (PrintFunc)
 
 ```go
@@ -67,6 +77,17 @@ red("Error: %s", err)
 // Mix up multiple attributes
 notice := color.New(color.Bold, color.FgGreen).PrintlnFunc()
 notice("Don't forget this...")
+```
+
+### Custom fprint functions (FprintFunc)
+
+```go
+blue := color.New(FgBlue).FprintfFunc()
+blue(myWriter, "important notice: %s", stars)
+
+// Mix up with multiple attributes
+success := color.New(color.Bold, color.FgGreen).FprintlnFunc()
+success(myWriter, don't forget this...")
 ```
 
 ### Insert into noncolor strings (SprintFunc)

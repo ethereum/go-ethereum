@@ -234,7 +234,7 @@ func TestUDP_findnode(t *testing.T) {
 	defer test.table.Close()
 
 	// put a few nodes into the table. their exact
-	// distribution shouldn't matter much, altough we need to
+	// distribution shouldn't matter much, although we need to
 	// take care not to overflow any bucket.
 	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}

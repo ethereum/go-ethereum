@@ -65,7 +65,7 @@ SECP256K1_API int secp256k1_ecdsa_recoverable_signature_serialize_compact(
     unsigned char *output64,
     int *recid,
     const secp256k1_ecdsa_recoverable_signature* sig
-) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(4);
+) SECP256K1_ARG_NONNULL(1) SECP256K1_ARG_NONNULL(2) SECP256K1_ARG_NONNULL(3) SECP256K1_ARG_NONNULL(4);
 
 /** Create a recoverable ECDSA signature.
  *
@@ -92,7 +92,7 @@ SECP256K1_API int secp256k1_ecdsa_sign_recoverable(
  *  Returns: 1: public key successfully recovered (which guarantees a correct signature).
  *           0: otherwise.
  *  Args:    ctx:        pointer to a context object, initialized for verification (cannot be NULL)
- *  Out:     pubkey:     pointer to the recoved public key (cannot be NULL)
+ *  Out:     pubkey:     pointer to the recovered public key (cannot be NULL)
  *  In:      sig:        pointer to initialized signature that supports pubkey recovery (cannot be NULL)
  *           msg32:      the 32-byte message hash assumed to be signed (cannot be NULL)
  */

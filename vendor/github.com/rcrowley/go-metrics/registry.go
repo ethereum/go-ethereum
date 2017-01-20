@@ -167,9 +167,9 @@ func NewPrefixedChildRegistry(parent Registry, prefix string) Registry {
 
 // Call the given function for each registered metric.
 func (r *PrefixedRegistry) Each(fn func(string, interface{})) {
-	wrappedFn := func (prefix string) func(string, interface{}) {
+	wrappedFn := func(prefix string) func(string, interface{}) {
 		return func(name string, iface interface{}) {
-			if strings.HasPrefix(name,prefix) {
+			if strings.HasPrefix(name, prefix) {
 				fn(name, iface)
 			} else {
 				return
@@ -184,7 +184,7 @@ func (r *PrefixedRegistry) Each(fn func(string, interface{})) {
 func findPrefix(registry Registry, prefix string) (Registry, string) {
 	switch r := registry.(type) {
 	case *PrefixedRegistry:
-		return findPrefix(r.underlying, r.prefix + prefix)
+		return findPrefix(r.underlying, r.prefix+prefix)
 	case *StandardRegistry:
 		return r, prefix
 	}

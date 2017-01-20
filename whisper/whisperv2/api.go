@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // PublicWhisperAPI provides the whisper RPC service.
@@ -32,7 +32,7 @@ type PublicWhisperAPI struct {
 	w *Whisper
 
 	messagesMu sync.RWMutex
-	messages   map[int]*whisperFilter
+	messages   map[hexutil.Uint]*whisperFilter
 }
 
 type whisperOfflineError struct{}
@@ -46,15 +46,15 @@ var whisperOffLineErr = new(whisperOfflineError)
 
 // NewPublicWhisperAPI create a new RPC whisper service.
 func NewPublicWhisperAPI(w *Whisper) *PublicWhisperAPI {
-	return &PublicWhisperAPI{w: w, messages: make(map[int]*whisperFilter)}
+	return &PublicWhisperAPI{w: w, messages: make(map[hexutil.Uint]*whisperFilter)}
 }
 
 // Version returns the Whisper version this node offers.
-func (s *PublicWhisperAPI) Version() (*rpc.HexNumber, error) {
+func (s *PublicWhisperAPI) Version() (hexutil.Uint, error) {
 	if s.w == nil {
-		return rpc.NewHexNumber(0), whisperOffLineErr
+		return 0, whisperOffLineErr
 	}
-	return rpc.NewHexNumber(s.w.Version()), nil
+	return hexutil.Uint(s.w.Version()), nil
 }
 
 // HasIdentity checks if the the whisper node is configured with the private key
@@ -84,12 +84,12 @@ type NewFilterArgs struct {
 }
 
 // NewWhisperFilter creates and registers a new message filter to watch for inbound whisper messages.
-func (s *PublicWhisperAPI) NewFilter(args NewFilterArgs) (*rpc.HexNumber, error) {
+func (s *PublicWhisperAPI) NewFilter(args NewFilterArgs) (hexutil.Uint, error) {
 	if s.w == nil {
-		return nil, whisperOffLineErr
+		return 0, whisperOffLineErr
 	}
 
-	var id int
+	var id hexutil.Uint
 	filter := Filter{
 		To:     crypto.ToECDSAPub(common.FromHex(args.To)),
 		From:   crypto.ToECDSAPub(common.FromHex(args.From)),
@@ -103,23 +103,22 @@ func (s *PublicWhisperAPI) NewFilter(args NewFilterArgs) (*rpc.HexNumber, error)
 			}
 		},
 	}
-
-	id = s.w.Watch(filter)
+	id = hexutil.Uint(s.w.Watch(filter))
 
 	s.messagesMu.Lock()
 	s.messages[id] = newWhisperFilter(id, s.w)
 	s.messagesMu.Unlock()
 
-	return rpc.NewHexNumber(id), nil
+	return id, nil
 }
 
 // GetFilterChanges retrieves all the new messages matched by a filter since the last retrieval.
-func (s *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []WhisperMessage {
+func (s *PublicWhisperAPI) GetFilterChanges(filterId hexutil.Uint) []WhisperMessage {
 	s.messagesMu.RLock()
 	defer s.messagesMu.RUnlock()
 
-	if s.messages[filterId.Int()] != nil {
-		if changes := s.messages[filterId.Int()].retrieve(); changes != nil {
+	if s.messages[filterId] != nil {
+		if changes := s.messages[filterId].retrieve(); changes != nil {
 			return changes
 		}
 	}
@@ -127,26 +126,26 @@ func (s *PublicWhisperAPI) GetFilterChanges(filterId rpc.HexNumber) []WhisperMes
 }
 
 // UninstallFilter disables and removes an existing filter.
-func (s *PublicWhisperAPI) UninstallFilter(filterId rpc.HexNumber) bool {
+func (s *PublicWhisperAPI) UninstallFilter(filterId hexutil.Uint) bool {
 	s.messagesMu.Lock()
 	defer s.messagesMu.Unlock()
 
-	if _, ok := s.messages[filterId.Int()]; ok {
-		delete(s.messages, filterId.Int())
+	if _, ok := s.messages[filterId]; ok {
+		delete(s.messages, filterId)
 		return true
 	}
 	return false
 }
 
 // GetMessages retrieves all the known messages that match a specific filter.
-func (s *PublicWhisperAPI) GetMessages(filterId rpc.HexNumber) []WhisperMessage {
+func (s *PublicWhisperAPI) GetMessages(filterId hexutil.Uint) []WhisperMessage {
 	// Retrieve all the cached messages matching a specific, existing filter
 	s.messagesMu.RLock()
 	defer s.messagesMu.RUnlock()
 
 	var messages []*Message
-	if s.messages[filterId.Int()] != nil {
-		messages = s.messages[filterId.Int()].messages()
+	if s.messages[filterId] != nil {
+		messages = s.messages[filterId].messages()
 	}
 
 	return returnWhisperMessages(messages)
@@ -217,12 +216,12 @@ type WhisperMessage struct {
 
 func (args *PostArgs) UnmarshalJSON(data []byte) (err error) {
 	var obj struct {
-		From     string        `json:"from"`
-		To       string        `json:"to"`
-		Topics   []string      `json:"topics"`
-		Payload  string        `json:"payload"`
-		Priority rpc.HexNumber `json:"priority"`
-		TTL      rpc.HexNumber `json:"ttl"`
+		From     string         `json:"from"`
+		To       string         `json:"to"`
+		Topics   []string       `json:"topics"`
+		Payload  string         `json:"payload"`
+		Priority hexutil.Uint64 `json:"priority"`
+		TTL      hexutil.Uint64 `json:"ttl"`
 	}
 
 	if err := json.Unmarshal(data, &obj); err != nil {
@@ -232,8 +231,8 @@ func (args *PostArgs) UnmarshalJSON(data []byte) (err error) {
 	args.From = obj.From
 	args.To = obj.To
 	args.Payload = obj.Payload
-	args.Priority = obj.Priority.Int64()
-	args.TTL = obj.TTL.Int64()
+	args.Priority = int64(obj.Priority) // TODO(gluk256): handle overflow
+	args.TTL = int64(obj.TTL)           // ... here too ...
 
 	// decode topic strings
 	args.Topics = make([][]byte, len(obj.Topics))
@@ -328,8 +327,8 @@ func (args *NewFilterArgs) UnmarshalJSON(b []byte) (err error) {
 // whisperFilter is the message cache matching a specific filter, accumulating
 // inbound messages until the are requested by the client.
 type whisperFilter struct {
-	id  int      // Filter identifier for old message retrieval
-	ref *Whisper // Whisper reference for old message retrieval
+	id  hexutil.Uint // Filter identifier for old message retrieval
+	ref *Whisper     // Whisper reference for old message retrieval
 
 	cache  []WhisperMessage         // Cache of messages not yet polled
 	skip   map[common.Hash]struct{} // List of retrieved messages to avoid duplication
@@ -348,7 +347,7 @@ func (w *whisperFilter) messages() []*Message {
 	w.update = time.Now()
 
 	w.skip = make(map[common.Hash]struct{})
-	messages := w.ref.Messages(w.id)
+	messages := w.ref.Messages(int(w.id))
 	for _, message := range messages {
 		w.skip[message.Hash] = struct{}{}
 	}
@@ -388,11 +387,10 @@ func (w *whisperFilter) activity() time.Time {
 }
 
 // newWhisperFilter creates a new serialized, poll based whisper topic filter.
-func newWhisperFilter(id int, ref *Whisper) *whisperFilter {
+func newWhisperFilter(id hexutil.Uint, ref *Whisper) *whisperFilter {
 	return &whisperFilter{
-		id:  id,
-		ref: ref,
-
+		id:     id,
+		ref:    ref,
 		update: time.Now(),
 		skip:   make(map[common.Hash]struct{}),
 	}
