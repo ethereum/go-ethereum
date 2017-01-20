@@ -341,11 +341,11 @@ var bindTests = []struct {
 	{
 		`NonExistent`,
 		`
-		contract NonExistent {
-			function String() constant returns(string) {
-				return "I don't exist";
+			contract NonExistent {
+				function String() constant returns(string) {
+					return "I don't exist";
+				}
 			}
-		}
 		`,
 		`6060604052609f8060106000396000f3606060405260e060020a6000350463f97a60058114601a575b005b600060605260c0604052600d60809081527f4920646f6e27742065786973740000000000000000000000000000000000000060a052602060c0908152600d60e081905281906101009060a09080838184600060046012f15050815172ffffffffffffffffffffffffffffffffffffff1916909152505060405161012081900392509050f3`,
 		`[{"constant":true,"inputs":[],"name":"String","outputs":[{"name":"","type":"string"}],"type":"function"}]`,
@@ -362,6 +362,49 @@ var bindTests = []struct {
 				t.Fatalf("Call succeeded on non-existent contract: %v", res)
 			} else if (err != bind.ErrNoCode) {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
+			}
+		`,
+	},
+	// Tests that gas estimation works for contracts with	weird gas mechanics too.
+	{
+		`FunkyGasPattern`,
+		`
+			contract FunkyGasPattern {
+				string public field;
+
+				function SetField(string value) {
+					// This check will screw gas estimation! Good, good!
+					if (msg.gas < 100000) {
+						throw;
+					}
+					field = value;
+				}
+			}
+		`,
+		`606060405261021c806100126000396000f3606060405260e060020a600035046323fcf32a81146100265780634f28bf0e1461007b575b005b6040805160206004803580820135601f8101849004840285018401909552848452610024949193602493909291840191908190840183828082843750949650505050505050620186a05a101561014e57610002565b6100db60008054604080516020601f600260001961010060018816150201909516949094049384018190048102820181019092528281529291908301828280156102145780601f106101e957610100808354040283529160200191610214565b60405180806020018281038252838181518152602001915080519060200190808383829060006004602084601f0104600302600f01f150905090810190601f16801561013b5780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b505050565b8060006000509080519060200190828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f106101b557805160ff19168380011785555b506101499291505b808211156101e557600081556001016101a1565b82800160010185558215610199579182015b828111156101995782518260005055916020019190600101906101c7565b5090565b820191906000526020600020905b8154815290600101906020018083116101f757829003601f168201915b50505050508156`,
+		`[{"constant":false,"inputs":[{"name":"value","type":"string"}],"name":"SetField","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"field","outputs":[{"name":"","type":"string"}],"type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+
+			// Deploy a funky gas pattern contract
+			_, _, limiter, err := DeployFunkyGasPattern(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy funky contract: %v", err)
+			}
+			sim.Commit()
+
+			// Set the field with automatic estimation and check that it succeeds
+			auth.GasLimit = nil
+			if _, err := limiter.SetField(auth, "automatic"); err != nil {
+				t.Fatalf("Failed to call automatically gased transaction: %v", err)
+			}
+			sim.Commit()
+
+			if field, _ := limiter.Field(nil); field != "automatic" {
+				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
 			}
 		`,
 	},
