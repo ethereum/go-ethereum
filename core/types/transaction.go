@@ -198,7 +198,8 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 
 	var V byte
 	if isProtectedV((*big.Int)(dec.V)) {
-		V = byte((new(big.Int).Sub((*big.Int)(dec.V), deriveChainId((*big.Int)(dec.V))).Uint64()) - 35)
+		chainId := deriveChainId((*big.Int)(dec.V)).Uint64()
+		V = byte(dec.V.ToInt().Uint64() - 35 - 2*chainId)
 	} else {
 		V = byte(((*big.Int)(dec.V)).Uint64() - 27)
 	}
