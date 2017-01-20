@@ -1096,10 +1096,6 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 	progressed, nproc, procerr := q.stateScheduler.Process(process, batch)
 	q.stateWriters += 1
 	go func() {
-		// Wake up WaitResults after the state has been written because it might be
-		// waiting for completion of the pivot block's state download.
-		defer q.active.Signal()
-
 		if procerr == nil {
 			nproc = len(process)
 			procerr = batch.Write()
@@ -1111,6 +1107,9 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 		q.stateWriters -= 1
 		q.lock.Unlock()
 		callback(nproc, progressed, procerr)
+		// Wake up WaitResults after the state has been written because it might be
+		// waiting for completion of the pivot block's state download.
+		q.active.Signal()
 	}()
 
 	// If none of the data items were good, it's a stale delivery
