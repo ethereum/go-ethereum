@@ -1129,12 +1129,13 @@ func (q *queue) deliverNodeData(results []trie.SyncResult, callback func(int, bo
 		if err != nil {
 			q.stateSchedLock.Unlock()
 			callback(i, progressed, err)
+			return
 		}
 		if err = batch.Write(); err != nil {
 			q.stateSchedLock.Unlock()
 			callback(i, progressed, err)
+			return // TODO(karalabe): If a DB write fails (disk full), we ought to cancel the sync
 		}
-
 		// Item processing succeeded, release the lock (temporarily)
 		progressed = progressed || prog
 		q.stateSchedLock.Unlock()
