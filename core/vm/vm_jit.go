@@ -19,7 +19,6 @@ package vm
 /*
 
 #include <evmjit.h>
-#include <stdlib.h>
 
 
 static struct evm_instance* new_evmjit()
@@ -63,6 +62,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
@@ -70,15 +70,15 @@ import (
 
 type EVMJIT struct {
 	jit  *C.struct_evm_instance
-	env  *Environment
+	env  *EVM
 }
 
 type EVMCContext struct {
 	contract *Contract
-	env      *Environment
+	env      *EVM
 }
 
-func NewJit(env *Environment, cfg Config) *EVMJIT {
+func NewJit(env *EVM, cfg Config) *EVMJIT {
 	// FIXME: Destroy the jit later.
 	return &EVMJIT{C.new_evmjit(), env}
 }
@@ -226,7 +226,7 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 		*pInt64Result = exist
 		// fmt.Printf("EXISTS? %x : %v\n", addr, exist)
 	case C.EVM_CALL_DEPTH:
-		*pInt64Result = int64(ctx.env.Depth - 1)
+		*pInt64Result = int64(ctx.env.depth - 1)
 
 	default:
 		panic(fmt.Sprintf("Unhandled EVM-C query %d\n", key))
@@ -258,8 +258,12 @@ func update(ctxIdx uintptr, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.Pointe
 		for i := 0; i < nTopics; i++ {
 			copy(topics[i][:], tData[i*32:(i+1)*32])
 		}
-		log := NewLog(ctx.contract.Address(), topics, data, ctx.env.BlockNumber.Uint64())
-		ctx.env.StateDB.AddLog(log)
+		ctx.env.StateDB.AddLog(&types.Log{
+			Address: ctx.contract.Address(),
+			Topics:  topics,
+			Data:    data,
+			BlockNumber: ctx.env.BlockNumber.Uint64(),
+		})
 	case C.EVM_SELFDESTRUCT:
 		arg := GoByteSlice(pArg1, 32)
 		db := ctx.env.StateDB
@@ -293,6 +297,10 @@ func call(
 	output := GoByteSlice(pOutput, outputSize)
 	bigGas := new(big.Int).SetInt64(gas)
 
+	// TODO: For some reason C.EVM_CALL_FAILURE "constant" is not visible
+	// by go linker. This probably should be reported as cgo bug.
+	const callFailureFlag int64 = -(1 << 63);
+
 	switch kind {
 	case C.EVM_CALL:
 		// fmt.Printf("CALL(gas %d, %x)\n", bigGas, address)
@@ -306,7 +314,7 @@ func call(
 			assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
 			return gasLeft
 		}
-		return gasLeft | C.EVM_CALL_FAILURE
+		return gasLeft | callFailureFlag
 	case C.EVM_CALLCODE:
 		// fmt.Printf("CALLCODE(gas %d, %x, value %d)\n", bigGas, address, value)
 		ctx.contract.Gas.SetInt64(0)
@@ -320,7 +328,7 @@ func call(
 		} else {
 			// fmt.Printf("Error: %v\n", err)
 		}
-		return gasLeft | C.EVM_CALL_FAILURE
+		return gasLeft | callFailureFlag
 	case C.EVM_DELEGATECALL:
 		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
 		ctx.contract.Gas.SetInt64(0)
@@ -332,16 +340,16 @@ func call(
 			copy(output, ret)
 			return gasLeft
 		}
-		return gasLeft | C.EVM_CALL_FAILURE
+		return gasLeft | callFailureFlag
 	case C.EVM_CREATE:
 		// fmt.Printf("DELEGATECALL(gas %d, %x)\n", bigGas, address)
 		ctx.contract.Gas.SetInt64(0)
 		_, addr, err := ctx.env.Create(ctx.contract, input, bigGas, value)
 		gasLeft := ctx.contract.Gas.Int64()
 		assert(gasLeft <= gas, fmt.Sprintf("%d <= %d", gasLeft, gas))
-		if (ctx.env.ChainConfig().IsHomestead(ctx.env.BlockNumber) && err == CodeStoreOutOfGasError) ||
-			(err != nil && err != CodeStoreOutOfGasError) {
-			return C.EVM_CALL_FAILURE
+		if (ctx.env.ChainConfig().IsHomestead(ctx.env.BlockNumber) && err == ErrCodeStoreOutOfGas) ||
+			(err != nil && err != ErrCodeStoreOutOfGas) {
+			return callFailureFlag
 		} else {
 			copy(output, addr[:])
 			return gasLeft
@@ -355,7 +363,7 @@ func ptr(bytes []byte) *C.uint8_t {
 	return (*C.uint8_t)(unsafe.Pointer(header.Data))
 }
 
-func getMode(env *Environment) C.enum_evm_mode {
+func getMode(env *EVM) C.enum_evm_mode {
 	n := env.BlockNumber
 	if env.ChainConfig().IsEIP158(n) {
 		return C.EVM_CLEARING
@@ -370,12 +378,12 @@ func getMode(env *Environment) C.enum_evm_mode {
 }
 
 func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error) {
-	evm.env.Depth++
-	defer func() { evm.env.Depth-- }()
+	evm.env.depth++
+	defer func() { evm.env.depth-- }()
 
 	if contract.CodeAddr != nil {
-		if p := Precompiled[contract.CodeAddr.Str()]; p != nil {
-			return evm.RunPrecompiled(p, input, contract)
+		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
+			return RunPrecompiledContract(p, input, contract)
 		}
 	}
 
@@ -412,19 +420,9 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 
 	if r.code != 0 {
 		// EVMJIT does not informs about the kind of the EVM expection.
-		err = OutOfGasError
+		err = ErrOutOfGas
 	}
 
 	C.evm_release_result(&r)
 	return output, err
-}
-
-func (evm *EVMJIT) RunPrecompiled(p *PrecompiledAccount, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.Gas(len(input))
-	if contract.UseGas(gas) {
-		ret = p.Call(input)
-		return ret, nil
-	} else {
-		return nil, OutOfGasError
-	}
 }
