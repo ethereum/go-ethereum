@@ -65,10 +65,11 @@ matrix:
 
         # Build the Android archive and upload it to Maven Central and Azure
         - brew update
-        - brew install android-sdk maven gpg
+        - travis_wait 60 brew install android-sdk android-ndk maven gpg
         - alias gpg="gpg2"
 
         - export ANDROID_HOME=/usr/local/opt/android-sdk
+        - export ANDROID_NDK=/usr/local/opt/android-ndk
         - echo "y" | android update sdk --no-ui --filter `android list sdk | grep "SDK Platform Android" | grep -E 'API 15|API 19|API 24' | awk '{print $1}' | cut -d '-' -f 1 | tr '\n' ','`
 
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds

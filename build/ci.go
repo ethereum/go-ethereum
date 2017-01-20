@@ -700,9 +700,16 @@ func doAndroidArchive(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
+	// Sanity check that the SDK and NDK are installed and set
+	if os.Getenv("ANDROID_HOME") == "" {
+		log.Fatal("Please ensure ANDROID_HOME points to your Android SDK")
+	}
+	if os.Getenv("ANDROID_NDK") == "" {
+		log.Fatal("Please ensure ANDROID_NDK points to your Android NDK")
+	}
 	// Build the Android archive and Maven resources
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
-	build.MustRun(gomobileTool("init"))
+	build.MustRun(gomobileTool("init", "--ndk", os.Getenv("ANDROID_NDK")))
 	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
 
 	if *local {
