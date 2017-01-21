@@ -96,10 +96,10 @@ func updateManifest(ctx *cli.Context, mhash , subcmd, path, hash string) {
 	}
 	*/
 
-	//mroot, err := client.downloadManifest(mhash)
-	//if err != nil {
-	//	log.Fatalln("manifest download failed:", err)
-	//}
+	mroot, err := client.downloadManifest(mhash)
+	if err != nil {
+		log.Fatalln("manifest download failed:", err)
+	}
 
 	switch subcmd {
 
