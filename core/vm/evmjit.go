@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -154,7 +154,7 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 		arg := *(*[32]byte)(pArg)
 		val := ctx.env.StateDB.GetState(ctx.contract.Address(), arg)
 		copy(result, val[:])
-		// fmt.Printf("EVMJIT SLOAD %x : %x\n", arg, result)
+	// fmt.Printf("EVMJIT SLOAD %x : %x\n", arg, result)
 	case C.EVM_ADDRESS:
 		addr := ctx.contract.Address()
 		copy(result[12:], addr[:])
@@ -185,14 +185,14 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 		pResAsMemRef := (*MemoryRef)(pResult)
 		pResAsMemRef.ptr = ptr(code)
 		pResAsMemRef.len = len(code)
-		// fmt.Printf("EXTCODE %x : %d\n", addr, pResAsMemRef.len)
+	// fmt.Printf("EXTCODE %x : %d\n", addr, pResAsMemRef.len)
 	case C.EVM_CODE_SIZE:
 		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
 		copy(addr[:], arg[12:])
 		pInt64Result := (*int64)(pResult)
 		*pInt64Result = int64(ctx.env.StateDB.GetCodeSize(addr))
-		// fmt.Printf("EXTCODESIZE %x : %d\n", addr, *pInt64Result)
+	// fmt.Printf("EXTCODESIZE %x : %d\n", addr, *pInt64Result)
 	case C.EVM_BALANCE:
 		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
@@ -209,7 +209,7 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 			hash = ctx.env.GetHash(uint64(n))
 		}
 		copy(result, hash[:])
-		// fmt.Printf("BLOCKHASH %x : %x (%d, %d, %d)\n", result, hash, n, a, b)
+	// fmt.Printf("BLOCKHASH %x : %x (%d, %d, %d)\n", result, hash, n, a, b)
 	case C.EVM_ACCOUNT_EXISTS:
 		arg := GoByteSlice(pArg, 32)
 		var addr common.Address
@@ -224,7 +224,7 @@ func query(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pArg unsafe.Pointe
 			exist = 1
 		}
 		*pInt64Result = exist
-		// fmt.Printf("EXISTS? %x : %v\n", addr, exist)
+	// fmt.Printf("EXISTS? %x : %v\n", addr, exist)
 	case C.EVM_CALL_DEPTH:
 		*pInt64Result = int64(ctx.env.depth - 1)
 
@@ -246,7 +246,7 @@ func update(ctxIdx uintptr, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.Pointe
 		if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
 			ctx.env.StateDB.AddRefund(params.SstoreRefundGas)
 		}
-		// fmt.Printf("EVMJIT STORE %x : %x [%x, %d]\n", arg1, arg2, ctx.contract.Address(), int(uintptr(pEnv)))
+	// fmt.Printf("EVMJIT STORE %x : %x [%x, %d]\n", arg1, arg2, ctx.contract.Address(), int(uintptr(pEnv)))
 	case C.EVM_LOG:
 		dataRef := (*MemoryRef)(pArg1)
 		topicsRef := (*MemoryRef)(pArg2)
@@ -280,15 +280,15 @@ func update(ctxIdx uintptr, key int32, pArg1 unsafe.Pointer, pArg2 unsafe.Pointe
 
 //export call
 func call(
-	pCtx unsafe.Pointer,
-	kind int32,
-	gas int64,
-	pAddr unsafe.Pointer,
-	pValue unsafe.Pointer,
-	pInput unsafe.Pointer,
-	inputSize C.size_t,
-	pOutput unsafe.Pointer,
-	outputSize C.size_t) int64 {
+pCtx unsafe.Pointer,
+kind int32,
+gas int64,
+pAddr unsafe.Pointer,
+pValue unsafe.Pointer,
+pInput unsafe.Pointer,
+inputSize C.size_t,
+pOutput unsafe.Pointer,
+outputSize C.size_t) int64 {
 
 	ctx := getCtx(uintptr(pCtx))
 	address := *(*[20]byte)(pAddr)
@@ -426,3 +426,4 @@ func (evm *EVMJIT) Run(contract *Contract, input []byte) (ret []byte, err error)
 	C.evm_release_result(&r)
 	return output, err
 }
+
