@@ -1,7 +1,7 @@
-FROM alpine:3.4
+FROM alpine:3.5
 
 RUN \
-  apk add --update go git make gcc musl-dev && \
+  apk add --update go git make gcc musl-dev ca-certificates && \
   git clone --depth 1 --branch release/1.5 https://github.com/ethereum/go-ethereum && \
   (cd go-ethereum && make geth) && \
   cp go-ethereum/build/bin/geth /geth && \
