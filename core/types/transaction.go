@@ -134,7 +134,7 @@ func (tx *Transaction) ChainId() *big.Int {
 	return deriveChainId(tx.data.V)
 }
 
-// Protected returns whether the transaction is pretected from replay protection
+// Protected returns whether the transaction is protected from replay protection.
 func (tx *Transaction) Protected() bool {
 	return isProtectedV(tx.data.V)
 }
@@ -311,16 +311,20 @@ func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
 }
 
 func (tx *Transaction) String() string {
-	// make a best guess about the signer and use that to derive
-	// the sender.
-	signer := deriveSigner(tx.data.V)
-
 	var from, to string
-	if f, err := Sender(signer, tx); err != nil { // derive but don't cache
-		from = "[invalid sender: invalid sig]"
+	if tx.data.V != nil {
+		// make a best guess about the signer and use that to derive
+		// the sender.
+		signer := deriveSigner(tx.data.V)
+		if f, err := Sender(signer, tx); err != nil { // derive but don't cache
+			from = "[invalid sender: invalid sig]"
+		} else {
+			from = fmt.Sprintf("%x", f[:])
+		}
 	} else {
-		from = fmt.Sprintf("%x", f[:])
+		from = "[invalid sender: nil V field]"
 	}
+
 	if tx.data.Recipient == nil {
 		to = "[contract creation]"
 	} else {
@@ -333,13 +337,13 @@ func (tx *Transaction) String() string {
 	From:     %s
 	To:       %s
 	Nonce:    %v
-	GasPrice: %v
-	GasLimit  %v
-	Value:    %v
+	GasPrice: %#x
+	GasLimit  %#x
+	Value:    %#x
 	Data:     0x%x
-	V:        0x%x
-	R:        0x%x
-	S:        0x%x
+	V:        %#x
+	R:        %#x
+	S:        %#x
 	Hex:      %x
 `,
 		tx.Hash(),
