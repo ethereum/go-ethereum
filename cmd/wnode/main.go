@@ -48,18 +48,16 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-const (
-	quitCommand = "~Q"
-	enodePrefix = "enode://"
-)
+const quitCommand = "~Q"
 
 // singletons
 var (
 	server     *p2p.Server
 	shh        *whisper.Whisper
 	done       chan struct{}
-	input      *bufio.Reader = bufio.NewReader(os.Stdin)
 	mailServer mailserver.WMailServer
+
+	input = bufio.NewReader(os.Stdin)
 )
 
 // encryption
@@ -115,6 +113,7 @@ func processArgs() {
 		}
 	}
 
+	const enodePrefix = "enode://"
 	if len(*argEnode) > 0 {
 		if (*argEnode)[:len(enodePrefix)] != enodePrefix {
 			*argEnode = enodePrefix + *argEnode
@@ -529,25 +528,10 @@ func requestExpiredMessagesLoop() {
 }
 
 func extractIdFromEnode(s string) []byte {
-	if len(s) == 0 {
-		return nil
-	}
-
-	p := len(enodePrefix)
-	if s[:p] == enodePrefix {
-		s = s[p:]
-	}
-
-	i := strings.Index(s, "@")
-	if i > 0 {
-		s = s[:i]
-	}
-
-	b, err := hex.DecodeString(s)
+	n, err := discover.ParseNode(s)
 	if err != nil {
-		utils.Fatalf("Failed to decode enode: %s", err)
+		utils.Fatalf("Failed to parse enode: %s", err)
 		return nil
 	}
-
-	return b
+	return n.ID[:]
 }

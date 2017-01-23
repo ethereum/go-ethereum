@@ -116,7 +116,7 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 
 	for i.Next() {
 		var envelope whisper.Envelope
-		err = envelope.DecodeBytes(i.Value())
+		err = rlp.DecodeBytes(i.Value(), &envelope)
 		if err != nil {
 			glog.V(logger.Error).Infof("RLP decoding failed: %s", err)
 		}
