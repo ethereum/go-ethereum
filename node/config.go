@@ -28,6 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -432,6 +433,15 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 	if err := os.MkdirAll(keydir, 0700); err != nil {
 		return nil, "", err
 	}
-	ks := keystore.NewKeyStore(keydir, scryptN, scryptP)
-	return accounts.NewManager(ks), ephemeralKeystore, nil
+
+	// Assemble the account manager and supported backends
+	backends := []accounts.Backend{
+		keystore.NewKeyStore(keydir, scryptN, scryptP),
+	}
+	if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+		glog.V(logger.Warn).Infof("Failed to start Ledger hub, disabling: %v", err)
+	} else {
+		backends = append(backends, ledgerhub)
+	}
+	return accounts.NewManager(backends...), ephemeralKeystore, nil
 }
