@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-package main
+package mailserver
 
 import (
 	"bytes"
@@ -30,6 +30,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+const MailServerKeyName = "958e04ab302fb36ad2616a352cbac79d"
+
 type WMailServer struct {
 	db  *leveldb.DB
 	w   *whisper.Whisper
@@ -44,13 +46,13 @@ type DBKey struct {
 }
 
 func NewDbKey(t uint32, h common.Hash) *DBKey {
-	const sz = common.HashLength + sizeOfInt
+	const sz = common.HashLength + 4
 	var k DBKey
 	k.timestamp = t
 	k.hash = h
 	k.raw = make([]byte, sz)
 	binary.BigEndian.PutUint32(k.raw, k.timestamp)
-	copy(k.raw[sizeOfInt:], k.hash[:])
+	copy(k.raw[4:], k.hash[:])
 	return &k
 }
 
@@ -72,11 +74,11 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	s.w = shh
 	s.pow = pow
 
-	err = s.w.AddSymKey(mailServerKeyName, []byte(password))
+	err = s.w.AddSymKey(MailServerKeyName, []byte(password))
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
 	}
-	s.key = s.w.GetSymKey(mailServerKeyName)
+	s.key = s.w.GetSymKey(MailServerKeyName)
 }
 
 func (s *WMailServer) Close() {
@@ -147,7 +149,7 @@ func (s *WMailServer) validate(peer *whisper.Peer, request *whisper.Envelope) (b
 		return false, 0, 0, topic
 	}
 
-	if len(decrypted.Payload) < sizeOfInt*2 {
+	if len(decrypted.Payload) < 8 {
 		glog.V(logger.Warn).Infof("Undersized p2p request")
 		return false, 0, 0, topic
 	}
@@ -157,11 +159,11 @@ func (s *WMailServer) validate(peer *whisper.Peer, request *whisper.Envelope) (b
 		return false, 0, 0, topic
 	}
 
-	lower := binary.BigEndian.Uint32(decrypted.Payload[:sizeOfInt])
-	upper := binary.BigEndian.Uint32(decrypted.Payload[sizeOfInt : sizeOfInt*2])
+	lower := binary.BigEndian.Uint32(decrypted.Payload[:4])
+	upper := binary.BigEndian.Uint32(decrypted.Payload[4:8])
 
-	if len(decrypted.Payload) == sizeOfInt*2+whisper.TopicLength {
-		topic = whisper.BytesToTopic(decrypted.Payload[sizeOfInt*2 : sizeOfInt*2+whisper.TopicLength])
+	if len(decrypted.Payload) >= 8+whisper.TopicLength {
+		topic = whisper.BytesToTopic(decrypted.Payload[8:])
 	}
 
 	return true, lower, upper, topic

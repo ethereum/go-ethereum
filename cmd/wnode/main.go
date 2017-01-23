@@ -43,16 +43,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/whisper/mailserver"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"golang.org/x/crypto/pbkdf2"
 )
 
-const sizeOfInt = 4
-
-var (
-	quitCommand       = "~Q"
-	enodePrefix       = "enode://"
-	mailServerKeyName = "958e04ab302fb36ad2616a352cbac79dfa08f43d325d0833e07061a9ef8c383d"
+const (
+	quitCommand = "~Q"
+	enodePrefix = "enode://"
 )
 
 // singletons
@@ -61,7 +59,7 @@ var (
 	shh        *whisper.Whisper
 	done       chan struct{}
 	input      *bufio.Reader = bufio.NewReader(os.Stdin)
-	mailServer WMailServer
+	mailServer mailserver.WMailServer
 )
 
 // encryption
@@ -477,11 +475,11 @@ func requestExpiredMessagesLoop() {
 	var t string
 	var xt, empty whisper.TopicType
 
-	err := shh.AddSymKey(mailServerKeyName, []byte(msPassword))
+	err := shh.AddSymKey(mailserver.MailServerKeyName, []byte(msPassword))
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
-	key = shh.GetSymKey(mailServerKeyName)
+	key = shh.GetSymKey(mailserver.MailServerKeyName)
 	peerID = extractIdFromEnode(*argEnode)
 	shh.MarkPeerTrusted(peerID)
 
@@ -500,12 +498,12 @@ func requestExpiredMessagesLoop() {
 			timeUpp = 0xFFFFFFFF
 		}
 
-		data := make([]byte, sizeOfInt*2+whisper.TopicLength)
+		data := make([]byte, 8+whisper.TopicLength)
 		binary.BigEndian.PutUint32(data, timeLow)
-		binary.BigEndian.PutUint32(data[sizeOfInt:], timeUpp)
-		copy(data[sizeOfInt*2:], xt[:])
+		binary.BigEndian.PutUint32(data[4:], timeUpp)
+		copy(data[8:], xt[:])
 		if xt == empty {
-			data = data[:sizeOfInt*2]
+			data = data[:8]
 		}
 
 		var params whisper.MessageParams
