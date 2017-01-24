@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package accounts
+package keystore
 
 import (
 	"crypto/rand"
@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-func tmpKeyStore(t *testing.T, encrypted bool) (dir string, ks keyStore) {
+func tmpKeyStoreIface(t *testing.T, encrypted bool) (dir string, ks keyStore) {
 	d, err := ioutil.TempDir("", "geth-keystore-test")
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func tmpKeyStore(t *testing.T, encrypted bool) (dir string, ks keyStore) {
 }
 
 func TestKeyStorePlain(t *testing.T) {
-	dir, ks := tmpKeyStore(t, false)
+	dir, ks := tmpKeyStoreIface(t, false)
 	defer os.RemoveAll(dir)
 
 	pass := "" // not used but required by API
@@ -52,7 +52,7 @@ func TestKeyStorePlain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k2, err := ks.GetKey(k1.Address, account.File, pass)
+	k2, err := ks.GetKey(k1.Address, account.URL, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestKeyStorePlain(t *testing.T) {
 }
 
 func TestKeyStorePassphrase(t *testing.T) {
-	dir, ks := tmpKeyStore(t, true)
+	dir, ks := tmpKeyStoreIface(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
@@ -73,7 +73,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k2, err := ks.GetKey(k1.Address, account.File, pass)
+	k2, err := ks.GetKey(k1.Address, account.URL, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 }
 
 func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
-	dir, ks := tmpKeyStore(t, true)
+	dir, ks := tmpKeyStoreIface(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
@@ -94,13 +94,13 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = ks.GetKey(k1.Address, account.File, "bar"); err != ErrDecrypt {
+	if _, err = ks.GetKey(k1.Address, account.URL, "bar"); err != ErrDecrypt {
 		t.Fatalf("wrong error for invalid passphrase\ngot %q\nwant %q", err, ErrDecrypt)
 	}
 }
 
 func TestImportPreSaleKey(t *testing.T) {
-	dir, ks := tmpKeyStore(t, true)
+	dir, ks := tmpKeyStoreIface(t, true)
 	defer os.RemoveAll(dir)
 
 	// file content of a presale key file generated with:
@@ -115,8 +115,8 @@ func TestImportPreSaleKey(t *testing.T) {
 	if account.Address != common.HexToAddress("d4584b5f6229b7be90727b0fc8c6b91bb427821f") {
 		t.Errorf("imported account has wrong address %x", account.Address)
 	}
-	if !strings.HasPrefix(account.File, dir) {
-		t.Errorf("imported account file not in keystore directory: %q", account.File)
+	if !strings.HasPrefix(account.URL, dir) {
+		t.Errorf("imported account file not in keystore directory: %q", account.URL)
 	}
 }
 
@@ -142,19 +142,19 @@ func TestV3_PBKDF2_1(t *testing.T) {
 
 func TestV3_PBKDF2_2(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["test1"], t)
 }
 
 func TestV3_PBKDF2_3(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["python_generated_test_with_odd_iv"], t)
 }
 
 func TestV3_PBKDF2_4(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["evilnonce"], t)
 }
 
@@ -166,7 +166,7 @@ func TestV3_Scrypt_1(t *testing.T) {
 
 func TestV3_Scrypt_2(t *testing.T) {
 	t.Parallel()
-	tests := loadKeyStoreTestV3("../tests/files/KeyStoreTests/basic_tests.json", t)
+	tests := loadKeyStoreTestV3("../../tests/files/KeyStoreTests/basic_tests.json", t)
 	testDecryptV3(tests["test2"], t)
 }
 

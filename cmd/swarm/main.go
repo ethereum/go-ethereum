@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
@@ -327,29 +328,36 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 		return key
 	}
 	// Otherwise try getting it from the keystore.
-	return decryptStoreAccount(stack.AccountManager(), keyid)
+	am := stack.AccountManager()
+	ks := am.Backend(keystore.BackendType).(*keystore.KeyStore)
+
+	return decryptStoreAccount(ks, keyid)
 }
 
-func decryptStoreAccount(accman *accounts.Manager, account string) *ecdsa.PrivateKey {
+func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKey {
 	var a accounts.Account
 	var err error
 	if common.IsHexAddress(account) {
-		a, err = accman.Find(accounts.Account{Address: common.HexToAddress(account)})
-	} else if ix, ixerr := strconv.Atoi(account); ixerr == nil {
-		a, err = accman.AccountByIndex(ix)
+		a, err = ks.Find(accounts.Account{Address: common.HexToAddress(account)})
+	} else if ix, ixerr := strconv.Atoi(account); ixerr == nil && ix > 0 {
+		if accounts := ks.Accounts(); len(accounts) > ix {
+			a = accounts[ix]
+		} else {
+			err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
+		}
 	} else {
 		utils.Fatalf("Can't find swarm account key %s", account)
 	}
 	if err != nil {
 		utils.Fatalf("Can't find swarm account key: %v", err)
 	}
-	keyjson, err := ioutil.ReadFile(a.File)
+	keyjson, err := ioutil.ReadFile(a.URL)
 	if err != nil {
 		utils.Fatalf("Can't load swarm account key: %v", err)
 	}
 	for i := 1; i <= 3; i++ {
 		passphrase := promptPassphrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i))
-		key, err := accounts.DecryptKey(keyjson, passphrase)
+		key, err := keystore.DecryptKey(keyjson, passphrase)
 		if err == nil {
 			return key.PrivateKey
 		}

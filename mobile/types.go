@@ -132,6 +132,11 @@ type Transaction struct {
 	tx *types.Transaction
 }
 
+// NewTransaction creates a new transaction with the given properties.
+func NewTransaction(nonce int64, to *Address, amount, gasLimit, gasPrice *BigInt, data []byte) *Transaction {
+	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, gasLimit.bigint, gasPrice.bigint, data)}
+}
+
 func (tx *Transaction) GetData() []byte      { return tx.tx.Data() }
 func (tx *Transaction) GetGas() int64        { return tx.tx.Gas().Int64() }
 func (tx *Transaction) GetGasPrice() *BigInt { return &BigInt{tx.tx.GasPrice()} }
