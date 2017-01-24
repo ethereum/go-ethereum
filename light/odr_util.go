@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -37,10 +38,12 @@ var sha3_nil = crypto.Keccak256Hash(nil)
 var (
 	ErrNoTrustedCht = errors.New("No trusted canonical hash trie")
 	ErrNoHeader     = errors.New("Header not found")
+	trustedChtKey   = []byte("TrustedCHT")
+)
 
-	ChtFrequency     = uint64(4096)
-	ChtConfirmations = uint64(2048)
-	trustedChtKey    = []byte("TrustedCHT")
+const (
+	ChtFrequency     = 4096
+	ChtConfirmations = 2048
 )
 
 type ChtNode struct {
@@ -65,6 +68,10 @@ func GetTrustedCht(db ethdb.Database) TrustedCht {
 func WriteTrustedCht(db ethdb.Database, cht TrustedCht) {
 	data, _ := rlp.EncodeToBytes(cht)
 	db.Put(trustedChtKey, data)
+	b := cht.Number * ChtFrequency / bloombits.SectionSize
+	if core.GetBloomBitsAvailable(db) < b {
+		core.StoreBloomBitsAvailable(db, b)
+	}
 }
 
 func DeleteTrustedCht(db ethdb.Database) {
@@ -183,5 +190,40 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 		return nil, err
 	} else {
 		return r.Receipts, nil
+	}
+}
+
+func GetBloomBits(ctx context.Context, odr OdrBackend, bitIdx uint64, sectionIdxList []uint64) ([]bloombits.CompVector, error) {
+	result := make([]bloombits.CompVector, len(sectionIdxList))
+	var (
+		reqList []uint64
+		reqIdx  []int
+	)
+	cht := GetTrustedCht(odr.Database())
+
+	for i, sectionIdx := range sectionIdxList {
+		bloomBits, err := core.GetBloomBits(odr.Database(), bitIdx, sectionIdx)
+		if err == nil {
+			result[i] = bloomBits
+		} else {
+			if sectionIdx >= cht.Number {
+				return nil, ErrNoTrustedCht
+			}
+			reqList = append(reqList, sectionIdx)
+			reqIdx = append(reqIdx, i)
+		}
+	}
+	if reqList == nil {
+		return result, nil
+	}
+
+	r := &BloomRequest{ChtRoot: cht.Root, ChtNum: cht.Number, BitIdx: bitIdx, SectionIdxList: reqList}
+	if err := odr.Retrieve(ctx, r); err != nil {
+		return nil, err
+	} else {
+		for i, idx := range reqIdx {
+			result[idx] = r.BloomBits[i]
+		}
+		return result, nil
 	}
 }

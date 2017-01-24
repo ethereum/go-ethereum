@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -311,7 +312,7 @@ func (pm *ProtocolManager) blockLoop() {
 					more := makeCht(pm.chainDb)
 					mu.Unlock()
 					if more {
-						time.Sleep(time.Millisecond * 10)
+						time.Sleep(time.Millisecond * 100)
 						newCht <- struct{}{}
 					}
 				}()
@@ -325,8 +326,8 @@ func (pm *ProtocolManager) blockLoop() {
 }
 
 var (
-	lastChtKey = []byte("LastChtNumber") // chtNum (uint64 big endian)
-	chtPrefix  = []byte("cht")           // chtPrefix + chtNum (uint64 big endian) -> trie root hash
+	lastChtKey = []byte("LastChtNumber6") // chtNum (uint64 big endian)
+	chtPrefix  = []byte("cht")            // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 )
 
 func getChtRoot(db ethdb.Database, num uint64) common.Hash {
@@ -341,6 +342,8 @@ func storeChtRoot(db ethdb.Database, num uint64, root common.Hash) {
 	binary.BigEndian.PutUint64(encNumber[:], num)
 	db.Put(append(chtPrefix, encNumber[:]...), root[:])
 }
+
+var bloomBitsTriePrefix = []byte("bloom")
 
 func makeCht(db ethdb.Database) bool {
 	headHash := core.GetHeadBlockHash(db)
@@ -372,31 +375,63 @@ func makeCht(db ethdb.Database) bool {
 		t, _ = trie.New(common.Hash{}, db)
 	}
 
-	for num := lastChtNum * light.ChtFrequency; num < (lastChtNum+1)*light.ChtFrequency; num++ {
-		hash := core.GetCanonicalHash(db, num)
-		if hash == (common.Hash{}) {
-			panic("Canonical hash not found")
+	var compSize, decompSize uint64
+loop:
+	for newChtNum > lastChtNum {
+		bloomBitsCreator := &bloombits.BloomBitsCreator{}
+
+		for num := lastChtNum * light.ChtFrequency; num < (lastChtNum+1)*light.ChtFrequency; num++ {
+
+			hash := core.GetCanonicalHash(db, num)
+			if hash == (common.Hash{}) {
+				return false
+			}
+			td := core.GetTd(db, hash, num)
+			if td == nil {
+				return false
+			}
+			var encNumber [8]byte
+			binary.BigEndian.PutUint64(encNumber[:], num)
+			var node light.ChtNode
+			node.Hash = hash
+			node.Td = td
+			data, _ := rlp.EncodeToBytes(node)
+			t.Update(encNumber[:], data)
+
+			header := core.GetHeader(db, hash, num)
+			if header == nil {
+				return false
+			}
+
+			bloomBitsCreator.AddHeaderBloom(header.Bloom)
 		}
-		td := core.GetTd(db, hash, num)
-		if td == nil {
-			panic("TD not found")
+
+		for i := uint(0); i < bloombits.BloomLength; i++ {
+			var encKey [10]byte
+			binary.BigEndian.PutUint16(encKey[0:2], uint16(i))
+			binary.BigEndian.PutUint64(encKey[2:10], lastChtNum)
+			key := append(bloomBitsTriePrefix, encKey[:]...)
+			data := bloombits.CompressBloomBits(bloomBitsCreator.GetBitVector(i))
+			decompSize += bloombits.SectionSize / 8
+			compSize += uint64(len(data))
+			if len(data) > 0 {
+				t.Update(key, data)
+			} else {
+				t.Delete(key)
+			}
 		}
-		var encNumber [8]byte
-		binary.BigEndian.PutUint64(encNumber[:], num)
-		var node light.ChtNode
-		node.Hash = hash
-		node.Td = td
-		data, _ := rlp.EncodeToBytes(node)
-		t.Update(encNumber[:], data)
+		lastChtNum++
+
+		if lastChtNum%16 == 0 {
+			break loop
+		}
 	}
 
 	root, err := t.Commit()
 	if err != nil {
 		lastChtNum = 0
 	} else {
-		lastChtNum++
-
-		glog.V(logger.Detail).Infof("cht: %d %064x", lastChtNum, root)
+		glog.V(logger.Info).Infof("Storing CHT #%d  root hash: %064x  compression ratio: %f", lastChtNum, root, float64(compSize)/float64(decompSize))
 
 		storeChtRoot(db, lastChtNum, root)
 		var data [8]byte

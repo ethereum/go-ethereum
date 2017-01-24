@@ -1283,7 +1283,7 @@ func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		self.mu.Lock()
 		defer self.mu.Unlock()
 
-		_, err := self.hc.WriteHeader(header)
+		_, err := self.hc.WriteHeader(header, nil)
 		return err
 	}
 
@@ -1306,7 +1306,7 @@ func (self *BlockChain) writeHeader(header *types.Header) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	_, err := self.hc.WriteHeader(header)
+	_, err := self.hc.WriteHeader(header, nil)
 	return err
 }
 

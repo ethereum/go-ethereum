@@ -333,7 +333,7 @@ func (pool *serverPool) selectPeer(reqID uint64, canSend func(*peer) (bool, time
 func (pool *serverPool) selectPeerWait(reqID uint64, canSend func(*peer) (bool, time.Duration), abort <-chan struct{}) *peer {
 	for {
 		peer, wait, locked := pool.selectPeer(reqID, canSend)
-		if locked {
+		if locked || peer == nil {
 			return peer
 		}
 		select {

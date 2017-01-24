@@ -36,7 +36,7 @@ const (
 var ProtocolVersions = []uint{lpv1}
 
 // Number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{15}
+var ProtocolLengths = []uint64{17}
 
 const (
 	NetworkId          = 1
@@ -61,6 +61,8 @@ const (
 	SendTxMsg          = 0x0c
 	GetHeaderProofsMsg = 0x0d
 	HeaderProofsMsg    = 0x0e
+	GetBloomBitsMsg    = 0x0f
+	BloomBitsMsg       = 0x10
 )
 
 type errCode int

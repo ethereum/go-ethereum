@@ -18,6 +18,7 @@
 package les
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -28,12 +29,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -57,6 +60,7 @@ const (
 	MaxCodeFetch         = 64  // Amount of contract codes to allow fetching per request
 	MaxProofsFetch       = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxHeaderProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxBloomBitsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend            = 64  // Amount of transactions to be send per request
 
 	disableClientRemovePeer = false
@@ -121,6 +125,11 @@ type ProtocolManager struct {
 	syncing  bool
 	syncDone chan struct{}
 
+	bloomBitsUpdateChn chan uint64
+	bloomBitsMu        sync.Mutex
+	bloomBitsCalcValid bool
+	bloomBitsCalcIdx   uint64
+
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
 	wg sync.WaitGroup
@@ -131,19 +140,20 @@ type ProtocolManager struct {
 func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId int, mux *event.TypeMux, pow pow.PoW, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		lightSync:   lightSync,
-		eventMux:    mux,
-		blockchain:  blockchain,
-		chainConfig: chainConfig,
-		chainDb:     chainDb,
-		networkId:   networkId,
-		txpool:      txpool,
-		txrelay:     txrelay,
-		odr:         odr,
-		peers:       newPeerSet(),
-		newPeerCh:   make(chan *peer),
-		quitSync:    make(chan struct{}),
-		noMorePeers: make(chan struct{}),
+		lightSync:          lightSync,
+		eventMux:           mux,
+		blockchain:         blockchain,
+		chainConfig:        chainConfig,
+		chainDb:            chainDb,
+		networkId:          networkId,
+		txpool:             txpool,
+		txrelay:            txrelay,
+		odr:                odr,
+		peers:              newPeerSet(),
+		newPeerCh:          make(chan *peer),
+		quitSync:           make(chan struct{}),
+		noMorePeers:        make(chan struct{}),
+		bloomBitsUpdateChn: make(chan uint64, 100),
 	}
 	// Initiate a sub-protocol for every implemented version we can handle
 	manager.SubProtocols = make([]p2p.Protocol, 0, len(ProtocolVersions))
@@ -203,6 +213,9 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
 			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, removePeer)
+
+		blockchain.(*light.LightChain).AddNewHeadCallback(manager.newHeadCallback)
+		go manager.bloomBitsUpdateLoop()
 	}
 
 	if odr != nil {
@@ -220,7 +233,83 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 	return manager, nil
 }
 
+func (pm *ProtocolManager) bloomBitsUpdateLoop() {
+	tryUpdate := make(chan struct{}, 1)
+	updating := false
+	var targetSectionCnt uint64
+
+	for {
+		select {
+		case <-pm.quitSync:
+			return
+		case targetSectionCnt = <-pm.bloomBitsUpdateChn:
+			if !updating {
+				updating = true
+				tryUpdate <- struct{}{}
+			}
+		case <-tryUpdate:
+			pm.bloomBitsMu.Lock()
+			sectionIdx := core.GetBloomBitsAvailable(pm.chainDb)
+			if targetSectionCnt > sectionIdx {
+				pm.bloomBitsCalcValid = true
+				pm.bloomBitsCalcIdx = sectionIdx
+
+				pm.bloomBitsMu.Unlock()
+				err := core.MakeBloomBitsSection(pm.chainDb, sectionIdx)
+				pm.bloomBitsMu.Lock()
+
+				if err == nil && pm.bloomBitsCalcValid {
+					glog.V(logger.Info).Infof("Stored bloomBits section #%d", sectionIdx)
+					sectionIdx++
+					core.StoreBloomBitsAvailable(pm.chainDb, sectionIdx)
+				} else {
+					// unsuccessful bloomBits calculation may happen because of a reorg
+					glog.V(logger.Info).Infof("Error calculating bloomBits section #%d: %v   valid: %v", sectionIdx, err, pm.bloomBitsCalcValid)
+				}
+				pm.bloomBitsCalcValid = false
+			}
+			pm.bloomBitsMu.Unlock()
+
+			if targetSectionCnt > sectionIdx {
+				go func() {
+					time.Sleep(time.Millisecond * 100)
+					tryUpdate <- struct{}{}
+				}()
+			} else {
+				updating = false
+			}
+		}
+	}
+}
+
+const bloomBitsConfirmations = 200
+
+func (pm *ProtocolManager) newHeadCallback(head *types.Header, rollback bool) {
+	pm.bloomBitsMu.Lock()
+	defer pm.bloomBitsMu.Unlock()
+
+	headNum := head.Number.Uint64()
+	rbSectionCnt := headNum / bloombits.SectionSize
+	var newSectionCnt uint64
+	if headNum >= bloomBitsConfirmations-1 {
+		newSectionCnt = (headNum + 1 - bloomBitsConfirmations) / bloombits.SectionSize
+	}
+	lastSectionCnt := core.GetBloomBitsAvailable(pm.chainDb)
+
+	if rbSectionCnt <= pm.bloomBitsCalcIdx {
+		pm.bloomBitsCalcValid = false
+	}
+	if rbSectionCnt < lastSectionCnt {
+		core.StoreBloomBitsAvailable(pm.chainDb, rbSectionCnt)
+		pm.bloomBitsUpdateChn <- rbSectionCnt
+	}
+	if newSectionCnt > lastSectionCnt {
+		pm.bloomBitsUpdateChn <- newSectionCnt
+	}
+}
+
 func (pm *ProtocolManager) removePeer(id string) {
+	fmt.Println("removePeer")
 	// Short circuit if the peer was already removed
 	peer := pm.peers.Peer(id)
 	if peer == nil {
@@ -396,7 +485,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsMsg, SendTxMsg, GetHeaderProofsMsg}
+var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsMsg, SendTxMsg, GetHeaderProofsMsg, GetBloomBitsMsg}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
@@ -859,6 +948,89 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 		deliverMsg = &Msg{
 			MsgType: MsgHeaderProofs,
+			ReqID:   resp.ReqID,
+			Obj:     resp.Data,
+		}
+
+	case GetBloomBitsMsg:
+		glog.V(logger.Debug).Infof("<=== GetBloomBitsMsg from peer %v", p.id)
+		// Decode the retrieval message
+		var req struct {
+			ReqID uint64
+			Reqs  []BloomReq
+		}
+		if err := msg.Decode(&req); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			byteCnt int
+			proofs  []BloomResp
+		)
+		reqCnt := len(req.Reqs)
+		if reject(uint64(reqCnt), MaxBloomBitsFetch) {
+			return errResp(ErrRequestRejected, "")
+		}
+		var (
+			lastRoot  common.Hash
+			tr        *trie.Trie
+			lastProof []rlp.RawValue
+		)
+		for _, req := range req.Reqs {
+			if byteCnt >= softResponseLimit {
+				break
+			}
+
+			if root := getChtRoot(pm.chainDb, req.ChtNum); root != (common.Hash{}) {
+				if root != lastRoot {
+					tr, _ = trie.New(root, pm.chainDb)
+					lastRoot = root
+				}
+				if tr != nil {
+					var encNumber [10]byte
+					binary.BigEndian.PutUint16(encNumber[0:2], uint16(req.BitIdx))
+					binary.BigEndian.PutUint64(encNumber[2:10], req.SectionIdx)
+					proof := tr.Prove(append(bloomBitsTriePrefix, encNumber[:]...))
+					if lastProof != nil {
+						fullProof := make([]rlp.RawValue, len(proof))
+						copy(fullProof, proof)
+					loop:
+						for i, data := range proof {
+							if i < len(lastProof) && bytes.Equal(lastProof[i], data) {
+								proof[i] = []byte{0}
+							} else {
+								break loop
+							}
+						}
+						lastProof = fullProof
+					} else {
+						lastProof = proof
+					}
+					proofs = append(proofs, BloomResp{Proof: proof})
+					byteCnt += len(proof)
+				}
+			}
+		}
+		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
+		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
+		return p.SendBloomBits(req.ReqID, bv, proofs)
+
+	case BloomBitsMsg:
+		if pm.odr == nil {
+			return errResp(ErrUnexpectedResponse, "")
+		}
+
+		glog.V(logger.Debug).Infof("<=== BloomBitsMsg from peer %v", p.id)
+		var resp struct {
+			ReqID, BV uint64
+			Data      []BloomResp
+		}
+		if err := msg.Decode(&resp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		p.fcServer.GotReply(resp.ReqID, resp.BV)
+		deliverMsg = &Msg{
+			MsgType: MsgBloomBits,
 			ReqID:   resp.ReqID,
 			Obj:     resp.Data,
 		}

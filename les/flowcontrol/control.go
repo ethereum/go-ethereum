@@ -130,6 +130,7 @@ func (peer *ServerNode) recalcBLE(time mclock.AbsTime) {
 const safetyMargin = time.Millisecond * 200
 
 func (peer *ServerNode) canSend(maxCost uint64) time.Duration {
+	peer.recalcBLE(mclock.Now())
 	maxCost += uint64(safetyMargin) * peer.params.MinRecharge / uint64(fcTimeConst)
 	if maxCost > peer.params.BufLimit {
 		maxCost = peer.params.BufLimit
@@ -204,13 +205,11 @@ func (peer *ServerNode) SendRequest(reqID, maxCost uint64) {
 		peer.lock.Lock()
 	}
 
-	peer.recalcBLE(mclock.Now())
 	wait := peer.canSend(maxCost)
 	for wait > 0 {
 		peer.lock.Unlock()
 		time.Sleep(wait)
 		peer.lock.Lock()
-		peer.recalcBLE(mclock.Now())
 		wait = peer.canSend(maxCost)
 	}
 	peer.assignedRequest = 0
