@@ -24,13 +24,14 @@ package guide
 
 import (
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Tests that the account management snippets work correctly.
@@ -42,59 +43,59 @@ func TestAccountManagement(t *testing.T) {
 	}
 	defer os.RemoveAll(workdir)
 
-	// Create an encrypted keystore manager with standard crypto parameters
-	am := accounts.NewManager(filepath.Join(workdir, "keystore"), accounts.StandardScryptN, accounts.StandardScryptP)
+	// Create an encrypted keystore with standard crypto parameters
+	ks := keystore.NewKeyStore(filepath.Join(workdir, "keystore"), keystore.StandardScryptN, keystore.StandardScryptP)
 
 	// Create a new account with the specified encryption passphrase
-	newAcc, err := am.NewAccount("Creation password")
+	newAcc, err := ks.NewAccount("Creation password")
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 	// Export the newly created account with a different passphrase. The returned
 	// data from this method invocation is a JSON encoded, encrypted key-file
-	jsonAcc, err := am.Export(newAcc, "Creation password", "Export password")
+	jsonAcc, err := ks.Export(newAcc, "Creation password", "Export password")
 	if err != nil {
 		t.Fatalf("Failed to export account: %v", err)
 	}
 	// Update the passphrase on the account created above inside the local keystore
-	if err := am.Update(newAcc, "Creation password", "Update password"); err != nil {
+	if err := ks.Update(newAcc, "Creation password", "Update password"); err != nil {
 		t.Fatalf("Failed to update account: %v", err)
 	}
 	// Delete the account updated above from the local keystore
-	if err := am.Delete(newAcc, "Update password"); err != nil {
+	if err := ks.Delete(newAcc, "Update password"); err != nil {
 		t.Fatalf("Failed to delete account: %v", err)
 	}
 	// Import back the account we've exported (and then deleted) above with yet
 	// again a fresh passphrase
-	if _, err := am.Import(jsonAcc, "Export password", "Import password"); err != nil {
+	if _, err := ks.Import(jsonAcc, "Export password", "Import password"); err != nil {
 		t.Fatalf("Failed to import account: %v", err)
 	}
 	// Create a new account to sign transactions with
-	signer, err := am.NewAccount("Signer password")
+	signer, err := ks.NewAccount("Signer password")
 	if err != nil {
 		t.Fatalf("Failed to create signer account: %v", err)
 	}
-	txHash := common.HexToHash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+	tx, chain := new(types.Transaction), big.NewInt(1)
 
 	// Sign a transaction with a single authorization
-	if _, err := am.SignWithPassphrase(signer, "Signer password", txHash.Bytes()); err != nil {
+	if _, err := ks.SignTxWithPassphrase(signer, "Signer password", tx, chain); err != nil {
 		t.Fatalf("Failed to sign with passphrase: %v", err)
 	}
 	// Sign a transaction with multiple manually cancelled authorizations
-	if err := am.Unlock(signer, "Signer password"); err != nil {
+	if err := ks.Unlock(signer, "Signer password"); err != nil {
 		t.Fatalf("Failed to unlock account: %v", err)
 	}
-	if _, err := am.Sign(signer.Address, txHash.Bytes()); err != nil {
+	if _, err := ks.SignTx(signer, tx, chain); err != nil {
 		t.Fatalf("Failed to sign with unlocked account: %v", err)
 	}
-	if err := am.Lock(signer.Address); err != nil {
+	if err := ks.Lock(signer.Address); err != nil {
 		t.Fatalf("Failed to lock account: %v", err)
 	}
 	// Sign a transaction with multiple automatically cancelled authorizations
-	if err := am.TimedUnlock(signer, "Signer password", time.Second); err != nil {
+	if err := ks.TimedUnlock(signer, "Signer password", time.Second); err != nil {
 		t.Fatalf("Failed to time unlock account: %v", err)
 	}
-	if _, err := am.Sign(signer.Address, txHash.Bytes()); err != nil {
+	if _, err := ks.SignTx(signer, tx, chain); err != nil {
 		t.Fatalf("Failed to sign with time unlocked account: %v", err)
 	}
 }

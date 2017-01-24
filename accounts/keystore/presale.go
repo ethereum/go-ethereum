@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package accounts
+package keystore
 
 import (
 	"crypto/aes"
@@ -25,20 +25,21 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )
 
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
-func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (Account, *Key, error) {
+func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (accounts.Account, *Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)
 	if err != nil {
-		return Account{}, nil, err
+		return accounts.Account{}, nil, err
 	}
 	key.Id = uuid.NewRandom()
-	a := Account{Address: key.Address, File: keyStore.JoinPath(keyFileName(key.Address))}
-	err = keyStore.StoreKey(a.File, key, password)
+	a := accounts.Account{Address: key.Address, URL: keyStore.JoinPath(keyFileName(key.Address))}
+	err = keyStore.StoreKey(a.URL, key, password)
 	return a, key, err
 }
 

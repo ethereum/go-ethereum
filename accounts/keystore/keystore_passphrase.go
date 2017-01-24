@@ -23,7 +23,7 @@ The crypto is documented at https://github.com/ethereum/wiki/wiki/Web3-Secret-St
 
 */
 
-package accounts
+package keystore
 
 import (
 	"bytes"

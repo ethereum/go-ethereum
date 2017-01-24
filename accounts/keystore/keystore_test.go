@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package accounts
+package keystore
 
 import (
 	"io/ioutil"
@@ -24,183 +24,184 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 var testSigData = make([]byte, 32)
 
-func TestManager(t *testing.T) {
-	dir, am := tmpManager(t, true)
+func TestKeyStore(t *testing.T) {
+	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
 
-	a, err := am.NewAccount("foo")
+	a, err := ks.NewAccount("foo")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(a.File, dir) {
-		t.Errorf("account file %s doesn't have dir prefix", a.File)
+	if !strings.HasPrefix(a.URL, dir) {
+		t.Errorf("account file %s doesn't have dir prefix", a.URL)
 	}
-	stat, err := os.Stat(a.File)
+	stat, err := os.Stat(a.URL)
 	if err != nil {
-		t.Fatalf("account file %s doesn't exist (%v)", a.File, err)
+		t.Fatalf("account file %s doesn't exist (%v)", a.URL, err)
 	}
 	if runtime.GOOS != "windows" && stat.Mode() != 0600 {
 		t.Fatalf("account file has wrong mode: got %o, want %o", stat.Mode(), 0600)
 	}
-	if !am.HasAddress(a.Address) {
+	if !ks.HasAddress(a.Address) {
 		t.Errorf("HasAccount(%x) should've returned true", a.Address)
 	}
-	if err := am.Update(a, "foo", "bar"); err != nil {
+	if err := ks.Update(a, "foo", "bar"); err != nil {
 		t.Errorf("Update error: %v", err)
 	}
-	if err := am.Delete(a, "bar"); err != nil {
+	if err := ks.Delete(a, "bar"); err != nil {
 		t.Errorf("Delete error: %v", err)
 	}
-	if common.FileExist(a.File) {
-		t.Errorf("account file %s should be gone after Delete", a.File)
+	if common.FileExist(a.URL) {
+		t.Errorf("account file %s should be gone after Delete", a.URL)
 	}
-	if am.HasAddress(a.Address) {
+	if ks.HasAddress(a.Address) {
 		t.Errorf("HasAccount(%x) should've returned true after Delete", a.Address)
 	}
 }
 
 func TestSign(t *testing.T) {
-	dir, am := tmpManager(t, true)
+	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "" // not used but required by API
-	a1, err := am.NewAccount(pass)
+	a1, err := ks.NewAccount(pass)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := am.Unlock(a1, ""); err != nil {
+	if err := ks.Unlock(a1, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := am.Sign(a1.Address, testSigData); err != nil {
+	if _, err := ks.SignHash(accounts.Account{Address: a1.Address}, testSigData); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestSignWithPassphrase(t *testing.T) {
-	dir, am := tmpManager(t, true)
+	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "passwd"
-	acc, err := am.NewAccount(pass)
+	acc, err := ks.NewAccount(pass)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, unlocked := am.unlocked[acc.Address]; unlocked {
+	if _, unlocked := ks.unlocked[acc.Address]; unlocked {
 		t.Fatal("expected account to be locked")
 	}
 
-	_, err = am.SignWithPassphrase(acc, pass, testSigData)
+	_, err = ks.SignHashWithPassphrase(acc, pass, testSigData)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, unlocked := am.unlocked[acc.Address]; unlocked {
+	if _, unlocked := ks.unlocked[acc.Address]; unlocked {
 		t.Fatal("expected account to be locked")
 	}
 
-	if _, err = am.SignWithPassphrase(acc, "invalid passwd", testSigData); err == nil {
-		t.Fatal("expected SignHash to fail with invalid password")
+	if _, err = ks.SignHashWithPassphrase(acc, "invalid passwd", testSigData); err == nil {
+		t.Fatal("expected SignHashWithPassphrase to fail with invalid password")
 	}
 }
 
 func TestTimedUnlock(t *testing.T) {
-	dir, am := tmpManager(t, true)
+	dir, ks := tmpKeyStore(t, true)
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	a1, err := am.NewAccount(pass)
+	a1, err := ks.NewAccount(pass)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Signing without passphrase fails because account is locked
-	_, err = am.Sign(a1.Address, testSigData)
-	if err != ErrLocked {
-		t.Fatal("Signing should've failed with ErrLocked before unlocking, got ", err)
+	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
+	if err != ErrNeedPasswordOrUnlock {
+		t.Fatal("Signing should've failed with ErrNeedPasswordOrUnlock before unlocking, got ", err)
 	}
 
 	// Signing with passphrase works
-	if err = am.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
+	if err = ks.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
 	// Signing without passphrase works because account is temp unlocked
-	_, err = am.Sign(a1.Address, testSigData)
+	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
 	if err != nil {
 		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
 
 	// Signing fails again after automatic locking
 	time.Sleep(250 * time.Millisecond)
-	_, err = am.Sign(a1.Address, testSigData)
-	if err != ErrLocked {
-		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
+	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
+	if err != ErrNeedPasswordOrUnlock {
+		t.Fatal("Signing should've failed with ErrNeedPasswordOrUnlock timeout expired, got ", err)
 	}
 }
 
 func TestOverrideUnlock(t *testing.T) {
-	dir, am := tmpManager(t, false)
+	dir, ks := tmpKeyStore(t, false)
 	defer os.RemoveAll(dir)
 
 	pass := "foo"
-	a1, err := am.NewAccount(pass)
+	a1, err := ks.NewAccount(pass)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Unlock indefinitely.
-	if err = am.TimedUnlock(a1, pass, 5*time.Minute); err != nil {
+	if err = ks.TimedUnlock(a1, pass, 5*time.Minute); err != nil {
 		t.Fatal(err)
 	}
 
 	// Signing without passphrase works because account is temp unlocked
-	_, err = am.Sign(a1.Address, testSigData)
+	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
 	if err != nil {
 		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
 
 	// reset unlock to a shorter period, invalidates the previous unlock
-	if err = am.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
+	if err = ks.TimedUnlock(a1, pass, 100*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
 	// Signing without passphrase still works because account is temp unlocked
-	_, err = am.Sign(a1.Address, testSigData)
+	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
 	if err != nil {
 		t.Fatal("Signing shouldn't return an error after unlocking, got ", err)
 	}
 
 	// Signing fails again after automatic locking
 	time.Sleep(250 * time.Millisecond)
-	_, err = am.Sign(a1.Address, testSigData)
-	if err != ErrLocked {
-		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
+	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
+	if err != ErrNeedPasswordOrUnlock {
+		t.Fatal("Signing should've failed with ErrNeedPasswordOrUnlock timeout expired, got ", err)
 	}
 }
 
 // This test should fail under -race if signing races the expiration goroutine.
 func TestSignRace(t *testing.T) {
-	dir, am := tmpManager(t, false)
+	dir, ks := tmpKeyStore(t, false)
 	defer os.RemoveAll(dir)
 
 	// Create a test account.
-	a1, err := am.NewAccount("")
+	a1, err := ks.NewAccount("")
 	if err != nil {
 		t.Fatal("could not create the test account", err)
 	}
 
-	if err := am.TimedUnlock(a1, "", 15*time.Millisecond); err != nil {
+	if err := ks.TimedUnlock(a1, "", 15*time.Millisecond); err != nil {
 		t.Fatal("could not unlock the test account", err)
 	}
 	end := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(end) {
-		if _, err := am.Sign(a1.Address, testSigData); err == ErrLocked {
+		if _, err := ks.SignHash(accounts.Account{Address: a1.Address}, testSigData); err == ErrNeedPasswordOrUnlock {
 			return
 		} else if err != nil {
 			t.Errorf("Sign error: %v", err)
@@ -211,14 +212,14 @@ func TestSignRace(t *testing.T) {
 	t.Errorf("Account did not lock within the timeout")
 }
 
-func tmpManager(t *testing.T, encrypted bool) (string, *Manager) {
+func tmpKeyStore(t *testing.T, encrypted bool) (string, *KeyStore) {
 	d, err := ioutil.TempDir("", "eth-keystore-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	new := NewPlaintextManager
+	new := NewPlaintextKeyStore
 	if encrypted {
-		new = func(kd string) *Manager { return NewManager(kd, veryLightScryptN, veryLightScryptP) }
+		new = func(kd string) *KeyStore { return NewKeyStore(kd, veryLightScryptN, veryLightScryptP) }
 	}
 	return d, new(d)
 }
