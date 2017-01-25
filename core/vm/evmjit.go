@@ -108,10 +108,14 @@ func unpinCtx(id uintptr) {
 	contextMapMu.Unlock()
 }
 
-func getCtx(id uintptr) *EVMCContext {
+func getCtx(idx uintptr) *EVMCContext {
 	contextMapMu.Lock()
 	defer contextMapMu.Unlock()
-	return contextMap[id]
+	return contextMap[idx]
+}
+
+func getEnv(idx uintptr) *EVM {
+	return getCtx(idx).env
 }
 
 func HashToEvmc(hash common.Hash) C.struct_evm_uint256be {
@@ -147,27 +151,27 @@ func GoByteSlice(data unsafe.Pointer, size C.size_t) []byte {
 
 //export getTxCtx
 func getTxCtx(pResult unsafe.Pointer, ctxIdx uintptr) {
-	ctx := getCtx(ctxIdx)
+	env := getEnv(ctxIdx)
 	txCtx := (*C.struct_evm_tx_context)(pResult)
-	txCtx.tx_gas_price = BigToEvmc(ctx.env.GasPrice)
-	txCtx.tx_origin = AddressToEvmc(ctx.env.Origin)
-	txCtx.block_coinbase = AddressToEvmc(ctx.env.Coinbase)
-	txCtx.block_number = C.int64_t(ctx.env.BlockNumber.Int64())
-	txCtx.block_timestamp = C.int64_t(ctx.env.Time.Int64())
-	txCtx.block_gas_limit = C.int64_t(ctx.env.GasLimit.Int64())
-	txCtx.block_difficulty = BigToEvmc(ctx.env.Difficulty)
+	txCtx.tx_gas_price = BigToEvmc(env.GasPrice)
+	txCtx.tx_origin = AddressToEvmc(env.Origin)
+	txCtx.block_coinbase = AddressToEvmc(env.Coinbase)
+	txCtx.block_number = C.int64_t(env.BlockNumber.Int64())
+	txCtx.block_timestamp = C.int64_t(env.Time.Int64())
+	txCtx.block_gas_limit = C.int64_t(env.GasLimit.Int64())
+	txCtx.block_difficulty = BigToEvmc(env.Difficulty)
 }
 
 //export getBlockHash
 func getBlockHash(pResult unsafe.Pointer, ctxIdx uintptr, number int64) {
 	// Represent the result memory as Go slice of 32 bytes.
 	result := GoByteSlice(pResult, 32)
-	ctx := getCtx(ctxIdx)
-	b := ctx.env.BlockNumber.Int64()
+	env := getEnv(ctxIdx)
+	b := env.BlockNumber.Int64()
 	a := b - 256
 	var hash common.Hash
 	if number >= a && number < b {
-		hash = ctx.env.GetHash(uint64(number))
+		hash = env.GetHash(uint64(number))
 	}
 	copy(result, hash[:])
 }
@@ -180,7 +184,7 @@ func queryState(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pAddr unsafe.
 	pInt64Result := (*int64)(pResult)
 
 	// Get the execution context.
-	ctx := getCtx(ctxIdx)
+	env := getEnv(ctxIdx)
 
 	var addr common.Address
 	copy(addr[:], GoByteSlice(pAddr, 20))
@@ -188,30 +192,30 @@ func queryState(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pAddr unsafe.
 	switch key {
 	case C.EVM_SLOAD:
 		arg := *(*[32]byte)(pArg)
-		val := ctx.env.StateDB.GetState(ctx.contract.Address(), arg)
+		val := env.StateDB.GetState(addr, arg)
 		copy(result, val[:])
 	case C.EVM_CODE_BY_ADDRESS:
-		code := ctx.env.StateDB.GetCode(addr)
+		code := env.StateDB.GetCode(addr)
 		pResAsMemRef := (*MemoryRef)(pResult)
 		pResAsMemRef.ptr = ptr(code)
 		pResAsMemRef.len = len(code)
 	// fmt.Printf("EXTCODE %x : %d\n", addr, pResAsMemRef.len)
 	case C.EVM_CODE_SIZE:
 		pInt64Result := (*int64)(pResult)
-		*pInt64Result = int64(ctx.env.StateDB.GetCodeSize(addr))
+		*pInt64Result = int64(env.StateDB.GetCodeSize(addr))
 	// fmt.Printf("EXTCODESIZE %x : %d\n", addr, *pInt64Result)
 	case C.EVM_BALANCE:
-		balance := ctx.env.StateDB.GetBalance(addr)
+		balance := env.StateDB.GetBalance(addr)
 		val := common.BigToHash(balance)
 		copy(result, val[:])
 	case C.EVM_ACCOUNT_EXISTS:
-		eip158 := ctx.env.ChainConfig().IsEIP158(ctx.env.BlockNumber)
+		eip158 := env.ChainConfig().IsEIP158(env.BlockNumber)
 		var exist int64
 		if eip158 {
-			if !ctx.env.StateDB.Empty(addr) {
+			if !env.StateDB.Empty(addr) {
 				exist = 1
 			}
-		} else if ctx.env.StateDB.Exist(addr) {
+		} else if env.StateDB.Exist(addr) {
 			exist = 1
 		}
 		*pInt64Result = exist
@@ -222,16 +226,19 @@ func queryState(pResult unsafe.Pointer, ctxIdx uintptr, key int32, pAddr unsafe.
 
 //export updateState
 func updateState(ctxIdx uintptr, key int32, pAddr unsafe.Pointer, pArg1 unsafe.Pointer, pArg2 unsafe.Pointer) {
-	ctx := getCtx(ctxIdx)
+	env := getEnv(ctxIdx)
+
+	var addr common.Address
+	copy(addr[:], GoByteSlice(pAddr, 20))
 
 	switch key {
 	case C.EVM_SSTORE:
 		key := *(*[32]byte)(pArg1)
 		newVal := *(*[32]byte)(pArg2)
-		oldVal := ctx.env.StateDB.GetState(ctx.contract.Address(), key)
-		ctx.env.StateDB.SetState(ctx.contract.Address(), key, newVal)
+		oldVal := env.StateDB.GetState(addr, key)
+		env.StateDB.SetState(addr, key, newVal)
 		if !common.EmptyHash(oldVal) && common.EmptyHash(newVal) {
-			ctx.env.StateDB.AddRefund(params.SstoreRefundGas)
+			env.StateDB.AddRefund(params.SstoreRefundGas)
 		}
 	// fmt.Printf("EVMJIT STORE %x : %x [%x, %d]\n", arg1, arg2, ctx.contract.Address(), int(uintptr(pEnv)))
 	case C.EVM_LOG:
@@ -245,16 +252,15 @@ func updateState(ctxIdx uintptr, key int32, pAddr unsafe.Pointer, pArg1 unsafe.P
 		for i := 0; i < nTopics; i++ {
 			copy(topics[i][:], tData[i*32:(i+1)*32])
 		}
-		ctx.env.StateDB.AddLog(&types.Log{
-			Address: ctx.contract.Address(),
+		env.StateDB.AddLog(&types.Log{
+			Address: addr,
 			Topics:  topics,
 			Data:    data,
-			BlockNumber: ctx.env.BlockNumber.Uint64(),
+			BlockNumber: env.BlockNumber.Uint64(),
 		})
 	case C.EVM_SELFDESTRUCT:
 		arg := GoByteSlice(pArg1, 32)
-		db := ctx.env.StateDB
-		addr := ctx.contract.Address()
+		db := env.StateDB
 		if !db.HasSuicided(addr) {
 			db.AddRefund(params.SuicideRefundGas)
 		}
