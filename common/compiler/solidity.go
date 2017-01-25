@@ -34,7 +34,7 @@ import (
 var (
 	versionRegexp = regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+`)
 	solcParams    = []string{
-		"--combined-json", "bin,abi,userdoc,devdoc",
+		"--combined-json", "bin,abi,userdoc,devdoc,metadata",
 		"--add-std",  // include standard lib contracts
 		"--optimize", // code optimizer switched on
 	}
@@ -54,6 +54,7 @@ type ContractInfo struct {
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
+	Metadata        interface{} `json:"metadata"`
 }
 
 // Solidity contains information about the solidity compiler.
@@ -63,7 +64,7 @@ type Solidity struct {
 
 // --combined-output format
 type solcOutput struct {
-	Contracts map[string]struct{ Bin, Abi, Devdoc, Userdoc string }
+	Contracts map[string]struct{ Bin, Abi, Devdoc, Userdoc, Metadata string }
 	Version   string
 }
 
@@ -146,6 +147,10 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
 			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
+		var metadata interface{}
+		if err := json.Unmarshal([]byte(info.Metadata), &metadata); err != nil {
+			return nil, fmt.Errorf("solc: error reading metadata: %v", err)
+		}
 		contracts[name] = &Contract{
 			Code: "0x" + info.Bin,
 			Info: ContractInfo{
@@ -157,6 +162,7 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 				AbiDefinition:   abi,
 				UserDoc:         userdoc,
 				DeveloperDoc:    devdoc,
+				Metadata:        metadata,
 			},
 		}
 	}
