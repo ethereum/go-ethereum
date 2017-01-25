@@ -160,7 +160,7 @@ func (s EIP155Signer) PublicKey(tx *Transaction) ([]byte, error) {
 // needs to be in the [R || S || V] format where V is 0 or 1.
 func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
 	if len(sig) != 65 {
-		panic(fmt.Sprintf("wrong size for snature: got %d, want 65", len(sig)))
+		panic(fmt.Sprintf("wrong size for signature: got %d, want 65", len(sig)))
 	}
 
 	cpy := &Transaction{data: tx.data}

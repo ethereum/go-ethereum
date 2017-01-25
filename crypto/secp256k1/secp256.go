@@ -40,8 +40,6 @@ import (
 	"errors"
 	"math/big"
 	"unsafe"
-
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
 var (
@@ -89,13 +87,11 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	}
 
 	var (
-		msgdata       = (*C.uchar)(unsafe.Pointer(&msg[0]))
-		nonce         = randentropy.GetEntropyCSPRNG(32)
-		noncefunc     = &(*C.secp256k1_nonce_function_default)
-		noncefuncData = unsafe.Pointer(&nonce[0])
-		sigstruct     C.secp256k1_ecdsa_recoverable_signature
+		msgdata   = (*C.uchar)(unsafe.Pointer(&msg[0]))
+		noncefunc = C.secp256k1_nonce_function_rfc6979
+		sigstruct C.secp256k1_ecdsa_recoverable_signature
 	)
-	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, noncefuncData) == 0 {
+	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil) == 0 {
 		return nil, ErrSignFailed
 	}
 
