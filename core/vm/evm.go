@@ -292,6 +292,37 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	return ret, contractAddr, contract.Gas, err
 }
 
+// InjectCode executes the given code in the context of caller, i.e. code injection.
+func (evm *EVM) InjectCall(caller ContractRef, code, input []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	if evm.vmConfig.NoRecursion && evm.depth > 0 {
+		return nil, gas, nil
+	}
+
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, gas, ErrDepth
+	}
+
+	var (
+		snapshot = evm.StateDB.Snapshot()
+		to       = evm.StateDB.GetAccount(caller.Address())
+	)
+
+	// Iinitialise a new contract and make initialise the delegate values
+	contract := NewContract(caller, to, new(big.Int), gas).AsDelegate()
+	contract.SetCallCode(nil, crypto.Sha3Hash(code), code)
+
+	ret, err = evm.interpreter.Run(contract, input)
+	if err != nil {
+		contract.UseGas(contract.Gas)
+
+		evm.StateDB.RevertToSnapshot(snapshot)
+	}
+
+	return ret, contract.Gas, err
+}
+
 // ChainConfig returns the evmironment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
