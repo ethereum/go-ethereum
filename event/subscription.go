@@ -43,14 +43,14 @@ type Subscription interface {
 	Unsubscribe()      // cancels sending of events, closing the error channel
 }
 
-// NewSubscription runs fn as a subscription in a new goroutine. The channel given to fn
-// is closed when Unsubscribe is called. If fn returns an error, it is sent on the
-// subscription's error channel.
-func NewSubscription(fn func(<-chan struct{}) error) Subscription {
+// NewSubscription runs a producer function as a subscription in a new goroutine. The
+// channel given to the producer is closed when Unsubscribe is called. If fn returns an
+// error, it is sent on the subscription's error channel.
+func NewSubscription(producer func(<-chan struct{}) error) Subscription {
 	s := &funcSub{unsub: make(chan struct{}), err: make(chan error, 1)}
 	go func() {
 		defer close(s.err)
-		err := fn(s.unsub)
+		err := producer(s.unsub)
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if !s.unsubscribed {
