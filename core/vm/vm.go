@@ -44,6 +44,8 @@ type Config struct {
 	NoRecursion bool
 	// Disable gas metering
 	DisableGasMetering bool
+	// Enable recording of SHA3/keccak preimages
+	EnablePreimageRecording bool
 	// JumpTable contains the EVM instruction table. This
 	// may me left uninitialised and will be set the default
 	// table.

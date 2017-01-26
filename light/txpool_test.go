@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -88,7 +89,7 @@ func TestTxPool(t *testing.T) {
 	)
 	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux)
+	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
 	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
 	gchain, _ := core.GenerateChain(chainConfig, genesis, sdb, poolTestBlocks, txPoolTestChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {

@@ -103,7 +103,7 @@ func (am *AccountManager) GetAccounts() *Accounts {
 // DeleteAccount deletes the key matched by account if the passphrase is correct.
 // If a contains no filename, the address must match a unique key.
 func (am *AccountManager) DeleteAccount(account *Account, passphrase string) error {
-	return am.manager.DeleteAccount(accounts.Account{
+	return am.manager.Delete(accounts.Account{
 		Address: account.account.Address,
 		File:    account.account.File,
 	}, passphrase)

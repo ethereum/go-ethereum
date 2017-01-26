@@ -233,9 +233,6 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	)
 	if contractCreation {
 		ret, _, vmerr = vmenv.Create(sender, self.data, self.gas, self.value)
-		if homestead && err == vm.ErrCodeStoreOutOfGas {
-			self.gas = Big0
-		}
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)

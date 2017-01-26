@@ -113,9 +113,9 @@ func (am *Manager) Accounts() []Account {
 	return am.cache.accounts()
 }
 
-// DeleteAccount deletes the key matched by account if the passphrase is correct.
-// If a contains no filename, the address must match a unique key.
-func (am *Manager) DeleteAccount(a Account, passphrase string) error {
+// Delete deletes the key matched by account if the passphrase is correct.
+// If the account contains no filename, the address must match a unique key.
+func (am *Manager) Delete(a Account, passphrase string) error {
 	// Decrypting the key isn't really necessary, but we do
 	// it anyway to check the password and zero out the key
 	// immediately afterwards.

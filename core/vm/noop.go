@@ -67,3 +67,4 @@ func (NoopStateDB) Empty(common.Address) bool                         { return f
 func (NoopStateDB) RevertToSnapshot(int)                              {}
 func (NoopStateDB) Snapshot() int                                     { return 0 }
 func (NoopStateDB) AddLog(*types.Log)                                 {}
+func (NoopStateDB) AddPreimage(common.Hash, []byte)                   {}

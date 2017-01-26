@@ -44,9 +44,7 @@ If Host is left empty, localhost is assumed.
 
 Using a public gateway, the above few lines gives you the leanest
 bzz-scheme aware read-only http client. You really only ever need this
-if you need go-native swarm access to bzz addresses, e.g.,
-github.com/ethereum/go-ethereum/common/natspec
-
+if you need go-native swarm access to bzz addresses.
 */
 
 type RoundTripper struct {

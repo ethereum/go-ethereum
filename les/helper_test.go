@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -143,7 +144,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		odr = NewLesOdr(db)
 		chain, _ = light.NewLightChain(odr, chainConfig, pow, evmux)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux)
+		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
 		gchain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)

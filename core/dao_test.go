@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
@@ -39,12 +40,12 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	proDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(proDb)
 	proConf := &params.ChainConfig{HomesteadBlock: big.NewInt(0), DAOForkBlock: forkBlock, DAOForkSupport: true}
-	proBc, _ := NewBlockChain(proDb, proConf, new(FakePow), new(event.TypeMux))
+	proBc, _ := NewBlockChain(proDb, proConf, new(FakePow), new(event.TypeMux), vm.Config{})
 
 	conDb, _ := ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(conDb)
 	conConf := &params.ChainConfig{HomesteadBlock: big.NewInt(0), DAOForkBlock: forkBlock, DAOForkSupport: false}
-	conBc, _ := NewBlockChain(conDb, conConf, new(FakePow), new(event.TypeMux))
+	conBc, _ := NewBlockChain(conDb, conConf, new(FakePow), new(event.TypeMux), vm.Config{})
 
 	if _, err := proBc.InsertChain(prefix); err != nil {
 		t.Fatalf("pro-fork: failed to import chain prefix: %v", err)
@@ -57,7 +58,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		// Create a pro-fork block, and try to feed into the no-fork chain
 		db, _ = ethdb.NewMemDatabase()
 		WriteGenesisBlockForTesting(db)
-		bc, _ := NewBlockChain(db, conConf, new(FakePow), new(event.TypeMux))
+		bc, _ := NewBlockChain(db, conConf, new(FakePow), new(event.TypeMux), vm.Config{})
 
 		blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()+1))
 		for j := 0; j < len(blocks)/2; j++ {
@@ -78,7 +79,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 		// Create a no-fork block, and try to feed into the pro-fork chain
 		db, _ = ethdb.NewMemDatabase()
 		WriteGenesisBlockForTesting(db)
-		bc, _ = NewBlockChain(db, proConf, new(FakePow), new(event.TypeMux))
+		bc, _ = NewBlockChain(db, proConf, new(FakePow), new(event.TypeMux), vm.Config{})
 
 		blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()+1))
 		for j := 0; j < len(blocks)/2; j++ {
@@ -100,7 +101,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Verify that contra-forkers accept pro-fork extra-datas after forking finishes
 	db, _ = ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(db)
-	bc, _ := NewBlockChain(db, conConf, new(FakePow), new(event.TypeMux))
+	bc, _ := NewBlockChain(db, conConf, new(FakePow), new(event.TypeMux), vm.Config{})
 
 	blocks := conBc.GetBlocksFromHash(conBc.CurrentBlock().Hash(), int(conBc.CurrentBlock().NumberU64()+1))
 	for j := 0; j < len(blocks)/2; j++ {
@@ -116,7 +117,7 @@ func TestDAOForkRangeExtradata(t *testing.T) {
 	// Verify that pro-forkers accept contra-fork extra-datas after forking finishes
 	db, _ = ethdb.NewMemDatabase()
 	WriteGenesisBlockForTesting(db)
-	bc, _ = NewBlockChain(db, proConf, new(FakePow), new(event.TypeMux))
+	bc, _ = NewBlockChain(db, proConf, new(FakePow), new(event.TypeMux), vm.Config{})
 
 	blocks = proBc.GetBlocksFromHash(proBc.CurrentBlock().Hash(), int(proBc.CurrentBlock().NumberU64()+1))
 	for j := 0; j < len(blocks)/2; j++ {

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -56,7 +57,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
 		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux)
+		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
 	)
 	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {

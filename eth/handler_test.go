@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -469,7 +470,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db)
 		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
-		blockchain, _ = core.NewBlockChain(db, config, pow, evmux)
+		blockchain, _ = core.NewBlockChain(db, config, pow, evmux, vm.Config{})
 	)
 	pm, err := NewProtocolManager(config, false, NetworkId, 1000, evmux, new(testTxPool), pow, blockchain, db)
 	if err != nil {
