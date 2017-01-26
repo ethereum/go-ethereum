@@ -348,7 +348,9 @@ func (pool *serverPool) selectPeerWait(reqID uint64, canSend func(*peer) (bool, 
 func (pool *serverPool) eventLoop() {
 	lookupCnt := 0
 	var convTime mclock.AbsTime
-	pool.discSetPeriod <- time.Millisecond * 100
+	if pool.discSetPeriod != nil {
+		pool.discSetPeriod <- time.Millisecond * 100
+	}
 	for {
 		select {
 		case entry := <-pool.timeout:
@@ -393,12 +395,16 @@ func (pool *serverPool) eventLoop() {
 				lookupCnt++
 				if pool.fastDiscover && (lookupCnt == 50 || time.Duration(mclock.Now()-convTime) > time.Minute) {
 					pool.fastDiscover = false
-					pool.discSetPeriod <- time.Minute
+					if pool.discSetPeriod != nil {
+						pool.discSetPeriod <- time.Minute
+					}
 				}
 			}
 
 		case <-pool.quit:
-			close(pool.discSetPeriod)
+			if pool.discSetPeriod != nil {
+				close(pool.discSetPeriod)
+			}
 			pool.connWg.Wait()
 			pool.saveNodes()
 			pool.wg.Done()

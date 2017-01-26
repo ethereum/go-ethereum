@@ -654,6 +654,10 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		vsn += "-" + gitCommit[:8]
 	}
 
+	// if we're running a light client or server, force enable the v5 peer discovery unless it is explicitly disabled with --nodiscover
+	// note that explicitly specifying --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
+	forceV5Discovery := (ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0) && !ctx.GlobalBool(NoDiscoverFlag.Name)
+
 	config := &node.Config{
 		DataDir:           MakeDataDir(ctx),
 		KeyStoreDir:       ctx.GlobalString(KeyStoreDirFlag.Name),
@@ -662,8 +666,8 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		Name:              name,
 		Version:           vsn,
 		UserIdent:         makeNodeUserIdent(ctx),
-		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name),
-		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0,
+		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name), // always disable v4 discovery in light client mode
+		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || forceV5Discovery,
 		DiscoveryV5Addr:   MakeDiscoveryV5Address(ctx),
 		BootstrapNodes:    MakeBootstrapNodes(ctx),
 		BootstrapNodesV5:  MakeBootstrapNodesV5(ctx),
