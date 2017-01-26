@@ -39,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -76,7 +75,6 @@ var (
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:  "bzznetworkid",
 		Usage: "Network identifier (integer, default 3=swarm testnet)",
-		Value: network.NetworkId,
 	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
@@ -242,6 +240,7 @@ func bzzd(ctx *cli.Context) error {
 }
 
 func registerBzzService(ctx *cli.Context, stack *node.Node) {
+
 	prvkey := getAccount(ctx, stack)
 
 	chbookaddr := common.HexToAddress(ctx.GlobalString(ChequebookAddrFlag.Name))
@@ -249,6 +248,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if bzzdir == "" {
 		bzzdir = stack.InstanceDir()
 	}
+
 	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
@@ -280,6 +280,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	keyid := ctx.GlobalString(SwarmAccountFlag.Name)
+
 	if keyid == "" {
 		utils.Fatalf("Option %q is required", SwarmAccountFlag.Name)
 	}
