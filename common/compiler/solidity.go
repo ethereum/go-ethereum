@@ -148,8 +148,10 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
 		var metadata interface{}
-		if err := json.Unmarshal([]byte(info.Metadata), &metadata); err != nil {
-			return nil, fmt.Errorf("solc: error reading metadata: %v", err)
+		if info.Metadata != "" {
+		        if err := json.Unmarshal([]byte(info.Metadata), &metadata); err != nil {
+			      return nil, fmt.Errorf("solc: error reading metadata: %v", err)
+			}
 		}
 		contracts[name] = &Contract{
 			Code: "0x" + info.Bin,
