@@ -330,9 +330,13 @@ func (hub *LedgerHub) rescan() {
 		id := uint16(device.Bus)<<8 + uint16(device.Address)
 		hub.wallets[id] = wallet
 
-		if wallet.resolveVersion() != nil || wallet.resolveAddress() != nil {
+		if wallet.resolveAddress() != nil {
 			glog.V(logger.Info).Infof("ledger wallet [%s] connected, Ethereum app not started", wallet.url)
 		} else {
+			// Try to resolve the Ethereum app's version, will fail prior to v1.0.2
+			if wallet.resolveVersion() != nil {
+				wallet.version = [3]byte{1, 0, 0} // Assume worst case, can't verify if v1.0.0 or v1.0.1
+			}
 			hub.accounts = append(hub.accounts, accounts.Account{
 				Address: wallet.address,
 				URL:     wallet.url,
