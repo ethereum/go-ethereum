@@ -46,10 +46,6 @@ type dummyStateDB struct {
 	ref *dummyContractRef
 }
 
-func (d dummyStateDB) GetAccount(common.Address) Account {
-	return d.ref
-}
-
 func TestStoreCapture(t *testing.T) {
 	var (
 		env      = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})

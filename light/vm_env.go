@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/net/context"
 )
@@ -64,27 +63,10 @@ func (self *VMState) RevertToSnapshot(idx int) {
 	self.snapshots = self.snapshots[:idx]
 }
 
-// GetAccount returns the account object of the given account or nil if the
-// account does not exist
-func (s *VMState) GetAccount(addr common.Address) vm.Account {
-	so, err := s.state.GetStateObject(s.ctx, addr)
-	s.errHandler(err)
-	if err != nil {
-		// return a dummy state object to avoid panics
-		so = s.state.newStateObject(addr)
-	}
-	return so
-}
-
 // CreateAccount creates creates a new account object and takes ownership.
-func (s *VMState) CreateAccount(addr common.Address) vm.Account {
-	so, err := s.state.CreateStateObject(s.ctx, addr)
+func (s *VMState) CreateAccount(addr common.Address) {
+	_, err := s.state.CreateStateObject(s.ctx, addr)
 	s.errHandler(err)
-	if err != nil {
-		// return a dummy state object to avoid panics
-		so = s.state.newStateObject(addr)
-	}
-	return so
 }
 
 // AddBalance adds the given amount to the balance of the specified account

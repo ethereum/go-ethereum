@@ -187,16 +187,16 @@ func runVmTest(test VmTest) error {
 	}
 
 	// check post state
-	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
+	for address, account := range test.Post {
+		accountAddr := common.HexToAddress(address)
+		if !statedb.Exist(accountAddr) {
 			continue
 		}
 		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
+			v := statedb.GetState(accountAddr, common.HexToHash(addr))
 			vexp := common.HexToHash(value)
 			if v != vexp {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
+				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", addr[:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}

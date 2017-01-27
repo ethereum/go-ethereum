@@ -165,25 +165,25 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 
 	// check post state
 	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
+		address := common.HexToAddress(addr)
+		if !statedb.Exist(address) {
 			return fmt.Errorf("did not find expected post-state account: %s", addr)
 		}
 
-		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], common.String2Big(account.Balance), obj.Balance())
+		if balance := statedb.GetBalance(address); balance.Cmp(common.Big(account.Balance)) != 0 {
+			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", address[:4], common.String2Big(account.Balance), balance)
 		}
 
-		if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
+		if nonce := statedb.GetNonce(address); nonce != common.String2Big(account.Nonce).Uint64() {
+			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", address[:4], account.Nonce, nonce)
 		}
 
 		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
+			v := statedb.GetState(address, common.HexToHash(addr))
 			vexp := common.HexToHash(value)
 
 			if v != vexp {
-				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", obj.Address().Bytes(), addr, vexp, v, vexp.Big(), v.Big())
+				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", address[:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}

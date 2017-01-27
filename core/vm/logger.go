@@ -144,11 +144,14 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost *b
 			storage = make(Storage)
 			// Get the contract account and loop over each storage entry. This may involve looping over
 			// the trie and is a very expensive process.
+
+			/* TODO
 			env.StateDB.GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
 				storage[key] = value
 				// Return true, indicating we'd like to continue.
 				return true
 			})
+			*/
 		} else {
 			// copy a snapshot of the current storage to a new container.
 			storage = l.changedValues[contract.Address()].Copy()
