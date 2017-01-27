@@ -60,11 +60,11 @@ func NewReportingRLPx(addr []byte, srv *p2p.Server, m Messenger, r Reporter) *RL
 	return rlpx
 }
 
-func (*RLPxMessenger) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
+func (RLPxMessenger) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
 	return p2p.Send(w, code, msg)
 }
 
-func (*RLPxMessenger) ReadMsg(r p2p.MsgReader) (p2p.Msg, error) {
+func (RLPxMessenger) ReadMsg(r p2p.MsgReader) (p2p.Msg, error) {
 	return r.ReadMsg()
 }
 

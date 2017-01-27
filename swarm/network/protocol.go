@@ -62,9 +62,9 @@ type Node interface {
 	String() string      // pretty printable the Node
 	ID() discover.NodeID // the key that uniquely identifies the Node for the peerPool
 
-	Send(interface{}) error                             // can send messages
-	Drop()                                              // disconnect this peer
-	Register(interface{}, func(interface{}) error) uint // register message-handler callbacks
+	Send(interface{}) error                               // can send messages
+	Drop()                                                // disconnect this peer
+	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
 }
 
 // PeerPool is the interface for the connectivity manager
