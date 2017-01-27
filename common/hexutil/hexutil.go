@@ -169,12 +169,7 @@ func EncodeBig(bigint *big.Int) string {
 	if nbits == 0 {
 		return "0x0"
 	}
-	enc := make([]byte, 2, (nbits/8)*2+2)
-	copy(enc, "0x")
-	for i := len(bigint.Bits()) - 1; i >= 0; i-- {
-		enc = strconv.AppendUint(enc, uint64(bigint.Bits()[i]), 16)
-	}
-	return string(enc)
+	return fmt.Sprintf("0x%x", bigint)
 }
 
 func has0xPrefix(input string) bool {

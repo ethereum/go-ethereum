@@ -110,7 +110,6 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 	for p, list := range sendTo {
 		cost := p.GetRequestCost(SendTxMsg, len(list))
 		go func(p *peer, list types.Transactions, cost uint64) {
-			p.fcServer.SendRequest(0, cost)
 			p.SendTxs(cost, list)
 		}(p, list, cost)
 	}

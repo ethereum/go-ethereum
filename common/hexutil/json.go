@@ -109,13 +109,8 @@ func (b *Big) MarshalJSON() ([]byte, error) {
 	if nbits == 0 {
 		return jsonZero, nil
 	}
-	enc := make([]byte, 3, (nbits/8)*2+4)
-	copy(enc, `"0x`)
-	for i := len(bigint.Bits()) - 1; i >= 0; i-- {
-		enc = strconv.AppendUint(enc, uint64(bigint.Bits()[i]), 16)
-	}
-	enc = append(enc, '"')
-	return enc, nil
+	enc := fmt.Sprintf(`"0x%x"`, bigint)
+	return []byte(enc), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
