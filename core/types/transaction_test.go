@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -29,7 +30,6 @@ import (
 
 // The values in those tests are from the Transaction Tests
 // at github.com/ethereum/tests.
-
 var (
 	emptyTx = NewTransaction(
 		0,
@@ -187,6 +187,48 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 			if j > i && txs[j].GasPrice().Cmp(txi.GasPrice()) > 0 {
 				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) > tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
 			}
+		}
+	}
+}
+
+// TestTransactionJSON tests serializing/de-serializing to/from JSON.
+func TestTransactionJSON(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("could not generate key: %v", err)
+	}
+	signer := NewEIP155Signer(common.Big1)
+
+	for i := uint64(0); i < 25; i++ {
+		var tx *Transaction
+		switch i % 2 {
+		case 0:
+			tx = NewTransaction(i, common.Address{1}, common.Big0, common.Big1, common.Big2, []byte("abcdef"))
+		case 1:
+			tx = NewContractCreation(i, common.Big0, common.Big1, common.Big2, []byte("abcdef"))
+		}
+
+		tx, err := SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("could not sign transaction: %v", err)
+		}
+
+		data, err := json.Marshal(tx)
+		if err != nil {
+			t.Errorf("json.Marshal failed: %v", err)
+		}
+
+		var parsedTx *Transaction
+		if err := json.Unmarshal(data, &parsedTx); err != nil {
+			t.Errorf("json.Unmarshal failed: %v", err)
+		}
+
+		// compare nonce, price, gaslimit, recipient, amount, payload, V, R, S
+		if tx.Hash() != parsedTx.Hash() {
+			t.Errorf("parsed tx differs from original tx, want %v, got %v", tx, parsedTx)
+		}
+		if tx.ChainId().Cmp(parsedTx.ChainId()) != 0 {
+			t.Errorf("invalid chain id, want %d, got %d", tx.ChainId(), parsedTx.ChainId())
 		}
 	}
 }
