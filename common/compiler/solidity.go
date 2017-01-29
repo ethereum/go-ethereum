@@ -54,7 +54,7 @@ type ContractInfo struct {
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
-	Metadata        interface{} `json:"metadata"`
+	Metadata        string      `json:"metadata"`
 }
 
 // Solidity contains information about the solidity compiler.
@@ -201,9 +201,13 @@ func runsolc(cmd *exec.Cmd, solcParams []string, source string) (map[string]*Con
 		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
 			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
-		var metadata interface{}
+		var metadata string
 		if info.Metadata != "" {
-		        if err := json.Unmarshal([]byte(info.Metadata), &metadata); err != nil {
+			jstring, err := json.Marshal( string(info.Metadata) )
+			if ( err != nil ) {
+			      return nil, fmt.Errorf("solc: error coercing metadata to string: %v", err)
+			}
+		        if err := json.Unmarshal(jstring, &metadata); err != nil {
 			      return nil, fmt.Errorf("solc: error reading metadata: %v", err)
 			}
 		}
