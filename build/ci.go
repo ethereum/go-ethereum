@@ -309,7 +309,7 @@ func spellcheck(packages []string) {
 	// Ensure the spellchecker is available
 	build.MustRun(goTool("get", "github.com/client9/misspell/cmd/misspell"))
 
-	// Windows chokes on long argument lists, check packages individualy
+	// Windows chokes on long argument lists, check packages individually
 	for _, pkg := range packages {
 		// The spell checker doesn't work on packages, gather all .go files for it
 		out, err := goTool("list", "-f", "{{.Dir}}{{range .GoFiles}}\n{{.}}{{end}}{{range .CgoFiles}}\n{{.}}{{end}}{{range .TestGoFiles}}\n{{.}}{{end}}", pkg).CombinedOutput()
