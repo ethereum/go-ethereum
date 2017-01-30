@@ -123,6 +123,7 @@ func initGenesis(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
+	defer genesisFile.Close()
 
 	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
 	if err != nil {
