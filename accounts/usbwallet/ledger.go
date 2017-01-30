@@ -234,32 +234,11 @@ func (hub *LedgerHub) rescan() {
 	hub.lock.Lock()
 	defer hub.lock.Unlock()
 
-	// Iterate over all attached devices and fetch those seemingly Ledger
-	present := make(map[uint16]bool)
-	devices, _ := hub.ctx.ListDevices(func(desc *usb.Descriptor) bool {
-		// Discard all devices not advertizing as Ledger
-		ledger := false
-		for _, id := range ledgerDeviceIDs {
-			if desc.Vendor == id.Vendor && desc.Product == id.Product {
-				ledger = true
-			}
-		}
-		if !ledger {
-			return false
-		}
-		// If we have a Ledger, mark as still present, or open as new
-		id := uint16(desc.Bus)<<8 + uint16(desc.Address)
-		if _, known := hub.wallets[id]; known {
-			// Track it's presence, but don't open again
-			present[id] = true
-			return false
-		}
-		// New Ledger device, open it for communication
-		return true
-	})
-	// Drop any tracker wallet which disconnected
+	// Iterate over all connected Ledger devices and do a heartbeat test
 	for id, wallet := range hub.wallets {
-		if !present[id] {
+		// If the device doesn't respond (io error on Windows, no device on Linux), drop
+		if err := wallet.resolveVersion(); err == usb.ERROR_IO || err == usb.ERROR_NO_DEVICE {
+			// Wallet disconnected or at least in a useless state
 			if wallet.address == (common.Address{}) {
 				glog.V(logger.Info).Infof("ledger wallet [%03d.%03d] disconnected", wallet.device.Bus, wallet.device.Address)
 			} else {
@@ -279,6 +258,26 @@ func (hub *LedgerHub) rescan() {
 			wallet.device.Close()
 		}
 	}
+	// Iterate over all attached devices and fetch those seemingly Ledger
+	devices, _ := hub.ctx.ListDevices(func(desc *usb.Descriptor) bool {
+		// Discard all devices not advertizing as Ledger
+		ledger := false
+		for _, id := range ledgerDeviceIDs {
+			if desc.Vendor == id.Vendor && desc.Product == id.Product {
+				ledger = true
+			}
+		}
+		if !ledger {
+			return false
+		}
+		// If we have an already known Ledger, skip opening it
+		id := uint16(desc.Bus)<<8 + uint16(desc.Address)
+		if _, known := hub.wallets[id]; known {
+			return false
+		}
+		// New Ledger device, open it for communication
+		return true
+	})
 	// Start tracking all wallets which newly appeared
 	var err error
 	for _, device := range devices {
