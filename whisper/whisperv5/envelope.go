@@ -172,6 +172,10 @@ func (e *Envelope) DecodeRLP(s *rlp.Stream) error {
 	if err != nil {
 		return err
 	}
+	return e.DecodeBytes(raw)
+}
+
+func (e *Envelope) DecodeBytes(raw []byte) error {
 	// The decoding of Envelope uses the struct fields but also needs
 	// to compute the hash of the whole RLP-encoded envelope. This
 	// type has the same structure as Envelope but is not an

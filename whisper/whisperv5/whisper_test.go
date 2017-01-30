@@ -57,10 +57,8 @@ func TestWhisperBasic(t *testing.T) {
 	if err := w.MarkPeerTrusted(peerID); err == nil {
 		t.Fatalf("failed MarkPeerTrusted.")
 	}
-	if err := w.RequestHistoricMessages(peerID, peerID); err == nil {
-		t.Fatalf("failed RequestHistoricMessages.")
-	}
-	if err := w.SendP2PMessage(peerID, nil); err == nil {
+	err = w.SendP2PMessage(peerID, nil)
+	if err == nil {
 		t.Fatalf("failed SendP2PMessage.")
 	}
 	exist := w.HasSymKey("non-existing")
