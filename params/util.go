@@ -24,9 +24,9 @@ import (
 
 var (
 	TestNetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
-	MainNetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
+	MainNetGenesisHash = common.HexToHash("0x406f1b7dd39fca54d8c702141851ed8b755463ab5b560e6f19b963b4047418af") // Mainnet genesis hash to enforce below configs on
 
-	TestNetHomesteadBlock = big.NewInt(0)  // Testnet homestead block
+	TestNetHomesteadBlock = big.NewInt(0) // Testnet homestead block
 	MainNetHomesteadBlock = big.NewInt(0) // Mainnet homestead block
 
 	TestNetHomesteadGasRepriceBlock = big.NewInt(0) // Testnet gas reprice block
