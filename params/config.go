@@ -35,7 +35,7 @@ var MainnetChainConfig = &ChainConfig{
 
 // TestnetChainConfig is the chain parameters to run a node on the test network.
 var TestnetChainConfig = &ChainConfig{
-	ChainId:        big.NewInt(3),
+	ChainId:        big.NewInt(9),
 	HomesteadBlock: big.NewInt(0),
 	EIP150Block:    big.NewInt(0),
 	EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
