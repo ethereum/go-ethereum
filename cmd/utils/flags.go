@@ -747,7 +747,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	switch {
 	case ctx.GlobalBool(TestNetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			ethConf.NetworkId = 3
+			ethConf.NetworkId = 9
 		}
 		ethConf.Genesis = core.DefaultTestnetGenesisBlock()
 
