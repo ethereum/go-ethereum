@@ -93,12 +93,12 @@ func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
 // data contains parameters (time frame, payment details, etc.), required
 // by the remote email-like server. Whisper is not aware about the data format,
 // it will just forward the raw data to the server.
-func (api *PublicWhisperAPI) RequestHistoricMessages(peerID hexutil.Bytes, data hexutil.Bytes) error {
-	if api.whisper == nil {
-		return whisperOffLineErr
-	}
-	return api.whisper.RequestHistoricMessages(peerID, data)
-}
+//func (api *PublicWhisperAPI) RequestHistoricMessages(peerID hexutil.Bytes, data hexutil.Bytes) error {
+//	if api.whisper == nil {
+//		return whisperOffLineErr
+//	}
+//	return api.whisper.RequestHistoricMessages(peerID, data)
+//}
 
 // HasIdentity checks if the whisper node is configured with the private key
 // of the specified public pair.

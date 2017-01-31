@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/pbkdf2"
 	set "gopkg.in/fatih/set.v0"
 )
@@ -125,13 +124,13 @@ func (w *Whisper) MarkPeerTrusted(peerID []byte) error {
 	return nil
 }
 
-func (w *Whisper) RequestHistoricMessages(peerID []byte, data []byte) error {
+func (w *Whisper) RequestHistoricMessages(peerID []byte, envelope *Envelope) error {
 	p, err := w.getPeer(peerID)
 	if err != nil {
 		return err
 	}
 	p.trusted = true
-	return p2p.Send(p.ws, p2pRequestCode, data)
+	return p2p.Send(p.ws, p2pRequestCode, envelope)
 }
 
 func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
@@ -140,6 +139,10 @@ func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
 		return err
 	}
 	return p2p.Send(p.ws, p2pCode, envelope)
+}
+
+func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
+	return p2p.Send(peer.ws, p2pCode, envelope)
 }
 
 // NewIdentity generates a new cryptographic identity for the client, and injects
@@ -347,9 +350,6 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 					return fmt.Errorf("invalid envelope")
 				}
 				p.mark(envelope)
-				if wh.mailServer != nil {
-					wh.mailServer.Archive(envelope)
-				}
 			}
 		case p2pCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
@@ -357,25 +357,22 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			// therefore might not satisfy the PoW, expiry and other requirements.
 			// these messages are only accepted from the trusted peer.
 			if p.trusted {
-				var envelopes []*Envelope
-				if err := packet.Decode(&envelopes); err != nil {
+				var envelope Envelope
+				if err := packet.Decode(&envelope); err != nil {
 					glog.V(logger.Warn).Infof("%v: failed to decode direct message: [%v], peer will be disconnected", p.peer, err)
 					return fmt.Errorf("garbage received (directMessage)")
 				}
-				for _, envelope := range envelopes {
-					wh.postEvent(envelope, true)
-				}
+				wh.postEvent(&envelope, true)
 			}
 		case p2pRequestCode:
 			// Must be processed if mail server is implemented. Otherwise ignore.
 			if wh.mailServer != nil {
-				s := rlp.NewStream(packet.Payload, uint64(packet.Size))
-				data, err := s.Bytes()
-				if err == nil {
-					wh.mailServer.DeliverMail(p, data)
-				} else {
-					glog.V(logger.Error).Infof("%v: bad requestHistoricMessages received: [%v]", p.peer, err)
+				var request Envelope
+				if err := packet.Decode(&request); err != nil {
+					glog.V(logger.Warn).Infof("%v: failed to decode p2p request message: [%v], peer will be disconnected", p.peer, err)
+					return fmt.Errorf("garbage received (p2p request)")
 				}
+				wh.mailServer.DeliverMail(p, &request)
 			}
 		default:
 			// New message types might be implemented in the future versions of Whisper.
@@ -454,6 +451,9 @@ func (wh *Whisper) add(envelope *Envelope) error {
 	} else {
 		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
 		wh.postEvent(envelope, false) // notify the local node about the new message
+		if wh.mailServer != nil {
+			wh.mailServer.Archive(envelope)
+		}
 	}
 	return nil
 }
