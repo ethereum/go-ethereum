@@ -195,7 +195,10 @@ func DefaultGenesisBlock() string {
 // DefaultTestnetGenesisBlock assembles a JSON string representing the default Ethereum
 // test network genesis block.
 func DefaultTestnetGenesisBlock() string {
-	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultTestnetGenesisBlock)))
+	reader, err := gzip.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultTestnetGenesisBlock)))
+	if err != nil {
+		panic(fmt.Sprintf("failed to access default genesis: %v", err))
+	}
 	blob, err := ioutil.ReadAll(reader)
 	if err != nil {
 		panic(fmt.Sprintf("failed to load default genesis: %v", err))
