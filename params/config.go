@@ -34,9 +34,10 @@ var (
 		EIP150Hash:     MainNetHomesteadGasRepriceHash,
 		EIP155Block:    MainNetSpuriousDragon,
 		EIP158Block:    MainNetSpuriousDragon,
+		EIP198Block:    MainNetMetropolis,
 	}
 
-	// TestnetChainConfig contains the chain parameters to run a node on the ropsten test network.
+	// TestnetChainConfig is the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(3),
 		HomesteadBlock: big.NewInt(0),
@@ -46,19 +47,20 @@ var (
 		EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:    big.NewInt(10),
 		EIP158Block:    big.NewInt(10),
+		EIP198Block:    TestNetMetropolis,
 	}
 
 	// AllProtocolChanges contains every protocol change (EIPs)
 	// introduced and accepted by the Ethereum core developers.
-	// TestChainConfig is like AllProtocolChanges but has chain ID 1.
 	//
 	// This configuration is intentionally not using keyed fields.
 	// This configuration must *always* have all forks enabled, which
 	// means that all fields must be set at all times. This forces
 	// anyone adding flags to the config to also have to set these
 	// fields.
-	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
-	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
+	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0)}
+	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), nil}
+	TestRules          = TestChainConfig.Rules(new(big.Int))
 )
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -79,11 +81,13 @@ type ChainConfig struct {
 
 	EIP155Block *big.Int `json:"eip155Block"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block"` // EIP158 HF block
+
+	EIP198Block *big.Int `json:"eip198Block"` // EIP198 HF block
 }
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v EIP198: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -91,6 +95,7 @@ func (c *ChainConfig) String() string {
 		c.EIP150Block,
 		c.EIP155Block,
 		c.EIP158Block,
+		c.EIP198Block,
 	)
 }
 
@@ -200,6 +205,14 @@ func configNumEqual(x, y *big.Int) bool {
 	return x.Cmp(y) == 0
 }
 
+func (c *ChainConfig) IsEIP198(num *big.Int) bool {
+	if c.EIP198Block == nil || num == nil {
+		return false
+	}
+	return num.Cmp(c.EIP198Block) >= 0
+
+}
+
 // ConfigCompatError is raised if the locally-stored blockchain is initialised with a
 // ChainConfig that would alter the past.
 type ConfigCompatError struct {
@@ -229,4 +242,18 @@ func newCompatError(what string, storedblock, newblock *big.Int) *ConfigCompatEr
 
 func (err *ConfigCompatError) Error() string {
 	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
+}
+
+// Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
+// that do not have or require information about the block.
+//
+// Rules is a one time interface meaning that it shouldn't be used in between transition
+// phases.
+type Rules struct {
+	ChainId                                             *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158, IsEIP198 bool
+}
+
+func (c *ChainConfig) Rules(num *big.Int) Rules {
+	return Rules{ChainId: new(big.Int).Set(c.ChainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsEIP198: c.IsEIP198(num)}
 }
