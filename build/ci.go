@@ -70,6 +70,7 @@ var (
 	allToolsArchiveFiles = []string{
 		"COPYING",
 		executablePath("abigen"),
+		executablePath("bootnode"),
 		executablePath("evm"),
 		executablePath("geth"),
 		executablePath("swarm"),
