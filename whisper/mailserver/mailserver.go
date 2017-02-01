@@ -171,6 +171,9 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	}
 
 	src := crypto.FromECDSAPub(decrypted.Src)
+	if len(src)-len(peerID) == 1 {
+		src = src[1:]
+	}
 	if !bytes.Equal(peerID, src) {
 		glog.V(logger.Warn).Infof("Wrong signature of p2p request")
 		return false, 0, 0, topic
