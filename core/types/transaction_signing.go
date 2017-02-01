@@ -27,7 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var ErrInvalidChainId = errors.New("invalid chaid id for signer")
+var (
+	ErrInvalidChainId = errors.New("invalid chaid id for signer")
+
+	errAbstractSigner     = errors.New("abstract signer")
+	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffff")
+)
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -102,6 +107,17 @@ type Signer interface {
 	// Checks for equality on the signers
 	Equal(Signer) bool
 }
+
+/*
+// WithSignature returns a new transaction with the given signature. This signature
+// needs to be in the [R || S || V] format where V is 0 or 1.
+func (s EIP86Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
+}
+
+// Hash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (s EIP86Signer) Hash(tx *Transaction) common.Hash {}
+*/
 
 // EIP155Transaction implements TransactionInterface using the
 // EIP155 rules

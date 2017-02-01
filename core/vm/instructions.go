@@ -27,7 +27,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var bigZero = new(big.Int)
+var (
+	bigZero = new(big.Int)
+)
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
@@ -599,7 +601,7 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -633,16 +635,10 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	// if not homestead return an error. DELEGATECALL is not supported
-	// during pre-homestead.
-	if !evm.ChainConfig().IsHomestead(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", DELEGATECALL)
-	}
-
 	gas, to, inOffset, inSize, outOffset, outSize := stack.pop().Uint64(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	toAddr := common.BigToAddress(to)
@@ -658,7 +654,7 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(to, inOffset, inSize, outOffset, outSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -666,6 +662,7 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	ret := memory.GetPtr(offset.Int64(), size.Int64())
 
 	evm.interpreter.intPool.put(offset, size)
+
 	return ret, nil
 }
 
