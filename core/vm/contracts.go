@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -28,8 +30,8 @@ import (
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
-	RequiredGas(inputSize int) uint64 // RequiredPrice calculates the contract gas use
-	Run(input []byte) []byte          // Run runs the precompiled contract
+	RequiredGas(input []byte) uint64 // RequiredPrice calculates the contract gas use
+	Run(input []byte) []byte         // Run runs the precompiled contract
 }
 
 // Precompiled contains the default set of ethereum contracts
@@ -38,11 +40,12 @@ var PrecompiledContracts = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256{},
 	common.BytesToAddress([]byte{3}): &ripemd160{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{5}): &bigModexp{},
 }
 
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
-	gas := p.RequiredGas(len(input))
+	gas := p.RequiredGas(input)
 	if contract.UseGas(gas) {
 		ret = p.Run(input)
 
@@ -55,7 +58,7 @@ func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contr
 // ECRECOVER implemented as a native contract
 type ecrecover struct{}
 
-func (c *ecrecover) RequiredGas(inputSize int) uint64 {
+func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
 
@@ -94,8 +97,8 @@ type sha256 struct{}
 //
 // This method does not require any overflow checking as the input size gas costs
 // required for anything significant is so high it's impossible to pay for.
-func (c *sha256) RequiredGas(inputSize int) uint64 {
-	return uint64(inputSize+31)/32*params.Sha256WordGas + params.Sha256Gas
+func (c *sha256) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.Sha256WordGas + params.Sha256Gas
 }
 func (c *sha256) Run(in []byte) []byte {
 	return crypto.Sha256(in)
@@ -108,8 +111,8 @@ type ripemd160 struct{}
 //
 // This method does not require any overflow checking as the input size gas costs
 // required for anything significant is so high it's impossible to pay for.
-func (c *ripemd160) RequiredGas(inputSize int) uint64 {
-	return uint64(inputSize+31)/32*params.Ripemd160WordGas + params.Ripemd160Gas
+func (c *ripemd160) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.Ripemd160WordGas + params.Ripemd160Gas
 }
 func (c *ripemd160) Run(in []byte) []byte {
 	return common.LeftPadBytes(crypto.Ripemd160(in), 32)
@@ -122,9 +125,66 @@ type dataCopy struct{}
 //
 // This method does not require any overflow checking as the input size gas costs
 // required for anything significant is so high it's impossible to pay for.
-func (c *dataCopy) RequiredGas(inputSize int) uint64 {
-	return uint64(inputSize+31)/32*params.IdentityWordGas + params.IdentityGas
+func (c *dataCopy) RequiredGas(input []byte) uint64 {
+	return uint64(len(input)+31)/32*params.IdentityWordGas + params.IdentityGas
 }
 func (c *dataCopy) Run(in []byte) []byte {
 	return in
+}
+
+type bigModexp struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *bigModexp) RequiredGas(input []byte) uint64 {
+	// TODO reword required gas to have error reporting and convert arithmetic
+	// to uint64.
+	if len(input) < 3*32 {
+		input = append(input, make([]byte, 3*32-len(input))...)
+	}
+	var (
+		baseLen = common.BytesToBig(input[:31])
+		expLen  = common.BigMax(common.BytesToBig(input[32:64]), big.NewInt(1))
+		modLen  = common.BytesToBig(input[65:97])
+	)
+	x := new(big.Int).Set(common.BigMax(baseLen, modLen))
+	x.Mul(x, x)
+	x.Mul(x, expLen)
+	x.Div(x, new(big.Int).SetUint64(params.QuadCoeffDiv))
+
+	return x.Uint64()
+}
+
+func (c *bigModexp) Run(input []byte) []byte {
+	if len(input) < 3*32 {
+		input = append(input, make([]byte, 3*32-len(input))...)
+	}
+	// why 32-byte? These values won't fit anyway
+	var (
+		baseLen = common.BytesToBig(input[:32]).Uint64()
+		expLen  = common.BytesToBig(input[32:64]).Uint64()
+		modLen  = common.BytesToBig(input[64:96]).Uint64()
+	)
+
+	input = input[96:]
+	if uint64(len(input)) < baseLen {
+		input = append(input, make([]byte, baseLen-uint64(len(input)))...)
+	}
+	base := common.BytesToBig(input[:baseLen])
+
+	input = input[baseLen:]
+	if uint64(len(input)) < expLen {
+		input = append(input, make([]byte, expLen-uint64(len(input)))...)
+	}
+	exp := common.BytesToBig(input[:expLen])
+
+	input = input[expLen:]
+	if uint64(len(input)) < modLen {
+		input = append(input, make([]byte, modLen-uint64(len(input)))...)
+	}
+	mod := common.BytesToBig(input[:modLen])
+
+	return base.Exp(base, exp, mod).Bytes()
 }
