@@ -29,8 +29,9 @@ import (
 )
 
 var (
-	bigZero   = new(big.Int)
-	errRevert = errors.New("standard throw")
+	bigZero            = new(big.Int)
+	errWriteProtection = errors.New("evm write protection")
+	errRevert          = errors.New("standard throw")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -570,6 +571,40 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 
 	evm.interpreter.intPool.put(value, offset, size)
 
+	return nil, nil
+}
+
+func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// EIP116 availability check; return an invalid opcode error on fault
+	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
+		return nil, fmt.Errorf("invalid opcode %x", STATIC_CALL)
+	}
+
+	// pop gas
+	gas := stack.pop().Uint64()
+	// pop address
+	addr := stack.pop()
+	// pop input size and offset
+	inOffset, inSize := stack.pop(), stack.pop()
+	// pop return size and offset
+	retOffset, retSize := stack.pop(), stack.pop()
+
+	address := common.BigToAddress(addr)
+
+	// Get the arguments from the memory
+	args := memory.Get(inOffset.Int64(), inSize.Int64())
+
+	ret, returnGas, err := evm.StaticCall(contract, address, args, gas)
+	if err != nil {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(big.NewInt(1))
+
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+	contract.Gas += returnGas
+
+	evm.interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
 	return nil, nil
 }
 
