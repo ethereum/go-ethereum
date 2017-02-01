@@ -32,12 +32,16 @@ import (
 )
 
 var (
-	ExpDiffPeriod       = big.NewInt(100000)
 	big88               = big.NewInt(88)
 	bigMinus99          = big.NewInt(-99)
 	nPowAveragingWindow = big.NewInt(21)
 	nPowMaxAdjustDown   = big.NewInt(16) // 16% adjustment down
 	nPowMaxAdjustUp     = big.NewInt(8)  // 8% adjustment up
+
+	diffChangeBlock      = big.NewInt(4088)
+	nPowAveragingWindow2 = big.NewInt(88)
+	nPowMaxAdjustDown2   = big.NewInt(3) // 3% adjustment down
+	nPowMaxAdjustUp2     = big.NewInt(2) // 2% adjustment up
 )
 
 func AveragingWindowTimespan() *big.Int {
@@ -63,6 +67,31 @@ func MaxActualTimespan() *big.Int {
 	z := new(big.Int)
 	x.Add(big.NewInt(100), nPowMaxAdjustDown)
 	y.Mul(AveragingWindowTimespan(), x)
+	z.Div(y, big.NewInt(100))
+	return z
+}
+
+func AveragingWindowTimespan2() *big.Int {
+	x := new(big.Int)
+	return x.Mul(nPowAveragingWindow2, big88)
+}
+
+func MinActualTimespan2() *big.Int {
+	x := new(big.Int)
+	y := new(big.Int)
+	z := new(big.Int)
+	x.Sub(big.NewInt(100), nPowMaxAdjustUp2)
+	y.Mul(AveragingWindowTimespan2(), x)
+	z.Div(y, big.NewInt(100))
+	return z
+}
+
+func MaxActualTimespan2() *big.Int {
+	x := new(big.Int)
+	y := new(big.Int)
+	z := new(big.Int)
+	x.Add(big.NewInt(100), nPowMaxAdjustDown2)
+	y.Mul(AveragingWindowTimespan2(), x)
 	z.Div(y, big.NewInt(100))
 	return z
 }
@@ -338,11 +367,19 @@ func ValidateHeaderHeaderChain(config *params.ChainConfig, pow pow.PoW, header *
 	return nil
 }
 
+func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
+	if parentNumber.Cmp(diffChangeBlock) < 0 {
+		return CalcDifficultyOrig(time, parentTime, parentNumber, parentDiff, bc)
+	} else {
+		return CalcDifficulty2(time, parentTime, parentNumber, parentDiff, bc)
+	}
+}
+
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
 // Rewritten to be based on Digibyte's Digishield v3 retargeting
-func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
+func CalcDifficultyOrig(time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
@@ -398,7 +435,49 @@ func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentN
 	return x
 }
 
+func CalcDifficulty2(time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
+	x := new(big.Int)
+	nFirstBlock := new(big.Int)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow2)
+
+	glog.V(logger.Debug).Infof("CalcDifficulty2 parentNumber: %v parentDiff: %v\n", parentNumber, parentDiff)
+
+	nLastBlockTime := bc.CalcPastMedianTime(parentNumber.Uint64())
+	nFirstBlockTime := bc.CalcPastMedianTime(nFirstBlock.Uint64())
+	nActualTimespan := new(big.Int)
+	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
+
+	y := new(big.Int)
+	y.Sub(nActualTimespan, AveragingWindowTimespan2())
+	y.Div(y, big.NewInt(4))
+	nActualTimespan.Add(y, AveragingWindowTimespan2())
+
+	if nActualTimespan.Cmp(MinActualTimespan2()) < 0 {
+		nActualTimespan.Set(MinActualTimespan2())
+	} else if nActualTimespan.Cmp(MaxActualTimespan2()) > 0 {
+		nActualTimespan.Set(MaxActualTimespan2())
+	}
+
+	x.Mul(parentDiff, AveragingWindowTimespan2())
+
+	x.Div(x, nActualTimespan)
+
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+
+	return x
+}
+
 func CalcDifficultyHeaderChain(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
+	if parentNumber.Cmp(diffChangeBlock) < 0 {
+		return CalcDifficultyHeaderChainOrig(time, parentTime, parentNumber, parentDiff, hc)
+	} else {
+		return CalcDifficultyHeaderChain2(time, parentTime, parentNumber, parentDiff, hc)
+	}
+}
+
+func CalcDifficultyHeaderChainOrig(time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
@@ -431,6 +510,37 @@ func CalcDifficultyHeaderChain(config *params.ChainConfig, time, parentTime uint
 	x.Div(x, nActualTimespan)
 
 	// minimum difficulty can ever be (before exponential factor)
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+
+	return x
+}
+
+func CalcDifficultyHeaderChain2(time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
+	x := new(big.Int)
+	nFirstBlock := new(big.Int)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow2)
+
+	nLastBlockTime := hc.CalcPastMedianTime(parentNumber.Uint64())
+	nFirstBlockTime := hc.CalcPastMedianTime(nFirstBlock.Uint64())
+	nActualTimespan := new(big.Int)
+	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
+
+	y := new(big.Int)
+	y.Sub(nActualTimespan, AveragingWindowTimespan2())
+	y.Div(y, big.NewInt(4))
+	nActualTimespan.Add(y, AveragingWindowTimespan2())
+
+	if nActualTimespan.Cmp(MinActualTimespan2()) < 0 {
+		nActualTimespan.Set(MinActualTimespan2())
+	} else if nActualTimespan.Cmp(MaxActualTimespan2()) > 0 {
+		nActualTimespan.Set(MaxActualTimespan2())
+	}
+
+	x.Mul(parentDiff, AveragingWindowTimespan2())
+	x.Div(x, nActualTimespan)
+
 	if x.Cmp(params.MinimumDifficulty) < 0 {
 		x.Set(params.MinimumDifficulty)
 	}
