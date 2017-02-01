@@ -209,10 +209,15 @@ func initialize() {
 		nodeid = shh.NewIdentity()
 	}
 
+	maxPeers := 80
+	if *bootstrapMode {
+		maxPeers = 800
+	}
+
 	server = &p2p.Server{
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
-			MaxPeers:       128,
+			MaxPeers:       maxPeers,
 			Name:           common.MakeName("whisper-go", "5.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     *argIP,
