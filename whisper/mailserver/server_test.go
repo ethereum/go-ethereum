@@ -152,6 +152,12 @@ func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *
 	if exist != expect {
 		t.Fatalf("error: exist = %v, seed: %d.", exist, seed)
 	}
+
+	src[0]++
+	ok, lower, upper, topic = server.validateRequest(src, request)
+	if ok {
+		t.Fatalf("request validation false positive, seed: %d.", seed)
+	}
 }
 
 func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
