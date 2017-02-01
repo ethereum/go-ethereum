@@ -34,7 +34,7 @@ import (
 )
 
 type diffTest struct {
-	ParentTimestamp    uint64
+	ParentTimestamp    *big.Int
 	ParentDifficulty   *big.Int
 	CurrentTimestamp   uint64
 	CurrentBlocknumber *big.Int
@@ -53,7 +53,7 @@ func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	d.ParentTimestamp = common.String2Big(ext.ParentTimestamp).Uint64()
+	d.ParentTimestamp = common.String2Big(ext.ParentTimestamp)
 	d.ParentDifficulty = common.String2Big(ext.ParentDifficulty)
 	d.CurrentTimestamp = common.String2Big(ext.CurrentTimestamp).Uint64()
 	d.CurrentBlocknumber = common.String2Big(ext.CurrentBlocknumber)
@@ -78,7 +78,7 @@ func TestCalcDifficulty(t *testing.T) {
 	config := &params.ChainConfig{HomesteadBlock: big.NewInt(1150000)}
 	for name, test := range tests {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
-		diff := CalcDifficulty(config, test.CurrentTimestamp, test.ParentTimestamp, number, test.ParentDifficulty)
+		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{Time: test.ParentTimestamp, Number: number, Difficulty: test.ParentDifficulty})
 		if diff.Cmp(test.CurrentDifficulty) != 0 {
 			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
 		}
