@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -27,7 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var bigZero = new(big.Int)
+var (
+	bigZero   = new(big.Int)
+	errRevert = errors.New("standard throw")
+)
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	x, y := stack.pop(), stack.pop()
@@ -667,6 +671,20 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 
 	evm.interpreter.intPool.put(offset, size)
 	return ret, nil
+}
+
+func opRevert(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// if not metropolis return an error. REVERT is not supported
+	// during pre-metropolis.
+	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
+		return nil, fmt.Errorf("invalid opcode %x", REVERT)
+	}
+
+	offset, size := stack.pop(), stack.pop()
+	ret := memory.GetPtr(offset.Int64(), size.Int64())
+
+	evm.interpreter.intPool.put(offset, size)
+	return ret, errRevert
 }
 
 func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {

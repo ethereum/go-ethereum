@@ -390,6 +390,14 @@ func NewJumpTable() [256]operation {
 			validateStack: makeStackFunc(0, 1),
 			valid:         true,
 		},
+		// TODO:
+		// * Determine cost
+		REVERT: {
+			execute:       opRevert,
+			gasCost:       constGasFunc(GasFastestStep),
+			validateStack: makeStackFunc(2, 0),
+			valid:         true,
+		},
 		JUMPDEST: {
 			execute:       opJumpdest,
 			gasCost:       constGasFunc(params.JumpdestGas),
