@@ -116,3 +116,60 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 }
+
+func TestDifferenceIterator(t *testing.T) {
+	triea := newEmpty()
+	valsa := []struct{ k, v string }{
+		{"bar", "b"},
+		{"barb", "ba"},
+		{"bars", "bb"},
+		{"bard", "bc"},
+		{"fab", "z"},
+		{"foo", "a"},
+		{"food", "ab"},
+		{"foos", "aa"},
+	}
+	for _, val := range valsa {
+		triea.Update([]byte(val.k), []byte(val.v))
+	}
+	triea.Commit()
+
+	trieb := newEmpty()
+	valsb := []struct{ k, v string }{
+		{"aardvark", "c"},
+		{"bar", "b"},
+		{"barb", "bd"},
+		{"bars", "be"},
+		{"fab", "z"},
+		{"foo", "a"},
+		{"foos", "aa"},
+		{"food", "ab"},
+		{"jars", "d"},
+	}
+	for _, val := range valsb {
+		trieb.Update([]byte(val.k), []byte(val.v))
+	}
+	trieb.Commit()
+
+	found := make(map[string]string)
+	di, _ := NewDifferenceIterator(NewNodeIterator(triea), NewNodeIterator(trieb))
+	it := FromNodeIterator(di)
+	for it.Next() {
+		found[string(it.Key)] = string(it.Value)
+	}
+
+	all := []struct{ k, v string }{
+		{"aardvark", "c"},
+		{"barb", "bd"},
+		{"bars", "be"},
+		{"jars", "d"},
+	}
+	for _, item := range all {
+		if found[item.k] != item.v {
+			t.Errorf("iterator value mismatch for %s: got %q want %q", item.k, found[item.k], item.v)
+		}
+	}
+	if len(found) != len(all) {
+		t.Errorf("iterator count mismatch: got %d values, want %d", len(found), len(all))
+	}
+}
