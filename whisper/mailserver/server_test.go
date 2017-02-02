@@ -49,13 +49,12 @@ func assert(statement bool, text string, t *testing.T) {
 }
 
 func TestDBKey(t *testing.T) {
-	const d = 256 * 256 * 256
 	var h common.Hash
 	i := uint32(time.Now().Unix())
 	k := NewDbKey(i, h)
 	assert(len(k.raw) == common.HashLength+4, "wrong DB key length", t)
-	assert(byte(i%256) == k.raw[3], "raw representation should be big endian", t)
-	assert(byte(i/d) == k.raw[0], "big endian expected", t)
+	assert(byte(i%0x100) == k.raw[3], "raw representation should be big endian", t)
+	assert(byte(i/0x1000000) == k.raw[0], "big endian expected", t)
 }
 
 func generateEnvelope(t *testing.T) *whisper.Envelope {
