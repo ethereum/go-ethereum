@@ -268,6 +268,26 @@ func (self *LightState) CreateStateObject(ctx context.Context, addr common.Addre
 	return newSo, nil
 }
 
+// ForEachStorage calls a callback function for every key/value pair found
+// in the local storage cache. Note that unlike core/state.StateObject,
+// light.StateObject only returns cached values and doesn't download the
+// entire storage tree.
+func (self *LightState) ForEachStorage(ctx context.Context, addr common.Address, cb func(key, value common.Hash) bool) error {
+	so, err := self.GetStateObject(ctx, addr)
+	if err != nil {
+		return err
+	}
+
+	if so == nil {
+		return nil
+	}
+
+	for h, v := range so.storage {
+		cb(h, v)
+	}
+	return nil
+}
+
 //
 // Setting, copying of the state methods
 //

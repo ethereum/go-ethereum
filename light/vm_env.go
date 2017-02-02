@@ -81,6 +81,15 @@ func (s *VMState) SubBalance(addr common.Address, amount *big.Int) {
 	s.errHandler(err)
 }
 
+// ForEachStorage calls a callback function for every key/value pair found
+// in the local storage cache. Note that unlike core/state.StateObject,
+// light.StateObject only returns cached values and doesn't download the
+// entire storage tree.
+func (s *VMState) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
+	err := s.state.ForEachStorage(s.ctx, addr, cb)
+	s.errHandler(err)
+}
+
 // GetBalance retrieves the balance from the given address or 0 if the account does
 // not exist
 func (s *VMState) GetBalance(addr common.Address) *big.Int {

@@ -27,9 +27,19 @@ type ContractRef interface {
 	Address() common.Address
 }
 
+// AccountRef implements ContractRef.
+//
+// Account references are used during EVM initialisation and
+// it's primary use is to fetch addresses. Removing this object
+// proves difficult because of the cached jump destinations which
+// are fetched from the parent contract (i.e. the caller), which
+// is a ContractRef.
 type AccountRef common.Address
 
-func (ar AccountRef) Address() common.Address  { return (common.Address)(ar) }
+// Address casts AccountRef to a Address
+func (ar AccountRef) Address() common.Address { return (common.Address)(ar) }
+
+// Reference returns a casted Address to AccountRef
 func Reference(addr common.Address) AccountRef { return (AccountRef)(addr) }
 
 // Contract represents an ethereum contract in the state database. It contains

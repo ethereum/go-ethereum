@@ -474,6 +474,27 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
+func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
+	so := db.getStateObject(addr)
+	if so == nil {
+		return
+	}
+
+	// When iterating over the storage check the cache first
+	for h, value := range so.cachedStorage {
+		cb(h, value)
+	}
+
+	it := so.getTrie(db.db).Iterator()
+	for it.Next() {
+		// ignore cached values
+		key := common.BytesToHash(db.trie.GetKey(it.Key))
+		if _, ok := so.cachedStorage[key]; !ok {
+			cb(key, common.BytesToHash(it.Value))
+		}
+	}
+}
+
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (self *StateDB) Copy() *StateDB {
