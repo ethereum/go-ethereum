@@ -38,7 +38,7 @@ func run(evm *EVM, contract *Contract, input []byte) ([]byte, error) {
 	if contract.CodeAddr != nil {
 		precompiledContracts := PrecompiledContracts
 		if evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
-			precompiledContracts = PrecompiledContractsEIP198
+			precompiledContracts = PrecompiledContractsMetropolis
 		}
 
 		if p := precompiledContracts[*contract.CodeAddr]; p != nil {
