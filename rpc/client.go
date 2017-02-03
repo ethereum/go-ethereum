@@ -682,7 +682,7 @@ func newClientSubscription(c *Client, channel reflect.Value) *ClientSubscription
 // resubscription when the client connection is closed unexpectedly.
 //
 // The error channel receives a value when the subscription has ended due
-// to an error. The received error is ErrClientQuit if Close has been called
+// to an error. The received error is nil if Close has been called
 // on the underlying client and no other error has occurred.
 //
 // The error channel is closed when Unsubscribe is called on the subscription.
@@ -707,6 +707,9 @@ func (sub *ClientSubscription) quitWithError(err error, unsubscribeServer bool) 
 			sub.requestUnsubscribe()
 		}
 		if err != nil {
+			if err == ErrClientQuit {
+				err = nil // Adhere to subscription semantics.
+			}
 			sub.err <- err
 		}
 	})
