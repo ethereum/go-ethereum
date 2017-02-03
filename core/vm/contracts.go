@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/obscuren/bn256"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -41,6 +42,7 @@ var PrecompiledContracts = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
+	common.BytesToAddress([]byte{8}): &pairing{},
 }
 
 // RunPrecompile runs and evaluate the output of a precompiled contract defined in contracts.go
@@ -133,4 +135,26 @@ func (c *dataCopy) RequiredGas(inputSize int) uint64 {
 }
 func (c *dataCopy) Run(in []byte) []byte {
 	return in
+}
+
+// pairing implements a pre-compile for the bn256 curve
+type pairing struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *pairing) RequiredGas(inputSize int) uint64 {
+	return 0 // TODO
+}
+
+func (c *pairing) Run(in []byte) []byte {
+	if len(in) != 64 {
+		return nil
+	}
+
+	g1 := new(bn256.G1).ScalarBaseMult(new(big.Int).SetBytes(in[:32]))
+	g2 := new(bn256.G2).ScalarBaseMult(new(big.Int).SetBytes(in[32:]))
+
+	return bn256.Pair(g1, g2).Marshal()
 }

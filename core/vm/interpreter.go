@@ -87,6 +87,12 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 
 	if contract.CodeAddr != nil {
 		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
+			if _, isPairing := p.(*pairing); isPairing && !evm.env.ChainConfig().IsMetropolis(evm.env.BlockNumber) {
+				// technically it shouldn't return. someone might have deployed
+				// a contract on this address, though extremely unlikely.
+				return
+			}
+
 			return RunPrecompiledContract(p, input, contract)
 		}
 	}
