@@ -34,8 +34,17 @@ type PrecompiledContract interface {
 	Run(input []byte) []byte         // Run runs the precompiled contract
 }
 
-// Precompiled contains the default set of ethereum contracts
+// PrecompiledContracts contains the default set of ethereum contracts
 var PrecompiledContracts = map[common.Address]PrecompiledContract{
+	common.BytesToAddress([]byte{1}): &ecrecover{},
+	common.BytesToAddress([]byte{2}): &sha256{},
+	common.BytesToAddress([]byte{3}): &ripemd160{},
+	common.BytesToAddress([]byte{4}): &dataCopy{},
+}
+
+// PrecompiledContractsEIP198 contains the default set of ethereum contracts
+// for EIP198.
+var PrecompiledContractsEIP198 = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
 	common.BytesToAddress([]byte{2}): &sha256{},
 	common.BytesToAddress([]byte{3}): &ripemd160{},
@@ -132,6 +141,7 @@ func (c *dataCopy) Run(in []byte) []byte {
 	return in
 }
 
+// bigModexp implements a native big integer exponential modular operation.
 type bigModexp struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
