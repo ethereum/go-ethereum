@@ -38,10 +38,16 @@ var (
 	nPowMaxAdjustDown   = big.NewInt(16) // 16% adjustment down
 	nPowMaxAdjustUp     = big.NewInt(8)  // 8% adjustment up
 
-	diffChangeBlock      = big.NewInt(4088)
-	nPowAveragingWindow2 = big.NewInt(88)
-	nPowMaxAdjustDown2   = big.NewInt(3) // 3% adjustment down
-	nPowMaxAdjustUp2     = big.NewInt(2) // 2% adjustment up
+	diffChangeBlock       = big.NewInt(4088)
+	nPowAveragingWindow88 = big.NewInt(88)
+	nPowMaxAdjustDown2    = big.NewInt(3) // 3% adjustment down
+	nPowMaxAdjustUp2      = big.NewInt(2) // 2% adjustment up
+
+	// Flux
+	fluxChangeBlock       = big.NewInt(8000)
+	nPowMaxAdjustDownFlux = big.NewInt(5) // 0.5% adjustment down
+	nPowMaxAdjustUpFlux   = big.NewInt(3) // 0.3% adjustment up
+	nPowDampFlux          = big.NewInt(1) // 0.1%
 )
 
 func AveragingWindowTimespan() *big.Int {
@@ -71,9 +77,9 @@ func MaxActualTimespan() *big.Int {
 	return z
 }
 
-func AveragingWindowTimespan2() *big.Int {
+func AveragingWindowTimespan88() *big.Int {
 	x := new(big.Int)
-	return x.Mul(nPowAveragingWindow2, big88)
+	return x.Mul(nPowAveragingWindow88, big88)
 }
 
 func MinActualTimespan2() *big.Int {
@@ -81,7 +87,7 @@ func MinActualTimespan2() *big.Int {
 	y := new(big.Int)
 	z := new(big.Int)
 	x.Sub(big.NewInt(100), nPowMaxAdjustUp2)
-	y.Mul(AveragingWindowTimespan2(), x)
+	y.Mul(AveragingWindowTimespan88(), x)
 	z.Div(y, big.NewInt(100))
 	return z
 }
@@ -91,8 +97,40 @@ func MaxActualTimespan2() *big.Int {
 	y := new(big.Int)
 	z := new(big.Int)
 	x.Add(big.NewInt(100), nPowMaxAdjustDown2)
-	y.Mul(AveragingWindowTimespan2(), x)
+	y.Mul(AveragingWindowTimespan88(), x)
 	z.Div(y, big.NewInt(100))
+	return z
+}
+
+func MinActualTimespanFlux(dampen bool) *big.Int {
+	x := new(big.Int)
+	y := new(big.Int)
+	z := new(big.Int)
+	if dampen {
+		x.Sub(big.NewInt(1000), nPowDampFlux)
+		y.Mul(AveragingWindowTimespan88(), x)
+		z.Div(y, big.NewInt(1000))
+	} else {
+		x.Sub(big.NewInt(1000), nPowMaxAdjustUpFlux)
+		y.Mul(AveragingWindowTimespan88(), x)
+		z.Div(y, big.NewInt(1000))
+	}
+	return z
+}
+
+func MaxActualTimespanFlux(dampen bool) *big.Int {
+	x := new(big.Int)
+	y := new(big.Int)
+	z := new(big.Int)
+	if dampen {
+		x.Add(big.NewInt(1000), nPowDampFlux)
+		y.Mul(AveragingWindowTimespan88(), x)
+		z.Div(y, big.NewInt(1000))
+	} else {
+		x.Add(big.NewInt(1000), nPowMaxAdjustDownFlux)
+		y.Mul(AveragingWindowTimespan88(), x)
+		z.Div(y, big.NewInt(1000))
+	}
 	return z
 }
 
@@ -370,8 +408,11 @@ func ValidateHeaderHeaderChain(config *params.ChainConfig, pow pow.PoW, header *
 func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
 	if parentNumber.Cmp(diffChangeBlock) < 0 {
 		return CalcDifficultyOrig(time, parentTime, parentNumber, parentDiff, bc)
-	} else {
+	}
+	if parentNumber.Cmp(fluxChangeBlock) < 0 {
 		return CalcDifficulty2(time, parentTime, parentNumber, parentDiff, bc)
+	} else {
+		return FluxDifficulty(time, parentTime, parentNumber, parentDiff, bc)
 	}
 }
 
@@ -438,7 +479,7 @@ func CalcDifficultyOrig(time, parentTime uint64, parentNumber, parentDiff *big.I
 func CalcDifficulty2(time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow2)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
 
 	glog.V(logger.Debug).Infof("CalcDifficulty2 parentNumber: %v parentDiff: %v\n", parentNumber, parentDiff)
 
@@ -448,9 +489,9 @@ func CalcDifficulty2(time, parentTime uint64, parentNumber, parentDiff *big.Int,
 	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
 
 	y := new(big.Int)
-	y.Sub(nActualTimespan, AveragingWindowTimespan2())
+	y.Sub(nActualTimespan, AveragingWindowTimespan88())
 	y.Div(y, big.NewInt(4))
-	nActualTimespan.Add(y, AveragingWindowTimespan2())
+	nActualTimespan.Add(y, AveragingWindowTimespan88())
 
 	if nActualTimespan.Cmp(MinActualTimespan2()) < 0 {
 		nActualTimespan.Set(MinActualTimespan2())
@@ -458,7 +499,54 @@ func CalcDifficulty2(time, parentTime uint64, parentNumber, parentDiff *big.Int,
 		nActualTimespan.Set(MaxActualTimespan2())
 	}
 
-	x.Mul(parentDiff, AveragingWindowTimespan2())
+	x.Mul(parentDiff, AveragingWindowTimespan88())
+
+	x.Div(x, nActualTimespan)
+
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+
+	return x
+}
+
+func FluxDifficulty(time, parentTime uint64, parentNumber, parentDiff *big.Int, bc *BlockChain) *big.Int {
+	x := new(big.Int)
+	nFirstBlock := new(big.Int)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
+
+	diffTime := new(big.Int)
+	diffTime.Sub(big.NewInt(int64(time)), big.NewInt(int64(parentTime)))
+
+	nLastBlockTime := bc.CalcPastMedianTime(parentNumber.Uint64())
+	nFirstBlockTime := bc.CalcPastMedianTime(nFirstBlock.Uint64())
+	nActualTimespan := new(big.Int)
+	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
+
+	y := new(big.Int)
+	y.Sub(nActualTimespan, AveragingWindowTimespan88())
+	y.Div(y, big.NewInt(4))
+	nActualTimespan.Add(y, AveragingWindowTimespan88())
+
+	if nActualTimespan.Cmp(MinActualTimespanFlux(false)) < 0 {
+		doubleBig88 := new(big.Int)
+		doubleBig88.Mul(big88, big.NewInt(2))
+		if diffTime.Cmp(doubleBig88) > 0 {
+			nActualTimespan.Set(MinActualTimespanFlux(true))
+		} else {
+			nActualTimespan.Set(MinActualTimespanFlux(false))
+		}
+	} else if nActualTimespan.Cmp(MaxActualTimespanFlux(false)) > 0 {
+		halfBig88 := new(big.Int)
+		halfBig88.Div(big88, big.NewInt(2))
+		if diffTime.Cmp(halfBig88) < 0 {
+			nActualTimespan.Set(MaxActualTimespanFlux(true))
+		} else {
+			nActualTimespan.Set(MaxActualTimespanFlux(false))
+		}
+	}
+
+	x.Mul(parentDiff, AveragingWindowTimespan88())
 
 	x.Div(x, nActualTimespan)
 
@@ -472,8 +560,11 @@ func CalcDifficulty2(time, parentTime uint64, parentNumber, parentDiff *big.Int,
 func CalcDifficultyHeaderChain(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
 	if parentNumber.Cmp(diffChangeBlock) < 0 {
 		return CalcDifficultyHeaderChainOrig(time, parentTime, parentNumber, parentDiff, hc)
-	} else {
+	}
+	if parentNumber.Cmp(fluxChangeBlock) < 0 {
 		return CalcDifficultyHeaderChain2(time, parentTime, parentNumber, parentDiff, hc)
+	} else {
+		return FluxDifficultyHeaderChain(time, parentTime, parentNumber, parentDiff, hc)
 	}
 }
 
@@ -520,7 +611,7 @@ func CalcDifficultyHeaderChainOrig(time, parentTime uint64, parentNumber, parent
 func CalcDifficultyHeaderChain2(time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
 	x := new(big.Int)
 	nFirstBlock := new(big.Int)
-	nFirstBlock.Sub(parentNumber, nPowAveragingWindow2)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
 
 	nLastBlockTime := hc.CalcPastMedianTime(parentNumber.Uint64())
 	nFirstBlockTime := hc.CalcPastMedianTime(nFirstBlock.Uint64())
@@ -528,9 +619,9 @@ func CalcDifficultyHeaderChain2(time, parentTime uint64, parentNumber, parentDif
 	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
 
 	y := new(big.Int)
-	y.Sub(nActualTimespan, AveragingWindowTimespan2())
+	y.Sub(nActualTimespan, AveragingWindowTimespan88())
 	y.Div(y, big.NewInt(4))
-	nActualTimespan.Add(y, AveragingWindowTimespan2())
+	nActualTimespan.Add(y, AveragingWindowTimespan88())
 
 	if nActualTimespan.Cmp(MinActualTimespan2()) < 0 {
 		nActualTimespan.Set(MinActualTimespan2())
@@ -538,7 +629,53 @@ func CalcDifficultyHeaderChain2(time, parentTime uint64, parentNumber, parentDif
 		nActualTimespan.Set(MaxActualTimespan2())
 	}
 
-	x.Mul(parentDiff, AveragingWindowTimespan2())
+	x.Mul(parentDiff, AveragingWindowTimespan88())
+	x.Div(x, nActualTimespan)
+
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+
+	return x
+}
+
+func FluxDifficultyHeaderChain(time, parentTime uint64, parentNumber, parentDiff *big.Int, hc *HeaderChain) *big.Int {
+	x := new(big.Int)
+	nFirstBlock := new(big.Int)
+	nFirstBlock.Sub(parentNumber, nPowAveragingWindow88)
+
+	diffTime := new(big.Int)
+	diffTime.Sub(big.NewInt(int64(time)), big.NewInt(int64(parentTime)))
+
+	nLastBlockTime := hc.CalcPastMedianTime(parentNumber.Uint64())
+	nFirstBlockTime := hc.CalcPastMedianTime(nFirstBlock.Uint64())
+	nActualTimespan := new(big.Int)
+	nActualTimespan.Sub(nLastBlockTime, nFirstBlockTime)
+
+	y := new(big.Int)
+	y.Sub(nActualTimespan, AveragingWindowTimespan88())
+	y.Div(y, big.NewInt(4))
+	nActualTimespan.Add(y, AveragingWindowTimespan88())
+
+	if nActualTimespan.Cmp(MinActualTimespanFlux(false)) < 0 {
+		doubleBig88 := new(big.Int)
+		doubleBig88.Mul(big88, big.NewInt(2))
+		if diffTime.Cmp(doubleBig88) > 0 {
+			nActualTimespan.Set(MinActualTimespanFlux(true))
+		} else {
+			nActualTimespan.Set(MinActualTimespanFlux(false))
+		}
+	} else if nActualTimespan.Cmp(MaxActualTimespanFlux(false)) > 0 {
+		halfBig88 := new(big.Int)
+		halfBig88.Div(big88, big.NewInt(2))
+		if diffTime.Cmp(halfBig88) < 0 {
+			nActualTimespan.Set(MaxActualTimespanFlux(true))
+		} else {
+			nActualTimespan.Set(MaxActualTimespanFlux(false))
+		}
+	}
+
+	x.Mul(parentDiff, AveragingWindowTimespan88())
 	x.Div(x, nActualTimespan)
 
 	if x.Cmp(params.MinimumDifficulty) < 0 {
