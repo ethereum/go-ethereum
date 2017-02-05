@@ -154,6 +154,43 @@ The output of this command is supposed to be machine-readable.
 Prints the swarm hash of file or directory.
 `,
 		},
+		{
+			Name:      "manifest",
+			Usage:     "update a MANIFEST",
+			ArgsUsage: "manifest COMMAND",
+			Description: `
+Updates a MANIFEST by adding/removing/updating the hash of a path.
+`,
+			Subcommands: []cli.Command{
+				{
+					Action:    add,
+					Name:      "add",
+					Usage:     "add a new path to the manifest",
+					ArgsUsage: "<MANIFEST> <path> <hash> [<content-type>]",
+					Description: `
+Adds a new path to the manifest
+`,
+				},
+				{
+					Action:    update,
+					Name:      "update",
+					Usage:     "update the hash for an already existing path in the manifest",
+					ArgsUsage: "<MANIFEST> <path> <newhash> [<newcontent-type>]",
+					Description: `
+Update the hash for an already existing path in the manifest
+`,
+				},
+				{
+					Action:    remove,
+					Name:      "remove",
+					Usage:     "removes a path from the manifest",
+					ArgsUsage: "<MANIFEST> <path>",
+					Description: `
+Removes a path from the manifest
+`,
+				},
+			},
+		},
 	}
 
 	app.Flags = []cli.Flag{
