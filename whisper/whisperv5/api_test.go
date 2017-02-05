@@ -14,22 +14,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package shhapi
+package whisperv5
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 	"time"
 
-	"encoding/json"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 func TestBasic(t *testing.T) {
 	var id string = "test"
-	api := NewPublicWhisperAPI()
+	w := New()
+	api := NewPublicWhisperAPI(w)
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
@@ -39,7 +38,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed generateFilter: %s.", err)
 	}
 
-	if uint64(ver) != whisperv5.ProtocolVersion {
+	if uint64(ver) != ProtocolVersion {
 		t.Fatalf("wrong version: %d.", ver)
 	}
 
@@ -182,22 +181,22 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 	}
 
 	i := 0
-	if f.Topics[i] != (whisperv5.TopicType{0x00, 0x00, 0x00, 0x00}) {
+	if f.Topics[i] != (TopicType{0x00, 0x00, 0x00, 0x00}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 
 	i++
-	if f.Topics[i] != (whisperv5.TopicType{0x00, 0x7f, 0x80, 0xff}) {
+	if f.Topics[i] != (TopicType{0x00, 0x7f, 0x80, 0xff}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 
 	i++
-	if f.Topics[i] != (whisperv5.TopicType{0xff, 0x80, 0x7f, 0x00}) {
+	if f.Topics[i] != (TopicType{0xff, 0x80, 0x7f, 0x00}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 
 	i++
-	if f.Topics[i] != (whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}) {
+	if f.Topics[i] != (TopicType{0xf2, 0x6e, 0x77, 0x79}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 }
@@ -235,7 +234,7 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	if a.KeyName != "shh_test" {
 		t.Fatalf("wrong KeyName: %s.", a.KeyName)
 	}
-	if a.Topic != (whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}) {
+	if a.Topic != (TopicType{0xf2, 0x6e, 0x77, 0x79}) {
 		t.Fatalf("wrong topic: %x.", a.Topic)
 	}
 	if string(a.Padding) != "this is my test string" {
@@ -272,7 +271,8 @@ func waitForMessage(api *PublicWhisperAPI, id uint32, target int) bool {
 }
 
 func TestIntegrationAsym(t *testing.T) {
-	api := NewPublicWhisperAPI()
+	w := New()
+	api := NewPublicWhisperAPI(w)
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
@@ -304,14 +304,14 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("wrong key")
 	}
 
-	var topics [2]whisperv5.TopicType
-	topics[0] = whisperv5.TopicType{0x00, 0x64, 0x00, 0xff}
-	topics[1] = whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}
+	var topics [2]TopicType
+	topics[0] = TopicType{0x00, 0x64, 0x00, 0xff}
+	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
 	f.To = key
 	f.From = sig
 	f.Topics = topics[:]
-	f.PoW = whisperv5.MinimumPoW / 2
+	f.PoW = MinimumPoW / 2
 	f.AcceptP2P = true
 
 	id, err := api.NewFilter(f)
@@ -325,8 +325,8 @@ func TestIntegrationAsym(t *testing.T) {
 	p.To = f.To
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = whisperv5.MinimumPoW
-	p.Topic = whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}
+	p.PoW = MinimumPoW
+	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	p.WorkTime = 2
 
 	err = api.Post(p)
@@ -373,7 +373,8 @@ func TestIntegrationAsym(t *testing.T) {
 }
 
 func TestIntegrationSym(t *testing.T) {
-	api := NewPublicWhisperAPI()
+	w := New()
+	api := NewPublicWhisperAPI(w)
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
@@ -403,9 +404,9 @@ func TestIntegrationSym(t *testing.T) {
 		t.Fatalf("failed HasIdentity: false negative.")
 	}
 
-	var topics [2]whisperv5.TopicType
-	topics[0] = whisperv5.TopicType{0x00, 0x7f, 0x80, 0xff}
-	topics[1] = whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}
+	var topics [2]TopicType
+	topics[0] = TopicType{0x00, 0x7f, 0x80, 0xff}
+	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
 	f.KeyName = keyname
 	f.Topics = topics[:]
@@ -424,8 +425,8 @@ func TestIntegrationSym(t *testing.T) {
 	p.From = f.From
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = whisperv5.MinimumPoW
-	p.Topic = whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}
+	p.PoW = MinimumPoW
+	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	p.WorkTime = 2
 
 	err = api.Post(p)
@@ -472,7 +473,8 @@ func TestIntegrationSym(t *testing.T) {
 }
 
 func TestIntegrationSymWithFilter(t *testing.T) {
-	api := NewPublicWhisperAPI()
+	w := New()
+	api := NewPublicWhisperAPI(w)
 	if api == nil {
 		t.Fatalf("failed to create API.")
 	}
@@ -502,9 +504,9 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 		t.Fatalf("failed HasIdentity: does not exist.")
 	}
 
-	var topics [2]whisperv5.TopicType
-	topics[0] = whisperv5.TopicType{0x00, 0x7f, 0x80, 0xff}
-	topics[1] = whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}
+	var topics [2]TopicType
+	topics[0] = TopicType{0x00, 0x7f, 0x80, 0xff}
+	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
 	f.KeyName = keyname
 	f.Topics = topics[:]
@@ -523,8 +525,8 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	p.From = sig
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = whisperv5.MinimumPoW
-	p.Topic = whisperv5.TopicType{0xf2, 0x6e, 0x77, 0x79}
+	p.PoW = MinimumPoW
+	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	p.WorkTime = 2
 
 	err = api.Post(p)

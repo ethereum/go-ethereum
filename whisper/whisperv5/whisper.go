@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/crypto/pbkdf2"
 	set "gopkg.in/fatih/set.v0"
 )
@@ -65,7 +66,7 @@ type Whisper struct {
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
 // Param s should be passed if you want to implement mail server, otherwise nil.
-func NewWhisper(server MailServer) *Whisper {
+func New() *Whisper {
 	whisper := &Whisper{
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
@@ -73,7 +74,6 @@ func NewWhisper(server MailServer) *Whisper {
 		messages:     make(map[common.Hash]*ReceivedMessage),
 		expirations:  make(map[uint32]*set.SetNonTS),
 		peers:        make(map[*Peer]struct{}),
-		mailServer:   server,
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
 		quit:         make(chan struct{}),
@@ -89,6 +89,22 @@ func NewWhisper(server MailServer) *Whisper {
 	}
 
 	return whisper
+}
+
+// APIs returns the RPC descriptors the Whisper implementation offers
+func (w *Whisper) APIs() []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: ProtocolName,
+			Version:   ProtocolVersionStr,
+			Service:   NewPublicWhisperAPI(w),
+			Public:    true,
+		},
+	}
+}
+
+func (w *Whisper) RegisterServer(server MailServer) {
+	w.mailServer = server
 }
 
 // Protocols returns the whisper sub-protocols ran by this particular client.
