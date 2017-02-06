@@ -33,9 +33,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
+
+type NetworkQuery struct {
+	Type string
+}
 
 type NetworkConfig struct {
 	// Type   NetworkType
@@ -47,7 +52,7 @@ type NetworkConfig struct {
 
 // event types related to connectivity, i.e., nodes coming on dropping off
 // and connections established and dropped
-var ConnectivityEvents = []interface{}{&NodeEvent{}, &ConnEvent{}}
+var ConnectivityEvents = []interface{}{&NodeEvent{}, &ConnEvent{}, &MsgEvent{}}
 
 // NewNetworkController creates a ResourceController responding to GET and DELETE methods
 // it embeds a mockers controller, a journal player, node and connection contollers.
@@ -55,6 +60,7 @@ var ConnectivityEvents = []interface{}{&NodeEvent{}, &ConnEvent{}}
 // Events from the eventer go into the provided journal. The content of the journal can be
 // accessed through the HTTP API.
 func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *Journal) Controller {
+
 	self := NewResourceContoller(
 		&ResourceHandlers{
 			// GET /<networkId>/
@@ -103,6 +109,7 @@ type Network struct {
 	connMap  map[string]int
 	Nodes    []*Node `json:"nodes"`
 	Conns    []*Conn `json:"conns"`
+	messenger	func(p2p.MsgReadWriter) adapters.Messenger
 	//
 	// adapters.Messenger
 	// node adapter function that creates the node model for
@@ -116,6 +123,7 @@ func NewNetwork(triggers, events *event.TypeMux) *Network {
 		events:   events,
 		nodeMap:  make(map[discover.NodeID]int),
 		connMap:  make(map[string]int),
+		messenger: adapters.NewSimPipe,
 	}
 }
 
@@ -155,12 +163,22 @@ type ConnEvent struct {
 	conn   *Conn
 }
 
+type MsgEvent struct {
+	Action string
+	Type   string
+	msg    *Msg
+}
+
 func (self *ConnEvent) String() string {
 	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.conn)
 }
 
 func (self *NodeEvent) String() string {
 	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.node)
+}
+
+func (self *MsgEvent) String() string {
+	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.msg)
 }
 
 func (self *Node) event(up bool) *NodeEvent {
@@ -210,6 +228,25 @@ func (self *Conn) event(up, rev bool) *ConnEvent {
 	}
 }
 
+type Msg struct {
+	One   *adapters.NodeId `json:"one"`
+	Other *adapters.NodeId `json:"other"`
+	Code  uint64		   `json:"conn"`
+}
+
+func (self *Msg) String() string {
+	return fmt.Sprintf("Msg(%d) %v->%v", self.Code, self.One.Label(), self.Other.Label())
+}
+
+func (self *Msg) event() *MsgEvent {
+	return &MsgEvent{
+		Action: "up",
+		//Type:   fmt.Sprintf("%d", self.Code),
+		Type:   "msg",
+		msg:    self,
+	}
+}
+
 type NodeConfig struct {
 	Id *adapters.NodeId `json:"Id"`
 }
@@ -251,6 +288,12 @@ func (self *Network) NewNode(conf *NodeConfig) error {
 	self.Nodes = append(self.Nodes, node)
 	glog.V(6).Infof("node %v created", id)
 	return nil
+}
+
+func (self *Network) NewGenericSimNode(conf *NodeConfig) adapters.NodeAdapter {
+	id := conf.Id
+	na := adapters.NewSimNode(id, self, self.messenger)
+	return na
 }
 
 // newConn adds a new connection to the network
@@ -438,6 +481,17 @@ func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
 	conn.Up = false
 	self.events.Post(conn.event(false, conn.Reverse))
 	return nil
+}
+
+// Send(senderid, receiverid) sends a message from one node to another
+func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64, protomsg interface{}) {
+	msg := &Msg{
+		One:   senderid,
+		Other: receiverid,
+		Code:  msgcode,
+	}
+	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
+	self.events.Post(msg.event())                                                                // should also include send status maybe
 }
 
 // GetNodeAdapter(id) returns the NodeAdapter for node with id

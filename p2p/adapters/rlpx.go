@@ -19,6 +19,7 @@ package adapters
 import (
 	"fmt"
 	"net"
+	//"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -30,17 +31,19 @@ type RLPx struct {
 	id   *NodeId
 	net  *p2p.Server
 	addr []byte
-	m    Messenger
+	m    func(p2p.MsgReadWriter) Messenger
 	r    Reporter
 }
 
 type RLPxMessenger struct {
+	rw p2p.MsgReadWriter
 }
 
-func NewRLPx(addr []byte, srv *p2p.Server, m Messenger) *RLPx {
-	if m == nil {
-		m = &RLPxMessenger{}
-	}
+func NewRLPxMessenger(rw p2p.MsgReadWriter) Messenger {
+	return Messenger(&RLPxMessenger{rw: rw})
+}
+
+func NewRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Messenger) *RLPx {
 	return &RLPx{
 		net:  srv,
 		addr: addr,
@@ -48,7 +51,7 @@ func NewRLPx(addr []byte, srv *p2p.Server, m Messenger) *RLPx {
 	}
 }
 
-func NewReportingRLPx(addr []byte, srv *p2p.Server, m Messenger, r Reporter) *RLPx {
+func NewReportingRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Messenger, r Reporter) *RLPx {
 	rlpx := NewRLPx(addr, srv, m)
 	rlpx.r = r
 	srv.PeerConnHook = func(p *p2p.Peer) {
@@ -60,12 +63,16 @@ func NewReportingRLPx(addr []byte, srv *p2p.Server, m Messenger, r Reporter) *RL
 	return rlpx
 }
 
-func (RLPxMessenger) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
-	return p2p.Send(w, code, msg)
+func (self *RLPxMessenger) SendMsg(code uint64, msg interface{}) error {
+	return p2p.Send(self.rw, code, msg)
 }
 
-func (RLPxMessenger) ReadMsg(r p2p.MsgReader) (p2p.Msg, error) {
-	return r.ReadMsg()
+func (self *RLPxMessenger) ReadMsg() (p2p.Msg, error) {
+	return self.rw.ReadMsg()
+}
+
+func (self *RLPxMessenger) Close() {
+
 }
 
 func (self *RLPx) LocalAddr() []byte {
@@ -83,12 +90,15 @@ func (self *RLPx) Connect(enode []byte) error {
 	return nil
 }
 
-func (self *RLPx) Messenger() Messenger {
-	return self.m
+func (self *RLPx) Messenger(rw p2p.MsgReadWriter) Messenger {
+	return self.m(rw)
 }
 
-func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	p.Disconnect(p2p.DiscSubprotocolError)
+//func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (self *RLPx) Disconnect(b []byte) error {
+	//p.Disconnect(p2p.DiscSubprotocolError)
+	//d, _ := binary.Uvarint(b)
+	//p.Disconnect(p2p.DiscReason(d))
 	return nil
 }
 

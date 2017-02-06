@@ -38,6 +38,7 @@ func handle(w http.ResponseWriter, r *http.Request, c Controller) {
 	uri := requestURL.Path
 	w.Header().Set("Content-Type", "text/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	defer r.Body.Close()
 	parts := strings.Split(uri, "/")
 	var err error

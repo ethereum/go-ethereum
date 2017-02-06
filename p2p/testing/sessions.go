@@ -30,7 +30,7 @@ type ExchangeSession struct {
 // correct message exchange, forwarding, and broadcast
 // higher level or network behaviour should be tested with network simulators
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id adapters.NodeAdapter) adapters.ProtoCall) *ExchangeSession {
-	simPipe := &adapters.SimPipe{}
+	simPipe := adapters.NewSimPipe
 	network := simulations.NewNetwork(nil, nil)
 	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
 		na := adapters.NewSimNode(conf.Id, network, simPipe)
@@ -49,7 +49,8 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id ada
 	}
 	glog.V(6).Infof("network created")
 	na := network.GetNode(id).Adapter()
-	s := NewExchangeTestSession(t, na.(TestNetAdapter), na.Messenger().(TestMessenger), nil)
+	//s := NewExchangeTestSession(t, na.(TestNetAdapter), na.Messenger().(TestMessenger), nil)
+	s := NewExchangeTestSession(t, na.(TestNetAdapter), nil)
 	self := &ExchangeSession{
 		network:             network,
 		na:                  na,

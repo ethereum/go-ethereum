@@ -25,16 +25,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-func newPeer(rw p2p.MsgReadWriter) *Peer {
+func newPeer(m Messenger) *Peer {
 	return &Peer{
-		RW:     rw,
+		Messenger: m,
 		Errc:   make(chan error, 1),
 		Flushc: make(chan bool),
 	}
 }
 
 type Peer struct {
-	RW     p2p.MsgReadWriter
+	//RW     p2p.MsgReadWriter
+	Messenger
 	Errc   chan error
 	Flushc chan bool
 }
@@ -51,17 +52,17 @@ type SimNode struct {
 	lock      sync.RWMutex
 	Id        *NodeId
 	network   Network
-	messenger Messenger
+	messenger func(p2p.MsgReadWriter) Messenger
 	peerMap   map[discover.NodeID]int
 	peers     []*Peer
 	Run       ProtoCall
 }
 
-func (self *SimNode) Messenger() Messenger {
-	return self.messenger
+func (self *SimNode) Messenger(rw p2p.MsgReadWriter) Messenger {
+	return self.messenger(rw)
 }
 
-func NewSimNode(id *NodeId, n Network, m Messenger) *SimNode {
+func NewSimNode(id *NodeId, n Network, m func(p2p.MsgReadWriter) Messenger) *SimNode {
 	return &SimNode{
 		Id:        id,
 		network:   n,
@@ -95,24 +96,24 @@ func (self *SimNode) getPeer(id *NodeId) *Peer {
 func (self *SimNode) SetPeer(id *NodeId, rw p2p.MsgReadWriter) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	self.setPeer(id, rw)
+	self.setPeer(id, self.Messenger(rw))
 }
 
-func (self *SimNode) setPeer(id *NodeId, rw p2p.MsgReadWriter) *Peer {
+func (self *SimNode) setPeer(id *NodeId, m Messenger) *Peer {
 	i, found := self.peerMap[id.NodeID]
 	if !found {
 		i = len(self.peers)
 		self.peerMap[id.NodeID] = i
-		p := newPeer(rw)
+		p := newPeer(m)
 		self.peers = append(self.peers, p)
 		return p
 	}
-	if self.peers[i] != nil && rw != nil {
+	if self.peers[i] != nil && m != nil {
 		panic(fmt.Sprintf("pipe for %v already set", id))
 	}
 	// legit reconnect reset disconnection error,
 	p := self.peers[i]
-	p.RW = rw
+	p.Messenger = m
 	return p
 }
 
@@ -121,11 +122,11 @@ func (self *SimNode) Disconnect(rid []byte) error {
 	defer self.lock.Unlock()
 	id := NewNodeId(rid)
 	peer := self.getPeer(id)
-	if peer == nil || peer.RW == nil {
+	if peer == nil || peer.Messenger == nil {
 		return fmt.Errorf("already disconnected")
 	}
-	peer.RW.(*p2p.MsgPipeRW).Close()
-	peer.RW = nil
+	peer.Messenger.Close()
+	peer.Messenger = nil
 	// na := self.network.GetNodeAdapter(id)
 	// peer = na.(*SimNode).GetPeer(self.Id)
 	// peer.RW = nil
@@ -146,12 +147,12 @@ func (self *SimNode) Connect(rid []byte) error {
 	defer close(runc)
 	// run protocol on remote node with self as peer
 
-	err := na.(*SimNode).runProtocol(self.Id, rrw, rw, runc)
+	err := na.(ProtocolRunner).RunProtocol(self.Id, rrw, rw, runc)
 	if err != nil {
 		return fmt.Errorf("cannot run protocol (%v -> %v) %v", self.Id, id, err)
 	}
 	// run protocol on remote node with self as peer
-	err = self.runProtocol(id, rw, rrw, runc)
+	err = self.RunProtocol(id, rw, rrw, runc)
 	if err != nil {
 		return fmt.Errorf("cannot run protocol (%v -> %v): %v", id, self.Id, err)
 	}
@@ -159,17 +160,17 @@ func (self *SimNode) Connect(rid []byte) error {
 	return nil
 }
 
-func (self *SimNode) runProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error {
+func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error {
 	if self.Run == nil {
 		glog.V(6).Infof("no protocol starting on peer %v (connection with %v)", self.Id, id)
 		return nil
 	}
 	glog.V(6).Infof("protocol starting on peer %v (connection with %v)", self.Id, id)
 	peer := self.getPeer(id)
-	if peer != nil && peer.RW != nil {
+	if peer != nil && peer.Messenger != nil {
 		return fmt.Errorf("already connected %v to peer %v", self.Id, id)
 	}
-	peer = self.setPeer(id, rrw)
+	peer = self.setPeer(id, self.Messenger(rrw))
 	p := p2p.NewPeer(id.NodeID, Name(id.Bytes()), []p2p.Cap{})
 	go func() {
 		err := self.Run(p, rw)

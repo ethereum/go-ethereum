@@ -8,12 +8,16 @@ import (
 	"net/http"
 	"testing"
 	"time"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
+/***
+ * \todo rewrite this with a scripting engine to do http protocol xchanges more easily
+ */
 const (
 	domain = "http://localhost"
 	port   = "8888"
@@ -55,8 +59,61 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	// should test that session controller POST creates network controller
-	// with proper endpoints
+	s, err := json.Marshal(&struct{Id string}{Id: "testnetwork"})
+	req, err := http.NewRequest("POST", domain + ":" + port, bytes.NewReader(s))
+	if err != nil {
+		t.Fatalf("unexpected error creating request: %v", err)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("unexpected error on http.Client request: %v", err)
+	}
+	req, err = http.NewRequest("POST", domain + ":" + port + "/testnetwork/debug/", nil)
+	if err != nil {
+		t.Fatalf("unexpected error creating request: %v", err)
+	}
+	resp, err = (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("unexpected error on http.Client request: %v", err)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("error reading response body: %v", err)
+	}
+	t.Logf("%s", body)
+}
+
+func TestNodes(t *testing.T) {
+	networkname := "testnetworkfornodes"
+	
+	s, err := json.Marshal(&struct{Id string}{Id: networkname})
+	req, err := http.NewRequest("POST", domain + ":" + port, bytes.NewReader(s))
+	if err != nil {
+		t.Fatalf("unexpected error creating request: %v", err)
+	}
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		t.Fatalf("unexpected error on http.Client request: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		req, err = http.NewRequest("POST", domain + ":" + port + "/" + networkname + "/node/", nil)
+		if err != nil {
+			t.Fatalf("unexpected error creating request: %v", err)
+		}
+		resp, err = (&http.Client{}).Do(req)
+		if err != nil {
+			t.Fatalf("unexpected error on http.Client request: %v", err)
+		}
+		t.Logf("%s", resp)
+	}
+	/*
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("error reading response body: %v", err)
+	}
+	
+	t.Logf("%s", body)
+	*/
 }
 
 func testResponse(t *testing.T, method, addr string, r io.ReadSeeker) []byte {
@@ -104,7 +161,8 @@ func TestUpdate(t *testing.T) {
       "group": "nodes"
     }
   ],
-  "remove": []
+  "remove": [],
+  "message": []
 }`
 	resp := testResponse(t, "GET", url(port, "0"), bytes.NewReader([]byte("{}")))
 	if string(resp) != exp {

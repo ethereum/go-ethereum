@@ -28,19 +28,29 @@ type CyElement struct {
 }
 
 type CyUpdate struct {
-	Add    []*CyElement `json:"add"`
-	Remove []string     `json:"remove"`
+	Add     []*CyElement `json:"add"`
+	Remove  []string     `json:"remove"`
+	Message []string	 `json:"message"`
 }
 
 func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 	added := []*CyElement{}
 	removed := []string{}
+	messaged := []string{}
 	var el *CyElement
 	update := func(e *event.Event) bool {
 		entry := e.Data
 		var action string
 		if ev, ok := entry.(*NodeEvent); ok {
 			el = &CyElement{Group: "nodes", Data: &CyData{Id: ev.node.Id.Label()}}
+			action = ev.Action
+		} else if ev, ok := entry.(*MsgEvent); ok {
+			msg := ev.msg
+			id := ConnLabel(msg.One, msg.Other)
+			var source, target string
+			source = msg.One.Label()
+			target = msg.Other.Label()
+			el = &CyElement{Group: "msgs", Data: &CyData{Id: id, Source: source, Target: target}}
 			action = ev.Action
 		} else if ev, ok := entry.(*ConnEvent); ok {
 			// mutually exclusive directed edge (caller -> callee)
@@ -67,6 +77,9 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 		case "down":
 			el.Data.Up = false
 			removed = append(removed, el.Data.Id)
+		case "msg":
+			el.Data.Up = true
+			messaged = append(messaged, el.Data.Id)
 		default:
 			panic("unknown action")
 		}
@@ -75,7 +88,8 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 	j.Read(update)
 
 	return &CyUpdate{
-		Add:    added,
-		Remove: removed,
+		Add:     added,
+		Remove:  removed,
+		Message: messaged,
 	}, nil
 }

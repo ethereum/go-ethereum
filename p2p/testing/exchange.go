@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
@@ -36,8 +35,8 @@ type TestNetAdapter interface {
 
 type TestMessenger interface {
 	// MsgPipe([]byte, []byte) p2p,MsgPipe
-	ExpectMsg(p2p.MsgReader, uint64, interface{}) error
-	TriggerMsg(p2p.MsgWriter, uint64, interface{}) error
+	ExpectMsg(uint64, interface{}) error
+	TriggerMsg(uint64, interface{}) error
 }
 
 // exchanges are the basic units of protocol tests
@@ -73,17 +72,18 @@ type Disconnect struct {
 // it allows for resource-driven scenario testing
 // disconnect reason errors are written in session.Errs
 // (correcponding to session.Peers)
-func NewExchangeTestSession(t *testing.T, n TestNetAdapter, m TestMessenger, ids []*adapters.NodeId) *ExchangeTestSession {
+//func NewExchangeTestSession(t *testing.T, n TestNetAdapter, m TestMessenger, ids []*adapters.NodeId) *ExchangeTestSession {
+func NewExchangeTestSession(t *testing.T, n TestNetAdapter, ids []*adapters.NodeId) *ExchangeTestSession {
 	return &ExchangeTestSession{
 		Ids:            ids,
 		TestNetAdapter: n,
-		TestMessenger:  m,
 		t:              t,
 	}
 }
 
 type TestPeerInfo struct {
-	RW     p2p.MsgReadWriter
+	//RW     p2p.MsgReadWriter
+	Messenger	TestMessenger
 	Flushc chan bool
 	Errc   chan error
 }
@@ -94,15 +94,17 @@ func (self *ExchangeTestSession) trigger(trig Trigger) error {
 	if peer == nil {
 		panic(fmt.Sprintf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids)))
 	}
-	rw := peer.RW
-	if rw == nil {
+	//rw := peer.RW
+	m := peer.Messenger
+	if m == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", trig.Peer)
 	}
 	errc := make(chan error)
 
 	go func() {
 		glog.V(6).Infof("trigger....")
-		errc <- self.TriggerMsg(rw, trig.Code, trig.Msg)
+		//errc <- self.TriggerMsg(rw, trig.Code, trig.Msg)
+		errc <- m.(TestMessenger).TriggerMsg(trig.Code, trig.Msg)
 		glog.V(6).Infof("triggered")
 	}()
 
@@ -132,15 +134,17 @@ func (self *ExchangeTestSession) expect(exp Expect) error {
 	if peer == nil {
 		panic(fmt.Sprintf("expect: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids)))
 	}
-	rw := peer.RW
-	if rw == nil {
+	//rw := peer.RW
+	m := peer.Messenger
+	if m == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", exp.Peer)
 	}
 
 	errc := make(chan error)
 	go func() {
 		glog.V(6).Infof("waiting for msg, %v", exp.Msg)
-		errc <- self.ExpectMsg(rw, exp.Code, exp.Msg)
+		//errc <- self.ExpectMsg(rw, exp.Code, exp.Msg)
+		errc <- m.(TestMessenger).ExpectMsg(exp.Code, exp.Msg)
 	}()
 
 	t := exp.Timeout

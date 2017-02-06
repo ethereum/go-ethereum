@@ -17,6 +17,7 @@
 package adapters
 
 import (
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -63,8 +64,9 @@ func (self *NodeId) Label() string {
 }
 
 type Messenger interface {
-	SendMsg(p2p.MsgWriter, uint64, interface{}) error
-	ReadMsg(p2p.MsgReader) (p2p.Msg, error)
+	SendMsg(uint64, interface{}) error
+	ReadMsg() (p2p.Msg, error)
+	Close()
 }
 
 type NodeAdapter interface {
@@ -73,7 +75,12 @@ type NodeAdapter interface {
 	// Disconnect(*p2p.Peer, p2p.MsgReadWriter)
 	LocalAddr() []byte
 	ParseAddr([]byte, string) ([]byte, error)
-	Messenger() Messenger
+	// Messenger() Messenger  <<<... old version
+	Messenger(p2p.MsgReadWriter) Messenger
+}
+
+type ProtocolRunner interface {
+	RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error
 }
 
 type StartAdapter interface {
@@ -84,4 +91,24 @@ type StartAdapter interface {
 type Reporter interface {
 	DidConnect(*NodeId, *NodeId) error
 	DidDisconnect(*NodeId, *NodeId) error
+}
+
+
+func RandomNodeId() *NodeId {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("unable to generate key")
+	}
+	var id discover.NodeID
+	pubkey := crypto.FromECDSAPub(&key.PublicKey)
+	copy(id[:], pubkey[1:])
+	return &NodeId{id}
+}
+
+func RandomNodeIds(n int) []*NodeId {
+	var ids []*NodeId
+	for i := 0; i < n; i++ {
+		ids = append(ids, RandomNodeId())
+	}
+	return ids
 }

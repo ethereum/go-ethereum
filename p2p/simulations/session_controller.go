@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
+	
 )
 
 type returnHandler func(body io.Reader) (resp io.ReadSeeker, err error)
@@ -34,6 +35,16 @@ type ResourceController struct {
 	*ResourceHandlers
 }
 
+type NodeResult struct {
+	Nodes []*Node	
+}
+
+type NodeIF struct {
+ 	One uint
+ 	Other uint
+ 	MessageType uint8
+}
+ 
 var methodsAvailable = []string{"POST", "GET", "PUT", "DELETE"}
 
 func (self *ResourceHandlers) handler(method string) *ResourceHandler {
@@ -47,7 +58,14 @@ func (self *ResourceHandlers) handler(method string) *ResourceHandler {
 		h = self.Update
 	case "DELETE":
 		h = self.Destroy
+	case "OPTIONS":
+		h = &ResourceHandler{
+			Handle: func(msg interface{}, c *ResourceController) (interface{}, error) {
+				return struct{}{}, nil
+			},
+		}
 	}
+
 	return h
 }
 
@@ -75,7 +93,10 @@ func NewSessionController() (*ResourceController, chan bool) {
 			Create: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 					conf := msg.(*NetworkConfig)
-					m := NewNetworkController(conf, &event.TypeMux{}, NewJournal())
+					journal := NewJournal()
+					net := NewNetwork(nil, &event.TypeMux{})
+					net.SetNaf(net.NewGenericSimNode)
+					m := NewNetworkController(conf, net.Events(), journal)
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", parent.id)
 					}
@@ -84,6 +105,66 @@ func NewSessionController() (*ResourceController, chan bool) {
 						parent.SetResource(conf.Id, m)
 					}
 					parent.id++
+					
+					m.SetResource("debug", NewResourceContoller(
+						&ResourceHandlers{
+							Create: &ResourceHandler{
+								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
+									journaldump := []string{}
+									eventfmt := func(e *event.Event) bool {
+										journaldump = append(journaldump, fmt.Sprintf("%v", e))
+									return true
+									}
+									journal.Read(eventfmt)
+									return struct{Results []string}{Results: journaldump,}, nil
+								},
+							},
+						},
+					))
+					
+					m.SetResource("node", NewResourceContoller(
+						&ResourceHandlers{
+							Create: &ResourceHandler{
+								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
+									var nodeid *adapters.NodeId
+									
+									nodeid = adapters.RandomNodeId()
+									
+									net.NewNode(&NodeConfig{Id: nodeid})
+									glog.V(6).Infof("added node %v to network %v", nodeid, net)
+									
+									return &NodeConfig{Id: nodeid}, nil
+									
+								},
+							},
+							Retrieve: &ResourceHandler{
+								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
+									return &NodeResult{Nodes: net.Nodes}, nil
+								},
+							},
+							Update: &ResourceHandler{
+								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
+									var othernode *Node
+									
+									args := msg.(*NodeIF)
+									onenode := net.Nodes[args.One - 1]
+									
+									if args.Other == 0 {
+										if net.Start(onenode.Id) != nil {
+											net.Stop(onenode.Id)	
+										}
+										return &NodeResult{Nodes: []*Node{onenode}}, nil
+									} else {
+										othernode = net.Nodes[args.Other - 1]
+										net.Connect(onenode.Id, othernode.Id)
+										return &NodeResult{Nodes: []*Node{onenode, othernode}}, nil
+									}
+								},
+								Type: reflect.TypeOf(&NodeIF{}), // this is input not output param structure
+							},
+						},
+					))
+					
 					return empty, nil
 				},
 				Type: reflect.TypeOf(&NetworkConfig{}),

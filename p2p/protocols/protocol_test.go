@@ -64,7 +64,7 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 				wg.Add(1)
 			}
 			id := &adapters.NodeId{p.ID()}
-			peer := NewPeer(p, rw, ct, na.Messenger(), func() { na.Disconnect(id.Bytes()) })
+			peer := NewPeer(p, ct, na.Messenger(rw), func() { na.Disconnect(id.Bytes()) })
 
 			// demonstrates use of peerPool, killing another peer connection as a response to a message
 			peer.Register(&kill{}, func(msg interface{}) error {
