@@ -10,11 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
-func testEvents(intervals ...int) (events []*event.Event) {
+func testEvents(intervals ...int) (events []*event.TypeMuxEvent) {
 	t := time.Now()
 	for _, interval := range intervals {
 		t = t.Add(time.Duration(interval) * time.Millisecond)
-		events = append(events, &event.Event{
+		events = append(events, &event.TypeMuxEvent{
 			Time: t,
 			Data: interface{}(&NodeEvent{
 				Type:   "node",

@@ -31,7 +31,7 @@ import (
 // peer session test
 // ExpectMsg(p2p.MsgReader, uint64, interface{}) error
 // SendMsg(p2p.MsgWriter, uint64, interface{}) error
-type SimPipe struct{
+type SimPipe struct {
 	rw p2p.MsgReadWriter
 }
 

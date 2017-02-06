@@ -15,28 +15,33 @@ const orders = 8
 type testOverlay struct {
 	mu     sync.Mutex
 	addr   []byte
-	pos    [][]*testNodeAddr
-	posMap map[string]*testNodeAddr
+	pos    [][]*testPeerAddr
+	posMap map[string]*testPeerAddr
 }
 
-type testNodeAddr struct {
-	NodeAddr
-	Node Node
+type testPeerAddr struct {
+	PeerAddr
+	Peer Peer
 }
 
-func (self *testOverlay) Register(na NodeAddr) error {
+func (self *testOverlay) Register(nas ...PeerAddr) error {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	return self.register(na)
+	return self.register(nas...)
 }
 
-func (self *testOverlay) register(na NodeAddr) error {
-	tna := &testNodeAddr{NodeAddr: na}
-	addr := na.OverlayAddr()
-	self.posMap[string(addr)] = tna
-	o := order(addr)
-	glog.V(6).Infof("PO: %v, orders: %v", o, orders)
-	self.pos[o] = append(self.pos[o], tna)
+func (self *testOverlay) register(nas ...PeerAddr) error {
+	for _, na := range nas {
+		tna := &testPeerAddr{PeerAddr: na}
+		addr := na.OverlayAddr()
+		if self.posMap[string(addr)] != nil {
+			continue
+		}
+		self.posMap[string(addr)] = tna
+		o := order(addr)
+		glog.V(6).Infof("PO: %v, orders: %v", o, orders)
+		self.pos[o] = append(self.pos[o], tna)
+	}
 	return nil
 }
 
@@ -44,7 +49,7 @@ func order(addr []byte) int {
 	return int(addr[0]) / 32
 }
 
-func (self *testOverlay) On(n Node) (Node, error) {
+func (self *testOverlay) On(n Peer) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	addr := n.OverlayAddr()
@@ -52,20 +57,15 @@ func (self *testOverlay) On(n Node) (Node, error) {
 	if na == nil {
 		self.register(n)
 		na = self.posMap[string(addr)]
-	} else if na.Node != nil {
-		return nil, nil
+	} else if na.Peer != nil {
+		return
 	}
 	glog.V(6).Infof("Online: %v", fmt.Sprintf("%x", addr[:4]))
-	na.Node = n
-	o := order(addr)
-	ons := self.on(self.pos[o])
-	if len(ons) > 2 {
-		return ons[0], nil
-	}
-	return nil, nil
+	na.Peer = n
+	return
 }
 
-func (self *testOverlay) Off(n Node) {
+func (self *testOverlay) Off(n Peer) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	addr := n.OverlayAddr()
@@ -73,37 +73,38 @@ func (self *testOverlay) Off(n Node) {
 	if na == nil {
 		return
 	}
-	na.Node = nil
+	delete(self.posMap, string(addr))
+	na.Peer = nil
 }
 
 // caller must hold the lock
-func (self *testOverlay) on(po []*testNodeAddr) (nodes []Node) {
+func (self *testOverlay) on(po []*testPeerAddr) (nodes []Peer) {
 	for _, na := range po {
-		if na.Node != nil {
-			nodes = append(nodes, na.Node)
+		if na.Peer != nil {
+			nodes = append(nodes, na.Peer)
 		}
 	}
 	return nodes
 }
 
 // caller must hold the lock
-func (self *testOverlay) off(po []*testNodeAddr) (nas []NodeAddr) {
+func (self *testOverlay) off(po []*testPeerAddr) (nas []PeerAddr) {
 	for _, na := range po {
-		if na.Node == nil {
-			nas = append(nas, NodeAddr(na))
+		if na.Peer == nil {
+			nas = append(nas, PeerAddr(na))
 		}
 	}
 	return nas
 }
 
-func (self *testOverlay) EachNode(base []byte, o int, f func(Node) bool) {
+func (self *testOverlay) EachLivePeer(base []byte, o int, f func(Peer) bool) {
 	if base == nil {
 		base = self.addr
 	}
 	for i := o; i < len(self.pos); i++ {
 		for _, na := range self.pos[i] {
-			if na.Node != nil {
-				if !f(na.Node) {
+			if na.Peer != nil {
+				if !f(na.Peer) {
 					return
 				}
 			}
@@ -111,7 +112,7 @@ func (self *testOverlay) EachNode(base []byte, o int, f func(Node) bool) {
 	}
 }
 
-func (self *testOverlay) EachNodeAddr(base []byte, o int, f func(NodeAddr) bool) {
+func (self *testOverlay) EachPeer(base []byte, o int, f func(PeerAddr) bool) {
 	if base == nil {
 		base = self.addr
 	}
@@ -124,53 +125,39 @@ func (self *testOverlay) EachNodeAddr(base []byte, o int, f func(NodeAddr) bool)
 	}
 }
 
-func (self *testOverlay) SuggestNodeAddr() NodeAddr {
+func (self *testOverlay) SuggestPeer() (PeerAddr, int, bool) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	for _, po := range self.pos {
+	for i, po := range self.pos {
 		ons := self.on(po)
 		if len(ons) < 2 {
 			offs := self.off(po)
 			if len(offs) > 0 {
 				glog.V(6).Infof("node %v is off", offs[0])
-				return offs[0]
+				return offs[0], i, true
 			}
 		}
 	}
-	return nil
+	return nil, 0, true
 }
 
-func (self *testOverlay) SuggestOrder() int {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	for o, po := range self.pos {
-		off := self.off(po)
-		if len(off) < 5 {
-			glog.V(6).Infof("suggest PO%02d / %v", o, len(self.pos)-1)
-			return o
-		}
-	}
-	return 256
-
-}
-
-func (self *testOverlay) Info() string {
+func (self *testOverlay) String() string {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	var t []string
 	var ons, offs int
-	var ns []Node
-	var nas []NodeAddr
+	var ns []Peer
+	var nas []PeerAddr
 	for o, po := range self.pos {
 		var row []string
 		ns = self.on(po)
+		nas = self.off(po)
 		ons = len(ns)
 		for _, n := range ns {
 			addr := n.OverlayAddr()
 			row = append(row, fmt.Sprintf("%x", addr[:4]))
 		}
 		row = append(row, "|")
-		nas = self.off(po)
 		offs = len(nas)
 		for _, na := range nas {
 			addr := na.OverlayAddr()
@@ -184,7 +171,7 @@ func (self *testOverlay) Info() string {
 func NewTestOverlay(addr []byte) *testOverlay {
 	return &testOverlay{
 		addr:   addr,
-		posMap: make(map[string]*testNodeAddr),
-		pos:    make([][]*testNodeAddr, orders),
+		posMap: make(map[string]*testPeerAddr),
+		pos:    make([][]*testPeerAddr, orders),
 	}
 }

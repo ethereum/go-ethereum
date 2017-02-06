@@ -11,9 +11,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
-	
 )
 
 type returnHandler func(body io.Reader) (resp io.ReadSeeker, err error)
@@ -36,15 +36,15 @@ type ResourceController struct {
 }
 
 type NodeResult struct {
-	Nodes []*Node	
+	Nodes []*Node
 }
 
 type NodeIF struct {
- 	One uint
- 	Other uint
- 	MessageType uint8
+	One         uint
+	Other       uint
+	MessageType uint8
 }
- 
+
 var methodsAvailable = []string{"POST", "GET", "PUT", "DELETE"}
 
 func (self *ResourceHandlers) handler(method string) *ResourceHandler {
@@ -96,45 +96,39 @@ func NewSessionController() (*ResourceController, chan bool) {
 					journal := NewJournal()
 					net := NewNetwork(nil, &event.TypeMux{})
 					net.SetNaf(net.NewGenericSimNode)
+					glog.V(logger.Info).Infof("new network controller on %v", conf.Id)
 					m := NewNetworkController(conf, net.Events(), journal)
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", parent.id)
 					}
-					glog.V(6).Infof("new network controller on %v", conf.Id)
 					if parent != nil {
 						parent.SetResource(conf.Id, m)
 					}
 					parent.id++
-					
+
 					m.SetResource("debug", NewResourceContoller(
 						&ResourceHandlers{
 							Create: &ResourceHandler{
 								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 									journaldump := []string{}
-									eventfmt := func(e *event.Event) bool {
+									eventfmt := func(e *event.TypeMuxEvent) bool {
 										journaldump = append(journaldump, fmt.Sprintf("%v", e))
-									return true
+										return true
 									}
 									journal.Read(eventfmt)
-									return struct{Results []string}{Results: journaldump,}, nil
+									return struct{ Results []string }{Results: journaldump}, nil
 								},
 							},
 						},
 					))
-					
+
 					m.SetResource("node", NewResourceContoller(
 						&ResourceHandlers{
 							Create: &ResourceHandler{
 								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-									var nodeid *adapters.NodeId
-									
-									nodeid = adapters.RandomNodeId()
-									
+									nodeid := adapters.RandomNodeId()
 									net.NewNode(&NodeConfig{Id: nodeid})
-									glog.V(6).Infof("added node %v to network %v", nodeid, net)
-									
 									return &NodeConfig{Id: nodeid}, nil
-									
 								},
 							},
 							Retrieve: &ResourceHandler{
@@ -145,17 +139,17 @@ func NewSessionController() (*ResourceController, chan bool) {
 							Update: &ResourceHandler{
 								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 									var othernode *Node
-									
+
 									args := msg.(*NodeIF)
-									onenode := net.Nodes[args.One - 1]
-									
+									onenode := net.Nodes[args.One-1]
+
 									if args.Other == 0 {
 										if net.Start(onenode.Id) != nil {
-											net.Stop(onenode.Id)	
+											net.Stop(onenode.Id)
 										}
 										return &NodeResult{Nodes: []*Node{onenode}}, nil
 									} else {
-										othernode = net.Nodes[args.Other - 1]
+										othernode = net.Nodes[args.Other-1]
 										net.Connect(onenode.Id, othernode.Id)
 										return &NodeResult{Nodes: []*Node{onenode, othernode}}, nil
 									}
@@ -164,7 +158,7 @@ func NewSessionController() (*ResourceController, chan bool) {
 							},
 						},
 					))
-					
+
 					return empty, nil
 				},
 				Type: reflect.TypeOf(&NetworkConfig{}),
@@ -172,7 +166,7 @@ func NewSessionController() (*ResourceController, chan bool) {
 
 			Destroy: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					glog.V(6).Infof("destroy handler called")
+					glog.V(logger.Debug).Infof("destroy handler called")
 					// this can quit the entire app (shut down the backend server)
 					quitc <- true
 					return empty, nil

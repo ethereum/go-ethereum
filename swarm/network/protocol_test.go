@@ -37,13 +37,13 @@ func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest
 	}
 }
 
-func newTestBzzProtocol(addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Node) error) func(adapters.NodeAdapter) adapters.ProtoCall {
+func newTestBzzProtocol(addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) func(adapters.NodeAdapter) adapters.ProtoCall {
 	if ct == nil {
 		ct = BzzCodeMap()
 	}
 	ct.Register(p2ptest.FlushMsg)
 	return func(na adapters.NodeAdapter) adapters.ProtoCall {
-		srv := func(p Node) error {
+		srv := func(p Peer) error {
 			if services != nil {
 				err := services(p)
 				if err != nil {
@@ -59,7 +59,7 @@ func newTestBzzProtocol(addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, serv
 			return nil
 		}
 
-		protocol := Bzz(addr.OverlayAddr(), pp, na, na.Messenger(), ct, srv)
+		protocol := Bzz(addr.OverlayAddr(), pp, na, ct, srv)
 		return protocol.Run
 	}
 }
@@ -97,7 +97,7 @@ func (s *bzzTester) runHandshakes(ids ...*adapters.NodeId) {
 	for _, id := range ids {
 		glog.V(6).Infof("\n\n\nrun handshake with %v", id)
 		time.Sleep(1)
-		s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NodeIdToAddr(id)))
+		s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NewPeerAddrFromNodeId(id)))
 		time.Sleep(1)
 	}
 	glog.V(6).Infof("flush %v", ids)
@@ -108,7 +108,7 @@ func correctBzzHandshake(addr *peerAddr) *bzzHandshake {
 	return &bzzHandshake{0, 322, addr}
 }
 
-func newBzzTester(t *testing.T, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Node) error) *bzzTester {
+func newBzzTester(t *testing.T, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
 	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, services))
 	return &bzzTester{
 		addr:            addr,
@@ -124,7 +124,7 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{0, 321, NodeIdToAddr(id)},
+		&bzzHandshake{0, 321, NewPeerAddrFromNodeId(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")},
 	)
 }
@@ -136,7 +136,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{1, 322, NodeIdToAddr(id)},
+		&bzzHandshake{1, 322, NewPeerAddrFromNodeId(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("version mismatch 1 (!= 0)")},
 	)
 }
@@ -148,7 +148,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{0, 322, NodeIdToAddr(id)},
+		&bzzHandshake{0, 322, NewPeerAddrFromNodeId(id)},
 	)
 }
 
@@ -203,7 +203,7 @@ func TestBzzPeerPoolNotAdd(t *testing.T) {
 	s := newBzzTester(t, addr, pp, nil, nil)
 
 	id := s.Ids[0]
-	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{0, 321, NodeIdToAddr(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
+	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{0, 321, NewPeerAddrFromNodeId(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
 	if pp.Has(id) {
 		t.Fatalf("peer %v incorrectly added: %v", id, pp)
 	}
@@ -212,21 +212,21 @@ func TestBzzPeerPoolNotAdd(t *testing.T) {
 // TestPeerPool is an example peerPool to demonstrate registration of peer connections
 type TestPeerPool struct {
 	lock  sync.Mutex
-	peers map[discover.NodeID]Node
+	peers map[discover.NodeID]Peer
 }
 
 func NewTestPeerPool() *TestPeerPool {
-	return &TestPeerPool{peers: make(map[discover.NodeID]Node)}
+	return &TestPeerPool{peers: make(map[discover.NodeID]Peer)}
 }
 
-func (self *TestPeerPool) Add(p Node) error {
+func (self *TestPeerPool) Add(p Peer) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.peers[p.ID()] = p
 	return nil
 }
 
-func (self *TestPeerPool) Remove(p Node) {
+func (self *TestPeerPool) Remove(p Peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	// glog.V(6).Infof("removing peer %v", p.ID())
@@ -240,7 +240,7 @@ func (self *TestPeerPool) Has(n *adapters.NodeId) bool {
 	return ok
 }
 
-func (self *TestPeerPool) Get(n *adapters.NodeId) Node {
+func (self *TestPeerPool) Get(n *adapters.NodeId) Peer {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	return self.peers[n.NodeID]

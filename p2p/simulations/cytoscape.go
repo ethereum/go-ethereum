@@ -30,7 +30,7 @@ type CyElement struct {
 type CyUpdate struct {
 	Add     []*CyElement `json:"add"`
 	Remove  []string     `json:"remove"`
-	Message []string	 `json:"message"`
+	Message []string     `json:"message"`
 }
 
 func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
@@ -38,7 +38,7 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 	removed := []string{}
 	messaged := []string{}
 	var el *CyElement
-	update := func(e *event.Event) bool {
+	update := func(e *event.TypeMuxEvent) bool {
 		entry := e.Data
 		var action string
 		if ev, ok := entry.(*NodeEvent); ok {

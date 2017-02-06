@@ -36,7 +36,7 @@ func (self *testConnect) connect(na string) error {
 	return nil
 }
 
-func newBzzHiveTester(t *testing.T, n int, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Node) error) *bzzTester {
+func newBzzHiveTester(t *testing.T, n int, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
 	s := p2ptest.NewProtocolTester(t, NodeId(addr), n, newTestBzzProtocol(addr, pp, ct, services))
 	return &bzzTester{
 		addr:            addr,
@@ -55,7 +55,7 @@ func TestOverlayRegistration(t *testing.T) {
 
 	// connect to the other peer
 	id := s.Ids[0]
-	raddr := NodeIdToAddr(id)
+	raddr := NewPeerAddrFromNodeId(id)
 	s.runHandshakes()
 
 	// hive should have called the overlay
@@ -74,9 +74,9 @@ func TestRegisterAndConnect(t *testing.T) {
 	// register the node with the peerPool
 	id := p2ptest.RandomNodeId()
 	s.Start(id)
-	raddr := NodeIdToAddr(id)
+	raddr := NewPeerAddrFromNodeId(id)
 	pp.Register(raddr)
-	glog.V(5).Infof("%v", pp.Info())
+	glog.V(5).Infof("%v", pp)
 	// start the hive and wait for the connection
 	tc := &testConnect{
 		connectf: func(c string) error {

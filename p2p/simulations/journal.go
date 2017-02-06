@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
@@ -23,7 +24,7 @@ type Journal struct {
 	counter int
 	cursor  int
 	quitc   chan bool
-	Events  []*event.Event
+	Events  []*event.TypeMuxEvent
 }
 
 // NewJournal constructor
@@ -41,7 +42,7 @@ func NewJournal() *Journal {
 // used for journalling history of a network
 // the goroutine terminates when the journal is closed
 func (self *Journal) Subscribe(eventer *event.TypeMux, types ...interface{}) {
-	glog.V(6).Infof("subscribe")
+	glog.V(logger.Info).Infof("subscribe")
 	sub := eventer.Subscribe(types...)
 	go func() {
 		defer sub.Unsubscribe()
@@ -99,7 +100,7 @@ func (self *Journal) Close() {
 	close(self.quitc)
 }
 
-func (self *Journal) append(evs ...*event.Event) {
+func (self *Journal) append(evs ...*event.TypeMuxEvent) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.Events = append(self.Events, evs...)
@@ -118,7 +119,7 @@ func (self *Journal) WaitEntries(n int) {
 	}
 }
 
-func (self *Journal) Read(f func(*event.Event) bool) (read int) {
+func (self *Journal) Read(f func(*event.TypeMuxEvent) bool) (read int) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	ok := true
@@ -145,7 +146,7 @@ func (self *Journal) TimedRead(acc float64, f func(interface{}) bool) (read int)
 	var lastEvent time.Time
 	timer := time.NewTimer(0)
 	var data interface{}
-	h := func(ev *event.Event) bool {
+	h := func(ev *event.TypeMuxEvent) bool {
 		// wait for the interval time passes event time
 		if ev.Time.Before(lastEvent) {
 			panic("events not ordered")

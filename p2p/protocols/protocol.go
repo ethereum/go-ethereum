@@ -164,7 +164,12 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 
 		m := na.Messenger(rw)
 
-		peer := NewPeer(p, ct, m, func() {})
+		disc := func() {
+			id := p.ID()
+			na.Disconnect(id[:])
+		}
+
+		peer := NewPeer(p, ct, m, disc)
 
 		return run(peer)
 
@@ -217,7 +222,7 @@ func (self *Peer) Register(msg interface{}, handler func(interface{}) error) uin
 	if !found {
 		panic(fmt.Sprintf("message type '%v' unknown ", typ))
 	}
-	glog.V(logger.Debug).Infof("registered handle for %v %v", msg, typ)
+	glog.V(logger.Detail).Infof("registered handle for %v %v", msg, typ)
 	self.handlers[typ] = append(self.handlers[typ], handler)
 	return code
 }
@@ -253,7 +258,7 @@ func (self *Peer) Send(msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	glog.V(logger.Debug).Infof("=> %v (%d)", msg, code)
+	glog.V(logger.Detail).Infof("=> %v (%d)", msg, code)
 	err := self.m.SendMsg(uint64(code), msg)
 	if err != nil {
 		self.Drop()
@@ -272,7 +277,7 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Debug).Infof("<= %v", msg)
+	glog.V(logger.Detail).Infof("<= %v", msg)
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
@@ -294,7 +299,7 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 	if err := msg.Decode(val.Interface()); err != nil {
 		return nil, errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
-	glog.V(logger.Debug).Infof("<= %v %v (%d)", req, typ, msg.Code)
+	glog.V(logger.Detail).Infof("<= %v %v (%d)", req, typ, msg.Code)
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface

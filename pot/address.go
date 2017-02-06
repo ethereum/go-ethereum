@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -13,21 +13,26 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package network
+package pot
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var (
 	zeroAddr = &common.Hash{}
-	zeros    = zeroAddr.Hex()[2:]
+	zerosHex = zeroAddr.Hex()[2:]
+	zerosBin = Address{}.Bin()
+)
+
+var (
+	addrlen = keylen
 )
 
 type Address common.Hash
@@ -74,11 +79,18 @@ func proximity(one, other Address) (ret int, eq bool) {
 }
 
 // posProximity(a, b, pos) returns proximity order of b wrt a (symmetric) pretending
-// the first pos bits match, checking only bits at index >= pos
+// the first pos bits match, checking only bits kzindex >= pos
 func posProximity(one, other Address, pos int) (ret int, eq bool) {
 	for i := pos / 8; i < len(one); i++ {
+		if one[i] == other[i] {
+			continue
+		}
 		oxo := one[i] ^ other[i]
-		for j := pos % 8; j < 8; j++ {
+		start := 0
+		if i == pos/8 {
+			start = pos % 8
+		}
+		for j := start; j < 8; j++ {
 			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j, false
 			}
@@ -184,27 +196,53 @@ func RandomAddress() Address {
 	return RandomAddressAt(Address{}, -1)
 }
 
-// wraps an Address to implement the PbVal interface
-type PbAddress struct {
+// wraps an Address to implement the PotVal interface
+type HashAddress struct {
 	Address
 }
 
-// Prefix(addr, pos) return the proximity order of addr wrt to
-// the pinned address of the tree
-// assuming it is greater than or  equal to pos
-func (self *PbAddress) Prefix(val PbVal, pos int) (po int, eq bool) {
-	return posProximity(self.Address, val.(*PbAddress).Address, pos)
+func (a *HashAddress) String() string {
+	return a.Address.Bin()
 }
 
-type BinAddr struct {
+func NewHashAddress(s string) *HashAddress {
+	ha := [32]byte{}
+
+	t := s + string(zerosBin)[:len(zerosBin)-len(s)]
+	for i := 0; i < len(t)/64; i++ {
+		n, err := strconv.ParseUint(t[i*64:(i+1)*64], 2, 64)
+		if err != nil {
+			panic("wrong format: " + err.Error())
+		}
+		binary.BigEndian.PutUint64(ha[i*8:(i+1)*8], uint64(n))
+	}
+	h := common.Hash{}
+	copy(h[:], ha[:])
+	return &HashAddress{Address(h)}
+}
+
+func NewHashAddressFromBytes(b []byte) *HashAddress {
+	h := common.Hash{}
+	copy(h[:], b)
+	return &HashAddress{Address(h)}
+}
+
+// PO(addr, pos) return the proximity order of addr wrt to
+// the pinned address of the tree
+// assuming it is greater than or  equal to pos
+func (self *HashAddress) PO(val PotVal, pos int) (po int, eq bool) {
+	return posProximity(self.Address, val.(*HashAddress).Address, pos)
+}
+
+type BoolAddress struct {
 	addr []bool
 }
 
-func NewBinAddr(s string) *BinAddr {
-	return NewBinAddrXOR(s, zeros[:len(s)])
+func NewBoolAddress(s string) *BoolAddress {
+	return NewBoolAddressXOR(s, zerosBin[:len(s)])
 }
 
-func NewBinAddrXOR(s, t string) *BinAddr {
+func NewBoolAddressXOR(s, t string) *BoolAddress {
 	if len(s) != len(t) {
 		panic("lengths do not match")
 	}
@@ -212,24 +250,23 @@ func NewBinAddrXOR(s, t string) *BinAddr {
 	for i, _ := range addr {
 		addr[i] = s[i] != t[i]
 	}
-	return &BinAddr{addr}
+	return &BoolAddress{addr}
 }
 
-func (self *BinAddr) String() string {
+func (self *BoolAddress) String() string {
 	a := self.addr
-	s := []byte(zeros)[:len(a)]
+	s := []byte(zerosBin)[:len(a)]
 	for i, one := range a {
 		if one {
 			s[i] = byte('1')
-			// glog.V(6).Infof("%v", s)
 		}
 	}
 	return string(s)
 }
 
-func (self *BinAddr) Prefix(val PbVal, pos int) (po int, eq bool) {
+func (self *BoolAddress) PO(val PotVal, pos int) (po int, eq bool) {
 	a := self.addr
-	b := val.(*BinAddr).addr
+	b := val.(*BoolAddress).addr
 	for po = pos; po < len(b); po++ {
 		if a[po] != b[po] {
 			return po, false

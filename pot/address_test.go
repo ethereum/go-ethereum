@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -13,8 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
-package network
+package pot
 
 import (
 	"math/rand"
@@ -92,6 +91,51 @@ func TestRandomAddressAt(t *testing.T) {
 		p, _ := proximity(a, b)
 		if p != prox {
 			t.Fatalf("incorrect address prox(%v, %v) == %v (expected %v)", a, b, p, prox)
+		}
+	}
+}
+
+const (
+	maxTestPOs   = 1000
+	testPOkeylen = 9
+)
+
+func TestPOs(t *testing.T) {
+	for i := 0; i < maxTestPOs; i++ {
+		length := rand.Intn(256) + 1
+		v0 := RandomAddress().Bin()[:length]
+		v1 := RandomAddress().Bin()[:length]
+		a0 := NewBoolAddress(v0)
+		a1 := NewBoolAddress(v1)
+		b0 := NewHashAddress(v0)
+		b1 := NewHashAddress(v1)
+		pos := rand.Intn(length) + 1
+		apo, aeq := a0.PO(a1, pos)
+		bpo, beq := b0.PO(b1, pos)
+		if bpo == 256 {
+			bpo = length
+		}
+		a0s := a0.String()
+		if a0s != v0 {
+			t.Fatalf("incorrect bool address. expected %v, got %v", v0, a0s)
+		}
+		a1s := a1.String()
+		if a1s != v1 {
+			t.Fatalf("incorrect bool address. expected %v, got %v", v1, a1s)
+		}
+		b0s := b0.String()[:length]
+		if b0s != v0 {
+			t.Fatalf("incorrect hash address. expected %v, got %v", v0, b0s)
+		}
+		b1s := b1.String()[:length]
+		if b1s != v1 {
+			t.Fatalf("incorrect hash address. expected %v, got %v", v1, b1s)
+		}
+		if apo != bpo {
+			t.Fatalf("PO does not match for %v X %v (pos: %v): expected %v, got %v", v0, v1, pos, apo, bpo)
+		}
+		if aeq != beq {
+			t.Fatalf("PO equality does not match for %v X %v (pos: %v): expected %v, got %v", v0, v1, pos, aeq, beq)
 		}
 	}
 }

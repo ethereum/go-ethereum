@@ -28,8 +28,8 @@ import (
 func newPeer(m Messenger) *Peer {
 	return &Peer{
 		Messenger: m,
-		Errc:   make(chan error, 1),
-		Flushc: make(chan bool),
+		Errc:      make(chan error, 1),
+		Flushc:    make(chan bool),
 	}
 }
 

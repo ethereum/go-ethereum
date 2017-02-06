@@ -2,13 +2,13 @@ package simulations
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -27,7 +27,7 @@ var quitc chan bool
 var controller *ResourceController
 
 func init() {
-	glog.SetV(6)
+	glog.SetV(0)
 	glog.SetToStderr(true)
 	controller, quitc = NewSessionController()
 	StartRestApiServer(port, controller)
@@ -59,8 +59,8 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	s, err := json.Marshal(&struct{Id string}{Id: "testnetwork"})
-	req, err := http.NewRequest("POST", domain + ":" + port, bytes.NewReader(s))
+	s, err := json.Marshal(&struct{ Id string }{Id: "testnetwork"})
+	req, err := http.NewRequest("POST", domain+":"+port, bytes.NewReader(s))
 	if err != nil {
 		t.Fatalf("unexpected error creating request: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on http.Client request: %v", err)
 	}
-	req, err = http.NewRequest("POST", domain + ":" + port + "/testnetwork/debug/", nil)
+	req, err = http.NewRequest("POST", domain+":"+port+"/testnetwork/debug/", nil)
 	if err != nil {
 		t.Fatalf("unexpected error creating request: %v", err)
 	}
@@ -76,44 +76,34 @@ func TestCreate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on http.Client request: %v", err)
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	_, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("error reading response body: %v", err)
 	}
-	t.Logf("%s", body)
 }
 
 func TestNodes(t *testing.T) {
 	networkname := "testnetworkfornodes"
-	
-	s, err := json.Marshal(&struct{Id string}{Id: networkname})
-	req, err := http.NewRequest("POST", domain + ":" + port, bytes.NewReader(s))
+
+	s, err := json.Marshal(&struct{ Id string }{Id: networkname})
+	req, err := http.NewRequest("POST", domain+":"+port, bytes.NewReader(s))
 	if err != nil {
 		t.Fatalf("unexpected error creating request: %v", err)
 	}
-	resp, err := (&http.Client{}).Do(req)
+	_, err = (&http.Client{}).Do(req)
 	if err != nil {
 		t.Fatalf("unexpected error on http.Client request: %v", err)
 	}
 	for i := 0; i < 3; i++ {
-		req, err = http.NewRequest("POST", domain + ":" + port + "/" + networkname + "/node/", nil)
+		req, err = http.NewRequest("POST", domain+":"+port+"/"+networkname+"/node/", nil)
 		if err != nil {
 			t.Fatalf("unexpected error creating request: %v", err)
 		}
-		resp, err = (&http.Client{}).Do(req)
+		_, err = (&http.Client{}).Do(req)
 		if err != nil {
 			t.Fatalf("unexpected error on http.Client request: %v", err)
 		}
-		t.Logf("%s", resp)
 	}
-	/*
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("error reading response body: %v", err)
-	}
-	
-	t.Logf("%s", body)
-	*/
 }
 
 func testResponse(t *testing.T, method, addr string, r io.ReadSeeker) []byte {

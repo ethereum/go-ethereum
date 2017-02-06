@@ -17,10 +17,8 @@
 package network
 
 import (
-	"fmt"
-	// "math/rand"
-	// "sort"
 	"bytes"
+	"fmt"
 	"sync"
 	"time"
 
@@ -42,24 +40,24 @@ peer connections and disconnections are reported and registered
 to keep the nodetable uptodate
 */
 type Overlay interface {
-	Register(NodeAddr) error
-	On(Node) (Node, error)
-	Off(Node)
+	Register(...PeerAddr) error
 
-	EachNode([]byte, int, func(Node) bool)
-	EachNodeAddr([]byte, int, func(NodeAddr) bool)
+	On(Peer)
+	Off(Peer)
 
-	SuggestNodeAddr() NodeAddr
-	SuggestOrder() int
+	EachLivePeer([]byte, int, func(Peer) bool)
+	EachPeer([]byte, int, func(PeerAddr) bool)
 
-	Info() string
+	SuggestPeer() (PeerAddr, int, bool)
+
+	String() string
 }
 
 // Hive implements the PeerPool interface
 type Hive struct {
 	*HiveParams // settings
 	Overlay     // the overlay topology driver
-	peers       map[discover.NodeID]Node
+	peers       map[discover.NodeID]Peer
 
 	lock   sync.Mutex
 	quit   chan bool
@@ -94,7 +92,7 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,
-		peers:      make(map[discover.NodeID]Node),
+		peers:      make(map[discover.NodeID]Peer),
 	}
 }
 
@@ -118,6 +116,10 @@ and correctness of responses should be checked
 If the proxBin of peers in the response is incorrect the sender should be
 disconnected
 */
+
+// peersMsg encapsulates an array of peer addresses
+// used for communicating about known peers
+// relevvant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
 	Peers []*peerAddr
 }
@@ -146,8 +148,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 	self.toggle = make(chan bool)
 	self.more = make(chan bool)
 	self.quit = make(chan bool)
-	order := -1
-	glog.V(logger.Detail).Infof("hive started")
+	glog.V(logger.Debug).Infof("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
 	go self.keepAlive(af)
 	go func() {
@@ -159,50 +160,46 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 				return
 			}
 			glog.V(logger.Detail).Infof("hive delegate to overlay driver: suggest addr to connect to")
-			addr := self.SuggestNodeAddr()
+			addr, order, want := self.SuggestPeer()
 
 			if addr != nil {
 				glog.V(logger.Detail).Infof("========> connect to bee %v", addr)
 				err := connectPeer(NodeId(addr).NodeID.String())
 				if err != nil {
 					glog.V(logger.Detail).Infof("===X====> connect to bee %v failed: %v", addr, err)
-
 				}
 			}
-			glog.V(logger.Detail).Infof("hive delegate to overlay driver: suggest order for getPeersMsg")
-			order = self.SuggestOrder()
-			req := &getPeersMsg{
-				Order: uint(order),
-				Max:   self.MaxPeersPerRequest,
-			}
-			var i uint
-			var err error
-			glog.V(logger.Debug).Infof("requesting bees of PO%03d from %v (each max %v)", order, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
-			self.EachNode(nil, order, func(n Node) bool {
-				glog.V(logger.Debug).Infof("%T sent to %v", req, n.ID())
-				err = n.Send(req)
-				if err == nil {
-					i++
-					if i >= self.PeersBroadcastSetSize {
-						return false
+			if want {
+				req := &getPeersMsg{
+					Order: uint(order),
+					Max:   self.MaxPeersPerRequest,
+				}
+				var i uint
+				var err error
+				glog.V(logger.Detail).Infof("requesting bees of PO%03d from %v (each max %v)", order, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				self.EachLivePeer(nil, order, func(n Peer) bool {
+					glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
+					err = n.Send(req)
+					if err == nil {
+						i++
+						if i >= self.PeersBroadcastSetSize {
+							return false
+						}
 					}
-				}
-				return true
-			})
-			glog.V(logger.Debug).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
-			// only switch off if full
-			var need bool
-			if order < 256 || addr != nil {
-				need = true
+					return true
+				})
+				glog.V(logger.Detail).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
 			}
+			glog.V(logger.Info).Infof("%v", self)
+
 			select {
-			case self.toggle <- need:
-				glog.V(logger.Debug).Infof("keep hive alive: %v", need)
+			case self.toggle <- want:
+				glog.V(logger.Detail).Infof("keep hive alive: %v", want)
 			case <-self.quit:
 				return
 			}
 		}
-		glog.V(logger.Debug).Infof("%v", self.Info())
+		glog.V(logger.Warn).Infof("%v", self)
 	}()
 	return
 }
@@ -217,12 +214,12 @@ func (self *Hive) ticker() <-chan time.Time {
 // wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive(af func() <-chan time.Time) {
-	glog.V(logger.Debug).Infof("keep alive loop started")
+	glog.V(logger.Detail).Infof("keep alive loop started")
 	alarm := af()
 	for {
 		select {
 		case <-alarm:
-			glog.V(logger.Debug).Infof("wake up: make hive alive")
+			glog.V(logger.Detail).Infof("wake up: make hive alive")
 			self.wake()
 		case need := <-self.toggle:
 			if alarm == nil && need {
@@ -246,45 +243,19 @@ func (self *Hive) Stop() {
 func (self *Hive) wake() {
 	select {
 	case self.more <- true:
-		glog.V(logger.Debug).Infof("hive woken up")
+		glog.V(logger.Detail).Infof("hive woken up")
 	case <-self.quit:
 	default:
-		glog.V(logger.Debug).Infof("hive already awake")
+		glog.V(logger.Detail).Infof("hive already awake")
 	}
 }
 
-// func (self *Hive) anyN(n int, peers []Node) []Node {
-// 	self.lock.Lock()
-// 	defer self.lock.Unlock()
-// 	pick := rand.Perm(len(peers))
-// 	sort.Ints(pick)
-// 	var nodes []Node
-// 	j := 0
-// 	i := 0
-// 	for i, node := range peers {
-// 		if i == pick[j] {
-// 			j++
-// 			nodes = append(nodes, node)
-// 			if j == n {
-// 				break
-// 			}
-// 		}
-// 	}
-// 	return nodes
-// }
-
-// Add is called at the end of a successful protocol handshake to register a peer onlune
-func (self *Hive) Add(p Node) error {
+// Add is called at the end of a successful protocol handshake
+// to register a connected (live) peer
+func (self *Hive) Add(p Peer) error {
 	defer self.wake()
-	glog.V(logger.Detail).Infof("add new bee %v", p)
-	drop, err := self.On(p)
-	if err != nil {
-		return err
-	}
-	if drop != nil {
-		drop.Drop()
-		return nil
-	}
+	glog.V(logger.Debug).Infof("to add new bee %v", p)
+	self.On(p)
 
 	self.lock.Lock()
 	self.peers[p.ID()] = p
@@ -297,7 +268,7 @@ func (self *Hive) Add(p Node) error {
 }
 
 // Remove called after peer is disconnected
-func (self *Hive) Remove(p Node) {
+func (self *Hive) Remove(p Peer) {
 	defer self.wake()
 	glog.V(logger.Debug).Infof("remove bee %v", p)
 	self.Off(p)
@@ -306,37 +277,37 @@ func (self *Hive) Remove(p Node) {
 	self.lock.Unlock()
 }
 
-// func (self *Hive) Get(n string) Node {
-// 	return Node(self.peers[n])
-// }
-
 // handlePeersMsg called by the protocol when receiving peerset (for target address)
-// list of nodes ([]NodeAddr in peersMsg is added to the overlay db
-func (self *Hive) handlePeersMsg(p Node) func(interface{}) error {
+// list of nodes ([]PeerAddr in peersMsg) is added to the overlay db using the
+// Register interface method
+func (self *Hive) handlePeersMsg(p Peer) func(interface{}) error {
 	return func(msg interface{}) error {
 		// wake up the hive on news of new arrival
 		defer self.wake()
 		// register all addresses
-		var err error
-		req := msg.(*peersMsg)
-		for _, p := range req.Peers {
-			err = self.Register(p)
-			// TODO: these are known to our peer, so do not resend during the session
+		var nas []PeerAddr
+		for _, na := range msg.(*peersMsg).Peers {
+			nas = append(nas, PeerAddr(na))
 		}
-		// FIXME: only the last error is returned
-		return err
+		return self.Register(nas...)
 	}
 }
 
-// HandleGetPeersMsg called by the protocol when receiving peerset (for target address)
-// peersMsgData is converted to a slice of NodeRecords for Kademlia
-// this is to store all thats needed
-func (self *Hive) handleGetPeersMsg(p Node) func(interface{}) error {
+// handleGetPeersMsg is called by the protocol when receiving a
+// peerset (for target address) request
+// peers suggestions are retrieved from the overlay topology driver
+// using the EachLivePeer interface iterator method
+// peers sent are remembered throughout a session and not sent twice
+func (self *Hive) handleGetPeersMsg(p Peer) func(interface{}) error {
 	return func(msg interface{}) error {
 		req := msg.(*getPeersMsg)
 		var peers []*peerAddr
-		self.EachNode(p.OverlayAddr(), int(req.Order), func(n Node) bool {
-			if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 {
+		alreadySent := p.Peers()
+		self.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer) bool {
+			if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 &&
+				// only send peers we have not sent before in this session
+				!alreadySent[n.ID()] {
+				alreadySent[n.ID()] = true
 				peers = append(peers, &peerAddr{n.OverlayAddr(), n.UnderlayAddr()})
 			}
 			return len(peers) < int(req.Max)
@@ -351,6 +322,10 @@ func (self *Hive) handleGetPeersMsg(p Node) func(interface{}) error {
 		}
 		return nil
 	}
+}
+
+func (self *Hive) NodeInfo() interface{} {
+	return interface{}(self.String())
 }
 
 func (self *Hive) PeerInfo(id discover.NodeID) interface{} {

@@ -37,45 +37,50 @@ const (
 )
 
 // bzz is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
-type bzz struct {
+type bzzPeer struct {
 	*protocols.Peer
 	hive       PeerPool
 	network    adapters.NodeAdapter
 	localAddr  *peerAddr
 	*peerAddr  // remote address
 	lastActive time.Time
+	peers      map[discover.NodeID]bool
 }
 
-func (self *bzz) LastActive() time.Time {
+func (self *bzzPeer) LastActive() time.Time {
 	return self.lastActive
 }
 
-// implemented by peerAddr and peerAddr
-type NodeAddr interface {
+func (self *bzzPeer) Peers() map[discover.NodeID]bool {
+	return self.peers
+}
+
+// implemented by peerAddr
+type PeerAddr interface {
 	OverlayAddr() []byte
 	UnderlayAddr() []byte
 }
 
-// the Node interface that peerPool needs
-type Node interface {
-	NodeAddr
+// the Peer interface that peerPool needs
+type Peer interface {
+	PeerAddr
 	String() string      // pretty printable the Node
 	ID() discover.NodeID // the key that uniquely identifies the Node for the peerPool
-
-	Send(interface{}) error                             // can send messages
-	Drop()                                              // disconnect this peer
+	Peers() map[discover.NodeID]bool
+	Send(interface{}) error                               // can send messages
+	Drop()                                                // disconnect this peer
 	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
 }
 
 // PeerPool is the interface for the connectivity manager
 // directly interacts with the p2p server to suggest connections
 type PeerPool interface {
-	Add(Node) error
-	Remove(Node)
+	Add(Peer) error
+	Remove(Peer)
 }
 
 type PeerInfo interface {
-	Info() interface{}
+	NodeInfo() interface{}
 	PeerInfo(discover.NodeID) interface{}
 }
 
@@ -86,54 +91,19 @@ func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 	return ct
 }
 
-func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
+// Bzz is the protocol constructor
+// returns p2p.Protocol that is to be offered by the node.Service
+func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error) *p2p.Protocol {
 	run := func(p *protocols.Peer) error {
 		addr := &peerAddr{localAddr, na.LocalAddr()}
 
-		bee := &bzz{Peer: p, hive: hive, network: na, localAddr: addr}
-		// protocol handshake and its validation
-		// sets remote peer address
-		err := bee.bzzHandshake()
-		if err != nil {
-			glog.V(6).Infof("handshake error in peer %v: %v", bee.ID(), err)
-			return err
+		bee := &bzzPeer{
+			Peer:      p,
+			hive:      hive,
+			network:   na,
+			localAddr: addr,
+			peers:     make(map[discover.NodeID]bool),
 		}
-
-		// mount external service models on the peer connection (swap, sync)
-		if services != nil {
-			err = services(bee)
-			if err != nil {
-				glog.V(6).Infof("protocol service error for peer %v: %v", bee.ID(), err)
-				return err
-			}
-		}
-
-		err = hive.Add(bee)
-		if err != nil {
-			glog.V(6).Infof("failed to add peer '%v' to hive: %v", bee.ID(), err)
-			return err
-		}
-
-		defer hive.Remove(bee)
-		return bee.Run()
-	}
-	
-	return protocols.NewProtocol(ProtocolName, Version, run, na, ct)
-}
-
-// Bzz is the protocol constructor
-// returns p2p.Protocol that is to be offered by the node.Service
-/*func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, m adapters.Messenger, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
-	// handle handshake
-
-	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		glog.V(6).Infof("protocol starting on %v connected to %v", localAddr, p.ID())
-
-		id := p.ID()
-		peer := protocols.NewPeer(p, rw, ct, m, func() { na.Disconnect(id[:]) })
-		addr := &peerAddr{localAddr, na.LocalAddr()}
-
-		bee := &bzz{Peer: peer, hive: hive, network: na, localAddr: addr}
 		// protocol handshake and its validation
 		// sets remote peer address
 		err := bee.bzzHandshake()
@@ -161,26 +131,15 @@ func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols
 		return bee.Run()
 	}
 
-	var info func() interface{}
-
-	var peerInfo func(discover.NodeID) interface{}
+	proto := protocols.NewProtocol(ProtocolName, Version, run, na, ct)
 
 	if o, ok := hive.(PeerInfo); ok {
-		info = o.Info
-		peerInfo = o.PeerInfo
+		proto.NodeInfo = o.NodeInfo
+		proto.PeerInfo = o.PeerInfo
 	}
 
-	return &p2p.Protocol{
-		Name:     ProtocolName,
-		Version:  Version,
-		Length:   ct.Length(),
-		Run:      run,
-		NodeInfo: info,
-		PeerInfo: peerInfo,
-	}
+	return proto
 }
-
-*/
 
 /*
  Handshake
@@ -199,6 +158,7 @@ func (self *bzzHandshake) String() string {
 	return fmt.Sprintf("Handshake: Version: %v, NetworkId: %v, Addr: %v", self.Version, self.NetworkId, self.Addr)
 }
 
+// peerAddr implements the PeerAddress interface
 type peerAddr struct {
 	OAddr []byte
 	UAddr []byte
@@ -219,7 +179,7 @@ func (self *peerAddr) String() string {
 // bzzHandshake negotiates the bzz master handshake
 // and validates the response, returns error when
 // mismatch/incompatibility is evident
-func (self *bzz) bzzHandshake() error {
+func (self *bzzPeer) bzzHandshake() error {
 
 	lhs := &bzzHandshake{
 		Version:   uint64(Version),
@@ -236,7 +196,7 @@ func (self *bzz) bzzHandshake() error {
 	rhs := hs.(*bzzHandshake)
 	err = checkBzzHandshake(rhs)
 	if err != nil {
-		glog.V(6).Infof("handshake between %v and %v  failed: %v", self.localAddr, self.peerAddr)
+		glog.V(6).Infof("handshake between %v and %v  failed: %v", self.localAddr, self.peerAddr, err)
 		return err
 	}
 
@@ -254,6 +214,7 @@ func (self *bzz) bzzHandshake() error {
 
 }
 
+// checkBzzHandshake checks for the validity and compatibility of the remote handshake
 func checkBzzHandshake(rhs *bzzHandshake) error {
 
 	if NetworkId != rhs.NetworkId {
@@ -267,6 +228,7 @@ func checkBzzHandshake(rhs *bzzHandshake) error {
 	return nil
 }
 
+// RandomAddr is a utility method generating an address from a public key
 func RandomAddr() *peerAddr {
 	key, err := crypto.GenerateKey()
 	if err != nil {
@@ -281,11 +243,14 @@ func RandomAddr() *peerAddr {
 	}
 }
 
-func NodeId(addr NodeAddr) *adapters.NodeId {
+// NodeId transforms the underlay address to an adapters.NodeId
+func NodeId(addr PeerAddr) *adapters.NodeId {
 	return adapters.NewNodeId(addr.UnderlayAddr())
 }
 
-func NodeIdToAddr(n *adapters.NodeId) *peerAddr {
+// NewPeerAddrFromNodeId constucts a peerAddr from an adapters.NodeId
+// the overlay address is derived as the hash of the nodeId
+func NewPeerAddrFromNodeId(n *adapters.NodeId) *peerAddr {
 	id := n.NodeID
 	return &peerAddr{
 		OAddr: crypto.Keccak256(id[:]),
