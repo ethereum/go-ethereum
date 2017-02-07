@@ -408,7 +408,7 @@ func (s *DbStore) getEntryCnt() uint64 {
 	return s.entryCnt
 }
 
-func (s *DbStore) close() {
+func (s *DbStore) Close() {
 	s.db.Close()
 }
 

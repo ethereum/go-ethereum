@@ -132,3 +132,8 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 	go self.cloud.Retrieve(chunk)
 	return chunk, nil
 }
+
+// Close netstore
+func (self *NetStore) Close() {
+	return
+}
