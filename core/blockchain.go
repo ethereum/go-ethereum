@@ -121,7 +121,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
-	badBlocks,_ := lru.New(badBlockLimit)
+	badBlocks, _ := lru.New(badBlockLimit)
 
 	bc := &BlockChain{
 		config:       config,
@@ -1245,22 +1245,25 @@ func (self *BlockChain) update() {
 		}
 	}
 }
-// SendTxArgs represents the arguments to sumbit a new transaction into the transaction pool.
+
+// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
 type BadBlockArgs struct {
-	Hash     common.Hash  `json:"hash"`
-	Header   *types.Header `json:"header"`
+	Hash   common.Hash   `json:"hash"`
+	Header *types.Header `json:"header"`
 }
+
 // BadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
-func (bc *BlockChain) BadBlocks() ([] BadBlockArgs, error) {
+func (bc *BlockChain) BadBlocks() ([]BadBlockArgs, error) {
 	headers := make([]BadBlockArgs, 0, bc.badBlocks.Len())
 	for _, hash := range bc.badBlocks.Keys() {
 		if hdr, exist := bc.badBlocks.Peek(hash); exist {
-			headers = append(headers, BadBlockArgs{ hdr.(*types.Header).Hash(), hdr.(*types.Header)})
+			headers = append(headers, BadBlockArgs{hdr.(*types.Header).Hash(), hdr.(*types.Header)})
 		}
 	}
 	return headers, nil
 }
-func (bc *BlockChain) addBadBlock(block *types.Block){
+// Adds a 'bad lock' to the LRU
+func (bc *BlockChain) addBadBlock(block *types.Block) {
 	bc.badBlocks.Add(block.Header().Hash(), block.Header())
 }
 
