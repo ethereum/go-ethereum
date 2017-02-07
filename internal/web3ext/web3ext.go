@@ -294,7 +294,12 @@ web3._extend({
 			call: 'debug_preimage',
 			params: 1,
 			inputFormatter: [null]
-		})
+		}),
+		new web3._extend.Method({
+			name: 'getBadBlocks',
+			call: 'debug_getBadBlocks',
+			params: 0,
+		}),
 	],
 	properties: []
 });
