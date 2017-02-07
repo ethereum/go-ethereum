@@ -726,7 +726,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	if networks > 1 {
 		Fatalf("The %v flags are mutually exclusive", netFlags)
 	}
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	ethConf := &eth.Config{
 		Etherbase:               MakeEtherbase(ks, ctx),

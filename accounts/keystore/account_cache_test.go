@@ -53,11 +53,11 @@ var (
 func TestWatchNewFile(t *testing.T) {
 	t.Parallel()
 
-	dir, am := tmpKeyStore(t, false)
+	dir, ks := tmpKeyStore(t, false)
 	defer os.RemoveAll(dir)
 
 	// Ensure the watcher is started before adding any files.
-	am.Accounts()
+	ks.Accounts()
 	time.Sleep(200 * time.Millisecond)
 
 	// Move in the files.
@@ -71,11 +71,17 @@ func TestWatchNewFile(t *testing.T) {
 		}
 	}
 
-	// am should see the accounts.
+	// ks should see the accounts.
 	var list []accounts.Account
 	for d := 200 * time.Millisecond; d < 5*time.Second; d *= 2 {
-		list = am.Accounts()
+		list = ks.Accounts()
 		if reflect.DeepEqual(list, wantAccounts) {
+			// ks should have also received change notifications
+			select {
+			case <-ks.changes:
+			default:
+				t.Fatalf("wasn't notified of new accounts")
+			}
 			return
 		}
 		time.Sleep(d)
@@ -86,12 +92,12 @@ func TestWatchNewFile(t *testing.T) {
 func TestWatchNoDir(t *testing.T) {
 	t.Parallel()
 
-	// Create am but not the directory that it watches.
+	// Create ks but not the directory that it watches.
 	rand.Seed(time.Now().UnixNano())
 	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
-	am := NewKeyStore(dir, LightScryptN, LightScryptP)
+	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
 
-	list := am.Accounts()
+	list := ks.Accounts()
 	if len(list) > 0 {
 		t.Error("initial account list not empty:", list)
 	}
@@ -105,12 +111,18 @@ func TestWatchNoDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// am should see the account.
+	// ks should see the account.
 	wantAccounts := []accounts.Account{cachetestAccounts[0]}
 	wantAccounts[0].URL = file
 	for d := 200 * time.Millisecond; d < 8*time.Second; d *= 2 {
-		list = am.Accounts()
+		list = ks.Accounts()
 		if reflect.DeepEqual(list, wantAccounts) {
+			// ks should have also received change notifications
+			select {
+			case <-ks.changes:
+			default:
+				t.Fatalf("wasn't notified of new accounts")
+			}
 			return
 		}
 		time.Sleep(d)
@@ -119,7 +131,7 @@ func TestWatchNoDir(t *testing.T) {
 }
 
 func TestCacheInitialReload(t *testing.T) {
-	cache := newAddrCache(cachetestDir)
+	cache, _ := newAccountCache(cachetestDir)
 	accounts := cache.accounts()
 	if !reflect.DeepEqual(accounts, cachetestAccounts) {
 		t.Fatalf("got initial accounts: %swant %s", spew.Sdump(accounts), spew.Sdump(cachetestAccounts))
@@ -127,7 +139,7 @@ func TestCacheInitialReload(t *testing.T) {
 }
 
 func TestCacheAddDeleteOrder(t *testing.T) {
-	cache := newAddrCache("testdata/no-such-dir")
+	cache, notify := newAccountCache("testdata/no-such-dir")
 	cache.watcher.running = true // prevent unexpected reloads
 
 	accs := []accounts.Account{
@@ -163,14 +175,24 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	for _, a := range accs {
 		cache.add(a)
 	}
+	select {
+	case <-notify:
+	default:
+		t.Fatalf("notifications didn't fire for adding new accounts")
+	}
 	// Add some of them twice to check that they don't get reinserted.
 	cache.add(accs[0])
 	cache.add(accs[2])
 
+	select {
+	case <-notify:
+		t.Fatalf("notifications fired for adding existing accounts")
+	default:
+	}
 	// Check that the account list is sorted by filename.
 	wantAccounts := make([]accounts.Account, len(accs))
 	copy(wantAccounts, accs)
-	sort.Sort(accountsByFile(wantAccounts))
+	sort.Sort(accountsByURL(wantAccounts))
 	list := cache.accounts()
 	if !reflect.DeepEqual(list, wantAccounts) {
 		t.Fatalf("got accounts: %s\nwant %s", spew.Sdump(accs), spew.Sdump(wantAccounts))
@@ -190,6 +212,11 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	}
 	cache.delete(accounts.Account{Address: common.HexToAddress("fd9bd350f08ee3c0c19b85a8e16114a11a60aa4e"), URL: "something"})
 
+	select {
+	case <-notify:
+	default:
+		t.Fatalf("notifications didn't fire for deleting accounts")
+	}
 	// Check content again after deletion.
 	wantAccountsAfterDelete := []accounts.Account{
 		wantAccounts[1],
@@ -212,7 +239,7 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 
 func TestCacheFind(t *testing.T) {
 	dir := filepath.Join("testdata", "dir")
-	cache := newAddrCache(dir)
+	cache, _ := newAccountCache(dir)
 	cache.watcher.running = true // prevent unexpected reloads
 
 	accs := []accounts.Account{

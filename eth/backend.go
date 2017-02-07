@@ -364,8 +364,10 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if s.etherbase != (common.Address{}) {
 		return s.etherbase, nil
 	}
-	if accounts := s.AccountManager().Accounts(); len(accounts) > 0 {
-		return accounts[0].Address, nil
+	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			return accounts[0].Address, nil
+		}
 	}
 	return common.Address{}, fmt.Errorf("etherbase address must be explicitly specified")
 }

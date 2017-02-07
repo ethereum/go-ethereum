@@ -27,14 +27,14 @@ import (
 )
 
 type watcher struct {
-	ac       *addressCache
+	ac       *accountCache
 	starting bool
 	running  bool
 	ev       chan notify.EventInfo
 	quit     chan struct{}
 }
 
-func newWatcher(ac *addressCache) *watcher {
+func newWatcher(ac *accountCache) *watcher {
 	return &watcher{
 		ac:   ac,
 		ev:   make(chan notify.EventInfo, 10),

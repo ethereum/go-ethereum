@@ -181,8 +181,13 @@ nodes.
 
 func accountList(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	for i, acct := range stack.AccountManager().Accounts() {
-		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.URL)
+
+	var index int
+	for _, wallet := range stack.AccountManager().Wallets() {
+		for _, account := range wallet.Accounts() {
+			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, account.URL)
+			index++
+		}
 	}
 	return nil
 }
@@ -276,7 +281,7 @@ func accountCreate(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	account, err := ks.NewAccount(password)
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
@@ -292,7 +297,7 @@ func accountUpdate(ctx *cli.Context) error {
 		utils.Fatalf("No accounts specified to update")
 	}
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	account, oldPassword := unlockAccount(ctx, ks, ctx.Args().First(), 0, nil)
 	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
@@ -315,7 +320,7 @@ func importWallet(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	acct, err := ks.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -336,7 +341,7 @@ func accountImport(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)

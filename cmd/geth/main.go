@@ -246,7 +246,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	passwords := utils.MakePasswordList(ctx)
 	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")

@@ -18,14 +18,17 @@ package keystore
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 var testSigData = make([]byte, 32)
@@ -122,8 +125,8 @@ func TestTimedUnlock(t *testing.T) {
 
 	// Signing without passphrase fails because account is locked
 	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != ErrNeedPasswordOrUnlock {
-		t.Fatal("Signing should've failed with ErrNeedPasswordOrUnlock before unlocking, got ", err)
+	if err != ErrLocked {
+		t.Fatal("Signing should've failed with ErrLocked before unlocking, got ", err)
 	}
 
 	// Signing with passphrase works
@@ -140,8 +143,8 @@ func TestTimedUnlock(t *testing.T) {
 	// Signing fails again after automatic locking
 	time.Sleep(250 * time.Millisecond)
 	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != ErrNeedPasswordOrUnlock {
-		t.Fatal("Signing should've failed with ErrNeedPasswordOrUnlock timeout expired, got ", err)
+	if err != ErrLocked {
+		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
 	}
 }
 
@@ -180,8 +183,8 @@ func TestOverrideUnlock(t *testing.T) {
 	// Signing fails again after automatic locking
 	time.Sleep(250 * time.Millisecond)
 	_, err = ks.SignHash(accounts.Account{Address: a1.Address}, testSigData)
-	if err != ErrNeedPasswordOrUnlock {
-		t.Fatal("Signing should've failed with ErrNeedPasswordOrUnlock timeout expired, got ", err)
+	if err != ErrLocked {
+		t.Fatal("Signing should've failed with ErrLocked timeout expired, got ", err)
 	}
 }
 
@@ -201,7 +204,7 @@ func TestSignRace(t *testing.T) {
 	}
 	end := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(end) {
-		if _, err := ks.SignHash(accounts.Account{Address: a1.Address}, testSigData); err == ErrNeedPasswordOrUnlock {
+		if _, err := ks.SignHash(accounts.Account{Address: a1.Address}, testSigData); err == ErrLocked {
 			return
 		} else if err != nil {
 			t.Errorf("Sign error: %v", err)
@@ -210,6 +213,145 @@ func TestSignRace(t *testing.T) {
 		time.Sleep(1 * time.Millisecond)
 	}
 	t.Errorf("Account did not lock within the timeout")
+}
+
+// Tests that the wallet notifier loop starts and stops correctly based on the
+// addition and removal of wallet event subscriptions.
+func TestWalletNotifierLifecycle(t *testing.T) {
+	// Create a temporary kesytore to test with
+	dir, ks := tmpKeyStore(t, false)
+	defer os.RemoveAll(dir)
+
+	// Ensure that the notification updater is not running yet
+	time.Sleep(250 * time.Millisecond)
+	ks.mu.RLock()
+	updating := ks.updating
+	ks.mu.RUnlock()
+
+	if updating {
+		t.Errorf("wallet notifier running without subscribers")
+	}
+	// Subscribe to the wallet feed and ensure the updater boots up
+	updates := make(chan accounts.WalletEvent)
+
+	subs := make([]event.Subscription, 2)
+	for i := 0; i < len(subs); i++ {
+		// Create a new subscription
+		subs[i] = ks.Subscribe(updates)
+
+		// Ensure the notifier comes online
+		time.Sleep(250 * time.Millisecond)
+		ks.mu.RLock()
+		updating = ks.updating
+		ks.mu.RUnlock()
+
+		if !updating {
+			t.Errorf("sub %d: wallet notifier not running after subscription", i)
+		}
+	}
+	// Unsubscribe and ensure the updater terminates eventually
+	for i := 0; i < len(subs); i++ {
+		// Close an existing subscription
+		subs[i].Unsubscribe()
+
+		// Ensure the notifier shuts down at and only at the last close
+		for k := 0; k < int(walletRefreshCycle/(250*time.Millisecond))+2; k++ {
+			ks.mu.RLock()
+			updating = ks.updating
+			ks.mu.RUnlock()
+
+			if i < len(subs)-1 && !updating {
+				t.Fatalf("sub %d: event notifier stopped prematurely", i)
+			}
+			if i == len(subs)-1 && !updating {
+				return
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+	t.Errorf("wallet notifier didn't terminate after unsubscribe")
+}
+
+// Tests that wallet notifications and correctly fired when accounts are added
+// or deleted from the keystore.
+func TestWalletNotifications(t *testing.T) {
+	// Create a temporary kesytore to test with
+	dir, ks := tmpKeyStore(t, false)
+	defer os.RemoveAll(dir)
+
+	// Subscribe to the wallet feed
+	updates := make(chan accounts.WalletEvent, 1)
+	sub := ks.Subscribe(updates)
+	defer sub.Unsubscribe()
+
+	// Randomly add and remove account and make sure events and wallets are in sync
+	live := make(map[common.Address]accounts.Account)
+	for i := 0; i < 1024; i++ {
+		// Execute a creation or deletion and ensure event arrival
+		if create := len(live) == 0 || rand.Int()%4 > 0; create {
+			// Add a new account and ensure wallet notifications arrives
+			account, err := ks.NewAccount("")
+			if err != nil {
+				t.Fatalf("failed to create test account: %v", err)
+			}
+			select {
+			case event := <-updates:
+				if !event.Arrive {
+					t.Errorf("departure event on account creation")
+				}
+				if event.Wallet.Accounts()[0] != account {
+					t.Errorf("account mismatch on created wallet: have %v, want %v", event.Wallet.Accounts()[0], account)
+				}
+			default:
+				t.Errorf("wallet arrival event not fired on account creation")
+			}
+			live[account.Address] = account
+		} else {
+			// Select a random account to delete (crude, but works)
+			var account accounts.Account
+			for _, a := range live {
+				account = a
+				break
+			}
+			// Remove an account and ensure wallet notifiaction arrives
+			if err := ks.Delete(account, ""); err != nil {
+				t.Fatalf("failed to delete test account: %v", err)
+			}
+			select {
+			case event := <-updates:
+				if event.Arrive {
+					t.Errorf("arrival event on account deletion")
+				}
+				if event.Wallet.Accounts()[0] != account {
+					t.Errorf("account mismatch on deleted wallet: have %v, want %v", event.Wallet.Accounts()[0], account)
+				}
+			default:
+				t.Errorf("wallet departure event not fired on account creation")
+			}
+			delete(live, account.Address)
+		}
+		// Retrieve the list of wallets and ensure it matches with our required live set
+		liveList := make([]accounts.Account, 0, len(live))
+		for _, account := range live {
+			liveList = append(liveList, account)
+		}
+		sort.Sort(accountsByURL(liveList))
+
+		wallets := ks.Wallets()
+		if len(liveList) != len(wallets) {
+			t.Errorf("wallet list doesn't match required accounts: have %v, want %v", wallets, liveList)
+		} else {
+			for j, wallet := range wallets {
+				if accs := wallet.Accounts(); len(accs) != 1 {
+					t.Errorf("wallet %d: contains invalid number of accounts: have %d, want 1", j, len(accs))
+				} else if accs[0] != liveList[j] {
+					t.Errorf("wallet %d: account mismatch: have %v, want %v", j, accs[0], liveList[j])
+				}
+			}
+		}
+		// Sleep a bit to avoid same-timestamp keyfiles
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func tmpKeyStore(t *testing.T, encrypted bool) (string, *KeyStore) {

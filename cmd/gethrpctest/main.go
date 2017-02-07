@@ -100,7 +100,7 @@ func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 		return nil, err
 	}
 	// Create the keystore and inject an unlocked account if requested
-	ks := stack.AccountManager().Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	if len(privkey) > 0 {
 		key, err := crypto.HexToECDSA(privkey)

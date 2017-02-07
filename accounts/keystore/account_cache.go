@@ -39,11 +39,11 @@ import (
 // exist yet, the code will attempt to create a watcher at most this often.
 const minReloadInterval = 2 * time.Second
 
-type accountsByFile []accounts.Account
+type accountsByURL []accounts.Account
 
-func (s accountsByFile) Len() int           { return len(s) }
-func (s accountsByFile) Less(i, j int) bool { return s[i].URL < s[j].URL }
-func (s accountsByFile) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s accountsByURL) Len() int           { return len(s) }
+func (s accountsByURL) Less(i, j int) bool { return s[i].URL < s[j].URL }
+func (s accountsByURL) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // AmbiguousAddrError is returned when attempting to unlock
 // an address for which more than one file exists.
@@ -63,26 +63,28 @@ func (err *AmbiguousAddrError) Error() string {
 	return fmt.Sprintf("multiple keys match address (%s)", files)
 }
 
-// addressCache is a live index of all accounts in the keystore.
-type addressCache struct {
+// accountCache is a live index of all accounts in the keystore.
+type accountCache struct {
 	keydir   string
 	watcher  *watcher
 	mu       sync.Mutex
-	all      accountsByFile
+	all      accountsByURL
 	byAddr   map[common.Address][]accounts.Account
 	throttle *time.Timer
+	notify   chan struct{}
 }
 
-func newAddrCache(keydir string) *addressCache {
-	ac := &addressCache{
+func newAccountCache(keydir string) (*accountCache, chan struct{}) {
+	ac := &accountCache{
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
+		notify: make(chan struct{}, 1),
 	}
 	ac.watcher = newWatcher(ac)
-	return ac
+	return ac, ac.notify
 }
 
-func (ac *addressCache) accounts() []accounts.Account {
+func (ac *accountCache) accounts() []accounts.Account {
 	ac.maybeReload()
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
@@ -91,14 +93,14 @@ func (ac *addressCache) accounts() []accounts.Account {
 	return cpy
 }
 
-func (ac *addressCache) hasAddress(addr common.Address) bool {
+func (ac *accountCache) hasAddress(addr common.Address) bool {
 	ac.maybeReload()
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 	return len(ac.byAddr[addr]) > 0
 }
 
-func (ac *addressCache) add(newAccount accounts.Account) {
+func (ac *accountCache) add(newAccount accounts.Account) {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 
@@ -111,17 +113,27 @@ func (ac *addressCache) add(newAccount accounts.Account) {
 	copy(ac.all[i+1:], ac.all[i:])
 	ac.all[i] = newAccount
 	ac.byAddr[newAccount.Address] = append(ac.byAddr[newAccount.Address], newAccount)
+
+	select {
+	case ac.notify <- struct{}{}:
+	default:
+	}
 }
 
 // note: removed needs to be unique here (i.e. both File and Address must be set).
-func (ac *addressCache) delete(removed accounts.Account) {
+func (ac *accountCache) delete(removed accounts.Account) {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
+
 	ac.all = removeAccount(ac.all, removed)
 	if ba := removeAccount(ac.byAddr[removed.Address], removed); len(ba) == 0 {
 		delete(ac.byAddr, removed.Address)
 	} else {
 		ac.byAddr[removed.Address] = ba
+	}
+	select {
+	case ac.notify <- struct{}{}:
+	default:
 	}
 }
 
@@ -137,7 +149,7 @@ func removeAccount(slice []accounts.Account, elem accounts.Account) []accounts.A
 // find returns the cached account for address if there is a unique match.
 // The exact matching rules are explained by the documentation of accounts.Account.
 // Callers must hold ac.mu.
-func (ac *addressCache) find(a accounts.Account) (accounts.Account, error) {
+func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	// Limit search to address candidates if possible.
 	matches := ac.all
 	if (a.Address != common.Address{}) {
@@ -169,9 +181,10 @@ func (ac *addressCache) find(a accounts.Account) (accounts.Account, error) {
 	}
 }
 
-func (ac *addressCache) maybeReload() {
+func (ac *accountCache) maybeReload() {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
+
 	if ac.watcher.running {
 		return // A watcher is running and will keep the cache up-to-date.
 	}
@@ -189,18 +202,22 @@ func (ac *addressCache) maybeReload() {
 	ac.throttle.Reset(minReloadInterval)
 }
 
-func (ac *addressCache) close() {
+func (ac *accountCache) close() {
 	ac.mu.Lock()
 	ac.watcher.close()
 	if ac.throttle != nil {
 		ac.throttle.Stop()
+	}
+	if ac.notify != nil {
+		close(ac.notify)
+		ac.notify = nil
 	}
 	ac.mu.Unlock()
 }
 
 // reload caches addresses of existing accounts.
 // Callers must hold ac.mu.
-func (ac *addressCache) reload() {
+func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
 	if err != nil && glog.V(logger.Debug) {
 		glog.Errorf("can't load keys: %v", err)
@@ -213,10 +230,14 @@ func (ac *addressCache) reload() {
 	for _, a := range accounts {
 		ac.byAddr[a.Address] = append(ac.byAddr[a.Address], a)
 	}
+	select {
+	case ac.notify <- struct{}{}:
+	default:
+	}
 	glog.V(logger.Debug).Infof("reloaded keys, cache has %d accounts", len(ac.all))
 }
 
-func (ac *addressCache) scan() ([]accounts.Account, error) {
+func (ac *accountCache) scan() ([]accounts.Account, error) {
 	files, err := ioutil.ReadDir(ac.keydir)
 	if err != nil {
 		return nil, err

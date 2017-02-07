@@ -402,7 +402,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	return nodes
 }
 
-func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore string, err error) {
+func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	if conf.UseLightweightKDF {
@@ -410,7 +410,11 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 		scryptP = keystore.LightScryptP
 	}
 
-	var keydir string
+	var (
+		keydir    string
+		ephemeral string
+		err       error
+	)
 	switch {
 	case filepath.IsAbs(conf.KeyStoreDir):
 		keydir = conf.KeyStoreDir
@@ -425,7 +429,7 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 	default:
 		// There is no datadir.
 		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
-		ephemeralKeystore = keydir
+		ephemeral = keydir
 	}
 	if err != nil {
 		return nil, "", err
@@ -433,7 +437,6 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 	if err := os.MkdirAll(keydir, 0700); err != nil {
 		return nil, "", err
 	}
-
 	// Assemble the account manager and supported backends
 	backends := []accounts.Backend{
 		keystore.NewKeyStore(keydir, scryptN, scryptP),
@@ -443,5 +446,22 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 	} else {
 		backends = append(backends, ledgerhub)
 	}
-	return accounts.NewManager(backends...), ephemeralKeystore, nil
+	am := accounts.NewManager(backends...)
+
+	// Start some logging for the user
+	changes := make(chan accounts.WalletEvent, 16)
+	am.Subscribe(changes)
+	go func() {
+		for event := range changes {
+			if event.Arrive {
+				glog.V(logger.Info).Infof("New %s wallet appeared: %s", event.Wallet.Type(), event.Wallet.URL())
+				if err := event.Wallet.Open(""); err != nil {
+					glog.V(logger.Warn).Infof("Failed to open %s wallet %s: %v", event.Wallet.Type(), event.Wallet.URL(), err)
+				}
+			} else {
+				glog.V(logger.Info).Infof("Old %s wallet disappeared: %s", event.Wallet.Type(), event.Wallet.URL())
+			}
+		}
+	}()
+	return am, ephemeral, nil
 }

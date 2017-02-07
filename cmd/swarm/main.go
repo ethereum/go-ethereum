@@ -329,7 +329,7 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	}
 	// Otherwise try getting it from the keystore.
 	am := stack.AccountManager()
-	ks := am.Backend(keystore.BackendType).(*keystore.KeyStore)
+	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	return decryptStoreAccount(ks, keyid)
 }

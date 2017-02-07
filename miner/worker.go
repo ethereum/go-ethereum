@@ -386,8 +386,11 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		work.family.Add(ancestor.Hash())
 		work.ancestors.Add(ancestor.Hash())
 	}
-	accounts := self.eth.AccountManager().Accounts()
-
+	wallets := self.eth.AccountManager().Wallets()
+	accounts := make([]accounts.Account, 0, len(wallets))
+	for _, wallet := range wallets {
+		accounts = append(accounts, wallet.Accounts()...)
+	}
 	// Keep track of transactions which return errors so they can be removed
 	work.tcount = 0
 	work.ownedAccounts = accountAddressesSet(accounts)
