@@ -446,22 +446,5 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	} else {
 		backends = append(backends, ledgerhub)
 	}
-	am := accounts.NewManager(backends...)
-
-	// Start some logging for the user
-	changes := make(chan accounts.WalletEvent, 16)
-	am.Subscribe(changes)
-	go func() {
-		for event := range changes {
-			if event.Arrive {
-				glog.V(logger.Info).Infof("New wallet appeared: %s", event.Wallet.URL())
-				if err := event.Wallet.Open(""); err != nil {
-					glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", event.Wallet.URL(), err)
-				}
-			} else {
-				glog.V(logger.Info).Infof("Old wallet disappeared: %s", event.Wallet.URL())
-			}
-		}
-	}()
-	return am, ephemeral, nil
+	return accounts.NewManager(backends...), ephemeral, nil
 }

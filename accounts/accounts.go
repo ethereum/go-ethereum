@@ -20,6 +20,7 @@ package accounts
 import (
 	"math/big"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -71,7 +72,19 @@ type Wallet interface {
 	// Derive attempts to explicitly derive a hierarchical deterministic account at
 	// the specified derivation path. If requested, the derived account will be added
 	// to the wallet's tracked account list.
-	Derive(path string, pin bool) (Account, error)
+	Derive(path DerivationPath, pin bool) (Account, error)
+
+	// SelfDerive sets a base account derivation path from which the wallet attempts
+	// to discover non zero accounts and automatically add them to list of tracked
+	// accounts.
+	//
+	// Note, self derivaton will increment the last component of the specified path
+	// opposed to decending into a child path to allow discovering accounts starting
+	// from non zero components.
+	//
+	// You can disable automatic account discovery by calling SelfDerive with a nil
+	// chain state reader.
+	SelfDerive(base DerivationPath, chain ethereum.ChainStateReader)
 
 	// SignHash requests the wallet to sign the given hash.
 	//

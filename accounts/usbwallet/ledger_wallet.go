@@ -29,11 +29,10 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -41,10 +40,15 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/karalabe/gousb/usb"
+	"golang.org/x/net/context"
 )
 
-// ledgerDerivationPath is the base derivation parameters used by the wallet.
-var ledgerDerivationPath = []uint32{0x80000000 + 44, 0x80000000 + 60, 0x80000000 + 0, 0}
+// Maximum time between wallet health checks to detect USB unplugs.
+const ledgerHeartbeatCycle = time.Second
+
+// Minimum time to wait between self derivation attempts, even it the user is
+// requesting accounts like crazy.
+const ledgerSelfDeriveThrottling = time.Second
 
 // ledgerOpcode is an enumeration encoding the supported Ledger opcodes.
 type ledgerOpcode byte
@@ -82,9 +86,15 @@ type ledgerWallet struct {
 	output  usb.Endpoint // Output endpoint to receive data from this device
 	failure error        // Any failure that would make the device unusable
 
-	version  [3]byte                     // Current version of the Ledger Ethereum app (zero if app is offline)
-	accounts []accounts.Account          // List of derive accounts pinned on the Ledger
-	paths    map[common.Address][]uint32 // Known derivation paths for signing operations
+	version  [3]byte                                    // Current version of the Ledger Ethereum app (zero if app is offline)
+	accounts []accounts.Account                         // List of derive accounts pinned on the Ledger
+	paths    map[common.Address]accounts.DerivationPath // Known derivation paths for signing operations
+
+	selfDeriveNextPath accounts.DerivationPath   // Next derivation path for account auto-discovery
+	selfDeriveNextAddr common.Address            // Next derived account address for auto-discovery
+	selfDerivePrevZero common.Address            // Last zero-address where auto-discovery stopped
+	selfDeriveChain    ethereum.ChainStateReader // Blockchain state reader to discover used account with
+	selfDeriveTime     time.Time                 // Timestamp of the last self-derivation to avoid thrashing
 
 	quit chan chan error
 	lock sync.RWMutex
@@ -107,10 +117,15 @@ func (w *ledgerWallet) Status() string {
 	if w.device == nil {
 		return "Closed"
 	}
-	if w.version == [3]byte{0, 0, 0} {
+	if w.offline() {
 		return "Ethereum app offline"
 	}
 	return fmt.Sprintf("Ethereum app v%d.%d.%d online", w.version[0], w.version[1], w.version[2])
+}
+
+// offline returns whether the wallet and the Ethereum app is offline or not.
+func (w *ledgerWallet) offline() bool {
+	return w.version == [3]byte{0, 0, 0}
 }
 
 // Open implements accounts.Wallet, attempting to open a USB connection to the
@@ -176,13 +191,13 @@ func (w *ledgerWallet) Open(passphrase string) error {
 	// Wallet seems to be successfully opened, guess if the Ethereum app is running
 	w.device, w.input, w.output = device, input, output
 
-	w.paths = make(map[common.Address][]uint32)
+	w.paths = make(map[common.Address]accounts.DerivationPath)
 	w.quit = make(chan chan error)
 	defer func() {
 		go w.heartbeat()
 	}()
 
-	if _, err := w.deriveAddress(ledgerDerivationPath); err != nil {
+	if _, err := w.deriveAddress(accounts.DefaultBaseDerivationPath); err != nil {
 		// Ethereum app is not running, nothing more to do, return
 		return nil
 	}
@@ -209,7 +224,7 @@ func (w *ledgerWallet) heartbeat() {
 		case errc = <-w.quit:
 			// Termination requested
 			continue
-		case <-time.After(time.Second):
+		case <-time.After(ledgerHeartbeatCycle):
 			// Heartbeat time
 		}
 		// Execute a tiny data exchange to see responsiveness
@@ -242,16 +257,86 @@ func (w *ledgerWallet) Close() error {
 		return err
 	}
 	w.device, w.input, w.output, w.paths, w.quit = nil, nil, nil, nil, nil
+	w.version = [3]byte{}
 
 	return herr // If all went well, return any health-check errors
 }
 
 // Accounts implements accounts.Wallet, returning the list of accounts pinned to
-// the Ledger hardware wallet.
+// the Ledger hardware wallet. If self derivation was enabled, the account list
+// is periodically expanded based on current chain state.
 func (w *ledgerWallet) Accounts() []accounts.Account {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
+	w.lock.Lock()
+	defer w.lock.Unlock()
 
+	// If the wallet is offline, there are no accounts to return
+	if w.offline() {
+		return nil
+	}
+	// If no self derivation is done (or throttled), return the current accounts
+	if w.selfDeriveChain == nil || time.Since(w.selfDeriveTime) < ledgerSelfDeriveThrottling {
+		cpy := make([]accounts.Account, len(w.accounts))
+		copy(cpy, w.accounts)
+		return cpy
+	}
+	// Self derivation requested, try to expand our account list
+	ctx := context.Background()
+	for empty := false; !empty; {
+		// Retrieve the next derived Ethereum account
+		var err error
+		if w.selfDeriveNextAddr == (common.Address{}) {
+			w.selfDeriveNextAddr, err = w.deriveAddress(w.selfDeriveNextPath)
+			if err != nil {
+				// Derivation failed, disable auto discovery
+				glog.V(logger.Warn).Infof("self-derivation failed: %v", err)
+				w.selfDeriveChain = nil
+				break
+			}
+		}
+		// Check the account's status against the current chain state
+		balance, err := w.selfDeriveChain.BalanceAt(ctx, w.selfDeriveNextAddr, nil)
+		if err != nil {
+			glog.V(logger.Warn).Infof("self-derivation balance retrieval failed: %v", err)
+			w.selfDeriveChain = nil
+			break
+		}
+		nonce, err := w.selfDeriveChain.NonceAt(ctx, w.selfDeriveNextAddr, nil)
+		if err != nil {
+			glog.V(logger.Warn).Infof("self-derivation nonce retrieval failed: %v", err)
+			w.selfDeriveChain = nil
+			break
+		}
+		// If the next account is empty, stop self-derivation, but add it nonetheless
+		if balance.BitLen() == 0 && nonce == 0 {
+			w.selfDerivePrevZero = w.selfDeriveNextAddr
+			empty = true
+		}
+		// We've just self-derived a new non-zero account, start tracking it
+		path := make(accounts.DerivationPath, len(w.selfDeriveNextPath))
+		copy(path[:], w.selfDeriveNextPath[:])
+
+		account := accounts.Account{
+			Address: w.selfDeriveNextAddr,
+			URL:     accounts.URL{Scheme: w.url.Scheme, Path: fmt.Sprintf("%s/%s", w.url.Path, path)},
+		}
+		_, known := w.paths[w.selfDeriveNextAddr]
+		if !known || (!empty && w.selfDeriveNextAddr == w.selfDerivePrevZero) {
+			// Either fully new account, or previous zero. Report discovery either way
+			glog.V(logger.Info).Infof("%s discovered %s (balance %d, nonce %d) at %s", w.url.String(), w.selfDeriveNextAddr.Hex(), balance, nonce, path)
+		}
+		if !known {
+			w.accounts = append(w.accounts, account)
+			w.paths[w.selfDeriveNextAddr] = path
+		}
+		// Fetch the next potential account
+		if !empty {
+			w.selfDeriveNextAddr = common.Address{}
+			w.selfDeriveNextPath[len(w.selfDeriveNextPath)-1]++
+		}
+	}
+	w.selfDeriveTime = time.Now()
+
+	// Return whatever account list we ended up with
 	cpy := make([]accounts.Account, len(w.accounts))
 	copy(cpy, w.accounts)
 	return cpy
@@ -271,34 +356,16 @@ func (w *ledgerWallet) Contains(account accounts.Account) bool {
 // Derive implements accounts.Wallet, deriving a new account at the specific
 // derivation path. If pin is set to true, the account will be added to the list
 // of tracked accounts.
-func (w *ledgerWallet) Derive(path string, pin bool) (accounts.Account, error) {
+func (w *ledgerWallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Account, error) {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
 	// If the wallet is closed, or the Ethereum app doesn't run, abort
-	if w.device == nil || w.version == [3]byte{0, 0, 0} {
+	if w.device == nil || w.offline() {
 		return accounts.Account{}, accounts.ErrWalletClosed
 	}
-	// All seems fine, convert the user derivation path to Ledger representation
-	path = strings.TrimPrefix(path, "/")
-
-	parts := strings.Split(path, "/")
-	lpath := make([]uint32, len(parts))
-	for i, part := range parts {
-		// Handle hardened paths
-		if strings.HasSuffix(part, "'") {
-			lpath[i] = 0x80000000
-			part = strings.TrimSuffix(part, "'")
-		}
-		// Handle the non hardened component
-		val, err := strconv.Atoi(part)
-		if err != nil {
-			return accounts.Account{}, fmt.Errorf("path element %d: %v", i, err)
-		}
-		lpath[i] += uint32(val)
-	}
 	// Try to derive the actual account and update it's URL if succeeful
-	address, err := w.deriveAddress(lpath)
+	address, err := w.deriveAddress(path)
 	if err != nil {
 		return accounts.Account{}, err
 	}
@@ -310,10 +377,25 @@ func (w *ledgerWallet) Derive(path string, pin bool) (accounts.Account, error) {
 	if pin {
 		if _, ok := w.paths[address]; !ok {
 			w.accounts = append(w.accounts, account)
-			w.paths[address] = lpath
+			w.paths[address] = path
 		}
 	}
 	return account, nil
+}
+
+// SelfDerive implements accounts.Wallet, trying to discover accounts that the
+// user used previously (based on the chain state), but ones that he/she did not
+// explicitly pin to the wallet manually. To avoid chain head monitoring, self
+// derivation only runs during account listing (and even then throttled).
+func (w *ledgerWallet) SelfDerive(base accounts.DerivationPath, chain ethereum.ChainStateReader) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+
+	w.selfDeriveNextPath = make(accounts.DerivationPath, len(base))
+	copy(w.selfDeriveNextPath[:], base[:])
+
+	w.selfDeriveNextAddr = common.Address{}
+	w.selfDeriveChain = chain
 }
 
 // SignHash implements accounts.Wallet, however signing arbitrary data is not

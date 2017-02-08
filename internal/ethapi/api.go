@@ -253,10 +253,14 @@ func (s *PrivateAccountAPI) DeriveAccount(url string, path string, pin *bool) (a
 	if err != nil {
 		return accounts.Account{}, err
 	}
+	derivPath, err := accounts.ParseDerivationPath(path)
+	if err != nil {
+		return accounts.Account{}, err
+	}
 	if pin == nil {
 		pin = new(bool)
 	}
-	return wallet.Derive(path, *pin)
+	return wallet.Derive(derivPath, *pin)
 }
 
 // NewAccount will create a new account and returns the address for the new account.

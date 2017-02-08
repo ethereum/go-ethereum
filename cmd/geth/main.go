@@ -25,12 +25,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -249,12 +251,38 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	passwords := utils.MakePasswordList(ctx)
-	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range accounts {
+	unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	for i, account := range unlocks {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
 			unlockAccount(ctx, ks, trimmed, i, passwords)
 		}
 	}
+	// Register wallet event handlers to open and auto-derive wallets
+	events := make(chan accounts.WalletEvent, 16)
+	stack.AccountManager().Subscribe(events)
+
+	go func() {
+		// Create an chain state reader for self-derivation
+		rpcClient, err := stack.Attach()
+		if err != nil {
+			utils.Fatalf("Failed to attach to self: %v", err)
+		}
+		stateReader := ethclient.NewClient(rpcClient)
+
+		// Listen for wallet event till termination
+		for event := range events {
+			if event.Arrive {
+				if err := event.Wallet.Open(""); err != nil {
+					glog.V(logger.Info).Infof("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err)
+				} else {
+					glog.V(logger.Info).Infof("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status())
+				}
+				event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+			} else {
+				glog.V(logger.Info).Infof("Old wallet dropped:  %s", event.Wallet.URL())
+			}
+		}
+	}()
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		var ethereum *eth.Ethereum
