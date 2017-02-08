@@ -17,7 +17,6 @@
 package vm
 
 import (
-	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -25,12 +24,10 @@ import (
 
 type (
 	executionFunc       func(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error)
-	gasFunc             func(params.GasTable, *EVM, *Contract, *Stack, *Memory, uint64) (uint64, error) // last parameter is the requested memory size as a uint64
+	gasFunc             func(params.GasTable, *EVM, *Contract, *Stack, *Memory, *big.Int) *big.Int
 	stackValidationFunc func(*Stack) error
 	memorySizeFunc      func(*Stack) *big.Int
 )
-
-var errGasUintOverflow = errors.New("gas uint64 overflow")
 
 type operation struct {
 	// op is the operation function
@@ -434,7 +431,7 @@ func NewJumpTable() [256]operation {
 		},
 		STOP: {
 			execute:       opStop,
-			gasCost:       constGasFunc(0),
+			gasCost:       constGasFunc(Zero),
 			validateStack: makeStackFunc(0, 0),
 			halts:         true,
 			valid:         true,

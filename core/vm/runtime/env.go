@@ -36,7 +36,7 @@ func NewEnv(cfg *Config, state *state.StateDB) *vm.EVM {
 		BlockNumber: cfg.BlockNumber,
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
-		GasLimit:    new(big.Int).SetUint64(cfg.GasLimit),
+		GasLimit:    cfg.GasLimit,
 		GasPrice:    new(big.Int),
 	}
 

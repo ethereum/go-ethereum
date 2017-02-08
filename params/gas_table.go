@@ -16,35 +16,41 @@
 
 package params
 
-type GasTable struct {
-	ExtcodeSize uint64
-	ExtcodeCopy uint64
-	Balance     uint64
-	SLoad       uint64
-	Calls       uint64
-	Suicide     uint64
+import "math/big"
 
-	ExpByte uint64
+type GasTable struct {
+	ExtcodeSize *big.Int
+	ExtcodeCopy *big.Int
+	Balance     *big.Int
+	SLoad       *big.Int
+	Calls       *big.Int
+	Suicide     *big.Int
+
+	ExpByte *big.Int
 
 	// CreateBySuicide occurs when the
 	// refunded account is one that does
 	// not exist. This logic is similar
 	// to call. May be left nil. Nil means
 	// not charged.
-	CreateBySuicide uint64
+	CreateBySuicide *big.Int
 }
 
 var (
 	// GasTableHomestead contain the gas prices for
 	// the homestead phase.
 	GasTableHomestead = GasTable{
-		ExtcodeSize: 20,
-		ExtcodeCopy: 20,
-		Balance:     20,
-		SLoad:       50,
-		Calls:       40,
-		Suicide:     0,
-		ExpByte:     10,
+		ExtcodeSize: big.NewInt(20),
+		ExtcodeCopy: big.NewInt(20),
+		Balance:     big.NewInt(20),
+		SLoad:       big.NewInt(50),
+		Calls:       big.NewInt(40),
+		Suicide:     big.NewInt(0),
+		ExpByte:     big.NewInt(10),
+
+		// explicitly set to nil to indicate
+		// this rule does not apply to homestead.
+		CreateBySuicide: nil,
 	}
 
 	// GasTableHomestead contain the gas re-prices for
@@ -52,26 +58,26 @@ var (
 	//
 	// TODO rename to GasTableEIP150
 	GasTableHomesteadGasRepriceFork = GasTable{
-		ExtcodeSize: 700,
-		ExtcodeCopy: 700,
-		Balance:     400,
-		SLoad:       200,
-		Calls:       700,
-		Suicide:     5000,
-		ExpByte:     10,
+		ExtcodeSize: big.NewInt(700),
+		ExtcodeCopy: big.NewInt(700),
+		Balance:     big.NewInt(400),
+		SLoad:       big.NewInt(200),
+		Calls:       big.NewInt(700),
+		Suicide:     big.NewInt(5000),
+		ExpByte:     big.NewInt(10),
 
-		CreateBySuicide: 25000,
+		CreateBySuicide: big.NewInt(25000),
 	}
 
 	GasTableEIP158 = GasTable{
-		ExtcodeSize: 700,
-		ExtcodeCopy: 700,
-		Balance:     400,
-		SLoad:       200,
-		Calls:       700,
-		Suicide:     5000,
-		ExpByte:     50,
+		ExtcodeSize: big.NewInt(700),
+		ExtcodeCopy: big.NewInt(700),
+		Balance:     big.NewInt(400),
+		SLoad:       big.NewInt(200),
+		Calls:       big.NewInt(700),
+		Suicide:     big.NewInt(5000),
+		ExpByte:     big.NewInt(50),
 
-		CreateBySuicide: 25000,
+		CreateBySuicide: big.NewInt(25000),
 	}
 )
