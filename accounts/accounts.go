@@ -29,19 +29,16 @@ import (
 // by the optional URL field.
 type Account struct {
 	Address common.Address `json:"address"` // Ethereum account address derived from the key
-	URL     string         `json:"url"`     // Optional resource locator within a backend
+	URL     URL            `json:"url"`     // Optional resource locator within a backend
 }
 
 // Wallet represents a software or hardware wallet that might contain one or more
 // accounts (derived from the same seed).
 type Wallet interface {
-	// Type retrieves a textual representation of the type of the wallet.
-	Type() string
-
 	// URL retrieves the canonical path under which this wallet is reachable. It is
 	// user by upper layers to define a sorting order over all wallets from multiple
 	// backends.
-	URL() string
+	URL() URL
 
 	// Status returns a textual status to aid the user in the current state of the
 	// wallet.

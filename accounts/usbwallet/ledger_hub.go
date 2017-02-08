@@ -32,6 +32,9 @@ import (
 	"github.com/karalabe/gousb/usb"
 )
 
+// LedgerScheme is the protocol scheme prefixing account and wallet URLs.
+var LedgerScheme = "ledger"
+
 // ledgerDeviceIDs are the known device IDs that Ledger wallets use.
 var ledgerDeviceIDs = []deviceID{
 	{Vendor: 0x2c97, Product: 0x0000}, // Ledger Blue
@@ -124,23 +127,24 @@ func (hub *LedgerHub) refreshWallets() {
 
 	for i := 0; i < len(devIDs); i++ {
 		devID, busID := devIDs[i], busIDs[i]
-		url := fmt.Sprintf("ledger://%03d:%03d", busID>>8, busID&0xff)
+
+		url := accounts.URL{Scheme: LedgerScheme, Path: fmt.Sprintf("%03d:%03d", busID>>8, busID&0xff)}
 
 		// Drop wallets while they were in front of the next account
-		for len(hub.wallets) > 0 && hub.wallets[0].URL() < url {
+		for len(hub.wallets) > 0 && hub.wallets[0].URL().Cmp(url) < 0 {
 			events = append(events, accounts.WalletEvent{Wallet: hub.wallets[0], Arrive: false})
 			hub.wallets = hub.wallets[1:]
 		}
 		// If there are no more wallets or the account is before the next, wrap new wallet
-		if len(hub.wallets) == 0 || hub.wallets[0].URL() > url {
-			wallet := &ledgerWallet{context: hub.ctx, hardwareID: devID, locationID: busID, url: url}
+		if len(hub.wallets) == 0 || hub.wallets[0].URL().Cmp(url) > 0 {
+			wallet := &ledgerWallet{context: hub.ctx, hardwareID: devID, locationID: busID, url: &url}
 
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Arrive: true})
 			wallets = append(wallets, wallet)
 			continue
 		}
 		// If the account is the same as the first wallet, keep it
-		if hub.wallets[0].URL() == url {
+		if hub.wallets[0].URL().Cmp(url) == 0 {
 			wallets = append(wallets, hub.wallets[0])
 			hub.wallets = hub.wallets[1:]
 			continue

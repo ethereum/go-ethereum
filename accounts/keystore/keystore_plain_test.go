@@ -52,7 +52,7 @@ func TestKeyStorePlain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k2, err := ks.GetKey(k1.Address, account.URL, pass)
+	k2, err := ks.GetKey(k1.Address, account.URL.Path, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestKeyStorePassphrase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	k2, err := ks.GetKey(k1.Address, account.URL, pass)
+	k2, err := ks.GetKey(k1.Address, account.URL.Path, pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestKeyStorePassphraseDecryptionFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = ks.GetKey(k1.Address, account.URL, "bar"); err != ErrDecrypt {
+	if _, err = ks.GetKey(k1.Address, account.URL.Path, "bar"); err != ErrDecrypt {
 		t.Fatalf("wrong error for invalid passphrase\ngot %q\nwant %q", err, ErrDecrypt)
 	}
 }
@@ -115,7 +115,7 @@ func TestImportPreSaleKey(t *testing.T) {
 	if account.Address != common.HexToAddress("d4584b5f6229b7be90727b0fc8c6b91bb427821f") {
 		t.Errorf("imported account has wrong address %x", account.Address)
 	}
-	if !strings.HasPrefix(account.URL, dir) {
+	if !strings.HasPrefix(account.URL.Path, dir) {
 		t.Errorf("imported account file not in keystore directory: %q", account.URL)
 	}
 }

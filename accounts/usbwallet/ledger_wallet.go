@@ -72,10 +72,10 @@ const (
 
 // ledgerWallet represents a live USB Ledger hardware wallet.
 type ledgerWallet struct {
-	context    *usb.Context // USB context to interface libusb through
-	hardwareID deviceID     // USB identifiers to identify this device type
-	locationID uint16       // USB bus and address to identify this device instance
-	url        string       // Textual URL uniquely identifying this wallet
+	context    *usb.Context  // USB context to interface libusb through
+	hardwareID deviceID      // USB identifiers to identify this device type
+	locationID uint16        // USB bus and address to identify this device instance
+	url        *accounts.URL // Textual URL uniquely identifying this wallet
 
 	device  *usb.Device  // USB device advertising itself as a Ledger wallet
 	input   usb.Endpoint // Input endpoint to send data to this device
@@ -90,14 +90,9 @@ type ledgerWallet struct {
 	lock sync.RWMutex
 }
 
-// Type implements accounts.Wallet, returning the textual type of the wallet.
-func (w *ledgerWallet) Type() string {
-	return "ledger"
-}
-
 // URL implements accounts.Wallet, returning the URL of the Ledger device.
-func (w *ledgerWallet) URL() string {
-	return w.url
+func (w *ledgerWallet) URL() accounts.URL {
+	return *w.url
 }
 
 // Status implements accounts.Wallet, always whether the Ledger is opened, closed
@@ -113,9 +108,9 @@ func (w *ledgerWallet) Status() string {
 		return "Closed"
 	}
 	if w.version == [3]byte{0, 0, 0} {
-		return "Ethereum app not started"
+		return "Ethereum app offline"
 	}
-	return fmt.Sprintf("Ethereum app v%d.%d.%d", w.version[0], w.version[1], w.version[2])
+	return fmt.Sprintf("Ethereum app v%d.%d.%d online", w.version[0], w.version[1], w.version[2])
 }
 
 // Open implements accounts.Wallet, attempting to open a USB connection to the
@@ -309,7 +304,7 @@ func (w *ledgerWallet) Derive(path string, pin bool) (accounts.Account, error) {
 	}
 	account := accounts.Account{
 		Address: address,
-		URL:     fmt.Sprintf("%s/%s", w.url, path),
+		URL:     accounts.URL{Scheme: w.url.Scheme, Path: fmt.Sprintf("%s/%s", w.url.Path, path)},
 	}
 	// If pinning was requested, track the account
 	if pin {

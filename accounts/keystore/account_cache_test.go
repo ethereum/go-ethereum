@@ -37,15 +37,15 @@ var (
 	cachetestAccounts = []accounts.Account{
 		{
 			Address: common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"),
-			URL:     filepath.Join(cachetestDir, "UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8")},
 		},
 		{
 			Address: common.HexToAddress("f466859ead1932d743d622cb74fc058882e8648a"),
-			URL:     filepath.Join(cachetestDir, "aaa"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "aaa")},
 		},
 		{
 			Address: common.HexToAddress("289d485d9771714cce91d3393d764e1311907acc"),
-			URL:     filepath.Join(cachetestDir, "zzz"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "zzz")},
 		},
 	}
 )
@@ -63,10 +63,11 @@ func TestWatchNewFile(t *testing.T) {
 	// Move in the files.
 	wantAccounts := make([]accounts.Account, len(cachetestAccounts))
 	for i := range cachetestAccounts {
-		a := cachetestAccounts[i]
-		a.URL = filepath.Join(dir, filepath.Base(a.URL))
-		wantAccounts[i] = a
-		if err := cp.CopyFile(a.URL, cachetestAccounts[i].URL); err != nil {
+		wantAccounts[i] = accounts.Account{
+			Address: cachetestAccounts[i].Address,
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, filepath.Base(cachetestAccounts[i].URL.Path))},
+		}
+		if err := cp.CopyFile(wantAccounts[i].URL.Path, cachetestAccounts[i].URL.Path); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -107,13 +108,13 @@ func TestWatchNoDir(t *testing.T) {
 	os.MkdirAll(dir, 0700)
 	defer os.RemoveAll(dir)
 	file := filepath.Join(dir, "aaa")
-	if err := cp.CopyFile(file, cachetestAccounts[0].URL); err != nil {
+	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
 		t.Fatal(err)
 	}
 
 	// ks should see the account.
 	wantAccounts := []accounts.Account{cachetestAccounts[0]}
-	wantAccounts[0].URL = file
+	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
 	for d := 200 * time.Millisecond; d < 8*time.Second; d *= 2 {
 		list = ks.Accounts()
 		if reflect.DeepEqual(list, wantAccounts) {
@@ -145,31 +146,31 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	accs := []accounts.Account{
 		{
 			Address: common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
-			URL:     "-309830980",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "-309830980"},
 		},
 		{
 			Address: common.HexToAddress("2cac1adea150210703ba75ed097ddfe24e14f213"),
-			URL:     "ggg",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "ggg"},
 		},
 		{
 			Address: common.HexToAddress("8bda78331c916a08481428e4b07c96d3e916d165"),
-			URL:     "zzzzzz-the-very-last-one.keyXXX",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "zzzzzz-the-very-last-one.keyXXX"},
 		},
 		{
 			Address: common.HexToAddress("d49ff4eeb0b2686ed89c0fc0f2b6ea533ddbbd5e"),
-			URL:     "SOMETHING.key",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "SOMETHING.key"},
 		},
 		{
 			Address: common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"),
-			URL:     "UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8"},
 		},
 		{
 			Address: common.HexToAddress("f466859ead1932d743d622cb74fc058882e8648a"),
-			URL:     "aaa",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "aaa"},
 		},
 		{
 			Address: common.HexToAddress("289d485d9771714cce91d3393d764e1311907acc"),
-			URL:     "zzz",
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "zzz"},
 		},
 	}
 	for _, a := range accs {
@@ -210,7 +211,7 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	for i := 0; i < len(accs); i += 2 {
 		cache.delete(wantAccounts[i])
 	}
-	cache.delete(accounts.Account{Address: common.HexToAddress("fd9bd350f08ee3c0c19b85a8e16114a11a60aa4e"), URL: "something"})
+	cache.delete(accounts.Account{Address: common.HexToAddress("fd9bd350f08ee3c0c19b85a8e16114a11a60aa4e"), URL: accounts.URL{Scheme: KeyStoreScheme, Path: "something"}})
 
 	select {
 	case <-notify:
@@ -245,19 +246,19 @@ func TestCacheFind(t *testing.T) {
 	accs := []accounts.Account{
 		{
 			Address: common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"),
-			URL:     filepath.Join(dir, "a.key"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "a.key")},
 		},
 		{
 			Address: common.HexToAddress("2cac1adea150210703ba75ed097ddfe24e14f213"),
-			URL:     filepath.Join(dir, "b.key"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "b.key")},
 		},
 		{
 			Address: common.HexToAddress("d49ff4eeb0b2686ed89c0fc0f2b6ea533ddbbd5e"),
-			URL:     filepath.Join(dir, "c.key"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "c.key")},
 		},
 		{
 			Address: common.HexToAddress("d49ff4eeb0b2686ed89c0fc0f2b6ea533ddbbd5e"),
-			URL:     filepath.Join(dir, "c2.key"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "c2.key")},
 		},
 	}
 	for _, a := range accs {
@@ -266,7 +267,7 @@ func TestCacheFind(t *testing.T) {
 
 	nomatchAccount := accounts.Account{
 		Address: common.HexToAddress("f466859ead1932d743d622cb74fc058882e8648a"),
-		URL:     filepath.Join(dir, "something"),
+		URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "something")},
 	}
 	tests := []struct {
 		Query      accounts.Account
@@ -278,7 +279,7 @@ func TestCacheFind(t *testing.T) {
 		// by file
 		{Query: accounts.Account{URL: accs[0].URL}, WantResult: accs[0]},
 		// by basename
-		{Query: accounts.Account{URL: filepath.Base(accs[0].URL)}, WantResult: accs[0]},
+		{Query: accounts.Account{URL: accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Base(accs[0].URL.Path)}}, WantResult: accs[0]},
 		// by file and address
 		{Query: accs[0], WantResult: accs[0]},
 		// ambiguous address, tie resolved by file
@@ -294,7 +295,7 @@ func TestCacheFind(t *testing.T) {
 		// no match error
 		{Query: nomatchAccount, WantError: ErrNoMatch},
 		{Query: accounts.Account{URL: nomatchAccount.URL}, WantError: ErrNoMatch},
-		{Query: accounts.Account{URL: filepath.Base(nomatchAccount.URL)}, WantError: ErrNoMatch},
+		{Query: accounts.Account{URL: accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Base(nomatchAccount.URL.Path)}}, WantError: ErrNoMatch},
 		{Query: accounts.Account{Address: nomatchAccount.Address}, WantError: ErrNoMatch},
 	}
 	for i, test := range tests {

@@ -185,7 +185,7 @@ func accountList(ctx *cli.Context) error {
 	var index int
 	for _, wallet := range stack.AccountManager().Wallets() {
 		for _, account := range wallet.Accounts() {
-			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, account.URL)
+			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
 			index++
 		}
 	}

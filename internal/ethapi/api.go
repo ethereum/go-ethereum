@@ -228,7 +228,6 @@ func (s *PrivateAccountAPI) ListAccounts() []common.Address {
 // rawWallet is a JSON representation of an accounts.Wallet interface, with its
 // data contents extracted into plain fields.
 type rawWallet struct {
-	Type     string             `json:"type"`
 	URL      string             `json:"url"`
 	Status   string             `json:"status"`
 	Accounts []accounts.Account `json:"accounts"`
@@ -239,8 +238,7 @@ func (s *PrivateAccountAPI) ListWallets() []rawWallet {
 	var wallets []rawWallet
 	for _, wallet := range s.am.Wallets() {
 		wallets = append(wallets, rawWallet{
-			Type:     wallet.Type(),
-			URL:      wallet.URL(),
+			URL:      wallet.URL().String(),
 			Status:   wallet.Status(),
 			Accounts: wallet.Accounts(),
 		})

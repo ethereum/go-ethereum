@@ -181,8 +181,8 @@ func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Accou
 	if err != nil {
 		return nil, accounts.Account{}, err
 	}
-	a := accounts.Account{Address: key.Address, URL: ks.JoinPath(keyFileName(key.Address))}
-	if err := ks.StoreKey(a.URL, key, auth); err != nil {
+	a := accounts.Account{Address: key.Address, URL: accounts.URL{Scheme: KeyStoreScheme, Path: ks.JoinPath(keyFileName(key.Address))}}
+	if err := ks.StoreKey(a.URL.Path, key, auth); err != nil {
 		zeroKey(key.PrivateKey)
 		return nil, a, err
 	}

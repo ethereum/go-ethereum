@@ -30,20 +30,21 @@ type keystoreWallet struct {
 	keystore *KeyStore        // Keystore where the account originates from
 }
 
-// Type implements accounts.Wallet, returning the textual type of the wallet.
-func (w *keystoreWallet) Type() string {
-	return "secret-storage"
-}
-
 // URL implements accounts.Wallet, returning the URL of the account within.
-func (w *keystoreWallet) URL() string {
+func (w *keystoreWallet) URL() accounts.URL {
 	return w.account.URL
 }
 
 // Status implements accounts.Wallet, always returning "open", since there is no
 // concept of open/close for plain keystore accounts.
 func (w *keystoreWallet) Status() string {
-	return "Open"
+	w.keystore.mu.RLock()
+	defer w.keystore.mu.RUnlock()
+
+	if _, ok := w.keystore.unlocked[w.account.Address]; ok {
+		return "Unlocked"
+	}
+	return "Locked"
 }
 
 // Open implements accounts.Wallet, but is a noop for plain wallets since there
@@ -63,7 +64,7 @@ func (w *keystoreWallet) Accounts() []accounts.Account {
 // Contains implements accounts.Wallet, returning whether a particular account is
 // or is not wrapped by this wallet instance.
 func (w *keystoreWallet) Contains(account accounts.Account) bool {
-	return account.Address == w.account.Address && (account.URL == "" || account.URL == w.account.URL)
+	return account.Address == w.account.Address && (account.URL == (accounts.URL{}) || account.URL == w.account.URL)
 }
 
 // Derive implements accounts.Wallet, but is a noop for plain wallets since there
@@ -81,7 +82,7 @@ func (w *keystoreWallet) SignHash(account accounts.Account, hash []byte) ([]byte
 	if account.Address != w.account.Address {
 		return nil, accounts.ErrUnknownAccount
 	}
-	if account.URL != "" && account.URL != w.account.URL {
+	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
@@ -97,7 +98,7 @@ func (w *keystoreWallet) SignTx(account accounts.Account, tx *types.Transaction,
 	if account.Address != w.account.Address {
 		return nil, accounts.ErrUnknownAccount
 	}
-	if account.URL != "" && account.URL != w.account.URL {
+	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
@@ -111,7 +112,7 @@ func (w *keystoreWallet) SignHashWithPassphrase(account accounts.Account, passph
 	if account.Address != w.account.Address {
 		return nil, accounts.ErrUnknownAccount
 	}
-	if account.URL != "" && account.URL != w.account.URL {
+	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign
@@ -125,7 +126,7 @@ func (w *keystoreWallet) SignTxWithPassphrase(account accounts.Account, passphra
 	if account.Address != w.account.Address {
 		return nil, accounts.ErrUnknownAccount
 	}
-	if account.URL != "" && account.URL != w.account.URL {
+	if account.URL != (accounts.URL{}) && account.URL != w.account.URL {
 		return nil, accounts.ErrUnknownAccount
 	}
 	// Account seems valid, request the keystore to sign

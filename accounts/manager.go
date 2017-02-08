@@ -134,8 +134,12 @@ func (am *Manager) Wallet(url string) (Wallet, error) {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
+	parsed, err := parseURL(url)
+	if err != nil {
+		return nil, err
+	}
 	for _, wallet := range am.Wallets() {
-		if wallet.URL() == url {
+		if wallet.URL() == parsed {
 			return wallet, nil
 		}
 	}
@@ -169,7 +173,7 @@ func (am *Manager) Subscribe(sink chan<- WalletEvent) event.Subscription {
 // The original slice is assumed to be already sorted by URL.
 func merge(slice []Wallet, wallets ...Wallet) []Wallet {
 	for _, wallet := range wallets {
-		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL() >= wallet.URL() })
+		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL().Cmp(wallet.URL()) >= 0 })
 		if n == len(slice) {
 			slice = append(slice, wallet)
 			continue
@@ -183,7 +187,7 @@ func merge(slice []Wallet, wallets ...Wallet) []Wallet {
 // cache and removes the ones specified.
 func drop(slice []Wallet, wallets ...Wallet) []Wallet {
 	for _, wallet := range wallets {
-		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL() >= wallet.URL() })
+		n := sort.Search(len(slice), func(i int) bool { return slice[i].URL().Cmp(wallet.URL()) >= 0 })
 		if n == len(slice) {
 			// Wallet not found, may happen during startup
 			continue

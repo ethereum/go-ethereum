@@ -351,7 +351,7 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 	if err != nil {
 		utils.Fatalf("Can't find swarm account key: %v", err)
 	}
-	keyjson, err := ioutil.ReadFile(a.URL)
+	keyjson, err := ioutil.ReadFile(a.URL.Path)
 	if err != nil {
 		utils.Fatalf("Can't load swarm account key: %v", err)
 	}

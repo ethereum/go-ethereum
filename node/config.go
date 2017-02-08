@@ -454,12 +454,12 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	go func() {
 		for event := range changes {
 			if event.Arrive {
-				glog.V(logger.Info).Infof("New %s wallet appeared: %s", event.Wallet.Type(), event.Wallet.URL())
+				glog.V(logger.Info).Infof("New wallet appeared: %s", event.Wallet.URL())
 				if err := event.Wallet.Open(""); err != nil {
-					glog.V(logger.Warn).Infof("Failed to open %s wallet %s: %v", event.Wallet.Type(), event.Wallet.URL(), err)
+					glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", event.Wallet.URL(), err)
 				}
 			} else {
-				glog.V(logger.Info).Infof("Old %s wallet disappeared: %s", event.Wallet.Type(), event.Wallet.URL())
+				glog.V(logger.Info).Infof("Old wallet disappeared: %s", event.Wallet.URL())
 			}
 		}
 	}()

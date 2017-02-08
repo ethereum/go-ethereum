@@ -41,10 +41,10 @@ func TestKeyStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(a.URL, dir) {
+	if !strings.HasPrefix(a.URL.Path, dir) {
 		t.Errorf("account file %s doesn't have dir prefix", a.URL)
 	}
-	stat, err := os.Stat(a.URL)
+	stat, err := os.Stat(a.URL.Path)
 	if err != nil {
 		t.Fatalf("account file %s doesn't exist (%v)", a.URL, err)
 	}
@@ -60,7 +60,7 @@ func TestKeyStore(t *testing.T) {
 	if err := ks.Delete(a, "bar"); err != nil {
 		t.Errorf("Delete error: %v", err)
 	}
-	if common.FileExist(a.URL) {
+	if common.FileExist(a.URL.Path) {
 		t.Errorf("account file %s should be gone after Delete", a.URL)
 	}
 	if ks.HasAddress(a.Address) {
@@ -286,7 +286,7 @@ func TestWalletNotifications(t *testing.T) {
 
 	// Randomly add and remove account and make sure events and wallets are in sync
 	live := make(map[common.Address]accounts.Account)
-	for i := 0; i < 1024; i++ {
+	for i := 0; i < 256; i++ {
 		// Execute a creation or deletion and ensure event arrival
 		if create := len(live) == 0 || rand.Int()%4 > 0; create {
 			// Add a new account and ensure wallet notifications arrives
@@ -349,8 +349,6 @@ func TestWalletNotifications(t *testing.T) {
 				}
 			}
 		}
-		// Sleep a bit to avoid same-timestamp keyfiles
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 

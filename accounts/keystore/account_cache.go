@@ -42,7 +42,7 @@ const minReloadInterval = 2 * time.Second
 type accountsByURL []accounts.Account
 
 func (s accountsByURL) Len() int           { return len(s) }
-func (s accountsByURL) Less(i, j int) bool { return s[i].URL < s[j].URL }
+func (s accountsByURL) Less(i, j int) bool { return s[i].URL.Cmp(s[j].URL) < 0 }
 func (s accountsByURL) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // AmbiguousAddrError is returned when attempting to unlock
@@ -55,7 +55,7 @@ type AmbiguousAddrError struct {
 func (err *AmbiguousAddrError) Error() string {
 	files := ""
 	for i, a := range err.Matches {
-		files += a.URL
+		files += a.URL.Path
 		if i < len(err.Matches)-1 {
 			files += ", "
 		}
@@ -104,7 +104,7 @@ func (ac *accountCache) add(newAccount accounts.Account) {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
 
-	i := sort.Search(len(ac.all), func(i int) bool { return ac.all[i].URL >= newAccount.URL })
+	i := sort.Search(len(ac.all), func(i int) bool { return ac.all[i].URL.Cmp(newAccount.URL) >= 0 })
 	if i < len(ac.all) && ac.all[i] == newAccount {
 		return
 	}
@@ -155,10 +155,10 @@ func (ac *accountCache) find(a accounts.Account) (accounts.Account, error) {
 	if (a.Address != common.Address{}) {
 		matches = ac.byAddr[a.Address]
 	}
-	if a.URL != "" {
+	if a.URL.Path != "" {
 		// If only the basename is specified, complete the path.
-		if !strings.ContainsRune(a.URL, filepath.Separator) {
-			a.URL = filepath.Join(ac.keydir, a.URL)
+		if !strings.ContainsRune(a.URL.Path, filepath.Separator) {
+			a.URL.Path = filepath.Join(ac.keydir, a.URL.Path)
 		}
 		for i := range matches {
 			if matches[i].URL == a.URL {
@@ -272,7 +272,7 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		case (addr == common.Address{}):
 			glog.V(logger.Debug).Infof("can't decode key %s: missing or zero address", path)
 		default:
-			addrs = append(addrs, accounts.Account{Address: addr, URL: path})
+			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
 		}
 		fd.Close()
 	}

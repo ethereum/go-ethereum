@@ -49,6 +49,9 @@ var (
 // KeyStoreType is the reflect type of a keystore backend.
 var KeyStoreType = reflect.TypeOf(&KeyStore{})
 
+// KeyStoreScheme is the protocol scheme prefixing account and wallet URLs.
+var KeyStoreScheme = "keystore"
+
 // Maximum time between wallet refreshes (if filesystem notifications don't work).
 const walletRefreshCycle = 3 * time.Second
 
@@ -130,22 +133,21 @@ func (ks *KeyStore) Wallets() []accounts.Wallet {
 // necessary wallet refreshes.
 func (ks *KeyStore) refreshWallets() {
 	// Retrieve the current list of accounts
+	ks.mu.Lock()
 	accs := ks.cache.accounts()
 
 	// Transform the current list of wallets into the new one
-	ks.mu.Lock()
-
 	wallets := make([]accounts.Wallet, 0, len(accs))
 	events := []accounts.WalletEvent{}
 
 	for _, account := range accs {
 		// Drop wallets while they were in front of the next account
-		for len(ks.wallets) > 0 && ks.wallets[0].URL() < account.URL {
+		for len(ks.wallets) > 0 && ks.wallets[0].URL().Cmp(account.URL) < 0 {
 			events = append(events, accounts.WalletEvent{Wallet: ks.wallets[0], Arrive: false})
 			ks.wallets = ks.wallets[1:]
 		}
 		// If there are no more wallets or the account is before the next, wrap new wallet
-		if len(ks.wallets) == 0 || ks.wallets[0].URL() > account.URL {
+		if len(ks.wallets) == 0 || ks.wallets[0].URL().Cmp(account.URL) > 0 {
 			wallet := &keystoreWallet{account: account, keystore: ks}
 
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Arrive: true})
@@ -242,7 +244,7 @@ func (ks *KeyStore) Delete(a accounts.Account, passphrase string) error {
 	// The order is crucial here. The key is dropped from the
 	// cache after the file is gone so that a reload happening in
 	// between won't insert it into the cache again.
-	err = os.Remove(a.URL)
+	err = os.Remove(a.URL.Path)
 	if err == nil {
 		ks.cache.delete(a)
 		ks.refreshWallets()
@@ -377,7 +379,7 @@ func (ks *KeyStore) getDecryptedKey(a accounts.Account, auth string) (accounts.A
 	if err != nil {
 		return a, nil, err
 	}
-	key, err := ks.storage.GetKey(a.Address, a.URL, auth)
+	key, err := ks.storage.GetKey(a.Address, a.URL.Path, auth)
 	return a, key, err
 }
 
@@ -453,8 +455,8 @@ func (ks *KeyStore) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (acco
 }
 
 func (ks *KeyStore) importKey(key *Key, passphrase string) (accounts.Account, error) {
-	a := accounts.Account{Address: key.Address, URL: ks.storage.JoinPath(keyFileName(key.Address))}
-	if err := ks.storage.StoreKey(a.URL, key, passphrase); err != nil {
+	a := accounts.Account{Address: key.Address, URL: accounts.URL{Scheme: KeyStoreScheme, Path: ks.storage.JoinPath(keyFileName(key.Address))}}
+	if err := ks.storage.StoreKey(a.URL.Path, key, passphrase); err != nil {
 		return accounts.Account{}, err
 	}
 	ks.cache.add(a)
@@ -468,7 +470,7 @@ func (ks *KeyStore) Update(a accounts.Account, passphrase, newPassphrase string)
 	if err != nil {
 		return err
 	}
-	return ks.storage.StoreKey(a.URL, key, newPassphrase)
+	return ks.storage.StoreKey(a.URL.Path, key, newPassphrase)
 }
 
 // ImportPreSaleKey decrypts the given Ethereum presale wallet and stores

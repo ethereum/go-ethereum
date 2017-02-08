@@ -78,9 +78,9 @@ func (a *Account) GetAddress() *Address {
 	return &Address{a.account.Address}
 }
 
-// GetFile retrieves the path of the file containing the account key.
-func (a *Account) GetFile() string {
-	return a.account.URL
+// GetURL retrieves the canonical URL of the account.
+func (a *Account) GetURL() string {
+	return a.account.URL.String()
 }
 
 // KeyStore manages a key storage directory on disk.
