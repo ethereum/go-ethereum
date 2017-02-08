@@ -107,6 +107,8 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.LightMode, config.NetworkId, eth.eventMux, eth.pow, eth.blockchain, nil, chainDb, odr, relay); err != nil {
 		return nil, err
 	}
+	relay.ps = eth.protocolManager.peers
+	relay.reqDist = eth.protocolManager.reqDist
 
 	eth.ApiBackend = &LesApiBackend{eth, nil}
 	eth.ApiBackend.gpo = gasprice.NewLightPriceOracle(eth.ApiBackend)

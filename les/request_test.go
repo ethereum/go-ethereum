@@ -72,8 +72,11 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
 	pool := &testServerPool{}
+	lpm.reqDist = newRequestDistributor(pool.getAllPeers, lpm.quitSync)
+	odr.reqDist = lpm.reqDist
 	pool.setPeer(lpeer)
 	odr.serverPool = pool
+	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
