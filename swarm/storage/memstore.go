@@ -314,3 +314,8 @@ func (s *MemStore) removeOldest() {
 		}
 	}
 }
+
+// Close memstore
+func (s *MemStore) Close() {
+	return
+}
