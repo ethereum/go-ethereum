@@ -130,12 +130,12 @@ func (hub *LedgerHub) refreshWallets() {
 
 		url := accounts.URL{Scheme: LedgerScheme, Path: fmt.Sprintf("%03d:%03d", busID>>8, busID&0xff)}
 
-		// Drop wallets while they were in front of the next account
-		for len(hub.wallets) > 0 && hub.wallets[0].URL().Cmp(url) < 0 {
+		// Drop wallets in front of the next device or those that failed for some reason
+		for len(hub.wallets) > 0 && (hub.wallets[0].URL().Cmp(url) < 0 || hub.wallets[0].(*ledgerWallet).failed()) {
 			events = append(events, accounts.WalletEvent{Wallet: hub.wallets[0], Arrive: false})
 			hub.wallets = hub.wallets[1:]
 		}
-		// If there are no more wallets or the account is before the next, wrap new wallet
+		// If there are no more wallets or the device is before the next, wrap new wallet
 		if len(hub.wallets) == 0 || hub.wallets[0].URL().Cmp(url) > 0 {
 			wallet := &ledgerWallet{context: hub.ctx, hardwareID: devID, locationID: busID, url: &url}
 
@@ -143,7 +143,7 @@ func (hub *LedgerHub) refreshWallets() {
 			wallets = append(wallets, wallet)
 			continue
 		}
-		// If the account is the same as the first wallet, keep it
+		// If the device is the same as the first wallet, keep it
 		if hub.wallets[0].URL().Cmp(url) == 0 {
 			wallets = append(wallets, hub.wallets[0])
 			hub.wallets = hub.wallets[1:]

@@ -128,6 +128,15 @@ func (w *ledgerWallet) offline() bool {
 	return w.version == [3]byte{0, 0, 0}
 }
 
+// failed returns if the USB device wrapped by the wallet failed for some reason.
+// This is used by the device scanner to report failed wallets as departed.
+func (w *ledgerWallet) failed() bool {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+
+	return w.failure != nil
+}
+
 // Open implements accounts.Wallet, attempting to open a USB connection to the
 // Ledger hardware wallet. The Ledger does not require a user passphrase so that
 // is silently discarded.
@@ -231,6 +240,8 @@ func (w *ledgerWallet) heartbeat() {
 		w.lock.Lock()
 		if err := w.resolveVersion(); err == usb.ERROR_IO || err == usb.ERROR_NO_DEVICE {
 			w.failure = err
+			w.close()
+
 			fail = err
 		}
 		w.lock.Unlock()
@@ -253,13 +264,27 @@ func (w *ledgerWallet) Close() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 
-	if err := w.device.Close(); err != nil {
+	w.quit = nil
+	if err := w.close(); err != nil {
 		return err
 	}
-	w.device, w.input, w.output, w.paths, w.quit = nil, nil, nil, nil, nil
-	w.version = [3]byte{}
-
 	return herr // If all went well, return any health-check errors
+}
+
+// close is the internal wallet closer that terminates the USB connection and
+// resets all the fields to their defaults. It assumes the lock is held.
+func (w *ledgerWallet) close() error {
+	// Allow duplicate closes, especially for health-check failures
+	if w.device == nil {
+		return nil
+	}
+	// Close the device, clear everything, then return
+	err := w.device.Close()
+
+	w.device, w.input, w.output = nil, nil, nil
+	w.version, w.paths = [3]byte{}, nil
+
+	return err
 }
 
 // Accounts implements accounts.Wallet, returning the list of accounts pinned to
