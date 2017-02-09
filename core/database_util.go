@@ -294,7 +294,7 @@ func GetReceipt(db ethdb.Database, txHash common.Hash) *types.Receipt {
 	var receipt types.ReceiptForStorage
 	err := rlp.DecodeBytes(data, &receipt)
 	if err != nil {
-		glog.V(logger.Core).Infoln("GetReceipt err:", err)
+		glog.V(logger.Debug).Infoln("GetReceipt err:", err)
 	}
 	return (*types.Receipt)(&receipt)
 }

@@ -109,7 +109,7 @@ func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
 
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 	}
 }
@@ -158,7 +158,7 @@ func (self *StateObject) SetState(k, value common.Hash) {
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
 }
@@ -167,7 +167,7 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 func (c *StateObject) SubBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 	}
 }

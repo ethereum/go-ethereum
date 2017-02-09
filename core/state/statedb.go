@@ -451,7 +451,7 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *StateObjec
 	newobj = newObject(self, addr, Account{}, self.MarkStateObjectDirty)
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
-		if glog.V(logger.Core) {
+		if glog.V(logger.Debug) {
 			glog.Infof("(+) %x\n", addr)
 		}
 		self.journal = append(self.journal, createObjectChange{account: &addr})

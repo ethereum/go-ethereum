@@ -239,7 +239,7 @@ func (self *LightState) GetOrNewStateObject(ctx context.Context, addr common.Add
 
 // newStateObject creates a state object whether it exists in the state or not
 func (self *LightState) newStateObject(addr common.Address) *StateObject {
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("(+) %x\n", addr)
 	}
 
