@@ -269,6 +269,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 		stateReader := ethclient.NewClient(rpcClient)
 
+		// Open and self derive any wallets already attached
+		for _, wallet := range stack.AccountManager().Wallets() {
+			if err := wallet.Open(""); err != nil {
+				glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", wallet.URL(), err)
+			}
+			wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+		}
 		// Listen for wallet event till termination
 		for event := range events {
 			if event.Arrive {
@@ -280,6 +287,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 				event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 			} else {
 				glog.V(logger.Info).Infof("Old wallet dropped:  %s", event.Wallet.URL())
+				event.Wallet.Close()
 			}
 		}
 	}()
