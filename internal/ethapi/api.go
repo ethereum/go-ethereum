@@ -579,6 +579,11 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 
 // EstimateGas returns an estimate of the amount of gas needed to execute the given transaction.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*hexutil.Big, error) {
+	if args.To == nil { // contract creation, doCall returns immediately the used gas.
+		_, gas, err := s.doCall(ctx, args, rpc.PendingBlockNumber, vm.Config{})
+		return (*hexutil.Big)(gas), err
+	}
+
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var lo, hi uint64
 	if (*big.Int)(&args.Gas).BitLen() > 0 {
