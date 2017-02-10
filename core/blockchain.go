@@ -1257,12 +1257,14 @@ func (bc *BlockChain) BadBlocks() ([]BadBlockArgs, error) {
 	headers := make([]BadBlockArgs, 0, bc.badBlocks.Len())
 	for _, hash := range bc.badBlocks.Keys() {
 		if hdr, exist := bc.badBlocks.Peek(hash); exist {
-			headers = append(headers, BadBlockArgs{hdr.(*types.Header).Hash(), hdr.(*types.Header)})
+			header := hdr.(*types.Header)
+			headers = append(headers, BadBlockArgs{header.Hash(), header})
 		}
 	}
 	return headers, nil
 }
-// Adds a 'bad lock' to the LRU
+
+// addBadBlock adds a bad block to the bad-block LRU cache
 func (bc *BlockChain) addBadBlock(block *types.Block) {
 	bc.badBlocks.Add(block.Header().Hash(), block.Header())
 }
