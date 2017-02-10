@@ -27,7 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var ErrInvalidChainId = errors.New("invalid chaid id for signer")
+var (
+	ErrInvalidChainId = errors.New("invalid chaid id for signer")
+
+	errAbstractSigner     = errors.New("abstract signer")
+	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffff")
+)
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -40,6 +45,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
+	case config.IsMetropolis(blockNumber):
+		signer = NewEIP86Signer(config.ChainId)
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainId)
 	case config.IsHomestead(blockNumber):
@@ -83,6 +90,10 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 
 	pubkey, err := signer.PublicKey(tx)
 	if err != nil {
+		if err == errAbstractSigner {
+			return abstractSignerAddress, nil
+		}
+
 		return common.Address{}, err
 	}
 	var addr common.Address
@@ -102,6 +113,44 @@ type Signer interface {
 	// Checks for equality on the signers
 	Equal(Signer) bool
 }
+
+type EIP86Signer struct {
+	EIP155Signer
+}
+
+func NewEIP86Signer(chainId *big.Int) EIP86Signer {
+	return EIP86Signer{
+		EIP155Signer: NewEIP155Signer(chainId),
+	}
+}
+
+func (s EIP86Signer) Equal(s2 Signer) bool {
+	_, ok := s2.(EIP86Signer)
+	return ok && s.EIP155Signer.Equal(s2)
+}
+
+func isAbstractSigner(tx *Transaction) bool {
+	v, r, s := tx.RawSignatureValues()
+	return v.BitLen() == 0 && r.BitLen() == 0 && s.BitLen() == 0
+}
+
+func (s EIP86Signer) PublicKey(tx *Transaction) ([]byte, error) {
+	if isAbstractSigner(tx) {
+		return nil, errAbstractSigner
+	}
+	return s.EIP155Signer.PublicKey(tx)
+}
+
+/*
+// WithSignature returns a new transaction with the given signature. This signature
+// needs to be in the [R || S || V] format where V is 0 or 1.
+func (s EIP86Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
+}
+
+// Hash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (s EIP86Signer) Hash(tx *Transaction) common.Hash {}
+*/
 
 // EIP155Transaction implements TransactionInterface using the
 // EIP155 rules
