@@ -74,6 +74,11 @@ const (
 	ledgerP2ReturnAddressChainCode  ledgerParam2 = 0x01 // Require a user confirmation before returning the address
 )
 
+// errReplyInvalidHeader is the error message returned by a Ledfer data exchange
+// if the device replies with a mismatching header. This usually means the device
+// is in browser mode.
+var errReplyInvalidHeader = errors.New("invalid reply header")
+
 // ledgerWallet represents a live USB Ledger hardware wallet.
 type ledgerWallet struct {
 	context    *usb.Context  // USB context to interface libusb through
@@ -87,6 +92,7 @@ type ledgerWallet struct {
 	failure error        // Any failure that would make the device unusable
 
 	version  [3]byte                                    // Current version of the Ledger Ethereum app (zero if app is offline)
+	browser  bool                                       // Flag whether the Ledger is in browser mode (reply channel mismatch)
 	accounts []accounts.Account                         // List of derive accounts pinned on the Ledger
 	paths    map[common.Address]accounts.DerivationPath // Known derivation paths for signing operations
 
@@ -137,6 +143,9 @@ func (w *ledgerWallet) Status() string {
 	}
 	if w.device == nil {
 		return "Closed"
+	}
+	if w.browser {
+		return "Ethereum app in browser mode"
 	}
 	if w.offline() {
 		return "Ethereum app offline"
@@ -239,7 +248,10 @@ func (w *ledgerWallet) Open(passphrase string) error {
 	}()
 
 	if _, err = w.ledgerDerive(accounts.DefaultBaseDerivationPath); err != nil {
-		// Ethereum app is not running, nothing more to do, return
+		// Ethereum app is not running or in browser mode, nothing more to do, return
+		if err == errReplyInvalidHeader {
+			w.browser = true
+		}
 		return nil
 	}
 	// Try to resolve the Ethereum app's version, will fail prior to v1.0.2
@@ -351,7 +363,8 @@ func (w *ledgerWallet) close() error {
 	err := w.device.Close()
 
 	w.device, w.input, w.output = nil, nil, nil
-	w.version, w.accounts, w.paths = [3]byte{}, nil, nil
+	w.browser, w.version = false, [3]byte{}
+	w.accounts, w.paths = nil, nil
 
 	return err
 }
@@ -463,7 +476,7 @@ func (w *ledgerWallet) selfDerive() {
 
 			// Display a log message to the user for new (or previously empty accounts)
 			if _, known := w.paths[nextAddr]; !known || (!empty && nextAddr == w.deriveNextAddr) {
-				glog.V(logger.Info).Infof("%s discovered %s (balance %d, nonce %d) at %s", w.url.String(), nextAddr.Hex(), balance, nonce, path)
+				glog.V(logger.Info).Infof("%s discovered %s (balance %22v, nonce %4d) at %s", w.url.String(), nextAddr.Hex(), balance, nonce, path)
 			}
 			// Fetch the next potential account
 			if !empty {
@@ -909,7 +922,7 @@ func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 		}
 		// Make sure the transport header matches
 		if chunk[0] != 0x01 || chunk[1] != 0x01 || chunk[2] != 0x05 {
-			return nil, fmt.Errorf("invalid reply header: %x", chunk[:3])
+			return nil, errReplyInvalidHeader
 		}
 		// If it's the first chunk, retrieve the total message length
 		if chunk[3] == 0x00 && chunk[4] == 0x00 {
