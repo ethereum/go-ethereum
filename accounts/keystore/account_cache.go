@@ -113,11 +113,6 @@ func (ac *accountCache) add(newAccount accounts.Account) {
 	copy(ac.all[i+1:], ac.all[i:])
 	ac.all[i] = newAccount
 	ac.byAddr[newAccount.Address] = append(ac.byAddr[newAccount.Address], newAccount)
-
-	select {
-	case ac.notify <- struct{}{}:
-	default:
-	}
 }
 
 // note: removed needs to be unique here (i.e. both File and Address must be set).
@@ -130,10 +125,6 @@ func (ac *accountCache) delete(removed accounts.Account) {
 		delete(ac.byAddr, removed.Address)
 	} else {
 		ac.byAddr[removed.Address] = ba
-	}
-	select {
-	case ac.notify <- struct{}{}:
-	default:
 	}
 }
 

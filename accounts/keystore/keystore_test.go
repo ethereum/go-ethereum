@@ -286,7 +286,7 @@ func TestWalletNotifications(t *testing.T) {
 
 	// Randomly add and remove account and make sure events and wallets are in sync
 	live := make(map[common.Address]accounts.Account)
-	for i := 0; i < 256; i++ {
+	for i := 0; i < 1024; i++ {
 		// Execute a creation or deletion and ensure event arrival
 		if create := len(live) == 0 || rand.Int()%4 > 0; create {
 			// Add a new account and ensure wallet notifications arrives

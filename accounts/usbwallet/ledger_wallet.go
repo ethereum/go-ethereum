@@ -192,6 +192,9 @@ func (w *ledgerWallet) Open(passphrase string) error {
 	if err != nil {
 		return err
 	}
+	if len(devices) == 0 {
+		return accounts.ErrUnknownWallet
+	}
 	// Device opened, attach to the input and output endpoints
 	device := devices[0]
 
@@ -767,7 +770,7 @@ func (w *ledgerWallet) ledgerDerive(derivationPath []uint32) (common.Address, er
 func (w *ledgerWallet) ledgerSign(derivationPath []uint32, address common.Address, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
 	// We need to modify the timeouts to account for user feedback
 	defer func(old time.Duration) { w.device.ReadTimeout = old }(w.device.ReadTimeout)
-	w.device.ReadTimeout = time.Minute
+	w.device.ReadTimeout = time.Hour * 24 * 30 // Timeout requires a Ledger power cycle, only if you must
 
 	// Flatten the derivation path into the Ledger request
 	path := make([]byte, 1+4*len(derivationPath))
@@ -823,7 +826,7 @@ func (w *ledgerWallet) ledgerSign(derivationPath []uint32, address common.Addres
 		signer = new(types.HomesteadSigner)
 	} else {
 		signer = types.NewEIP155Signer(chainID)
-		signature[64] = (signature[64]-34)/2 - byte(chainID.Uint64())
+		signature[64] = signature[64] - byte(chainID.Uint64()*2+35)
 	}
 	// Inject the final signature into the transaction and sanity check the sender
 	signed, err := tx.WithSignature(signer, signature)
@@ -875,45 +878,42 @@ func (w *ledgerWallet) ledgerSign(derivationPath []uint32, address common.Addres
 //  Optional APDU data       | arbitrary
 func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 ledgerParam2, data []byte) ([]byte, error) {
 	// Construct the message payload, possibly split into multiple chunks
-	var chunks [][]byte
-	for left := data; len(left) > 0 || len(chunks) == 0; {
-		// Create the chunk header
-		var chunk []byte
+	apdu := make([]byte, 2, 7+len(data))
 
-		if len(chunks) == 0 {
-			// The first chunk encodes the length and all the opcodes
-			chunk = []byte{0x00, 0x00, 0xe0, byte(opcode), byte(p1), byte(p2), byte(len(data))}
-			binary.BigEndian.PutUint16(chunk, uint16(5+len(data)))
-		}
-		// Append the data blob to the end of the chunk
-		space := 64 - len(chunk) - 5 // 5 == header size
-		if len(left) > space {
-			chunks, left = append(chunks, append(chunk, left[:space]...)), left[space:]
-			continue
-		}
-		chunks, left = append(chunks, append(chunk, left...)), nil
-	}
+	binary.BigEndian.PutUint16(apdu, uint16(5+len(data)))
+	apdu = append(apdu, []byte{0xe0, byte(opcode), byte(p1), byte(p2), byte(len(data))}...)
+	apdu = append(apdu, data...)
+
 	// Stream all the chunks to the device
-	for i, chunk := range chunks {
+	header := []byte{0x01, 0x01, 0x05, 0x00, 0x00} // Channel ID and command tag appended
+	chunk := make([]byte, 64)
+	space := len(chunk) - len(header)
+
+	for i := 0; len(apdu) > 0; i++ {
 		// Construct the new message to stream
-		header := []byte{0x01, 0x01, 0x05, 0x00, 0x00} // Channel ID and command tag appended
-		binary.BigEndian.PutUint16(header[3:], uint16(i))
+		chunk = append(chunk[:0], header...)
+		binary.BigEndian.PutUint16(chunk[3:], uint16(i))
 
-		msg := append(header, chunk...)
-
+		if len(apdu) > space {
+			chunk = append(chunk, apdu[:space]...)
+			apdu = apdu[space:]
+		} else {
+			chunk = append(chunk, apdu...)
+			apdu = nil
+		}
 		// Send over to the device
 		if glog.V(logger.Detail) {
-			glog.Infof("-> %03d.%03d: %x", w.device.Bus, w.device.Address, msg)
+			glog.Infof("-> %03d.%03d: %x", w.device.Bus, w.device.Address, chunk)
 		}
-		if _, err := w.input.Write(msg); err != nil {
+		if _, err := w.input.Write(chunk); err != nil {
 			return nil, err
 		}
 	}
 	// Stream the reply back from the wallet in 64 byte chunks
 	var reply []byte
+	chunk = chunk[:64] // Yeah, we surely have enough space
 	for {
 		// Read the next chunk from the Ledger wallet
-		chunk := make([]byte, 64)
 		if _, err := io.ReadFull(w.output, chunk); err != nil {
 			return nil, err
 		}
@@ -925,17 +925,19 @@ func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 			return nil, errReplyInvalidHeader
 		}
 		// If it's the first chunk, retrieve the total message length
+		var payload []byte
+
 		if chunk[3] == 0x00 && chunk[4] == 0x00 {
 			reply = make([]byte, 0, int(binary.BigEndian.Uint16(chunk[5:7])))
-			chunk = chunk[7:]
+			payload = chunk[7:]
 		} else {
-			chunk = chunk[5:]
+			payload = chunk[5:]
 		}
 		// Append to the reply and stop when filled up
-		if left := cap(reply) - len(reply); left > len(chunk) {
-			reply = append(reply, chunk...)
+		if left := cap(reply) - len(reply); left > len(payload) {
+			reply = append(reply, payload...)
 		} else {
-			reply = append(reply, chunk[:left]...)
+			reply = append(reply, payload[:left]...)
 			break
 		}
 	}

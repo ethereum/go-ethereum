@@ -140,7 +140,7 @@ func TestCacheInitialReload(t *testing.T) {
 }
 
 func TestCacheAddDeleteOrder(t *testing.T) {
-	cache, notify := newAccountCache("testdata/no-such-dir")
+	cache, _ := newAccountCache("testdata/no-such-dir")
 	cache.watcher.running = true // prevent unexpected reloads
 
 	accs := []accounts.Account{
@@ -176,20 +176,10 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	for _, a := range accs {
 		cache.add(a)
 	}
-	select {
-	case <-notify:
-	default:
-		t.Fatalf("notifications didn't fire for adding new accounts")
-	}
 	// Add some of them twice to check that they don't get reinserted.
 	cache.add(accs[0])
 	cache.add(accs[2])
 
-	select {
-	case <-notify:
-		t.Fatalf("notifications fired for adding existing accounts")
-	default:
-	}
 	// Check that the account list is sorted by filename.
 	wantAccounts := make([]accounts.Account, len(accs))
 	copy(wantAccounts, accs)
@@ -213,11 +203,6 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 	}
 	cache.delete(accounts.Account{Address: common.HexToAddress("fd9bd350f08ee3c0c19b85a8e16114a11a60aa4e"), URL: accounts.URL{Scheme: KeyStoreScheme, Path: "something"}})
 
-	select {
-	case <-notify:
-	default:
-		t.Fatalf("notifications didn't fire for deleting accounts")
-	}
 	// Check content again after deletion.
 	wantAccountsAfterDelete := []accounts.Account{
 		wantAccounts[1],
