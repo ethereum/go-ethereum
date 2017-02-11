@@ -13,18 +13,18 @@ import (
 )
 
 // ENSABI is the input ABI used to generate the binding from.
-const ENSABI = `[{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"resolver","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"owner","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"label","type":"bytes32"},{"name":"owner","type":"address"}],"name":"setSubnodeOwner","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"resolver","type":"address"}],"name":"setResolver","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"owner","type":"address"}],"name":"setOwner","outputs":[],"type":"function"},{"inputs":[{"name":"owner","type":"address"}],"type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":true,"name":"label","type":"bytes32"},{"indexed":false,"name":"owner","type":"address"}],"name":"NewOwner","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"owner","type":"address"}],"name":"Transfer","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"resolver","type":"address"}],"name":"NewResolver","type":"event"}]`
+const ENSABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"resolver\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"owner\",\"outputs\":[{\"name\":\"\",\"type\":\"address\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"label\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"setSubnodeOwner\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"ttl\",\"type\":\"uint64\"}],\"name\":\"setTTL\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"ttl\",\"outputs\":[{\"name\":\"\",\"type\":\"uint64\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"resolver\",\"type\":\"address\"}],\"name\":\"setResolver\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"setOwner\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"inputs\":[],\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"label\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"NewOwner\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"Transfer\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"resolver\",\"type\":\"address\"}],\"name\":\"NewResolver\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"ttl\",\"type\":\"uint64\"}],\"name\":\"NewTTL\",\"type\":\"event\"}]"
 
 // ENSBin is the compiled bytecode used for deploying new contracts.
-const ENSBin = `0x606060405260405160208061032683395060806040525160008080526020527fad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb58054600160a060020a03191682179055506102c88061005e6000396000f3606060405260e060020a60003504630178b8bf811461004757806302571be31461006e57806306ab5923146100915780631896f70a146100c85780635b0fc9c3146100fc575b005b610130600435600081815260208190526040902060010154600160a060020a03165b919050565b610130600435600081815260208190526040902054600160a060020a0316610069565b6100456004356024356044356000838152602081905260408120548490600160a060020a0390811633919091161461014d57610002565b6100456004356024356000828152602081905260409020548290600160a060020a039081163391909116146101e757610002565b6100456004356024356000828152602081905260409020548290600160a060020a0390811633919091161461025957610002565b60408051600160a060020a03929092168252519081900360200190f35b60408051868152602081810187905282519182900383018220600160a060020a03871683529251929450869288927fce0457fe73731f824cc272376169235128c118b49d344817417c6d108d155e8292908290030190a382600060005060008460001916815260200190815260200160002060005060000160006101000a815481600160a060020a03021916908302179055505050505050565b60408051600160a060020a0384168152905184917f335721b01866dc23fbee8b6b2c7b1e14d6f05c28cd35a2c934239f94095602a0919081900360200190a2506000828152602081905260409020600101805473ffffffffffffffffffffffffffffffffffffffff1916821790555050565b60408051600160a060020a0384168152905184917fd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d266919081900360200190a2506000828152602081905260409020805473ffffffffffffffffffffffffffffffffffffffff191682179055505056`
+const ENSBin = `0x606060405260008080526020527fad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb580546c0100000000000000000000000033810204600160a060020a031990911617905561044b8061005e6000396000f3606060405236156100615760e060020a60003504630178b8bf811461006657806302571be31461009257806306ab5923146100ba57806314ab9038146100f657806316a25cbd1461012f5780631896f70a146101635780635b0fc9c31461019c575b610002565b34610002576101d5600435600081815260208190526040902060010154600160a060020a03165b919050565b34610002576101d5600435600081815260208190526040902054600160a060020a031661008d565b34610002576101f16004356024356044356000838152602081905260408120548490600160a060020a0390811633919091161461021057610002565b34610002576101f16004356024356000828152602081905260409020548290600160a060020a039081163391909116146102b357610002565b34610002576101f360043560008181526020819052604090206001015467ffffffffffffffff60a060020a9091041661008d565b34610002576101f16004356024356000828152602081905260409020548290600160a060020a0390811633919091161461035657610002565b34610002576101f16004356024356000828152602081905260409020548290600160a060020a039081163391909116146103d257610002565b60408051600160a060020a039092168252519081900360200190f35b005b6040805167ffffffffffffffff9092168252519081900360200190f35b60408051868152602080820187905282519182900383018220600160a060020a03871683529251929450869288927fce0457fe73731f824cc272376169235128c118b49d344817417c6d108d155e8292908290030190a382600060005060008460001916815260200190815260200160002060005060000160006101000a815481600160a060020a030219169083606060020a9081020402179055505050505050565b6040805167ffffffffffffffff84168152905184917f1d4f9bbfc9cab89d66e1a1562f2233ccbf1308cb4f63de2ead5787adddb8fa68919081900360200190a26000838152602081905260409020600101805478010000000000000000000000000000000000000000000000008085020460a060020a027fffffffff0000000000000000ffffffffffffffffffffffffffffffffffffffff909116179055505050565b60408051600160a060020a0384168152905184917f335721b01866dc23fbee8b6b2c7b1e14d6f05c28cd35a2c934239f94095602a0919081900360200190a260008381526020819052604090206001018054606060020a8085020473ffffffffffffffffffffffffffffffffffffffff19909116179055505050565b60408051600160a060020a0384168152905184917fd4735d920b0f87494915f556dd9b54c8f309026070caea5c737245152564d266919081900360200190a260008381526020819052604090208054606060020a8085020473ffffffffffffffffffffffffffffffffffffffff1990911617905550505056`
 
 // DeployENS deploys a new Ethereum contract, binding an instance of ENS to it.
-func DeployENS(auth *bind.TransactOpts, backend bind.ContractBackend, owner common.Address) (common.Address, *types.Transaction, *ENS, error) {
+func DeployENS(auth *bind.TransactOpts, backend bind.ContractBackend) (common.Address, *types.Transaction, *ENS, error) {
 	parsed, err := abi.JSON(strings.NewReader(ENSABI))
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(ENSBin), backend, owner)
+	address, tx, contract, err := bind.DeployContract(auth, parsed, common.FromHex(ENSBin), backend)
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
@@ -210,6 +210,32 @@ func (_ENS *ENSCallerSession) Resolver(node [32]byte) (common.Address, error) {
 	return _ENS.Contract.Resolver(&_ENS.CallOpts, node)
 }
 
+// Ttl is a free data retrieval call binding the contract method 0x16a25cbd.
+//
+// Solidity: function ttl(node bytes32) constant returns(uint64)
+func (_ENS *ENSCaller) Ttl(opts *bind.CallOpts, node [32]byte) (uint64, error) {
+	var (
+		ret0 = new(uint64)
+	)
+	out := ret0
+	err := _ENS.contract.Call(opts, out, "ttl", node)
+	return *ret0, err
+}
+
+// Ttl is a free data retrieval call binding the contract method 0x16a25cbd.
+//
+// Solidity: function ttl(node bytes32) constant returns(uint64)
+func (_ENS *ENSSession) Ttl(node [32]byte) (uint64, error) {
+	return _ENS.Contract.Ttl(&_ENS.CallOpts, node)
+}
+
+// Ttl is a free data retrieval call binding the contract method 0x16a25cbd.
+//
+// Solidity: function ttl(node bytes32) constant returns(uint64)
+func (_ENS *ENSCallerSession) Ttl(node [32]byte) (uint64, error) {
+	return _ENS.Contract.Ttl(&_ENS.CallOpts, node)
+}
+
 // SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
 //
 // Solidity: function setOwner(node bytes32, owner address) returns()
@@ -273,11 +299,32 @@ func (_ENS *ENSTransactorSession) SetSubnodeOwner(node [32]byte, label [32]byte,
 	return _ENS.Contract.SetSubnodeOwner(&_ENS.TransactOpts, node, label, owner)
 }
 
+// SetTTL is a paid mutator transaction binding the contract method 0x14ab9038.
+//
+// Solidity: function setTTL(node bytes32, ttl uint64) returns()
+func (_ENS *ENSTransactor) SetTTL(opts *bind.TransactOpts, node [32]byte, ttl uint64) (*types.Transaction, error) {
+	return _ENS.contract.Transact(opts, "setTTL", node, ttl)
+}
+
+// SetTTL is a paid mutator transaction binding the contract method 0x14ab9038.
+//
+// Solidity: function setTTL(node bytes32, ttl uint64) returns()
+func (_ENS *ENSSession) SetTTL(node [32]byte, ttl uint64) (*types.Transaction, error) {
+	return _ENS.Contract.SetTTL(&_ENS.TransactOpts, node, ttl)
+}
+
+// SetTTL is a paid mutator transaction binding the contract method 0x14ab9038.
+//
+// Solidity: function setTTL(node bytes32, ttl uint64) returns()
+func (_ENS *ENSTransactorSession) SetTTL(node [32]byte, ttl uint64) (*types.Transaction, error) {
+	return _ENS.Contract.SetTTL(&_ENS.TransactOpts, node, ttl)
+}
+
 // FIFSRegistrarABI is the input ABI used to generate the binding from.
-const FIFSRegistrarABI = `[{"constant":false,"inputs":[{"name":"subnode","type":"bytes32"},{"name":"owner","type":"address"}],"name":"register","outputs":[],"type":"function"},{"inputs":[{"name":"ensAddr","type":"address"},{"name":"node","type":"bytes32"}],"type":"constructor"}]`
+const FIFSRegistrarABI = "[{\"constant\":false,\"inputs\":[{\"name\":\"subnode\",\"type\":\"bytes32\"},{\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"},{\"name\":\"node\",\"type\":\"bytes32\"}],\"type\":\"constructor\"}]"
 
 // FIFSRegistrarBin is the compiled bytecode used for deploying new contracts.
-const FIFSRegistrarBin = `0x6060604081815280610620833960a090525160805160008054600160a060020a031916831790558160a0610367806100878339018082600160a060020a03168152602001915050604051809103906000f0600160006101000a815481600160a060020a0302191690830217905550806002600050819055505050610232806103ee6000396000f3606060405260405160208061036783395060806040525160008054600160a060020a0319168217905550610330806100376000396000f36060604052361561004b5760e060020a60003504632dff694181146100535780633b3b57de1461007557806341b9dc2b146100a0578063c3d014d614610139578063d5fa2b00146101b2575b61022b610002565b61022d6004356000818152600260205260408120549081141561027057610002565b61023f600435600081815260016020526040812054600160a060020a03169081141561027057610002565b61025c60043560243560007f6164647200000000000000000000000000000000000000000000000000000000821480156100f05750600083815260016020526040812054600160a060020a031614155b8061013257507f636f6e74656e740000000000000000000000000000000000000000000000000082148015610132575060008381526002602052604081205414155b9392505050565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a031691909114905061027557610002565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a03169190911490506102c157610002565b005b60408051918252519081900360200190f35b60408051600160a060020a03929092168252519081900360200190f35b604080519115158252519081900360200190f35b919050565b6000838152600260209081526040918290208490558151848152915185927f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc92908290030190a2505050565b600083815260016020908152604091829020805473ffffffffffffffffffffffffffffffffffffffff1916851790558151600160a060020a0385168152915185927f52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd292908290030190a250505056606060405260e060020a6000350463d22057a9811461001b575b005b61001960043560243560025460408051918252602082810185905260008054835194859003840185207f02571be300000000000000000000000000000000000000000000000000000000865260048601819052935193949193600160a060020a03909116926302571be39260248181019391829003018187876161da5a03f11561000257505060405151915050600160a060020a0381166000148015906100d4575033600160a060020a031681600160a060020a031614155b156100de57610002565b60408051600080546002547f06ab592300000000000000000000000000000000000000000000000000000000845260048401526024830188905230600160a060020a03908116604485015293519316926306ab5923926064818101939291829003018183876161da5a03f11561000257505060008054600154604080517f1896f70a00000000000000000000000000000000000000000000000000000000815260048101889052600160a060020a0392831660248201529051929091169350631896f70a926044828101939192829003018183876161da5a03f11561000257505060008054604080517f5b0fc9c300000000000000000000000000000000000000000000000000000000815260048101879052600160a060020a0388811660248301529151929091169350635b0fc9c3926044828101939192829003018183876161da5a03f115610002575050505050505056`
+const FIFSRegistrarBin = `0x60606040818152806106aa833960a0905251608051600080546c0100000000000000000000000080850204600160a060020a031990911617905560405182906103aa806100a58339018082600160a060020a03168152602001915050604051809103906000f0801560025760018054600160a060020a0319166c01000000000000000000000000928302929092049190911790556002555061025b8061044f6000396000f360606040526040516020806103aa833950608060405251600080546c0100000000000000000000000080840204600160a060020a0319909116179055506103608061004a6000396000f3606060405236156100565760e060020a600035046301ffc9a781146100635780632dff6941146100d75780633b3b57de1461010057806341b9dc2b1461013c578063c3d014d6146101da578063d5fa2b0014610267575b34610002576102f4610002565b34610002576102f660043560007f3b3b57de00000000000000000000000000000000000000000000000000000000600160e060020a0319831614806100d157507fd8389dc500000000000000000000000000000000000000000000000000000000600160e060020a03198316145b92915050565b346100025760043560009081526002602052604090205460408051918252519081900360200190f35b3461000257600435600090815260016020526040902054600160a060020a031660408051600160a060020a039092168252519081900360200190f35b34610002576102f660043560243560007f6164647200000000000000000000000000000000000000000000000000000000821480156101915750600083815260016020526040902054600160a060020a031615155b806101d357507f6861736800000000000000000000000000000000000000000000000000000000821480156101d3575060008381526002602052604090205415155b9392505050565b34610002576102f460043560243560008054604080516020908101849052815160e060020a6302571be30281526004810187905291518694600160a060020a033381169516936302571be393602480830194919391928390030190829087803b156100025760325a03f11561000257505060405151600160a060020a031691909114905061030a57610002565b34610002576102f460043560243560008054604080516020908101849052815160e060020a6302571be30281526004810187905291518694600160a060020a033381169516936302571be393602480830194919391928390030190829087803b156100025760325a03f11561000257505060405151600160a060020a031691909114905061031d57610002565b005b604080519115158252519081900360200190f35b5060009182526002602052604090912055565b600083815260016020526040902080546c010000000000000000000000008085020473ffffffffffffffffffffffffffffffffffffffff1990911617905550505056606060405260e060020a6000350463d22057a9811461001e575b610002565b34610002576100f1600435602435600254604080519182526020808301859052815192839003820183206000805494830181905283517f02571be300000000000000000000000000000000000000000000000000000000815260048101839052935191949093600160a060020a03909116926302571be39260248084019382900301818787803b156100025760325a03f11561000257505060405151915050600160a060020a038116158015906100e7575033600160a060020a031681600160a060020a031614155b156100f357610002565b005b60008054600254604080517f06ab5923000000000000000000000000000000000000000000000000000000008152600481019290925260248201889052600160a060020a03308116604484015290519216926306ab59239260648084019382900301818387803b156100025760325a03f11561000257505060008054600154604080517f1896f70a00000000000000000000000000000000000000000000000000000000815260048101889052600160a060020a0392831660248201529051919092169350631896f70a9260448084019391929182900301818387803b156100025760325a03f11561000257505060008054604080517f5b0fc9c300000000000000000000000000000000000000000000000000000000815260048101879052600160a060020a0388811660248301529151919092169350635b0fc9c39260448084019391929182900301818387803b156100025760325a03f115610002575050505050505056`
 
 // DeployFIFSRegistrar deploys a new Ethereum contract, binding an instance of FIFSRegistrar to it.
 func DeployFIFSRegistrar(auth *bind.TransactOpts, backend bind.ContractBackend, ensAddr common.Address, node [32]byte) (common.Address, *types.Transaction, *FIFSRegistrar, error) {
@@ -441,10 +488,10 @@ func (_FIFSRegistrar *FIFSRegistrarTransactorSession) Register(subnode [32]byte,
 }
 
 // PublicResolverABI is the input ABI used to generate the binding from.
-const PublicResolverABI = `[{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"type":"function"},{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"addr","outputs":[{"name":"ret","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"kind","type":"bytes32"}],"name":"has","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"addr","type":"address"}],"name":"setAddr","outputs":[],"type":"function"},{"inputs":[{"name":"ensAddr","type":"address"}],"type":"constructor"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"a","type":"address"}],"name":"AddrChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]`
+const PublicResolverABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"interfaceID\",\"type\":\"bytes4\"}],\"name\":\"supportsInterface\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"content\",\"outputs\":[{\"name\":\"ret\",\"type\":\"bytes32\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"addr\",\"outputs\":[{\"name\":\"ret\",\"type\":\"address\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"kind\",\"type\":\"bytes32\"}],\"name\":\"has\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"setContent\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"setAddr\",\"outputs\":[],\"payable\":false,\"type\":\"function\"},{\"inputs\":[{\"name\":\"ensAddr\",\"type\":\"address\"}],\"type\":\"constructor\"},{\"payable\":false,\"type\":\"fallback\"}]"
 
 // PublicResolverBin is the compiled bytecode used for deploying new contracts.
-const PublicResolverBin = `0x606060405260405160208061036783395060806040525160008054600160a060020a0319168217905550610330806100376000396000f36060604052361561004b5760e060020a60003504632dff694181146100535780633b3b57de1461007557806341b9dc2b146100a0578063c3d014d614610139578063d5fa2b00146101b2575b61022b610002565b61022d6004356000818152600260205260408120549081141561027057610002565b61023f600435600081815260016020526040812054600160a060020a03169081141561027057610002565b61025c60043560243560007f6164647200000000000000000000000000000000000000000000000000000000821480156100f05750600083815260016020526040812054600160a060020a031614155b8061013257507f636f6e74656e740000000000000000000000000000000000000000000000000082148015610132575060008381526002602052604081205414155b9392505050565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a031691909114905061027557610002565b61022b600435602435600080546040805160e060020a6302571be30281526004810186905290518593600160a060020a033381169416926302571be392602482810193602093839003909101908290876161da5a03f11561000257505060405151600160a060020a03169190911490506102c157610002565b005b60408051918252519081900360200190f35b60408051600160a060020a03929092168252519081900360200190f35b604080519115158252519081900360200190f35b919050565b6000838152600260209081526040918290208490558151848152915185927f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc92908290030190a2505050565b600083815260016020908152604091829020805473ffffffffffffffffffffffffffffffffffffffff1916851790558151600160a060020a0385168152915185927f52d7d861f09ab3d26239d492e8968629f95e9e318cf0b73bfddc441522a15fd292908290030190a250505056`
+const PublicResolverBin = `0x60606040526040516020806103aa833950608060405251600080546c0100000000000000000000000080840204600160a060020a0319909116179055506103608061004a6000396000f3606060405236156100565760e060020a600035046301ffc9a781146100635780632dff6941146100d75780633b3b57de1461010057806341b9dc2b1461013c578063c3d014d6146101da578063d5fa2b0014610267575b34610002576102f4610002565b34610002576102f660043560007f3b3b57de00000000000000000000000000000000000000000000000000000000600160e060020a0319831614806100d157507fd8389dc500000000000000000000000000000000000000000000000000000000600160e060020a03198316145b92915050565b346100025760043560009081526002602052604090205460408051918252519081900360200190f35b3461000257600435600090815260016020526040902054600160a060020a031660408051600160a060020a039092168252519081900360200190f35b34610002576102f660043560243560007f6164647200000000000000000000000000000000000000000000000000000000821480156101915750600083815260016020526040902054600160a060020a031615155b806101d357507f6861736800000000000000000000000000000000000000000000000000000000821480156101d3575060008381526002602052604090205415155b9392505050565b34610002576102f460043560243560008054604080516020908101849052815160e060020a6302571be30281526004810187905291518694600160a060020a033381169516936302571be393602480830194919391928390030190829087803b156100025760325a03f11561000257505060405151600160a060020a031691909114905061030a57610002565b34610002576102f460043560243560008054604080516020908101849052815160e060020a6302571be30281526004810187905291518694600160a060020a033381169516936302571be393602480830194919391928390030190829087803b156100025760325a03f11561000257505060405151600160a060020a031691909114905061031d57610002565b005b604080519115158252519081900360200190f35b5060009182526002602052604090912055565b600083815260016020526040902080546c010000000000000000000000008085020473ffffffffffffffffffffffffffffffffffffffff1990911617905550505056`
 
 // DeployPublicResolver deploys a new Ethereum contract, binding an instance of PublicResolver to it.
 func DeployPublicResolver(auth *bind.TransactOpts, backend bind.ContractBackend, ensAddr common.Address) (common.Address, *types.Transaction, *PublicResolver, error) {
@@ -638,25 +685,56 @@ func (_PublicResolver *PublicResolverCallerSession) Content(node [32]byte) ([32]
 	return _PublicResolver.Contract.Content(&_PublicResolver.CallOpts, node)
 }
 
-// Has is a paid mutator transaction binding the contract method 0x41b9dc2b.
+// Has is a free data retrieval call binding the contract method 0x41b9dc2b.
 //
-// Solidity: function has(node bytes32, kind bytes32) returns(bool)
-func (_PublicResolver *PublicResolverTransactor) Has(opts *bind.TransactOpts, node [32]byte, kind [32]byte) (*types.Transaction, error) {
-	return _PublicResolver.contract.Transact(opts, "has", node, kind)
+// Solidity: function has(node bytes32, kind bytes32) constant returns(bool)
+func (_PublicResolver *PublicResolverCaller) Has(opts *bind.CallOpts, node [32]byte, kind [32]byte) (bool, error) {
+	var (
+		ret0 = new(bool)
+	)
+	out := ret0
+	err := _PublicResolver.contract.Call(opts, out, "has", node, kind)
+	return *ret0, err
 }
 
-// Has is a paid mutator transaction binding the contract method 0x41b9dc2b.
+// Has is a free data retrieval call binding the contract method 0x41b9dc2b.
 //
-// Solidity: function has(node bytes32, kind bytes32) returns(bool)
-func (_PublicResolver *PublicResolverSession) Has(node [32]byte, kind [32]byte) (*types.Transaction, error) {
-	return _PublicResolver.Contract.Has(&_PublicResolver.TransactOpts, node, kind)
+// Solidity: function has(node bytes32, kind bytes32) constant returns(bool)
+func (_PublicResolver *PublicResolverSession) Has(node [32]byte, kind [32]byte) (bool, error) {
+	return _PublicResolver.Contract.Has(&_PublicResolver.CallOpts, node, kind)
 }
 
-// Has is a paid mutator transaction binding the contract method 0x41b9dc2b.
+// Has is a free data retrieval call binding the contract method 0x41b9dc2b.
 //
-// Solidity: function has(node bytes32, kind bytes32) returns(bool)
-func (_PublicResolver *PublicResolverTransactorSession) Has(node [32]byte, kind [32]byte) (*types.Transaction, error) {
-	return _PublicResolver.Contract.Has(&_PublicResolver.TransactOpts, node, kind)
+// Solidity: function has(node bytes32, kind bytes32) constant returns(bool)
+func (_PublicResolver *PublicResolverCallerSession) Has(node [32]byte, kind [32]byte) (bool, error) {
+	return _PublicResolver.Contract.Has(&_PublicResolver.CallOpts, node, kind)
+}
+
+// SupportsInterface is a free data retrieval call binding the contract method 0x01ffc9a7.
+//
+// Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
+func (_PublicResolver *PublicResolverCaller) SupportsInterface(opts *bind.CallOpts, interfaceID [4]byte) (bool, error) {
+	var (
+		ret0 = new(bool)
+	)
+	out := ret0
+	err := _PublicResolver.contract.Call(opts, out, "supportsInterface", interfaceID)
+	return *ret0, err
+}
+
+// SupportsInterface is a free data retrieval call binding the contract method 0x01ffc9a7.
+//
+// Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
+func (_PublicResolver *PublicResolverSession) SupportsInterface(interfaceID [4]byte) (bool, error) {
+	return _PublicResolver.Contract.SupportsInterface(&_PublicResolver.CallOpts, interfaceID)
+}
+
+// SupportsInterface is a free data retrieval call binding the contract method 0x01ffc9a7.
+//
+// Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
+func (_PublicResolver *PublicResolverCallerSession) SupportsInterface(interfaceID [4]byte) (bool, error) {
+	return _PublicResolver.Contract.SupportsInterface(&_PublicResolver.CallOpts, interfaceID)
 }
 
 // SetAddr is a paid mutator transaction binding the contract method 0xd5fa2b00.
@@ -702,7 +780,7 @@ func (_PublicResolver *PublicResolverTransactorSession) SetContent(node [32]byte
 }
 
 // ResolverABI is the input ABI used to generate the binding from.
-const ResolverABI = `[{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"type":"function"},{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"addr","outputs":[{"name":"ret","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"kind","type":"bytes32"}],"name":"has","outputs":[{"name":"","type":"bool"}],"type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"a","type":"address"}],"name":"AddrChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]`
+const ResolverABI = "[{\"constant\":true,\"inputs\":[{\"name\":\"interfaceID\",\"type\":\"bytes4\"}],\"name\":\"supportsInterface\",\"outputs\":[{\"name\":\"\",\"type\":\"bool\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"content\",\"outputs\":[{\"name\":\"ret\",\"type\":\"bytes32\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"}],\"name\":\"addr\",\"outputs\":[{\"name\":\"ret\",\"type\":\"address\"}],\"payable\":false,\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"node\",\"type\":\"bytes32\"},{\"name\":\"qtype\",\"type\":\"uint16\"},{\"name\":\"qclass\",\"type\":\"uint16\"},{\"name\":\"index\",\"type\":\"uint32\"}],\"name\":\"dnsrr\",\"outputs\":[{\"name\":\"rtype\",\"type\":\"uint16\"},{\"name\":\"rclass\",\"type\":\"uint16\"},{\"name\":\"data\",\"type\":\"bytes\"}],\"payable\":false,\"type\":\"function\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"a\",\"type\":\"address\"}],\"name\":\"AddrChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"hash\",\"type\":\"bytes32\"}],\"name\":\"ContentChanged\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"node\",\"type\":\"bytes32\"},{\"indexed\":false,\"name\":\"qtype\",\"type\":\"uint16\"},{\"indexed\":false,\"name\":\"qclass\",\"type\":\"uint16\"},{\"indexed\":false,\"name\":\"index\",\"type\":\"uint32\"}],\"name\":\"DnsrrChanged\",\"type\":\"event\"}]"
 
 // ResolverBin is the compiled bytecode used for deploying new contracts.
 const ResolverBin = `0x`
@@ -899,23 +977,68 @@ func (_Resolver *ResolverCallerSession) Content(node [32]byte) ([32]byte, error)
 	return _Resolver.Contract.Content(&_Resolver.CallOpts, node)
 }
 
-// Has is a paid mutator transaction binding the contract method 0x41b9dc2b.
+// Dnsrr is a free data retrieval call binding the contract method 0xfcca1f4e.
 //
-// Solidity: function has(node bytes32, kind bytes32) returns(bool)
-func (_Resolver *ResolverTransactor) Has(opts *bind.TransactOpts, node [32]byte, kind [32]byte) (*types.Transaction, error) {
-	return _Resolver.contract.Transact(opts, "has", node, kind)
+// Solidity: function dnsrr(node bytes32, qtype uint16, qclass uint16, index uint32) constant returns(rtype uint16, rclass uint16, data bytes)
+func (_Resolver *ResolverCaller) Dnsrr(opts *bind.CallOpts, node [32]byte, qtype uint16, qclass uint16, index uint32) (struct {
+	Rtype  uint16
+	Rclass uint16
+	Data   []byte
+}, error) {
+	ret := new(struct {
+		Rtype  uint16
+		Rclass uint16
+		Data   []byte
+	})
+	out := ret
+	err := _Resolver.contract.Call(opts, out, "dnsrr", node, qtype, qclass, index)
+	return *ret, err
 }
 
-// Has is a paid mutator transaction binding the contract method 0x41b9dc2b.
+// Dnsrr is a free data retrieval call binding the contract method 0xfcca1f4e.
 //
-// Solidity: function has(node bytes32, kind bytes32) returns(bool)
-func (_Resolver *ResolverSession) Has(node [32]byte, kind [32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.Has(&_Resolver.TransactOpts, node, kind)
+// Solidity: function dnsrr(node bytes32, qtype uint16, qclass uint16, index uint32) constant returns(rtype uint16, rclass uint16, data bytes)
+func (_Resolver *ResolverSession) Dnsrr(node [32]byte, qtype uint16, qclass uint16, index uint32) (struct {
+	Rtype  uint16
+	Rclass uint16
+	Data   []byte
+}, error) {
+	return _Resolver.Contract.Dnsrr(&_Resolver.CallOpts, node, qtype, qclass, index)
 }
 
-// Has is a paid mutator transaction binding the contract method 0x41b9dc2b.
+// Dnsrr is a free data retrieval call binding the contract method 0xfcca1f4e.
 //
-// Solidity: function has(node bytes32, kind bytes32) returns(bool)
-func (_Resolver *ResolverTransactorSession) Has(node [32]byte, kind [32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.Has(&_Resolver.TransactOpts, node, kind)
+// Solidity: function dnsrr(node bytes32, qtype uint16, qclass uint16, index uint32) constant returns(rtype uint16, rclass uint16, data bytes)
+func (_Resolver *ResolverCallerSession) Dnsrr(node [32]byte, qtype uint16, qclass uint16, index uint32) (struct {
+	Rtype  uint16
+	Rclass uint16
+	Data   []byte
+}, error) {
+	return _Resolver.Contract.Dnsrr(&_Resolver.CallOpts, node, qtype, qclass, index)
+}
+
+// SupportsInterface is a free data retrieval call binding the contract method 0x01ffc9a7.
+//
+// Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
+func (_Resolver *ResolverCaller) SupportsInterface(opts *bind.CallOpts, interfaceID [4]byte) (bool, error) {
+	var (
+		ret0 = new(bool)
+	)
+	out := ret0
+	err := _Resolver.contract.Call(opts, out, "supportsInterface", interfaceID)
+	return *ret0, err
+}
+
+// SupportsInterface is a free data retrieval call binding the contract method 0x01ffc9a7.
+//
+// Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
+func (_Resolver *ResolverSession) SupportsInterface(interfaceID [4]byte) (bool, error) {
+	return _Resolver.Contract.SupportsInterface(&_Resolver.CallOpts, interfaceID)
+}
+
+// SupportsInterface is a free data retrieval call binding the contract method 0x01ffc9a7.
+//
+// Solidity: function supportsInterface(interfaceID bytes4) constant returns(bool)
+func (_Resolver *ResolverCallerSession) SupportsInterface(interfaceID [4]byte) (bool, error) {
+	return _Resolver.Contract.SupportsInterface(&_Resolver.CallOpts, interfaceID)
 }
