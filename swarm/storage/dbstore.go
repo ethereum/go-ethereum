@@ -252,18 +252,22 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// actual gc
 	for i := 0; i < gcnt; i++ {
 		if s.gcArray[i].value <= cutval {
-			batch := new(leveldb.Batch)
-			batch.Delete(s.gcArray[i].idxKey)
-			batch.Delete(getDataKey(s.gcArray[i].idx))
-			s.entryCnt--
-			batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
-			s.db.Write(batch)
+			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey)
 		}
 	}
 
 	// fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
+}
+
+func (s *DbStore) delete(idx uint64, idxKey []byte) {
+	batch := new(leveldb.Batch)
+	batch.Delete(idxKey)
+	batch.Delete(getDataKey(idx))
+	s.entryCnt--
+	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
+	s.db.Write(batch)
 }
 
 func (s *DbStore) Counter() uint64 {
@@ -283,6 +287,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 		if chunk.dbStored != nil {
 			close(chunk.dbStored)
 		}
+		glog.V(logger.Detail).Infof("Storing to DB: chunk already exists, only update access")
 		return // already exists, only update access
 	}
 
@@ -348,6 +353,8 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		var data []byte
 		data, err = s.db.Get(getDataKey(index.Idx))
 		if err != nil {
+			glog.V(logger.Detail).Infof("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err)
+			s.delete(index.Idx, getIndexKey(key))
 			return
 		}
 
@@ -355,8 +362,9 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hasher.Write(data)
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
-			s.db.Delete(getDataKey(index.Idx))
+			s.delete(index.Idx, getIndexKey(key))
 			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
+			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 			return
 		}
 
