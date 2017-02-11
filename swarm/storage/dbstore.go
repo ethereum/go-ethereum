@@ -261,6 +261,43 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	s.db.Put(keyGCPos, s.gcPos)
 }
 
+func (s *DbStore) Cleanup() {
+	//Iterates over the database and checks that there are no faulty chunks
+	it := s.db.NewIterator()
+	startPosition := []byte{kpIndex}
+	it.Seek(startPosition)
+	var key []byte
+	var errorsFound, total int
+	for it.Valid() {
+		key = it.Key()
+		if (key == nil) || (key[0] != kpIndex) {
+			break
+		}
+		total++
+		var index dpaDBIndex
+		decodeIndex(it.Value(), &index)
+
+		data, err := s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			glog.V(logger.Warn).Infof("Chunk %x found but could not be accessed: %v", key[:], err)
+			s.delete(index.Idx, getIndexKey(key[1:]))
+			errorsFound++
+		} else {
+			hasher := s.hashfunc()
+			hasher.Write(data)
+			hash := hasher.Sum(nil)
+			if !bytes.Equal(hash, key[1:]) {
+				glog.V(logger.Warn).Infof("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:])
+				s.delete(index.Idx, getIndexKey(key[1:]))
+				errorsFound++
+			}
+		}
+		it.Next()
+	}
+	it.Release()
+	glog.V(logger.Warn).Infof("Found %v errors out of %v entries", errorsFound, total)
+}
+
 func (s *DbStore) delete(idx uint64, idxKey []byte) {
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
@@ -363,9 +400,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
 			s.delete(index.Idx, getIndexKey(key))
-			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
 			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
-			return
 		}
 
 		chunk = &Chunk{
