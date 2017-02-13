@@ -156,7 +156,7 @@ func run(ctx *cli.Context) error {
 		ret, _, err = runtime.Create(input, &runtime.Config{
 			Origin:   sender.Address(),
 			State:    statedb,
-			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)).Uint64(),
+			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
 			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
 			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
@@ -172,7 +172,7 @@ func run(ctx *cli.Context) error {
 		ret, err = runtime.Call(receiver.Address(), common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
 			Origin:   sender.Address(),
 			State:    statedb,
-			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)).Uint64(),
+			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)),
 			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
 			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{

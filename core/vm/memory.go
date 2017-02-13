@@ -20,12 +20,11 @@ import "fmt"
 
 // Memory implements a simple memory model for the ethereum virtual machine.
 type Memory struct {
-	store       []byte
-	lastGasCost uint64
+	store []byte
 }
 
 func NewMemory() *Memory {
-	return &Memory{}
+	return &Memory{nil}
 }
 
 // Set sets offset + size to value

@@ -146,7 +146,7 @@ func runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, bt map[s
 	}
 
 	for name, test := range bt {
-		if skipTest[name] /*|| name != "CallingCanonicalContractFromFork_CALLCODE"*/ {
+		if skipTest[name] {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}
