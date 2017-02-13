@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -271,6 +273,14 @@ func bzzd(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	registerBzzService(ctx, stack)
 	utils.StartNode(stack)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		<-sigc
+		glog.V(logger.Info).Infoln("Got sigterm, shutting down...")
+		stack.Stop()
+	}()
 	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
