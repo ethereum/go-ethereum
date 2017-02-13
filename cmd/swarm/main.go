@@ -191,6 +191,15 @@ Removes a path from the manifest
 				},
 			},
 		},
+		{
+			Action:    cleandb,
+			Name:      "cleandb",
+			Usage:     "Cleans database of corrupted entries",
+			ArgsUsage: " ",
+			Description: `
+Cleans database of corrupted entries.
+`,
+		},
 	}
 
 	app.Flags = []cli.Flag{
