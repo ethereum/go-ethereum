@@ -43,42 +43,46 @@ public class AndroidTest extends InstrumentationTestCase {
 	public AndroidTest() {}
 
 	public void testAccountManagement() {
-		// Create an encrypted keystore manager with light crypto parameters.
-		AccountManager am = new AccountManager(getInstrumentation().getContext().getFilesDir() + "/keystore", Geth.LightScryptN, Geth.LightScryptP);
+		// Create an encrypted keystore with light crypto parameters.
+		KeyStore ks = new KeyStore(getInstrumentation().getContext().getFilesDir() + "/keystore", Geth.LightScryptN, Geth.LightScryptP);
 
 		try {
 			// Create a new account with the specified encryption passphrase.
-			Account newAcc = am.newAccount("Creation password");
+			Account newAcc = ks.newAccount("Creation password");
 
 			// Export the newly created account with a different passphrase. The returned
 			// data from this method invocation is a JSON encoded, encrypted key-file.
-			byte[] jsonAcc = am.exportKey(newAcc, "Creation password", "Export password");
+			byte[] jsonAcc = ks.exportKey(newAcc, "Creation password", "Export password");
 
 			// Update the passphrase on the account created above inside the local keystore.
-			am.updateAccount(newAcc, "Creation password", "Update password");
+			ks.updateAccount(newAcc, "Creation password", "Update password");
 
 			// Delete the account updated above from the local keystore.
-			am.deleteAccount(newAcc, "Update password");
+			ks.deleteAccount(newAcc, "Update password");
 
 			// Import back the account we've exported (and then deleted) above with yet
 			// again a fresh passphrase.
-			Account impAcc = am.importKey(jsonAcc, "Export password", "Import password");
+			Account impAcc = ks.importKey(jsonAcc, "Export password", "Import password");
 
 			// Create a new account to sign transactions with
-			Account signer = am.newAccount("Signer password");
-			Hash txHash = new Hash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+			Account signer = ks.newAccount("Signer password");
+
+			Transaction tx = new Transaction(
+				1, new Address("0x0000000000000000000000000000000000000000"),
+				new BigInt(0), new BigInt(0), new BigInt(1), null); // Random empty transaction
+			BigInt chain = new BigInt(1); // Chain identifier of the main net
 
 			// Sign a transaction with a single authorization
-			byte[] signature = am.signPassphrase(signer, "Signer password", txHash.getBytes());
+			Transaction signed = ks.signTxPassphrase(signer, "Signer password", tx, chain);
 
 			// Sign a transaction with multiple manually cancelled authorizations
-			am.unlock(signer, "Signer password");
-			signature = am.sign(signer.getAddress(), txHash.getBytes());
-			am.lock(signer.getAddress());
+			ks.unlock(signer, "Signer password");
+			signed = ks.signTx(signer, tx, chain);
+			ks.lock(signer.getAddress());
 
 			// Sign a transaction with multiple automatically cancelled authorizations
-			am.timedUnlock(signer, "Signer password", 1000000000);
-			signature = am.sign(signer.getAddress(), txHash.getBytes());
+			ks.timedUnlock(signer, "Signer password", 1000000000);
+			signed = ks.signTx(signer, tx, chain);
 		} catch (Exception e) {
 			fail(e.toString());
 		}

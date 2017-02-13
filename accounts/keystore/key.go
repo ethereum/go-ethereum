@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package accounts
+package keystore
 
 import (
 	"bytes"
@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -175,13 +176,13 @@ func newKey(rand io.Reader) (*Key, error) {
 	return newKeyFromECDSA(privateKeyECDSA), nil
 }
 
-func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, Account, error) {
+func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
 	key, err := newKey(rand)
 	if err != nil {
-		return nil, Account{}, err
+		return nil, accounts.Account{}, err
 	}
-	a := Account{Address: key.Address, File: ks.JoinPath(keyFileName(key.Address))}
-	if err := ks.StoreKey(a.File, key, auth); err != nil {
+	a := accounts.Account{Address: key.Address, URL: ks.JoinPath(keyFileName(key.Address))}
+	if err := ks.StoreKey(a.URL, key, auth); err != nil {
 		zeroKey(key.PrivateKey)
 		return nil, a, err
 	}

@@ -19,10 +19,10 @@
 // This is the fallback implementation of directory watching.
 // It is used on unsupported platforms.
 
-package accounts
+package keystore
 
 type watcher struct{ running bool }
 
-func newWatcher(*addrCache) *watcher { return new(watcher) }
-func (*watcher) start()              {}
-func (*watcher) close()              {}
+func newWatcher(*addressCache) *watcher { return new(watcher) }
+func (*watcher) start()                 {}
+func (*watcher) close()                 {}
