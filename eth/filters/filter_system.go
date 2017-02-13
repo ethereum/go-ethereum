@@ -74,7 +74,7 @@ type subscription struct {
 // subscription which match the subscription criteria.
 type EventSystem struct {
 	mux       *event.TypeMux
-	sub       event.Subscription
+	sub       *event.TypeMuxSubscription
 	backend   Backend
 	lightMode bool
 	lastHead  *types.Header
@@ -277,7 +277,7 @@ func (es *EventSystem) SubscribePendingTxEvents(hashes chan common.Hash) *Subscr
 type filterIndex map[Type]map[rpc.ID]*subscription
 
 // broadcast event to filters that match criteria.
-func (es *EventSystem) broadcast(filters filterIndex, ev *event.Event) {
+func (es *EventSystem) broadcast(filters filterIndex, ev *event.TypeMuxEvent) {
 	if ev == nil {
 		return
 	}

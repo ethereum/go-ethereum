@@ -47,7 +47,7 @@ type TxPool struct {
 	signer   types.Signer
 	quit     chan bool
 	eventMux *event.TypeMux
-	events   event.Subscription
+	events   *event.TypeMuxSubscription
 	mu       sync.RWMutex
 	chain    *LightChain
 	odr      OdrBackend

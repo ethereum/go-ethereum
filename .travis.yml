@@ -53,26 +53,51 @@ matrix:
         - CC=aarch64-linux-gnu-gcc go run build/ci.go install -arch arm64
         - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
-    # This builder does the OSX Azure, Android Maven and Azure and iOS CocoaPods and Azure uploads
+    # This builder does the Android Maven and Azure uploads
+    - os: linux
+      dist: precise # Needed for the android tools
+      addons:
+        apt:
+          packages:
+            - oracle-java8-installer
+            - oracle-java8-set-default
+      language: android
+      android:
+        components:
+          - platform-tools
+          - tools
+          - android-15
+          - android-19
+          - android-24
+      env:
+        - azure-android
+        - maven-android
+      before_install:
+        - curl https://storage.googleapis.com/golang/go1.8rc3.linux-amd64.tar.gz | tar -xz
+        - export PATH=`pwd`/go/bin:$PATH
+        - export GOROOT=`pwd`/go
+        - export GOPATH=$HOME/go # Drop post Go 1.8
+      script:
+        # Build the Android archive and upload it to Maven Central and Azure
+        - curl https://dl.google.com/android/repository/android-ndk-r13b-linux-x86_64.zip -o android-ndk-r13b.zip
+        - unzip -q android-ndk-r13b.zip && rm android-ndk-r13b.zip
+        - mv android-ndk-r13b $HOME
+        - export ANDROID_NDK=$HOME/android-ndk-r13b
+
+        - mkdir -p $GOPATH/src/github.com/ethereum
+        - ln -s `pwd` $GOPATH/src/github.com/ethereum
+        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
+
+    # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
       go: 1.7.4
       env:
         - azure-osx
-        - mobile
+        - azure-ios
+        - cocoapods-ios
       script:
         - go run build/ci.go install
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
-
-        # Build the Android archive and upload it to Maven Central and Azure
-        - brew update
-        - travis_wait 60 brew install android-sdk android-ndk maven gpg
-        - alias gpg="gpg2"
-
-        - export ANDROID_HOME=/usr/local/opt/android-sdk
-        - export ANDROID_NDK=/usr/local/opt/android-ndk
-        - echo "y" | android update sdk --no-ui --filter `android list sdk | grep "SDK Platform Android" | grep -E 'API 15|API 19|API 24' | awk '{print $1}' | cut -d '-' -f 1 | tr '\n' ','`
-
-        - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
         - gem uninstall cocoapods -a

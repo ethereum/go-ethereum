@@ -160,10 +160,10 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 	defer pool.lock.Unlock()
 	entry := pool.entries[p.ID()]
 	if entry == nil {
-		return nil
+		entry = pool.findOrNewNode(p.ID(), ip, port)
 	}
 	glog.V(logger.Debug).Infof("connecting to %v, state: %v", p.id, entry.state)
-	if entry.state != psDialed {
+	if entry.state == psConnected || entry.state == psRegistered {
 		return nil
 	}
 	pool.connWg.Add(1)
@@ -250,11 +250,17 @@ type poolStatAdjust struct {
 
 // adjustBlockDelay adjusts the block announce delay statistics of a node
 func (pool *serverPool) adjustBlockDelay(entry *poolEntry, time time.Duration) {
+	if entry == nil {
+		return
+	}
 	pool.adjustStats <- poolStatAdjust{pseBlockDelay, entry, time}
 }
 
 // adjustResponseTime adjusts the request response time statistics of a node
 func (pool *serverPool) adjustResponseTime(entry *poolEntry, time time.Duration, timeout bool) {
+	if entry == nil {
+		return
+	}
 	if timeout {
 		pool.adjustStats <- poolStatAdjust{pseResponseTimeout, entry, time}
 	} else {
@@ -342,7 +348,9 @@ func (pool *serverPool) selectPeerWait(reqID uint64, canSend func(*peer) (bool, 
 func (pool *serverPool) eventLoop() {
 	lookupCnt := 0
 	var convTime mclock.AbsTime
-	pool.discSetPeriod <- time.Millisecond * 100
+	if pool.discSetPeriod != nil {
+		pool.discSetPeriod <- time.Millisecond * 100
+	}
 	for {
 		select {
 		case entry := <-pool.timeout:
@@ -375,39 +383,7 @@ func (pool *serverPool) eventLoop() {
 
 		case node := <-pool.discNodes:
 			pool.lock.Lock()
-			now := mclock.Now()
-			id := discover.NodeID(node.ID)
-			entry := pool.entries[id]
-			if entry == nil {
-				glog.V(logger.Debug).Infof("discovered %v", node.String())
-				entry = &poolEntry{
-					id:         id,
-					addr:       make(map[string]*poolEntryAddress),
-					addrSelect: *newWeightedRandomSelect(),
-					shortRetry: shortRetryCnt,
-				}
-				pool.entries[id] = entry
-				// initialize previously unknown peers with good statistics to give a chance to prove themselves
-				entry.connectStats.add(1, initStatsWeight)
-				entry.delayStats.add(0, initStatsWeight)
-				entry.responseStats.add(0, initStatsWeight)
-				entry.timeoutStats.add(0, initStatsWeight)
-			}
-			entry.lastDiscovered = now
-			addr := &poolEntryAddress{
-				ip:   node.IP,
-				port: node.TCP,
-			}
-			if a, ok := entry.addr[addr.strKey()]; ok {
-				addr = a
-			} else {
-				entry.addr[addr.strKey()] = addr
-			}
-			addr.lastSeen = now
-			entry.addrSelect.update(addr)
-			if !entry.known {
-				pool.newQueue.setLatest(entry)
-			}
+			entry := pool.findOrNewNode(discover.NodeID(node.ID), node.IP, node.TCP)
 			pool.updateCheckDial(entry)
 			pool.lock.Unlock()
 
@@ -419,12 +395,16 @@ func (pool *serverPool) eventLoop() {
 				lookupCnt++
 				if pool.fastDiscover && (lookupCnt == 50 || time.Duration(mclock.Now()-convTime) > time.Minute) {
 					pool.fastDiscover = false
-					pool.discSetPeriod <- time.Minute
+					if pool.discSetPeriod != nil {
+						pool.discSetPeriod <- time.Minute
+					}
 				}
 			}
 
 		case <-pool.quit:
-			close(pool.discSetPeriod)
+			if pool.discSetPeriod != nil {
+				close(pool.discSetPeriod)
+			}
 			pool.connWg.Wait()
 			pool.saveNodes()
 			pool.wg.Done()
@@ -432,6 +412,42 @@ func (pool *serverPool) eventLoop() {
 
 		}
 	}
+}
+
+func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16) *poolEntry {
+	now := mclock.Now()
+	entry := pool.entries[id]
+	if entry == nil {
+		glog.V(logger.Debug).Infof("discovered %v", id.String())
+		entry = &poolEntry{
+			id:         id,
+			addr:       make(map[string]*poolEntryAddress),
+			addrSelect: *newWeightedRandomSelect(),
+			shortRetry: shortRetryCnt,
+		}
+		pool.entries[id] = entry
+		// initialize previously unknown peers with good statistics to give a chance to prove themselves
+		entry.connectStats.add(1, initStatsWeight)
+		entry.delayStats.add(0, initStatsWeight)
+		entry.responseStats.add(0, initStatsWeight)
+		entry.timeoutStats.add(0, initStatsWeight)
+	}
+	entry.lastDiscovered = now
+	addr := &poolEntryAddress{
+		ip:   ip,
+		port: port,
+	}
+	if a, ok := entry.addr[addr.strKey()]; ok {
+		addr = a
+	} else {
+		entry.addr[addr.strKey()] = addr
+	}
+	addr.lastSeen = now
+	entry.addrSelect.update(addr)
+	if !entry.known {
+		pool.newQueue.setLatest(entry)
+	}
+	return entry
 }
 
 // loadNodes loads known nodes and their statistics from the database

@@ -105,7 +105,6 @@ type Config struct {
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
-	Synced()
 	Stop()
 	Protocols() []p2p.Protocol
 }

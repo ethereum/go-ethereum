@@ -94,7 +94,9 @@ func main() {
 			abi, _ := json.Marshal(contract.Info.AbiDefinition) // Flatten the compiler parse
 			abis = append(abis, string(abi))
 			bins = append(bins, contract.Code)
-			types = append(types, name)
+
+			nameParts := strings.Split(name, ":")
+			types = append(types, nameParts[len(nameParts)-1])
 		}
 	} else {
 		// Otherwise load up the ABI, optional bytecode and type name from the parameters
