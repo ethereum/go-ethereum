@@ -60,6 +60,7 @@ const (
 	// must be bumped when consensus algorithm is changed, this forces the upgradedb
 	// command to be run (forces the blocks to be imported again using the new algorithm)
 	BlockChainVersion = 3
+	badBlockLimit     = 10
 )
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -108,6 +109,8 @@ type BlockChain struct {
 	processor Processor // block processor interface
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
+
+	badBlocks *lru.Cache // Bad block cache
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -118,6 +121,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
+	badBlocks, _ := lru.New(badBlockLimit)
 
 	bc := &BlockChain{
 		config:       config,
@@ -130,6 +134,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 		futureBlocks: futureBlocks,
 		pow:          pow,
 		vmConfig:     vmConfig,
+		badBlocks:    badBlocks,
 	}
 	bc.SetValidator(NewBlockValidator(config, bc, pow))
 	bc.SetProcessor(NewStateProcessor(config, bc))
@@ -893,7 +898,6 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			glog.V(logger.Debug).Infoln("Premature abort during block chain processing")
 			break
 		}
-
 		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
@@ -1242,8 +1246,32 @@ func (self *BlockChain) update() {
 	}
 }
 
+// BadBlockArgs represents the entries in the list returned when bad blocks are queried.
+type BadBlockArgs struct {
+	Hash   common.Hash   `json:"hash"`
+	Header *types.Header `json:"header"`
+}
+
+// BadBlocks returns a list of the last 'bad blocks' that the client has seen on the network
+func (bc *BlockChain) BadBlocks() ([]BadBlockArgs, error) {
+	headers := make([]BadBlockArgs, 0, bc.badBlocks.Len())
+	for _, hash := range bc.badBlocks.Keys() {
+		if hdr, exist := bc.badBlocks.Peek(hash); exist {
+			header := hdr.(*types.Header)
+			headers = append(headers, BadBlockArgs{header.Hash(), header})
+		}
+	}
+	return headers, nil
+}
+
+// addBadBlock adds a bad block to the bad-block LRU cache
+func (bc *BlockChain) addBadBlock(block *types.Block) {
+	bc.badBlocks.Add(block.Header().Hash(), block.Header())
+}
+
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
+	bc.addBadBlock(block)
 	if glog.V(logger.Error) {
 		var receiptString string
 		for _, receipt := range receipts {
