@@ -229,3 +229,29 @@ func (c *client) postRaw(mimetype string, size int64, body io.ReadCloser) (strin
 	content, err := ioutil.ReadAll(resp.Body)
 	return string(content), err
 }
+
+func (c *client) downloadManifest(mhash string) (manifest, error) {
+
+	mroot := manifest{}
+	req, err := http.NewRequest("GET", c.api + "/bzzr:/" + mhash, nil)
+	if err != nil {
+		return mroot, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return mroot, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return mroot, fmt.Errorf("bad status: %s", resp.Status)
+
+	}
+	content, err := ioutil.ReadAll(resp.Body)
+
+	err = json.Unmarshal(content, &mroot)
+	if err != nil {
+		return mroot, fmt.Errorf("Manifest %v is malformed: %v", mhash, err)
+	}
+	return mroot, err
+}
