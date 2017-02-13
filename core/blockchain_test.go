@@ -485,6 +485,7 @@ func chm(genesis *types.Block, db ethdb.Database) *BlockChain {
 	bc.bodyRLPCache, _ = lru.New(100)
 	bc.blockCache, _ = lru.New(100)
 	bc.futureBlocks, _ = lru.New(100)
+	bc.badBlocks, _ = lru.New(10)
 	bc.SetValidator(bproc{})
 	bc.SetProcessor(bproc{})
 	bc.ResetWithGenesisBlock(genesis)
