@@ -21,11 +21,28 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/params"
+)
+
+// Type is the VM type accepted by **NewVm**
+type Type byte
+
+const (
+	StdVmTy Type = iota // Default standard VM
+	JitVmTy             // LLVM JIT VM
+	MaxVmTy
 )
 
 var (
+	Pow256 = common.BigPow(2, 256) // Pow256 is 2**256
+
 	U256 = common.U256 // Shortcut to common.U256
 	S256 = common.S256 // Shortcut to common.S256
+
+	Zero = common.Big0 // Shortcut to common.Big0
+	One  = common.Big1 // Shortcut to common.Big1
+
+	max = big.NewInt(math.MaxInt64) // Maximum 64 bit integer
 )
 
 // calculates the memory size required for a step
@@ -35,6 +52,48 @@ func calcMemSize(off, l *big.Int) *big.Int {
 	}
 
 	return new(big.Int).Add(off, l)
+}
+
+// calculates the quadratic gas
+func quadMemGas(mem *Memory, newMemSize, gas *big.Int) {
+	if newMemSize.Cmp(common.Big0) > 0 {
+		newMemSizeWords := toWordSize(newMemSize)
+		newMemSize.Mul(newMemSizeWords, u256(32))
+
+		if newMemSize.Cmp(u256(int64(mem.Len()))) > 0 {
+			// be careful reusing variables here when changing.
+			// The order has been optimised to reduce allocation
+			oldSize := toWordSize(big.NewInt(int64(mem.Len())))
+			pow := new(big.Int).Exp(oldSize, common.Big2, Zero)
+			linCoef := oldSize.Mul(oldSize, params.MemoryGas)
+			quadCoef := new(big.Int).Div(pow, params.QuadCoeffDiv)
+			oldTotalFee := new(big.Int).Add(linCoef, quadCoef)
+
+			pow.Exp(newMemSizeWords, common.Big2, Zero)
+			linCoef = linCoef.Mul(newMemSizeWords, params.MemoryGas)
+			quadCoef = quadCoef.Div(pow, params.QuadCoeffDiv)
+			newTotalFee := linCoef.Add(linCoef, quadCoef)
+
+			fee := newTotalFee.Sub(newTotalFee, oldTotalFee)
+			gas.Add(gas, fee)
+		}
+	}
+}
+
+// Simple helper
+func u256(n int64) *big.Int {
+	return big.NewInt(n)
+}
+
+// Mainly used for print variables and passing to Print*
+func toValue(val *big.Int) interface{} {
+	// Let's assume a string on right padded zero's
+	b := val.Bytes()
+	if b[0] != 0 && b[len(b)-1] == 0x0 && b[len(b)-2] == 0x0 {
+		return string(b)
+	}
+
+	return val
 }
 
 // getData returns a slice from the data based on the start and size and pads
@@ -47,17 +106,14 @@ func getData(data []byte, start, size *big.Int) []byte {
 	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
 }
 
-// bigUint64 returns the integer casted to a uint64 and returns whether it
-// overflowed in the process.
-func bigUint64(v *big.Int) (uint64, bool) {
-	return v.Uint64(), v.BitLen() > 64
-}
-
-// toWordSize returns the ceiled word size required for memory expansion.
-func toWordSize(size uint64) uint64 {
-	if size > math.MaxUint64-31 {
-		return math.MaxUint64/32 + 1
+// useGas attempts to subtract the amount of gas and returns whether it was
+// successful
+func useGas(gas, amount *big.Int) bool {
+	if gas.Cmp(amount) < 0 {
+		return false
 	}
 
-	return (size + 31) / 32
+	// Sub the amount of gas from the remaining
+	gas.Sub(gas, amount)
+	return true
 }

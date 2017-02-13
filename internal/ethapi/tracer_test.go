@@ -45,7 +45,7 @@ func (account) ForEachStorage(cb func(key, value common.Hash) bool) {}
 func runTrace(tracer *JavascriptTracer) (interface{}, error) {
 	env := vm.NewEVM(vm.Context{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
 
-	contract := vm.NewContract(account{}, account{}, big.NewInt(0), 10000)
+	contract := vm.NewContract(account{}, account{}, big.NewInt(0), big.NewInt(10000))
 	contract.Code = []byte{byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x1, 0x0}
 
 	_, err := env.Interpreter().Run(contract, []byte{})
@@ -134,7 +134,7 @@ func TestHaltBetweenSteps(t *testing.T) {
 	}
 
 	env := vm.NewEVM(vm.Context{}, nil, params.TestChainConfig, vm.Config{Debug: true, Tracer: tracer})
-	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), 0)
+	contract := vm.NewContract(&account{}, &account{}, big.NewInt(0), big.NewInt(0))
 
 	tracer.CaptureState(env, 0, 0, big.NewInt(0), big.NewInt(0), nil, nil, contract, 0, nil)
 	timeout := errors.New("stahp")
