@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -99,17 +100,18 @@ func MakeSystemNode(privkey string, test *tests.BlockTest) (*node.Node, error) {
 		return nil, err
 	}
 	// Create the keystore and inject an unlocked account if requested
-	accman := stack.AccountManager()
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+
 	if len(privkey) > 0 {
 		key, err := crypto.HexToECDSA(privkey)
 		if err != nil {
 			return nil, err
 		}
-		a, err := accman.ImportECDSA(key, "")
+		a, err := ks.ImportECDSA(key, "")
 		if err != nil {
 			return nil, err
 		}
-		if err := accman.Unlock(a, ""); err != nil {
+		if err := ks.Unlock(a, ""); err != nil {
 			return nil, err
 		}
 	}

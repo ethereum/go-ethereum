@@ -24,24 +24,25 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 )
 
 const (
 	// StandardScryptN is the N parameter of Scrypt encryption algorithm, using 256MB
 	// memory and taking approximately 1s CPU time on a modern processor.
-	StandardScryptN = int(accounts.StandardScryptN)
+	StandardScryptN = int(keystore.StandardScryptN)
 
 	// StandardScryptP is the P parameter of Scrypt encryption algorithm, using 256MB
 	// memory and taking approximately 1s CPU time on a modern processor.
-	StandardScryptP = int(accounts.StandardScryptP)
+	StandardScryptP = int(keystore.StandardScryptP)
 
 	// LightScryptN is the N parameter of Scrypt encryption algorithm, using 4MB
 	// memory and taking approximately 100ms CPU time on a modern processor.
-	LightScryptN = int(accounts.LightScryptN)
+	LightScryptN = int(keystore.LightScryptN)
 
 	// LightScryptP is the P parameter of Scrypt encryption algorithm, using 4MB
 	// memory and taking approximately 100ms CPU time on a modern processor.
-	LightScryptP = int(accounts.LightScryptP)
+	LightScryptP = int(keystore.LightScryptP)
 )
 
 // Account represents a stored key.
@@ -77,59 +78,75 @@ func (a *Account) GetAddress() *Address {
 	return &Address{a.account.Address}
 }
 
-// GetFile retrieves the path of the file containing the account key.
-func (a *Account) GetFile() string {
-	return a.account.File
+// GetURL retrieves the canonical URL of the account.
+func (a *Account) GetURL() string {
+	return a.account.URL.String()
 }
 
-// AccountManager manages a key storage directory on disk.
-type AccountManager struct{ manager *accounts.Manager }
+// KeyStore manages a key storage directory on disk.
+type KeyStore struct{ keystore *keystore.KeyStore }
 
-// NewAccountManager creates a manager for the given directory.
-func NewAccountManager(keydir string, scryptN, scryptP int) *AccountManager {
-	return &AccountManager{manager: accounts.NewManager(keydir, scryptN, scryptP)}
+// NewKeyStore creates a keystore for the given directory.
+func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
+	return &KeyStore{keystore: keystore.NewKeyStore(keydir, scryptN, scryptP)}
 }
 
 // HasAddress reports whether a key with the given address is present.
-func (am *AccountManager) HasAddress(address *Address) bool {
-	return am.manager.HasAddress(address.address)
+func (ks *KeyStore) HasAddress(address *Address) bool {
+	return ks.keystore.HasAddress(address.address)
 }
 
 // GetAccounts returns all key files present in the directory.
-func (am *AccountManager) GetAccounts() *Accounts {
-	return &Accounts{am.manager.Accounts()}
+func (ks *KeyStore) GetAccounts() *Accounts {
+	return &Accounts{ks.keystore.Accounts()}
 }
 
 // DeleteAccount deletes the key matched by account if the passphrase is correct.
 // If a contains no filename, the address must match a unique key.
-func (am *AccountManager) DeleteAccount(account *Account, passphrase string) error {
-	return am.manager.Delete(accounts.Account{
-		Address: account.account.Address,
-		File:    account.account.File,
-	}, passphrase)
+func (ks *KeyStore) DeleteAccount(account *Account, passphrase string) error {
+	return ks.keystore.Delete(account.account, passphrase)
 }
 
-// Sign calculates a ECDSA signature for the given hash. The produced signature
+// SignHash calculates a ECDSA signature for the given hash. The produced signature
 // is in the [R || S || V] format where V is 0 or 1.
-func (am *AccountManager) Sign(address *Address, hash []byte) (signature []byte, _ error) {
-	return am.manager.Sign(address.address, hash)
+func (ks *KeyStore) SignHash(address *Address, hash []byte) (signature []byte, _ error) {
+	return ks.keystore.SignHash(accounts.Account{Address: address.address}, hash)
 }
 
-// SignPassphrase signs hash if the private key matching the given address can
+// SignTx signs the given transaction with the requested account.
+func (ks *KeyStore) SignTx(account *Account, tx *Transaction, chainID *BigInt) (*Transaction, error) {
+	signed, err := ks.keystore.SignTx(account.account, tx.tx, chainID.bigint)
+	if err != nil {
+		return nil, err
+	}
+	return &Transaction{signed}, nil
+}
+
+// SignHashPassphrase signs hash if the private key matching the given address can
 // be decrypted with the given passphrase. The produced signature is in the
 // [R || S || V] format where V is 0 or 1.
-func (am *AccountManager) SignPassphrase(account *Account, passphrase string, hash []byte) (signature []byte, _ error) {
-	return am.manager.SignWithPassphrase(account.account, passphrase, hash)
+func (ks *KeyStore) SignHashPassphrase(account *Account, passphrase string, hash []byte) (signature []byte, _ error) {
+	return ks.keystore.SignHashWithPassphrase(account.account, passphrase, hash)
+}
+
+// SignTxPassphrase signs the transaction if the private key matching the
+// given address can be decrypted with the given passphrase.
+func (ks *KeyStore) SignTxPassphrase(account *Account, passphrase string, tx *Transaction, chainID *BigInt) (*Transaction, error) {
+	signed, err := ks.keystore.SignTxWithPassphrase(account.account, passphrase, tx.tx, chainID.bigint)
+	if err != nil {
+		return nil, err
+	}
+	return &Transaction{signed}, nil
 }
 
 // Unlock unlocks the given account indefinitely.
-func (am *AccountManager) Unlock(account *Account, passphrase string) error {
-	return am.manager.TimedUnlock(account.account, passphrase, 0)
+func (ks *KeyStore) Unlock(account *Account, passphrase string) error {
+	return ks.keystore.TimedUnlock(account.account, passphrase, 0)
 }
 
 // Lock removes the private key with the given address from memory.
-func (am *AccountManager) Lock(address *Address) error {
-	return am.manager.Lock(address.address)
+func (ks *KeyStore) Lock(address *Address) error {
+	return ks.keystore.Lock(address.address)
 }
 
 // TimedUnlock unlocks the given account with the passphrase. The account stays
@@ -139,14 +156,14 @@ func (am *AccountManager) Lock(address *Address) error {
 // If the account address is already unlocked for a duration, TimedUnlock extends or
 // shortens the active unlock timeout. If the address was previously unlocked
 // indefinitely the timeout is not altered.
-func (am *AccountManager) TimedUnlock(account *Account, passphrase string, timeout int64) error {
-	return am.manager.TimedUnlock(account.account, passphrase, time.Duration(timeout))
+func (ks *KeyStore) TimedUnlock(account *Account, passphrase string, timeout int64) error {
+	return ks.keystore.TimedUnlock(account.account, passphrase, time.Duration(timeout))
 }
 
 // NewAccount generates a new key and stores it into the key directory,
 // encrypting it with the passphrase.
-func (am *AccountManager) NewAccount(passphrase string) (*Account, error) {
-	account, err := am.manager.NewAccount(passphrase)
+func (ks *KeyStore) NewAccount(passphrase string) (*Account, error) {
+	account, err := ks.keystore.NewAccount(passphrase)
 	if err != nil {
 		return nil, err
 	}
@@ -154,13 +171,13 @@ func (am *AccountManager) NewAccount(passphrase string) (*Account, error) {
 }
 
 // ExportKey exports as a JSON key, encrypted with newPassphrase.
-func (am *AccountManager) ExportKey(account *Account, passphrase, newPassphrase string) (key []byte, _ error) {
-	return am.manager.Export(account.account, passphrase, newPassphrase)
+func (ks *KeyStore) ExportKey(account *Account, passphrase, newPassphrase string) (key []byte, _ error) {
+	return ks.keystore.Export(account.account, passphrase, newPassphrase)
 }
 
 // ImportKey stores the given encrypted JSON key into the key directory.
-func (am *AccountManager) ImportKey(keyJSON []byte, passphrase, newPassphrase string) (account *Account, _ error) {
-	acc, err := am.manager.Import(keyJSON, passphrase, newPassphrase)
+func (ks *KeyStore) ImportKey(keyJSON []byte, passphrase, newPassphrase string) (account *Account, _ error) {
+	acc, err := ks.keystore.Import(keyJSON, passphrase, newPassphrase)
 	if err != nil {
 		return nil, err
 	}
@@ -168,14 +185,14 @@ func (am *AccountManager) ImportKey(keyJSON []byte, passphrase, newPassphrase st
 }
 
 // UpdateAccount changes the passphrase of an existing account.
-func (am *AccountManager) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
-	return am.manager.Update(account.account, passphrase, newPassphrase)
+func (ks *KeyStore) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
+	return ks.keystore.Update(account.account, passphrase, newPassphrase)
 }
 
 // ImportPreSaleKey decrypts the given Ethereum presale wallet and stores
 // a key file in the key directory. The key file is encrypted with the same passphrase.
-func (am *AccountManager) ImportPreSaleKey(keyJSON []byte, passphrase string) (ccount *Account, _ error) {
-	account, err := am.manager.ImportPreSaleKey(keyJSON, passphrase)
+func (ks *KeyStore) ImportPreSaleKey(keyJSON []byte, passphrase string) (ccount *Account, _ error) {
+	account, err := ks.keystore.ImportPreSaleKey(keyJSON, passphrase)
 	if err != nil {
 		return nil, err
 	}

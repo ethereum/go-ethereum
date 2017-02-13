@@ -27,6 +27,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts/usbwallet"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -400,15 +402,19 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	return nodes
 }
 
-func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore string, err error) {
-	scryptN := accounts.StandardScryptN
-	scryptP := accounts.StandardScryptP
+func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
 	if conf.UseLightweightKDF {
-		scryptN = accounts.LightScryptN
-		scryptP = accounts.LightScryptP
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
 	}
 
-	var keydir string
+	var (
+		keydir    string
+		ephemeral string
+		err       error
+	)
 	switch {
 	case filepath.IsAbs(conf.KeyStoreDir):
 		keydir = conf.KeyStoreDir
@@ -423,7 +429,7 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 	default:
 		// There is no datadir.
 		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
-		ephemeralKeystore = keydir
+		ephemeral = keydir
 	}
 	if err != nil {
 		return nil, "", err
@@ -431,6 +437,14 @@ func makeAccountManager(conf *Config) (am *accounts.Manager, ephemeralKeystore s
 	if err := os.MkdirAll(keydir, 0700); err != nil {
 		return nil, "", err
 	}
-
-	return accounts.NewManager(keydir, scryptN, scryptP), ephemeralKeystore, nil
+	// Assemble the account manager and supported backends
+	backends := []accounts.Backend{
+		keystore.NewKeyStore(keydir, scryptN, scryptP),
+	}
+	if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+		glog.V(logger.Warn).Infof("Failed to start Ledger hub, disabling: %v", err)
+	} else {
+		backends = append(backends, ledgerhub)
+	}
+	return accounts.NewManager(backends...), ephemeral, nil
 }

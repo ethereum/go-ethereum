@@ -361,15 +361,15 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
-	eb = s.etherbase
-	if (eb == common.Address{}) {
-		firstAccount, err := s.AccountManager().AccountByIndex(0)
-		eb = firstAccount.Address
-		if err != nil {
-			return eb, fmt.Errorf("etherbase address must be explicitly specified")
+	if s.etherbase != (common.Address{}) {
+		return s.etherbase, nil
+	}
+	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			return accounts[0].Address, nil
 		}
 	}
-	return eb, nil
+	return common.Address{}, fmt.Errorf("etherbase address must be explicitly specified")
 }
 
 // set in js console via admin interface or wrapper from cli flags

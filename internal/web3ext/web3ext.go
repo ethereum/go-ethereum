@@ -448,6 +448,18 @@ web3._extend({
 			name: 'ecRecover',
 			call: 'personal_ecRecover',
 			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'deriveAccount',
+			call: 'personal_deriveAccount',
+			params: 3
+		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'listWallets',
+			getter: 'personal_listWallets'
 		})
 	]
 })
