@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -101,11 +102,19 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 }
 
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
-	ok, lower, upper, topic := s.validate(peer, request)
-	if !ok {
+	if peer == nil {
+		glog.V(logger.Error).Info("Whisper peer is nil")
 		return
 	}
 
+	ok, lower, upper, topic := s.validateRequest(peer.ID(), request)
+	if ok {
+		s.processRequest(peer, lower, upper, topic)
+	}
+}
+
+func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, topic whisper.TopicType) []*whisper.Envelope {
+	ret := make([]*whisper.Envelope, 0)
 	var err error
 	var zero common.Hash
 	var empty whisper.TopicType
@@ -122,10 +131,15 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 		}
 
 		if topic == empty || envelope.Topic == topic {
-			err = s.w.SendP2PDirect(peer, &envelope)
-			if err != nil {
-				glog.V(logger.Error).Infof("Failed to send direct message to peer: %s", err)
-				return
+			if peer == nil {
+				// used for test purposes
+				ret = append(ret, &envelope)
+			} else {
+				err = s.w.SendP2PDirect(peer, &envelope)
+				if err != nil {
+					glog.V(logger.Error).Infof("Failed to send direct message to peer: %s", err)
+					return nil
+				}
 			}
 		}
 	}
@@ -134,9 +148,11 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 	if err != nil {
 		glog.V(logger.Error).Infof("Level DB iterator error: %s", err)
 	}
+
+	return ret
 }
 
-func (s *WMailServer) validate(peer *whisper.Peer, request *whisper.Envelope) (bool, uint32, uint32, whisper.TopicType) {
+func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) (bool, uint32, uint32, whisper.TopicType) {
 	var topic whisper.TopicType
 	if s.pow > 0.0 && request.PoW() < s.pow {
 		return false, 0, 0, topic
@@ -154,7 +170,11 @@ func (s *WMailServer) validate(peer *whisper.Peer, request *whisper.Envelope) (b
 		return false, 0, 0, topic
 	}
 
-	if bytes.Equal(peer.ID(), decrypted.Signature) {
+	src := crypto.FromECDSAPub(decrypted.Src)
+	if len(src)-len(peerID) == 1 {
+		src = src[1:]
+	}
+	if !bytes.Equal(peerID, src) {
 		glog.V(logger.Warn).Infof("Wrong signature of p2p request")
 		return false, 0, 0, topic
 	}
