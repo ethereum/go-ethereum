@@ -70,7 +70,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	for addr, account := range genesis.Alloc {
 		address := common.HexToAddress(addr)
 		statedb.AddBalance(address, common.String2Big(account.Balance))
-		statedb.SetCode(address, common.Hex2Bytes(account.Code))
+		statedb.SetCode(address, common.FromHex(account.Code))
 		statedb.SetNonce(address, common.String2Big(account.Nonce).Uint64())
 		for key, value := range account.Storage {
 			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
