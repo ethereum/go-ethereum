@@ -116,7 +116,7 @@ func initialize(t *testing.T) {
 
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
-		node.shh = NewWhisper(nil)
+		node.shh = New()
 		node.shh.test = true
 		node.shh.Start(nil)
 		topics := make([]TopicType, 0)

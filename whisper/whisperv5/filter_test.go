@@ -96,7 +96,7 @@ func TestInstallFilters(t *testing.T) {
 	InitSingleTest()
 
 	const SizeTestFilters = 256
-	w := NewWhisper(nil)
+	w := New()
 	filters := NewFilters(w)
 	tst := generateTestCases(t, SizeTestFilters)
 
@@ -520,7 +520,7 @@ func TestWatchers(t *testing.T) {
 	var j uint32
 	var e *Envelope
 
-	w := NewWhisper(nil)
+	w := New()
 	filters := NewFilters(w)
 	tst := generateTestCases(t, NumFilters)
 	for i = 0; i < NumFilters; i++ {
