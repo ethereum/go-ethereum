@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -60,6 +61,7 @@ type Interpreter struct {
 	env      *EVM
 	cfg      Config
 	gasTable params.GasTable
+	intPool  *intPool
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
@@ -75,6 +77,7 @@ func NewInterpreter(env *EVM, cfg Config) *Interpreter {
 		env:      env,
 		cfg:      cfg,
 		gasTable: env.ChainConfig().GasTable(env.BlockNumber),
+		intPool:  newIntPool(),
 	}
 }
 
@@ -106,14 +109,18 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
-		cost *big.Int
+		cost uint64
 	)
 	contract.Input = input
 
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
 		if err != nil && evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
+			// XXX For debugging
+			//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d ERR = %v\n", pc, op, cost, stack.len(), err)
+			// TODO update the tracer
+			g, c := new(big.Int).SetUint64(contract.Gas), new(big.Int).SetUint64(cost)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, g, c, mem, stack, contract, evm.env.depth, err)
 		}
 	}()
 
@@ -147,34 +154,47 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 			return nil, err
 		}
 
-		var memorySize *big.Int
+		var memorySize uint64
 		// calculate the new memory size and expand the memory to fit
 		// the operation
 		if operation.memorySize != nil {
-			memorySize = operation.memorySize(stack)
+			memSize, overflow := bigUint64(operation.memorySize(stack))
+			if overflow {
+				return nil, errGasUintOverflow
+			}
 			// memory is expanded in words of 32 bytes. Gas
 			// is also calculated in words.
-			memorySize.Mul(toWordSize(memorySize), big.NewInt(32))
+			if memorySize, overflow = math.SafeMul(toWordSize(memSize), 32); overflow {
+				return nil, errGasUintOverflow
+			}
 		}
 
 		if !evm.cfg.DisableGasMetering {
 			// consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method cas get the proper cost
-			cost = operation.gasCost(evm.gasTable, evm.env, contract, stack, mem, memorySize)
-			if !contract.UseGas(cost) {
+			cost, err = operation.gasCost(evm.gasTable, evm.env, contract, stack, mem, memorySize)
+			if err != nil || !contract.UseGas(cost) {
 				return nil, ErrOutOfGas
 			}
 		}
-		if memorySize != nil {
-			mem.Resize(memorySize.Uint64())
+		if memorySize > 0 {
+			mem.Resize(memorySize)
 		}
 
 		if evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
+			g, c := new(big.Int).SetUint64(contract.Gas), new(big.Int).SetUint64(cost)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, g, c, mem, stack, contract, evm.env.depth, err)
 		}
+		// XXX For debugging
+		//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d\n", pc, op, cost, stack.len())
 
 		// execute the operation
 		res, err := operation.execute(&pc, evm.env, contract, mem, stack)
+		// verifyPool is a build flag. Pool verification makes sure the integrity
+		// of the integer pool by comparing values to a default value.
+		if verifyPool {
+			verifyIntegerPool(evm.intPool)
+		}
 		switch {
 		case err != nil:
 			return nil, err
