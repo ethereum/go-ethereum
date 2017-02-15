@@ -18,8 +18,8 @@ func SafeAdd(x, y uint64) (uint64, bool) {
 
 // SafeMul returns multiplication result and whether overflow occurred.
 func SafeMul(x, y uint64) (uint64, bool) {
-	if x == 0 {
+	if x == 0 || y == 0 {
 		return 0, false
 	}
-	return x * y, x != 0 && y != 0 && y > gmath.MaxUint64/x
+	return x * y, y > gmath.MaxUint64/x
 }

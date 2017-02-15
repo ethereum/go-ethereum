@@ -27,6 +27,9 @@ const wordSize = 32 << (uint64(^big.Word(0)) >> 63)
 
 // Exp implement exponentiation by squaring algorithm.
 //
+// Exp return a new variable; base and exponent must
+// not be changed under any circumstance.
+//
 // Courtesy @karalabe and @chfast
 func Exp(base, exponent *big.Int) *big.Int {
 	result := big.NewInt(1)
