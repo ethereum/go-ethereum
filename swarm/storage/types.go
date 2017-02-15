@@ -19,6 +19,8 @@ package storage
 import (
 	"bytes"
 	"crypto"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"hash"
 	"io"
@@ -71,6 +73,24 @@ func (h Key) bits(i, j uint) uint {
 	return res
 }
 
+/*
+func proximity(one, other []byte) (ret int) {
+	retbig, _ := binary.Varint(other)
+	ret = int(int8(retbig))
+	return
+}*/
+func Proximity(one, other []byte) (ret int) {
+	for i := 0; i < len(one); i++ {
+		oxo := one[i] ^ other[i]
+		for j := 0; j < 8; j++ {
+			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+				return i*8 + j
+			}
+		}
+	}
+	return len(one) * 8
+}
+
 func IsZeroKey(key Key) bool {
 	return len(key) == 0 || bytes.Equal(key, ZeroKey)
 }
@@ -114,6 +134,27 @@ func (key *Key) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+type KeyCollection []Key
+
+func NewKeyCollection(l int) KeyCollection {
+	return make(KeyCollection, l)
+}
+
+func (c KeyCollection) Len() int {
+	return len(c)
+}
+
+func (c KeyCollection) Less(i, j int) bool {
+	if bytes.Compare(c[i], c[j]) == -1 {
+		return true
+	}
+	return false
+}
+
+func (c KeyCollection) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
+}
+
 // each chunk when first requested opens a record associated with the request
 // next time a request for the same chunk arrives, this record is updated
 // this request status keeps track of the request ID-s as well as the requesting
@@ -153,6 +194,41 @@ type Chunk struct {
 
 func NewChunk(key Key, rs *RequestStatus) *Chunk {
 	return &Chunk{Key: key, Req: rs}
+}
+
+func FakeChunk(size int64, count int, chunks []Chunk) int {
+	var i int
+	hasher := MakeHashFunc(defaultHash)()
+	chunksize := getDefaultChunkSize()
+	if size > chunksize {
+		size = chunksize
+	}
+
+	for i = 0; i < count; i++ {
+		/*
+			hasher.Reset()
+			data := make([]byte, size)
+			rand.Read(data)
+			binary.LittleEndian.PutUint64(data[8:], uint64(size))
+			hasher.Write(data)
+			chunks[i].SData = make([]byte, chunksize)
+			copy(chunks[i].SData, hasher.Sum(nil))
+		*/
+		hasher.Reset()
+		chunks[i].SData = make([]byte, size)
+		rand.Read(chunks[i].SData)
+		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(size))
+		hasher.Write(chunks[i].SData)
+		chunks[i].Key = make([]byte, 32)
+		copy(chunks[i].Key, hasher.Sum(nil))
+	}
+
+	return i
+}
+
+func getDefaultChunkSize() int64 {
+	return defaultBranches * int64(MakeHashFunc(defaultHash)().Size())
+
 }
 
 /*

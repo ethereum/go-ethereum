@@ -63,7 +63,7 @@ func testDataReaderAndSlice(l int) (r io.Reader, slice []byte) {
 	return
 }
 
-func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
+func testStore(m ChunkStore, indata io.Reader, l int64, branches int64, t *testing.T) {
 
 	chunkC := make(chan *Chunk)
 	go func() {
@@ -79,7 +79,7 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 		Hash:     defaultHash,
 	})
 	swg := &sync.WaitGroup{}
-	key, _ := chunker.Split(rand.Reader, l, chunkC, swg, nil)
+	key, _ := chunker.Split(indata, l, chunkC, swg, nil)
 	swg.Wait()
 	close(chunkC)
 	chunkC = make(chan *Chunk)
@@ -113,4 +113,29 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 	}
 	close(chunkC)
 	<-quit
+}
+
+// only put, but fills an array supplied by the caller with the keys
+func testSplit(m ChunkStore, l int64, branches int64, chunkkeys []Key, t *testing.T) Key {
+	var i int
+	chunkC := make(chan *Chunk)
+	go func() {
+		for chunk := range chunkC {
+			chunkkeys[i] = chunk.Key
+			i++
+			m.Put(chunk)
+			if chunk.wg != nil {
+				chunk.wg.Done()
+			}
+		}
+	}()
+	chunker := NewTreeChunker(&ChunkerParams{
+		Branches: branches,
+		Hash:     defaultHash,
+	})
+	swg := &sync.WaitGroup{}
+	key, _ := chunker.Split(rand.Reader, l, chunkC, swg, nil)
+	swg.Wait()
+	close(chunkC)
+	return key
 }

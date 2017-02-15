@@ -64,11 +64,11 @@ type DPA struct {
 }
 
 // for testing locally
-func NewLocalDPA(datadir string) (*DPA, error) {
+func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 
 	hash := MakeHashFunc("SHA256")
 
-	dbStore, err := NewDbStore(datadir, hash, singletonSwarmDbCapacity, 0)
+	dbStore, err := NewDbStore(datadir, hash, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}

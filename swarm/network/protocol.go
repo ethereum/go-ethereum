@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -364,14 +365,21 @@ func (self *bzz) handleStatus() (err error) {
 	}
 
 	log.Info(fmt.Sprintf("Peer %08x is capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId))
+
 	err = self.hive.addPeer(&peer{bzz: self})
 	if err != nil {
 		return err
 	}
 
 	// hive sets syncstate so sync should start after node added
-	log.Info(fmt.Sprintf("syncronisation request sent with %v", self.syncState))
+	self.syncState.PO = kademlia.Proximity(self.hive.addr, self.remoteAddr.Addr)
+
+	if self.syncState.PO >= uint8(self.hive.kad.GetProxLimit()) {
+		self.syncState.IncludeCloser = true
+	}
+
 	self.syncRequest()
+	log.Debug(fmt.Sprintf("syncronisation request sent with %v", self.syncState))
 
 	return nil
 }
@@ -382,28 +390,23 @@ func (self *bzz) sync(state *syncState) error {
 		return errors.New("sync request can only be sent once")
 	}
 
-	cnt := self.dbAccess.counter()
+	cnt := self.dbAccess.currentStorageIndex()
 	remoteaddr := self.remoteAddr.Addr
-	start, stop := self.hive.kad.KeyRange(remoteaddr)
 
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
 		self.syncEnabled = false
 		log.Warn(fmt.Sprintf("syncronisation disabled for peer %v", self))
-		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
+		state = &syncState{Synced: true}
 	} else {
-		state.synced = make(chan bool)
 		state.SessionAt = cnt
-		if storage.IsZeroKey(state.Stop) && state.Synced {
-			state.Start = storage.Key(start[:])
-			state.Stop = storage.Key(stop[:])
-		}
 		log.Debug(fmt.Sprintf("syncronisation requested by peer %v at state %v", self, state))
 	}
 	var err error
 	self.syncer, err = newSyncer(
 		self.requestDb,
 		storage.Key(remoteaddr[:]),
+		self.hive.kad.GetProxLimit,
 		self.dbAccess,
 		self.unsyncedKeys, self.store,
 		self.syncParams, state, func() bool { return self.syncEnabled },
@@ -502,7 +505,7 @@ func (self *bzz) peers(req *peersMsgData) error {
 
 func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
-		return fmt.Errorf("network write blocked")
+		log.Warn("network write blocked")
 	}
 	log.Trace(fmt.Sprintf("-> %v: %v (%T) to %v", msg, data, data, self))
 	err := p2p.Send(self.rw, msg, data)

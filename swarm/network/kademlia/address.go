@@ -48,6 +48,9 @@ func (a Address) Bin() string {
 	return strings.Join(bs, "")
 }
 
+func Proximity(one, other Address) (ret uint8) {
+	return uint8(proximity(one, other))
+}
 /*
 Proximity(x, y) returns the proximity order of the MSB distance between x and y
 

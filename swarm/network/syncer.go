@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+/// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -31,6 +32,7 @@ const (
 	requestDbBatchSize = 512  // size of batch before written to request db
 	keyBufferSize      = 1024 // size of buffer  for unsynced keys
 	syncBatchSize      = 128  // maximum batchsize for outgoing requests
+	historyBufferSize  = 128  // maximum size for history iteration buffer
 	syncBufferSize     = 128  // size of buffer  for delivery requests
 	syncCacheSize      = 1024 // cache capacity to store request queue in memory
 )
@@ -54,11 +56,16 @@ const (
 
 // json serialisable struct to record the syncronisation state between 2 peers
 type syncState struct {
-	*storage.DbSyncState // embeds the following 4 fields:
-	// Start      Key    // lower limit of address space
-	// Stop       Key    // upper limit of address space
-	// First      uint64 // counter taken from last sync state
-	// Last       uint64 // counter of remote peer dbStore at the time of last connection
+	SessionAt     uint64 // set at the time of connection
+	Since         uint64 // requested start index
+	PO            uint8  // the requested proximity order (wrt to requester's address)
+	Last          uint64 // index of last synced chunk
+	Synced        bool   // true iff Sync is done up to session at
+	IncludeCloser bool   // whether to include all keys that are closer to the peer than the requested PO
+}
+
+// json serialisable struct to record the syncronisation state between 2 peers
+type legacySyncState struct {
 	SessionAt  uint64      // set at the time of connection
 	LastSeenAt uint64      // set at the time of connection
 	Latest     storage.Key // cursor of dbstore when last (continuously set by syncer)
@@ -82,40 +89,18 @@ func (self *DbAccess) get(key storage.Key) (*storage.Chunk, error) {
 }
 
 // current storage counter of chunk db
-func (self *DbAccess) counter() uint64 {
-	return self.db.Counter()
+func (self *DbAccess) currentStorageIndex() uint64 {
+	return self.db.CurrentStorageIndex()
 }
 
-// implemented by dbStoreSyncIterator
-type keyIterator interface {
-	Next() storage.Key
-}
-
-// generator function for iteration by address range and storage counter
-func (self *DbAccess) iterator(s *syncState) keyIterator {
-	it, err := self.db.NewSyncIterator(*(s.DbSyncState))
-	if err != nil {
-		return nil
-	}
-	return keyIterator(it)
+// iteration storage counter and proximity order
+func (self *DbAccess) iterator(since uint64, until uint64, po uint8, f func(storage.Key, uint64) bool) error {
+	return self.db.SyncIterator(since, until, po, f)
 }
 
 func (self syncState) String() string {
-	if self.Synced {
-		return fmt.Sprintf(
-			"session started at: %v, last seen at: %v, latest key: %v",
-			self.SessionAt, self.LastSeenAt,
-			self.Latest.Log(),
-		)
-	} else {
-		return fmt.Sprintf(
-			"address: %v-%v, index: %v-%v, session started at: %v, last seen at: %v, latest key: %v",
-			self.Start.Log(), self.Stop.Log(),
-			self.First, self.Last,
-			self.SessionAt, self.LastSeenAt,
-			self.Latest.Log(),
-		)
-	}
+	return fmt.Sprintf("synced: session started at: %v, requested sync since: %v, latest key: %v, includecloser: %v",
+		self.SessionAt, self.Since, self.Last, self.IncludeCloser)
 }
 
 // syncer parameters (global, not peer specific)
@@ -146,14 +131,15 @@ func NewSyncParams(bzzdir string) *SyncParams {
 
 // syncer is the agent that manages content distribution/storage replication/chunk storeRequest forwarding
 type syncer struct {
-	*SyncParams                     // sync parameters
-	syncF           func() bool     // if syncing is needed
-	key             storage.Key     // remote peers address key
-	state           *syncState      // sync state for our dbStore
-	syncStates      chan *syncState // different stages of sync
-	deliveryRequest chan bool       // one of two triggers needed to send unsyncedKeys
-	newUnsyncedKeys chan bool       // one of two triggers needed to send unsynced keys
-	quit            chan bool       // signal to quit loops
+	*SyncParams             // sync parameters
+	syncF       func() bool // if syncing is needed
+	key         storage.Key // remote peers address key
+	proxLimit   func() int  // kademlia proxlimit retrieval function
+	state       *syncState  // sync state for our dbStore
+	//syncStates      chan *syncState // different stages of sync
+	deliveryRequest chan bool // one of two triggers needed to send unsyncedKeys
+	newUnsyncedKeys chan bool // one of two triggers needed to send unsynced keys
+	quit            chan bool // signal to quit loops
 
 	// DB related fields
 	dbAccess *DbAccess            // access to dbStore
@@ -175,6 +161,7 @@ type syncer struct {
 // by the forwarder
 func newSyncer(
 	db *storage.LDBDatabase, remotekey storage.Key,
+	proxLimit func() int,
 	dbAccess *DbAccess,
 	unsyncedKeys func([]*syncRequest, *syncState) error,
 	store func(*storeRequestMsgData) error,
@@ -190,8 +177,8 @@ func newSyncer(
 	self := &syncer{
 		syncF:           syncF,
 		key:             remotekey,
+		proxLimit:       proxLimit,
 		dbAccess:        dbAccess,
-		syncStates:      make(chan *syncState, 20),
 		deliveryRequest: make(chan bool, 1),
 		newUnsyncedKeys: make(chan bool, 1),
 		SyncParams:      params,
@@ -213,8 +200,29 @@ func newSyncer(
 	go self.syncDeliveries()
 	// launch sync task manager
 	if self.syncF() {
-		go self.sync()
+		/*
+		   * first all items left in the request Db are replayed
+		     * type = StaleSync
+		     * Mode: by default once again via confirmation roundtrip
+		     * Priority: the items are replayed as the proirity specified for StaleSync
+		     * but within the order respects earlier priority level of request
+		   * after all items are consumed for a priority level, then the respective
+		    queue for delivery requests is open (this way new reqs not written to db)
+		   * the sync state provided by the remote peer is used to sync history
+		   sync is called from the syncer constructor and is not supposed to be used externally
+		*/
+		if state.SessionAt == 0 {
+			log.Trace(fmt.Sprintf("syncer[%v]: nothing to sync", self.key.Log()))
+			return self, nil
+		}
+		log.Trace(fmt.Sprintf("syncer[%v]: start replaying stale requests from request db", self.key.Log()))
+		for p := priorities - 1; p >= 0; p-- {
+			self.queues[p].dbRead(false, 0, self.replay())
+		}
+		log.Trace(fmt.Sprintf("syncer[%v]: done replaying stale requests from request db", self.key.Log()))
+
 	}
+
 	// process unsynced keys to broadcast
 	go self.syncUnsyncedKeys()
 
@@ -239,94 +247,9 @@ func decodeSync(meta *json.RawMessage) (*syncState, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
 	}
-	state := &syncState{DbSyncState: &storage.DbSyncState{}}
+	state := &syncState{}
 	err := json.Unmarshal(data, state)
 	return state, err
-}
-
-/*
- sync implements the syncing script
- * first all items left in the request Db are replayed
-   * type = StaleSync
-   * Mode: by default once again via confirmation roundtrip
-   * Priority: the items are replayed as the proirity specified for StaleSync
-   * but within the order respects earlier priority level of request
- * after all items are consumed for a priority level, the the respective
-  queue for delivery requests is open (this way new reqs not written to db)
-  (TODO: this should be checked)
- * the sync state provided by the remote peer is used to sync history
-   * all the backlog from earlier (aborted) syncing is completed starting from latest
-   * if Last  < LastSeenAt then all items in between then process all
-     backlog from upto last disconnect
-   * if Last > 0 &&
-
- sync is called from the syncer constructor and is not supposed to be used externally
-*/
-func (self *syncer) sync() {
-	state := self.state
-	// sync finished
-	defer close(self.syncStates)
-
-	// 0. first replay stale requests from request db
-	if state.SessionAt == 0 {
-		log.Debug(fmt.Sprintf("syncer[%v]: nothing to sync", self.key.Log()))
-		return
-	}
-	log.Debug(fmt.Sprintf("syncer[%v]: start replaying stale requests from request db", self.key.Log()))
-	for p := priorities - 1; p >= 0; p-- {
-		self.queues[p].dbRead(false, 0, self.replay())
-	}
-	log.Debug(fmt.Sprintf("syncer[%v]: done replaying stale requests from request db", self.key.Log()))
-
-	// unless peer is synced sync unfinished history beginning on
-	if !state.Synced {
-		start := state.Start
-
-		if !storage.IsZeroKey(state.Latest) {
-			// 1. there is unfinished earlier sync
-			state.Start = state.Latest
-			log.Debug(fmt.Sprintf("syncer[%v]: start syncronising backlog (unfinished sync: %v)", self.key.Log(), state))
-			// blocks while the entire history upto state is synced
-			self.syncState(state)
-			if state.Last < state.SessionAt {
-				state.First = state.Last + 1
-			}
-		}
-		state.Latest = storage.ZeroKey
-		state.Start = start
-		// 2. sync up to last disconnect1
-		if state.First < state.LastSeenAt {
-			state.Last = state.LastSeenAt
-			log.Debug(fmt.Sprintf("syncer[%v]: start syncronising history upto last disconnect at %v: %v", self.key.Log(), state.LastSeenAt, state))
-			self.syncState(state)
-			state.First = state.LastSeenAt
-		}
-		state.Latest = storage.ZeroKey
-
-	} else {
-		// synchronisation starts at end of last session
-		state.First = state.LastSeenAt
-	}
-
-	// 3. sync up to current session start
-	// if there have been new chunks since last session
-	if state.LastSeenAt < state.SessionAt {
-		state.Last = state.SessionAt
-		log.Debug(fmt.Sprintf("syncer[%v]: start syncronising history since last disconnect at %v up until session start at %v: %v", self.key.Log(), state.LastSeenAt, state.SessionAt, state))
-		// blocks until state syncing is finished
-		self.syncState(state)
-	}
-	log.Info(fmt.Sprintf("syncer[%v]: syncing all history complete", self.key.Log()))
-
-}
-
-// wait till syncronised block uptil state is synced
-func (self *syncer) syncState(state *syncState) {
-	self.syncStates <- state
-	select {
-	case <-state.synced:
-	case <-self.quit:
-	}
 }
 
 // stop quits both request processor and saves the request cache to disk
@@ -360,40 +283,69 @@ func (self *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error)
 
 // serves historical items from the DB
 // * read is on demand, blocking unless history channel is read
-// * accepts sync requests (syncStates) to create new db iterator
-// * closes the channel one iteration finishes
+// * closes the channel once iteration finishes
 func (self *syncer) syncHistory(state *syncState) chan interface{} {
-	var n uint
-	history := make(chan interface{})
-	log.Debug(fmt.Sprintf("syncer[%v]: syncing history between %v - %v for chunk addresses %v - %v", self.key.Log(), state.First, state.Last, state.Start, state.Stop))
-	it := self.dbAccess.iterator(state)
-	if it != nil {
-		go func() {
-			// signal end of the iteration ended
-			defer close(history)
-		IT:
-			for {
-				key := it.Next()
-				if key == nil {
-					break IT
-				}
+	var roundCnt, stateCnt, totalCnt uint
+	var quit, wait bool
+	history := make(chan interface{}, historyBufferSize)
+
+	go func() {
+		// signal end of the iteration ended
+		defer close(history)
+		last := state.Last
+		since := state.Since
+		for {
+			log.Debug(fmt.Sprintf("syncer[%v]: syncing history since %v for chunks of proximity order %v", self.key.Log(), since, state.PO))
+			err := self.dbAccess.iterator(since, state.SessionAt, state.PO, func(key storage.Key, idx uint64) bool {
 				select {
-				// blocking until history channel is read from
-				case history <- storage.Key(key):
-					n++
-					log.Trace(fmt.Sprintf("syncer[%v]: history: %v (%v keys)", self.key.Log(), key.Log(), n))
-					state.Latest = key
+				// if history channel cannot be written to, we fall through to default
+				// and release the iterator
+				// last is not set to idx so the lost key will be retrieved in the next
+				// batch given Since is set to last
+				case history <- key:
+					roundCnt++
+					stateCnt++
+					totalCnt++
+					last = idx
+					return true
 				case <-self.quit:
-					return
+					quit = true
+					return false
+				default:
+					wait = true
+					return false
+				}
+				// return true //dummy return.
+			})
+			if err != nil {
+				log.Debug(fmt.Sprintf("syncer[%v]: sync for %v failed: %v: ..abort syncing", self.key.Log(), state, err))
+				return
+			}
+			if quit {
+				return
+			}
+			// advancing syncstate
+			since = last
+			if !wait {
+				log.Debug(fmt.Sprintf("syncer[%v]: sync for %v failed: %v: ..abort syncing", self.key.Log(), state, err))
+				break
+			}
+			// if history channel is no longer contented, continue outer loop
+			// and read yet another batch
+			for len(history) > historyBufferSize/5 {
+				t := time.NewTimer(100 * time.Millisecond)
+				select {
+				case <-t.C:
+				case <-self.quit:
 				}
 			}
-			log.Debug(fmt.Sprintf("syncer[%v]: finished syncing history between %v - %v for chunk addresses %v - %v (at %v) (chunks = %v)", self.key.Log(), state.First, state.Last, state.Start, state.Stop, state.Latest, n))
-		}()
-	}
+		}
+		roundCnt = 0
+	}()
 	return history
 }
 
-// triggers key syncronisation
+// triggers key synchronisation
 func (self *syncer) sendUnsyncedKeys() {
 	select {
 	case self.deliveryRequest <- true:
@@ -412,15 +364,18 @@ func (self *syncer) syncUnsyncedKeys() {
 	var unsynced []*syncRequest
 	var more, justSynced bool
 	var keyCount, historyCnt int
-	var history chan interface{}
 
 	priority := High
 	keys := self.keys[priority]
 	var newUnsyncedKeys, deliveryRequest chan bool
 	keyCounts := make([]int, priorities)
 	histPrior := self.SyncPriorities[HistoryReq]
-	syncStates := self.syncStates
 	state := self.state
+
+	if state.IncludeCloser {
+		state.PO = 255
+	}
+	history := self.syncHistory(self.state)
 
 LOOP:
 	for {
@@ -454,7 +409,7 @@ LOOP:
 		// if peer ready to receive but nothing to send
 		if keys == nil && deliveryRequest == nil {
 			// if no items left and switch to waiting mode
-			log.Trace(fmt.Sprintf("syncer[%v]: buffers consumed. Waiting", self.key.Log()))
+			log.Trace(fmt.Sprintf("syncer[%v]: buffers consumed. Waiting (keys %v (len  %v) deliveryrequest %v)", self.key.Log(), keys, len(keys), deliveryRequest))
 			newUnsyncedKeys = self.newUnsyncedKeys
 		}
 
@@ -464,8 +419,7 @@ LOOP:
 		// * batch full OR
 		// * all history have been consumed, synced)
 		if deliveryRequest == nil &&
-			(justSynced ||
-				len(unsynced) > 0 && keys == nil ||
+			(justSynced && len(unsynced) > 0 ||
 				len(unsynced) == int(self.SyncBatchSize)) {
 			justSynced = false
 			// listen to requests
@@ -473,11 +427,9 @@ LOOP:
 			newUnsyncedKeys = nil // not care about data until next req comes in
 			// set sync to current counter
 			// (all nonhistorical outgoing traffic sheduled and persisted
-			state.LastSeenAt = self.dbAccess.counter()
-			state.Latest = storage.ZeroKey
-			log.Trace(fmt.Sprintf("syncer[%v]: sending %v", self.key.Log(), unsynced))
-			//  send the unsynced keys
 			stateCopy := *state
+			// actually sending unsynced keys with a state
+			log.Trace(fmt.Sprintf("syncer[%v]: sending %v", self.key.Log(), unsynced))
 			err := self.unsyncedKeys(unsynced, &stateCopy)
 			if err != nil {
 				log.Warn(fmt.Sprintf("syncer[%v]: unable to send unsynced keys: %v", self.key.Log(), err))
@@ -495,16 +447,24 @@ LOOP:
 		case req, more = <-keys:
 			if keys == history && !more {
 				log.Trace(fmt.Sprintf("syncer[%v]: syncing history segment complete", self.key.Log()))
-				// history channel is closed, waiting for new state (called from sync())
-				syncStates = self.syncStates
-				state.Synced = true // this signals that the  current segment is complete
-				select {
-				case state.synced <- false:
-				case <-self.quit:
-					break LOOP
-				}
+				// moved to closing of channel in syncHistory
 				justSynced = true
-				history = nil
+
+				log.Trace(fmt.Sprintf("syncer[%v]: start synchronising history since last disconnect at %v up until session start at %v: %v", self.key.Log(), state.Last, state.SessionAt, state))
+
+				if state.IncludeCloser && state.PO > uint8(self.proxLimit()) {
+					log.Trace(fmt.Sprintf("syncer[%v]: PO is now %d", self.key.Log(), state.PO))
+					state.PO--
+					history = self.syncHistory(state)
+
+				} else {
+
+					history = nil
+					state.Synced = true
+					state.Last = self.dbAccess.currentStorageIndex()
+					log.Trace(fmt.Sprintf("syncer[%v]: syncing all history complete", self.key.Log()))
+				}
+
 			}
 		case <-deliveryRequest:
 			log.Trace(fmt.Sprintf("syncer[%v]: peer ready to receive", self.key.Log()))
@@ -520,40 +480,27 @@ LOOP:
 			// signals that data is available to send if peer is ready to receive
 			newUnsyncedKeys = nil
 			keys = self.keys[High]
-
-		case state, more = <-syncStates:
-			// this resets the state
-			if !more {
-				state = self.state
-				log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) syncing complete upto %v)", self.key.Log(), priority, state))
-				state.Synced = true
-				syncStates = nil
-			} else {
-				log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) syncing history upto %v priority %v)", self.key.Log(), priority, state, histPrior))
-				state.Synced = false
-				history = self.syncHistory(state)
-				// only one history at a time, only allow another one once the
-				// history channel is closed
-				syncStates = nil
-			}
 		}
 		if req == nil {
 			continue LOOP
 		}
 
-		log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) added to unsynced keys: %v", self.key.Log(), priority, req))
+		sreq, err := self.newSyncRequest(req, priority)
+		if err != nil {
+			log.Warn(fmt.Sprintf("syncer[%v]: (priority %v): error creating request for %v: %v)", self.key.Log(), priority, req, state.Synced, err))
+			continue
+		}
+
+		unsynced = append(unsynced, sreq)
+
 		keyCounts[priority]++
 		keyCount++
+
 		if keys == history {
-			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) history item %v (synced = %v)", self.key.Log(), priority, req, state.Synced))
 			historyCnt++
-		}
-		if sreq, err := self.newSyncRequest(req, priority); err == nil {
-			// extract key from req
-			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v): request %v (synced = %v)", self.key.Log(), priority, req, state.Synced))
-			unsynced = append(unsynced, sreq)
+			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) history item %v (synced = %v)", self.key.Log(), priority, req, state.Synced))
 		} else {
-			log.Warn(fmt.Sprintf("syncer[%v]: (priority %v): error creating request for %v: %v)", self.key.Log(), priority, req, err))
+			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v) added to unsynced keys: %v", self.key.Log(), priority, req))
 		}
 
 	}

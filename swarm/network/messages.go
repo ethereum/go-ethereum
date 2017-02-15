@@ -34,14 +34,14 @@ BZZ protocol Message Types and Message Data Types
 
 // bzz protocol message codes
 const (
-	statusMsg          = iota // 0x01
-	storeRequestMsg           // 0x02
-	retrieveRequestMsg        // 0x03
-	peersMsg                  // 0x04
-	syncRequestMsg            // 0x05
-	deliveryRequestMsg        // 0x06
-	unsyncedKeysMsg           // 0x07
-	paymentMsg                // 0x08
+	statusMsg          = iota // 0x00
+	storeRequestMsg           // 0x01
+	retrieveRequestMsg        // 0x02
+	peersMsg                  // 0x03
+	syncRequestMsg            // 0x04
+	deliveryRequestMsg        // 0x05
+	unsyncedKeysMsg           // 0x06
+	paymentMsg                // 0x07
 )
 
 /*
