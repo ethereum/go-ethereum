@@ -244,6 +244,32 @@ Which will start mining bocks and transactions on a single CPU thread, crediting
 the account specified by `--etherbase`. You can further tune the mining by changing the default gas
 limit blocks converge to (`--targetgaslimit`) and the price transactions are accepted at (`--gasprice`).
 
+### Configuration file
+
+Using configuration files on the mainnet and the testnet is discouraged. The reason is that we strive
+to ensure these two networks work out of the box without requiring complicated manual setup. However,
+we do acknowledge that running private networks (or more complex multi-network machines) might require
+a lot of additional flags to be specified, which can be a burden after a while. For these scenarios,
+Geth can load all its configuration flags from a config file too.
+
+Geth uses `.ini` files as configuration files, which are plain text files where each line may contain
+a property followed by `=` and the value to set for that property (for more information, see the
+[Wikipedia - INI file](https://en.wikipedia.org/wiki/INI_file) page). Valid properties are those (and
+only those that Geth accepts as usual command line flags).
+
+E.g. To use fast sync and set the database caching to 1GB, you could start geth with `--config=conf.ini`
+and have the following inside `conf.ini`:
+
+```ini
+fast  = true
+cache = 1024
+```
+
+Precedence wise, manually specified options on the command line always have the highest priority,
+those contained in the config file (only ever loaded via `-config`) have the second highest priority
+and the hard coded defaults have the lowest. If the same flag is specified multiple times, the value
+of the last one is used.
+
 ## Contribution
 
 Thank you for considering to help out with the source code! We welcome contributions from

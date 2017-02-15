@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -105,6 +106,11 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	// Config file to use instead of defaults
+	ConfigFileFlag = cli.StringFlag{
+		Name:  "config",
+		Usage: "Config file to load default flag values from",
+	}
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
@@ -414,6 +420,108 @@ var (
 		Value: 110,
 	}
 )
+
+// OverrideDefaults parses a config .ini file if one was specified as a CLI flag
+// and overrides any non-manually set config values.
+func OverrideDefaults(ctx *cli.Context) {
+	// If no override was requested, use hard-coded defaults
+	config := ctx.GlobalString(ConfigFileFlag.Name)
+	if config == "" {
+		return
+	}
+	// Ensure the any config file and containing folder can only be written by the current user
+	info, err := os.Stat(config)
+	if err != nil {
+		Fatalf("Failed to retrieve config file stats: %v", err)
+	}
+	if perms := info.Mode().Perm(); perms&0022 > 0 {
+		Fatalf("Config file is publicly or group writeable, refusing to trust it!")
+	}
+	info, err = os.Stat(filepath.Dir(config))
+	if err != nil {
+		Fatalf("Failed to retrieve config folder stats: %v", err)
+	}
+	if perms := info.Mode().Perm(); perms&0022 > 0 {
+		Fatalf("Config folder is publicly or group writeable, refusing to trust it!")
+	}
+	// Gather all known configuration fields to enforce config validity
+	flags := make(map[string]struct{})
+	for _, flag := range ctx.GlobalFlagNames() {
+		flags[flag] = struct{}{}
+	}
+	// Parse the configuration files and load all fields
+	var cfg map[string]interface{}
+	if _, err := toml.DecodeFile(config, &cfg); err != nil {
+		Fatalf("Failed to load initial configurations: %v", err)
+	}
+	overrides := make(map[string]string)
+	for key, val := range cfg {
+		// Bail out if the config field does not exist
+		if _, ok := flags[key]; !ok {
+			Fatalf("Unknown configuration entry: %s", key)
+		}
+		// Flatten the config value into its string form
+		var value string
+
+		switch val := (val).(type) {
+		case []string:
+			value = strings.Join(val, ",")
+		default:
+			value = fmt.Sprintf("%v", val)
+		}
+		// Check for duplicate assignments, and set the config field
+		if _, duplicate := overrides[key]; duplicate || ctx.GlobalIsSet(key) {
+			overrides[key] = value
+			continue
+		}
+		ctx.GlobalSet(key, value)
+	}
+	// If config file values were overridden, warn the user
+	if len(overrides) > 0 {
+		fmt.Println("Config file values overridden via the CLI:")
+		for key, val := range overrides {
+			fmt.Printf("  - %s:\n", key)
+			fmt.Printf("    - Config: %s\n", val)
+			fmt.Printf("    - Manual: %v\n", ctx.GlobalString(key))
+		}
+		fmt.Println()
+	}
+}
+
+// dangerousFlags is a set of flags considered dangerous that the user is warned
+// about if they are contained within the config file.
+var dangerousFlags = map[string]string{
+	RPCListenAddrFlag.Name: "May allow ousiders to access your node",
+	WSListenAddrFlag.Name:  "May allow ousiders to access your node",
+	IPCPathFlag.Name:       "May allow other users/programs to access your node",
+}
+
+// WarnDangerousFlags checks whether the user specified dangerous flags either
+// in a config file or manually on the CLI, and display a warning in such cases.
+func WarnDangerousFlags(ctx *cli.Context) {
+	// Gather any potentially dangerous flags
+	dangerous := make(map[string]string)
+	for _, flag := range ctx.GlobalFlagNames() {
+		if ctx.GlobalIsSet(flag) && dangerousFlags[flag] != "" {
+			dangerous[flag] = ctx.GlobalString(flag)
+		}
+	}
+	if len(dangerous) == 0 {
+		return
+	}
+	// Dangerous flags set, warn the user
+	// If config file contains dangerous flags, warn the user
+	fmt.Println("-----------------------------------------------------------------")
+	fmt.Println("Config file contains dangerous flags:")
+	for key, val := range dangerous {
+		fmt.Printf("  - %s:\n", key)
+		fmt.Printf("    - Config: %s\n", val)
+		fmt.Printf("    - Danger: %s\n", dangerousFlags[key])
+	}
+	fmt.Println()
+	fmt.Println("If you don't know what the above flags do, terminate immediately!")
+	fmt.Println("-----------------------------------------------------------------")
+}
 
 // MakeDataDir retrieves the currently requested data directory, terminating
 // if none (or the empty string) is specified. If the node is starting a testnet,
