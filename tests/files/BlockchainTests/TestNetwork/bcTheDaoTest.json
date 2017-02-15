@@ -1,6 +1,6 @@
 {
     "DaoTransactions" : {
-        "acomment" : "This test checks DAO hardfork transition at block 8. According to specification given list of accounts L from the prestate (except a94f5374fce5edbc8e2a8697c15331677e6ebf0b (caller)) should transfer it's balance at the begining of the block 8 to contract C = bf4ed7b27f1d666546e30d74d50d173d20bca754. Then all blocks from 8 to 17(included) must have extradata set to 0x64616f2d686172642d666f726b otherwise blocks considered incorrect. Additionally all uncles with numbers from 8 to 17(included) in this blocks should corespond to extradata requirenmets.",
+        "acomment" : "This test checks DAO hardfork transition at block 8. According to specification given list of accounts L from the prestate (except a94f5374fce5edbc8e2a8697c15331677e6ebf0b (caller)) should transfer it's balance at the beginning of the block 8 to contract C = bf4ed7b27f1d666546e30d74d50d173d20bca754. Then all blocks from 8 to 17(included) must have extradata set to 0x64616f2d686172642d666f726b otherwise blocks considered incorrect. Additionally all uncles with numbers from 8 to 17(included) in this blocks should corespond to extradata requirenmets.",
         "blocks" : [
             {
                 "blockHeader" : {
@@ -2430,7 +2430,7 @@
         }
     },
     "DaoTransactions_EmptyTransactionAndForkBlocksAhead" : {
-        "acomment" : "This test checks DAO hardfork transition at block 8. According to specification given list of accounts L from the prestate (except a94f5374fce5edbc8e2a8697c15331677e6ebf0b (caller)) should transfer it's balance at the begining of the block 8 to contract C = bf4ed7b27f1d666546e30d74d50d173d20bca754. Then all blocks from 8 to 17(included) must have extradata set to 0x64616f2d686172642d666f726b otherwise blocks considered incorrect. Additionally all uncles with numbers from 8 to 17(included) in this blocks should corespond to extradata requirenmets.",
+        "acomment" : "This test checks DAO hardfork transition at block 8. According to specification given list of accounts L from the prestate (except a94f5374fce5edbc8e2a8697c15331677e6ebf0b (caller)) should transfer it's balance at the beginning of the block 8 to contract C = bf4ed7b27f1d666546e30d74d50d173d20bca754. Then all blocks from 8 to 17(included) must have extradata set to 0x64616f2d686172642d666f726b otherwise blocks considered incorrect. Additionally all uncles with numbers from 8 to 17(included) in this blocks should corespond to extradata requirenmets.",
         "blocks" : [
             {
                 "blockHeader" : {
@@ -4516,7 +4516,7 @@
         }
     },
     "DaoTransactions_UncleExtradata" : {
-        "acomment" : "This test checks DAO hardfork transition at block 8. According to specification given list of accounts L from the prestate (except a94f5374fce5edbc8e2a8697c15331677e6ebf0b (caller)) should transfer it's balance at the begining of the block 8 to contract C = bf4ed7b27f1d666546e30d74d50d173d20bca754. Then all blocks from 8 to 17(included) must have extradata set to 0x64616f2d686172642d666f726b otherwise blocks considered incorrect. Additionally all uncles with numbers from 8 to 17(included) in this blocks should corespond to extradata requirenmets.",
+        "acomment" : "This test checks DAO hardfork transition at block 8. According to specification given list of accounts L from the prestate (except a94f5374fce5edbc8e2a8697c15331677e6ebf0b (caller)) should transfer it's balance at the beginning of the block 8 to contract C = bf4ed7b27f1d666546e30d74d50d173d20bca754. Then all blocks from 8 to 17(included) must have extradata set to 0x64616f2d686172642d666f726b otherwise blocks considered incorrect. Additionally all uncles with numbers from 8 to 17(included) in this blocks should corespond to extradata requirenmets.",
         "blocks" : [
             {
                 "blockHeader" : {

@@ -22,10 +22,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 // failPow is a non-validating proof of work implementation, that returns true
@@ -60,7 +61,7 @@ func TestPowVerification(t *testing.T) {
 	var (
 		testdb, _ = ethdb.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
-		blocks, _ = GenerateChain(nil, genesis, testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -115,7 +116,7 @@ func testPowConcurrentVerification(t *testing.T, threads int) {
 	var (
 		testdb, _ = ethdb.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
-		blocks, _ = GenerateChain(nil, genesis, testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -186,7 +187,7 @@ func testPowConcurrentAbortion(t *testing.T, threads int) {
 	var (
 		testdb, _ = ethdb.NewMemDatabase()
 		genesis   = GenesisBlockForTesting(testdb, common.Address{}, new(big.Int))
-		blocks, _ = GenerateChain(nil, genesis, testdb, 1024, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, testdb, 1024, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {

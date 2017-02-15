@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,18 +27,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/internal/jsre"
-	"github.com/expanse-project/go-expanse/internal/web3ext"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/internal/jsre"
+	"github.com/expanse-org/go-expanse/internal/web3ext"
+	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"
 )
 
 var (
-	passwordRegexp = regexp.MustCompile("personal.[nus]")
-	onlyWhitespace = regexp.MustCompile("^\\s*$")
-	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
+	passwordRegexp = regexp.MustCompile(`personal.[nus]`)
+	onlyWhitespace = regexp.MustCompile(`^\s*$`)
+	exit           = regexp.MustCompile(`^\s*exit\s*;*\s*$`)
 )
 
 // HistoryFile is the file within the data directory to store input scrollback.
@@ -52,7 +52,7 @@ const DefaultPrompt = "> "
 type Config struct {
 	DataDir  string       // Data directory to store the console history at
 	DocRoot  string       // Filesystem path from where to load JavaScript files from
-	Client   rpc.Client   // RPC client to execute Ethereum requests through
+	Client   *rpc.Client  // RPC client to execute Ethereum requests through
 	Prompt   string       // Input prompt prefix string (defaults to DefaultPrompt)
 	Prompter UserPrompter // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
 	Printer  io.Writer    // Output writer to serialize any display strings to (defaults to os.Stdout)
@@ -63,7 +63,7 @@ type Config struct {
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   rpc.Client   // RPC client to execute Ethereum requests through
+	client   *rpc.Client  // RPC client to execute Ethereum requests through
 	jsre     *jsre.JSRE   // JavaScript runtime environment running the interpreter
 	prompt   string       // Input prompt prefix string
 	prompter UserPrompter // Input prompter to allow interactive user feedback
@@ -137,9 +137,13 @@ func (c *Console) init(preload []string) error {
 			continue // manually mapped or ignore
 		}
 		if file, ok := web3ext.Modules[api]; ok {
+			// Load our extension for the module.
 			if err = c.jsre.Compile(fmt.Sprintf("%s.js", api), file); err != nil {
 				return fmt.Errorf("%s.js: %v", api, err)
 			}
+			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
+		} else if obj, err := c.jsre.Run("web3." + api); err == nil && obj.IsObject() {
+			// Enable web3.js built-in extension if available.
 			flatten += fmt.Sprintf("var %s = web3.%s; ", api, api)
 		}
 	}
@@ -156,10 +160,9 @@ func (c *Console) init(preload []string) error {
 		if err != nil {
 			return err
 		}
-		// Override the unlockAccount and newAccount methods since these require user interaction.
-		// Assign the jeth.unlockAccount and jeth.newAccount in the Console the original web3 callbacks.
-		// These will be called by the jeth.* methods after they got the password from the user and send
-		// the original web3 request to the backend.
+		// Override the unlockAccount, newAccount and sign methods since these require user interaction.
+		// Assign these method in the Console the original web3 callbacks. These will be called by the jeth.*
+		// methods after they got the password from the user and send the original web3 request to the backend.
 		if obj := personal.Object(); obj != nil { // make sure the personal api is enabled over the interface
 			if _, err = c.jsre.Run(`jeth.unlockAccount = personal.unlockAccount;`); err != nil {
 				return fmt.Errorf("personal.unlockAccount: %v", err)
@@ -167,8 +170,12 @@ func (c *Console) init(preload []string) error {
 			if _, err = c.jsre.Run(`jeth.newAccount = personal.newAccount;`); err != nil {
 				return fmt.Errorf("personal.newAccount: %v", err)
 			}
+			if _, err = c.jsre.Run(`jeth.sign = personal.sign;`); err != nil {
+				return fmt.Errorf("personal.sign: %v", err)
+			}
 			obj.Set("unlockAccount", bridge.UnlockAccount)
 			obj.Set("newAccount", bridge.NewAccount)
+			obj.Set("sign", bridge.Sign)
 		}
 	}
 	// The admin.sleep and admin.sleepBlocks are offered by the console and not by the RPC layer.
@@ -223,8 +230,8 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	}
 	// Chunck data to relevant part for autocompletion
 	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
-	start := 0
-	for start = pos - 1; start > 0; start-- {
+	start := pos - 1
+	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including te dot)
 		if line[start] == '.' || (line[start] >= 'a' && line[start] <= 'z') || (line[start] >= 'A' && line[start] <= 'Z') {
 			continue
@@ -241,11 +248,11 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	return line[:start], c.jsre.CompleteKeywords(line[start:pos]), line[pos:]
 }
 
-// Welcome show summary of current  instance and some metadata about the
+// Welcome show summary of current Gexp instance and some metadata about the
 // console's available modules.
 func (c *Console) Welcome() {
-	// Print some generic  metadata
-	fmt.Fprintf(c.printer, "Welcome to the  JavaScript console!\n\n")
+	// Print some generic Gexp metadata
+	fmt.Fprintf(c.printer, "Welcome to the Gexp JavaScript console!\n\n")
 	c.jsre.Run(`
 		console.log("instance: " + web3.version.node);
 		console.log("coinbase: " + eth.coinbase);
@@ -272,10 +279,7 @@ func (c *Console) Evaluate(statement string) error {
 			fmt.Fprintf(c.printer, "[native] error: %v\n", r)
 		}
 	}()
-	if err := c.jsre.Evaluate(statement, c.printer); err != nil {
-		return err
-	}
-	return nil
+	return c.jsre.Evaluate(statement, c.printer)
 }
 
 // Interactive starts an interactive user session, where input is propted from

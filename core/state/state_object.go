@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -22,12 +22,12 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/rlp"
-	"github.com/expanse-project/go-expanse/trie"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/trie"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -87,8 +87,14 @@ type StateObject struct {
 	// during the "update" phase of the state transition.
 	dirtyCode bool // true if the code was updated
 	suicided  bool
+	touched   bool
 	deleted   bool
 	onDirty   func(addr common.Address) // Callback method to mark a state object newly dirty
+}
+
+// empty returns whether the account is considered empty.
+func (s *StateObject) empty() bool {
+	return s.data.Nonce == 0 && s.data.Balance.BitLen() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -134,12 +140,24 @@ func (self *StateObject) markSuicided() {
 	}
 }
 
+func (c *StateObject) touch() {
+	c.db.journal = append(c.db.journal, touchChange{
+		account: &c.address,
+		prev:    c.touched,
+	})
+	if c.onDirty != nil {
+		c.onDirty(c.Address())
+		c.onDirty = nil
+	}
+	c.touched = true
+}
+
 func (c *StateObject) getTrie(db trie.Database) *trie.SecureTrie {
 	if c.trie == nil {
 		var err error
-		c.trie, err = trie.NewSecure(c.data.Root, db)
+		c.trie, err = trie.NewSecure(c.data.Root, db, 0)
 		if err != nil {
-			c.trie, _ = trie.NewSecure(common.Hash{}, db)
+			c.trie, _ = trie.NewSecure(common.Hash{}, db, 0)
 			c.setError(fmt.Errorf("can't create storage trie: %v", err))
 		}
 	}
@@ -221,8 +239,16 @@ func (self *StateObject) CommitTrie(db trie.Database, dbw trie.DatabaseWriter) e
 	return err
 }
 
+// AddBalance removes amount from c's balance.
+// It is used to add funds to the destination account of a transfer.
 func (c *StateObject) AddBalance(amount *big.Int) {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
 	if amount.Cmp(common.Big0) == 0 {
+		if c.empty() {
+			c.touch()
+		}
+
 		return
 	}
 	c.SetBalance(new(big.Int).Add(c.Balance(), amount))
@@ -232,6 +258,8 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 	}
 }
 
+// SubBalance removes amount from c's balance.
+// It is used to remove funds from the origin account of a transfer.
 func (c *StateObject) SubBalance(amount *big.Int) {
 	if amount.Cmp(common.Big0) == 0 {
 		return
@@ -260,7 +288,7 @@ func (self *StateObject) setBalance(amount *big.Int) {
 }
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
-func (c *StateObject) ReturnGas(gas, price *big.Int) {}
+func (c *StateObject) ReturnGas(gas *big.Int) {}
 
 func (self *StateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *StateObject {
 	stateObject := newObject(db, self.address, self.data, onDirty)

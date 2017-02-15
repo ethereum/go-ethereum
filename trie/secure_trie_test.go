@@ -22,14 +22,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 func newEmptySecure() *SecureTrie {
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db)
+	trie, _ := NewSecure(common.Hash{}, db, 0)
 	return trie
 }
 
@@ -37,7 +37,7 @@ func newEmptySecure() *SecureTrie {
 func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db)
+	trie, _ := NewSecure(common.Hash{}, db, 0)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)

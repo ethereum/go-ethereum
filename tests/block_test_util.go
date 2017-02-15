@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
@@ -26,16 +26,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/expanse-project/ethash"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/ethereum/ethash"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // Block Test JSON Format
@@ -104,7 +106,7 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTestWithReader(homesteadBlock, daoForkBlock *big.Int, r io.Reader, skipTests []string) error {
+func RunBlockTestWithReader(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, r io.Reader, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJson(r, &btjs); err != nil {
 		return err
@@ -115,13 +117,13 @@ func RunBlockTestWithReader(homesteadBlock, daoForkBlock *big.Int, r io.Reader, 
 		return err
 	}
 
-	if err := runBlockTests(homesteadBlock, daoForkBlock, bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RunBlockTest(homesteadBlock, daoForkBlock *big.Int, file string, skipTests []string) error {
+func RunBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, file string, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJsonFile(file, &btjs); err != nil {
 		return err
@@ -131,25 +133,25 @@ func RunBlockTest(homesteadBlock, daoForkBlock *big.Int, file string, skipTests 
 	if err != nil {
 		return err
 	}
-	if err := runBlockTests(homesteadBlock, daoForkBlock, bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runBlockTests(homesteadBlock, daoForkBlock *big.Int, bt map[string]*BlockTest, skipTests []string) error {
+func runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, bt map[string]*BlockTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
 	for name, test := range bt {
-		if skipTest[name] {
+		if skipTest[name] /*|| name != "CallingCanonicalContractFromFork_CALLCODE"*/ {
 			glog.Infoln("Skipping block test", name)
 			continue
 		}
 		// test the block
-		if err := runBlockTest(homesteadBlock, daoForkBlock, test); err != nil {
+		if err := runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
 		glog.Infoln("Block test passed: ", name)
@@ -158,20 +160,20 @@ func runBlockTests(homesteadBlock, daoForkBlock *big.Int, bt map[string]*BlockTe
 	return nil
 }
 
-func runBlockTest(homesteadBlock, daoForkBlock *big.Int, test *BlockTest) error {
+func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *BlockTest) error {
 	// import pre accounts & construct test genesis block & state root
 	db, _ := ethdb.NewMemDatabase()
 	if _, err := test.InsertPreState(db); err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	core.WriteTd(db, test.Genesis.Hash(), test.Genesis.Difficulty())
+	core.WriteTd(db, test.Genesis.Hash(), 0, test.Genesis.Difficulty())
 	core.WriteBlock(db, test.Genesis)
 	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
 	core.WriteHeadBlockHash(db, test.Genesis.Hash())
 	evmux := new(event.TypeMux)
-	config := &core.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true}
-	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux)
+	config := &params.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true, EIP150Block: gasPriceFork}
+	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux, vm.Config{})
 	if err != nil {
 		return err
 	}
@@ -206,7 +208,6 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	for addrString, acct := range t.preAccounts {
 		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
 		if err != nil {
@@ -229,7 +230,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 		}
 	}
 
-	root, err := statedb.Commit()
+	root, err := statedb.Commit(false)
 	if err != nil {
 		return nil, fmt.Errorf("error writing state: %v", err)
 	}
@@ -239,7 +240,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 	return statedb, nil
 }
 
-/* See https://github.com/expanse-project/tests/wiki/Blockchain-Tests-II
+/* See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
 
    Whether a block is valid or not is a bit subtle, it's defined by presence of
    blockHeader, transactions and uncleHeaders fields. If they are missing, the block is
@@ -358,7 +359,6 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 
 	expectedTimestamp := mustConvertBigInt(h.Timestamp, 16)
 	if expectedTimestamp.Cmp(h2.Time) != 0 {
-
 		return fmt.Errorf("Timestamp: want: %v have: %v", expectedTimestamp, h2.Time)
 	}
 
@@ -415,7 +415,7 @@ func (test *BlockTest) ValidateImportedHeaders(cm *core.BlockChain, validBlocks 
 	// block-by-block, so we can only validate imported headers after
 	// all blocks have been processed by ChainManager, as they may not
 	// be part of the longest chain until last block is imported.
-	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlock(b.Header().ParentHash) {
+	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
 		bHash := common.Bytes2Hex(b.Hash().Bytes()) // hex without 0x prefix
 		if err := validateHeader(bmap[bHash].BlockHeader, b.Header()); err != nil {
 			return fmt.Errorf("Imported block header validation failed: %v", err)
@@ -553,9 +553,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 // Nothing to see here, please move along...
 func prepInt(base int, s string) string {
 	if base == 16 {
-		if strings.HasPrefix(s, "0x") {
-			s = s[2:]
-		}
+		s = strings.TrimPrefix(s, "0x")
 		if len(s) == 0 {
 			s = "00"
 		}

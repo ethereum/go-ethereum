@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package discover
 
@@ -34,63 +34,13 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 func init() {
 	spew.Config.DisableMethods = true
-}
-
-// This test checks that isPacketTooBig correctly identifies
-// errors that result from receiving a UDP packet larger
-// than the supplied receive buffer.
-func TestIsPacketTooBig(t *testing.T) {
-	listener, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer listener.Close()
-	sender, err := net.Dial("udp", listener.LocalAddr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sender.Close()
-
-	sendN := 1800
-	recvN := 300
-	for i := 0; i < 20; i++ {
-		go func() {
-			buf := make([]byte, sendN)
-			for i := range buf {
-				buf[i] = byte(i)
-			}
-			sender.Write(buf)
-		}()
-
-		buf := make([]byte, recvN)
-		listener.SetDeadline(time.Now().Add(1 * time.Second))
-		n, _, err := listener.ReadFrom(buf)
-		if err != nil {
-			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
-				continue
-			}
-			if !isPacketTooBig(err) {
-				t.Fatal("unexpected read error:", spew.Sdump(err))
-			}
-			continue
-		}
-		if n != recvN {
-			t.Fatalf("short read: %d, want %d", n, recvN)
-		}
-		for i := range buf {
-			if buf[i] != byte(i) {
-				t.Fatalf("error in pattern")
-				break
-			}
-		}
-	}
 }
 
 // shared test variables
@@ -118,9 +68,9 @@ func newUDPTest(t *testing.T) *udpTest {
 		pipe:       newpipe(),
 		localkey:   newkey(),
 		remotekey:  newkey(),
-		remoteaddr: &net.UDPAddr{IP: net.IP{1, 2, 3, 4}, Port: 42786},
+		remoteaddr: &net.UDPAddr{IP: net.IP{10, 0, 1, 99}, Port: 42786},
 	}
-	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "")
+	test.table, test.udp, _ = newUDP(test.localkey, test.pipe, nil, "", nil)
 	return test
 }
 
@@ -284,7 +234,7 @@ func TestUDP_findnode(t *testing.T) {
 	defer test.table.Close()
 
 	// put a few nodes into the table. their exact
-	// distribution shouldn't matter much, altough we need to
+	// distribution shouldn't matter much, although we need to
 	// take care not to overflow any bucket.
 	targetHash := crypto.Keccak256Hash(testTarget[:])
 	nodes := &nodesByDistance{target: targetHash}
@@ -349,7 +299,7 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	list := []*Node{
 		MustParseNode("enode://ba85011c70bcc5c04d8607d3a0ed29aa6179c092cbdda10d5d32684fb33ed01bd94f588ca8f91ac48318087dcb02eaf36773a7a453f0eedd6742af668097b29c@10.0.1.16:42786?discport=30304"),
 		MustParseNode("enode://81fa361d25f157cd421c60dcc28d8dac5ef6a89476633339c5df30287474520caca09627da18543d9079b5b288698b542d56167aa5c09111e55acdbbdf2ef799@10.0.1.16:42786"),
-		MustParseNode("enode://9bffefd833d53fac8e652415f4973bee289e8b1a5c6c4cbe70abf817ce8a64cee11b823b66a987f51aaa9fba0d6a91b3e6bf0d5a5d1042de8e9eeea057b217f8@10.0.1.36:42787?discport=17"),
+		MustParseNode("enode://9bffefd833d53fac8e652415f4973bee289e8b1a5c6c4cbe70abf817ce8a64cee11b823b66a987f51aaa9fba0d6a91b3e6bf0d5a5d1042de8e9eeea057b217f8@10.0.1.36:30301?discport=17"),
 		MustParseNode("enode://1b5b4aa662d7cb44a7221bfba67302590b643028197a7d5214790f3bac7aaa4a3241be9e83c09cf1f6c69d007c634faae3dc1b1221793e8446c0b3a09de65960@10.0.1.16:42786"),
 	}
 	rpclist := make([]rpcNode, len(list))
@@ -362,8 +312,9 @@ func TestUDP_findnodeMultiReply(t *testing.T) {
 	// check that the sent neighbors are all returned by findnode
 	select {
 	case result := <-resultc:
-		if !reflect.DeepEqual(result, list) {
-			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, list)
+		want := append(list[:2], list[3:]...)
+		if !reflect.DeepEqual(result, want) {
+			t.Errorf("neighbors mismatch:\n  got:  %v\n  want: %v", result, want)
 		}
 	case err := <-errc:
 		t.Errorf("findnode error: %v", err)
@@ -423,7 +374,7 @@ func TestUDP_successfulPing(t *testing.T) {
 		if n.ID != rid {
 			t.Errorf("node has wrong ID: got %v, want %v", n.ID, rid)
 		}
-		if !bytes.Equal(n.IP, test.remoteaddr.IP) {
+		if !n.IP.Equal(test.remoteaddr.IP) {
 			t.Errorf("node has wrong IP: got %v, want: %v", n.IP, test.remoteaddr.IP)
 		}
 		if int(n.UDP) != test.remoteaddr.Port {

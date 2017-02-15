@@ -12,6 +12,6 @@ keypair:            christoph
 ip_access_range:    0.0.0.0/0
 
 
-project_description: https://github.com/expanse-project/tests
+project_description: https://github.com/expanse-org/tests
 
 total_no_instances: 3

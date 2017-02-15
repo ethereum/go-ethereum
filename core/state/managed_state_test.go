@@ -1,26 +1,26 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
 import (
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 var addr = common.BytesToAddress([]byte("test"))
@@ -52,7 +52,7 @@ func TestRemove(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -68,7 +68,7 @@ func TestReuse(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -84,16 +84,16 @@ func TestReuse(t *testing.T) {
 func TestRemoteNonceChange(t *testing.T) {
 	ms, account := create()
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
-	nonce := ms.NewNonce(addr)
+	ms.NewNonce(addr)
 
 	ms.StateDB.stateObjects[addr].data.Nonce = 200
-	nonce = ms.NewNonce(addr)
+	nonce := ms.NewNonce(addr)
 	if nonce != 200 {
-		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+		t.Error("expected nonce after remote update to be", 200, "got", nonce)
 	}
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
@@ -101,7 +101,7 @@ func TestRemoteNonceChange(t *testing.T) {
 	ms.StateDB.stateObjects[addr].data.Nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
-		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+		t.Error("expected nonce after remote update to be", 204, "got", nonce)
 	}
 }
 

@@ -1,22 +1,23 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
 import (
+	"compress/bzip2"
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
@@ -26,13 +27,13 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 // WriteGenesisBlock writes the genesis block to the database as block number 0
@@ -43,7 +44,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 
 	var genesis struct {
-		ChainConfig *ChainConfig `json:"config"`
+		ChainConfig *params.ChainConfig `json:"config"`
 		Nonce       string
 		Timestamp   string
 		ParentHash  string
@@ -56,6 +57,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 			Code    string
 			Storage map[string]string
 			Balance string
+			Nonce   string
 		}
 	}
 
@@ -68,12 +70,13 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	for addr, account := range genesis.Alloc {
 		address := common.HexToAddress(addr)
 		statedb.AddBalance(address, common.String2Big(account.Balance))
-		statedb.SetCode(address, common.Hex2Bytes(account.Code))
+		statedb.SetCode(address, common.FromHex(account.Code))
+		statedb.SetNonce(address, common.String2Big(account.Nonce).Uint64())
 		for key, value := range account.Storage {
 			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
 		}
 	}
-	root, stateBatch := statedb.CommitBatch()
+	root, stateBatch := statedb.CommitBatch(false)
 
 	difficulty := common.String2Big(genesis.Difficulty)
 	block := types.NewBlock(&types.Header{
@@ -88,7 +91,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 		Root:       root,
 	}, nil, nil, nil)
 
-	if block := GetBlock(chainDb, block.Hash()); block != nil {
+	if block := GetBlock(chainDb, block.Hash(), block.NumberU64()); block != nil {
 		glog.V(logger.Info).Infoln("Genesis block already in chain. Writing canonical number")
 		err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
@@ -100,13 +103,13 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := stateBatch.Write(); err != nil {
 		return nil, fmt.Errorf("cannot write state: %v", err)
 	}
-	if err := WriteTd(chainDb, block.Hash(), difficulty); err != nil {
+	if err := WriteTd(chainDb, block.Hash(), block.NumberU64(), difficulty); err != nil {
 		return nil, err
 	}
 	if err := WriteBlock(chainDb, block); err != nil {
 		return nil, err
 	}
-	if err := WriteBlockReceipts(chainDb, block.Hash(), nil); err != nil {
+	if err := WriteBlockReceipts(chainDb, block.Hash(), block.NumberU64(), nil); err != nil {
 		return nil, err
 	}
 	if err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64()); err != nil {
@@ -128,7 +131,7 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	statedb, _ := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
-	root, err := statedb.Commit()
+	root, err := statedb.Commit(false)
 	if err != nil {
 		panic(fmt.Sprintf("cannot write state: %v", err))
 	}
@@ -165,22 +168,16 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 	return block
 }
 
-// WriteDefaultGenesisBlock assembles the official Expanse genesis block and
+// WriteDefaultGenesisBlock assembles the official Ethereum genesis block and
 // writes it - along with all associated state - into a chain database.
 func WriteDefaultGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
 	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultGenesisBlock()))
 }
 
-// WriteTestNetGenesisBlock assembles the Morden test network genesis block and
+// WriteTestNetGenesisBlock assembles the test network genesis block and
 // writes it - along with all associated state - into a chain database.
 func WriteTestNetGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
-	return WriteGenesisBlock(chainDb, strings.NewReader(TestNetGenesisBlock()))
-}
-
-// WriteOlympicGenesisBlock assembles the Olympic genesis block and writes it
-// along with all associated state into a chain database.
-func WriteOlympicGenesisBlock(db ethdb.Database) (*types.Block, error) {
-	return WriteGenesisBlock(db, strings.NewReader(OlympicGenesisBlock()))
+	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultTestnetGenesisBlock()))
 }
 
 // DefaultGenesisBlock assembles a JSON string representing the default Ethereum
@@ -197,48 +194,23 @@ func DefaultGenesisBlock() string {
 	return string(blob)
 }
 
-// OlympicGenesisBlock assembles a JSON string representing the Olympic genesis
-// block.
-func OlympicGenesisBlock() string {
-	return fmt.Sprintf(`{
-		"nonce":"0x%x",
-		"gasLimit":"0x%x",
-		"difficulty":"0x%x",
-		"alloc": {
-			"0000000000000000000000000000000000000001": {"balance": "1"},
-			"0000000000000000000000000000000000000002": {"balance": "1"},
-			"0000000000000000000000000000000000000003": {"balance": "1"},
-			"0000000000000000000000000000000000000004": {"balance": "1"},
-			"dbdbdb2cbd23b783741e8d7fcf51e459b497e4a6": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"e4157b34ea9615cfbde6b4fda419828124b70c78": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"b9c015918bdaba24b4ff057a92a3873d6eb201be": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"6c386a4b26f73c802f34673f7248bb118f97424a": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"cd2a3d9f938e13cd947ec05abc7fe734df8dd826": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"2ef47100e0787b915105fd5e3f4ff6752079d5cb": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"e6716f9544a56c530d868e4bfbacb172315bdead": {"balance": "1606938044258990275541962092341162602522202993782792835301376"},
-			"1a26338f0d905e295fccb71fa9ea849ffa12aaf4": {"balance": "1606938044258990275541962092341162602522202993782792835301376"}
-		}
-	}`, types.EncodeNonce(42), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes())
+// DefaultTestnetGenesisBlock assembles a JSON string representing the default Ethereum
+// test network genesis block.
+func DefaultTestnetGenesisBlock() string {
+	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultTestnetGenesisBlock)))
+	blob, err := ioutil.ReadAll(reader)
+	if err != nil {
+		panic(fmt.Sprintf("failed to load default genesis: %v", err))
+	}
+	return string(blob)
 }
 
-// TestNetGenesisBlock assembles a JSON string representing the Morden test net
-// genenis block.
-func TestNetGenesisBlock() string {
-	return fmt.Sprintf(`{
-		"nonce": "0x%x",
-		"difficulty": "0x20000",
-		"mixhash": "0x00000000000000000000000000000000000000647572616c65787365646c6578",
-		"coinbase": "0x0000000000000000000000000000000000000000",
-		"timestamp": "0x00",
-		"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-		"extraData": "0x",
-		"gasLimit": "0x2FEFD8",
-		"alloc": {
-			"0000000000000000000000000000000000000001": { "balance": "1" },
-			"0000000000000000000000000000000000000002": { "balance": "1" },
-			"0000000000000000000000000000000000000003": { "balance": "1" },
-			"0000000000000000000000000000000000000004": { "balance": "1" },
-			"102e61f5d8f9bc71d0ad4a084df4e65e05ce0e1c": { "balance": "1606938044258990275541962092341162602522202993782792835301376" }
-		}
-	}`, types.EncodeNonce(0x6d6f7264656e))
+// DevGenesisBlock assembles a JSON string representing a local dev genesis block.
+func DevGenesisBlock() string {
+	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultDevnetGenesisBlock)))
+	blob, err := ioutil.ReadAll(reader)
+	if err != nil {
+		panic(fmt.Sprintf("failed to load dev genesis: %v", err))
+	}
+	return string(blob)
 }

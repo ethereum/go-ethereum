@@ -1,30 +1,28 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package common
 
 import (
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
-	"strings"
+
+	"github.com/expanse-org/go-expanse/common/hexutil"
 )
 
 const (
@@ -32,10 +30,11 @@ const (
 	AddressLength = 20
 )
 
-var hashJsonLengthErr = errors.New("common: unmarshalJSON failed: hash must be exactly 32 bytes")
-
 type (
-	Hash    [HashLength]byte
+	// Hash represents the 32 byte Keccak256 hash of arbitrary data.
+	Hash [HashLength]byte
+
+	// Address represents the 20 byte address of an Ethereum account.
 	Address [AddressLength]byte
 )
 
@@ -54,30 +53,16 @@ func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
-func (h Hash) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
+func (h Hash) Hex() string   { return hexutil.Encode(h[:]) }
 
 // UnmarshalJSON parses a hash in its hex from to a hash.
 func (h *Hash) UnmarshalJSON(input []byte) error {
-	length := len(input)
-	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
-		input = input[1 : length-1]
-	}
-	// strip "0x" for length check
-	if len(input) > 1 && strings.ToLower(string(input[:2])) == "0x" {
-		input = input[2:]
-	}
-
-	// validate the length of the input hash
-	if len(input) != HashLength*2 {
-		return hashJsonLengthErr
-	}
-	h.SetBytes(FromHex(string(input)))
-	return nil
+	return hexutil.UnmarshalJSON("Hash", input, h[:])
 }
 
 // Serialize given hash to JSON
 func (h Hash) MarshalJSON() ([]byte, error) {
-	return json.Marshal(h.Hex())
+	return hexutil.Bytes(h[:]).MarshalJSON()
 }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
@@ -123,7 +108,7 @@ func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
 func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
-// Expanse address or not.
+// Ethereum address or not.
 func IsHexAddress(s string) bool {
 	if len(s) == 2+2*AddressLength && IsHex(s) {
 		return true
@@ -139,7 +124,7 @@ func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return Bytes2Big(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
-func (a Address) Hex() string   { return "0x" + Bytes2Hex(a[:]) }
+func (a Address) Hex() string   { return hexutil.Encode(a[:]) }
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {
@@ -161,34 +146,12 @@ func (a *Address) Set(other Address) {
 
 // Serialize given address to JSON
 func (a Address) MarshalJSON() ([]byte, error) {
-	return json.Marshal(a.Hex())
+	return hexutil.Bytes(a[:]).MarshalJSON()
 }
 
 // Parse address from raw json data
-func (a *Address) UnmarshalJSON(data []byte) error {
-	if len(data) > 2 && data[0] == '"' && data[len(data)-1] == '"' {
-		data = data[1 : len(data)-1]
-	}
-
-	if len(data) > 2 && data[0] == '0' && data[1] == 'x' {
-		data = data[2:]
-	}
-
-	if len(data) != 2*AddressLength {
-		return fmt.Errorf("Invalid address length, expected %d got %d bytes", 2*AddressLength, len(data))
-	}
-
-	n, err := hex.Decode(a[:], data)
-	if err != nil {
-		return err
-	}
-
-	if n != AddressLength {
-		return fmt.Errorf("Invalid address")
-	}
-
-	a.Set(HexToAddress(string(data)))
-	return nil
+func (a *Address) UnmarshalJSON(input []byte) error {
+	return hexutil.UnmarshalJSON("Address", input, a[:])
 }
 
 // PP Pretty Prints a byte slice in the following format:

@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of go-expanse.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-expanse is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-expanse is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package utils
 
@@ -23,8 +23,6 @@ import (
 	"os/user"
 	"path"
 	"strings"
-
-	"gopkg.in/urfave/cli.v1"
 )
 
 // Custom type which is registered in the flags library which cli uses for
@@ -44,9 +42,8 @@ func (self *DirectoryString) Set(value string) error {
 }
 
 // Custom cli.Flag type which expand the received string to an absolute path.
-// e.g. ~/.expanse -> /home/username/.expanse
+// e.g. ~/.ethereum -> /home/username/.ethereum
 type DirectoryFlag struct {
-	cli.GenericFlag
 	Name   string
 	Value  DirectoryString
 	Usage  string
@@ -54,15 +51,10 @@ type DirectoryFlag struct {
 }
 
 func (self DirectoryFlag) String() string {
-	var fmtString string
-	fmtString = "%s %v\t%v"
-
+	fmtString := "%s %v\t%v"
 	if len(self.Value.Value) > 0 {
 		fmtString = "%s \"%v\"\t%v"
-	} else {
-		fmtString = "%s %v\t%v"
 	}
-
 	return withEnvHint(self.EnvVar, fmt.Sprintf(fmtString, prefixedNames(self.Name), self.Value.Value, self.Usage))
 }
 
@@ -122,7 +114,7 @@ func withEnvHint(envVar, str string) string {
 	return str + envText
 }
 
-func (self DirectoryFlag) getName() string {
+func (self DirectoryFlag) GetName() string {
 	return self.Name
 }
 
@@ -137,9 +129,19 @@ func (self *DirectoryFlag) Set(value string) {
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
-		if user, err := user.Current(); err == nil {
-			p = user.HomeDir + p[1:]
+		if home := homeDir(); home != "" {
+			p = home + p[1:]
 		}
 	}
 	return path.Clean(os.ExpandEnv(p))
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
 }

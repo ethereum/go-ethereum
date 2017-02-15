@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package state provides a caching layer atop the Expanse state trie.
+// Package state provides a caching layer atop the Ethereum state trie.
 package state
 
 import (
@@ -23,25 +23,25 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/rlp"
-	"github.com/expanse-project/go-expanse/trie"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/trie"
 	lru "github.com/hashicorp/golang-lru"
 )
 
-// The starting nonce determines the default nonce when new accounts are being
-// created.
-var StartingNonce uint64
+// Trie cache generation limit after which to evic trie nodes from memory.
+var MaxTrieCacheGen = uint16(120)
 
 const (
-	// Number of past tries to keep. The arbitrarily chosen value here
-	// is max uncle depth + 1.
-	maxTrieCacheLength = 8
+	// Number of past tries to keep. This value is chosen such that
+	// reasonable chain reorg depths will hit an existing trie.
+	maxPastTries = 12
 
 	// Number of codehash->size associations to keep.
 	codeSizeCacheSize = 100000
@@ -72,8 +72,10 @@ type StateDB struct {
 
 	thash, bhash common.Hash
 	txIndex      int
-	logs         map[common.Hash]vm.Logs
+	logs         map[common.Hash][]*types.Log
 	logSize      uint
+
+	preimages map[common.Hash][]byte
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -86,7 +88,7 @@ type StateDB struct {
 
 // Create a new state from a given trie
 func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
-	tr, err := trie.NewSecure(root, db)
+	tr, err := trie.NewSecure(root, db, MaxTrieCacheGen)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +100,8 @@ func New(root common.Hash, db ethdb.Database) (*StateDB, error) {
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
-		logs:              make(map[common.Hash]vm.Logs),
+		logs:              make(map[common.Hash][]*types.Log),
+		preimages:         make(map[common.Hash][]byte),
 	}, nil
 }
 
@@ -119,7 +122,8 @@ func (self *StateDB) New(root common.Hash) (*StateDB, error) {
 		stateObjects:      make(map[common.Address]*StateObject),
 		stateObjectsDirty: make(map[common.Address]struct{}),
 		refund:            new(big.Int),
-		logs:              make(map[common.Hash]vm.Logs),
+		logs:              make(map[common.Hash][]*types.Log),
+		preimages:         make(map[common.Hash][]byte),
 	}, nil
 }
 
@@ -139,8 +143,9 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.thash = common.Hash{}
 	self.bhash = common.Hash{}
 	self.txIndex = 0
-	self.logs = make(map[common.Hash]vm.Logs)
+	self.logs = make(map[common.Hash][]*types.Log)
 	self.logSize = 0
+	self.preimages = make(map[common.Hash][]byte)
 	self.clearJournalAndRefund()
 
 	return nil
@@ -155,14 +160,14 @@ func (self *StateDB) openTrie(root common.Hash) (*trie.SecureTrie, error) {
 			return &tr, nil
 		}
 	}
-	return trie.NewSecure(root, self.db)
+	return trie.NewSecure(root, self.db, MaxTrieCacheGen)
 }
 
 func (self *StateDB) pushTrie(t *trie.SecureTrie) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	if len(self.pastTries) >= maxTrieCacheLength {
+	if len(self.pastTries) >= maxPastTries {
 		copy(self.pastTries, self.pastTries[1:])
 		self.pastTries[len(self.pastTries)-1] = t
 	} else {
@@ -176,7 +181,7 @@ func (self *StateDB) StartRecord(thash, bhash common.Hash, ti int) {
 	self.txIndex = ti
 }
 
-func (self *StateDB) AddLog(log *vm.Log) {
+func (self *StateDB) AddLog(log *types.Log) {
 	self.journal = append(self.journal, addLogChange{txhash: self.thash})
 
 	log.TxHash = self.thash
@@ -187,16 +192,31 @@ func (self *StateDB) AddLog(log *vm.Log) {
 	self.logSize++
 }
 
-func (self *StateDB) GetLogs(hash common.Hash) vm.Logs {
+func (self *StateDB) GetLogs(hash common.Hash) []*types.Log {
 	return self.logs[hash]
 }
 
-func (self *StateDB) Logs() vm.Logs {
-	var logs vm.Logs
+func (self *StateDB) Logs() []*types.Log {
+	var logs []*types.Log
 	for _, lgs := range self.logs {
 		logs = append(logs, lgs...)
 	}
 	return logs
+}
+
+// AddPreimage records a SHA3 preimage seen by the VM.
+func (self *StateDB) AddPreimage(hash common.Hash, preimage []byte) {
+	if _, ok := self.preimages[hash]; !ok {
+		self.journal = append(self.journal, addPreimageChange{hash: hash})
+		pi := make([]byte, len(preimage))
+		copy(pi, preimage)
+		self.preimages[hash] = pi
+	}
+}
+
+// Preimages returns a list of SHA3 preimages that have been submitted.
+func (self *StateDB) Preimages() map[common.Hash][]byte {
+	return self.preimages
 }
 
 func (self *StateDB) AddRefund(gas *big.Int) {
@@ -208,6 +228,13 @@ func (self *StateDB) AddRefund(gas *big.Int) {
 // Notably this also returns true for suicided accounts.
 func (self *StateDB) Exist(addr common.Address) bool {
 	return self.GetStateObject(addr) != nil
+}
+
+// Empty returns whether the state object is either non-existent
+// or empty according to the EIP161 specification (balance = nonce = code = 0)
+func (self *StateDB) Empty(addr common.Address) bool {
+	so := self.GetStateObject(addr)
+	return so == nil || so.empty()
 }
 
 func (self *StateDB) GetAccount(addr common.Address) vm.Account {
@@ -229,7 +256,7 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 		return stateObject.Nonce()
 	}
 
-	return StartingNonce
+	return 0
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
@@ -287,10 +314,19 @@ func (self *StateDB) HasSuicided(addr common.Address) bool {
  * SETTERS
  */
 
+// AddBalance adds amount to the account associated with addr
 func (self *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddBalance(amount)
+	}
+}
+
+// SubBalance subtracts amount from the account associated with addr
+func (self *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubBalance(amount)
 	}
 }
 
@@ -413,7 +449,7 @@ func (self *StateDB) MarkStateObjectDirty(addr common.Address) {
 func (self *StateDB) createObject(addr common.Address) (newobj, prev *StateObject) {
 	prev = self.GetStateObject(addr)
 	newobj = newObject(self, addr, Account{}, self.MarkStateObjectDirty)
-	newobj.setNonce(StartingNonce) // sets the object to dirty
+	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
 		if glog.V(logger.Core) {
 			glog.Infof("(+) %x\n", addr)
@@ -459,17 +495,21 @@ func (self *StateDB) Copy() *StateDB {
 		stateObjects:      make(map[common.Address]*StateObject, len(self.stateObjectsDirty)),
 		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
 		refund:            new(big.Int).Set(self.refund),
-		logs:              make(map[common.Hash]vm.Logs, len(self.logs)),
+		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:           self.logSize,
+		preimages:         make(map[common.Hash][]byte),
 	}
-	// Copy the dirty states and logs
-	for addr, _ := range self.stateObjectsDirty {
+	// Copy the dirty states, logs, and preimages
+	for addr := range self.stateObjectsDirty {
 		state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state, state.MarkStateObjectDirty)
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
 	for hash, logs := range self.logs {
-		state.logs[hash] = make(vm.Logs, len(logs))
+		state.logs[hash] = make([]*types.Log, len(logs))
 		copy(state.logs[hash], logs)
+	}
+	for hash, preimage := range self.preimages {
+		state.preimages[hash] = preimage
 	}
 	return state
 }
@@ -513,10 +553,10 @@ func (self *StateDB) GetRefund() *big.Int {
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot() common.Hash {
-	for addr, _ := range s.stateObjectsDirty {
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+	for addr := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
-		if stateObject.suicided {
+		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
 			s.deleteStateObject(stateObject)
 		} else {
 			stateObject.updateRoot(s.db)
@@ -537,7 +577,7 @@ func (s *StateDB) DeleteSuicides() {
 	// Reset refund so that any used-gas calculations can use this method.
 	s.clearJournalAndRefund()
 
-	for addr, _ := range s.stateObjectsDirty {
+	for addr := range s.stateObjectsDirty {
 		stateObject := s.stateObjects[addr]
 
 		// If the object has been removed by a suicide
@@ -550,17 +590,19 @@ func (s *StateDB) DeleteSuicides() {
 }
 
 // Commit commits all state changes to the database.
-func (s *StateDB) Commit() (root common.Hash, err error) {
-	root, batch := s.CommitBatch()
+func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
+	root, batch := s.CommitBatch(deleteEmptyObjects)
 	return root, batch.Write()
 }
 
 // CommitBatch commits all state changes to a write batch but does not
 // execute the batch. It is used to validate state changes against
 // the root hash stored in a block.
-func (s *StateDB) CommitBatch() (root common.Hash, batch ethdb.Batch) {
+func (s *StateDB) CommitBatch(deleteEmptyObjects bool) (root common.Hash, batch ethdb.Batch) {
 	batch = s.db.NewBatch()
-	root, _ = s.commit(batch)
+	root, _ = s.commit(batch, deleteEmptyObjects)
+
+	glog.V(logger.Debug).Infof("Trie cache stats: %d misses, %d unloads", trie.CacheMisses(), trie.CacheUnloads())
 	return root, batch
 }
 
@@ -570,16 +612,18 @@ func (s *StateDB) clearJournalAndRefund() {
 	s.refund = new(big.Int)
 }
 
-func (s *StateDB) commit(dbw trie.DatabaseWriter) (root common.Hash, err error) {
+func (s *StateDB) commit(dbw trie.DatabaseWriter, deleteEmptyObjects bool) (root common.Hash, err error) {
 	defer s.clearJournalAndRefund()
 
 	// Commit objects to the trie.
 	for addr, stateObject := range s.stateObjects {
-		if stateObject.suicided {
+		_, isDirty := s.stateObjectsDirty[addr]
+		switch {
+		case stateObject.suicided || (isDirty && deleteEmptyObjects && stateObject.empty()):
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
 			s.deleteStateObject(stateObject)
-		} else if _, ok := s.stateObjectsDirty[addr]; ok {
+		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
 				if err := dbw.Put(stateObject.CodeHash(), stateObject.code); err != nil {

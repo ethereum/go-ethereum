@@ -22,10 +22,10 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/accounts/keystore"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 // NewTransactor is a utility method to easily create a transaction signer from
@@ -35,7 +35,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := accounts.DecryptKey(json, passphrase)
+	key, err := keystore.DecryptKey(json, passphrase)
 	if err != nil {
 		return nil, err
 	}
@@ -48,15 +48,15 @@ func NewKeyedTransactor(key *ecdsa.PrivateKey) *TransactOpts {
 	keyAddr := crypto.PubkeyToAddress(key.PublicKey)
 	return &TransactOpts{
 		From: keyAddr,
-		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
+		Signer: func(signer types.Signer, address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != keyAddr {
 				return nil, errors.New("not authorized to sign this account")
 			}
-			signature, err := crypto.Sign(tx.SigHash().Bytes(), key)
+			signature, err := crypto.Sign(signer.Hash(tx).Bytes(), key)
 			if err != nil {
 				return nil, err
 			}
-			return tx.WithSignature(signature)
+			return tx.WithSignature(signer, signature)
 		},
 	}
 }

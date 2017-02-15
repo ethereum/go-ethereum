@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"
@@ -72,14 +72,6 @@ func BenchmarkSha3(b *testing.B) {
 	fmt.Println(amount, ":", time.Since(start))
 }
 
-func Test0Key(t *testing.T) {
-	key := common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")
-	_, err := secp256k1.GeneratePubKey(key)
-	if err == nil {
-		t.Errorf("expected error due to zero privkey")
-	}
-}
-
 func TestSign(t *testing.T) {
 	key, _ := HexToECDSA(testPrivHex)
 	addr := common.HexToAddress(testAddrHex)
@@ -93,7 +85,8 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Errorf("ECRecover error: %s", err)
 	}
-	recoveredAddr := PubkeyToAddress(*ToECDSAPub(recoveredPub))
+	pubKey := ToECDSAPub(recoveredPub)
+	recoveredAddr := PubkeyToAddress(*pubKey)
 	if addr != recoveredAddr {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr)
 	}
@@ -107,17 +100,13 @@ func TestSign(t *testing.T) {
 	if addr != recoveredAddr2 {
 		t.Errorf("Address mismatch: want: %x have: %x", addr, recoveredAddr2)
 	}
-
 }
 
 func TestInvalidSign(t *testing.T) {
-	_, err := Sign(make([]byte, 1), nil)
-	if err == nil {
+	if _, err := Sign(make([]byte, 1), nil); err == nil {
 		t.Errorf("expected sign with hash 1 byte to error")
 	}
-
-	_, err = Sign(make([]byte, 33), nil)
-	if err == nil {
+	if _, err := Sign(make([]byte, 33), nil); err == nil {
 		t.Errorf("expected sign with hash 33 byte to error")
 	}
 }
@@ -184,43 +173,43 @@ func TestValidateSignatureValues(t *testing.T) {
 	secp256k1nMinus1 := new(big.Int).Sub(secp256k1.N, common.Big1)
 
 	// correct v,r,s
-	check(true, 27, one, one)
-	check(true, 28, one, one)
+	check(true, 0, one, one)
+	check(true, 1, one, one)
 	// incorrect v, correct r,s,
-	check(false, 30, one, one)
-	check(false, 26, one, one)
+	check(false, 2, one, one)
+	check(false, 3, one, one)
 
 	// incorrect v, combinations of incorrect/correct r,s at lower limit
+	check(false, 2, zero, zero)
+	check(false, 2, zero, one)
+	check(false, 2, one, zero)
+	check(false, 2, one, one)
+
+	// correct v for any combination of incorrect r,s
 	check(false, 0, zero, zero)
 	check(false, 0, zero, one)
 	check(false, 0, one, zero)
-	check(false, 0, one, one)
 
-	// correct v for any combination of incorrect r,s
-	check(false, 27, zero, zero)
-	check(false, 27, zero, one)
-	check(false, 27, one, zero)
-
-	check(false, 28, zero, zero)
-	check(false, 28, zero, one)
-	check(false, 28, one, zero)
+	check(false, 1, zero, zero)
+	check(false, 1, zero, one)
+	check(false, 1, one, zero)
 
 	// correct sig with max r,s
-	check(true, 27, secp256k1nMinus1, secp256k1nMinus1)
+	check(true, 0, secp256k1nMinus1, secp256k1nMinus1)
 	// correct v, combinations of incorrect r,s at upper limit
-	check(false, 27, secp256k1.N, secp256k1nMinus1)
-	check(false, 27, secp256k1nMinus1, secp256k1.N)
-	check(false, 27, secp256k1.N, secp256k1.N)
+	check(false, 0, secp256k1.N, secp256k1nMinus1)
+	check(false, 0, secp256k1nMinus1, secp256k1.N)
+	check(false, 0, secp256k1.N, secp256k1.N)
 
 	// current callers ensures r,s cannot be negative, but let's test for that too
 	// as crypto package could be used stand-alone
-	check(false, 27, minusOne, one)
-	check(false, 27, one, minusOne)
+	check(false, 0, minusOne, one)
+	check(false, 0, one, minusOne)
 }
 
 func checkhash(t *testing.T, name string, f func([]byte) []byte, msg, exp []byte) {
 	sum := f(msg)
-	if bytes.Compare(exp, sum) != 0 {
+	if !bytes.Equal(exp, sum) {
 		t.Fatalf("hash %s mismatch: want: %x have: %x", name, exp, sum)
 	}
 }

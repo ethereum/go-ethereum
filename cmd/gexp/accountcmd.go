@@ -20,41 +20,49 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/console"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/accounts/keystore"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/console"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 )
 
 var (
 	walletCommand = cli.Command{
-		Name:  "wallet",
-		Usage: "ethereum presale wallet",
-		Subcommands: []cli.Command{
-			{
-				Action: importWallet,
-				Name:   "import",
-				Usage:  "import expanse presale wallet",
-			},
-		},
+		Name:      "wallet",
+		Usage:     "Manage Expanse presale wallets",
+		ArgsUsage: "",
+		Category:  "ACCOUNT COMMANDS",
 		Description: `
-
-    get wallet import /path/to/my/presale.wallet
+    gexp wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
 passwordfile as argument containing the wallet password in plaintext.
 
-`}
+`,
+		Subcommands: []cli.Command{
+			{
+				Action:    importWallet,
+				Name:      "import",
+				Usage:     "Import Expanse presale wallet",
+				ArgsUsage: "<keyFile>",
+				Description: `
+TODO: Please write this
+`,
+			},
+		},
+	}
 	accountCommand = cli.Command{
-		Action: accountList,
-		Name:   "account",
-		Usage:  "manage accounts",
+		Action:    accountList,
+		Name:      "account",
+		Usage:     "Manage accounts",
+		ArgsUsage: "",
+		Category:  "ACCOUNT COMMANDS",
 		Description: `
-
 Manage accounts lets you create new accounts, list all existing accounts,
 import a private key into a new account.
 
@@ -86,17 +94,21 @@ And finally. DO NOT FORGET YOUR PASSWORD.
 `,
 		Subcommands: []cli.Command{
 			{
-				Action: accountList,
-				Name:   "list",
-				Usage:  "print account addresses",
+				Action:    accountList,
+				Name:      "list",
+				Usage:     "Print account addresses",
+				ArgsUsage: " ",
+				Description: `
+TODO: Please write this
+`,
 			},
 			{
-				Action: accountCreate,
-				Name:   "new",
-				Usage:  "create a new account",
+				Action:    accountCreate,
+				Name:      "new",
+				Usage:     "Create a new account",
+				ArgsUsage: " ",
 				Description: `
-
-    expanse account new
+    gexp account new
 
 Creates a new account. Prints the address.
 
@@ -106,19 +118,19 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    expanse --password <passwordfile> account new
+    gexp --password <passwordfile> account new
 
 Note, this is meant to be used for testing only, it is a bad idea to save your
 password to file or expose in any other way.
-					`,
+`,
 			},
 			{
-				Action: accountUpdate,
-				Name:   "update",
-				Usage:  "update an existing account",
+				Action:    accountUpdate,
+				Name:      "update",
+				Usage:     "Update an existing account",
+				ArgsUsage: "<address>",
 				Description: `
-
-    expanse account update <address>
+    gexp account update <address>
 
 Update an existing account.
 
@@ -130,19 +142,19 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    expanse --password <passwordfile> account update <address>
+    gexp --password <passwordfile> account update <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
-					`,
+`,
 			},
 			{
-				Action: accountImport,
-				Name:   "import",
-				Usage:  "import a private key into a new account",
+				Action:    accountImport,
+				Name:      "import",
+				Usage:     "Import a private key into a new account",
+				ArgsUsage: "<keyFile>",
 				Description: `
-
-    expanse account import <keyfile>
+    gexp account import <keyfile>
 
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
@@ -155,45 +167,50 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the -password flag:
 
-    expanse --password <passwordfile> account import <keyfile>
+    gexp --password <passwordfile> account import <keyfile>
 
 Note:
 As you can directly copy your encrypted accounts to another expanse instance,
 this import mechanism is not needed when you transfer an account between
 nodes.
-					`,
+`,
 			},
 		},
 	}
 )
 
 func accountList(ctx *cli.Context) error {
-	accman := utils.MakeAccountManager(ctx)
-	for i, acct := range accman.Accounts() {
-		fmt.Printf("Account #%d: {%x} %s\n", i, acct.Address, acct.File)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+
+	var index int
+	for _, wallet := range stack.AccountManager().Wallets() {
+		for _, account := range wallet.Accounts() {
+			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
+			index++
+		}
 	}
 	return nil
 }
 
 // tries unlocking the specified account a few times.
-func unlockAccount(ctx *cli.Context, accman *accounts.Manager, address string, i int, passwords []string) (accounts.Account, string) {
-	account, err := utils.MakeAddress(accman, address)
+func unlockAccount(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
+	account, err := utils.MakeAddress(ks, address)
 	if err != nil {
 		utils.Fatalf("Could not list accounts: %v", err)
 	}
 	for trials := 0; trials < 3; trials++ {
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
 		password := getPassPhrase(prompt, false, i, passwords)
-		err = accman.Unlock(account, password)
+		err = ks.Unlock(account, password)
 		if err == nil {
 			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
 			return account, password
 		}
-		if err, ok := err.(*accounts.AmbiguousAddrError); ok {
+		if err, ok := err.(*keystore.AmbiguousAddrError); ok {
 			glog.V(logger.Info).Infof("Unlocked account %x", account.Address)
-			return ambiguousAddrRecovery(accman, err, password), password
+			return ambiguousAddrRecovery(ks, err, password), password
 		}
-		if err != accounts.ErrDecrypt {
+		if err != keystore.ErrDecrypt {
 			// No need to prompt again if the error is not decryption-related.
 			break
 		}
@@ -233,15 +250,15 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	return password
 }
 
-func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrError, auth string) accounts.Account {
+func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrError, auth string) accounts.Account {
 	fmt.Printf("Multiple key files exist for address %x:\n", err.Addr)
 	for _, a := range err.Matches {
-		fmt.Println("  ", a.File)
+		fmt.Println("  ", a.URL)
 	}
 	fmt.Println("Testing your passphrase against all of them...")
 	var match *accounts.Account
 	for _, a := range err.Matches {
-		if err := am.Unlock(a, auth); err == nil {
+		if err := ks.Unlock(a, auth); err == nil {
 			match = &a
 			break
 		}
@@ -249,11 +266,11 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 	if match == nil {
 		utils.Fatalf("None of the listed files could be unlocked.")
 	}
-	fmt.Printf("Your passphrase unlocked %s\n", match.File)
+	fmt.Printf("Your passphrase unlocked %s\n", match.URL)
 	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
 	for _, a := range err.Matches {
 		if a != *match {
-			fmt.Println("  ", a.File)
+			fmt.Println("  ", a.URL)
 		}
 	}
 	return *match
@@ -261,10 +278,11 @@ func ambiguousAddrRecovery(am *accounts.Manager, err *accounts.AmbiguousAddrErro
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	account, err := accman.NewAccount(password)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	account, err := ks.NewAccount(password)
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
@@ -278,11 +296,12 @@ func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	account, oldPassword := unlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
+	account, oldPassword := unlockAccount(ctx, ks, ctx.Args().First(), 0, nil)
 	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
-	if err := accman.Update(account, oldPassword, newPassword); err != nil {
+	if err := ks.Update(account, oldPassword, newPassword); err != nil {
 		utils.Fatalf("Could not update the account: %v", err)
 	}
 	return nil
@@ -298,10 +317,11 @@ func importWallet(ctx *cli.Context) error {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
-	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	acct, err := ks.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
@@ -316,11 +336,13 @@ func accountImport(ctx *cli.Context) error {
 	}
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
-		utils.Fatalf("keyfile must be given as argument")
+		utils.Fatalf("Failed to load the private key: %v", err)
 	}
-	accman := utils.MakeAccountManager(ctx)
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-	acct, err := accman.ImportECDSA(key, passphrase)
+
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}

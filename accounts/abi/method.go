@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 // Callable method given a `Name` and whether the method is a constant.

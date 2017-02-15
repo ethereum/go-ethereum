@@ -23,10 +23,10 @@ dependencies:
 
 test:
   override:
-    # Build  and move into a known folder
-    - make geth
-    - cp ./build/bin/geth $HOME/geth
+    # Build Gexp and move into a known folder
+    - make gexp
+    - cp ./build/bin/gexp $HOME/gexp
 
     # Run hive and move all generated logs into the public artifacts folder
-    - (cd ~/.go_workspace/src/github.com/karalabe/hive && hive --docker-noshell --client=go-ethereum:local --override=$HOME/geth --test=. --sim=.)
+    - (cd ~/.go_workspace/src/github.com/karalabe/hive && hive --docker-noshell --client=go-expanse:local --override=$HOME/gexp --test=. --sim=.)
     - cp -r ~/.go_workspace/src/github.com/karalabe/hive/workspace/logs/* $CIRCLE_ARTIFACTS

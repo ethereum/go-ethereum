@@ -19,12 +19,13 @@ package core
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 var (
@@ -37,32 +38,32 @@ var (
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *ChainConfig
+	config *params.ChainConfig
 	bc     *BlockChain
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *ChainConfig, bc *BlockChain) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, bc *BlockChain) *StateProcessor {
 	return &StateProcessor{
 		config: config,
 		bc:     bc,
 	}
 }
 
-// Process processes the state changes according to the Expanse rules by running
+// Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
 //
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, vm.Logs, *big.Int, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, *big.Int, error) {
 	var (
 		receipts     types.Receipts
 		totalUsedGas = big.NewInt(0)
 		err          error
 		header       = block.Header()
-		allLogs      vm.Logs
+		allLogs      []*types.Log
 		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
 	// Mutate the the block and state according to any hard-fork specs
@@ -71,13 +72,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
+		//fmt.Println("tx:", i)
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-		receipt, logs, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
+		receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
-			return nil, nil, totalUsedGas, err
+			return nil, nil, nil, err
 		}
 		receipts = append(receipts, receipt)
-		allLogs = append(allLogs, logs...)
+		allLogs = append(allLogs, receipt.Logs...)
 	}
 	AccumulateRewards(statedb, header, block.Uncles())
 
@@ -85,33 +87,44 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
-// and uses the input parameters for its environment.
-//
-// ApplyTransactions returns the generated receipts and vm logs during the
-// execution of the state transition phase.
-func ApplyTransaction(config *ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, vm.Logs, *big.Int, error) {
-	_, gas, err := ApplyMessage(NewEnv(statedb, config, bc, tx, header, cfg), tx, gp)
+// and uses the input parameters for its environment. It returns the receipt
+// for the transaction, gas used and an error if the transaction failed,
+// indicating the block was invalid.
+func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *big.Int, cfg vm.Config) (*types.Receipt, *big.Int, error) {
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
+	}
+	// Create a new context to be used in the EVM environment
+	context := NewEVMContext(msg, header, bc)
+	// Create a new environment which holds all relevant information
+	// about the transaction and calling mechanisms.
+	vmenv := vm.NewEVM(context, statedb, config, cfg)
+	// Apply the transaction to the current state (included in the env)
+	_, gas, err := ApplyMessage(vmenv, msg, gp)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
-	receipt := types.NewReceipt(statedb.IntermediateRoot().Bytes(), usedGas)
+	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+	// based on the eip phase, we're passing wether the root touch-delete accounts.
+	receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
 	receipt.TxHash = tx.Hash()
 	receipt.GasUsed = new(big.Int).Set(gas)
-	if MessageCreatesContract(tx) {
-		from, _ := tx.From()
-		receipt.ContractAddress = crypto.CreateAddress(from, tx.Nonce())
+	// if the transaction created a contract, store the creation address in the receipt.
+	if msg.To() == nil {
+		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 	}
 
-	logs := statedb.GetLogs(tx.Hash())
-	receipt.Logs = logs
+	// Set the receipt logs and create a bloom for filtering
+	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	glog.V(logger.Debug).Infoln(receipt)
 
-	return receipt, logs, gas, err
+	return receipt, gas, err
 }
 
 // AccumulateRewards credits the coinbase of the given block with the

@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.
@@ -41,7 +41,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 	// Cross check the hashes and the database itself
-	for hash, _ := range hashes {
+	for hash := range hashes {
 		if _, err := db.Get(hash.Bytes()); err != nil {
 			t.Errorf("failed to retrieve reported node %x: %v", hash, err)
 		}

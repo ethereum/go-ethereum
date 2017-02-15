@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package miner implements Expanse block creation and mining.
+// Package miner implements Ethereum block creation and mining.
 package miner
 
 import (
@@ -22,37 +22,52 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/exp/downloader"
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/params"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
+// Backend wraps all methods required for mining.
+type Backend interface {
+	AccountManager() *accounts.Manager
+	BlockChain() *core.BlockChain
+	TxPool() *core.TxPool
+	ChainDb() ethdb.Database
+}
+
+// Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
 	mux *event.TypeMux
 
 	worker *worker
 
-	MinAcceptedGasPrice *big.Int
-
 	threads  int
 	coinbase common.Address
 	mining   int32
-	exp      core.Backend
+	eth      Backend
 	pow      pow.PoW
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 }
 
-func New(exp core.Backend, config *core.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
-	miner := &Miner{exp: exp, mux: mux, pow: pow, worker: newWorker(config, common.Address{}, exp), canStart: 1}
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, pow pow.PoW) *Miner {
+	miner := &Miner{
+		eth:      eth,
+		mux:      mux,
+		pow:      pow,
+		worker:   newWorker(config, common.Address{}, eth, mux),
+		canStart: 1,
+	}
 	go miner.update()
 
 	return miner
@@ -90,26 +105,28 @@ out:
 	}
 }
 
+func (m *Miner) GasPrice() *big.Int {
+	return new(big.Int).Set(m.worker.gasPrice)
+}
+
 func (m *Miner) SetGasPrice(price *big.Int) {
 	// FIXME block tests set a nil gas price. Quick dirty fix
 	if price == nil {
 		return
 	}
-
 	m.worker.setGasPrice(price)
 }
 
 func (self *Miner) Start(coinbase common.Address, threads int) {
 	atomic.StoreInt32(&self.shouldStart, 1)
-	self.threads = threads
-	self.worker.coinbase = coinbase
+	self.worker.setEtherbase(coinbase)
 	self.coinbase = coinbase
+	self.threads = threads
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
 		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
 		return
 	}
-
 	atomic.StoreInt32(&self.mining, 1)
 
 	for i := 0; i < threads; i++ {
@@ -117,9 +134,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 	}
 
 	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
-
 	self.worker.start()
-
 	self.worker.commitNewWork()
 }
 
@@ -156,17 +171,25 @@ func (self *Miner) HashRate() (tot int64) {
 }
 
 func (self *Miner) SetExtra(extra []byte) error {
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("Extra exceeds max length. %d > %v", len(extra), params.MaximumExtraDataSize)
 	}
-
-	self.worker.extra = extra
+	self.worker.setExtra(extra)
 	return nil
 }
 
 // Pending returns the currently pending block and associated state.
 func (self *Miner) Pending() (*types.Block, *state.StateDB) {
 	return self.worker.pending()
+}
+
+// PendingBlock returns the currently pending block.
+//
+// Note, to access both the pending block and the pending state
+// simultaneously, please use Pending(), as the pending state can
+// change between multiple method calls
+func (self *Miner) PendingBlock() *types.Block {
+	return self.worker.pendingBlock()
 }
 
 func (self *Miner) SetEtherbase(addr common.Address) {

@@ -21,11 +21,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/accounts/abi"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/accounts/abi"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 func TestDefaults(t *testing.T) {
@@ -39,8 +39,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.Time == nil {
 		t.Error("expected time to be non nil")
 	}
-	if cfg.GasLimit == nil {
-		t.Error("expected time to be non nil")
+	if cfg.GasLimit == 0 {
+		t.Error("didn't expect gaslimit to be zero")
 	}
 	if cfg.GasPrice == nil {
 		t.Error("expected time to be non nil")
@@ -56,7 +56,7 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-func TestEnvironment(t *testing.T) {
+func TestEVM(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("crashed with: %v", r)

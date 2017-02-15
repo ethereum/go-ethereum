@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 var (
@@ -76,7 +77,7 @@ func Env() Environment {
 
 // LocalEnv returns build environment metadata gathered from git.
 func LocalEnv() Environment {
-	env := applyEnvFlags(Environment{Name: "local", Repo: "expanse-project/go-expanse"})
+	env := applyEnvFlags(Environment{Name: "local", Repo: "expanse-org/go-expanse"})
 	if _, err := os.Stat(".git"); err != nil {
 		return env
 	}
@@ -88,9 +89,14 @@ func LocalEnv() Environment {
 			env.Branch = b
 		}
 	}
-	// Note that we don't get the current git tag. It would slow down
-	// builds and isn't used by anything.
+	if env.Tag == "" {
+		env.Tag = firstLine(RunGit("tag", "-l", "--points-at", "HEAD"))
+	}
 	return env
+}
+
+func firstLine(s string) string {
+	return strings.Split(s, "\n")[0]
 }
 
 func applyEnvFlags(env Environment) Environment {

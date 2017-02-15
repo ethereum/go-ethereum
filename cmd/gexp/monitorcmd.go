@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of go-expanse.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-expanse is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-expanse is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -21,14 +21,13 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
-	"sort"
-
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/gizak/termui"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -36,7 +35,7 @@ import (
 var (
 	monitorCommandAttachFlag = cli.StringFlag{
 		Name:  "attach",
-		Value: "ipc:" + node.DefaultIPCEndpoint(),
+		Value: node.DefaultIPCEndpoint(clientIdentifier),
 		Usage: "API endpoint to attach to",
 	}
 	monitorCommandRowsFlag = cli.IntFlag{
@@ -50,9 +49,11 @@ var (
 		Usage: "Refresh interval in seconds",
 	}
 	monitorCommand = cli.Command{
-		Action: monitor,
-		Name:   "monitor",
-		Usage:  `Gexp Monitor: node metrics monitoring and visualization`,
+		Action:    monitor,
+		Name:      "monitor",
+		Usage:     "Monitor and visualize node metrics",
+		ArgsUsage: " ",
+		Category:  "MONITOR COMMANDS",
 		Description: `
 The Gexp monitor is a tool to collect and visualize various internal metrics
 gathered by the node, supporting different chart types as well as the capacity
@@ -69,12 +70,12 @@ to display multiple metrics simultaneously.
 // monitor starts a terminal UI based monitoring tool for the requested metrics.
 func monitor(ctx *cli.Context) error {
 	var (
-		client rpc.Client
+		client *rpc.Client
 		err    error
 	)
-	// Attach to an Expanse node over IPC or RPC
+	// Attach to an Ethereum node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
-	if client, err = utils.NewRemoteRPCClientFromString(endpoint); err != nil {
+	if client, err = dialRPC(endpoint); err != nil {
 		utils.Fatalf("Unable to attach to gexp node: %v", err)
 	}
 	defer client.Close()
@@ -159,30 +160,10 @@ func monitor(ctx *cli.Context) error {
 
 // retrieveMetrics contacts the attached gexp node and retrieves the entire set
 // of collected system metrics.
-func retrieveMetrics(client rpc.Client) (map[string]interface{}, error) {
-	req := map[string]interface{}{
-		"id":      new(int64),
-		"method":  "debug_metrics",
-		"jsonrpc": "2.0",
-		"params":  []interface{}{true},
-	}
-
-	if err := client.Send(req); err != nil {
-		return nil, err
-	}
-
-	var res rpc.JSONSuccessResponse
-	if err := client.Recv(&res); err != nil {
-		return nil, err
-	}
-
-	if res.Result != nil {
-		if mets, ok := res.Result.(map[string]interface{}); ok {
-			return mets, nil
-		}
-	}
-
-	return nil, fmt.Errorf("unable to retrieve metrics")
+func retrieveMetrics(client *rpc.Client) (map[string]interface{}, error) {
+	var metrics map[string]interface{}
+	err := client.Call(&metrics, "debug_metrics", true)
+	return metrics, err
 }
 
 // resolveMetrics takes a list of input metric patterns, and resolves each to one
@@ -255,8 +236,9 @@ func expandMetrics(metrics map[string]interface{}, path string) []string {
 
 // fetchMetric iterates over the metrics map and retrieves a specific one.
 func fetchMetric(metrics map[string]interface{}, metric string) float64 {
-	parts, found := strings.Split(metric, "/"), true
+	parts := strings.Split(metric, "/")
 	for _, part := range parts[:len(parts)-1] {
+		var found bool
 		metrics, found = metrics[part].(map[string]interface{})
 		if !found {
 			return 0
@@ -270,7 +252,7 @@ func fetchMetric(metrics map[string]interface{}, metric string) float64 {
 
 // refreshCharts retrieves a next batch of metrics, and inserts all the new
 // values into the active datasets and charts
-func refreshCharts(client rpc.Client, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
+func refreshCharts(client *rpc.Client, metrics []string, data [][]float64, units []int, charts []*termui.LineChart, ctx *cli.Context, footer *termui.Par) (realign bool) {
 	values, err := retrieveMetrics(client)
 	for i, metric := range metrics {
 		if len(data) < 512 {

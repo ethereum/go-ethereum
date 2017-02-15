@@ -19,7 +19,7 @@ package abi
 import (
 	"reflect"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation
@@ -54,7 +54,7 @@ func packElement(t Type, reflectValue reflect.Value) []byte {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
 		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len())
-	case FixedBytesTy:
+	case FixedBytesTy, FunctionTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}

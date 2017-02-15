@@ -1,38 +1,36 @@
-// Copyright 2014 The go-ethereum Authors
-// Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // ContractRef is a reference to the contract's backing object
 type ContractRef interface {
-	ReturnGas(*big.Int, *big.Int)
 	Address() common.Address
 	Value() *big.Int
 	SetCode(common.Hash, []byte)
 	ForEachStorage(callback func(key, value common.Hash) bool)
 }
 
-// Contract represents an expanse contract in the state database. It contains
+// Contract represents an ethereum contract in the state database. It contains
 // the the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {
 	// CallerAddress is the result of the caller which initialised this
@@ -49,7 +47,8 @@ type Contract struct {
 	CodeAddr *common.Address
 	Input    []byte
 
-	value, Gas, UsedGas, Price *big.Int
+	Gas   uint64
+	value *big.Int
 
 	Args []byte
 
@@ -57,7 +56,7 @@ type Contract struct {
 }
 
 // NewContract returns a new contract environment for the execution of EVM.
-func NewContract(caller ContractRef, object ContractRef, value, gas, price *big.Int) *Contract {
+func NewContract(caller ContractRef, object ContractRef, value *big.Int, gas uint64) *Contract {
 	c := &Contract{CallerAddress: caller.Address(), caller: caller, self: object, Args: nil}
 
 	if parent, ok := caller.(*Contract); ok {
@@ -69,12 +68,8 @@ func NewContract(caller ContractRef, object ContractRef, value, gas, price *big.
 
 	// Gas should be a pointer so it can safely be reduced through the run
 	// This pointer will be off the state transition
-	c.Gas = gas //new(big.Int).Set(gas)
+	c.Gas = gas
 	c.value = new(big.Int).Set(value)
-	// In most cases price and value are pointers to transaction objects
-	// and we don't want the transaction's values to change.
-	c.Price = new(big.Int).Set(price)
-	c.UsedGas = new(big.Int)
 
 	return c
 }
@@ -111,27 +106,13 @@ func (c *Contract) Caller() common.Address {
 	return c.CallerAddress
 }
 
-// Finalise finalises the contract and returning any remaining gas to the original
-// caller.
-func (c *Contract) Finalise() {
-	// Return the remaining gas to the caller
-	c.caller.ReturnGas(c.Gas, c.Price)
-}
-
 // UseGas attempts the use gas and subtracts it and returns true on success
-func (c *Contract) UseGas(gas *big.Int) (ok bool) {
-	ok = useGas(c.Gas, gas)
-	if ok {
-		c.UsedGas.Add(c.UsedGas, gas)
+func (c *Contract) UseGas(gas uint64) (ok bool) {
+	if c.Gas < gas {
+		return false
 	}
-	return
-}
-
-// ReturnGas adds the given gas back to itself.
-func (c *Contract) ReturnGas(gas, price *big.Int) {
-	// Return the gas to the context
-	c.Gas.Add(c.Gas, gas)
-	c.UsedGas.Sub(c.UsedGas, gas)
+	c.Gas -= gas
+	return true
 }
 
 // Address returns the contracts address

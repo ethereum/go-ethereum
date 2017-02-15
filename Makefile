@@ -2,12 +2,11 @@
 # with Go source code. If you know what GOPATH is then you probably
 # don't need to bother with make.
 
-.PHONY: gexp gexp-cross evm all test clean
+.PHONY: gexp android ios gexp-cross evm all test clean
 .PHONY: gexp-linux gexp-linux-386 gexp-linux-amd64 gexp-linux-mips64 gexp-linux-mips64le
 .PHONY: gexp-linux-arm gexp-linux-arm-5 gexp-linux-arm-6 gexp-linux-arm-7 gexp-linux-arm64
 .PHONY: gexp-darwin gexp-darwin-386 gexp-darwin-amd64
 .PHONY: gexp-windows gexp-windows-386 gexp-windows-amd64
-.PHONY: gexp-android gexp-ios
 
 GOBIN = build/bin
 GO ?= latest
@@ -20,16 +19,26 @@ gexp:
 evm:
 	build/env.sh go run build/ci.go install ./cmd/evm
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/evm to start the evm."
+	@echo "Run \"$(GOBIN)/evm\" to start the evm."
 
 all:
 	build/env.sh go run build/ci.go install
+
+android:
+	build/env.sh go run build/ci.go aar --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/gexp.aar\" to use the library."
+
+ios:
+	build/env.sh go run build/ci.go xcode --local
+	@echo "Done building."
+	@echo "Import \"$(GOBIN)/Gexp.framework\" to use the library."
 
 test: all
 	build/env.sh go run build/ci.go test
 
 clean:
-	rm -fr build/_workspace/pkg/ Godeps/_workspace/pkg $(GOBIN)/*
+	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
 # Cross Compilation Targets (xgo)
 
@@ -112,13 +121,3 @@ gexp-windows-amd64:
 	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=windows/amd64 -v ./cmd/gexp
 	@echo "Windows amd64 cross compilation done:"
 	@ls -ld $(GOBIN)/gexp-windows-* | grep amd64
-
-gexp-android:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=android-21/aar -v ./cmd/gexp
-	@echo "Android cross compilation done:"
-	@ls -ld $(GOBIN)/gexp-android-*
-
-gexp-ios:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --dest=$(GOBIN) --targets=ios-7.0/framework -v ./cmd/gexp
-	@echo "iOS framework cross compilation done:"
-	@ls -ld $(GOBIN)/gexp-ios-*

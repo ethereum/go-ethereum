@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethdb
 
@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -37,18 +37,18 @@ import (
 
 var OpenFileLimit = 64
 
-// cacheRatio specifies how the total alloted cache is distributed between the
+// cacheRatio specifies how the total allotted cache is distributed between the
 // various system databases.
 var cacheRatio = map[string]float64{
-	"dapp":      0.0,
-	"chaindata": 1.0,
+	"chaindata":      1.0,
+	"lightchaindata": 1.0,
 }
 
-// handleRatio specifies how the total alloted file descriptors is distributed
+// handleRatio specifies how the total allotted file descriptors is distributed
 // between the various system databases.
 var handleRatio = map[string]float64{
-	"dapp":      0.0,
-	"chaindata": 1.0,
+	"chaindata":      1.0,
+	"lightchaindata": 1.0,
 }
 
 type LDBDatabase struct {
@@ -80,7 +80,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	glog.V(logger.Info).Infof("Alloted %dMB cache and %d file handles to %s", cache, handles, file)
+	glog.V(logger.Info).Infof("Allotted %dMB cache and %d file handles to %s", cache, handles, file)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
@@ -100,6 +100,11 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 		fn: file,
 		db: db,
 	}, nil
+}
+
+// Path returns the path to the database directory.
+func (db *LDBDatabase) Path() string {
+	return db.fn
 }
 
 // Put puts the given key / value to the queue
@@ -299,4 +304,56 @@ func (b *ldbBatch) Put(key, value []byte) error {
 
 func (b *ldbBatch) Write() error {
 	return b.db.Write(b.b, nil)
+}
+
+type table struct {
+	db     Database
+	prefix string
+}
+
+// NewTable returns a Database object that prefixes all keys with a given
+// string.
+func NewTable(db Database, prefix string) Database {
+	return &table{
+		db:     db,
+		prefix: prefix,
+	}
+}
+
+func (dt *table) Put(key []byte, value []byte) error {
+	return dt.db.Put(append([]byte(dt.prefix), key...), value)
+}
+
+func (dt *table) Get(key []byte) ([]byte, error) {
+	return dt.db.Get(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Delete(key []byte) error {
+	return dt.db.Delete(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Close() {
+	// Do nothing; don't close the underlying DB.
+}
+
+type tableBatch struct {
+	batch  Batch
+	prefix string
+}
+
+// NewTableBatch returns a Batch object which prefixes all keys with a given string.
+func NewTableBatch(db Database, prefix string) Batch {
+	return &tableBatch{db.NewBatch(), prefix}
+}
+
+func (dt *table) NewBatch() Batch {
+	return &tableBatch{dt.db.NewBatch(), dt.prefix}
+}
+
+func (tb *tableBatch) Put(key, value []byte) error {
+	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
+}
+
+func (tb *tableBatch) Write() error {
+	return tb.batch.Write()
 }

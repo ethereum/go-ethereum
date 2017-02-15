@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package common
 
@@ -27,7 +27,7 @@ func TestMisc(t *testing.T) {
 	c := []byte{1, 2, 3, 4}
 	z := BitTest(a, 1)
 
-	if z != true {
+	if !z {
 		t.Error("Expected true got", z)
 	}
 
@@ -79,11 +79,11 @@ func TestBigCopy(t *testing.T) {
 	z := BigToBytes(c, 16)
 	zbytes := []byte{232, 212, 165, 16, 0}
 
-	if bytes.Compare(y, ybytes) != 0 {
+	if !bytes.Equal(y, ybytes) {
 		t.Error("Got", ybytes)
 	}
 
-	if bytes.Compare(z, zbytes) != 0 {
+	if !bytes.Equal(z, zbytes) {
 		t.Error("Got", zbytes)
 	}
 }

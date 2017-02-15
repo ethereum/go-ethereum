@@ -1,26 +1,24 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package errs
 
 import (
 	"fmt"
 	"testing"
-
-	"github.com/expanse-project/go-expanse/logger"
 )
 
 func testErrors() *Errors {
@@ -29,14 +27,6 @@ func testErrors() *Errors {
 		Errors: map[int]string{
 			0: "zero",
 			1: "one",
-		},
-		Level: func(i int) (l logger.LogLevel) {
-			if i == 0 {
-				l = logger.ErrorLevel
-			} else {
-				l = logger.WarnLevel
-			}
-			return
 		},
 	}
 }
@@ -47,16 +37,5 @@ func TestErrorMessage(t *testing.T) {
 	exp := "[TEST] ERROR: zero: zero detail available"
 	if message != exp {
 		t.Errorf("error message incorrect. expected %v, got %v", exp, message)
-	}
-}
-
-func TestErrorSeverity(t *testing.T) {
-	err0 := testErrors().New(0, "zero detail")
-	if !err0.Fatal() {
-		t.Errorf("error should be fatal")
-	}
-	err1 := testErrors().New(1, "one detail")
-	if err1.Fatal() {
-		t.Errorf("error should not be fatal")
 	}
 }

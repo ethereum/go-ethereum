@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of go-expanse.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-expanse is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-expanse is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// exptest executes Expanse JSON tests.
+// ethtest executes Ethereum JSON tests.
 package main
 
 import (
@@ -25,11 +25,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/params"
-	"github.com/expanse-project/go-expanse/tests"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/tests"
 	"gopkg.in/urfave/cli.v1"
-
 )
 
 var (
@@ -50,7 +49,7 @@ var (
 		Name:   "file",
 		Usage:  "Test file or directory. Directories are searched for .json files 1 level deep",
 		Value:  defaultDir,
-		EnvVar: "EXPANSE_TEST_PATH",
+		EnvVar: "ETHEREUM_TEST_PATH",
 	}
 	ContinueOnErrorFlag = cli.BoolFlag{
 		Name:  "continue",
@@ -75,12 +74,13 @@ func runTestWithReader(test string, r io.Reader) error {
 	var err error
 	switch strings.ToLower(test) {
 	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
-		err = tests.RunBlockTestWithReader(params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, r, skipTests)
+		err = tests.RunBlockTestWithReader(params.MainNetHomesteadBlock, params.MainNetDAOForkBlock, params.MainNetHomesteadGasRepriceBlock, r, skipTests)
 	case "st", "state", "statetest", "statetests":
-		rs := tests.RuleSet{HomesteadBlock: params.MainNetHomesteadBlock, DAOForkBlock: params.MainNetDAOForkBlock, DAOForkSupport: true}
+		rs := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock, DAOForkBlock: params.MainNetDAOForkBlock, DAOForkSupport: true, EIP150Block: params.MainNetHomesteadGasRepriceBlock}
 		err = tests.RunStateTestWithReader(rs, r, skipTests)
 	case "tx", "transactiontest", "transactiontests":
-		err = tests.RunTransactionTestsWithReader(r, skipTests)
+		rs := &params.ChainConfig{HomesteadBlock: params.MainNetHomesteadBlock, DAOForkBlock: params.MainNetDAOForkBlock, DAOForkSupport: true, EIP150Block: params.MainNetHomesteadGasRepriceBlock}
+		err = tests.RunTransactionTestsWithReader(rs, r, skipTests)
 	case "vm", "vmtest", "vmtests":
 		err = tests.RunVmTestWithReader(r, skipTests)
 	case "rlp", "rlptest", "rlptests":
@@ -88,12 +88,7 @@ func runTestWithReader(test string, r io.Reader) error {
 	default:
 		err = fmt.Errorf("Invalid test type specified: %v", test)
 	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func getFiles(path string) ([]string, error) {
@@ -205,7 +200,7 @@ func main() {
 	glog.SetToStderr(true)
 
 	app := cli.NewApp()
-	app.Name = "exptest"
+	app.Name = "ethtest"
 	app.Usage = "go-expanse test interface"
 	app.Action = setupApp
 	app.Version = "0.2.0"

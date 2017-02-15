@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package discover
 
@@ -30,12 +30,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
 )
 
-const nodeIDBits = 512
+const NodeIDBits = 512
 
 // Node represents a host on the network.
 // The fields of Node may not be modified.
@@ -137,9 +137,9 @@ var incompleteNodeURL = regexp.MustCompile("(?i)^(?:enode://)?([0-9a-f]+)$")
 //
 // In the following example, the node URL describes
 // a node with IP address 10.3.58.6, TCP listening port 42786
-// and UDP discovery port 42787.
+// and UDP discovery port 30301.
 //
-//    enode://<hex node id>@10.3.58.6:42786?discport=42787
+//    enode://<hex node id>@10.3.58.6:42786?discport=30301
 func ParseNode(rawurl string) (*Node, error) {
 	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
 		id, err := HexID(m[1])
@@ -209,7 +209,7 @@ func MustParseNode(rawurl string) *Node {
 
 // NodeID is a unique identifier for each node.
 // The node identifier is a marshaled elliptic curve public key.
-type NodeID [nodeIDBits / 8]byte
+type NodeID [NodeIDBits / 8]byte
 
 // NodeID prints as a long hexadecimal number.
 func (n NodeID) String() string {
@@ -224,11 +224,8 @@ func (n NodeID) GoString() string {
 // HexID converts a hex string to a NodeID.
 // The string may be prefixed with 0x.
 func HexID(in string) (NodeID, error) {
-	if strings.HasPrefix(in, "0x") {
-		in = in[2:]
-	}
 	var id NodeID
-	b, err := hex.DecodeString(in)
+	b, err := hex.DecodeString(strings.TrimPrefix(in, "0x"))
 	if err != nil {
 		return id, err
 	} else if len(b) != len(id) {

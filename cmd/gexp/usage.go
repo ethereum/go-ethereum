@@ -1,5 +1,5 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-expanse.
+// This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains the gexp command usage template and generator.
 
@@ -21,14 +21,16 @@ package main
 import (
 	"io"
 
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/internal/debug"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/internal/debug"
 	"gopkg.in/urfave/cli.v1"
 )
 
 // AppHelpTemplate is the test template for the default, global app help topic.
 var AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
+
+   Copyright 2013-2016 The go-ethereum / go-expanse Authors
 
 USAGE:
    {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
@@ -60,19 +62,26 @@ type flagGroup struct {
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flagGroup{
 	{
-		Name: "EXPANSE",
+		Name: "ETHEREUM",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			utils.NetworkIdFlag,
-			utils.OlympicFlag,
 			utils.TestNetFlag,
 			utils.DevModeFlag,
 			utils.IdentityFlag,
 			utils.FastSyncFlag,
+			utils.LightModeFlag,
+			utils.LightServFlag,
+			utils.LightPeersFlag,
 			utils.LightKDFFlag,
+		},
+	},
+	{
+		Name: "PERFORMANCE TUNING",
+		Flags: []cli.Flag{
 			utils.CacheFlag,
-			utils.BlockchainVersionFlag,
+			utils.TrieCacheGenFlag,
 		},
 	},
 	{
@@ -112,6 +121,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MaxPendingPeersFlag,
 			utils.NATFlag,
 			utils.NoDiscoverFlag,
+			utils.DiscoveryV5Flag,
 			utils.NodeKeyFileFlag,
 			utils.NodeKeyHexFlag,
 		},
@@ -121,7 +131,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.MiningGPUFlag,
 			utils.AutoDAGFlag,
 			utils.EtherbaseFlag,
 			utils.TargetGasLimitFlag,
@@ -146,11 +155,13 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.VMEnableJitFlag,
 			utils.VMForceJitFlag,
 			utils.VMJitCacheFlag,
+			utils.VMEnableDebugFlag,
 		},
 	},
 	{
 		Name: "LOGGING AND DEBUGGING",
 		Flags: append([]cli.Flag{
+			utils.EthStatsURLFlag,
 			utils.MetricsEnabledFlag,
 			utils.FakePoWFlag,
 		}, debug.Flags...),
@@ -159,7 +170,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Name: "EXPERIMENTAL",
 		Flags: []cli.Flag{
 			utils.WhisperEnabledFlag,
-			utils.NatspecEnabledFlag,
 		},
 	},
 	{

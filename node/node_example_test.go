@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/p2p/discover"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // SampleService is a trivial network service that can be attached to a node for
@@ -41,10 +41,10 @@ func (s *SampleService) APIs() []rpc.API           { return nil }
 func (s *SampleService) Start(*p2p.Server) error   { fmt.Println("Service starting..."); return nil }
 func (s *SampleService) Stop() error               { fmt.Println("Service stopping..."); return nil }
 
-func ExampleUsage() {
+func ExampleService() {
 	// Create a network node to run protocols with the default values. The below list
 	// is only used to display each of the configuration options. All of these could
-	// have been ommited if the default behavior is desired.
+	// have been omitted if the default behavior is desired.
 	nodeConfig := &node.Config{
 		DataDir:         "",                 // Empty uses ephemeral storage
 		PrivateKey:      nil,                // Nil generates a node key on the fly

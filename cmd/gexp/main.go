@@ -1,147 +1,87 @@
-﻿// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of go-expanse.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-expanse is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-expanse is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// gexp is the official command-line client for Expanse.
+// gexp is the official command-line client for Ethereum.
 package main
 
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/expanse-project/ethash"
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/console"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/exp"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/internal/debug"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/metrics"
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/params"
-	"github.com/expanse-project/go-expanse/release"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/accounts/keystore"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/console"
+	"github.com/expanse-org/go-expanse/contracts/release"
+	"github.com/expanse-org/go-expanse/eth"
+	"github.com/expanse-org/go-expanse/ethclient"
+	"github.com/expanse-org/go-expanse/internal/debug"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/metrics"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
 const (
-	clientIdentifier = "Gexp"   // Client identifier to advertise over the network
-	versionMajor     = 1        // Major version component of the current release
-	versionMinor     = 4        // Minor version component of the current release
-	versionPatch     = 17       // Patch version component of the current release
-	versionMeta      = "stable" // Version metadata to append to the version string
-	versionOracle = "0x926d69cc3bbf81d52cba6886d788df007a15a3cd" // Expanse address of the Gexp release oracle
+	clientIdentifier = "gexp" // Client identifier to advertise over the network
 )
 
 var (
-	gitCommit string         // Git SHA1 commit hash of the release (set via linker flags)
-	verString string         // Combined textual representation of all the version components
-	relConfig release.Config // Structured version information and release oracle config
-	app       *cli.App
+	// Git SHA1 commit hash of the release (set via linker flags)
+	gitCommit = ""
+	// Ethereum address of the Gexp release oracle.
+	relOracle = common.HexToAddress("0x926d69cc3bbf81d52cba6886d788df007a15a3cd")
+	// The app that holds all commands and flags.
+	app = utils.NewApp(gitCommit, "the go-expanse command line interface")
 )
 
 func init() {
-	// Construct the textual version string from the individual components
-	verString = fmt.Sprintf("%d.%d.%d", versionMajor, versionMinor, versionPatch)
-	if versionMeta != "" {
-		verString += "-" + versionMeta
-	}
-	if gitCommit != "" {
-		verString += "-" + gitCommit[:8]
-	}
-	// Construct the version release oracle configuration
-	relConfig.Oracle = common.HexToAddress(versionOracle)
-
-	relConfig.Major = uint32(versionMajor)
-	relConfig.Minor = uint32(versionMinor)
-	relConfig.Patch = uint32(versionPatch)
-
-	commit, _ := hex.DecodeString(gitCommit)
-	copy(relConfig.Commit[:], commit)
-
 	// Initialize the CLI app and start Gexp
-	app = utils.NewApp(verString, "the go-expanse command line interface")
 	app.Action = gexp
 	app.HideVersion = true // we have a command to print the version
+	app.Copyright = "Copyright 2013-2017 The go-ethereum / go-expanse Authors"
 	app.Commands = []cli.Command{
+		// See chaincmd.go:
+		initCommand,
 		importCommand,
 		exportCommand,
 		upgradedbCommand,
 		removedbCommand,
 		dumpCommand,
+		// See monitorcmd.go:
 		monitorCommand,
+		// See accountcmd.go:
 		accountCommand,
 		walletCommand,
+		// See consolecmd.go:
 		consoleCommand,
 		attachCommand,
 		javascriptCommand,
-		{
-			Action: makedag,
-			Name:   "makedag",
-			Usage:  "generate ethash dag (for testing)",
-			Description: `
-The makedag command generates an ethash DAG in /tmp/dag.
-
-This command exists to support the system testing project.
-Regular users do not need to execute it.
-`,
-		},
-		{
-			Action: gpuinfo,
-			Name:   "gpuinfo",
-			Usage:  "gpuinfo",
-			Description: `
-Prints OpenCL device info for all found GPUs.
-`,
-		},
-		{
-			Action: gpubench,
-			Name:   "gpubench",
-			Usage:  "benchmark GPU",
-			Description: `
-Runs quick benchmark on first GPU found.
-`,
-		},
-		{
-			Action: version,
-			Name:   "version",
-			Usage:  "print expanse version numbers",
-			Description: `
-The output of this command is supposed to be machine-readable.
-`,
-		},
-		{
-			Action: initGenesis,
-			Name:   "init",
-			Usage:  "bootstraps and initialises a new genesis block (JSON)",
-			Description: `
-The init command initialises a new genesis block and definition for the network.
-This is a destructive action and changes the network in which you will be
-participating.
-`,
-		},
+		// See misccmd.go:
+		makedagCommand,
+		versionCommand,
+		licenseCommand,
 	}
 
 	app.Flags = []cli.Flag{
@@ -151,27 +91,27 @@ participating.
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.BlockchainVersionFlag,
-		utils.OlympicFlag,
 		utils.FastSyncFlag,
-		utils.CacheFlag,
+		utils.LightModeFlag,
+		utils.LightServFlag,
+		utils.LightPeersFlag,
 		utils.LightKDFFlag,
+		utils.CacheFlag,
+		utils.TrieCacheGenFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
-		utils.SupportDAOFork,
-		utils.OpposeDAOFork,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
-		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
-		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,
+		utils.DiscoveryV5Flag,
+		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.RPCEnabledFlag,
@@ -194,8 +134,10 @@ participating.
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
 		utils.VMEnableJitFlag,
+		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
+		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
 		utils.SolcPathFlag,
@@ -221,14 +163,13 @@ participating.
 		// because it is not intended to run while testing.
 		// In addition to this check, bad block reports are sent only
 		// for chains with the main network genesis block and network id 1.
-		exp.EnableBadBlockReporting = true
+		eth.EnableBadBlockReporting = false
 
 		utils.SetupNetwork(ctx)
 		return nil
 	}
 
 	app.After = func(ctx *cli.Context) error {
-		logger.Flush()
 		debug.Exit()
 		console.Stdin.Close() // Resets terminal mode.
 		return nil
@@ -242,61 +183,61 @@ func main() {
 	}
 }
 
-func makeDefaultExtra() []byte {
+// gexp is the main entry point into the system if no special subcommand is ran.
+// It creates a default node based on the command line arguments and runs it in
+// blocking mode, waiting for it to be shut down.
+func gexp(ctx *cli.Context) error {
+	node := makeFullNode(ctx)
+	startNode(ctx, node)
+	node.Wait()
+	return nil
+}
+
+func makeFullNode(ctx *cli.Context) *node.Node {
+	// Create the default extradata and construct the base node
 	var clientInfo = struct {
 		Version   uint
 		Name      string
 		GoVersion string
 		Os        string
-	}{uint(versionMajor<<16 | versionMinor<<8 | versionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
+	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
 	extra, err := rlp.EncodeToBytes(clientInfo)
 	if err != nil {
 		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
 	}
-
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+	if uint64(len(extra)) > params.MaximumExtraDataSize {
 		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
 		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		return nil
+		extra = nil
 	}
-	return extra
-}
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	utils.RegisterEthService(ctx, stack, extra)
 
-// gexp is the main entry point into the system if no special subcommand is ran.
-// It creates a default node based on the command line arguments and runs it in
-// blocking mode, waiting for it to be shut down.
-func gexp(ctx *cli.Context) error {
-	node := utils.MakeSystemNode(clientIdentifier, verString, relConfig, makeDefaultExtra(), ctx)
-	startNode(ctx, node)
-	node.Wait()
-
-	return nil
-}
-
-// initGenesis will initialise the given JSON format genesis file and writes it as
-// the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) error {
-	genesisPath := ctx.Args().First()
-	if len(genesisPath) == 0 {
-		utils.Fatalf("must supply path to genesis JSON file")
+	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
+	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
+	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
+	if shhEnabled || shhAutoEnabled {
+		utils.RegisterShhService(stack)
 	}
-
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MustMakeDataDir(ctx), "chaindata"), 0, 0)
-	if err != nil {
-		utils.Fatalf("could not open database: %v", err)
+	// Add the Ethereum Stats daemon if requested
+	if url := ctx.GlobalString(utils.EthStatsURLFlag.Name); url != "" {
+		utils.RegisterEthStatsService(stack, url)
 	}
-
-	genesisFile, err := os.Open(genesisPath)
-	if err != nil {
-		utils.Fatalf("failed to read genesis file: %v", err)
+	// Add the release oracle service so it boots along with node.
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := release.Config{
+			Oracle: relOracle,
+			Major:  uint32(params.VersionMajor),
+			Minor:  uint32(params.VersionMinor),
+			Patch:  uint32(params.VersionPatch),
+		}
+		commit, _ := hex.DecodeString(gitCommit)
+		copy(config.Commit[:], commit)
+		return release.NewReleaseService(ctx, config)
+	}); err != nil {
+		utils.Fatalf("Failed to register the Gexp release oracle service: %v", err)
 	}
-
-	block, err := core.WriteGenesisBlock(chainDb, genesisFile)
-	if err != nil {
-		utils.Fatalf("failed to write genesis block: %v", err)
-	}
-	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
-	return nil
+	return stack
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -307,91 +248,58 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	var expanse *exp.Expanse
-	if err := stack.Service(&expanse); err != nil {
-		utils.Fatalf("ethereum service not running: %v", err)
-	}
-	accman := expanse.AccountManager()
-	passwords := utils.MakePasswordList(ctx)
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range accounts {
+	passwords := utils.MakePasswordList(ctx)
+	unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	for i, account := range unlocks {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, accman, trimmed, i, passwords)
+			unlockAccount(ctx, ks, trimmed, i, passwords)
 		}
 	}
+	// Register wallet event handlers to open and auto-derive wallets
+	events := make(chan accounts.WalletEvent, 16)
+	stack.AccountManager().Subscribe(events)
+
+	go func() {
+		// Create an chain state reader for self-derivation
+		rpcClient, err := stack.Attach()
+		if err != nil {
+			utils.Fatalf("Failed to attach to self: %v", err)
+		}
+		stateReader := ethclient.NewClient(rpcClient)
+
+		// Open and self derive any wallets already attached
+		for _, wallet := range stack.AccountManager().Wallets() {
+			if err := wallet.Open(""); err != nil {
+				glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", wallet.URL(), err)
+			} else {
+				wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+			}
+		}
+		// Listen for wallet event till termination
+		for event := range events {
+			if event.Arrive {
+				if err := event.Wallet.Open(""); err != nil {
+					glog.V(logger.Info).Infof("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err)
+				} else {
+					glog.V(logger.Info).Infof("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status())
+					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+				}
+			} else {
+				glog.V(logger.Info).Infof("Old wallet dropped:  %s", event.Wallet.URL())
+				event.Wallet.Close()
+			}
+		}
+	}()
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := expanse.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
+		var ethereum *eth.Ethereum
+		if err := stack.Service(&ethereum); err != nil {
+			utils.Fatalf("expanse service not running: %v", err)
+		}
+		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
-}
-
-func makedag(ctx *cli.Context) error {
-	args := ctx.Args()
-	wrongArgs := func() {
-		utils.Fatalf(`Usage: gexp makedag <block number> <outputdir>`)
-	}
-	switch {
-	case len(args) == 2:
-		blockNum, err := strconv.ParseUint(args[0], 0, 64)
-		dir := args[1]
-		if err != nil {
-			wrongArgs()
-		} else {
-			dir = filepath.Clean(dir)
-			// seems to require a trailing slash
-			if !strings.HasSuffix(dir, "/") {
-				dir = dir + "/"
-			}
-			_, err = ioutil.ReadDir(dir)
-			if err != nil {
-				utils.Fatalf("Can't find dir")
-			}
-			fmt.Println("making DAG, this could take awhile...")
-			ethash.MakeDAG(blockNum, dir)
-		}
-	default:
-		wrongArgs()
-	}
-	return nil
-}
-
-func gpuinfo(ctx *cli.Context) error {
-	exp.PrintOpenCLDevices()
-	return nil
-}
-
-func gpubench(ctx *cli.Context) error {
-	args := ctx.Args()
-	wrongArgs := func() {
-		utils.Fatalf(`Usage: gexp gpubench <gpu number>`)
-	}
-	switch {
-	case len(args) == 1:
-		n, err := strconv.ParseUint(args[0], 0, 64)
-		if err != nil {
-			wrongArgs()
-		}
-		exp.GPUBench(n)
-	case len(args) == 0:
-		exp.GPUBench(0)
-	default:
-		wrongArgs()
-	}
-	return nil
-}
-
-func version(c *cli.Context) error {
-	fmt.Println(clientIdentifier)
-	fmt.Println("Version:", verString)
-	fmt.Println("Protocol Versions:", exp.ProtocolVersions)
-	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
-	fmt.Println("Go Version:", runtime.Version())
-	fmt.Println("OS:", runtime.GOOS)
-	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
-	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
-
-	return nil
 }

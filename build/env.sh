@@ -10,7 +10,7 @@ fi
 # Create fake Go workspace if it doesn't exist yet.
 workspace="$PWD/build/_workspace"
 root="$PWD"
-ethdir="$workspace/src/github.com/expanse-project"
+ethdir="$workspace/src/github.com/expanse-org"
 if [ ! -L "$ethdir/go-expanse" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
@@ -19,9 +19,9 @@ if [ ! -L "$ethdir/go-expanse" ]; then
 fi
 
 # Set up the environment to use the workspace.
-# Also add Godeps workspace so we build using canned dependencies.
 GOPATH="$workspace"
-export GOPATH
+GO15VENDOREXPERIMENT=1
+export GOPATH GO15VENDOREXPERIMENT
 
 # Run the command inside the workspace.
 cd "$ethdir/go-expanse"

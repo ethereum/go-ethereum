@@ -45,10 +45,15 @@ var (
 	// paths with any of these prefixes will be skipped
 	skipPrefixes = []string{
 		// boring stuff
-		"Godeps/", "tests/files/", "build/",
+		"vendor/", "tests/files/", "build/",
 		// don't relicense vendored sources
 		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
 		"crypto/secp256k1/curve.go",
+		// don't license generated files
+		"contracts/chequebook/contract/",
+		"contracts/ens/contract/",
+		"contracts/release/contract.go",
+		"p2p/discv5/nodeevent_string.go",
 	}
 
 	// paths with this prefix are licensed as GPL. all other files are LGPL.
@@ -59,13 +64,13 @@ var (
 	licenseCommentRE = regexp.MustCompile(`^//\s*(Copyright|This file is part of).*?\n(?://.*?\n)*\n*`)
 
 	// this text appears at the start of AUTHORS
-	authorsFileHeader = "# This is the official list of go-expanse authors for copyright purposes.\n\n"
+	authorsFileHeader = "# This is the official list of go-ethereum / go-expanse authors for copyright purposes.\n\n"
 )
 
 // this template generates the license comment.
 // its input is an info structure.
 var licenseT = template.Must(template.New("").Parse(`
-// Copyright {{.Year}} The go-expanse Authors
+// Copyright {{.Year}} The go-ethereum / go-expanse Authors
 // This file is part of {{.Whole false}}.
 //
 // {{.Whole true}} is free software: you can redistribute it and/or modify
@@ -180,7 +185,7 @@ func getFiles() []string {
 		files = append(files, line)
 	})
 	if err != nil {
-		log.Fatalf("error getting files:", err)
+		log.Fatal("error getting files:", err)
 	}
 	return files
 }
@@ -289,7 +294,7 @@ func getInfo(files <-chan string, out chan<- *info, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-// fileInfo finds the lowest year in which the given file was commited.
+// fileInfo finds the lowest year in which the given file was committed.
 func fileInfo(file string) (*info, error) {
 	info := &info{file: file, Year: int64(time.Now().Year())}
 	cmd := exec.Command("git", "log", "--follow", "--find-renames=80", "--find-copies=80", "--pretty=format:%ai", "--", file)

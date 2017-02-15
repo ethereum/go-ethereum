@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
@@ -30,11 +30,11 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto/ecies"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
-	"github.com/expanse-project/go-expanse/crypto/sha3"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/rlp"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -59,7 +59,7 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 func Sha3(data ...[]byte) []byte          { return Keccak256(data...) }
 func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
 
-// Creates an expanse address given the bytes and the nonce
+// Creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Keccak256(data)[12:])
@@ -78,6 +78,12 @@ func Ripemd160(data []byte) []byte {
 	return ripemd.Sum(nil)
 }
 
+// Ecrecover returns the public key for the private key that was used to
+// calculate the signature.
+//
+// Note: secp256k1 expects the recover id to be either 0, 1. Ethereum
+// signatures have a recover id with an offset of 27. Callers must take
+// this into account and if "recovering" from an Ethereum signature adjust.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
 	return secp256k1.RecoverPubkey(hash, sig)
 }
@@ -161,25 +167,19 @@ func GenerateKey() (*ecdsa.PrivateKey, error) {
 	return ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 }
 
+// ValidateSignatureValues verifies whether the signature values are valid with
+// the given chain rules. The v value is assumed to be either 0 or 1.
 func ValidateSignatureValues(v byte, r, s *big.Int, homestead bool) bool {
 	if r.Cmp(common.Big1) < 0 || s.Cmp(common.Big1) < 0 {
 		return false
 	}
-	vint := uint32(v)
 	// reject upper range of s values (ECDSA malleability)
 	// see discussion in secp256k1/libsecp256k1/include/secp256k1.h
 	if homestead && s.Cmp(secp256k1.HalfN) > 0 {
 		return false
 	}
 	// Frontier: allow s to be in full N range
-	if s.Cmp(secp256k1.N) >= 0 {
-		return false
-	}
-	if r.Cmp(secp256k1.N) < 0 && (vint == 27 || vint == 28) {
-		return true
-	} else {
-		return false
-	}
+	return r.Cmp(secp256k1.N) < 0 && s.Cmp(secp256k1.N) < 0 && (v == 0 || v == 1)
 }
 
 func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
@@ -192,14 +192,22 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	return &ecdsa.PublicKey{Curve: secp256k1.S256(), X: x, Y: y}, nil
 }
 
-func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
-	if len(hash) != 32 {
-		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
+// Sign calculates an ECDSA signature.
+//
+// This function is susceptible to chosen plaintext attacks that can leak
+// information about the private key that is used for signing. Callers must
+// be aware that the given hash cannot be chosen by an adversery. Common
+// solution is to hash any input before calculating the signature.
+//
+// The produced signature is in the [R || S || V] format where V is 0 or 1.
+func Sign(data []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
+	if len(data) != 32 {
+		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(data))
 	}
 
 	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
-	sig, err = secp256k1.Sign(hash, seckey)
+	sig, err = secp256k1.Sign(data, seckey)
 	return
 }
 

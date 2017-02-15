@@ -8,6 +8,6 @@
 
 - name: checkout test repo
   git:
-    repo: https://github.com/expanse-project/tests.git
+    repo: https://github.com/expanse-org/tests.git
     version: develop
     dest: git

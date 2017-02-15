@@ -57,7 +57,7 @@ func parseICAP(s string) (Address, error) {
 	if err := validCheckSum(s); err != nil {
 		return Address{}, err
 	}
-	// checksum is ISO13616, Expanse address is base-36
+	// checksum is ISO13616, Ethereum address is base-36
 	bigAddr, _ := new(big.Int).SetString(s[4:], 36)
 	return BigToAddress(bigAddr), nil
 }

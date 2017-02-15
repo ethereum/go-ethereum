@@ -1,39 +1,40 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of go-expanse.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-expanse is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-expanse is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-expanse. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-expanse commands.
+// Package utils contains internal helper functions for go-ethereum commands.
 package utils
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"regexp"
 	"runtime"
+	"strings"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/internal/debug"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/rlp"
-
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/internal/debug"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 const (
@@ -66,7 +67,6 @@ func Fatalf(format string, args ...interface{}) {
 		}
 	}
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
-	logger.Flush()
 	os.Exit(1)
 }
 
@@ -94,7 +94,7 @@ func StartNode(stack *node.Node) {
 
 func FormatTransactionData(data string) []byte {
 	d := common.StringToByteFunc(data, func(s string) (ret []byte) {
-		slice := regexp.MustCompile("\\n|\\s").Split(s, 1000000000)
+		slice := regexp.MustCompile(`\n|\s`).Split(s, 1000000000)
 		for _, dataItem := range slice {
 			d := common.FormatData(dataItem)
 			ret = append(ret, d...)
@@ -134,7 +134,15 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		return err
 	}
 	defer fh.Close()
-	stream := rlp.NewStream(fh, 0)
+
+	var reader io.Reader = fh
+	if strings.HasSuffix(fn, ".gz") {
+		if reader, err = gzip.NewReader(reader); err != nil {
+			return err
+		}
+	}
+
+	stream := rlp.NewStream(reader, 0)
 
 	// Run actual the import.
 	blocks := make(types.Blocks, importBatchSize)
@@ -196,10 +204,18 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 		return err
 	}
 	defer fh.Close()
-	if err := blockchain.Export(fh); err != nil {
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+
+	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to ", fn)
+
 	return nil
 }
 
@@ -211,7 +227,14 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 		return err
 	}
 	defer fh.Close()
-	if err := blockchain.ExportN(fh, first, last); err != nil {
+
+	var writer io.Writer = fh
+	if strings.HasSuffix(fn, ".gz") {
+		writer = gzip.NewWriter(writer)
+		defer writer.(*gzip.Writer).Close()
+	}
+
+	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
 	glog.Infoln("Exported blockchain to ", fn)

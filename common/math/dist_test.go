@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package math
 
@@ -41,24 +41,24 @@ func TestSum(t *testing.T) {
 
 func TestDist(t *testing.T) {
 	var vectors = []Vector{
-		Vector{big.NewInt(1000), big.NewInt(1234)},
-		Vector{big.NewInt(500), big.NewInt(10023)},
-		Vector{big.NewInt(1034), big.NewInt(1987)},
-		Vector{big.NewInt(1034), big.NewInt(1987)},
-		Vector{big.NewInt(8983), big.NewInt(1977)},
-		Vector{big.NewInt(98382), big.NewInt(1887)},
-		Vector{big.NewInt(12398), big.NewInt(1287)},
-		Vector{big.NewInt(12398), big.NewInt(1487)},
-		Vector{big.NewInt(12398), big.NewInt(1987)},
-		Vector{big.NewInt(12398), big.NewInt(128)},
-		Vector{big.NewInt(12398), big.NewInt(1987)},
-		Vector{big.NewInt(1398), big.NewInt(187)},
-		Vector{big.NewInt(12328), big.NewInt(1927)},
-		Vector{big.NewInt(12398), big.NewInt(1987)},
-		Vector{big.NewInt(22398), big.NewInt(1287)},
-		Vector{big.NewInt(1370), big.NewInt(1981)},
-		Vector{big.NewInt(12398), big.NewInt(1957)},
-		Vector{big.NewInt(42198), big.NewInt(1987)},
+		{big.NewInt(1000), big.NewInt(1234)},
+		{big.NewInt(500), big.NewInt(10023)},
+		{big.NewInt(1034), big.NewInt(1987)},
+		{big.NewInt(1034), big.NewInt(1987)},
+		{big.NewInt(8983), big.NewInt(1977)},
+		{big.NewInt(98382), big.NewInt(1887)},
+		{big.NewInt(12398), big.NewInt(1287)},
+		{big.NewInt(12398), big.NewInt(1487)},
+		{big.NewInt(12398), big.NewInt(1987)},
+		{big.NewInt(12398), big.NewInt(128)},
+		{big.NewInt(12398), big.NewInt(1987)},
+		{big.NewInt(1398), big.NewInt(187)},
+		{big.NewInt(12328), big.NewInt(1927)},
+		{big.NewInt(12398), big.NewInt(1987)},
+		{big.NewInt(22398), big.NewInt(1287)},
+		{big.NewInt(1370), big.NewInt(1981)},
+		{big.NewInt(12398), big.NewInt(1957)},
+		{big.NewInt(42198), big.NewInt(1987)},
 	}
 
 	VectorsBy(GasSort).Sort(vectors)

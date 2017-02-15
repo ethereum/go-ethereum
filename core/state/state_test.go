@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -23,9 +23,9 @@ import (
 
 	checker "gopkg.in/check.v1"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 type StateSuite struct {
@@ -48,7 +48,7 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	// write some of them to the trie
 	s.state.updateStateObject(obj1)
 	s.state.updateStateObject(obj2)
-	s.state.Commit()
+	s.state.Commit(false)
 
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
@@ -100,7 +100,7 @@ func TestNull(t *testing.T) {
 	//value := common.FromHex("0x823140710bf13990e4500136726d8b55")
 	var value common.Hash
 	state.SetState(address, common.Hash{}, value)
-	state.Commit()
+	state.Commit(false)
 	value = state.GetState(address, common.Hash{})
 	if !common.EmptyHash(value) {
 		t.Errorf("expected empty hash. got %x", value)
@@ -160,7 +160,7 @@ func TestSnapshot2(t *testing.T) {
 	so0.deleted = false
 	state.setStateObject(so0)
 
-	root, _ := state.Commit()
+	root, _ := state.Commit(false)
 	state.Reset(root)
 
 	// and one with deleted == true

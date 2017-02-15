@@ -1,35 +1,35 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package types
 
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // The values in those tests are from the Transaction Tests
-// at github.com/expanse-project/tests.
-
+// at github.com/ethereum/tests.
 var (
 	emptyTx = NewTransaction(
 		0,
@@ -46,15 +46,16 @@ var (
 		big.NewInt(1),
 		common.FromHex("5544"),
 	).WithSignature(
+		HomesteadSigner{},
 		common.Hex2Bytes("98ff921201554726367d2be8c804a7ff89ccf285ebc57dff8ae4c44b9c19ac4a8887321be575c8095f789dd4c743dfe42c1820f9231f98a962b210e3ac2452a301"),
 	)
 )
 
 func TestTransactionSigHash(t *testing.T) {
-	if emptyTx.SigHash() != common.HexToHash("c775b99e7ad12f50d819fcd602390467e28141316969f4b57f0626f74fe3b386") {
+	if emptyTx.SigHash(HomesteadSigner{}) != common.HexToHash("c775b99e7ad12f50d819fcd602390467e28141316969f4b57f0626f74fe3b386") {
 		t.Errorf("empty transaction hash mismatch, got %x", emptyTx.Hash())
 	}
-	if rightvrsTx.SigHash() != common.HexToHash("fe7a79529ed5f7c3375d06b26b186a8644e0e16c373d7a12be41c62d6042b77a") {
+	if rightvrsTx.SigHash(HomesteadSigner{}) != common.HexToHash("fe7a79529ed5f7c3375d06b26b186a8644e0e16c373d7a12be41c62d6042b77a") {
 		t.Errorf("RightVRS transaction hash mismatch, got %x", rightvrsTx.Hash())
 	}
 }
@@ -72,7 +73,9 @@ func TestTransactionEncode(t *testing.T) {
 
 func decodeTx(data []byte) (*Transaction, error) {
 	var tx Transaction
-	return &tx, rlp.Decode(bytes.NewReader(data), &tx)
+	t, err := &tx, rlp.Decode(bytes.NewReader(data), &tx)
+
+	return t, err
 }
 
 func defaultTestKey() (*ecdsa.PrivateKey, common.Address) {
@@ -88,7 +91,8 @@ func TestRecipientEmpty(t *testing.T) {
 		t.Error(err)
 		t.FailNow()
 	}
-	from, err := tx.From()
+
+	from, err := Sender(HomesteadSigner{}, tx)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -107,7 +111,7 @@ func TestRecipientNormal(t *testing.T) {
 		t.FailNow()
 	}
 
-	from, err := tx.From()
+	from, err := Sender(HomesteadSigner{}, tx)
 	if err != nil {
 		t.Error(err)
 		t.FailNow()
@@ -127,12 +131,14 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], _ = crypto.GenerateKey()
 	}
+
+	signer := HomesteadSigner{}
 	// Generate a batch of transactions with overlapping values, but shifted nonces
 	groups := map[common.Address]Transactions{}
 	for start, key := range keys {
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		for i := 0; i < 25; i++ {
-			tx, _ := NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), big.NewInt(100), big.NewInt(int64(start+i)), nil).SignECDSA(key)
+			tx, _ := SignTx(NewTransaction(uint64(start+i), common.Address{}, big.NewInt(100), big.NewInt(100), big.NewInt(int64(start+i)), nil), signer, key)
 			groups[addr] = append(groups[addr], tx)
 		}
 	}
@@ -148,11 +154,11 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		break
 	}
 	for i, txi := range txs {
-		fromi, _ := txi.From()
+		fromi, _ := Sender(signer, txi)
 
 		// Make sure the nonce order is valid
 		for j, txj := range txs[i+1:] {
-			fromj, _ := txj.From()
+			fromj, _ := Sender(signer, txj)
 
 			if fromi == fromj && txi.Nonce() > txj.Nonce() {
 				t.Errorf("invalid nonce ordering: tx #%d (A=%x N=%v) < tx #%d (A=%x N=%v)", i, fromi[:4], txi.Nonce(), i+j, fromj[:4], txj.Nonce())
@@ -161,26 +167,68 @@ func TestTransactionPriceNonceSort(t *testing.T) {
 		// Find the previous and next nonce of this account
 		prev, next := i-1, i+1
 		for j := i - 1; j >= 0; j-- {
-			if fromj, _ := txs[j].From(); fromi == fromj {
+			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
 				prev = j
 				break
 			}
 		}
 		for j := i + 1; j < len(txs); j++ {
-			if fromj, _ := txs[j].From(); fromi == fromj {
+			if fromj, _ := Sender(signer, txs[j]); fromi == fromj {
 				next = j
 				break
 			}
 		}
 		// Make sure that in between the neighbor nonces, the transaction is correctly positioned price wise
 		for j := prev + 1; j < next; j++ {
-			fromj, _ := txs[j].From()
+			fromj, _ := Sender(signer, txs[j])
 			if j < i && txs[j].GasPrice().Cmp(txi.GasPrice()) < 0 {
 				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) < tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
 			}
 			if j > i && txs[j].GasPrice().Cmp(txi.GasPrice()) > 0 {
 				t.Errorf("invalid gasprice ordering: tx #%d (A=%x P=%v) > tx #%d (A=%x P=%v)", j, fromj[:4], txs[j].GasPrice(), i, fromi[:4], txi.GasPrice())
 			}
+		}
+	}
+}
+
+// TestTransactionJSON tests serializing/de-serializing to/from JSON.
+func TestTransactionJSON(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("could not generate key: %v", err)
+	}
+	signer := NewEIP155Signer(common.Big1)
+
+	for i := uint64(0); i < 25; i++ {
+		var tx *Transaction
+		switch i % 2 {
+		case 0:
+			tx = NewTransaction(i, common.Address{1}, common.Big0, common.Big1, common.Big2, []byte("abcdef"))
+		case 1:
+			tx = NewContractCreation(i, common.Big0, common.Big1, common.Big2, []byte("abcdef"))
+		}
+
+		tx, err := SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("could not sign transaction: %v", err)
+		}
+
+		data, err := json.Marshal(tx)
+		if err != nil {
+			t.Errorf("json.Marshal failed: %v", err)
+		}
+
+		var parsedTx *Transaction
+		if err := json.Unmarshal(data, &parsedTx); err != nil {
+			t.Errorf("json.Unmarshal failed: %v", err)
+		}
+
+		// compare nonce, price, gaslimit, recipient, amount, payload, V, R, S
+		if tx.Hash() != parsedTx.Hash() {
+			t.Errorf("parsed tx differs from original tx, want %v, got %v", tx, parsedTx)
+		}
+		if tx.ChainId().Cmp(parsedTx.ChainId()) != 0 {
+			t.Errorf("invalid chain id, want %d, got %d", tx.ChainId(), parsedTx.ChainId())
 		}
 	}
 }

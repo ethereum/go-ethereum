@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.
@@ -67,7 +67,7 @@ func checkTrieContents(t *testing.T, db Database, root []byte, content map[strin
 		t.Fatalf("inconsistent trie at %x: %v", root, err)
 	}
 	for key, val := range content {
-		if have := trie.Get([]byte(key)); bytes.Compare(have, val) != 0 {
+		if have := trie.Get([]byte(key)); !bytes.Equal(have, val) {
 			t.Errorf("entry %x: content mismatch: have %x, want %x", key, have, val)
 		}
 	}
@@ -122,7 +122,7 @@ func testIterativeTrieSync(t *testing.T, batch int) {
 			}
 			results[i] = SyncResult{hash, data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[:0], sched.Missing(batch)...)
@@ -152,7 +152,7 @@ func TestIterativeDelayedTrieSync(t *testing.T) {
 			}
 			results[i] = SyncResult{hash, data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[len(results):], sched.Missing(10000)...)
@@ -182,7 +182,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
 		results := make([]SyncResult, 0, len(queue))
-		for hash, _ := range queue {
+		for hash := range queue {
 			data, err := srcDb.Get(hash.Bytes())
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
@@ -190,7 +190,7 @@ func testIterativeRandomTrieSync(t *testing.T, batch int) {
 			results = append(results, SyncResult{hash, data})
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = make(map[common.Hash]struct{})
@@ -219,7 +219,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]SyncResult, 0, len(queue)/2+1)
-		for hash, _ := range queue {
+		for hash := range queue {
 			data, err := srcDb.Get(hash.Bytes())
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
@@ -231,7 +231,7 @@ func TestIterativeRandomDelayedTrieSync(t *testing.T) {
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, result := range results {
@@ -272,7 +272,7 @@ func TestDuplicateAvoidanceTrieSync(t *testing.T) {
 
 			results[i] = SyncResult{hash, data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[:0], sched.Missing(0)...)
@@ -304,7 +304,7 @@ func TestIncompleteTrieSync(t *testing.T) {
 			results[i] = SyncResult{hash, data}
 		}
 		// Process each of the trie nodes
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, result := range results {

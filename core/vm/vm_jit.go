@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // +build evmjit
 
@@ -25,7 +25,7 @@ int   evmjit_run(void* _jit, void* _data, void* _env);
 void  evmjit_destroy(void* _jit);
 
 // Shared library evmjit (e.g. libevmjit.so) is expected to be installed in /usr/local/lib
-// More: https://github.com/expanse-project/evmjit
+// More: https://github.com/ethereum/evmjit
 #cgo LDFLAGS: -levmjit
 */
 import "C"
@@ -38,13 +38,13 @@ import (
 	"math/big"
 	"unsafe"
 
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 type JitVm struct {
-	env        Environment
+	env        EVM
 	me         ContextRef
 	callerAddr []byte
 	price      *big.Int
@@ -161,7 +161,7 @@ func assert(condition bool, message string) {
 	}
 }
 
-func NewJitVm(env Environment) *JitVm {
+func NewJitVm(env EVM) *JitVm {
 	return &JitVm{env: env}
 }
 
@@ -235,7 +235,7 @@ func (self *JitVm) Endl() VirtualMachine {
 	return self
 }
 
-func (self *JitVm) Env() Environment {
+func (self *JitVm) Env() EVM {
 	return self.env
 }
 

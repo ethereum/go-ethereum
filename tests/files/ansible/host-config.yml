@@ -1,0 +1,10 @@
+---
+- name: Provision the operation system for tests
+  # testing
+  # hosts: all
+  # live
+  hosts: tag_Name_test_runner
+  remote_user: ubuntu
+  roles:
+    - docker
+    - common

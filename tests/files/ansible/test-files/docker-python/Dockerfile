@@ -9,7 +9,7 @@ RUN apt-get install -qy curl git python2.7 python-pip python-dev
 # this is a workaround, to make sure that docker's cache is invalidated whenever the git repo changes
 ADD https://api.github.com/repos/expanse/pyethereum/git/refs/heads/develop unused.txt
 
-RUN git clone --branch develop --recursive https://github.com/expanse-project/pyethereum.git
+RUN git clone --branch develop --recursive https://github.com/expanse-org/pyethereum.git
 
 RUN cd pyethereum && curl https://bootstrap.pypa.io/bootstrap-buildout.py | python
 

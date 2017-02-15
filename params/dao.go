@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // TestNetDAOForkBlock is the block number where the DAO hard-fork commences on
@@ -31,7 +31,7 @@ var TestNetDAOForkBlock *big.Int
 
 // MainNetDAOForkBlock is the block number where the DAO hard-fork commences on
 // the Ethereum main network.
-var MainNetDAOForkBlock = big.NewInt(1920000)
+var MainNetDAOForkBlock *big.Int
 
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork
 // point and a number of consecutive blocks to allow fast/light syncers to correctly
@@ -43,7 +43,7 @@ var DAOForkBlockExtra = common.FromHex("0x64616f2d686172642d666f726b")
 var DAOForkExtraRange = big.NewInt(10)
 
 // DAORefundContract is the address of the refund contract to send DAO balances to.
-var DAORefundContract = common.HexToAddress("0x6a620a92Ec2D11a70428b45a795909bd28AedA45")
+var DAORefundContract = common.HexToAddress("0xbf4ed7b27f1d666546e30d74d50d173d20bca754")
 
 // DAODrainList is the list of accounts whose full balances will be moved into a
 // refund contract at the beginning of the dao-fork block.

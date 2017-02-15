@@ -17,16 +17,25 @@
 package rpc
 
 import (
-	"crypto/rand"
+	"bufio"
+	crand "crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
-	"errors"
-	"fmt"
 	"math/big"
+	"math/rand"
 	"reflect"
+	"strings"
+	"sync"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/net/context"
+)
+
+var (
+	subscriptionIDGenMu sync.Mutex
+	subscriptionIDGen   = idGenerator()
 )
 
 // Is this an exported - upper case - name?
@@ -219,39 +228,36 @@ METHODS:
 	return callbacks, subscriptions
 }
 
-func newSubscriptionID() (string, error) {
-	var subid [16]byte
-	n, _ := rand.Read(subid[:])
-	if n != 16 {
-		return "", errors.New("Unable to generate subscription id")
+// idGenerator helper utility that generates a (pseudo) random sequence of
+// bytes that are used to generate identifiers.
+func idGenerator() *rand.Rand {
+	if seed, err := binary.ReadVarint(bufio.NewReader(crand.Reader)); err == nil {
+		return rand.New(rand.NewSource(seed))
 	}
-	return "0x" + hex.EncodeToString(subid[:]), nil
+	return rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
 }
 
-// SupportedModules returns the collection of API's that the RPC server offers
-// on which the given client connects.
-func SupportedModules(client Client) (map[string]string, error) {
-	req := JSONRequest{
-		Id:      []byte("1"),
-		Version: "2.0",
-		Method:  MetadataApi + "_modules",
-	}
-	if err := client.Send(req); err != nil {
-		return nil, err
-	}
+// NewID generates a identifier that can be used as an identifier in the RPC interface.
+// e.g. filter and subscription identifier.
+func NewID() ID {
+	subscriptionIDGenMu.Lock()
+	defer subscriptionIDGenMu.Unlock()
 
-	var response JSONSuccessResponse
-	if err := client.Recv(&response); err != nil {
-		return nil, err
-	}
-	if response.Result != nil {
-		mods := make(map[string]string)
-		if modules, ok := response.Result.(map[string]interface{}); ok {
-			for m, v := range modules {
-				mods[m] = fmt.Sprintf("%s", v)
-			}
-			return mods, nil
+	id := make([]byte, 16)
+	for i := 0; i < len(id); i += 7 {
+		val := subscriptionIDGen.Int63()
+		for j := 0; i+j < len(id) && j < 7; j++ {
+			id[i+j] = byte(val)
+			val >>= 8
 		}
 	}
-	return nil, fmt.Errorf("unable to retrieve modules")
+
+	rpcId := hex.EncodeToString(id)
+	// rpc ID's are RPC quantities, no leading zero's and 0 is 0x0
+	rpcId = strings.TrimLeft(rpcId, "0")
+	if rpcId == "" {
+		rpcId = "0"
+	}
+
+	return ID("0x" + rpcId)
 }

@@ -1,12 +1,11 @@
-FROM alpine:3.3
+FROM alpine:3.5
 
 RUN \
-  apk add --update go git make gcc musl-dev         && \
-  git clone https://github.com/expanse-project/go-expanse && \
-  (cd go-expanse && git checkout develop)          && \
-  (cd go-expanse && make gexp)                     && \
-  cp go-expanse/build/bin/gexp /gexp               && \
-  apk del go git make gcc musl-dev                  && \
+  apk add --update go git make gcc musl-dev linux-headers ca-certificates && \
+  git clone --depth 1 https://github.com/expanse-org/go-expanse && \
+  (cd go-expanse && make gexp) && \
+  cp go-expanse/build/bin/gexp /gexp && \
+  apk del go git make gcc musl-dev linux-headers && \
   rm -rf /go-expanse && rm -rf /var/cache/apk/*
 
 EXPOSE 9656

@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains the node database, storing previously seen nodes and any collected
 // metadata about them for QoS purposes.
@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -243,7 +243,7 @@ func (db *nodeDB) expirer() {
 }
 
 // expireNodes iterates over the database and deletes all nodes that have not
-// been seen (i.e. received a pong from) for some alloted time.
+// been seen (i.e. received a pong from) for some allotted time.
 func (db *nodeDB) expireNodes() error {
 	threshold := time.Now().Add(-nodeDBNodeExpiration)
 
@@ -258,7 +258,7 @@ func (db *nodeDB) expireNodes() error {
 			continue
 		}
 		// Skip the node if not expired yet (and not self)
-		if bytes.Compare(id[:], db.self[:]) != 0 {
+		if !bytes.Equal(id[:], db.self[:]) {
 			if seen := db.lastPong(id); seen.After(threshold) {
 				continue
 			}

@@ -1,17 +1,15 @@
-FROM ubuntu:wily
-MAINTAINER caktux
+FROM ubuntu:xenial
 
-ENV DEBIAN_FRONTEND noninteractive
+RUN \
+  apt-get update && apt-get upgrade -q -y && \
+  apt-get install -y --no-install-recommends golang git make gcc libc-dev ca-certificates && \
+  git clone --depth 1 --branch release/1.5 https://github.com/expanse-org/go-expanse && \
+  (cd go-expanse && make gexp) && \
+  cp go-expanse/build/bin/gexp /gexp && \
+  apt-get remove -y golang git make gcc libc-dev && apt autoremove -y && apt-get clean && \
+  rm -rf /go-expanse
 
-RUN apt-get update && \
-    apt-get upgrade -q -y && \
-    apt-get dist-upgrade -q -y && \
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 923F6CA9 && \
-    echo "deb http://ppa.launchpad.net/ethereum/ethereum/ubuntu wily main" | tee -a /etc/apt/sources.list.d/ethereum.list && \
-    apt-get update && \
-    apt-get install -q -y gexp
+EXPOSE 9656
+EXPOSE 42786
 
-EXPOSE 8545
-EXPOSE 30303
-
-ENTRYPOINT ["/usr/bin/gexp"]
+ENTRYPOINT ["/gexp"]

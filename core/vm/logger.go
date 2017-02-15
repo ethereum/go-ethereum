@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
@@ -22,7 +22,7 @@ import (
 	"os"
 	"unicode"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 type Storage map[common.Hash]common.Hash
@@ -36,22 +36,16 @@ func (self Storage) Copy() Storage {
 	return cpy
 }
 
-// StructLogCollector is the basic interface to capture emited logs by the EVM logger.
-type StructLogCollector interface {
-	// Adds the structured log to the collector.
-	AddStructLog(StructLog)
-}
-
 // LogConfig are the configuration options for structured logger the EVM
 type LogConfig struct {
-	DisableMemory  bool               // disable memory capture
-	DisableStack   bool               // disable stack capture
-	DisableStorage bool               // disable storage capture
-	FullStorage    bool               // show full storage (slow)
-	Collector      StructLogCollector // the log collector
+	DisableMemory  bool // disable memory capture
+	DisableStack   bool // disable stack capture
+	DisableStorage bool // disable storage capture
+	FullStorage    bool // show full storage (slow)
+	Limit          int  // maximum length of output, but zero means unlimited
 }
 
-// StructLog is emitted to the Environment each cycle and lists information about the current internal state
+// StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
 	Pc      uint64
@@ -65,34 +59,45 @@ type StructLog struct {
 	Err     error
 }
 
-// Logger is an EVM state logger and implements VmLogger.
+// Tracer is used to collect execution traces from an EVM transaction
+// execution. CaptureState is called for each step of the VM with the
+// current VM state.
+// Note that reference types are actual VM data structures; make copies
+// if you need to retain them beyond the current call.
+type Tracer interface {
+	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
+}
+
+// StructLogger is an EVM state logger and implements Tracer.
 //
-// Logger can capture state based on the given Log configuration and also keeps
+// StructLogger can capture state based on the given Log configuration and also keeps
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
-type Logger struct {
+type StructLogger struct {
 	cfg LogConfig
 
-	env           Environment
+	logs          []StructLog
 	changedValues map[common.Address]Storage
 }
 
-// newLogger returns a new logger
-func newLogger(cfg LogConfig, env Environment) *Logger {
-	return &Logger{
-		cfg:           cfg,
-		env:           env,
+// NewLogger returns a new logger
+func NewStructLogger(cfg *LogConfig) *StructLogger {
+	logger := &StructLogger{
 		changedValues: make(map[common.Address]Storage),
 	}
+	if cfg != nil {
+		logger.cfg = *cfg
+	}
+	return logger
 }
 
 // captureState logs a new structured log message and pushes it out to the environment
 //
 // captureState also tracks SSTORE ops to track dirty values.
-func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *stack, contract *Contract, depth int, err error) {
-	// short circuit if no log collector is present
-	if l.cfg.Collector == nil {
-		return
+func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost *big.Int, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
+	// check if already accumulated the specified number of logs
+	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
+		return ErrTraceLimitReached
 	}
 
 	// initialise new changed values storage container for this contract
@@ -139,7 +144,7 @@ func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *
 			storage = make(Storage)
 			// Get the contract account and loop over each storage entry. This may involve looping over
 			// the trie and is a very expensive process.
-			l.env.Db().GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
+			env.StateDB.GetAccount(contract.Address()).ForEachStorage(func(key, value common.Hash) bool {
 				storage[key] = value
 				// Return true, indicating we'd like to continue.
 				return true
@@ -150,9 +155,15 @@ func (l *Logger) captureState(pc uint64, op OpCode, gas, cost *big.Int, memory *
 		}
 	}
 	// create a new snaptshot of the EVM.
-	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, l.env.Depth(), err}
-	// Add the log to the collector
-	l.cfg.Collector.AddStructLog(log)
+	log := StructLog{pc, op, new(big.Int).Set(gas), cost, mem, stck, storage, env.depth, err}
+
+	l.logs = append(l.logs, log)
+	return nil
+}
+
+// StructLogs returns a list of captured log entries
+func (l *StructLogger) StructLogs() []StructLog {
+	return l.logs
 }
 
 // StdErrFormat formats a slice of StructLogs to human readable format

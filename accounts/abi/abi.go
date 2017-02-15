@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -24,8 +24,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/common"
-
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // The ABI holds information about a contract's context and available
@@ -78,7 +77,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return append(method.Id(), arguments...), nil
 }
 
-// toGoSliceType prses the input and casts it to the proper slice defined by the ABI
+// toGoSliceType parses the input and casts it to the proper slice defined by the ABI
 // argument in T.
 func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	index := i * 32
@@ -92,35 +91,75 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	// first we need to create a slice of the type
 	var refSlice reflect.Value
 	switch elem.T {
-	case IntTy, UintTy, BoolTy: // int, uint, bool can all be of type big int.
-		refSlice = reflect.ValueOf([]*big.Int(nil))
+	case IntTy, UintTy, BoolTy:
+		// create a new reference slice matching the element type
+		switch t.Type.Kind {
+		case reflect.Bool:
+			refSlice = reflect.ValueOf([]bool(nil))
+		case reflect.Uint8:
+			refSlice = reflect.ValueOf([]uint8(nil))
+		case reflect.Uint16:
+			refSlice = reflect.ValueOf([]uint16(nil))
+		case reflect.Uint32:
+			refSlice = reflect.ValueOf([]uint32(nil))
+		case reflect.Uint64:
+			refSlice = reflect.ValueOf([]uint64(nil))
+		case reflect.Int8:
+			refSlice = reflect.ValueOf([]int8(nil))
+		case reflect.Int16:
+			refSlice = reflect.ValueOf([]int16(nil))
+		case reflect.Int32:
+			refSlice = reflect.ValueOf([]int32(nil))
+		case reflect.Int64:
+			refSlice = reflect.ValueOf([]int64(nil))
+		default:
+			refSlice = reflect.ValueOf([]*big.Int(nil))
+		}
 	case AddressTy: // address must be of slice Address
 		refSlice = reflect.ValueOf([]common.Address(nil))
 	case HashTy: // hash must be of slice hash
 		refSlice = reflect.ValueOf([]common.Hash(nil))
 	case FixedBytesTy:
-		refSlice = reflect.ValueOf([]byte(nil))
+		refSlice = reflect.ValueOf([][]byte(nil))
 	default: // no other types are supported
 		return nil, fmt.Errorf("abi: unsupported slice type %v", elem.T)
 	}
-	// get the offset which determines the start of this array ...
-	offset := int(common.BytesToBig(output[index : index+32]).Uint64())
-	if offset+32 > len(output) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+
+	var slice []byte
+	var size int
+	var offset int
+	if t.Type.IsSlice {
+
+		// get the offset which determines the start of this array ...
+		offset = int(common.BytesToBig(output[index : index+32]).Uint64())
+		if offset+32 > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+		}
+
+		slice = output[offset:]
+		// ... starting with the size of the array in elements ...
+		size = int(common.BytesToBig(slice[:32]).Uint64())
+		slice = slice[32:]
+		// ... and make sure that we've at the very least the amount of bytes
+		// available in the buffer.
+		if size*32 > len(slice) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
+		}
+
+		// reslice to match the required size
+		slice = slice[:(size * 32)]
+	} else if t.Type.IsArray {
+		//get the number of elements in the array
+		size = t.Type.SliceSize
+
+		//check to make sure array size matches up
+		if index+32*size > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), index+32*size)
+		}
+		//slice is there for a fixed amount of times
+		slice = output[index : index+size*32]
 	}
 
-	slice := output[offset:]
-	// ... starting with the size of the array in elements ...
-	size := int(common.BytesToBig(slice[:32]).Uint64())
-	slice = slice[32:]
-	// ... and make sure that we've at the very least the amount of bytes
-	// available in the buffer.
-	if size*32 > len(slice) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
-	}
-
-	// reslice to match the required size
-	slice = slice[:(size * 32)]
 	for i := 0; i < size; i++ {
 		var (
 			inter        interface{}             // interface type
@@ -130,13 +169,35 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		// set inter to the correct type (cast)
 		switch elem.T {
 		case IntTy, UintTy:
-			inter = common.BytesToBig(returnOutput)
+			bigNum := common.BytesToBig(returnOutput)
+			switch t.Type.Kind {
+			case reflect.Uint8:
+				inter = uint8(bigNum.Uint64())
+			case reflect.Uint16:
+				inter = uint16(bigNum.Uint64())
+			case reflect.Uint32:
+				inter = uint32(bigNum.Uint64())
+			case reflect.Uint64:
+				inter = bigNum.Uint64()
+			case reflect.Int8:
+				inter = int8(bigNum.Int64())
+			case reflect.Int16:
+				inter = int16(bigNum.Int64())
+			case reflect.Int32:
+				inter = int32(bigNum.Int64())
+			case reflect.Int64:
+				inter = bigNum.Int64()
+			default:
+				inter = common.BytesToBig(returnOutput)
+			}
 		case BoolTy:
 			inter = common.BytesToBig(returnOutput).Uint64() > 0
 		case AddressTy:
 			inter = common.BytesToAddress(returnOutput)
 		case HashTy:
 			inter = common.BytesToHash(returnOutput)
+		case FixedBytesTy:
+			inter = returnOutput
 		}
 		// append the item to our reflect slice
 		refSlice = reflect.Append(refSlice, reflect.ValueOf(inter))
@@ -150,7 +211,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 // argument in T.
 func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	// we need to treat slices differently
-	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy {
+	if (t.Type.IsSlice || t.Type.IsArray) && t.Type.T != BytesTy && t.Type.T != StringTy && t.Type.T != FixedBytesTy && t.Type.T != FunctionTy {
 		return toGoSlice(i, t, output)
 	}
 
@@ -214,7 +275,7 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 		return common.BytesToAddress(returnOutput), nil
 	case HashTy:
 		return common.BytesToHash(returnOutput), nil
-	case BytesTy, FixedBytesTy:
+	case BytesTy, FixedBytesTy, FunctionTy:
 		return returnOutput, nil
 	case StringTy:
 		return string(returnOutput), nil
@@ -326,12 +387,13 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 
 func (abi *ABI) UnmarshalJSON(data []byte) error {
 	var fields []struct {
-		Type     string
-		Name     string
-		Constant bool
-		Indexed  bool
-		Inputs   []Argument
-		Outputs  []Argument
+		Type      string
+		Name      string
+		Constant  bool
+		Indexed   bool
+		Anonymous bool
+		Inputs    []Argument
+		Outputs   []Argument
 	}
 
 	if err := json.Unmarshal(data, &fields); err != nil {
@@ -356,8 +418,9 @@ func (abi *ABI) UnmarshalJSON(data []byte) error {
 			}
 		case "event":
 			abi.Events[field.Name] = Event{
-				Name:   field.Name,
-				Inputs: field.Inputs,
+				Name:      field.Name,
+				Anonymous: field.Anonymous,
+				Inputs:    field.Inputs,
 			}
 		}
 	}

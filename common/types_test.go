@@ -1,24 +1,27 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package common
 
 import (
 	"math/big"
+	"strings"
 	"testing"
+
+	"github.com/expanse-org/go-expanse/common/hexutil"
 )
 
 func TestBytesConversion(t *testing.T) {
@@ -38,19 +41,26 @@ func TestHashJsonValidation(t *testing.T) {
 	var tests = []struct {
 		Prefix string
 		Size   int
-		Error  error
+		Error  string
 	}{
-		{"", 2, hashJsonLengthErr},
-		{"", 62, hashJsonLengthErr},
-		{"", 66, hashJsonLengthErr},
-		{"", 65, hashJsonLengthErr},
-		{"0X", 64, nil},
-		{"0x", 64, nil},
-		{"0x", 62, hashJsonLengthErr},
+		{"", 62, hexutil.ErrMissingPrefix.Error()},
+		{"0x", 66, "hex string has length 66, want 64 for Hash"},
+		{"0x", 63, hexutil.ErrOddLength.Error()},
+		{"0x", 0, "hex string has length 0, want 64 for Hash"},
+		{"0x", 64, ""},
+		{"0X", 64, ""},
 	}
-	for i, test := range tests {
-		if err := h.UnmarshalJSON(append([]byte(test.Prefix), make([]byte, test.Size)...)); err != test.Error {
-			t.Errorf("test #%d: error mismatch: have %v, want %v", i, err, test.Error)
+	for _, test := range tests {
+		input := `"` + test.Prefix + strings.Repeat("0", test.Size) + `"`
+		err := h.UnmarshalJSON([]byte(input))
+		if err == nil {
+			if test.Error != "" {
+				t.Errorf("%s: error mismatch: have nil, want %q", input, test.Error)
+			}
+		} else {
+			if err.Error() != test.Error {
+				t.Errorf("%s: error mismatch: have %q, want %q", input, err, test.Error)
+			}
 		}
 	}
 }
