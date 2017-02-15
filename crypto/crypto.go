@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -31,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/crypto/ripemd160"
 )
 
 var (
@@ -57,26 +55,12 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 }
 
 // Deprecated: For backward compatibility as other packages depend on these
-func Sha3(data ...[]byte) []byte          { return Keccak256(data...) }
 func Sha3Hash(data ...[]byte) common.Hash { return Keccak256Hash(data...) }
 
 // Creates an ethereum address given the bytes and the nonce
 func CreateAddress(b common.Address, nonce uint64) common.Address {
 	data, _ := rlp.EncodeToBytes([]interface{}{b, nonce})
 	return common.BytesToAddress(Keccak256(data)[12:])
-}
-
-func Sha256(data []byte) []byte {
-	hash := sha256.Sum256(data)
-
-	return hash[:]
-}
-
-func Ripemd160(data []byte) []byte {
-	ripemd := ripemd160.New()
-	ripemd.Write(data)
-
-	return ripemd.Sum(nil)
 }
 
 // ToECDSA creates a private key with the given D value.
