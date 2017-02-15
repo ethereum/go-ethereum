@@ -33,6 +33,12 @@ func makeCompilerAPIs(solcPath string) []rpc.API {
 			Public:    true,
 		},
 		{
+			Namespace: "exp",
+			Version:   "1.0",
+			Service:   (*PublicCompilerAPI)(c),
+			Public:    true,
+		},
+		{
 			Namespace: "admin",
 			Version:   "1.0",
 			Service:   (*CompilerAdminAPI)(c),

@@ -302,7 +302,7 @@ func (s *Service) login(in *json.Decoder, out *json.Encoder) error {
 	infos := s.server.NodeInfo()
 
 	var network, protocol string
-	if info := infos.Protocols["eth"]; info != nil {
+	if info := infos.Protocols["exp"]; info != nil {
 		network = strconv.Itoa(info.(*eth.EthNodeInfo).Network)
 		protocol = fmt.Sprintf("eth/%d", eth.ProtocolVersions[0])
 	} else {
