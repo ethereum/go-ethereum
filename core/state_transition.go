@@ -250,7 +250,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 		ret, self.gas, vmerr = evm.Call(sender, self.to().Address(), self.data, self.gas, self.value)
 	}
 	if vmerr != nil {
-		glog.V(logger.Core).Infoln("vm returned with error:", err)
+		glog.V(logger.Debug).Infoln("vm returned with error:", err)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.

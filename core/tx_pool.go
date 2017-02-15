@@ -514,7 +514,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 	for addr, list := range pool.queue {
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(state.GetNonce(addr)) {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Removed old queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
@@ -522,7 +522,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 		// Drop all transactions that are too costly (low balance)
 		drops, _ := list.Filter(state.GetBalance(addr))
 		for _, tx := range drops {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Removed unpayable queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
@@ -530,14 +530,14 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 		}
 		// Gather all executable transactions and promote them
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Promoting queued transaction: %v", tx)
 			}
 			pool.promoteTx(addr, tx.Hash(), tx)
 		}
 		// Drop all transactions over the allowed limit
 		for _, tx := range list.Cap(int(maxQueuedPerAccount)) {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Removed cap-exceeding queued transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
@@ -651,7 +651,7 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(nonce) {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Removed old pending transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
@@ -659,14 +659,14 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 		// Drop all transactions that are too costly (low balance), and queue any invalids back for later
 		drops, invalids := list.Filter(state.GetBalance(addr))
 		for _, tx := range drops {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Removed unpayable pending transaction: %v", tx)
 			}
 			delete(pool.all, tx.Hash())
 			pendingNofundsCounter.Inc(1)
 		}
 		for _, tx := range invalids {
-			if glog.V(logger.Core) {
+			if glog.V(logger.Debug) {
 				glog.Infof("Demoting pending transaction: %v", tx)
 			}
 			pool.enqueueTx(tx.Hash(), tx)
