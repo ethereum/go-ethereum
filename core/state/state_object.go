@@ -135,7 +135,7 @@ func (self *StateObject) markSuicided() {
 		self.onDirty(self.Address())
 		self.onDirty = nil
 	}
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("%x: #%d %v X\n", self.Address(), self.Nonce(), self.Balance())
 	}
 }
@@ -253,7 +253,7 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 	}
 	c.SetBalance(new(big.Int).Add(c.Balance(), amount))
 
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
 	}
 }
@@ -266,7 +266,7 @@ func (c *StateObject) SubBalance(amount *big.Int) {
 	}
 	c.SetBalance(new(big.Int).Sub(c.Balance(), amount))
 
-	if glog.V(logger.Core) {
+	if glog.V(logger.Debug) {
 		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
 	}
 }
