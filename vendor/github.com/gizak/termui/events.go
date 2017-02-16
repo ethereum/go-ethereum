@@ -1,4 +1,4 @@
-// Copyright 2016 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
+// Copyright 2017 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 
@@ -221,6 +221,7 @@ func findMatch(mux map[string]func(Event), path string) string {
 	return pattern
 
 }
+
 // Remove all existing defined Handlers from the map
 func (es *EvtStream) ResetHandlers() {
 	for Path, _ := range es.Handlers {
@@ -309,7 +310,7 @@ func NewTimerCh(du time.Duration) chan Event {
 	return t
 }
 
-var DefualtHandler = func(e Event) {
+var DefaultHandler = func(e Event) {
 }
 
 var usrEvtCh = make(chan Event)
