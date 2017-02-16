@@ -225,7 +225,7 @@ func (api *PublicWhisperAPI) UninstallFilter(filterId uint32) {
 }
 
 // GetFilterChanges retrieves all the new messages matched by a filter since the last retrieval.
-func (api *PublicWhisperAPI) GetFilterChanges(filterId uint32) []WhisperMessage {
+func (api *PublicWhisperAPI) GetFilterChanges(filterId uint32) []*WhisperMessage {
 	f := api.whisper.GetFilter(filterId)
 	if f != nil {
 		newMail := f.Retrieve()
@@ -235,14 +235,14 @@ func (api *PublicWhisperAPI) GetFilterChanges(filterId uint32) []WhisperMessage 
 }
 
 // GetMessages retrieves all the known messages that match a specific filter.
-func (api *PublicWhisperAPI) GetMessages(filterId uint32) []WhisperMessage {
+func (api *PublicWhisperAPI) GetMessages(filterId uint32) []*WhisperMessage {
 	all := api.whisper.Messages(filterId)
 	return toWhisperMessages(all)
 }
 
 // toWhisperMessages converts a Whisper message to a RPC whisper message.
-func toWhisperMessages(messages []*ReceivedMessage) []WhisperMessage {
-	msgs := make([]WhisperMessage, len(messages))
+func toWhisperMessages(messages []*ReceivedMessage) []*WhisperMessage {
+	msgs := make([]*WhisperMessage, len(messages))
 	for i, msg := range messages {
 		msgs[i] = NewWhisperMessage(msg)
 	}
@@ -449,15 +449,21 @@ type WhisperMessage struct {
 }
 
 // NewWhisperMessage converts an internal message into an API version.
-func NewWhisperMessage(message *ReceivedMessage) WhisperMessage {
-	return WhisperMessage{
+func NewWhisperMessage(message *ReceivedMessage) *WhisperMessage {
+	msg := WhisperMessage{
 		Payload: common.ToHex(message.Payload),
 		Padding: common.ToHex(message.Padding),
-		From:    common.ToHex(crypto.FromECDSAPub(message.SigToPubKey())),
-		To:      common.ToHex(crypto.FromECDSAPub(message.Dst)),
 		Sent:    message.Sent,
 		TTL:     message.TTL,
 		PoW:     message.PoW,
 		Hash:    common.ToHex(message.EnvelopeHash.Bytes()),
 	}
+
+	if message.Dst != nil {
+		msg.To = common.ToHex(crypto.FromECDSAPub(message.Dst))
+	}
+	if isMessageSigned(message.Raw[0]) {
+		msg.From = common.ToHex(crypto.FromECDSAPub(message.SigToPubKey()))
+	}
+	return &msg
 }
