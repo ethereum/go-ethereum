@@ -365,7 +365,7 @@ func doArchive(cmdline []string) {
 		gexp     = "gexp-" + base + ext
 		alltools = "gexp-alltools-" + base + ext
 	)
-	maybeSkipArchive(env)
+	// maybeSkipArchive(env)
 	if err := build.WriteArchive(gexp, gethArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
