@@ -123,7 +123,7 @@ func (api *PublicWhisperAPI) GenerateSymKey(name string) error {
 }
 
 // AddSymKey stores the key under the 'name' id.
-func (api *PublicWhisperAPI) AddSymKey(name string, key []byte) error {
+func (api *PublicWhisperAPI) AddSymKey(name string, key hexutil.Bytes) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
@@ -438,6 +438,7 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 
 // WhisperMessage is the RPC representation of a whisper message.
 type WhisperMessage struct {
+	Topic   string  `json:"topic"`
 	Payload string  `json:"payload"`
 	Padding string  `json:"padding"`
 	From    string  `json:"from"`
@@ -451,6 +452,7 @@ type WhisperMessage struct {
 // NewWhisperMessage converts an internal message into an API version.
 func NewWhisperMessage(message *ReceivedMessage) *WhisperMessage {
 	msg := WhisperMessage{
+		Topic:   common.ToHex(message.Topic[:]),
 		Payload: common.ToHex(message.Payload),
 		Padding: common.ToHex(message.Padding),
 		Sent:    message.Sent,

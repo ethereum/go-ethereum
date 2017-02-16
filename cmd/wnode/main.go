@@ -170,7 +170,7 @@ func initialize() {
 	}
 
 	if *testMode {
-		symPass = "test"
+		symPass = "wwww" // ascii code: 0x77777777
 		msPassword = "mail server test password"
 	}
 
