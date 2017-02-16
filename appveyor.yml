@@ -31,5 +31,7 @@ build_script:
   - go run build\ci.go install
 
 after_build:
-  - go run build\ci.go archive -type zip -signer WINDOWS_SIGNING_KEY -upload gexpstore/builds
-  - go run build\ci.go nsis -signer WINDOWS_SIGNING_KEY -upload gexpstore/builds
+  - GO run build\ci.go archive -type zip
+
+artifacts:
+  - path: geth-*.zip
