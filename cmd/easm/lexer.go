@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -31,6 +32,7 @@ const (
 	invalidStatement                 // any invalid statement
 	element                          // any element during element parsing
 	label                            // label is emitted when a labal is found
+	labelDef                         // label definition is emitted when a new label is found
 	number                           // number is emitted when a number is found
 	stringValue                      // stringValue is emitted when a string has been found
 
@@ -48,12 +50,13 @@ func (it itemType) String() string {
 }
 
 var stringItemTypes = []string{
-	eof:              "eof",
+	eof:              "EOF",
 	invalidStatement: "invalid statement",
 	element:          "element",
-	lineEnd:          "bol",
-	lineStart:        "eol",
+	lineEnd:          "end of line",
+	lineStart:        "new line",
 	label:            "label",
+	labelDef:         "label definition",
 	number:           "number",
 	stringValue:      "string",
 }
@@ -69,21 +72,26 @@ type Lexer struct {
 
 	lineno            int // current line number in the source file
 	start, pos, width int // positions for lexing and returning value
+
+	debug bool // flag for triggering debug output
 }
 
 // lex lexes the program by name with the given source. It returns a
 // channel on which the items are delivered.
-func lex(name, source string) chan item {
+func lex(name string, source []byte, debug bool) <-chan item {
 	ch := make(chan item)
 	l := &Lexer{
-		input: source,
+		input: string(source),
 		items: ch,
 		state: lexLine,
+		debug: debug,
 	}
 	go func() {
+		l.emit(lineStart)
 		for l.state != nil {
 			l.state = l.state(l)
 		}
+		l.emit(eof)
 		close(l.items)
 	}()
 
@@ -157,19 +165,26 @@ func (l *Lexer) blob() string {
 
 // Emits a new item on to item channel for processing
 func (l *Lexer) emit(t itemType) {
-	l.items <- item{t, l.lineno, l.blob()}
+	item := item{t, l.lineno, l.blob()}
+
+	if l.debug {
+		fmt.Printf("%04d: (%-20v) %s\n", item.lineno, item.typ, item.text)
+	}
+
+	l.items <- item
 	l.start = l.pos
 }
 
 // lexLine is state function for lexing lines
 func lexLine(l *Lexer) stateFn {
-	l.emit(lineStart)
 	for {
 		switch r := l.next(); {
 		case r == '\n':
-			l.lineno++
-			l.ignore()
 			l.emit(lineEnd)
+			l.ignore()
+			l.lineno++
+
+			l.emit(lineStart)
 		case isSpace(r):
 			l.ignore()
 		case isAlphaNumeric(r) || r == '_':
@@ -177,6 +192,7 @@ func lexLine(l *Lexer) stateFn {
 		case isNumber(r):
 			return lexNumber
 		case r == '@':
+			l.ignore()
 			return lexLabel
 		case r == '"':
 			return lexInsideString
@@ -221,10 +237,13 @@ func lexNumber(l *Lexer) stateFn {
 }
 
 func lexElement(l *Lexer) stateFn {
-	l.acceptRun(Alpha + "_")
+	l.acceptRun(Alpha + "_" + Numbers)
 
-	if l.accept(":") {
-		l.emit(label)
+	if l.peek() == ':' {
+		l.emit(labelDef)
+
+		l.accept(":")
+		l.ignore()
 	} else {
 		l.emit(element)
 	}
