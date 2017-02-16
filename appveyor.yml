@@ -34,4 +34,4 @@ after_build:
   - GO run build\ci.go archive -type zip
 
 artifacts:
-  - path: geth-*.zip
+  - path: gexp-*.zip
