@@ -6,6 +6,7 @@
 package monotime
 
 import (
+	"time"
 	_ "unsafe" // required to use //go:linkname
 )
 
@@ -21,4 +22,10 @@ func nanotime() int64
 // seconds.
 func Now() uint64 {
 	return uint64(nanotime())
+}
+
+// Since returns the amount of time that has elapsed since t. t should be
+// the result of a call to Now() on the same machine.
+func Since(t uint64) time.Duration {
+	return time.Duration(Now() - t)
 }
