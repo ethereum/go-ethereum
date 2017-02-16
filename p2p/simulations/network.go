@@ -328,12 +328,6 @@ func (self *Conn) nodesUp() error {
 	return nil
 }
 
-// sa := node.Adapter()
-// err := sa.Stop()
-// if err != nil {
-// 	return err
-// }
-
 // Start(id) starts up the node (relevant only for instance with own p2p or remote)
 func (self *Network) Start(id *adapters.NodeId) error {
 	node := self.GetNode(id)

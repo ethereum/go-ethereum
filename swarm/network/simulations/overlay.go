@@ -29,7 +29,8 @@ type Network struct {
 
 // SimNode is the adapter used by Swarm simulations.
 type SimNode struct {
-	hive *network.Hive
+	connect func(s string) error
+	hive    *network.Hive
 	adapters.NodeAdapter
 }
 
@@ -41,11 +42,7 @@ func af() <-chan time.Time {
 // Start() starts up the hive
 // makes SimNode implement *NodeAdapter
 func (self *SimNode) Start() error {
-	connect := func(s string) error {
-		id := network.HexToBytes(s)
-		return self.Connect(id)
-	}
-	return self.hive.Start(connect, af)
+	return self.hive.Start(self.connect, af)
 }
 
 // Stop() shuts down the hive
@@ -64,14 +61,18 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, adapters.NewSimPipe)
 	addr := network.NewPeerAddrFromNodeId(id)
-	// to := network.NewKademlia(addr.OverlayAddr(), nil)   // overlay topology driver
+	// to := network.NewKademlia(addr.OverlayAddr(), nil) // overlay topology driver
 	to := network.NewTestOverlay(addr.OverlayAddr())   // overlay topology driver
 	pp := network.NewHive(network.NewHiveParams(), to) // hive
 	self.hives = append(self.hives, pp)                // remember hive
 	// bzz protocol Run function. messaging through SimPipe
 	ct := network.BzzCodeMap(network.HiveMsgs...) // bzz protocol code map
 	na.Run = network.Bzz(addr.OverlayAddr(), pp, na, ct, nil).Run
+	connect := func(s string) error {
+		return self.Connect(id, adapters.NewNodeIdFromHex(s))
+	}
 	return &SimNode{
+		connect:     connect,
 		hive:        pp,
 		NodeAdapter: na,
 	}
@@ -106,7 +107,7 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 					if parent != nil {
 						parent.SetResource(conf.Id, c)
 					}
-					ids := p2ptest.RandomNodeIds(5)
+					ids := p2ptest.RandomNodeIds(50)
 					for _, id := range ids {
 						ppnet.NewNode(&simulations.NodeConfig{Id: id})
 						ppnet.Start(id)
