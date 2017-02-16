@@ -17,6 +17,12 @@
 			"revisionTime": "2017-02-10T01:56:32Z"
 		},
 		{
+			"checksumSHA1": "fIpm6Vr5a8kgr22gWkQx7vKUTyU=",
+			"path": "github.com/btcsuite/btcd/btcec",
+			"revision": "d06c0bb181529331be8f8d9350288c420d9e60e4",
+			"revisionTime": "2017-02-01T21:25:25Z"
+		},
+		{
 			"checksumSHA1": "cDMtzKmdTx4CcIpP4broa+16X9g=",
 			"path": "github.com/cespare/cp",
 			"revision": "165db2f241fd235aec29ba6d9b1ccd5f1c14637c",
