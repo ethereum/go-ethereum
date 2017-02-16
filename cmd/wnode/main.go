@@ -66,7 +66,7 @@ var (
 	asymKey    *ecdsa.PrivateKey
 	nodeid     *ecdsa.PrivateKey
 	topic      whisper.TopicType
-	filterID   uint32
+	filterID   string
 	symPass    string
 	msPassword string
 )

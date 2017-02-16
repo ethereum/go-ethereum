@@ -151,9 +151,9 @@ func (api *PublicWhisperAPI) DeleteSymKey(name string) error {
 
 // NewWhisperFilter creates and registers a new message filter to watch for inbound whisper messages.
 // Returns the ID of the newly created Filter.
-func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
+func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 	if api.whisper == nil {
-		return 0, whisperOffLineErr
+		return "", whisperOffLineErr
 	}
 
 	filter := Filter{
@@ -171,25 +171,25 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 	if len(args.Topics) == 0 {
 		info := "NewFilter: at least one topic must be specified"
 		glog.V(logger.Error).Infof(info)
-		return 0, errors.New(info)
+		return "", errors.New(info)
 	}
 
 	if len(args.KeyName) != 0 && len(filter.KeySym) == 0 {
 		info := "NewFilter: key was not found by name: " + args.KeyName
 		glog.V(logger.Error).Infof(info)
-		return 0, errors.New(info)
+		return "", errors.New(info)
 	}
 
 	if len(args.To) == 0 && len(filter.KeySym) == 0 {
 		info := "NewFilter: filter must contain either symmetric or asymmetric key"
 		glog.V(logger.Error).Infof(info)
-		return 0, errors.New(info)
+		return "", errors.New(info)
 	}
 
 	if len(args.To) != 0 && len(filter.KeySym) != 0 {
 		info := "NewFilter: filter must not contain both symmetric and asymmetric key"
 		glog.V(logger.Error).Infof(info)
-		return 0, errors.New(info)
+		return "", errors.New(info)
 	}
 
 	if len(args.To) > 0 {
@@ -197,13 +197,13 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 		if !ValidatePublicKey(dst) {
 			info := "NewFilter: Invalid 'To' address"
 			glog.V(logger.Error).Infof(info)
-			return 0, errors.New(info)
+			return "", errors.New(info)
 		}
 		filter.KeyAsym = api.whisper.GetIdentity(string(args.To))
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
 			glog.V(logger.Error).Infof(info)
-			return 0, errors.New(info)
+			return "", errors.New(info)
 		}
 	}
 
@@ -211,7 +211,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 		if !ValidatePublicKey(filter.Src) {
 			info := "NewFilter: Invalid 'From' address"
 			glog.V(logger.Error).Infof(info)
-			return 0, errors.New(info)
+			return "", errors.New(info)
 		}
 	}
 
@@ -220,12 +220,12 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (uint32, error) {
 }
 
 // UninstallFilter disables and removes an existing filter.
-func (api *PublicWhisperAPI) UninstallFilter(filterId uint32) {
+func (api *PublicWhisperAPI) UninstallFilter(filterId string) {
 	api.whisper.Unwatch(filterId)
 }
 
 // GetFilterChanges retrieves all the new messages matched by a filter since the last retrieval.
-func (api *PublicWhisperAPI) GetFilterChanges(filterId uint32) []*WhisperMessage {
+func (api *PublicWhisperAPI) GetFilterChanges(filterId string) []*WhisperMessage {
 	f := api.whisper.GetFilter(filterId)
 	if f != nil {
 		newMail := f.Retrieve()
@@ -235,7 +235,7 @@ func (api *PublicWhisperAPI) GetFilterChanges(filterId uint32) []*WhisperMessage
 }
 
 // GetMessages retrieves all the known messages that match a specific filter.
-func (api *PublicWhisperAPI) GetMessages(filterId uint32) []*WhisperMessage {
+func (api *PublicWhisperAPI) GetMessages(filterId string) []*WhisperMessage {
 	all := api.whisper.Messages(filterId)
 	return toWhisperMessages(all)
 }
@@ -282,7 +282,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	filter := api.whisper.GetFilter(args.FilterID)
-	if filter == nil && args.FilterID > 0 {
+	if filter == nil && len(args.FilterID) > 0 {
 		info := fmt.Sprintf("Post: wrong filter id %d", args.FilterID)
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
@@ -374,7 +374,7 @@ type PostArgs struct {
 	Payload  hexutil.Bytes `json:"payload"`
 	WorkTime uint32        `json:"worktime"`
 	PoW      float64       `json:"pow"`
-	FilterID uint32        `json:"filterID"`
+	FilterID string        `json:"filterID"`
 	PeerID   hexutil.Bytes `json:"peerID"`
 }
 

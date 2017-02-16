@@ -44,7 +44,7 @@ func TestWhisperBasic(t *testing.T) {
 	if uint64(w.Version()) != ProtocolVersion {
 		t.Fatalf("failed whisper Version: %v.", shh.Version)
 	}
-	if w.GetFilter(0) != nil {
+	if w.GetFilter("non-existent") != nil {
 		t.Fatalf("failed GetFilter.")
 	}
 
@@ -69,7 +69,7 @@ func TestWhisperBasic(t *testing.T) {
 	if len(mail) != 0 {
 		t.Fatalf("failed w.Envelopes().")
 	}
-	m := w.Messages(0)
+	m := w.Messages("non-existent")
 	if len(m) != 0 {
 		t.Fatalf("failed w.Messages.")
 	}
