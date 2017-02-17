@@ -13,15 +13,18 @@ matrix:
       go: 1.6.2
     - os: linux
       dist: trusty
-      go: 1.7.4
+      go: 1.7.5
+    - os: linux
+      dist: trusty
+      go: 1.8
     - os: osx
-      go: 1.7.4
+      go: 1.8
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.7.4
+      go: 1.8
       env:
         - ubuntu-ppa
         - azure-linux
@@ -73,10 +76,10 @@ matrix:
         - azure-android
         - maven-android
       before_install:
-        - curl https://storage.googleapis.com/golang/go1.8rc3.linux-amd64.tar.gz | tar -xz
+        - curl https://storage.googleapis.com/golang/go1.8.linux-amd64.tar.gz | tar -xz
         - export PATH=`pwd`/go/bin:$PATH
         - export GOROOT=`pwd`/go
-        - export GOPATH=$HOME/go # Drop post Go 1.8
+        - export GOPATH=$HOME/go
       script:
         # Build the Android archive and upload it to Maven Central and Azure
         - curl https://dl.google.com/android/repository/android-ndk-r13b-linux-x86_64.zip -o android-ndk-r13b.zip
@@ -90,7 +93,7 @@ matrix:
 
     # This builder does the OSX Azure, iOS CocoaPods and iOS Azure uploads
     - os: osx
-      go: 1.7.4
+      go: 1.8
       env:
         - azure-osx
         - azure-ios
