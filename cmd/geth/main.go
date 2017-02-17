@@ -81,6 +81,7 @@ func init() {
 		// See misccmd.go:
 		makedagCommand,
 		versionCommand,
+		bugCommand,
 		licenseCommand,
 	}
 
