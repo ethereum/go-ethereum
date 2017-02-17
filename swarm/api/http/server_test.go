@@ -113,6 +113,9 @@ func TestBzzrGetPath(t *testing.T) {
 			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
 		}
 		resp, err = http.Get(url)
+		if err != nil {
+			t.Fatalf("Request failed: %v", err)
+		}
 		defer resp.Body.Close()
 		respbody, err = ioutil.ReadAll(resp.Body)
 
