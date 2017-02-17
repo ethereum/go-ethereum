@@ -86,12 +86,6 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 	evm.env.depth++
 	defer func() { evm.env.depth-- }()
 
-	if contract.CodeAddr != nil {
-		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
-			return RunPrecompiledContract(p, input, contract)
-		}
-	}
-
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
 		return nil, nil
