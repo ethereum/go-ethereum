@@ -122,6 +122,10 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	return nil
 }
 
+func (e *Envelope) size() int {
+	return len(e.Data) + len(e.Version) + len(e.AESNonce) + len(e.Salt) + 20
+}
+
 func (e *Envelope) PoW() float64 {
 	if e.pow == 0 {
 		e.calculatePoW(0)
@@ -137,14 +141,14 @@ func (e *Envelope) calculatePoW(diff uint32) {
 	h = crypto.Keccak256(buf)
 	firstBit := common.FirstBitSet(common.BigD(h))
 	x := math.Pow(2, float64(firstBit))
-	x /= float64(len(e.Data)) // we only count e.Data, other variable-sized members are checked in Whisper.add()
+	x /= float64(e.size())
 	x /= float64(e.TTL + diff)
 	e.pow = x
 }
 
 func (e *Envelope) powToFirstBit(pow float64) int {
 	x := pow
-	x *= float64(len(e.Data))
+	x *= float64(e.size())
 	x *= float64(e.TTL)
 	bits := math.Log2(x)
 	bits = math.Ceil(bits)

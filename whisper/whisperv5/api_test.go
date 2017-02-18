@@ -152,7 +152,7 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 	"keyname":"testname",
 	"pow":2.34,
 	"topics":["0x00000000", "0x007f80ff", "0xff807f00", "0xf26e7779"],
-	"acceptP2P":true
+	"p2p":true
 	}`)
 
 	var f WhisperFilterArgs
@@ -212,8 +212,8 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	"payload":"0x7061796C6F61642073686F756C642062652070736575646F72616E646F6D",
 	"worktime":777,
 	"pow":3.1416,
-	"filterID":"test-filter-id",
-	"peerID":"0xf26e7779"
+	"filterid":"test-filter-id",
+	"peerid":"0xf26e7779"
 	}`)
 
 	var a PostArgs
