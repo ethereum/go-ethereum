@@ -82,6 +82,7 @@ var (
 	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
 	generateKey    = flag.Bool("k", false, "generate and show the private key")
 
+	argVerbosity = flag.Int("verbosity", logger.Warn, "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
 	argPoW       = flag.Float64("pow", whisper.MinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
@@ -152,7 +153,7 @@ func echo() {
 }
 
 func initialize() {
-	glog.SetV(logger.Warn)
+	glog.SetV(*argVerbosity)
 	glog.SetToStderr(true)
 
 	done = make(chan struct{})
