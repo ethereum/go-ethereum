@@ -168,7 +168,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 	}
 	filter.Topics = append(filter.Topics, args.Topics...)
 
-	if len(args.Topics) == 0 {
+	if len(args.Topics) == 0 && len(args.KeyName) != 0 {
 		info := "NewFilter: at least one topic must be specified"
 		glog.V(logger.Error).Infof(info)
 		return "", errors.New(info)
@@ -374,17 +374,17 @@ type PostArgs struct {
 	Payload  hexutil.Bytes `json:"payload"`
 	WorkTime uint32        `json:"worktime"`
 	PoW      float64       `json:"pow"`
-	FilterID string        `json:"filterID"`
-	PeerID   hexutil.Bytes `json:"peerID"`
+	FilterID string        `json:"filterid"`
+	PeerID   hexutil.Bytes `json:"peerid"`
 }
 
 type WhisperFilterArgs struct {
-	To        string
-	From      string
-	KeyName   string
-	PoW       float64
-	Topics    []TopicType
-	AcceptP2P bool
+	To        string      `json:"to"`
+	From      string      `json:"from"`
+	KeyName   string      `json:"keyname"`
+	PoW       float64     `json:"pow"`
+	Topics    []TopicType `json:"topics"`
+	AcceptP2P bool        `json:"p2p"`
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface, invoked to convert a
@@ -397,7 +397,7 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 		KeyName   string        `json:"keyname"`
 		PoW       float64       `json:"pow"`
 		Topics    []interface{} `json:"topics"`
-		AcceptP2P bool          `json:"acceptP2P"`
+		AcceptP2P bool          `json:"p2p"`
 	}
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return err
