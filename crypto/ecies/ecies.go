@@ -30,6 +30,7 @@
 package ecies
 
 import (
+	"bytes"
 	"crypto/cipher"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -213,16 +214,17 @@ func symEncrypt(rand io.Reader, params *ECIESParams, key, m []byte) (ct []byte, 
 	if err != nil {
 		return
 	}
-
-	iv, err := generateIV(params, rand)
-	if err != nil {
-		return
-	}
+	/*
+		In SEC 1 Version 2.0 section 3.8 the IV value is not specified in for XOR CTR.
+		It is specified, however, that it should not be transmitted as part of the ciphertext.
+		This means it cannot be random, as the other party would not know the value.
+		Therefore we set it to the zeroed value defined for AES in CTR mode.
+	*/
+	iv := bytes.Repeat([]byte{0}, 16)
 	ctr := cipher.NewCTR(c, iv)
 
-	ct = make([]byte, len(m)+params.BlockSize)
-	copy(ct, iv)
-	ctr.XORKeyStream(ct[params.BlockSize:], m)
+	ct = make([]byte, len(m))
+	ctr.XORKeyStream(ct, m)
 	return
 }
 
@@ -234,10 +236,11 @@ func symDecrypt(rand io.Reader, params *ECIESParams, key, ct []byte) (m []byte, 
 		return
 	}
 
-	ctr := cipher.NewCTR(c, ct[:params.BlockSize])
+	iv := bytes.Repeat([]byte{0}, 16)
+	ctr := cipher.NewCTR(c, iv)
 
-	m = make([]byte, len(ct)-params.BlockSize)
-	ctr.XORKeyStream(m, ct[params.BlockSize:])
+	m = make([]byte, len(ct))
+	ctr.XORKeyStream(m, ct)
 	return
 }
 
@@ -270,12 +273,9 @@ func Encrypt(rand io.Reader, pub *PublicKey, m, s1, s2 []byte) (ct []byte, err e
 	}
 	Ke := K[:params.KeyLen]
 	Km := K[params.KeyLen:]
-	hash.Write(Km)
-	Km = hash.Sum(nil)
-	hash.Reset()
 
 	em, err := symEncrypt(rand, params, Ke, m)
-	if err != nil || len(em) <= params.BlockSize {
+	if err != nil {
 		return
 	}
 
@@ -350,9 +350,6 @@ func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err 
 
 	Ke := K[:params.KeyLen]
 	Km := K[params.KeyLen:]
-	hash.Write(Km)
-	Km = hash.Sum(nil)
-	hash.Reset()
 
 	d := messageTag(params.Hash, Km, c[mStart:mEnd], s2)
 	if subtle.ConstantTimeCompare(c[mEnd:], d) != 1 {
