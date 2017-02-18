@@ -250,7 +250,7 @@ func TestUnmarshalPostArgs(t *testing.T) {
 		t.Fatalf("wrong pow: %f.", a.PoW)
 	}
 	if a.FilterID != "test-filter-id" {
-		t.Fatalf("wrong FilterID: %d.", a.FilterID)
+		t.Fatalf("wrong FilterID: %s.", a.FilterID)
 	}
 	if !bytes.Equal(a.PeerID[:], a.Topic[:]) {
 		t.Fatalf("wrong PeerID: %x.", a.PeerID)

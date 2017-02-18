@@ -187,7 +187,7 @@ func checkPropagation(t *testing.T) {
 		for i := 0; i < NumNodes; i++ {
 			f := nodes[i].shh.GetFilter(nodes[i].filerId)
 			if f == nil {
-				t.Fatalf("failed to get filterId %d from node %d.", nodes[i].filerId, i)
+				t.Fatalf("failed to get filterId %s from node %d.", nodes[i].filerId, i)
 			}
 
 			mail := f.Retrieve()

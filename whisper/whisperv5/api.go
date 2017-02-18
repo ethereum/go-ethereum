@@ -283,7 +283,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 
 	filter := api.whisper.GetFilter(args.FilterID)
 	if filter == nil && len(args.FilterID) > 0 {
-		info := fmt.Sprintf("Post: wrong filter id %d", args.FilterID)
+		info := fmt.Sprintf("Post: wrong filter id %s", args.FilterID)
 		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
@@ -299,7 +299,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		if (params.Topic == TopicType{}) {
 			sz := len(filter.Topics)
 			if sz < 1 {
-				info := fmt.Sprintf("Post: no topics in filter # %d", args.FilterID)
+				info := fmt.Sprintf("Post: no topics in filter # %s", args.FilterID)
 				glog.V(logger.Error).Infof(info)
 				return errors.New(info)
 			} else if sz == 1 {
