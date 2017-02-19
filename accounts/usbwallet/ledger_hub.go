@@ -18,18 +18,16 @@
 // wallets. The wire protocol spec can be found in the Ledger Blue GitHub repo:
 // https://raw.githubusercontent.com/LedgerHQ/blue-app-eth/master/doc/ethapp.asc
 
-// +build !ios
-
 package usbwallet
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/karalabe/gousb/usb"
+	"github.com/karalabe/hid"
 )
 
 // LedgerScheme is the protocol scheme prefixing account and wallet URLs.
@@ -49,8 +47,6 @@ const ledgerRefreshThrottling = 500 * time.Millisecond
 
 // LedgerHub is a accounts.Backend that can find and handle Ledger hardware wallets.
 type LedgerHub struct {
-	ctx *usb.Context // Context interfacing with a libusb instance
-
 	refreshed   time.Time               // Time instance when the list of wallets was last refreshed
 	wallets     []accounts.Wallet       // List of Ledger devices currently tracking
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
@@ -63,18 +59,13 @@ type LedgerHub struct {
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
 func NewLedgerHub() (*LedgerHub, error) {
-	// Initialize the USB library to access Ledgers through
-	ctx, err := usb.NewContext()
-	if err != nil {
-		return nil, err
+	if !hid.Supported() {
+		return nil, errors.New("unsupported platform")
 	}
-	// Create the USB hub, start and return it
 	hub := &LedgerHub{
-		ctx:  ctx,
 		quit: make(chan chan error),
 	}
 	hub.refreshWallets()
-
 	return hub, nil
 }
 
@@ -104,31 +95,23 @@ func (hub *LedgerHub) refreshWallets() {
 		return
 	}
 	// Retrieve the current list of Ledger devices
-	var devIDs []deviceID
-	var busIDs []uint16
-
-	hub.ctx.ListDevices(func(desc *usb.Descriptor) bool {
-		// Gather Ledger devices, don't connect any just yet
+	var ledgers []hid.DeviceInfo
+	for _, info := range hid.Enumerate(0, 0) { // Can't enumerate directly, one valid ID is the 0 wildcard
 		for _, id := range ledgerDeviceIDs {
-			if desc.Vendor == id.Vendor && desc.Product == id.Product {
-				devIDs = append(devIDs, deviceID{Vendor: desc.Vendor, Product: desc.Product})
-				busIDs = append(busIDs, uint16(desc.Bus)<<8+uint16(desc.Address))
-				return false
+			if info.VendorID == id.Vendor && info.ProductID == id.Product {
+				ledgers = append(ledgers, info)
+				break
 			}
 		}
-		// Not ledger, ignore and don't connect either
-		return false
-	})
+	}
 	// Transform the current list of wallets into the new one
 	hub.lock.Lock()
 
-	wallets := make([]accounts.Wallet, 0, len(devIDs))
+	wallets := make([]accounts.Wallet, 0, len(ledgers))
 	events := []accounts.WalletEvent{}
 
-	for i := 0; i < len(devIDs); i++ {
-		devID, busID := devIDs[i], busIDs[i]
-
-		url := accounts.URL{Scheme: LedgerScheme, Path: fmt.Sprintf("%03d:%03d", busID>>8, busID&0xff)}
+	for _, ledger := range ledgers {
+		url := accounts.URL{Scheme: LedgerScheme, Path: ledger.Path}
 
 		// Drop wallets in front of the next device or those that failed for some reason
 		for len(hub.wallets) > 0 && (hub.wallets[0].URL().Cmp(url) < 0 || hub.wallets[0].(*ledgerWallet).failed()) {
@@ -137,7 +120,7 @@ func (hub *LedgerHub) refreshWallets() {
 		}
 		// If there are no more wallets or the device is before the next, wrap new wallet
 		if len(hub.wallets) == 0 || hub.wallets[0].URL().Cmp(url) > 0 {
-			wallet := &ledgerWallet{context: hub.ctx, hardwareID: devID, locationID: busID, url: &url}
+			wallet := &ledgerWallet{url: &url, info: ledger}
 
 			events = append(events, accounts.WalletEvent{Wallet: wallet, Arrive: true})
 			wallets = append(wallets, wallet)

@@ -119,10 +119,11 @@
 			"revisionTime": "2016-06-03T03:41:37Z"
 		},
 		{
-			"checksumSHA1": "SdiKy93Lsh3ly7I2E7vhlyp2Xq8=",
-			"path": "github.com/karalabe/gousb/usb",
-			"revision": "ffa821b2e25aa1828ffca731f759a1ebfa410d73",
-			"revisionTime": "2017-01-24T16:09:49Z"
+			"checksumSHA1": "HKy8oSpuboe02Uqq+43zbIzD/AY=",
+			"path": "github.com/karalabe/hid",
+			"revision": "40280bf4f6fc762010efeb066cbff7490d467f03",
+			"revisionTime": "2017-02-17T09:52:56Z",
+			"tree": true
 		},
 		{
 			"checksumSHA1": "7hln62oZPZmyqEmgXaybf9WxQ7A=",
