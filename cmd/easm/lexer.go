@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -168,7 +169,7 @@ func (l *Lexer) emit(t itemType) {
 	item := item{t, l.lineno, l.blob()}
 
 	if l.debug {
-		fmt.Printf("%04d: (%-20v) %s\n", item.lineno, item.typ, item.text)
+		fmt.Fprintf(os.Stderr, "%04d: (%-20v) %s\n", item.lineno, item.typ, item.text)
 	}
 
 	l.items <- item

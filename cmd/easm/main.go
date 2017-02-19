@@ -111,7 +111,6 @@ func newCompiler(debug bool) *Compiler {
 // position.
 func (c *Compiler) feed(ch <-chan item) {
 	for i := range ch {
-		fmt.Println(c.pc, i.text)
 		switch i.typ {
 		case number:
 			num := common.String2Big(i.text).Bytes()
@@ -133,7 +132,7 @@ func (c *Compiler) feed(ch <-chan item) {
 		c.tokens = append(c.tokens, i)
 	}
 	if c.debug {
-		fmt.Println("found", len(c.labels), "labels")
+		fmt.Sprintln(os.Stderr, "found", len(c.labels), "labels")
 	}
 }
 
