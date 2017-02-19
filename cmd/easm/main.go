@@ -23,6 +23,10 @@ var (
 		Name:  "debug",
 		Usage: "outputs lexer and compiler debug output",
 	}
+	LexFlag = cli.BoolFlag{
+		Name:  "lex",
+		Usage: "displays lex token output",
+	}
 )
 
 func init() {
@@ -39,7 +43,10 @@ func init() {
 }
 
 func run(ctx *cli.Context) {
-	debug := ctx.GlobalBool(DebugFlag.Name)
+	var (
+		debug    = ctx.GlobalBool(DebugFlag.Name)
+		lexDebug = ctx.GlobalBool(LexFlag.Name)
+	)
 
 	if len(ctx.Args()) == 0 {
 		glog.Exitln("err: <filename> required")
@@ -52,14 +59,13 @@ func run(ctx *cli.Context) {
 	}
 
 	compiler := newCompiler(debug)
-	compiler.feed(lex(fn, src, debug))
+	compiler.feed(lex(fn, src, lexDebug))
 
 	bin, errors := compiler.compile()
 	if len(errors) > 0 {
 		// report errors
 		for _, err := range errors {
-			got, want := err.Error()
-			fmt.Printf("%s:%d: syntax error: unexpected %v, expected %v\n", fn, err.Lineno(), got, want)
+			fmt.Printf("%s:%v\n", fn, err)
 		}
 		os.Exit(1)
 	}
@@ -105,6 +111,7 @@ func newCompiler(debug bool) *Compiler {
 // position.
 func (c *Compiler) feed(ch <-chan item) {
 	for i := range ch {
+		fmt.Println(c.pc, i.text)
 		switch i.typ {
 		case number:
 			num := common.String2Big(i.text).Bytes()
@@ -136,8 +143,8 @@ func (c *Compiler) feed(ch <-chan item) {
 //
 // compile is the second stage in the compile phase
 // which compiles the tokens to EVM instructions.
-func (c *Compiler) compile() (string, []cerror) {
-	var errors []cerror
+func (c *Compiler) compile() (string, []error) {
+	var errors []error
 	// continue looping over the tokens until
 	// the stack has been exhausted.
 	for c.pos < len(c.tokens) {
@@ -169,7 +176,7 @@ func (c *Compiler) next() item {
 
 // compile line compiles a single line instruction e.g.
 // "push 1", "jump @labal".
-func (c *Compiler) compileLine() cerror {
+func (c *Compiler) compileLine() error {
 	n := c.next()
 	if n.typ != lineStart {
 		return compileErr(n, n.typ.String(), lineStart.String())
@@ -211,7 +218,7 @@ func (c *Compiler) compileNumber(element item) (int, error) {
 // compileElement compiles the element (push & label or both)
 // to a binary representation and may error if incorrect statements
 // where fed.
-func (c *Compiler) compileElement(element item) cerror {
+func (c *Compiler) compileElement(element item) error {
 	// check for a jump. jumps must be read and compiled
 	// from right to left.
 	if isJump(element.text) {
@@ -231,37 +238,45 @@ func (c *Compiler) compileElement(element item) cerror {
 		default:
 			return compileErr(rvalue, rvalue.text, "number, string or label")
 		}
-	}
-	// push the operation
-	c.pushBin(toBinary(element.text))
+		// push the operation
+		c.pushBin(toBinary(element.text))
+		return nil
+	} else if isPush(element.text) {
+		// handle pushes. pushes are read from left to right.
+		var value []byte
 
-	// handle pushes. pushes are read from left to right.
-	if isPush(element.text) {
 		rvalue := c.next()
 		switch rvalue.typ {
 		case number:
-			// TODO figure out how to return the error properly
-			c.compileNumber(rvalue)
+			value = common.String2Big(rvalue.text).Bytes()
+			if len(value) == 0 {
+				value = []byte{0}
+			}
 		case stringValue:
-			// strings are quoted, remove them.
-			c.pushBin(rvalue.text[1 : len(rvalue.text)-1])
+			value = []byte(rvalue.text[1 : len(rvalue.text)-1])
 		case label:
-			c.pushBin(vm.PUSH4)
-			pos := make([]byte, 4)
-			copy(pos, big.NewInt(int64(c.labels[rvalue.text])).Bytes())
-			c.pushBin(pos)
+			value = make([]byte, 4)
+			copy(value, big.NewInt(int64(c.labels[rvalue.text])).Bytes())
 		default:
 			return compileErr(rvalue, rvalue.text, "number, string or label")
 		}
+
+		if len(value) > 32 {
+			return fmt.Errorf("%d type error: unsupported string or number with size > 32", rvalue.lineno)
+		}
+
+		c.pushBin(vm.OpCode(int(vm.PUSH1) - 1 + len(value)))
+		c.pushBin(value)
+	} else {
+		c.pushBin(toBinary(element.text))
 	}
 
 	return nil
 }
 
 // compileLabel pushes a jumpdest to the binary slice.
-func (c *Compiler) compileLabel() cerror {
+func (c *Compiler) compileLabel() {
 	c.pushBin(vm.JUMPDEST)
-	return nil
 }
 
 // pushBin pushes the value v to the binary stack.
@@ -294,11 +309,6 @@ func toBinary(text string) vm.OpCode {
 	return vm.StringToOp(strings.ToUpper(text))
 }
 
-type cerror interface {
-	Error() (string, string)
-	Lineno() int
-}
-
 type compileError struct {
 	got  string
 	want string
@@ -306,15 +316,16 @@ type compileError struct {
 	lineno int
 }
 
-func (c compileError) Error() (string, string) { return c.got, c.want }
-func (c compileError) Lineno() int             { return c.lineno }
+func (err compileError) Error() string {
+	return fmt.Sprintf("%d syntax error: unexpected %v, expected %v", err.lineno, err.got, err.want)
+}
 
 var (
 	errExpBol            = errors.New("expected beginning of line")
 	errExpElementOrLabel = errors.New("expected beginning of line")
 )
 
-func compileErr(c item, got, want string) cerror {
+func compileErr(c item, got, want string) error {
 	return compileError{
 		got:    got,
 		want:   want,
