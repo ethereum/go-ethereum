@@ -37,6 +37,7 @@ func testNodeConfig() *Config {
 	return &Config{
 		PrivateKey: testNodeKey,
 		Name:       "test node",
+		IPCPath:    "node.ipc",
 	}
 }
 
