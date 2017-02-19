@@ -2,19 +2,25 @@
 
 set -e
 
-if [ ! -f "build/env.sh" ]; then
+root="$PWD"
+
+if [ ! -f "$root/build/env.sh" ]; then
     echo "$0 must be run from the root of the repository."
     exit 2
 fi
 
+# Create build/bin if it doesn't exist yet.
+if [ ! -e "$root/build/bin" ]; then
+    mkdir -p "$root/build/bin"
+fi
+
 # Create fake Go workspace if it doesn't exist yet.
-workspace="$PWD/build/_workspace"
-root="$PWD"
+workspace="$root/../_go_build/_workspace"
 ethdir="$workspace/src/github.com/ethereum"
-if [ ! -L "$ethdir/go-ethereum" ]; then
+if [ ! -e "$ethdir/go-ethereum" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"
-    ln -s ../../../../../. go-ethereum
+    ln -s "$root" go-ethereum
     cd "$root"
 fi
 
