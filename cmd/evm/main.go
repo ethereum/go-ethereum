@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -153,7 +154,7 @@ func run(ctx *cli.Context) error {
 				os.Exit(1)
 			}
 		}
-		code = common.Hex2Bytes(string(hexcode[:]))
+		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
 	}
 
 	if ctx.GlobalBool(CreateFlag.Name) {
