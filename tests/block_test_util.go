@@ -177,6 +177,7 @@ func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *Blo
 	if err != nil {
 		return err
 	}
+	defer chain.Stop()
 
 	//vm.Debug = true
 	validBlocks, err := test.TryBlocksInsert(chain)
