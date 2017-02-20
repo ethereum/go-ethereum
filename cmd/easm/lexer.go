@@ -13,29 +13,29 @@ import (
 // current state.
 type stateFn func(*Lexer) stateFn
 
-// item is emitted when the lexer has discovered
-// a new parsable item. These are delivered over
-// the items channels of the lexer
-type item struct {
-	typ    itemType
+// token is emitted when the lexer has discovered
+// a new parsable token. These are delivered over
+// the tokens channels of the lexer
+type token struct {
+	typ    tokenType
 	lineno int
 	text   string
 }
 
-// itemType are the different types the lexer
+// tokenType are the different types the lexer
 // is able to parse and return.
-type itemType int
+type tokenType int
 
 const (
-	eof              itemType = iota // end of file
-	lineStart                        // emitted when a line starts
-	lineEnd                          // emitted when a line ends
-	invalidStatement                 // any invalid statement
-	element                          // any element during element parsing
-	label                            // label is emitted when a labal is found
-	labelDef                         // label definition is emitted when a new label is found
-	number                           // number is emitted when a number is found
-	stringValue                      // stringValue is emitted when a string has been found
+	eof              tokenType = iota // end of file
+	lineStart                         // emitted when a line starts
+	lineEnd                           // emitted when a line ends
+	invalidStatement                  // any invalid statement
+	element                           // any element during element parsing
+	label                             // label is emitted when a labal is found
+	labelDef                          // label definition is emitted when a new label is found
+	number                            // number is emitted when a number is found
+	stringValue                       // stringValue is emitted when a string has been found
 
 	Numbers            = "1234567890"                                           // characters representing any decimal number
 	HexadecimalNumbers = Numbers + "aAbBcCdDeEfF"                               // characters representing any hexadecimal
@@ -43,14 +43,14 @@ const (
 )
 
 // String implements stringer
-func (it itemType) String() string {
-	if int(it) > len(stringItemTypes) {
+func (it tokenType) String() string {
+	if int(it) > len(stringtokenTypes) {
 		return "invalid"
 	}
-	return stringItemTypes[it]
+	return stringtokenTypes[it]
 }
 
-var stringItemTypes = []string{
+var stringtokenTypes = []string{
 	eof:              "EOF",
 	invalidStatement: "invalid statement",
 	element:          "element",
@@ -68,8 +68,8 @@ var stringItemTypes = []string{
 type Lexer struct {
 	input string // input contains the source code of the program
 
-	items chan item // items is used to deliver tokens to the listener
-	state stateFn   // the current state function
+	tokens chan token // tokens is used to deliver tokens to the listener
+	state  stateFn    // the current state function
 
 	lineno            int // current line number in the source file
 	start, pos, width int // positions for lexing and returning value
@@ -78,14 +78,14 @@ type Lexer struct {
 }
 
 // lex lexes the program by name with the given source. It returns a
-// channel on which the items are delivered.
-func lex(name string, source []byte, debug bool) <-chan item {
-	ch := make(chan item)
+// channel on which the tokens are delivered.
+func lex(name string, source []byte, debug bool) <-chan token {
+	ch := make(chan token)
 	l := &Lexer{
-		input: string(source),
-		items: ch,
-		state: lexLine,
-		debug: debug,
+		input:  string(source),
+		tokens: ch,
+		state:  lexLine,
+		debug:  debug,
 	}
 	go func() {
 		l.emit(lineStart)
@@ -93,7 +93,7 @@ func lex(name string, source []byte, debug bool) <-chan item {
 			l.state = l.state(l)
 		}
 		l.emit(eof)
-		close(l.items)
+		close(l.tokens)
 	}()
 
 	return ch
@@ -164,15 +164,15 @@ func (l *Lexer) blob() string {
 	return l.input[l.start:l.pos]
 }
 
-// Emits a new item on to item channel for processing
-func (l *Lexer) emit(t itemType) {
-	item := item{t, l.lineno, l.blob()}
+// Emits a new token on to token channel for processing
+func (l *Lexer) emit(t tokenType) {
+	token := token{t, l.lineno, l.blob()}
 
 	if l.debug {
-		fmt.Fprintf(os.Stderr, "%04d: (%-20v) %s\n", item.lineno, item.typ, item.text)
+		fmt.Fprintf(os.Stderr, "%04d: (%-20v) %s\n", token.lineno, token.typ, token.text)
 	}
 
-	l.items <- item
+	l.tokens <- token
 	l.start = l.pos
 }
 

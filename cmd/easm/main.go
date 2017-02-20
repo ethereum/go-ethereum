@@ -82,7 +82,7 @@ func main() {
 // Compiler contains information about the parsed source
 // and holds the tokens for the program.
 type Compiler struct {
-	tokens []item
+	tokens []token
 	binary []interface{}
 
 	labels map[string]int
@@ -109,7 +109,7 @@ func newCompiler(debug bool) *Compiler {
 // of the jump dests. The labels can than be used in the
 // second stage to push labels and determine the right
 // position.
-func (c *Compiler) feed(ch <-chan item) {
+func (c *Compiler) feed(ch <-chan token) {
 	for i := range ch {
 		switch i.typ {
 		case number:
@@ -167,7 +167,7 @@ func (c *Compiler) compile() (string, []error) {
 
 // next returns the next token and increments the
 // posititon.
-func (c *Compiler) next() item {
+func (c *Compiler) next() token {
 	token := c.tokens[c.pos]
 	c.pos++
 	return token
@@ -205,7 +205,7 @@ func (c *Compiler) compileLine() error {
 }
 
 // compileNumber compiles the number to bytes
-func (c *Compiler) compileNumber(element item) (int, error) {
+func (c *Compiler) compileNumber(element token) (int, error) {
 	num := common.String2Big(element.text).Bytes()
 	if len(num) == 0 {
 		num = []byte{0}
@@ -217,7 +217,7 @@ func (c *Compiler) compileNumber(element item) (int, error) {
 // compileElement compiles the element (push & label or both)
 // to a binary representation and may error if incorrect statements
 // where fed.
-func (c *Compiler) compileElement(element item) error {
+func (c *Compiler) compileElement(element token) error {
 	// check for a jump. jumps must be read and compiled
 	// from right to left.
 	if isJump(element.text) {
@@ -324,7 +324,7 @@ var (
 	errExpElementOrLabel = errors.New("expected beginning of line")
 )
 
-func compileErr(c item, got, want string) error {
+func compileErr(c token, got, want string) error {
 	return compileError{
 		got:    got,
 		want:   want,
