@@ -309,7 +309,10 @@ func configureNode() {
 		Topics:    []whisper.TopicType{topic},
 		AcceptP2P: p2pAccept,
 	}
-	filterID = shh.Watch(&filter)
+	filterID, err = shh.Watch(&filter)
+	if err != nil {
+		utils.Fatalf("Failed to install filter: %s", err)
+	}
 	fmt.Printf("Filter is configured for the topic: %x \n", topic)
 }
 

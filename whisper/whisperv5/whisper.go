@@ -272,7 +272,7 @@ func (w *Whisper) GetSymKey(name string) []byte {
 
 // Watch installs a new message handler to run in case a matching packet arrives
 // from the whisper network.
-func (w *Whisper) Watch(f *Filter) string {
+func (w *Whisper) Watch(f *Filter) (string, error) {
 	return w.filters.Install(f)
 }
 

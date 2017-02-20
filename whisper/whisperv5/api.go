@@ -215,8 +215,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 		}
 	}
 
-	id := api.whisper.Watch(&filter)
-	return id, nil
+	return api.whisper.Watch(&filter)
 }
 
 // UninstallFilter disables and removes an existing filter.

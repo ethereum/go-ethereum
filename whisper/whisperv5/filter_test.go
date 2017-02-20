@@ -100,9 +100,13 @@ func TestInstallFilters(t *testing.T) {
 	filters := NewFilters(w)
 	tst := generateTestCases(t, SizeTestFilters)
 
+	var err error
 	var j string
 	for i := 0; i < SizeTestFilters; i++ {
-		j = filters.Install(tst[i].f)
+		j, err = filters.Install(tst[i].f)
+		if err != nil {
+			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
+		}
 		tst[i].id = j
 		if len(j) != 40 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
@@ -519,13 +523,17 @@ func TestWatchers(t *testing.T) {
 	var j uint32
 	var e *Envelope
 	var x, firstID string
+	var err error
 
 	w := New()
 	filters := NewFilters(w)
 	tst := generateTestCases(t, NumFilters)
 	for i = 0; i < NumFilters; i++ {
 		tst[i].f.Src = nil
-		x = filters.Install(tst[i].f)
+		x, err = filters.Install(tst[i].f)
+		if err != nil {
+			t.Fatalf("failed to install filter with seed %d: %s.", seed, err)
+		}
 		tst[i].id = x
 		if len(firstID) == 0 {
 			firstID = x

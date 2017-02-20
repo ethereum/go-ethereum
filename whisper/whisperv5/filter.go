@@ -53,8 +53,7 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
-func (fs *Filters) generateRandomID() (id string) {
-	var err error
+func (fs *Filters) generateRandomID() (id string, err error) {
 	buf := make([]byte, 20)
 	for i := 0; i < 3; i++ {
 		_, err = crand.Read(buf)
@@ -70,16 +69,13 @@ func (fs *Filters) generateRandomID() (id string) {
 			err = fmt.Errorf("error in generateRandomID: generated same ID twice")
 			continue
 		}
-		return id
+		return id, err
 	}
 
-	// at this point all the attempts to generate the random ID failed.
-	// this poses a serious danger, since whisper very much relies
-	// on random numbers. the program must be terminated.
-	panic(err)
+	return "", err
 }
 
-func (fs *Filters) Install(watcher *Filter) string {
+func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
@@ -87,9 +83,11 @@ func (fs *Filters) Install(watcher *Filter) string {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	id := fs.generateRandomID()
-	fs.watchers[id] = watcher
-	return id
+	id, err := fs.generateRandomID()
+	if err == nil {
+		fs.watchers[id] = watcher
+	}
+	return id, err
 }
 
 func (fs *Filters) Uninstall(id string) {
