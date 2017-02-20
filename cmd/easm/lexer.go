@@ -186,6 +186,8 @@ func lexLine(l *Lexer) stateFn {
 			l.lineno++
 
 			l.emit(lineStart)
+		case r == ';' && l.peek() == ';':
+			return lexComment
 		case isSpace(r):
 			l.ignore()
 		case isAlphaNumeric(r) || r == '_':
@@ -201,6 +203,15 @@ func lexLine(l *Lexer) stateFn {
 			return nil
 		}
 	}
+}
+
+// lexComment parses the current position until the end
+// of the line and discards the text.
+func lexComment(l *Lexer) stateFn {
+	l.acceptRunUntil('\n')
+	l.ignore()
+
+	return lexLine
 }
 
 // lexLabel parses the current label, emits and returns
