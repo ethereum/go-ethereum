@@ -58,6 +58,8 @@ func TerminalFormat() Format {
 			color = 32
 		case LvlDebug:
 			color = 36
+		case LvlTrace:
+			color = 34
 		}
 
 		b := &bytes.Buffer{}
