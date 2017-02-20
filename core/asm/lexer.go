@@ -1,4 +1,20 @@
-package main
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package asm
 
 import (
 	"fmt"
@@ -11,7 +27,7 @@ import (
 // stateFn is used through the lifetime of the
 // lexer to parse the different values at the
 // current state.
-type stateFn func(*Lexer) stateFn
+type stateFn func(*lexer) stateFn
 
 // token is emitted when the lexer has discovered
 // a new parsable token. These are delivered over
@@ -62,10 +78,10 @@ var stringtokenTypes = []string{
 	stringValue:      "string",
 }
 
-// Lexer is the basic construct for parsing
+// lexer is the basic construct for parsing
 // source code and turning them in to tokens.
 // Tokens are interpreted by the compiler.
-type Lexer struct {
+type lexer struct {
 	input string // input contains the source code of the program
 
 	tokens chan token // tokens is used to deliver tokens to the listener
@@ -79,9 +95,9 @@ type Lexer struct {
 
 // lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
-func lex(name string, source []byte, debug bool) <-chan token {
+func Lex(name string, source []byte, debug bool) <-chan token {
 	ch := make(chan token)
-	l := &Lexer{
+	l := &lexer{
 		input:  string(source),
 		tokens: ch,
 		state:  lexLine,
@@ -100,7 +116,7 @@ func lex(name string, source []byte, debug bool) <-chan token {
 }
 
 // next returns the next rune in the program's source.
-func (l *Lexer) next() (rune rune) {
+func (l *lexer) next() (rune rune) {
 	if l.pos >= len(l.input) {
 		l.width = 0
 		return 0
@@ -111,24 +127,24 @@ func (l *Lexer) next() (rune rune) {
 }
 
 // backup backsup the last parsed element (multi-character)
-func (l *Lexer) backup() {
+func (l *lexer) backup() {
 	l.pos -= l.width
 }
 
 // peek returns the next rune but does not advance the seeker
-func (l *Lexer) peek() rune {
+func (l *lexer) peek() rune {
 	r := l.next()
 	l.backup()
 	return r
 }
 
 // ignore advances the seeker and ignores the value
-func (l *Lexer) ignore() {
+func (l *lexer) ignore() {
 	l.start = l.pos
 }
 
 // Accepts checks whether the given input matches the next rune
-func (l *Lexer) accept(valid string) bool {
+func (l *lexer) accept(valid string) bool {
 	if strings.IndexRune(valid, l.next()) >= 0 {
 		return true
 	}
@@ -140,7 +156,7 @@ func (l *Lexer) accept(valid string) bool {
 
 // acceptRun will continue to advance the seeker until valid
 // can no longer be met.
-func (l *Lexer) acceptRun(valid string) {
+func (l *lexer) acceptRun(valid string) {
 	for strings.IndexRune(valid, l.next()) >= 0 {
 	}
 	l.backup()
@@ -148,7 +164,7 @@ func (l *Lexer) acceptRun(valid string) {
 
 // acceptRunUntil is the inverse of acceptRun and will continue
 // to advance the seeker until the rune has been found.
-func (l *Lexer) acceptRunUntil(until rune) bool {
+func (l *lexer) acceptRunUntil(until rune) bool {
 	// Continues running until a rune is found
 	for i := l.next(); strings.IndexRune(string(until), i) == -1; i = l.next() {
 		if i == 0 {
@@ -160,12 +176,12 @@ func (l *Lexer) acceptRunUntil(until rune) bool {
 }
 
 // blob returns the current value
-func (l *Lexer) blob() string {
+func (l *lexer) blob() string {
 	return l.input[l.start:l.pos]
 }
 
 // Emits a new token on to token channel for processing
-func (l *Lexer) emit(t tokenType) {
+func (l *lexer) emit(t tokenType) {
 	token := token{t, l.lineno, l.blob()}
 
 	if l.debug {
@@ -177,7 +193,7 @@ func (l *Lexer) emit(t tokenType) {
 }
 
 // lexLine is state function for lexing lines
-func lexLine(l *Lexer) stateFn {
+func lexLine(l *lexer) stateFn {
 	for {
 		switch r := l.next(); {
 		case r == '\n':
@@ -207,7 +223,7 @@ func lexLine(l *Lexer) stateFn {
 
 // lexComment parses the current position until the end
 // of the line and discards the text.
-func lexComment(l *Lexer) stateFn {
+func lexComment(l *lexer) stateFn {
 	l.acceptRunUntil('\n')
 	l.ignore()
 
@@ -217,7 +233,7 @@ func lexComment(l *Lexer) stateFn {
 // lexLabel parses the current label, emits and returns
 // the lex text state function to advance the parsing
 // process.
-func lexLabel(l *Lexer) stateFn {
+func lexLabel(l *lexer) stateFn {
 	l.acceptRun(Alpha + "_")
 
 	l.emit(label)
@@ -228,7 +244,7 @@ func lexLabel(l *Lexer) stateFn {
 // lexInsideString lexes the inside of a string until
 // until the state function finds the closing quote.
 // It returns the lex text state function.
-func lexInsideString(l *Lexer) stateFn {
+func lexInsideString(l *lexer) stateFn {
 	if l.acceptRunUntil('"') {
 		l.emit(stringValue)
 	}
@@ -236,7 +252,7 @@ func lexInsideString(l *Lexer) stateFn {
 	return lexLine
 }
 
-func lexNumber(l *Lexer) stateFn {
+func lexNumber(l *lexer) stateFn {
 	acceptance := Numbers
 	if l.accept("0") && l.accept("xX") {
 		acceptance = HexadecimalNumbers
@@ -248,7 +264,7 @@ func lexNumber(l *Lexer) stateFn {
 	return lexLine
 }
 
-func lexElement(l *Lexer) stateFn {
+func lexElement(l *lexer) stateFn {
 	l.acceptRun(Alpha + "_" + Numbers)
 
 	if l.peek() == ':' {

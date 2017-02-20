@@ -1,83 +1,31 @@
-package main
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package asm
 
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
-	"path/filepath"
 	"strings"
 
-	cli "gopkg.in/urfave/cli.v1"
-
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
-
-var (
-	app *cli.App
-
-	DebugFlag = cli.BoolFlag{
-		Name:  "debug",
-		Usage: "outputs lexer and compiler debug output",
-	}
-	LexFlag = cli.BoolFlag{
-		Name:  "lex",
-		Usage: "displays lex token output",
-	}
-)
-
-func init() {
-	app = cli.NewApp()
-	app.Name = filepath.Base(os.Args[0])
-	app.Author = ""
-	app.Email = ""
-	app.Version = "0.1"
-
-	app.Flags = []cli.Flag{
-		DebugFlag,
-	}
-	app.Action = run
-}
-
-func run(ctx *cli.Context) {
-	var (
-		debug    = ctx.GlobalBool(DebugFlag.Name)
-		lexDebug = ctx.GlobalBool(LexFlag.Name)
-	)
-
-	if len(ctx.Args()) == 0 {
-		glog.Exitln("err: <filename> required")
-	}
-
-	fn := ctx.Args().First()
-	src, err := ioutil.ReadFile(fn)
-	if err != nil {
-		glog.Exitln("err:", err)
-	}
-
-	compiler := newCompiler(debug)
-	compiler.feed(lex(fn, src, lexDebug))
-
-	bin, errors := compiler.compile()
-	if len(errors) > 0 {
-		// report errors
-		for _, err := range errors {
-			fmt.Printf("%s:%v\n", fn, err)
-		}
-		os.Exit(1)
-	}
-	fmt.Println(bin)
-}
-
-func main() {
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-}
 
 // Compiler contains information about the parsed source
 // and holds the tokens for the program.
@@ -93,14 +41,14 @@ type Compiler struct {
 }
 
 // newCompiler returns a new allocated compiler.
-func newCompiler(debug bool) *Compiler {
+func NewCompiler(debug bool) *Compiler {
 	return &Compiler{
 		labels: make(map[string]int),
 		debug:  debug,
 	}
 }
 
-// feed feeds tokens in to ch and are interpreted by
+// Feed feeds tokens in to ch and are interpreted by
 // the compiler.
 //
 // feed is the first pass in the compile stage as it
@@ -109,11 +57,11 @@ func newCompiler(debug bool) *Compiler {
 // of the jump dests. The labels can than be used in the
 // second stage to push labels and determine the right
 // position.
-func (c *Compiler) feed(ch <-chan token) {
+func (c *Compiler) Feed(ch <-chan token) {
 	for i := range ch {
 		switch i.typ {
 		case number:
-			num := common.String2Big(i.text).Bytes()
+			num := math.MustParseBig256(i.text).Bytes()
 			if len(num) == 0 {
 				num = []byte{0}
 			}
@@ -132,17 +80,17 @@ func (c *Compiler) feed(ch <-chan token) {
 		c.tokens = append(c.tokens, i)
 	}
 	if c.debug {
-		fmt.Sprintln(os.Stderr, "found", len(c.labels), "labels")
+		fmt.Fprintln(os.Stderr, "found", len(c.labels), "labels")
 	}
 }
 
-// compile compiles the current tokens and returns a
+// Compile compiles the current tokens and returns a
 // binary string that can be interpreted by the EVM
 // and an error if it failed.
 //
 // compile is the second stage in the compile phase
 // which compiles the tokens to EVM instructions.
-func (c *Compiler) compile() (string, []error) {
+func (c *Compiler) Compile() (string, []error) {
 	var errors []error
 	// continue looping over the tokens until
 	// the stack has been exhausted.
@@ -206,7 +154,7 @@ func (c *Compiler) compileLine() error {
 
 // compileNumber compiles the number to bytes
 func (c *Compiler) compileNumber(element token) (int, error) {
-	num := common.String2Big(element.text).Bytes()
+	num := math.MustParseBig256(element.text).Bytes()
 	if len(num) == 0 {
 		num = []byte{0}
 	}
@@ -247,7 +195,7 @@ func (c *Compiler) compileElement(element token) error {
 		rvalue := c.next()
 		switch rvalue.typ {
 		case number:
-			value = common.String2Big(rvalue.text).Bytes()
+			value = math.MustParseBig256(rvalue.text).Bytes()
 			if len(value) == 0 {
 				value = []byte{0}
 			}
