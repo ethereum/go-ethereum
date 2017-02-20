@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,24 +14,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package params
 
-import (
-	"fmt"
+const (
+	// These are the multipliers for ether denominations.
+	// Example: To get the wei value of an amount in 'douglas', use
+	//
+	//    new(big.Int).Mul(value, big.NewInt(params.Douglas))
+	//
+	Wei      = 1
+	Ada      = 1e3
+	Babbage  = 1e6
+	Shannon  = 1e9
+	Szabo    = 1e12
+	Finney   = 1e15
+	Ether    = 1e18
+	Einstein = 1e21
+	Douglas  = 1e42
 )
-
-type StorageSize float64
-
-func (self StorageSize) String() string {
-	if self > 1000000 {
-		return fmt.Sprintf("%.2f mB", self/1000000)
-	} else if self > 1000 {
-		return fmt.Sprintf("%.2f kB", self/1000)
-	} else {
-		return fmt.Sprintf("%.2f B", self)
-	}
-}
-
-func (self StorageSize) Int64() int64 {
-	return int64(self)
-}

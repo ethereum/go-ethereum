@@ -561,7 +561,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// Ignore any transactions (and accounts subsequently) with low gas limits
 		if tx.GasPrice().Cmp(gasPrice) < 0 && !env.ownedAccounts.Has(from) {
 			// Pop the current low-priced transaction without shifting in the next from the account
-			log.Info(fmt.Sprintf("Transaction (%x) below gas price (tx=%v ask=%v). All sequential txs from this address(%x) will be ignored\n", tx.Hash().Bytes()[:4], common.CurrencyToString(tx.GasPrice()), common.CurrencyToString(gasPrice), from[:4]))
+			log.Info(fmt.Sprintf("Transaction (%x) below gas price (tx=%dwei ask=%dwei). All sequential txs from this address(%x) will be ignored\n", tx.Hash().Bytes()[:4], tx.GasPrice(), gasPrice, from[:4]))
 
 			env.lowGasTxs = append(env.lowGasTxs, tx)
 			txs.Pop()
