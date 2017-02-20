@@ -202,10 +202,13 @@ func (s *TypeMuxSubscription) deliver(event *TypeMuxEvent) {
 	}
 	// Otherwise deliver the event
 	s.postMu.RLock()
-	defer s.postMu.RUnlock()
+	go deliver_goroutine(s, event)
+}
 
+func deliver_goroutine(s *TypeMuxSubscription, event *TypeMuxEvent)  {
 	select {
 	case s.postC <- event:
 	case <-s.closing:
 	}
+	s.postMu.RUnlock()
 }
