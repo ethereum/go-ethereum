@@ -116,7 +116,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	var (
-		to       = Reference(addr)
+		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
 	)
 	if !evm.StateDB.Exist(addr) {
@@ -167,7 +167,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	var (
 		snapshot = evm.StateDB.Snapshot()
-		to       = Reference(caller.Address())
+		to       = AccountRef(caller.Address())
 	)
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped evmironment for this execution context
@@ -203,7 +203,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	var (
 		snapshot = evm.StateDB.Snapshot()
-		to       = Reference(caller.Address())
+		to       = AccountRef(caller.Address())
 	)
 
 	// Iinitialise a new contract and make initialise the delegate values
@@ -250,7 +250,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped evmironment for this execution context
 	// only.
-	contract := NewContract(caller, Reference(contractAddr), value, gas)
+	contract := NewContract(caller, AccountRef(contractAddr), value, gas)
 	contract.SetCallCode(&contractAddr, crypto.Keccak256Hash(code), code)
 
 	ret, err = evm.interpreter.Run(contract, nil)

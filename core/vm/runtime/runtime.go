@@ -107,7 +107,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 	var (
 		address = common.StringToAddress("contract")
 		vmenv   = NewEnv(cfg, cfg.State)
-		sender  = vm.Reference(cfg.Origin)
+		sender  = vm.AccountRef(cfg.Origin)
 	)
 	cfg.State.CreateAccount(address)
 	// set the receiver's (the executing contract) code for execution.
@@ -137,7 +137,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, error) {
 	}
 	var (
 		vmenv  = NewEnv(cfg, cfg.State)
-		sender = vm.Reference(cfg.Origin)
+		sender = vm.AccountRef(cfg.Origin)
 	)
 
 	// Call the code with the given configuration.

@@ -381,19 +381,3 @@ func (self *stateObject) Nonce() uint64 {
 func (self *stateObject) Value() *big.Int {
 	panic("Value on stateObject should never be called")
 }
-
-func (self *stateObject) ForEachStorage(cb func(key, value common.Hash) bool) {
-	// When iterating over the storage check the cache first
-	for h, value := range self.cachedStorage {
-		cb(h, value)
-	}
-
-	it := self.getTrie(self.db.db).Iterator()
-	for it.Next() {
-		// ignore cached values
-		key := common.BytesToHash(self.trie.GetKey(it.Key))
-		if _, ok := self.cachedStorage[key]; !ok {
-			cb(key, common.BytesToHash(it.Value))
-		}
-	}
-}

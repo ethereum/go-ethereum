@@ -332,11 +332,10 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		// Check storage.
 		if obj := state.getStateObject(addr); obj != nil {
-			obj.ForEachStorage(func(key, val common.Hash) bool {
+			state.ForEachStorage(addr, func(key, val common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", val, checkstate.GetState(addr, key))
 			})
-			checkobj := checkstate.getStateObject(addr)
-			checkobj.ForEachStorage(func(key, checkval common.Hash) bool {
+			checkstate.ForEachStorage(addr, func(key, checkval common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", state.GetState(addr, key), checkval)
 			})
 		}

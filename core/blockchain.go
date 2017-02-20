@@ -214,8 +214,6 @@ func (self *BlockChain) loadLastState() error {
 		return err
 	}
 	self.stateCache = statedb
-	// XXX Reviewers: what's this for? I need to know if I need to backport this somehow
-	//self.stateCache.GetAccount(common.Address{})
 
 	// Issue a status log for the user
 	headerTd := self.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())

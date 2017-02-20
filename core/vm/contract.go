@@ -39,9 +39,6 @@ type AccountRef common.Address
 // Address casts AccountRef to a Address
 func (ar AccountRef) Address() common.Address { return (common.Address)(ar) }
 
-// Reference returns a casted Address to AccountRef
-func Reference(addr common.Address) AccountRef { return (AccountRef)(addr) }
-
 // Contract represents an ethereum contract in the state database. It contains
 // the the contract code, calling arguments. Contract implements ContractRef
 type Contract struct {

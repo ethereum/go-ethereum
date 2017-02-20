@@ -142,7 +142,7 @@ func (self *StateTransition) from() vm.AccountRef {
 	if !self.state.Exist(f) {
 		self.state.CreateAccount(f)
 	}
-	return vm.Reference(f)
+	return vm.AccountRef(f)
 }
 
 func (self *StateTransition) to() vm.AccountRef {
@@ -154,7 +154,7 @@ func (self *StateTransition) to() vm.AccountRef {
 		return vm.AccountRef{} // contract creation
 	}
 
-	reference := vm.Reference(*to)
+	reference := vm.AccountRef(*to)
 	if !self.state.Exist(*to) {
 		self.state.CreateAccount(*to)
 	}
