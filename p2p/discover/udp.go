@@ -464,7 +464,7 @@ func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req interface{}) error {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infof(">>> %v %T\n", toaddr, req)
+	glog.V(logger.Detail).Infof(">>> %v %T", toaddr, req)
 	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
 		glog.V(logger.Detail).Infoln("UDP send failed:", err)
 	}
@@ -518,14 +518,14 @@ func (t *udp) readLoop() {
 func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	packet, fromID, hash, err := decodePacket(buf)
 	if err != nil {
-		glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
+		glog.V(logger.Debug).Infof("Bad packet from %v: %v", from, err)
 		return err
 	}
 	status := "ok"
 	if err = packet.handle(t, from, fromID, hash); err != nil {
 		status = err.Error()
 	}
-	glog.V(logger.Detail).Infof("<<< %v %T: %s\n", from, packet, status)
+	glog.V(logger.Detail).Infof("<<< %v %T: %s", from, packet, status)
 	return err
 }
 

@@ -296,7 +296,7 @@ func (t *dialTask) resolve(srv *Server) bool {
 // dial performs the actual connection attempt.
 func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
 	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
-	glog.V(logger.Debug).Infof("dial tcp %v (%x)\n", addr, dest.ID[:6])
+	glog.V(logger.Debug).Infof("dial tcp %v (%x)", addr, dest.ID[:6])
 	fd, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
 		glog.V(logger.Detail).Infof("%v", err)
