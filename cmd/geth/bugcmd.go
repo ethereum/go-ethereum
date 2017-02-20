@@ -56,8 +56,7 @@ func reportBug(ctx *cli.Context) error {
 
 	// open a new GH issue
 	if !browser.Open(issueUrl + "?body=" + url.QueryEscape(buff.String())) {
-		fmt.Println("Please file a new issue at", issueUrl, "using this template:\n")
-		fmt.Println(buff.String())
+		fmt.Printf("Please file a new issue at %s using this template:\n%s", issueUrl, buff.String())
 	}
 	return nil
 }
