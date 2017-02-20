@@ -120,7 +120,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 		islocal = true
 		//return
 	}
-	
+
 	hasher := self.hashfunc()
 	hasher.Write(req.SData)
 	if !bytes.Equal(hasher.Sum(nil), req.Key) {
