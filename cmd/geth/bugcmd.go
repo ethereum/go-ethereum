@@ -40,6 +40,8 @@ var bugCommand = cli.Command{
 	Category:  "MISCELLANEOUS COMMANDS",
 }
 
+const issueUrl = "https://github.com/ethereum/go-ethereum/issues/new"
+
 // reportBug reports a bug by opening a new URL to the go-ethereum GH issue
 // tracker and setting default values as the issue body.
 func reportBug(ctx *cli.Context) error {
@@ -53,7 +55,10 @@ func reportBug(ctx *cli.Context) error {
 	printOSDetails(&buff)
 
 	// open a new GH issue
-	browser.Open("https://github.com/ethereum/go-ethereum/issues/new?body=" + url.QueryEscape(buff.String()))
+	if !browser.Open(issueUrl + "?body=" + url.QueryEscape(buff.String())) {
+		fmt.Println("Please file a new issue at", issueUrl, "using this template:\n")
+		fmt.Println(buff.String())
+	}
 	return nil
 }
 
