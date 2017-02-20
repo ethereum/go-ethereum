@@ -18,11 +18,15 @@ package main
 
 import (
 	"bytes"
-	"html/template"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"net/url"
 	"os/exec"
 	"runtime"
+	"strings"
 
+	"github.com/ethereum/go-ethereum/cmd/internal/browser"
 	"github.com/ethereum/go-ethereum/params"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -39,62 +43,62 @@ var bugCommand = cli.Command{
 // reportBug reports a bug by opening a new URL to the go-ethereum GH issue
 // tracker and setting default values as the issue body.
 func reportBug(ctx *cli.Context) error {
-	// compile the bug report template or crash
-	t := template.Must(template.New("bug-report").Parse(bugTemplate))
-
-	// assemble the info for the bug template
-	uname, err := uname()
-	if err != nil {
-		return err
-	}
-
-	info := struct {
-		Version, GoVersion, OS, Uname string
-	}{Version: params.Version, GoVersion: runtime.Version(), OS: runtime.GOOS, Uname: uname}
-
 	// execute template and write contents to buff
 	var buff bytes.Buffer
-	if err := t.Execute(&buff, info); err != nil {
-		return err
-	}
+
+	fmt.Fprintln(&buff, header)
+	fmt.Fprintln(&buff, "Version:", params.Version)
+	fmt.Fprintln(&buff, "Go Version:", runtime.Version())
+	fmt.Fprintln(&buff, "OS:", runtime.GOOS)
+	printOSDetails(&buff)
 
 	// open a new GH issue
-	return exec.Command("open", "https://github.com/ethereum/go-ethereum/issues/new?body="+url.QueryEscape(buff.String())).Start()
+	browser.Open("https://github.com/ethereum/go-ethereum/issues/new?body=" + url.QueryEscape(buff.String()))
+	return nil
 }
 
-const bugTemplate = `Please answer these questions before submitting your issue. Thanks!
+// copied from the Go source. Copyright 2017 The Go Authors
+func printOSDetails(w io.Writer) {
+	switch runtime.GOOS {
+	case "darwin":
+		printCmdOut(w, "uname -v: ", "uname", "-v")
+		printCmdOut(w, "", "sw_vers")
+	case "linux":
+		printCmdOut(w, "uname -sr: ", "uname", "-sr")
+		printCmdOut(w, "", "lsb_release", "-a")
+	case "openbsd", "netbsd", "freebsd", "dragonfly":
+		printCmdOut(w, "uname -v: ", "uname", "-v")
+	case "solaris":
+		out, err := ioutil.ReadFile("/etc/release")
+		if err == nil {
+			fmt.Fprintf(w, "/etc/release: %s\n", out)
+		} else {
+			fmt.Printf("failed to read /etc/release: %v\n", err)
+		}
+	}
+}
+
+// printCmdOut prints the output of running the given command.
+// It ignores failures; 'go bug' is best effort.
+//
+// copied from the Go source. Copyright 2017 The Go Authors
+func printCmdOut(w io.Writer, prefix, path string, args ...string) {
+	cmd := exec.Command(path, args...)
+	out, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("%s %s: %v\n", path, strings.Join(args, " "), err)
+		return
+	}
+	fmt.Fprintf(w, "%s%s\n", prefix, bytes.TrimSpace(out))
+}
+
+const header = `Please answer these questions before submitting your issue. Thanks!
 
 #### What did you do?
-
+ 
 #### What did you expect to see?
-
+ 
 #### What did you see instead?
-
+ 
 #### System details
-
-Version: {{.Version}}
-
-Go Version: {{.GoVersion}}
-OS: {{.OS}}
-uname -a: {{.Uname}}
 `
-
-// uname returns machine hardware, os release, name and version.
-func uname() (string, error) {
-	// figure out the uname of the system (e.g. uname, systeminfo)
-	var (
-		err   error
-		uname []byte
-		cmd   = [2]string{"uname", "-a"}
-	)
-
-	if runtime.GOOS == "windows" {
-		cmd = [2]string{"systeminfo"}
-	}
-
-	uname, err = exec.Command(cmd[0], cmd[1]).Output()
-	if err != nil {
-		return "", err
-	}
-	return string(uname), err
-}
