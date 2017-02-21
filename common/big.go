@@ -20,18 +20,14 @@ import "math/big"
 
 // Common big integers often used
 var (
-	Big1     = big.NewInt(1)
-	Big2     = big.NewInt(2)
-	Big3     = big.NewInt(3)
-	Big0     = big.NewInt(0)
-	BigTrue  = Big1
-	BigFalse = Big0
-	Big32    = big.NewInt(32)
-	Big36    = big.NewInt(36)
-	Big97    = big.NewInt(97)
-	Big98    = big.NewInt(98)
-	Big256   = big.NewInt(0xff)
-	Big257   = big.NewInt(257)
+	Big1    = big.NewInt(1)
+	Big2    = big.NewInt(2)
+	Big3    = big.NewInt(3)
+	Big0    = big.NewInt(0)
+	BigTrue = Big1
+	Big32   = big.NewInt(32)
+	Big256  = big.NewInt(0xff)
+	Big257  = big.NewInt(257)
 )
 
 // Bytes2Big
