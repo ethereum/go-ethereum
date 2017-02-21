@@ -24,23 +24,78 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// Apply function to each disassembled EVM instruction.
-func ForEachDisassembledInstruction(script []byte, fun func(uint64, vm.OpCode, []byte)) error {
-	for pc := uint64(0); pc < uint64(len(script)); pc++ {
-		op := vm.OpCode(script[pc])
-		if op.IsPush() {
-			a := uint64(op) - uint64(vm.PUSH1) + 1
-			u := pc + 1 + a
-			if uint64(len(script)) <= pc || uint64(len(script)) < u {
-				return fmt.Errorf("incomplete push instruction at %v", pc)
-			}
-			fun(pc, op, script[pc+1:u])
-			pc += a
-		} else {
-			fun(pc, op, make([]byte, 0))
-		}
+// Iterator for disassembled EVM instructions
+type instructionIterator struct {
+	code  []byte
+	pc    uint64
+	arg   []byte
+	op    vm.OpCode
+	error error
+}
+
+// Create a new instruction iterator.
+func NewInstructionIterator(code []byte) *instructionIterator {
+	it := new(instructionIterator)
+	it.code = code
+	it.pc = 0
+	it.error = nil
+	it.arg = nil
+	return it
+}
+
+// Returns true if there is a next instruction and moves on.
+func (it *instructionIterator) Next() bool {
+	if it.error != nil || uint64(len(it.code)) <= it.pc {
+		// We previously reached an error or the end.
+		return false
 	}
-	return nil
+
+	if it.arg == nil {
+		// We are calling this procedure for the first time.
+		it.pc = 0
+	} else {
+		// We are moving to the next instruction.
+		it.pc += uint64(len(it.arg)) + 1
+	}
+
+	if uint64(len(it.code)) <= it.pc {
+		// We reached the end.
+		return false
+	}
+
+	it.op = vm.OpCode(it.code[it.pc])
+	if it.op.IsPush() {
+		a := uint64(it.op) - uint64(vm.PUSH1) + 1
+		u := it.pc + 1 + a
+		if uint64(len(it.code)) <= it.pc || uint64(len(it.code)) < u {
+			it.error = fmt.Errorf("incomplete push instruction at %v", it.pc)
+			return false
+		}
+		it.arg = it.code[it.pc+1 : u]
+	} else {
+		it.arg = make([]byte, 0)
+	}
+	return true
+}
+
+// Returns any error that may have been encountered.
+func (it *instructionIterator) Error() error {
+	return it.error
+}
+
+// Returns the PC of the current instruction.
+func (it *instructionIterator) PC() uint64 {
+	return it.pc
+}
+
+// Returns the opcode of the current instruction.
+func (it *instructionIterator) Op() vm.OpCode {
+	return it.op
+}
+
+// Returns the argument of the current instruction.
+func (it *instructionIterator) Arg() []byte {
+	return it.arg
 }
 
 // Pretty-print all disassembled EVM instructions to stdout.
@@ -50,28 +105,34 @@ func PrintDisassembled(code string) error {
 		return err
 	}
 
-	return ForEachDisassembledInstruction(script, func(pc uint64, op vm.OpCode, args []byte) {
-		if args != nil && 0 < len(args) {
-			fmt.Printf("%06v: %v 0x%x\n", pc, op, args)
+	it := NewInstructionIterator(script)
+	for it.Next() {
+		if it.Arg() != nil && 0 < len(it.Arg()) {
+			fmt.Printf("%06v: %v 0x%x\n", it.PC(), it.Op(), it.Arg())
 		} else {
-			fmt.Printf("%06v: %v\n", pc, op)
+			fmt.Printf("%06v: %v\n", it.PC(), it.Op())
 		}
-	})
+	}
+	if it.Error() != nil {
+		return it.Error()
+	}
+	return nil
 }
 
 // Return all disassembled EVM instructions in human-readable format.
 func Disassemble(script []byte) ([]string, error) {
 	instrs := make([]string, 0)
-	err := ForEachDisassembledInstruction(script, func(pc uint64, op vm.OpCode, args []byte) {
-		if args != nil && 0 < len(args) {
-			instrs = append(instrs, fmt.Sprintf("%06v: %v 0x%x\n", pc, op, args))
-		} else {
-			instrs = append(instrs, fmt.Sprintf("%06v: %v\n", pc, op))
-		}
-	})
 
-	if err != nil {
-		return nil, err
+	it := NewInstructionIterator(script)
+	for it.Next() {
+		if it.Arg() != nil && 0 < len(it.Arg()) {
+			instrs = append(instrs, fmt.Sprintf("%06v: %v 0x%x\n", it.PC(), it.Op(), it.Arg()))
+		} else {
+			instrs = append(instrs, fmt.Sprintf("%06v: %v\n", it.PC(), it.Op()))
+		}
+	}
+	if it.Error() != nil {
+		return nil, it.Error()
 	}
 	return instrs, nil
 }

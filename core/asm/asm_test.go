@@ -20,18 +20,20 @@ import (
 	"testing"
 
 	"encoding/hex"
-	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Tests disassembling the instructions for valid evm code
-func TestForEachDisassembledInstructionValid(t *testing.T) {
+func TestInstructionIteratorValid(t *testing.T) {
 	cnt := 0
 	script, _ := hex.DecodeString("61000000")
-	err := ForEachDisassembledInstruction(script, func(pc uint64, op vm.OpCode, args []byte) {
+
+	it := NewInstructionIterator(script)
+	for it.Next() {
 		cnt++
-	})
-	if err != nil {
-		t.Errorf("Expected 2, but encountered error %v instead.", err)
+	}
+
+	if it.Error() != nil {
+		t.Errorf("Expected 2, but encountered error %v instead.", it.Error())
 	}
 	if cnt != 2 {
 		t.Errorf("Expected 2, but got %v instead.", cnt)
@@ -39,13 +41,16 @@ func TestForEachDisassembledInstructionValid(t *testing.T) {
 }
 
 // Tests disassembling the instructions for invalid evm code
-func TestForEachDisassembledInstructionInvalid(t *testing.T) {
+func TestInstructionIteratorInvalid(t *testing.T) {
 	cnt := 0
 	script, _ := hex.DecodeString("6100")
-	err := ForEachDisassembledInstruction(script, func(pc uint64, op vm.OpCode, args []byte) {
+
+	it := NewInstructionIterator(script)
+	for it.Next() {
 		cnt++
-	})
-	if err == nil {
+	}
+
+	if it.Error() == nil {
 		t.Errorf("Expected an error, but got %v instead.", cnt)
 	}
 }
