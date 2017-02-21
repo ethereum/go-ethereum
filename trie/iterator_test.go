@@ -153,7 +153,7 @@ func TestDifferenceIterator(t *testing.T) {
 
 	found := make(map[string]string)
 	di, _ := NewDifferenceIterator(NewNodeIterator(triea), NewNodeIterator(trieb))
-	it := FromNodeIterator(di)
+	it := NewIteratorFromNodeIterator(di)
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}

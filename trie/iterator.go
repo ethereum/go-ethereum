@@ -33,15 +33,13 @@ type Iterator struct {
 func NewIterator(trie *Trie) *Iterator {
 	return &Iterator{
 		nodeIt: NewNodeIterator(trie),
-		Key:    nil,
 	}
 }
 
 // FromNodeIterator creates a new key-value iterator from a node iterator
-func FromNodeIterator(it NodeIterator) *Iterator {
+func NewIteratorFromNodeIterator(it NodeIterator) *Iterator {
 	return &Iterator{
 		nodeIt: it,
-		Key:    nil,
 	}
 }
 
@@ -61,12 +59,22 @@ func (it *Iterator) Next() bool {
 
 // NodeIterator is an iterator to traverse the trie pre-order.
 type NodeIterator interface {
+	// Hash returns the hash of the current node
 	Hash() common.Hash
+	// Parent returns the hash of the parent of the current node
 	Parent() common.Hash
+	// Leaf returns true iff the current node is a leaf node.
 	Leaf() bool
+	// LeafBlob returns the contents of the node, if it is a leaf.
+	// Callers must not retain references to the return value after calling Next()
 	LeafBlob() []byte
+	// Path returns the hex-encoded path to the current node.
+	// Callers must not retain references to the return value after calling Next()
 	Path() []byte
+	// Next moves the iterator to the next node. If the parameter is false, any child
+	// nodes will be skipped.
 	Next(bool) bool
+	// Error returns the error status of the iterator.
 	Error() error
 }
 
@@ -99,7 +107,7 @@ func NewNodeIterator(trie *Trie) NodeIterator {
 
 // Hash returns the hash of the current node
 func (it *nodeIterator) Hash() common.Hash {
-	if it.trie == nil {
+	if len(it.stack) == 0 {
 		return common.Hash{}
 	}
 
@@ -108,7 +116,7 @@ func (it *nodeIterator) Hash() common.Hash {
 
 // Parent returns the hash of the parent node
 func (it *nodeIterator) Parent() common.Hash {
-	if it.trie == nil {
+	if len(it.stack) == 0 {
 		return common.Hash{}
 	}
 
@@ -117,7 +125,7 @@ func (it *nodeIterator) Parent() common.Hash {
 
 // Leaf returns true if the current node is a leaf
 func (it *nodeIterator) Leaf() bool {
-	if it.trie == nil {
+	if len(it.stack) == 0 {
 		return false
 	}
 
@@ -127,7 +135,7 @@ func (it *nodeIterator) Leaf() bool {
 
 // LeafBlob returns the data for the current node, if it is a leaf
 func (it *nodeIterator) LeafBlob() []byte {
-	if it.trie == nil {
+	if len(it.stack) == 0 {
 		return nil
 	}
 
@@ -149,15 +157,15 @@ func (it *nodeIterator) Error() error {
 
 // Next moves the iterator to the next node, returning whether there are any
 // further nodes. In case of an internal error this method returns false and
-// sets the Error field to the encountered failure. If `children` is false,
+// sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
-func (it *nodeIterator) Next(children bool) bool {
+func (it *nodeIterator) Next(descend bool) bool {
 	// If the iterator failed previously, don't do anything
 	if it.err != nil {
 		return false
 	}
 	// Otherwise step forward with the iterator and report any errors
-	if err := it.step(children); err != nil {
+	if err := it.step(descend); err != nil {
 		it.err = err
 		return false
 	}
@@ -165,7 +173,7 @@ func (it *nodeIterator) Next(children bool) bool {
 }
 
 // step moves the iterator to the next node of the trie.
-func (it *nodeIterator) step(children bool) error {
+func (it *nodeIterator) step(descend bool) error {
 	if it.trie == nil {
 		// Abort if we reached the end of the iteration
 		return nil
@@ -181,7 +189,7 @@ func (it *nodeIterator) step(children bool) error {
 		return nil
 	}
 
-	if !children {
+	if !descend {
 		// If we're skipping children, pop the current node first
 		it.path = it.path[:it.stack[len(it.stack)-1].pathlen]
 		it.stack = it.stack[:len(it.stack)-1]
@@ -260,20 +268,19 @@ outer:
 }
 
 type differenceIterator struct {
-	a, b  NodeIterator
-	eof   bool
-	count int // Number of nodes scanned on either trie
+	a, b  NodeIterator // Nodes returned are those in b - a.
+	eof   bool         // Indicates a has run out of elements
+	count int          // Number of nodes scanned on either trie
 }
 
 // NewDifferenceIterator constructs a NodeIterator that iterates over elements in b that
-// are not in a.
+// are not in a. Returns the iterator, and a pointer to an integer recording the number
+// of nodes seen.
 func NewDifferenceIterator(a, b NodeIterator) (NodeIterator, *int) {
 	a.Next(true)
 	it := &differenceIterator{
-		a:     a,
-		b:     b,
-		eof:   false,
-		count: 0,
+		a: a,
+		b: b,
 	}
 	return it, &it.count
 }
@@ -314,18 +321,18 @@ func (it *differenceIterator) Next(bool) bool {
 
 	for {
 		apath, bpath := it.a.Path(), it.b.Path()
-		cmp := bytes.Compare(apath, bpath)
-		if cmp < 0 {
+		switch bytes.Compare(apath, bpath) {
+		case -1:
 			// b jumped past a; advance a
 			if !it.a.Next(true) {
 				it.eof = true
 				return true
 			}
 			it.count += 1
-		} else if cmp > 0 {
+		case 1:
 			// b is before a
 			return true
-		} else {
+		case 0:
 			if it.a.Hash() != it.b.Hash() || it.a.Leaf() != it.b.Leaf() {
 				// Keys are identical, but hashes or leaf status differs
 				return true
@@ -336,14 +343,16 @@ func (it *differenceIterator) Next(bool) bool {
 			}
 
 			// a and b are identical; skip this whole subtree if the nodes have hashes
-			if !it.b.Next(it.a.Hash() == common.Hash{}) {
+			hasHash := it.a.Hash() == common.Hash{}
+			if !it.b.Next(hasHash) {
 				return false
 			}
-			if !it.a.Next(it.a.Hash() == common.Hash{}) {
+			it.count += 1
+			if !it.a.Next(hasHash) {
 				it.eof = true
 				return true
 			}
-			it.count += 2
+			it.count += 1
 		}
 	}
 }
