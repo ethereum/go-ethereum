@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -209,7 +210,7 @@ func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Heade
 	}
 
 	if uncle {
-		if header.Time.Cmp(common.MaxBig) == 1 {
+		if header.Time.Cmp(math.MaxBig256) == 1 {
 			return BlockTSTooBigErr
 		}
 	} else {
@@ -344,7 +345,7 @@ func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *b
 		expDiff := periodCount.Sub(periodCount, common.Big2)
 		expDiff.Exp(common.Big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = common.BigMax(diff, params.MinimumDifficulty)
+		diff = math.BigMax(diff, params.MinimumDifficulty)
 	}
 
 	return diff
@@ -372,13 +373,13 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	*/
 	gl := new(big.Int).Sub(parent.GasLimit(), decay)
 	gl = gl.Add(gl, contrib)
-	gl.Set(common.BigMax(gl, params.MinGasLimit))
+	gl.Set(math.BigMax(gl, params.MinGasLimit))
 
 	// however, if we're now below the target (TargetGasLimit) we increase the
 	// limit as much as we can (parentGasLimit / 1024 -1)
 	if gl.Cmp(params.TargetGasLimit) < 0 {
 		gl.Add(parent.GasLimit(), decay)
-		gl.Set(common.BigMin(gl, params.TargetGasLimit))
+		gl.Set(math.BigMin(gl, params.TargetGasLimit))
 	}
 	return gl
 }

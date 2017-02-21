@@ -21,6 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -95,7 +96,7 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state etha
 	if err != nil {
 		return nil, nil, err
 	}
-	from.SetBalance(common.MaxBig)
+	from.SetBalance(math.MaxBig256)
 
 	vmstate := light.NewVMState(ctx, stateDb)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain)

@@ -24,6 +24,7 @@ import (
 	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -119,8 +120,8 @@ func insertAccount(state *state.StateDB, saddr string, account Account) {
 	}
 	addr := common.HexToAddress(saddr)
 	state.SetCode(addr, common.Hex2Bytes(account.Code))
-	state.SetNonce(addr, common.Big(account.Nonce).Uint64())
-	state.SetBalance(addr, common.Big(account.Balance))
+	state.SetNonce(addr, math.MustParseUint64(account.Nonce))
+	state.SetBalance(addr, math.MustParseBig(account.Balance))
 	for a, v := range account.Storage {
 		state.SetState(addr, common.HexToHash(a), common.HexToHash(v))
 	}
@@ -152,10 +153,10 @@ type VmTest struct {
 func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.EVM, core.Message) {
 	var (
 		data  = common.FromHex(tx["data"])
-		gas   = common.Big(tx["gasLimit"])
-		price = common.Big(tx["gasPrice"])
-		value = common.Big(tx["value"])
-		nonce = common.Big(tx["nonce"]).Uint64()
+		gas   = math.MustParseBig(tx["gasLimit"])
+		price = math.MustParseBig(tx["gasPrice"])
+		value = math.MustParseBig(tx["value"])
+		nonce = math.MustParseUint64(tx["nonce"])
 	)
 
 	origin := common.HexToAddress(tx["caller"])
@@ -198,10 +199,10 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 
 		Origin:      origin,
 		Coinbase:    common.HexToAddress(envValues["currentCoinbase"]),
-		BlockNumber: common.Big(envValues["currentNumber"]),
-		Time:        common.Big(envValues["currentTimestamp"]),
-		GasLimit:    common.Big(envValues["currentGasLimit"]),
-		Difficulty:  common.Big(envValues["currentDifficulty"]),
+		BlockNumber: math.MustParseBig(envValues["currentNumber"]),
+		Time:        math.MustParseBig(envValues["currentTimestamp"]),
+		GasLimit:    math.MustParseBig(envValues["currentGasLimit"]),
+		Difficulty:  math.MustParseBig(envValues["currentDifficulty"]),
 		GasPrice:    price,
 	}
 	if context.GasPrice == nil {

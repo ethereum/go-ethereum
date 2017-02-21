@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
@@ -160,9 +161,9 @@ func run(ctx *cli.Context) error {
 		ret, _, err = runtime.Create(input, &runtime.Config{
 			Origin:   sender.Address(),
 			State:    statedb,
-			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)).Uint64(),
-			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
-			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
+			GasLimit: math.MustParseUint64(ctx.GlobalString(GasFlag.Name)),
+			GasPrice: math.MustParseBig(ctx.GlobalString(PriceFlag.Name)),
+			Value:    math.MustParseBig(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
 				Tracer:             logger,
 				Debug:              ctx.GlobalBool(DebugFlag.Name),
@@ -177,9 +178,9 @@ func run(ctx *cli.Context) error {
 		ret, err = runtime.Call(receiverAddress, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
 			Origin:   sender.Address(),
 			State:    statedb,
-			GasLimit: common.Big(ctx.GlobalString(GasFlag.Name)).Uint64(),
-			GasPrice: common.Big(ctx.GlobalString(PriceFlag.Name)),
-			Value:    common.Big(ctx.GlobalString(ValueFlag.Name)),
+			GasLimit: math.MustParseUint64(ctx.GlobalString(GasFlag.Name)),
+			GasPrice: math.MustParseBig(ctx.GlobalString(PriceFlag.Name)),
+			Value:    math.MustParseBig(ctx.GlobalString(ValueFlag.Name)),
 			EVMConfig: vm.Config{
 				Tracer:             logger,
 				Debug:              ctx.GlobalBool(DebugFlag.Name),
