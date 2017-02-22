@@ -28,9 +28,10 @@ type marshalTest struct {
 }
 
 type unmarshalTest struct {
-	input   string
-	want    interface{}
-	wantErr error
+	input        string
+	want         interface{}
+	wantErr      error // if set, decoding must fail on any platform
+	wantErr32bit error // if set, decoding must fail on 32bit platforms (used for Uint tests)
 }
 
 var (
@@ -53,6 +54,13 @@ var (
 		{uint64(1), "0x1"},
 		{uint64(0xff), "0xff"},
 		{uint64(0x1122334455667788), "0x1122334455667788"},
+	}
+
+	encodeUintTests = []marshalTest{
+		{uint(0), "0x0"},
+		{uint(1), "0x1"},
+		{uint(0xff), "0xff"},
+		{uint(0x11223344), "0x11223344"},
 	}
 
 	decodeBytesTests = []unmarshalTest{

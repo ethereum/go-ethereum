@@ -75,14 +75,14 @@ func (b Bloom) TestBytes(test []byte) bool {
 
 }
 
-// MarshalJSON encodes b as a hex string with 0x prefix.
-func (b Bloom) MarshalJSON() ([]byte, error) {
-	return hexutil.Bytes(b[:]).MarshalJSON()
+// MarshalText encodes b as a hex string with 0x prefix.
+func (b Bloom) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(b[:]).MarshalText()
 }
 
-// UnmarshalJSON b as a hex string with 0x prefix.
-func (b *Bloom) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalJSON("Bloom", input, b[:])
+// UnmarshalText b as a hex string with 0x prefix.
+func (b *Bloom) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("Bloom", input, b[:])
 }
 
 func CreateBloom(receipts Receipts) Bloom {

@@ -25,8 +25,7 @@ import (
 )
 
 var (
-	jsonNull          = []byte("null")
-	jsonZero          = []byte(`"0x0"`)
+	textZero          = []byte(`0x0`)
 	errNonString      = errors.New("cannot unmarshal non-string as hex data")
 	errNegativeBigInt = errors.New("hexutil.Big: can't marshal negative integer")
 )
@@ -35,18 +34,25 @@ var (
 // The empty slice marshals as "0x".
 type Bytes []byte
 
-// MarshalJSON implements json.Marshaler.
-func (b Bytes) MarshalJSON() ([]byte, error) {
-	result := make([]byte, len(b)*2+4)
-	copy(result, `"0x`)
-	hex.Encode(result[3:], b)
-	result[len(result)-1] = '"'
+// MarshalText implements encoding.TextMarshaler
+func (b Bytes) MarshalText() ([]byte, error) {
+	result := make([]byte, len(b)*2+2)
+	copy(result, `0x`)
+	hex.Encode(result[2:], b)
 	return result, nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Bytes) UnmarshalJSON(input []byte) error {
-	raw, err := checkJSON(input)
+	if !isString(input) {
+		return errNonString
+	}
+	return b.UnmarshalText(input[1 : len(input)-1])
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (b *Bytes) UnmarshalText(input []byte) error {
+	raw, err := checkText(input)
 	if err != nil {
 		return err
 	}
@@ -64,17 +70,11 @@ func (b Bytes) String() string {
 	return Encode(b)
 }
 
-// UnmarshalJSON decodes input as a JSON string with 0x prefix. The length of out
+// UnmarshalFixedText decodes the input as a string with 0x prefix. The length of out
 // determines the required input length. This function is commonly used to implement the
-// UnmarshalJSON method for fixed-size types:
-//
-//     type Foo [8]byte
-//
-//     func (f *Foo) UnmarshalJSON(input []byte) error {
-//         return hexutil.UnmarshalJSON("Foo", input, f[:])
-//     }
-func UnmarshalJSON(typname string, input, out []byte) error {
-	raw, err := checkJSON(input)
+// UnmarshalText method for fixed-size types.
+func UnmarshalFixedText(typname string, input, out []byte) error {
+	raw, err := checkText(input)
 	if err != nil {
 		return err
 	}
@@ -99,26 +99,33 @@ func UnmarshalJSON(typname string, input, out []byte) error {
 // marshaled without error.
 type Big big.Int
 
-// MarshalJSON implements json.Marshaler.
-func (b *Big) MarshalJSON() ([]byte, error) {
-	if b == nil {
-		return jsonNull, nil
-	}
-	bigint := (*big.Int)(b)
+// MarshalText implements encoding.TextMarshaler
+func (b Big) MarshalText() ([]byte, error) {
+	bigint := (big.Int)(b)
 	if bigint.Sign() == -1 {
 		return nil, errNegativeBigInt
 	}
 	nbits := bigint.BitLen()
 	if nbits == 0 {
-		return jsonZero, nil
+		return textZero, nil
 	}
-	enc := fmt.Sprintf(`"0x%x"`, bigint)
-	return []byte(enc), nil
+	enc := make([]byte, 2, nbits/4+2)
+	copy(enc, "0x")
+	enc = bigint.Append(enc, 16)
+	return enc, nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Big) UnmarshalJSON(input []byte) error {
-	raw, err := checkNumberJSON(input)
+	if !isString(input) {
+		return errNonString
+	}
+	return b.UnmarshalText(input[1 : len(input)-1])
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler
+func (b *Big) UnmarshalText(input []byte) error {
+	raw, err := checkNumberText(input)
 	if err != nil {
 		return err
 	}
@@ -162,18 +169,25 @@ func (b *Big) String() string {
 // The zero value marshals as "0x0".
 type Uint64 uint64
 
-// MarshalJSON implements json.Marshaler.
-func (b Uint64) MarshalJSON() ([]byte, error) {
-	buf := make([]byte, 3, 12)
-	copy(buf, `"0x`)
+// MarshalText implements encoding.TextMarshaler.
+func (b Uint64) MarshalText() ([]byte, error) {
+	buf := make([]byte, 2, 10)
+	copy(buf, `0x`)
 	buf = strconv.AppendUint(buf, uint64(b), 16)
-	buf = append(buf, '"')
 	return buf, nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Uint64) UnmarshalJSON(input []byte) error {
-	raw, err := checkNumberJSON(input)
+	if !isString(input) {
+		return errNonString
+	}
+	return b.UnmarshalText(input[1 : len(input)-1])
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler
+func (b *Uint64) UnmarshalText(input []byte) error {
+	raw, err := checkNumberText(input)
 	if err != nil {
 		return err
 	}
@@ -202,19 +216,27 @@ func (b Uint64) String() string {
 // The zero value marshals as "0x0".
 type Uint uint
 
-// MarshalJSON implements json.Marshaler.
-func (b Uint) MarshalJSON() ([]byte, error) {
-	return Uint64(b).MarshalJSON()
+// MarshalText implements encoding.TextMarshaler.
+func (b Uint) MarshalText() ([]byte, error) {
+	return Uint64(b).MarshalText()
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (b *Uint) UnmarshalJSON(input []byte) error {
+	if !isString(input) {
+		return errNonString
+	}
+	return b.UnmarshalText(input[1 : len(input)-1])
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (b *Uint) UnmarshalText(input []byte) error {
 	var u64 Uint64
-	err := u64.UnmarshalJSON(input)
-	if err != nil {
-		return err
-	} else if u64 > Uint64(^uint(0)) {
+	err := u64.UnmarshalText(input)
+	if u64 > Uint64(^uint(0)) || err == ErrUint64Range {
 		return ErrUintRange
+	} else if err != nil {
+		return err
 	}
 	*b = Uint(u64)
 	return nil
@@ -233,28 +255,21 @@ func bytesHave0xPrefix(input []byte) bool {
 	return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
 }
 
-func checkJSON(input []byte) (raw []byte, err error) {
-	if !isString(input) {
-		return nil, errNonString
-	}
-	if len(input) == 2 {
+func checkText(input []byte) ([]byte, error) {
+	if len(input) == 0 {
 		return nil, nil // empty strings are allowed
 	}
-	if !bytesHave0xPrefix(input[1:]) {
+	if !bytesHave0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
-	input = input[3 : len(input)-1]
+	input = input[2:]
 	if len(input)%2 != 0 {
 		return nil, ErrOddLength
 	}
 	return input, nil
 }
 
-func checkNumberJSON(input []byte) (raw []byte, err error) {
-	if !isString(input) {
-		return nil, errNonString
-	}
-	input = input[1 : len(input)-1]
+func checkNumberText(input []byte) (raw []byte, err error) {
 	if len(input) == 0 {
 		return nil, nil // empty strings are allowed
 	}

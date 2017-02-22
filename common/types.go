@@ -71,14 +71,14 @@ func (h Hash) Format(s fmt.State, c rune) {
 	fmt.Fprintf(s, "%"+string(c), h[:])
 }
 
-// UnmarshalJSON parses a hash in its hex from to a hash.
-func (h *Hash) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalJSON("Hash", input, h[:])
+// UnmarshalText parses a hash in hex syntax.
+func (h *Hash) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("Hash", input, h[:])
 }
 
-// Serialize given hash to JSON
-func (h Hash) MarshalJSON() ([]byte, error) {
-	return hexutil.Bytes(h[:]).MarshalJSON()
+// MarshalText returns the hex representation of h.
+func (h Hash) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(h[:]).MarshalText()
 }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic
@@ -171,14 +171,14 @@ func (a *Address) Set(other Address) {
 	}
 }
 
-// Serialize given address to JSON
-func (a Address) MarshalJSON() ([]byte, error) {
-	return hexutil.Bytes(a[:]).MarshalJSON()
+// MarshalText returns the hex representation of a.
+func (a Address) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(a[:]).MarshalText()
 }
 
-// Parse address from raw json data
-func (a *Address) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalJSON("Address", input, a[:])
+// UnmarshalText parses a hash in hex syntax.
+func (a *Address) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("Address", input, a[:])
 }
 
 // PP Pretty Prints a byte slice in the following format:
