@@ -145,7 +145,8 @@ Passphrase: {{.InputLine "foobar"}}
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
+		"Unlocked account",
+		"=0xf466859ead1932d743d622cb74fc058882e8648a",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -189,8 +190,9 @@ Passphrase: {{.InputLine "foobar"}}
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account 7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
-		"Unlocked account 289d485d9771714cce91d3393d764e1311907acc",
+		"Unlocked account",
+		"=0x7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
+		"=0x289d485d9771714cce91d3393d764e1311907acc",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -208,8 +210,9 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account 7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
-		"Unlocked account 289d485d9771714cce91d3393d764e1311907acc",
+		"Unlocked account",
+		"=0x7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
+		"=0x289d485d9771714cce91d3393d764e1311907acc",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -257,7 +260,8 @@ In order to avoid this warning, you need to remove the following duplicate key f
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
+		"Unlocked account",
+		"=0xf466859ead1932d743d622cb74fc058882e8648a",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {

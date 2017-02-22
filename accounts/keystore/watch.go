@@ -19,7 +19,6 @@
 package keystore
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -64,15 +63,16 @@ func (w *watcher) loop() {
 		w.starting = false
 		w.ac.mu.Unlock()
 	}()
+	logger := log.New("path", w.ac.keydir)
 
-	err := notify.Watch(w.ac.keydir, w.ev, notify.All)
-	if err != nil {
-		log.Trace(fmt.Sprintf("can't watch %s: %v", w.ac.keydir, err))
+	if err := notify.Watch(w.ac.keydir, w.ev, notify.All); err != nil {
+		logger.Trace("Failed to watch keystore folder", "error", err)
 		return
 	}
 	defer notify.Stop(w.ev)
-	log.Trace(fmt.Sprintf("now watching %s", w.ac.keydir))
-	defer log.Trace(fmt.Sprintf("no longer watching %s", w.ac.keydir))
+
+	logger.Trace("Started watching keystore folder")
+	defer logger.Trace("Stopped watching keystore folder")
 
 	w.ac.mu.Lock()
 	w.running = true

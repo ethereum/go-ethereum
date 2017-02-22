@@ -70,7 +70,8 @@ var (
 )
 
 func runTestWithReader(test string, r io.Reader) error {
-	log.Info(fmt.Sprint("runTest", test))
+	log.Info("Running test", "test", test)
+
 	var err error
 	switch strings.ToLower(test) {
 	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
@@ -92,7 +93,8 @@ func runTestWithReader(test string, r io.Reader) error {
 }
 
 func getFiles(path string) ([]string, error) {
-	log.Info(fmt.Sprint("getFiles", path))
+	log.Info("Listing files", "path", path)
+
 	var files []string
 	f, err := os.Open(path)
 	if err != nil {
@@ -113,7 +115,7 @@ func getFiles(path string) ([]string, error) {
 			// only go 1 depth and leave directory entires blank
 			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
 				files[i] = filepath.Join(path, v.Name())
-				log.Info(fmt.Sprint("Found file", files[i]))
+				log.Info("Found test file", "file", files[i])
 			}
 		}
 	case mode.IsRegular():
@@ -134,7 +136,9 @@ func runSuite(test, file string) {
 	}
 
 	for _, curTest := range tests {
-		log.Info(fmt.Sprint("runSuite", curTest, file))
+		suiteLogger := log.New("suite", file, "test", curTest)
+		suiteLogger.Info("Running test suite")
+
 		var err error
 		var files []string
 		if test == defaultTest {
@@ -149,30 +153,31 @@ func runSuite(test, file string) {
 			files, err = getFiles(file)
 		}
 		if err != nil {
-			log.Crit(fmt.Sprint(err))
+			suiteLogger.Crit("Failed to gather files", "error", err)
 		}
 
 		if len(files) == 0 {
-			log.Warn("No files matched path")
+			suiteLogger.Warn("No files matched path")
 		}
 		for _, curFile := range files {
 			// Skip blank entries
 			if len(curFile) == 0 {
 				continue
 			}
+			testLogger := suiteLogger.New("file", curFile)
 
 			r, err := os.Open(curFile)
 			if err != nil {
-				log.Crit(fmt.Sprint(err))
+				testLogger.Crit("Failed to open file")
 			}
 			defer r.Close()
 
 			err = runTestWithReader(curTest, r)
 			if err != nil {
 				if continueOnError {
-					log.Error(fmt.Sprint(err))
+					testLogger.Error("Test failed, continuing", "error", err)
 				} else {
-					log.Crit(fmt.Sprint(err))
+					testLogger.Crit("Test failed, aborting", "error", err)
 				}
 			}
 		}
@@ -189,9 +194,7 @@ func setupApp(c *cli.Context) error {
 	if !useStdIn {
 		runSuite(flagTest, flagFile)
 	} else {
-		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
-			log.Crit(fmt.Sprint(err))
-		}
+		return runTestWithReader(flagTest, os.Stdin)
 	}
 	return nil
 }
@@ -216,7 +219,6 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Crit(fmt.Sprint(err))
+		log.Crit("Failed to run the tester", "error", err)
 	}
-
 }

@@ -56,28 +56,28 @@ func main() {
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
-		log.Crit(fmt.Sprintf("-nat: %v", err))
+		log.Crit("Failed to parse requested NAT", "error", err)
 	}
 	switch {
 	case *genKey != "":
 		nodeKey, err = crypto.GenerateKey()
 		if err != nil {
-			log.Crit(fmt.Sprintf("could not generate key: %v", err))
+			log.Crit("Failed to generate new key", "error", err)
 		}
 		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
-			log.Crit(fmt.Sprintf("%v", err))
+			log.Crit("Failed to save generated key", "error", err)
 		}
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
-		log.Crit(fmt.Sprintf("Use -nodekey or -nodekeyhex to specify a private key"))
+		log.Crit("Use -nodekey or -nodekeyhex to load a private key")
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
-		log.Crit(fmt.Sprintf("Options -nodekey and -nodekeyhex are mutually exclusive"))
+		log.Crit("Options -nodekey and -nodekeyhex are mutually exclusive")
 	case *nodeKeyFile != "":
 		if nodeKey, err = crypto.LoadECDSA(*nodeKeyFile); err != nil {
-			log.Crit(fmt.Sprintf("-nodekey: %v", err))
+			log.Crit("Failed to loading the key file", "path", *nodeKeyFile, "error", err)
 		}
 	case *nodeKeyHex != "":
 		if nodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
-			log.Crit(fmt.Sprintf("-nodekeyhex: %v", err))
+			log.Crit("Failed to parse the key hex", "hex", *nodeKeyHex, "error", err)
 		}
 	}
 
@@ -90,17 +90,17 @@ func main() {
 	if *netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(*netrestrict)
 		if err != nil {
-			log.Crit(fmt.Sprintf("-netrestrict: %v", err))
+			log.Crit("Failed to parse the network restrictions", "error", err)
 		}
 	}
 
 	if *runv5 {
 		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
-			log.Crit(fmt.Sprintf("%v", err))
+			log.Crit("Failed to start the v5 discovery protocol", "error", err)
 		}
 	} else {
 		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
-			log.Crit(fmt.Sprintf("%v", err))
+			log.Crit("Failed to start the discovery protocol", "error", err)
 		}
 	}
 

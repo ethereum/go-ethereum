@@ -210,7 +210,7 @@ func (ac *accountCache) close() {
 func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
 	if err != nil {
-		log.Debug(fmt.Sprintf("can't load keys: %v", err))
+		log.Debug("Failed to reload keystore contents", "error", err)
 	}
 	ac.all = accounts
 	sort.Sort(ac.all)
@@ -224,7 +224,7 @@ func (ac *accountCache) reload() {
 	case ac.notify <- struct{}{}:
 	default:
 	}
-	log.Debug(fmt.Sprintf("reloaded keys, cache has %d accounts", len(ac.all)))
+	log.Debug("Reloaded keystore contents", "accounts", len(ac.all))
 }
 
 func (ac *accountCache) scan() ([]accounts.Account, error) {
@@ -243,12 +243,14 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 	for _, fi := range files {
 		path := filepath.Join(ac.keydir, fi.Name())
 		if skipKeyFile(fi) {
-			log.Trace(fmt.Sprintf("ignoring file %s", path))
+			log.Trace("Ignoring file on account scan", "path", path)
 			continue
 		}
+		logger := log.New("path", path)
+
 		fd, err := os.Open(path)
 		if err != nil {
-			log.Trace(fmt.Sprint(err))
+			logger.Trace("Failed to open keystore file", "error", err)
 			continue
 		}
 		buf.Reset(fd)
@@ -258,9 +260,9 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		addr := common.HexToAddress(keyJSON.Address)
 		switch {
 		case err != nil:
-			log.Debug(fmt.Sprintf("can't decode key %s: %v", path, err))
+			logger.Debug("Failed to decode keystore key", "error", err)
 		case (addr == common.Address{}):
-			log.Debug(fmt.Sprintf("can't decode key %s: missing or zero address", path))
+			logger.Debug("Failed to decode keystore key", "error", "missing or zero address")
 		default:
 			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
 		}
