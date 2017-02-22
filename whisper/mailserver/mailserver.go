@@ -19,12 +19,11 @@ package mailserver
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -60,16 +59,16 @@ func NewDbKey(t uint32, h common.Hash) *DBKey {
 func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, pow float64) {
 	var err error
 	if len(path) == 0 {
-		utils.Fatalf("DB file is not specified")
+		log.Crit(fmt.Sprintf("DB file is not specified"))
 	}
 
 	if len(password) == 0 {
-		utils.Fatalf("Password is not specified for MailServer")
+		log.Crit(fmt.Sprintf("Password is not specified for MailServer"))
 	}
 
 	s.db, err = leveldb.OpenFile(path, nil)
 	if err != nil {
-		utils.Fatalf("Failed to open DB file: %s", err)
+		log.Crit(fmt.Sprintf("Failed to open DB file: %s", err))
 	}
 
 	s.w = shh
@@ -77,7 +76,7 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 
 	err = s.w.AddSymKey(MailServerKeyName, []byte(password))
 	if err != nil {
-		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
+		log.Crit(fmt.Sprintf("Failed to create symmetric key for MailServer: %s", err))
 	}
 	s.key = s.w.GetSymKey(MailServerKeyName)
 }
@@ -92,18 +91,18 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
 	if err != nil {
-		glog.V(logger.Error).Infof("rlp.EncodeToBytes failed: %s", err)
+		log.Error(fmt.Sprintf("rlp.EncodeToBytes failed: %s", err))
 	} else {
 		err = s.db.Put(key.raw, rawEnvelope, nil)
 		if err != nil {
-			glog.V(logger.Error).Infof("Writing to DB failed: %s", err)
+			log.Error(fmt.Sprintf("Writing to DB failed: %s", err))
 		}
 	}
 }
 
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
 	if peer == nil {
-		glog.V(logger.Error).Info("Whisper peer is nil")
+		log.Error(fmt.Sprint("Whisper peer is nil"))
 		return
 	}
 
@@ -127,7 +126,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 		var envelope whisper.Envelope
 		err = rlp.DecodeBytes(i.Value(), &envelope)
 		if err != nil {
-			glog.V(logger.Error).Infof("RLP decoding failed: %s", err)
+			log.Error(fmt.Sprintf("RLP decoding failed: %s", err))
 		}
 
 		if topic == empty || envelope.Topic == topic {
@@ -137,7 +136,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 			} else {
 				err = s.w.SendP2PDirect(peer, &envelope)
 				if err != nil {
-					glog.V(logger.Error).Infof("Failed to send direct message to peer: %s", err)
+					log.Error(fmt.Sprintf("Failed to send direct message to peer: %s", err))
 					return nil
 				}
 			}
@@ -146,7 +145,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 
 	err = i.Error()
 	if err != nil {
-		glog.V(logger.Error).Infof("Level DB iterator error: %s", err)
+		log.Error(fmt.Sprintf("Level DB iterator error: %s", err))
 	}
 
 	return ret
@@ -161,12 +160,12 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	f := whisper.Filter{KeySym: s.key}
 	decrypted := request.Open(&f)
 	if decrypted == nil {
-		glog.V(logger.Warn).Infof("Failed to decrypt p2p request")
+		log.Warn(fmt.Sprintf("Failed to decrypt p2p request"))
 		return false, 0, 0, topic
 	}
 
 	if len(decrypted.Payload) < 8 {
-		glog.V(logger.Warn).Infof("Undersized p2p request")
+		log.Warn(fmt.Sprintf("Undersized p2p request"))
 		return false, 0, 0, topic
 	}
 
@@ -175,7 +174,7 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 		src = src[1:]
 	}
 	if !bytes.Equal(peerID, src) {
-		glog.V(logger.Warn).Infof("Wrong signature of p2p request")
+		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
 		return false, 0, 0, topic
 	}
 

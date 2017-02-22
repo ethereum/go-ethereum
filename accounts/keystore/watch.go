@@ -19,10 +19,10 @@
 package keystore
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
 )
 
@@ -67,12 +67,12 @@ func (w *watcher) loop() {
 
 	err := notify.Watch(w.ac.keydir, w.ev, notify.All)
 	if err != nil {
-		glog.V(logger.Detail).Infof("can't watch %s: %v", w.ac.keydir, err)
+		log.Trace(fmt.Sprintf("can't watch %s: %v", w.ac.keydir, err))
 		return
 	}
 	defer notify.Stop(w.ev)
-	glog.V(logger.Detail).Infof("now watching %s", w.ac.keydir)
-	defer glog.V(logger.Detail).Infof("no longer watching %s", w.ac.keydir)
+	log.Trace(fmt.Sprintf("now watching %s", w.ac.keydir))
+	defer log.Trace(fmt.Sprintf("no longer watching %s", w.ac.keydir))
 
 	w.ac.mu.Lock()
 	w.running = true

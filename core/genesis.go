@@ -31,8 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -92,7 +91,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}, nil, nil, nil)
 
 	if block := GetBlock(chainDb, block.Hash(), block.NumberU64()); block != nil {
-		glog.V(logger.Info).Infoln("Genesis block already in chain. Writing canonical number")
+		log.Info(fmt.Sprint("Genesis block already in chain. Writing canonical number"))
 		err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
 			return nil, err

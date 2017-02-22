@@ -29,8 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -128,10 +127,10 @@ func (r *ReleaseService) checker() {
 			version, err := r.oracle.CurrentVersion(opts)
 			if err != nil {
 				if err == bind.ErrNoCode {
-					glog.V(logger.Debug).Infof("Release oracle not found at %x", r.config.Oracle)
+					log.Debug(fmt.Sprintf("Release oracle not found at %x", r.config.Oracle))
 					continue
 				}
-				glog.V(logger.Error).Infof("Failed to retrieve current release: %v", err)
+				log.Error(fmt.Sprintf("Failed to retrieve current release: %v", err))
 				continue
 			}
 			// Version was successfully retrieved, notify if newer than ours
@@ -144,13 +143,13 @@ func (r *ReleaseService) checker() {
 				howtofix := fmt.Sprintf("Please check https://github.com/ethereum/go-ethereum/releases for new releases")
 				separator := strings.Repeat("-", len(warning))
 
-				glog.V(logger.Warn).Info(separator)
-				glog.V(logger.Warn).Info(warning)
-				glog.V(logger.Warn).Info(howtofix)
-				glog.V(logger.Warn).Info(separator)
+				log.Warn(fmt.Sprint(separator))
+				log.Warn(fmt.Sprint(warning))
+				log.Warn(fmt.Sprint(howtofix))
+				log.Warn(fmt.Sprint(separator))
 			} else {
-				glog.V(logger.Debug).Infof("Client v%d.%d.%d-%x seems up to date with upstream v%d.%d.%d-%x",
-					r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4])
+				log.Debug(fmt.Sprintf("Client v%d.%d.%d-%x seems up to date with upstream v%d.%d.%d-%x",
+					r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4]))
 			}
 
 		// If termination was requested, return

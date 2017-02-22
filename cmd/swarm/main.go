@@ -35,8 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -278,7 +277,7 @@ func bzzd(ctx *cli.Context) error {
 		signal.Notify(sigc, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		glog.V(logger.Info).Infoln("Got sigterm, shutting down...")
+		log.Info(fmt.Sprint("Got sigterm, shutting down..."))
 		stack.Stop()
 	}()
 	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
@@ -308,7 +307,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
-		utils.Fatalf("unable to configure swarm: %v", err)
+		log.Crit(fmt.Sprintf("unable to configure swarm: %v", err))
 	}
 	bzzport := ctx.GlobalString(SwarmPortFlag.Name)
 	if len(bzzport) > 0 {
@@ -325,13 +324,13 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 		if len(ethapi) > 0 {
 			client, err = ethclient.Dial(ethapi)
 			if err != nil {
-				utils.Fatalf("Can't connect: %v", err)
+				log.Crit(fmt.Sprintf("Can't connect: %v", err))
 			}
 		}
 		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors)
 	}
 	if err := stack.Register(boot); err != nil {
-		utils.Fatalf("Failed to register the Swarm service: %v", err)
+		log.Crit(fmt.Sprintf("Failed to register the Swarm service: %v", err))
 	}
 }
 
@@ -339,11 +338,11 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	keyid := ctx.GlobalString(SwarmAccountFlag.Name)
 
 	if keyid == "" {
-		utils.Fatalf("Option %q is required", SwarmAccountFlag.Name)
+		log.Crit(fmt.Sprintf("Option %q is required", SwarmAccountFlag.Name))
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(keyid); err == nil {
-		glog.V(logger.Info).Infof("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey))
+		log.Info(fmt.Sprintf("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey)))
 		return key
 	}
 	// Otherwise try getting it from the keystore.
@@ -365,14 +364,14 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 			err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
 		}
 	} else {
-		utils.Fatalf("Can't find swarm account key %s", account)
+		log.Crit(fmt.Sprintf("Can't find swarm account key %s", account))
 	}
 	if err != nil {
-		utils.Fatalf("Can't find swarm account key: %v", err)
+		log.Crit(fmt.Sprintf("Can't find swarm account key: %v", err))
 	}
 	keyjson, err := ioutil.ReadFile(a.URL.Path)
 	if err != nil {
-		utils.Fatalf("Can't load swarm account key: %v", err)
+		log.Crit(fmt.Sprintf("Can't load swarm account key: %v", err))
 	}
 	for i := 1; i <= 3; i++ {
 		passphrase := promptPassphrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i))
@@ -381,7 +380,7 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 			return key.PrivateKey
 		}
 	}
-	utils.Fatalf("Can't decrypt swarm account key")
+	log.Crit(fmt.Sprintf("Can't decrypt swarm account key"))
 	return nil
 }
 
@@ -391,7 +390,7 @@ func promptPassphrase(prompt string) string {
 	}
 	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
+		log.Crit(fmt.Sprintf("Failed to read passphrase: %v", err))
 	}
 	return password
 }
@@ -400,7 +399,7 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 	for _, url := range nodes {
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			glog.Errorf("invalid bootnode %q", err)
+			log.Error(fmt.Sprintf("invalid bootnode %q", err))
 			continue
 		}
 		srv.AddPeer(n)

@@ -32,8 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
@@ -113,7 +112,7 @@ Use "ethereum dump 0" to dump the genesis block.
 func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
-		utils.Fatalf("must supply path to genesis JSON file")
+		log.Crit(fmt.Sprintf("must supply path to genesis JSON file"))
 	}
 
 	stack := makeFullNode(ctx)
@@ -121,21 +120,21 @@ func initGenesis(ctx *cli.Context) error {
 
 	genesisFile, err := os.Open(genesisPath)
 	if err != nil {
-		utils.Fatalf("failed to read genesis file: %v", err)
+		log.Crit(fmt.Sprintf("failed to read genesis file: %v", err))
 	}
 	defer genesisFile.Close()
 
 	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
 	if err != nil {
-		utils.Fatalf("failed to write genesis block: %v", err)
+		log.Crit(fmt.Sprintf("failed to write genesis block: %v", err))
 	}
-	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	log.Info(fmt.Sprintf("successfully wrote genesis block and/or chain rule set: %x", block.Hash()))
 	return nil
 }
 
 func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) != 1 {
-		utils.Fatalf("This command requires an argument.")
+		log.Crit(fmt.Sprintf("This command requires an argument."))
 	}
 	stack := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
@@ -159,7 +158,7 @@ func importChain(ctx *cli.Context) error {
 	// Import the chain
 	start := time.Now()
 	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
-		utils.Fatalf("Import error: %v", err)
+		log.Crit(fmt.Sprintf("Import error: %v", err))
 	}
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
@@ -168,7 +167,7 @@ func importChain(ctx *cli.Context) error {
 
 	stats, err := db.LDB().GetProperty("leveldb.stats")
 	if err != nil {
-		utils.Fatalf("Failed to read database stats: %v", err)
+		log.Crit(fmt.Sprintf("Failed to read database stats: %v", err))
 	}
 	fmt.Println(stats)
 	fmt.Printf("Trie cache misses:  %d\n", trie.CacheMisses())
@@ -187,13 +186,13 @@ func importChain(ctx *cli.Context) error {
 	start = time.Now()
 	fmt.Println("Compacting entire database...")
 	if err = db.LDB().CompactRange(util.Range{}); err != nil {
-		utils.Fatalf("Compaction failed: %v", err)
+		log.Crit(fmt.Sprintf("Compaction failed: %v", err))
 	}
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
 
 	stats, err = db.LDB().GetProperty("leveldb.stats")
 	if err != nil {
-		utils.Fatalf("Failed to read database stats: %v", err)
+		log.Crit(fmt.Sprintf("Failed to read database stats: %v", err))
 	}
 	fmt.Println(stats)
 
@@ -202,7 +201,7 @@ func importChain(ctx *cli.Context) error {
 
 func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
-		utils.Fatalf("This command requires an argument.")
+		log.Crit(fmt.Sprintf("This command requires an argument."))
 	}
 	stack := makeFullNode(ctx)
 	chain, _ := utils.MakeChain(ctx, stack)
@@ -217,16 +216,16 @@ func exportChain(ctx *cli.Context) error {
 		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
 		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
 		if ferr != nil || lerr != nil {
-			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
+			log.Crit(fmt.Sprintf("Export error in parsing parameters: block number not an integer\n"))
 		}
 		if first < 0 || last < 0 {
-			utils.Fatalf("Export error: block number must be greater than 0\n")
+			log.Crit(fmt.Sprintf("Export error: block number must be greater than 0\n"))
 		}
 		err = utils.ExportAppendChain(chain, fp, uint64(first), uint64(last))
 	}
 
 	if err != nil {
-		utils.Fatalf("Export error: %v\n", err)
+		log.Crit(fmt.Sprintf("Export error: %v\n", err))
 	}
 	fmt.Printf("Export done in %v", time.Since(start))
 	return nil
@@ -244,7 +243,7 @@ func removeDB(ctx *cli.Context) error {
 	confirm, err := console.Stdin.PromptConfirm("Remove this database?")
 	switch {
 	case err != nil:
-		utils.Fatalf("%v", err)
+		log.Crit(fmt.Sprintf("%v", err))
 	case !confirm:
 		fmt.Println("Operation aborted")
 	default:
@@ -257,7 +256,7 @@ func removeDB(ctx *cli.Context) error {
 }
 
 func upgradeDB(ctx *cli.Context) error {
-	glog.Infoln("Upgrading blockchain database")
+	log.Info(fmt.Sprint("Upgrading blockchain database"))
 
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	chain, chainDb := utils.MakeChain(ctx, stack)
@@ -270,7 +269,7 @@ func upgradeDB(ctx *cli.Context) error {
 	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
 	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
 	if err := utils.ExportChain(chain, exportFile); err != nil {
-		utils.Fatalf("Unable to export chain for reimport %s", err)
+		log.Crit(fmt.Sprintf("Unable to export chain for reimport %s", err))
 	}
 	chainDb.Close()
 	if dir := dbDirectory(chainDb); dir != "" {
@@ -283,10 +282,10 @@ func upgradeDB(ctx *cli.Context) error {
 	err := utils.ImportChain(chain, exportFile)
 	chainDb.Close()
 	if err != nil {
-		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)", err, exportFile)
+		log.Crit(fmt.Sprintf("Import error %v (a backup is made in %s, use the import command to import it)", err, exportFile))
 	} else {
 		os.Remove(exportFile)
-		glog.Infoln("Import finished")
+		log.Info(fmt.Sprint("Import finished"))
 	}
 	return nil
 }
@@ -312,11 +311,11 @@ func dump(ctx *cli.Context) error {
 		}
 		if block == nil {
 			fmt.Println("{}")
-			utils.Fatalf("block not found")
+			log.Crit(fmt.Sprintf("block not found"))
 		} else {
 			state, err := state.New(block.Root(), chainDb)
 			if err != nil {
-				utils.Fatalf("could not create new state: %v", err)
+				log.Crit(fmt.Sprintf("could not create new state: %v", err))
 			}
 			fmt.Printf("%s\n", state.Dump())
 		}

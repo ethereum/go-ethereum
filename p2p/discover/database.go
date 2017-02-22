@@ -23,13 +23,13 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -180,12 +180,12 @@ func (db *nodeDB) storeInt64(key []byte, n int64) error {
 func (db *nodeDB) node(id NodeID) *Node {
 	blob, err := db.lvl.Get(makeKey(id, nodeDBDiscoverRoot), nil)
 	if err != nil {
-		glog.V(logger.Detail).Infof("failed to retrieve node %v: %v", id, err)
+		log.Trace(fmt.Sprintf("failed to retrieve node %v: %v", id, err))
 		return nil
 	}
 	node := new(Node)
 	if err := rlp.DecodeBytes(blob, node); err != nil {
-		glog.V(logger.Warn).Infof("failed to decode node RLP: %v", err)
+		log.Warn(fmt.Sprintf("failed to decode node RLP: %v", err))
 		return nil
 	}
 	node.sha = crypto.Keccak256Hash(node.ID[:])
@@ -233,7 +233,7 @@ func (db *nodeDB) expirer() {
 		select {
 		case <-tick:
 			if err := db.expireNodes(); err != nil {
-				glog.V(logger.Error).Infof("Failed to expire nodedb items: %v", err)
+				log.Error(fmt.Sprintf("Failed to expire nodedb items: %v", err))
 			}
 
 		case <-db.quit:
@@ -352,9 +352,7 @@ func nextNode(it iterator.Iterator) *Node {
 		}
 		var n Node
 		if err := rlp.DecodeBytes(it.Value(), &n); err != nil {
-			if glog.V(logger.Warn) {
-				glog.Errorf("invalid node %x: %v", id, err)
-			}
+			log.Warn(fmt.Sprintf("invalid node %x: %v", id, err))
 			continue
 		}
 		return &n

@@ -34,8 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/karalabe/hid"
 	"golang.org/x/net/context"
@@ -220,8 +219,8 @@ func (w *ledgerWallet) Open(passphrase string) error {
 //  - libusb on Windows doesn't support hotplug, so we can't detect USB unplugs
 //  - communication timeout on the Ledger requires a device power cycle to fix
 func (w *ledgerWallet) heartbeat() {
-	glog.V(logger.Debug).Infof("%s health-check started", w.url.String())
-	defer glog.V(logger.Debug).Infof("%s health-check stopped", w.url.String())
+	log.Debug(fmt.Sprintf("%s health-check started", w.url.String()))
+	defer log.Debug(fmt.Sprintf("%s health-check stopped", w.url.String()))
 
 	// Execute heartbeat checks until termination or error
 	var (
@@ -260,7 +259,7 @@ func (w *ledgerWallet) heartbeat() {
 	}
 	// In case of error, wait for termination
 	if err != nil {
-		glog.V(logger.Debug).Infof("%s health-check failed: %v", w.url.String(), err)
+		log.Debug(fmt.Sprintf("%s health-check failed: %v", w.url.String(), err))
 		errc = <-w.healthQuit
 	}
 	errc <- err
@@ -348,8 +347,8 @@ func (w *ledgerWallet) Accounts() []accounts.Account {
 // selfDerive is an account derivation loop that upon request attempts to find
 // new non-zero accounts.
 func (w *ledgerWallet) selfDerive() {
-	glog.V(logger.Debug).Infof("%s self-derivation started", w.url.String())
-	defer glog.V(logger.Debug).Infof("%s self-derivation stopped", w.url.String())
+	log.Debug(fmt.Sprintf("%s self-derivation started", w.url.String()))
+	defer log.Debug(fmt.Sprintf("%s self-derivation stopped", w.url.String()))
 
 	// Execute self-derivations until termination or error
 	var (
@@ -394,7 +393,7 @@ func (w *ledgerWallet) selfDerive() {
 			// Retrieve the next derived Ethereum account
 			if nextAddr == (common.Address{}) {
 				if nextAddr, err = w.ledgerDerive(nextPath); err != nil {
-					glog.V(logger.Warn).Infof("%s self-derivation failed: %v", w.url.String(), err)
+					log.Warn(fmt.Sprintf("%s self-derivation failed: %v", w.url.String(), err))
 					break
 				}
 			}
@@ -405,12 +404,12 @@ func (w *ledgerWallet) selfDerive() {
 			)
 			balance, err = w.deriveChain.BalanceAt(context, nextAddr, nil)
 			if err != nil {
-				glog.V(logger.Warn).Infof("%s self-derivation balance retrieval failed: %v", w.url.String(), err)
+				log.Warn(fmt.Sprintf("%s self-derivation balance retrieval failed: %v", w.url.String(), err))
 				break
 			}
 			nonce, err = w.deriveChain.NonceAt(context, nextAddr, nil)
 			if err != nil {
-				glog.V(logger.Warn).Infof("%s self-derivation nonce retrieval failed: %v", w.url.String(), err)
+				log.Warn(fmt.Sprintf("%s self-derivation nonce retrieval failed: %v", w.url.String(), err))
 				break
 			}
 			// If the next account is empty, stop self-derivation, but add it nonetheless
@@ -430,7 +429,7 @@ func (w *ledgerWallet) selfDerive() {
 
 			// Display a log message to the user for new (or previously empty accounts)
 			if _, known := w.paths[nextAddr]; !known || (!empty && nextAddr == w.deriveNextAddr) {
-				glog.V(logger.Info).Infof("%s discovered %s (balance %22v, nonce %4d) at %s", w.url.String(), nextAddr.Hex(), balance, nonce, path)
+				log.Info(fmt.Sprintf("%s discovered %s (balance %22v, nonce %4d) at %s", w.url.String(), nextAddr.Hex(), balance, nonce, path))
 			}
 			// Fetch the next potential account
 			if !empty {
@@ -469,7 +468,7 @@ func (w *ledgerWallet) selfDerive() {
 	}
 	// In case of error, wait for termination
 	if err != nil {
-		glog.V(logger.Debug).Infof("%s self-derivation failed: %s", w.url.String(), err)
+		log.Debug(fmt.Sprintf("%s self-derivation failed: %s", w.url.String(), err))
 		errc = <-w.deriveQuit
 	}
 	errc <- err
@@ -849,9 +848,7 @@ func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 			apdu = nil
 		}
 		// Send over to the device
-		if glog.V(logger.Detail) {
-			glog.Infof("-> %s: %x", w.device.Path, chunk)
-		}
+		log.Trace("", "msg", log.Lazy{Fn: func() string { return fmt.Sprintf("-> %s: %x", w.device.Path, chunk) }})
 		if _, err := w.device.Write(chunk); err != nil {
 			return nil, err
 		}
@@ -864,9 +861,8 @@ func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 		if _, err := io.ReadFull(w.device, chunk); err != nil {
 			return nil, err
 		}
-		if glog.V(logger.Detail) {
-			glog.Infof("<- %s: %x", w.device.Path, chunk)
-		}
+		log.Trace("", "msg", log.Lazy{Fn: func() string { return fmt.Sprintf("<- %s: %x", w.device.Path, chunk) }})
+
 		// Make sure the transport header matches
 		if chunk[0] != 0x01 || chunk[1] != 0x01 || chunk[2] != 0x05 {
 			return nil, errReplyInvalidHeader

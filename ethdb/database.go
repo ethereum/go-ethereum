@@ -17,14 +17,14 @@
 package ethdb
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -80,7 +80,7 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	glog.V(logger.Info).Infof("Allotted %dMB cache and %d file handles to %s", cache, handles, file)
+	log.Info(fmt.Sprintf("Allotted %dMB cache and %d file handles to %s", cache, handles, file))
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
@@ -167,16 +167,14 @@ func (self *LDBDatabase) Close() {
 		errc := make(chan error)
 		self.quitChan <- errc
 		if err := <-errc; err != nil {
-			glog.V(logger.Error).Infof("metrics failure in '%s': %v\n", self.fn, err)
+			log.Error(fmt.Sprintf("metrics failure in '%s': %v\n", self.fn, err))
 		}
 	}
 	err := self.db.Close()
-	if glog.V(logger.Error) {
-		if err == nil {
-			glog.Infoln("closed db:", self.fn)
-		} else {
-			glog.Errorf("error closing db %s: %v", self.fn, err)
-		}
+	if err == nil {
+		log.Info(fmt.Sprint("closed db:", self.fn))
+	} else {
+		log.Error(fmt.Sprintf("error closing db %s: %v", self.fn, err))
 	}
 }
 
@@ -231,7 +229,7 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 		// Retrieve the database stats
 		stats, err := self.db.GetProperty("leveldb.stats")
 		if err != nil {
-			glog.V(logger.Error).Infof("failed to read database stats: %v", err)
+			log.Error(fmt.Sprintf("failed to read database stats: %v", err))
 			return
 		}
 		// Find the compaction table, skip the header
@@ -240,7 +238,7 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			lines = lines[1:]
 		}
 		if len(lines) <= 3 {
-			glog.V(logger.Error).Infof("compaction table not found")
+			log.Error(fmt.Sprintf("compaction table not found"))
 			return
 		}
 		lines = lines[3:]
@@ -256,7 +254,7 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			}
 			for idx, counter := range parts[3:] {
 				if value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64); err != nil {
-					glog.V(logger.Error).Infof("compaction entry parsing failed: %v", err)
+					log.Error(fmt.Sprintf("compaction entry parsing failed: %v", err))
 					return
 				} else {
 					counters[i%2][idx] += value

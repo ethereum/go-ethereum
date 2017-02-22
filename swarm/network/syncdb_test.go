@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -25,14 +26,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 func init() {
-	glog.SetV(0)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat())))
 }
 
 type testSyncDb struct {
@@ -83,7 +82,7 @@ func (self *testSyncDb) push(n int) {
 		self.sent = append(self.sent, self.c)
 		self.c++
 	}
-	glog.V(logger.Debug).Infof("pushed %v requests", n)
+	log.Debug(fmt.Sprintf("pushed %v requests", n))
 }
 
 func (self *testSyncDb) draindb() {
@@ -128,7 +127,7 @@ func (self *testSyncDb) expect(n int, db bool) {
 		}
 		if len(self.sent) > self.at && !bytes.Equal(crypto.Keccak256([]byte{byte(self.sent[self.at])}), self.delivered[self.at]) {
 			self.t.Fatalf("expected delivery %v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db)
-			glog.V(logger.Debug).Infof("%v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db)
+			log.Debug(fmt.Sprintf("%v/%v/%v to be hash of  %v, from db: %v = %v", i, n, self.at, self.sent[self.at], ok, db))
 		}
 		if !ok && db {
 			self.t.Fatalf("expected delivery %v/%v/%v from db", i, n, self.at)

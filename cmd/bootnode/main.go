@@ -23,9 +23,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -42,39 +41,43 @@ func main() {
 		natdesc     = flag.String("nat", "none", "port mapping mechanism (any|none|upnp|pmp|extip:<IP>)")
 		netrestrict = flag.String("netrestrict", "", "restrict network communication to the given IP networks (CIDR masks)")
 		runv5       = flag.Bool("v5", false, "run a v5 topic discovery bootnode")
+		verbosity   = flag.Int("verbosity", int(log.LvlInfo), "log verbosity (0-9)")
+		vmodule     = flag.String("vmodule", "", "log verbosity pattern")
 
 		nodeKey *ecdsa.PrivateKey
 		err     error
 	)
-	flag.Var(glog.GetVerbosity(), "verbosity", "log verbosity (0-9)")
-	flag.Var(glog.GetVModule(), "vmodule", "log verbosity pattern")
-	glog.SetToStderr(true)
 	flag.Parse()
+
+	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat()))
+	glogger.Verbosity(log.Lvl(*verbosity))
+	glogger.Vmodule(*vmodule)
+	log.Root().SetHandler(glogger)
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
-		utils.Fatalf("-nat: %v", err)
+		log.Crit(fmt.Sprintf("-nat: %v", err))
 	}
 	switch {
 	case *genKey != "":
 		nodeKey, err = crypto.GenerateKey()
 		if err != nil {
-			utils.Fatalf("could not generate key: %v", err)
+			log.Crit(fmt.Sprintf("could not generate key: %v", err))
 		}
 		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
-			utils.Fatalf("%v", err)
+			log.Crit(fmt.Sprintf("%v", err))
 		}
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
-		utils.Fatalf("Use -nodekey or -nodekeyhex to specify a private key")
+		log.Crit(fmt.Sprintf("Use -nodekey or -nodekeyhex to specify a private key"))
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
-		utils.Fatalf("Options -nodekey and -nodekeyhex are mutually exclusive")
+		log.Crit(fmt.Sprintf("Options -nodekey and -nodekeyhex are mutually exclusive"))
 	case *nodeKeyFile != "":
 		if nodeKey, err = crypto.LoadECDSA(*nodeKeyFile); err != nil {
-			utils.Fatalf("-nodekey: %v", err)
+			log.Crit(fmt.Sprintf("-nodekey: %v", err))
 		}
 	case *nodeKeyHex != "":
 		if nodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
-			utils.Fatalf("-nodekeyhex: %v", err)
+			log.Crit(fmt.Sprintf("-nodekeyhex: %v", err))
 		}
 	}
 
@@ -87,17 +90,17 @@ func main() {
 	if *netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(*netrestrict)
 		if err != nil {
-			utils.Fatalf("-netrestrict: %v", err)
+			log.Crit(fmt.Sprintf("-netrestrict: %v", err))
 		}
 	}
 
 	if *runv5 {
 		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
-			utils.Fatalf("%v", err)
+			log.Crit(fmt.Sprintf("%v", err))
 		}
 	} else {
 		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
-			utils.Fatalf("%v", err)
+			log.Crit(fmt.Sprintf("%v", err))
 		}
 	}
 

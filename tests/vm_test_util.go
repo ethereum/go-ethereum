@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -130,7 +130,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 	for name, test := range tests {
 		if skipTest[name] /*|| name != "exp0"*/ {
-			glog.Infoln("Skipping VM test", name)
+			log.Info(fmt.Sprint("Skipping VM test", name))
 			continue
 		}
 
@@ -138,7 +138,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 			return fmt.Errorf("%s %s", name, err.Error())
 		}
 
-		glog.Infoln("VM test passed: ", name)
+		log.Info(fmt.Sprint("VM test passed: ", name))
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil

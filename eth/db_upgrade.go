@@ -28,8 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -50,7 +49,7 @@ func upgradeSequentialKeys(db ethdb.Database) (stopFn func()) {
 		return nil // empty database, nothing to do
 	}
 
-	glog.V(logger.Info).Infof("Upgrading chain database to use sequential keys")
+	log.Info(fmt.Sprintf("Upgrading chain database to use sequential keys"))
 
 	stopChn := make(chan struct{})
 	stoppedChn := make(chan struct{})
@@ -73,11 +72,11 @@ func upgradeSequentialKeys(db ethdb.Database) (stopFn func()) {
 			err, stopped = upgradeSequentialOrphanedReceipts(db, stopFn)
 		}
 		if err == nil && !stopped {
-			glog.V(logger.Info).Infof("Database conversion successful")
+			log.Info(fmt.Sprintf("Database conversion successful"))
 			db.Put(useSequentialKeys, []byte{42})
 		}
 		if err != nil {
-			glog.V(logger.Error).Infof("Database conversion failed: %v", err)
+			log.Error(fmt.Sprintf("Database conversion failed: %v", err))
 		}
 		close(stoppedChn)
 	}()
@@ -106,7 +105,7 @@ func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (e
 				it.Release()
 				it = db.(*ethdb.LDBDatabase).NewIterator()
 				it.Seek(keyPtr)
-				glog.V(logger.Info).Infof("converting %d canonical numbers...", cnt)
+				log.Info(fmt.Sprintf("converting %d canonical numbers...", cnt))
 			}
 			number := big.NewInt(0).SetBytes(keyPtr[10:]).Uint64()
 			newKey := []byte("h12345678n")
@@ -125,7 +124,7 @@ func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (e
 		it.Next()
 	}
 	if cnt > 0 {
-		glog.V(logger.Info).Infof("converted %d canonical numbers...", cnt)
+		log.Info(fmt.Sprintf("converted %d canonical numbers...", cnt))
 	}
 	return nil, false
 }
@@ -149,7 +148,7 @@ func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool
 				it.Release()
 				it = db.(*ethdb.LDBDatabase).NewIterator()
 				it.Seek(keyPtr)
-				glog.V(logger.Info).Infof("converting %d blocks...", cnt)
+				log.Info(fmt.Sprintf("converting %d blocks...", cnt))
 			}
 			// convert header, body, td and block receipts
 			var keyPrefix [38]byte
@@ -177,7 +176,7 @@ func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool
 		}
 	}
 	if cnt > 0 {
-		glog.V(logger.Info).Infof("converted %d blocks...", cnt)
+		log.Info(fmt.Sprintf("converted %d blocks...", cnt))
 	}
 	return nil, false
 }
@@ -204,7 +203,7 @@ func upgradeSequentialOrphanedReceipts(db ethdb.Database, stopFn func() bool) (e
 		it.Next()
 	}
 	if cnt > 0 {
-		glog.V(logger.Info).Infof("removed %d orphaned block receipts...", cnt)
+		log.Info(fmt.Sprintf("removed %d orphaned block receipts...", cnt))
 	}
 	return nil, false
 }
@@ -267,7 +266,7 @@ func upgradeChainDatabase(db ethdb.Database) error {
 		return nil
 	}
 	// At least some of the database is still the old format, upgrade (skip the head block!)
-	glog.V(logger.Info).Info("Old database detected, upgrading...")
+	log.Info(fmt.Sprint("Old database detected, upgrading..."))
 
 	if db, ok := db.(*ethdb.LDBDatabase); ok {
 		blockPrefix := []byte("block-hash-")
@@ -343,7 +342,7 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 	}
 
 	tstart := time.Now()
-	glog.V(logger.Info).Infoln("upgrading db log bloom bins")
+	log.Info(fmt.Sprint("upgrading db log bloom bins"))
 	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
 		hash := core.GetCanonicalHash(db, i)
 		if (hash == common.Hash{}) {
@@ -351,6 +350,6 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 		}
 		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
 	}
-	glog.V(logger.Info).Infoln("upgrade completed in", time.Since(tstart))
+	log.Info(fmt.Sprint("upgrade completed in", time.Since(tstart)))
 	return nil
 }

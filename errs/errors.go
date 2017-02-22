@@ -16,11 +16,7 @@
 
 package errs
 
-import (
-	"fmt"
-
-	"github.com/ethereum/go-ethereum/logger/glog"
-)
+import "fmt"
 
 /*
 Errors implements an error handler providing standardised errors for a package.
@@ -79,10 +75,4 @@ func (self Error) Error() (message string) {
 		}
 	}
 	return self.message
-}
-
-func (self Error) Log(v glog.Verbose) {
-	if v {
-		v.Infoln(self)
-	}
 }

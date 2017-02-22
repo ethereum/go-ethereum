@@ -30,8 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -210,8 +209,8 @@ func (ac *accountCache) close() {
 // Callers must hold ac.mu.
 func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
-	if err != nil && glog.V(logger.Debug) {
-		glog.Errorf("can't load keys: %v", err)
+	if err != nil {
+		log.Debug(fmt.Sprintf("can't load keys: %v", err))
 	}
 	ac.all = accounts
 	sort.Sort(ac.all)
@@ -225,7 +224,7 @@ func (ac *accountCache) reload() {
 	case ac.notify <- struct{}{}:
 	default:
 	}
-	glog.V(logger.Debug).Infof("reloaded keys, cache has %d accounts", len(ac.all))
+	log.Debug(fmt.Sprintf("reloaded keys, cache has %d accounts", len(ac.all)))
 }
 
 func (ac *accountCache) scan() ([]accounts.Account, error) {
@@ -244,12 +243,12 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 	for _, fi := range files {
 		path := filepath.Join(ac.keydir, fi.Name())
 		if skipKeyFile(fi) {
-			glog.V(logger.Detail).Infof("ignoring file %s", path)
+			log.Trace(fmt.Sprintf("ignoring file %s", path))
 			continue
 		}
 		fd, err := os.Open(path)
 		if err != nil {
-			glog.V(logger.Detail).Infoln(err)
+			log.Trace(fmt.Sprint(err))
 			continue
 		}
 		buf.Reset(fd)
@@ -259,9 +258,9 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		addr := common.HexToAddress(keyJSON.Address)
 		switch {
 		case err != nil:
-			glog.V(logger.Debug).Infof("can't decode key %s: %v", path, err)
+			log.Debug(fmt.Sprintf("can't decode key %s: %v", path, err))
 		case (addr == common.Address{}):
-			glog.V(logger.Debug).Infof("can't decode key %s: missing or zero address", path)
+			log.Debug(fmt.Sprintf("can't decode key %s: missing or zero address", path))
 		default:
 			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
 		}

@@ -18,6 +18,7 @@ package miner
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -26,8 +27,7 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -140,13 +140,13 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 	// Make sure the work submitted is present
 	work := a.work[hash]
 	if work == nil {
-		glog.V(logger.Info).Infof("Work was submitted for %x but no pending work found", hash)
+		log.Info(fmt.Sprintf("Work was submitted for %x but no pending work found", hash))
 		return false
 	}
 	// Make sure the PoW solutions is indeed valid
 	block := work.Block.WithMiningResult(nonce, mixDigest)
 	if !a.pow.Verify(block) {
-		glog.V(logger.Warn).Infof("Invalid PoW submitted for %x", hash)
+		log.Warn(fmt.Sprintf("Invalid PoW submitted for %x", hash))
 		return false
 	}
 	// Solutions seems to be valid, return to the miner and notify acceptance

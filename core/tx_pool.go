@@ -28,8 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
@@ -163,12 +162,12 @@ func (pool *TxPool) eventLoop() {
 func (pool *TxPool) resetState() {
 	currentState, err := pool.currentState()
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to get current state: %v", err)
+		log.Error(fmt.Sprintf("Failed to get current state: %v", err))
 		return
 	}
 	managedState := state.ManageState(currentState)
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to get managed state: %v", err)
+		log.Error(fmt.Sprintf("Failed to get managed state: %v", err))
 		return
 	}
 	pool.pendingState = managedState
@@ -193,7 +192,7 @@ func (pool *TxPool) Stop() {
 	pool.events.Unsubscribe()
 	close(pool.quit)
 	pool.wg.Wait()
-	glog.V(logger.Info).Infoln("Transaction pool stopped")
+	log.Info(fmt.Sprint("Transaction pool stopped"))
 }
 
 func (pool *TxPool) State() *state.ManagedState {
@@ -334,14 +333,14 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 	pool.enqueueTx(hash, tx)
 
 	// Print a log message if low enough level is set
-	if glog.V(logger.Debug) {
+	log.Debug("", "msg", log.Lazy{Fn: func() string {
 		rcpt := "[NEW_CONTRACT]"
 		if to := tx.To(); to != nil {
 			rcpt = common.Bytes2Hex(to[:4])
 		}
 		from, _ := types.Sender(pool.signer, tx) // from already verified during tx validation
-		glog.Infof("(t) 0x%x => %s (%v) %x\n", from[:4], rcpt, tx.Value, hash)
-	}
+		return fmt.Sprintf("(t) 0x%x => %s (%v) %x\n", from[:4], rcpt, tx.Value(), hash)
+	}})
 	return nil
 }
 
@@ -423,7 +422,7 @@ func (pool *TxPool) AddBatch(txs []*types.Transaction) error {
 
 	for _, tx := range txs {
 		if err := pool.add(tx); err != nil {
-			glog.V(logger.Debug).Infoln("tx error:", err)
+			log.Debug(fmt.Sprint("tx error:", err))
 		}
 	}
 
@@ -514,32 +513,32 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 	for addr, list := range pool.queue {
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(state.GetNonce(addr)) {
-			if glog.V(logger.Debug) {
-				glog.Infof("Removed old queued transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Removed old queued transaction: %v", tx)
+			}})
 			delete(pool.all, tx.Hash())
 		}
 		// Drop all transactions that are too costly (low balance)
 		drops, _ := list.Filter(state.GetBalance(addr))
 		for _, tx := range drops {
-			if glog.V(logger.Debug) {
-				glog.Infof("Removed unpayable queued transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Removed unpayable queued transaction: %v", tx)
+			}})
 			delete(pool.all, tx.Hash())
 			queuedNofundsCounter.Inc(1)
 		}
 		// Gather all executable transactions and promote them
 		for _, tx := range list.Ready(pool.pendingState.GetNonce(addr)) {
-			if glog.V(logger.Debug) {
-				glog.Infof("Promoting queued transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Promoting queued transaction: %v", tx)
+			}})
 			pool.promoteTx(addr, tx.Hash(), tx)
 		}
 		// Drop all transactions over the allowed limit
 		for _, tx := range list.Cap(int(maxQueuedPerAccount)) {
-			if glog.V(logger.Debug) {
-				glog.Infof("Removed cap-exceeding queued transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Removed cap-exceeding queued transaction: %v", tx)
+			}})
 			delete(pool.all, tx.Hash())
 			queuedRLCounter.Inc(1)
 		}
@@ -651,24 +650,24 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(nonce) {
-			if glog.V(logger.Debug) {
-				glog.Infof("Removed old pending transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Removed old pending transaction: %v", tx)
+			}})
 			delete(pool.all, tx.Hash())
 		}
 		// Drop all transactions that are too costly (low balance), and queue any invalids back for later
 		drops, invalids := list.Filter(state.GetBalance(addr))
 		for _, tx := range drops {
-			if glog.V(logger.Debug) {
-				glog.Infof("Removed unpayable pending transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Removed unpayable pending transaction: %v", tx)
+			}})
 			delete(pool.all, tx.Hash())
 			pendingNofundsCounter.Inc(1)
 		}
 		for _, tx := range invalids {
-			if glog.V(logger.Debug) {
-				glog.Infof("Demoting pending transaction: %v", tx)
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("Demoting pending transaction: %v", tx)
+			}})
 			pool.enqueueTx(tx.Hash(), tx)
 		}
 		// Delete the entire queue entry if it became empty.

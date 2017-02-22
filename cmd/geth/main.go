@@ -34,8 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -204,11 +203,11 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
 	extra, err := rlp.EncodeToBytes(clientInfo)
 	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+		log.Warn(fmt.Sprint("error setting canonical miner information:", err))
 	}
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		log.Warn(fmt.Sprint("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize))
+		log.Debug(fmt.Sprintf("extra: %x\n", extra))
 		extra = nil
 	}
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
@@ -236,7 +235,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		copy(config.Commit[:], commit)
 		return release.NewReleaseService(ctx, config)
 	}); err != nil {
-		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
+		log.Crit(fmt.Sprintf("Failed to register the Geth release oracle service: %v", err))
 	}
 	return stack
 }
@@ -266,14 +265,14 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		// Create an chain state reader for self-derivation
 		rpcClient, err := stack.Attach()
 		if err != nil {
-			utils.Fatalf("Failed to attach to self: %v", err)
+			log.Crit(fmt.Sprintf("Failed to attach to self: %v", err))
 		}
 		stateReader := ethclient.NewClient(rpcClient)
 
 		// Open and self derive any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
 			if err := wallet.Open(""); err != nil {
-				glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", wallet.URL(), err)
+				log.Warn(fmt.Sprintf("Failed to open wallet %s: %v", wallet.URL(), err))
 			} else {
 				wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 			}
@@ -282,13 +281,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		for event := range events {
 			if event.Arrive {
 				if err := event.Wallet.Open(""); err != nil {
-					glog.V(logger.Info).Infof("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err)
+					log.Info(fmt.Sprintf("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err))
 				} else {
-					glog.V(logger.Info).Infof("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status())
+					log.Info(fmt.Sprintf("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status()))
 					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 				}
 			} else {
-				glog.V(logger.Info).Infof("Old wallet dropped:  %s", event.Wallet.URL())
+				log.Info(fmt.Sprintf("Old wallet dropped:  %s", event.Wallet.URL()))
 				event.Wallet.Close()
 			}
 		}
@@ -297,10 +296,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {
-			utils.Fatalf("ethereum service not running: %v", err)
+			log.Crit(fmt.Sprintf("ethereum service not running: %v", err))
 		}
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
-			utils.Fatalf("Failed to start mining: %v", err)
+			log.Crit(fmt.Sprintf("Failed to start mining: %v", err))
 		}
 	}
 }

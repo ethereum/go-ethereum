@@ -31,8 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -72,19 +71,19 @@ func Fatalf(format string, args ...interface{}) {
 
 func StartNode(stack *node.Node) {
 	if err := stack.Start(); err != nil {
-		Fatalf("Error starting protocol stack: %v", err)
+		log.Crit(fmt.Sprintf("Error starting protocol stack: %v", err))
 	}
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, os.Interrupt)
 		defer signal.Stop(sigc)
 		<-sigc
-		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
+		log.Info(fmt.Sprint("Got interrupt, shutting down..."))
 		go stack.Stop()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				glog.V(logger.Info).Infof("Already shutting down, interrupt %d more times for panic.", i-1)
+				log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
 			}
 		}
 		debug.Exit() // ensure trace and CPU profile data is flushed.
@@ -115,7 +114,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 	defer close(interrupt)
 	go func() {
 		if _, ok := <-interrupt; ok {
-			glog.Info("caught interrupt during import, will stop at next batch")
+			log.Info(fmt.Sprint("caught interrupt during import, will stop at next batch"))
 		}
 		close(stop)
 	}()
@@ -128,7 +127,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 	}
 
-	glog.Infoln("Importing blockchain ", fn)
+	log.Info(fmt.Sprint("Importing blockchain ", fn))
 	fh, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -176,8 +175,8 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 			return fmt.Errorf("interrupted")
 		}
 		if hasAllBlocks(chain, blocks[:i]) {
-			glog.Infof("skipping batch %d, all blocks present [%x / %x]",
-				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4])
+			log.Info(fmt.Sprintf("skipping batch %d, all blocks present [%x / %x]",
+				batch, blocks[0].Hash().Bytes()[:4], blocks[i-1].Hash().Bytes()[:4]))
 			continue
 		}
 
@@ -198,7 +197,7 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 }
 
 func ExportChain(blockchain *core.BlockChain, fn string) error {
-	glog.Infoln("Exporting blockchain to ", fn)
+	log.Info(fmt.Sprint("Exporting blockchain to ", fn))
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -214,13 +213,13 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	if err := blockchain.Export(writer); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to ", fn)
+	log.Info(fmt.Sprint("Exported blockchain to ", fn))
 
 	return nil
 }
 
 func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
-	glog.Infoln("Exporting blockchain to ", fn)
+	log.Info(fmt.Sprint("Exporting blockchain to ", fn))
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
@@ -237,6 +236,6 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	if err := blockchain.ExportN(writer, first, last); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to ", fn)
+	log.Info(fmt.Sprint("Exported blockchain to ", fn))
 	return nil
 }

@@ -65,10 +65,6 @@ func TestSimTopics(t *testing.T) {
 	if runWithPlaygroundTime(t) {
 		return
 	}
-
-	// glog.SetV(6)
-	// glog.SetToStderr(true)
-
 	sim := newSimulation()
 	bootnode := sim.launchNode(false)
 
@@ -158,10 +154,6 @@ func TestSimTopicHierarchy(t *testing.T) {
 	if runWithPlaygroundTime(t) {
 		return
 	}
-
-	// glog.SetV(6)
-	// glog.SetToStderr(true)
-
 	sim := newSimulation()
 	bootnode := sim.launchNode(false)
 

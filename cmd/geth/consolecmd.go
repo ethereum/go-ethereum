@@ -17,12 +17,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
@@ -78,7 +80,7 @@ func localConsole(ctx *cli.Context) error {
 	// Attach to the newly started node and start the JavaScript console
 	client, err := node.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		log.Crit(fmt.Sprintf("Failed to attach to the inproc geth: %v", err))
 	}
 	config := console.Config{
 		DataDir: node.DataDir(),
@@ -88,7 +90,7 @@ func localConsole(ctx *cli.Context) error {
 	}
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		log.Crit(fmt.Sprintf("Failed to start the JavaScript console: %v", err))
 	}
 	defer console.Stop(false)
 
@@ -110,7 +112,7 @@ func remoteConsole(ctx *cli.Context) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
 	client, err := dialRPC(ctx.Args().First())
 	if err != nil {
-		utils.Fatalf("Unable to attach to remote geth: %v", err)
+		log.Crit(fmt.Sprintf("Unable to attach to remote geth: %v", err))
 	}
 	config := console.Config{
 		DataDir: utils.MakeDataDir(ctx),
@@ -120,7 +122,7 @@ func remoteConsole(ctx *cli.Context) error {
 	}
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		log.Crit(fmt.Sprintf("Failed to start the JavaScript console: %v", err))
 	}
 	defer console.Stop(false)
 
@@ -162,7 +164,7 @@ func ephemeralConsole(ctx *cli.Context) error {
 	// Attach to the newly started node and start the JavaScript console
 	client, err := node.Attach()
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		log.Crit(fmt.Sprintf("Failed to attach to the inproc geth: %v", err))
 	}
 	config := console.Config{
 		DataDir: node.DataDir(),
@@ -172,14 +174,14 @@ func ephemeralConsole(ctx *cli.Context) error {
 	}
 	console, err := console.New(config)
 	if err != nil {
-		utils.Fatalf("Failed to start the JavaScript console: %v", err)
+		log.Crit(fmt.Sprintf("Failed to start the JavaScript console: %v", err))
 	}
 	defer console.Stop(false)
 
 	// Evaluate each of the specified JavaScript files
 	for _, file := range ctx.Args() {
 		if err = console.Execute(file); err != nil {
-			utils.Fatalf("Failed to execute %s: %v", file, err)
+			log.Crit(fmt.Sprintf("Failed to execute %s: %v", file, err))
 		}
 	}
 	// Wait for pending callbacks, but stop for Ctrl-C.

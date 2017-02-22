@@ -20,11 +20,11 @@ package debug
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"runtime/trace"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // StartGoTrace turns on tracing, writing to the given file.
@@ -44,7 +44,7 @@ func (h *HandlerT) StartGoTrace(file string) error {
 	}
 	h.traceW = f
 	h.traceFile = file
-	glog.V(logger.Info).Infoln("trace started, writing to", h.traceFile)
+	log.Info(fmt.Sprint("trace started, writing to", h.traceFile))
 	return nil
 }
 
@@ -56,7 +56,7 @@ func (h *HandlerT) StopGoTrace() error {
 	if h.traceW == nil {
 		return errors.New("trace not in progress")
 	}
-	glog.V(logger.Info).Infoln("done writing trace to", h.traceFile)
+	log.Info(fmt.Sprint("done writing trace to", h.traceFile))
 	h.traceW.Close()
 	h.traceW = nil
 	h.traceFile = ""

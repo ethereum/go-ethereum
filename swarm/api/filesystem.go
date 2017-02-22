@@ -26,8 +26,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -63,7 +62,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	var start int
 	if stat.IsDir() {
 		start = len(localpath)
-		glog.V(logger.Debug).Infof("uploading '%s'", localpath)
+		log.Debug(fmt.Sprintf("uploading '%s'", localpath))
 		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 			if (err == nil) && !info.IsDir() {
 				//fmt.Printf("lp %s  path %s\n", localpath, path)
@@ -198,7 +197,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.api.dpa, key, quitC)
 	if err != nil {
-		glog.V(logger.Warn).Infof("fs.Download: loadManifestTrie error: %v", err)
+		log.Warn(fmt.Sprintf("fs.Download: loadManifestTrie error: %v", err))
 		return err
 	}
 
@@ -212,7 +211,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 
 	prevPath := lpath
 	err = trie.listWithPrefix(path, quitC, func(entry *manifestTrieEntry, suffix string) {
-		glog.V(logger.Detail).Infof("fs.Download: %#v", entry)
+		log.Trace(fmt.Sprintf("fs.Download: %#v", entry))
 
 		key = common.Hex2Bytes(entry.Hash)
 		path := lpath + "/" + suffix

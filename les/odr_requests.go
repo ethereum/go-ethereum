@@ -21,6 +21,7 @@ package les
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -28,8 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -74,7 +74,7 @@ func (self *BlockRequest) CanSend(peer *peer) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *BlockRequest) Request(reqID uint64, peer *peer) error {
-	glog.V(logger.Debug).Infof("ODR: requesting body of block %08x from peer %v", self.Hash[:4], peer.id)
+	log.Debug(fmt.Sprintf("ODR: requesting body of block %08x from peer %v", self.Hash[:4], peer.id))
 	return peer.RequestBodies(reqID, self.GetCost(peer), []common.Hash{self.Hash})
 }
 
@@ -82,39 +82,39 @@ func (self *BlockRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (self *BlockRequest) Valid(db ethdb.Database, msg *Msg) bool {
-	glog.V(logger.Debug).Infof("ODR: validating body of block %08x", self.Hash[:4])
+	log.Debug(fmt.Sprintf("ODR: validating body of block %08x", self.Hash[:4]))
 	if msg.MsgType != MsgBlockBodies {
-		glog.V(logger.Debug).Infof("ODR: invalid message type")
+		log.Debug(fmt.Sprintf("ODR: invalid message type"))
 		return false
 	}
 	bodies := msg.Obj.([]*types.Body)
 	if len(bodies) != 1 {
-		glog.V(logger.Debug).Infof("ODR: invalid number of entries: %d", len(bodies))
+		log.Debug(fmt.Sprintf("ODR: invalid number of entries: %d", len(bodies)))
 		return false
 	}
 	body := bodies[0]
 	header := core.GetHeader(db, self.Hash, self.Number)
 	if header == nil {
-		glog.V(logger.Debug).Infof("ODR: header not found for block %08x", self.Hash[:4])
+		log.Debug(fmt.Sprintf("ODR: header not found for block %08x", self.Hash[:4]))
 		return false
 	}
 	txHash := types.DeriveSha(types.Transactions(body.Transactions))
 	if header.TxHash != txHash {
-		glog.V(logger.Debug).Infof("ODR: header.TxHash %08x does not match received txHash %08x", header.TxHash[:4], txHash[:4])
+		log.Debug(fmt.Sprintf("ODR: header.TxHash %08x does not match received txHash %08x", header.TxHash[:4], txHash[:4]))
 		return false
 	}
 	uncleHash := types.CalcUncleHash(body.Uncles)
 	if header.UncleHash != uncleHash {
-		glog.V(logger.Debug).Infof("ODR: header.UncleHash %08x does not match received uncleHash %08x", header.UncleHash[:4], uncleHash[:4])
+		log.Debug(fmt.Sprintf("ODR: header.UncleHash %08x does not match received uncleHash %08x", header.UncleHash[:4], uncleHash[:4]))
 		return false
 	}
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
-		glog.V(logger.Debug).Infof("ODR: body RLP encode error: %v", err)
+		log.Debug(fmt.Sprintf("ODR: body RLP encode error: %v", err))
 		return false
 	}
 	self.Rlp = data
-	glog.V(logger.Debug).Infof("ODR: validation successful")
+	log.Debug(fmt.Sprintf("ODR: validation successful"))
 	return true
 }
 
@@ -134,7 +134,7 @@ func (self *ReceiptsRequest) CanSend(peer *peer) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *ReceiptsRequest) Request(reqID uint64, peer *peer) error {
-	glog.V(logger.Debug).Infof("ODR: requesting receipts for block %08x from peer %v", self.Hash[:4], peer.id)
+	log.Debug(fmt.Sprintf("ODR: requesting receipts for block %08x from peer %v", self.Hash[:4], peer.id))
 	return peer.RequestReceipts(reqID, self.GetCost(peer), []common.Hash{self.Hash})
 }
 
@@ -142,28 +142,28 @@ func (self *ReceiptsRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (self *ReceiptsRequest) Valid(db ethdb.Database, msg *Msg) bool {
-	glog.V(logger.Debug).Infof("ODR: validating receipts for block %08x", self.Hash[:4])
+	log.Debug(fmt.Sprintf("ODR: validating receipts for block %08x", self.Hash[:4]))
 	if msg.MsgType != MsgReceipts {
-		glog.V(logger.Debug).Infof("ODR: invalid message type")
+		log.Debug(fmt.Sprintf("ODR: invalid message type"))
 		return false
 	}
 	receipts := msg.Obj.([]types.Receipts)
 	if len(receipts) != 1 {
-		glog.V(logger.Debug).Infof("ODR: invalid number of entries: %d", len(receipts))
+		log.Debug(fmt.Sprintf("ODR: invalid number of entries: %d", len(receipts)))
 		return false
 	}
 	hash := types.DeriveSha(receipts[0])
 	header := core.GetHeader(db, self.Hash, self.Number)
 	if header == nil {
-		glog.V(logger.Debug).Infof("ODR: header not found for block %08x", self.Hash[:4])
+		log.Debug(fmt.Sprintf("ODR: header not found for block %08x", self.Hash[:4]))
 		return false
 	}
 	if !bytes.Equal(header.ReceiptHash[:], hash[:]) {
-		glog.V(logger.Debug).Infof("ODR: header receipts hash %08x does not match calculated RLP hash %08x", header.ReceiptHash[:4], hash[:4])
+		log.Debug(fmt.Sprintf("ODR: header receipts hash %08x does not match calculated RLP hash %08x", header.ReceiptHash[:4], hash[:4]))
 		return false
 	}
 	self.Receipts = receipts[0]
-	glog.V(logger.Debug).Infof("ODR: validation successful")
+	log.Debug(fmt.Sprintf("ODR: validation successful"))
 	return true
 }
 
@@ -189,7 +189,7 @@ func (self *TrieRequest) CanSend(peer *peer) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *TrieRequest) Request(reqID uint64, peer *peer) error {
-	glog.V(logger.Debug).Infof("ODR: requesting trie root %08x key %08x from peer %v", self.Id.Root[:4], self.Key[:4], peer.id)
+	log.Debug(fmt.Sprintf("ODR: requesting trie root %08x key %08x from peer %v", self.Id.Root[:4], self.Key[:4], peer.id))
 	req := &ProofReq{
 		BHash:  self.Id.BlockHash,
 		AccKey: self.Id.AccKey,
@@ -202,24 +202,24 @@ func (self *TrieRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (self *TrieRequest) Valid(db ethdb.Database, msg *Msg) bool {
-	glog.V(logger.Debug).Infof("ODR: validating trie root %08x key %08x", self.Id.Root[:4], self.Key[:4])
+	log.Debug(fmt.Sprintf("ODR: validating trie root %08x key %08x", self.Id.Root[:4], self.Key[:4]))
 
 	if msg.MsgType != MsgProofs {
-		glog.V(logger.Debug).Infof("ODR: invalid message type")
+		log.Debug(fmt.Sprintf("ODR: invalid message type"))
 		return false
 	}
 	proofs := msg.Obj.([][]rlp.RawValue)
 	if len(proofs) != 1 {
-		glog.V(logger.Debug).Infof("ODR: invalid number of entries: %d", len(proofs))
+		log.Debug(fmt.Sprintf("ODR: invalid number of entries: %d", len(proofs)))
 		return false
 	}
 	_, err := trie.VerifyProof(self.Id.Root, self.Key, proofs[0])
 	if err != nil {
-		glog.V(logger.Debug).Infof("ODR: merkle proof verification error: %v", err)
+		log.Debug(fmt.Sprintf("ODR: merkle proof verification error: %v", err))
 		return false
 	}
 	self.Proof = proofs[0]
-	glog.V(logger.Debug).Infof("ODR: validation successful")
+	log.Debug(fmt.Sprintf("ODR: validation successful"))
 	return true
 }
 
@@ -244,7 +244,7 @@ func (self *CodeRequest) CanSend(peer *peer) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *CodeRequest) Request(reqID uint64, peer *peer) error {
-	glog.V(logger.Debug).Infof("ODR: requesting node data for hash %08x from peer %v", self.Hash[:4], peer.id)
+	log.Debug(fmt.Sprintf("ODR: requesting node data for hash %08x from peer %v", self.Hash[:4], peer.id))
 	req := &CodeReq{
 		BHash:  self.Id.BlockHash,
 		AccKey: self.Id.AccKey,
@@ -256,23 +256,23 @@ func (self *CodeRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (self *CodeRequest) Valid(db ethdb.Database, msg *Msg) bool {
-	glog.V(logger.Debug).Infof("ODR: validating node data for hash %08x", self.Hash[:4])
+	log.Debug(fmt.Sprintf("ODR: validating node data for hash %08x", self.Hash[:4]))
 	if msg.MsgType != MsgCode {
-		glog.V(logger.Debug).Infof("ODR: invalid message type")
+		log.Debug(fmt.Sprintf("ODR: invalid message type"))
 		return false
 	}
 	reply := msg.Obj.([][]byte)
 	if len(reply) != 1 {
-		glog.V(logger.Debug).Infof("ODR: invalid number of entries: %d", len(reply))
+		log.Debug(fmt.Sprintf("ODR: invalid number of entries: %d", len(reply)))
 		return false
 	}
 	data := reply[0]
 	if hash := crypto.Keccak256Hash(data); self.Hash != hash {
-		glog.V(logger.Debug).Infof("ODR: requested hash %08x does not match received data hash %08x", self.Hash[:4], hash[:4])
+		log.Debug(fmt.Sprintf("ODR: requested hash %08x does not match received data hash %08x", self.Hash[:4], hash[:4]))
 		return false
 	}
 	self.Data = data
-	glog.V(logger.Debug).Infof("ODR: validation successful")
+	log.Debug(fmt.Sprintf("ODR: validation successful"))
 	return true
 }
 
@@ -304,7 +304,7 @@ func (self *ChtRequest) CanSend(peer *peer) bool {
 
 // Request sends an ODR request to the LES network (implementation of LesOdrRequest)
 func (self *ChtRequest) Request(reqID uint64, peer *peer) error {
-	glog.V(logger.Debug).Infof("ODR: requesting CHT #%d block #%d from peer %v", self.ChtNum, self.BlockNum, peer.id)
+	log.Debug(fmt.Sprintf("ODR: requesting CHT #%d block #%d from peer %v", self.ChtNum, self.BlockNum, peer.id))
 	req := &ChtReq{
 		ChtNum:   self.ChtNum,
 		BlockNum: self.BlockNum,
@@ -316,15 +316,15 @@ func (self *ChtRequest) Request(reqID uint64, peer *peer) error {
 // returns true and stores results in memory if the message was a valid reply
 // to the request (implementation of LesOdrRequest)
 func (self *ChtRequest) Valid(db ethdb.Database, msg *Msg) bool {
-	glog.V(logger.Debug).Infof("ODR: validating CHT #%d block #%d", self.ChtNum, self.BlockNum)
+	log.Debug(fmt.Sprintf("ODR: validating CHT #%d block #%d", self.ChtNum, self.BlockNum))
 
 	if msg.MsgType != MsgHeaderProofs {
-		glog.V(logger.Debug).Infof("ODR: invalid message type")
+		log.Debug(fmt.Sprintf("ODR: invalid message type"))
 		return false
 	}
 	proofs := msg.Obj.([]ChtResp)
 	if len(proofs) != 1 {
-		glog.V(logger.Debug).Infof("ODR: invalid number of entries: %d", len(proofs))
+		log.Debug(fmt.Sprintf("ODR: invalid number of entries: %d", len(proofs)))
 		return false
 	}
 	proof := proofs[0]
@@ -332,22 +332,22 @@ func (self *ChtRequest) Valid(db ethdb.Database, msg *Msg) bool {
 	binary.BigEndian.PutUint64(encNumber[:], self.BlockNum)
 	value, err := trie.VerifyProof(self.ChtRoot, encNumber[:], proof.Proof)
 	if err != nil {
-		glog.V(logger.Debug).Infof("ODR: CHT merkle proof verification error: %v", err)
+		log.Debug(fmt.Sprintf("ODR: CHT merkle proof verification error: %v", err))
 		return false
 	}
 	var node light.ChtNode
 	if err := rlp.DecodeBytes(value, &node); err != nil {
-		glog.V(logger.Debug).Infof("ODR: error decoding CHT node: %v", err)
+		log.Debug(fmt.Sprintf("ODR: error decoding CHT node: %v", err))
 		return false
 	}
 	if node.Hash != proof.Header.Hash() {
-		glog.V(logger.Debug).Infof("ODR: CHT header hash does not match")
+		log.Debug(fmt.Sprintf("ODR: CHT header hash does not match"))
 		return false
 	}
 
 	self.Proof = proof.Proof
 	self.Header = proof.Header
 	self.Td = node.Td
-	glog.V(logger.Debug).Infof("ODR: validation successful")
+	log.Debug(fmt.Sprintf("ODR: validation successful"))
 	return true
 }

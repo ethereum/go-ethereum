@@ -36,8 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -82,7 +81,7 @@ var (
 	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
 	generateKey    = flag.Bool("k", false, "generate and show the private key")
 
-	argVerbosity = flag.Int("verbosity", logger.Warn, "log verbosity level")
+	argVerbosity = flag.Int("verbosity", int(log.LvlWarn), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
 	argPoW       = flag.Float64("pow", whisper.MinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
@@ -109,7 +108,7 @@ func processArgs() {
 		var err error
 		nodeid, err = crypto.LoadECDSA(*argIDFile)
 		if err != nil {
-			utils.Fatalf("Failed to load file [%s]: %s.", *argIDFile, err)
+			log.Crit(fmt.Sprintf("Failed to load file [%s]: %s.", *argIDFile, err))
 		}
 	}
 
@@ -123,7 +122,7 @@ func processArgs() {
 	if len(*argTopic) > 0 {
 		x, err := hex.DecodeString(*argTopic)
 		if err != nil {
-			utils.Fatalf("Failed to parse the topic: %s", err)
+			log.Crit(fmt.Sprintf("Failed to parse the topic: %s", err))
 		}
 		topic = whisper.BytesToTopic(x)
 	}
@@ -131,7 +130,7 @@ func processArgs() {
 	if *asymmetricMode && len(*argPub) > 0 {
 		pub = crypto.ToECDSAPub(common.FromHex(*argPub))
 		if !isKeyValid(pub) {
-			utils.Fatalf("invalid public key")
+			log.Crit(fmt.Sprintf("invalid public key"))
 		}
 	}
 
@@ -153,8 +152,7 @@ func echo() {
 }
 
 func initialize() {
-	glog.SetV(*argVerbosity)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*argVerbosity), log.StreamHandler(os.Stderr, log.TerminalFormat())))
 
 	done = make(chan struct{})
 	var peers []*discover.Node
@@ -163,7 +161,7 @@ func initialize() {
 	if *generateKey {
 		key, err := crypto.GenerateKey()
 		if err != nil {
-			utils.Fatalf("Failed to generate private key: %s", err)
+			log.Crit(fmt.Sprintf("Failed to generate private key: %s", err))
 		}
 		k := hex.EncodeToString(crypto.FromECDSA(key))
 		fmt.Printf("Random private key: %s \n", k)
@@ -191,7 +189,7 @@ func initialize() {
 		if len(msPassword) == 0 {
 			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
 			if err != nil {
-				utils.Fatalf("Failed to read Mail Server password: %s", err)
+				log.Crit(fmt.Sprintf("Failed to read Mail Server password: %s", err))
 			}
 		}
 		shh = whisper.New()
@@ -229,7 +227,7 @@ func initialize() {
 func startServer() {
 	err := server.Start()
 	if err != nil {
-		utils.Fatalf("Failed to start Whisper peer: %s.", err)
+		log.Crit(fmt.Sprintf("Failed to start Whisper peer: %s.", err))
 	}
 
 	fmt.Printf("my public key: %s \n", common.ToHex(crypto.FromECDSAPub(&asymKey.PublicKey)))
@@ -267,7 +265,7 @@ func configureNode() {
 			s := scanLine("Please enter the peer's public key: ")
 			pub = crypto.ToECDSAPub(common.FromHex(s))
 			if !isKeyValid(pub) {
-				utils.Fatalf("Error: invalid public key")
+				log.Crit(fmt.Sprintf("Error: invalid public key"))
 			}
 		}
 	}
@@ -277,7 +275,7 @@ func configureNode() {
 		if len(msPassword) == 0 {
 			msPassword, err = console.Stdin.PromptPassword("Please enter the Mail Server password: ")
 			if err != nil {
-				utils.Fatalf("Failed to read Mail Server password: %s", err)
+				log.Crit(fmt.Sprintf("Failed to read Mail Server password: %s", err))
 			}
 		}
 	}
@@ -286,7 +284,7 @@ func configureNode() {
 		if len(symPass) == 0 {
 			symPass, err = console.Stdin.PromptPassword("Please enter the password: ")
 			if err != nil {
-				utils.Fatalf("Failed to read passphrase: %v", err)
+				log.Crit(fmt.Sprintf("Failed to read passphrase: %v", err))
 			}
 		}
 
@@ -332,7 +330,7 @@ func waitForConnection(timeout bool) {
 		if timeout {
 			cnt++
 			if cnt > 1000 {
-				utils.Fatalf("Timeout expired, failed to connect")
+				log.Crit(fmt.Sprintf("Timeout expired, failed to connect"))
 			}
 		}
 	}
@@ -384,7 +382,7 @@ func scanLine(prompt string) string {
 	}
 	txt, err := input.ReadString('\n')
 	if err != nil {
-		utils.Fatalf("input error: %s", err)
+		log.Crit(fmt.Sprintf("input error: %s", err))
 	}
 	txt = strings.TrimRight(txt, "\n\r")
 	return txt
@@ -399,7 +397,7 @@ func scanUint(prompt string) uint32 {
 	s := scanLine(prompt)
 	i, err := strconv.Atoi(s)
 	if err != nil {
-		utils.Fatalf("Fail to parse the lower time limit: %s", err)
+		log.Crit(fmt.Sprintf("Fail to parse the lower time limit: %s", err))
 	}
 	return uint32(i)
 }
@@ -432,7 +430,7 @@ func sendMsg(payload []byte) {
 func messageLoop() {
 	f := shh.GetFilter(filterID)
 	if f == nil {
-		utils.Fatalf("filter is not installed")
+		log.Crit(fmt.Sprintf("filter is not installed"))
 	}
 
 	ticker := time.NewTicker(time.Millisecond * 50)
@@ -474,7 +472,7 @@ func requestExpiredMessagesLoop() {
 
 	err := shh.AddSymKey(mailserver.MailServerKeyName, []byte(msPassword))
 	if err != nil {
-		utils.Fatalf("Failed to create symmetric key for mail request: %s", err)
+		log.Crit(fmt.Sprintf("Failed to create symmetric key for mail request: %s", err))
 	}
 	key = shh.GetSymKey(mailserver.MailServerKeyName)
 	peerID = extractIdFromEnode(*argEnode)
@@ -487,7 +485,7 @@ func requestExpiredMessagesLoop() {
 		if len(t) >= whisper.TopicLength*2 {
 			x, err := hex.DecodeString(t)
 			if err != nil {
-				utils.Fatalf("Failed to parse the topic: %s", err)
+				log.Crit(fmt.Sprintf("Failed to parse the topic: %s", err))
 			}
 			xt = whisper.BytesToTopic(x)
 		}
@@ -513,12 +511,12 @@ func requestExpiredMessagesLoop() {
 		msg := whisper.NewSentMessage(&params)
 		env, err := msg.Wrap(&params)
 		if err != nil {
-			utils.Fatalf("Wrap failed: %s", err)
+			log.Crit(fmt.Sprintf("Wrap failed: %s", err))
 		}
 
 		err = shh.RequestHistoricMessages(peerID, env)
 		if err != nil {
-			utils.Fatalf("Failed to send P2P message: %s", err)
+			log.Crit(fmt.Sprintf("Failed to send P2P message: %s", err))
 		}
 
 		time.Sleep(time.Second * 5)
@@ -528,7 +526,7 @@ func requestExpiredMessagesLoop() {
 func extractIdFromEnode(s string) []byte {
 	n, err := discover.ParseNode(s)
 	if err != nil {
-		utils.Fatalf("Failed to parse enode: %s", err)
+		log.Crit(fmt.Sprintf("Failed to parse enode: %s", err))
 		return nil
 	}
 	return n.ID[:]

@@ -23,8 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -61,9 +60,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 			var err error
 			tn, err = t.resolveHash(n, nil, nil)
 			if err != nil {
-				if glog.V(logger.Error) {
-					glog.Errorf("Unhandled trie error: %v", err)
-				}
+				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 				return nil
 			}
 		default:

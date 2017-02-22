@@ -34,8 +34,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -278,10 +277,10 @@ func (tab *Table) lookup(targetID NodeID, refreshIfEmpty bool) []*Node {
 						// Bump the failure counter to detect and evacuate non-bonded entries
 						fails := tab.db.findFails(n.ID) + 1
 						tab.db.updateFindFails(n.ID, fails)
-						glog.V(logger.Detail).Infof("Bumping failures for %x: %d", n.ID[:8], fails)
+						log.Trace(fmt.Sprintf("Bumping failures for %x: %d", n.ID[:8], fails))
 
 						if fails >= maxFindnodeFailures {
-							glog.V(logger.Detail).Infof("Evacuating node %x: %d findnode failures", n.ID[:8], fails)
+							log.Trace(fmt.Sprintf("Evacuating node %x: %d findnode failures", n.ID[:8], fails))
 							tab.delete(n)
 						}
 					}
@@ -384,14 +383,15 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// (hopefully) still alive.
 	seeds := tab.db.querySeeds(seedCount, seedMaxAge)
 	seeds = tab.bondall(append(seeds, tab.nursery...))
-	if glog.V(logger.Debug) {
-		if len(seeds) == 0 {
-			glog.Infof("no seed nodes found")
-		}
-		for _, n := range seeds {
+
+	if len(seeds) == 0 {
+		log.Debug(fmt.Sprintf("no seed nodes found"))
+	}
+	for _, n := range seeds {
+		log.Debug("", "msg", log.Lazy{Fn: func() string {
 			age := time.Since(tab.db.lastPong(n.ID))
-			glog.Infof("seed node (age %v): %v", age, n)
-		}
+			return fmt.Sprintf("seed node (age %v): %v", age, n)
+		}})
 	}
 	tab.mutex.Lock()
 	tab.stuff(seeds)
@@ -470,7 +470,7 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 	var result error
 	age := time.Since(tab.db.lastPong(id))
 	if node == nil || fails > 0 || age > nodeDBNodeExpiration {
-		glog.V(logger.Detail).Infof("Bonding %x: known=%t, fails=%d age=%v", id[:8], node != nil, fails, age)
+		log.Trace(fmt.Sprintf("Bonding %x: known=%t, fails=%d age=%v", id[:8], node != nil, fails, age))
 
 		tab.bondmu.Lock()
 		w := tab.bonding[id]
