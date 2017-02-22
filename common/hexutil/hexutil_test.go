@@ -83,6 +83,10 @@ var (
 		{input: `0x01`, wantErr: ErrLeadingZero},
 		{input: `0xx`, wantErr: ErrSyntax},
 		{input: `0x1zz01`, wantErr: ErrSyntax},
+		{
+			input:   `0x10000000000000000000000000000000000000000000000000000000000000000`,
+			wantErr: ErrBig256Range,
+		},
 		// valid
 		{input: `0x0`, want: big.NewInt(0)},
 		{input: `0x2`, want: big.NewInt(0x2)},
@@ -98,6 +102,10 @@ var (
 		{
 			input: `0xffffffffffffffffffffffffffffffffffff`,
 			want:  referenceBig("ffffffffffffffffffffffffffffffffffff"),
+		},
+		{
+			input: `0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`,
+			want:  referenceBig("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 		},
 	}
 

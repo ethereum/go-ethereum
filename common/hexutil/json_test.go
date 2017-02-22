@@ -130,6 +130,10 @@ var unmarshalBigTests = []unmarshalTest{
 	{input: `"0x01"`, wantErr: ErrLeadingZero},
 	{input: `"0xx"`, wantErr: ErrSyntax},
 	{input: `"0x1zz01"`, wantErr: ErrSyntax},
+	{
+		input:   `"0x10000000000000000000000000000000000000000000000000000000000000000"`,
+		wantErr: ErrBig256Range,
+	},
 
 	// valid encoding
 	{input: `""`, want: big.NewInt(0)},
@@ -147,6 +151,10 @@ var unmarshalBigTests = []unmarshalTest{
 	{
 		input: `"0xffffffffffffffffffffffffffffffffffff"`,
 		want:  referenceBig("ffffffffffffffffffffffffffffffffffff"),
+	},
+	{
+		input: `"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"`,
+		want:  referenceBig("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
 	},
 }
 

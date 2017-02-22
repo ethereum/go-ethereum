@@ -91,9 +91,12 @@ func UnmarshalJSON(typname string, input, out []byte) error {
 	return nil
 }
 
-// Big marshals/unmarshals as a JSON string with 0x prefix. The zero value marshals as
-// "0x0". Negative integers are not supported at this time. Attempting to marshal them
-// will return an error.
+// Big marshals/unmarshals as a JSON string with 0x prefix.
+// The zero value marshals as "0x0".
+//
+// Negative integers are not supported at this time. Attempting to marshal them will
+// return an error. Values larger than 256bits are rejected by Unmarshal but will be
+// marshaled without error.
 type Big big.Int
 
 // MarshalJSON implements json.Marshaler.
@@ -118,6 +121,9 @@ func (b *Big) UnmarshalJSON(input []byte) error {
 	raw, err := checkNumberJSON(input)
 	if err != nil {
 		return err
+	}
+	if len(raw) > 64 {
+		return ErrBig256Range
 	}
 	words := make([]big.Word, len(raw)/bigWordNibbles+1)
 	end := len(raw)

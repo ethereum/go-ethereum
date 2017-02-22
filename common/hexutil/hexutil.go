@@ -49,6 +49,7 @@ var (
 	ErrOddLength     = errors.New("hex string has odd length")
 	ErrUint64Range   = errors.New("hex number does not fit into 64 bits")
 	ErrUintRange     = fmt.Errorf("hex number does not fit into %d bits", uintBits)
+	ErrBig256Range   = errors.New("hex number does not fit into 256 bits")
 )
 
 // Decode decodes a hex string with 0x prefix.
@@ -126,10 +127,14 @@ func init() {
 }
 
 // DecodeBig decodes a hex string with 0x prefix as a quantity.
+// Numbers larger than 256 bits are not accepted.
 func DecodeBig(input string) (*big.Int, error) {
 	raw, err := checkNumber(input)
 	if err != nil {
 		return nil, err
+	}
+	if len(raw) > 64 {
+		return nil, ErrBig256Range
 	}
 	words := make([]big.Word, len(raw)/bigWordNibbles+1)
 	end := len(raw)
