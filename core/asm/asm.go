@@ -26,20 +26,18 @@ import (
 
 // Iterator for disassembled EVM instructions
 type instructionIterator struct {
-	code  []byte
-	pc    uint64
-	arg   []byte
-	op    vm.OpCode
-	error error
+	code    []byte
+	pc      uint64
+	arg     []byte
+	op      vm.OpCode
+	error   error
+	started bool
 }
 
 // Create a new instruction iterator.
 func NewInstructionIterator(code []byte) *instructionIterator {
 	it := new(instructionIterator)
 	it.code = code
-	it.pc = 0
-	it.error = nil
-	it.arg = nil
 	return it
 }
 
@@ -50,12 +48,15 @@ func (it *instructionIterator) Next() bool {
 		return false
 	}
 
-	if it.arg == nil {
-		// We are calling this procedure for the first time.
-		it.pc = 0
+	if it.started {
+		// Since the iteration has been already started we move to the next instruction.
+		if it.arg != nil {
+			it.pc += uint64(len(it.arg))
+		}
+		it.pc++
 	} else {
-		// We are moving to the next instruction.
-		it.pc += uint64(len(it.arg)) + 1
+		// We start the iteration from the first instruction.
+		it.started = true
 	}
 
 	if uint64(len(it.code)) <= it.pc {
@@ -73,7 +74,7 @@ func (it *instructionIterator) Next() bool {
 		}
 		it.arg = it.code[it.pc+1 : u]
 	} else {
-		it.arg = make([]byte, 0)
+		it.arg = nil
 	}
 	return true
 }
@@ -113,8 +114,8 @@ func PrintDisassembled(code string) error {
 			fmt.Printf("%06v: %v\n", it.PC(), it.Op())
 		}
 	}
-	if it.Error() != nil {
-		return it.Error()
+	if err := it.Error(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -131,8 +132,8 @@ func Disassemble(script []byte) ([]string, error) {
 			instrs = append(instrs, fmt.Sprintf("%06v: %v\n", it.PC(), it.Op()))
 		}
 	}
-	if it.Error() != nil {
-		return nil, it.Error()
+	if err := it.Error(); err != nil {
+		return nil, err
 	}
 	return instrs, nil
 }
