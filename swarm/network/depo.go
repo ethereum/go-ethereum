@@ -211,7 +211,7 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found)
 */
 func (self *Depo) addRequester(rs *storage.RequestStatus, req *retrieveRequestMsgData) {
-	log.Trace(fmt.Sprintf("Depo.addRequester: key %v - add peer to req.Id %v", req.Key.Log(), req.from, req.Id))
+	log.Trace(fmt.Sprintf("Depo.addRequester: key %v - add peer to req.Id %v", req.Key.Log(), req.Id))
 	list := rs.Requesters[req.Id]
 	rs.Requesters[req.Id] = append(list, req)
 }

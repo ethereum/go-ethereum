@@ -120,7 +120,7 @@ func (self *KadDb) add(nrs []*NodeRecord, proximityBin func(Address) int) {
 			copy(newnodes[:], nodes[:dbcursor])
 			newnodes[dbcursor] = node
 			copy(newnodes[dbcursor+1:], nodes[dbcursor:])
-			log.Trace(fmt.Sprintf("new nodes: %v (keys: %v)\nnodes: %v", newnodes, nodes))
+			log.Trace(fmt.Sprintf("new nodes: %v, nodes: %v", newnodes, nodes))
 			self.Nodes[index] = newnodes
 			n++
 		}
@@ -294,7 +294,7 @@ func (self *KadDb) save(path string, cb func(*NodeRecord, Node)) error {
 	}
 	err = ioutil.WriteFile(path, data, os.ModePerm)
 	if err != nil {
-		log.Warn(fmt.Sprintf("unable to save kaddb with %v nodes to %v: err", n, path, err))
+		log.Warn(fmt.Sprintf("unable to save kaddb with %v nodes to %v: %v", n, path, err))
 	} else {
 		log.Info(fmt.Sprintf("saved kaddb with %v nodes to %v", n, path))
 	}

@@ -938,7 +938,7 @@ func (d *Downloader) fetchNodeData() error {
 				}
 				if err != nil {
 					// If the node data processing failed, the root hash is very wrong, abort
-					log.Error(fmt.Sprintf("peer %d: state processing failed: %v", packet.PeerId(), err))
+					log.Error(fmt.Sprintf("peer %s: state processing failed: %v", packet.PeerId(), err))
 					d.cancel()
 					return
 				}

@@ -480,7 +480,7 @@ LOOP:
 			stateCopy := *state
 			err := self.unsyncedKeys(unsynced, &stateCopy)
 			if err != nil {
-				log.Warn(fmt.Sprintf("syncer[%v]: unable to send unsynced keys: %v", err))
+				log.Warn(fmt.Sprintf("syncer[%v]: unable to send unsynced keys: %v", self.key.Log(), err))
 			}
 			self.state = state
 			log.Debug(fmt.Sprintf("syncer[%v]: --> %v keys sent: (total: %v (%v), history: %v), sent sync state: %v", self.key.Log(), len(unsynced), keyCounts, keyCount, historyCnt, stateCopy))
@@ -553,7 +553,7 @@ LOOP:
 			log.Trace(fmt.Sprintf("syncer[%v]: (priority %v): request %v (synced = %v)", self.key.Log(), priority, req, state.Synced))
 			unsynced = append(unsynced, sreq)
 		} else {
-			log.Warn(fmt.Sprintf("syncer[%v]: (priority %v): error creating request for %v: %v)", self.key.Log(), priority, req, state.Synced, err))
+			log.Warn(fmt.Sprintf("syncer[%v]: (priority %v): error creating request for %v: %v)", self.key.Log(), priority, req, err))
 		}
 
 	}

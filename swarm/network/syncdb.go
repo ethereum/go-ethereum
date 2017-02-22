@@ -217,7 +217,7 @@ LOOP:
 		// if just switched to db mode and not quitting, then launch dbRead
 		// in a parallel go routine to send deliveries from db
 		if inDb == 0 && quit != nil {
-			log.Trace(fmt.Sprintf("syncDb[%v/%v] start dbRead"))
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] start dbRead", self.key.Log(), self.priority))
 			go self.dbRead(true, counter, deliver)
 		}
 		inDb++

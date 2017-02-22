@@ -197,7 +197,7 @@ func (self *Swarm) Start(net *p2p.Server) error {
 	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
 
 	if self.corsString != "" {
-		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain:", self.corsString))
+		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.corsString))
 	}
 
 	return nil

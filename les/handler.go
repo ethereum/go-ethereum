@@ -441,7 +441,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	// Block header query, collect the requested headers and reply
 	case AnnounceMsg:
-		log.Debug(fmt.Sprint("<=== AnnounceMsg from peer %v:", p.id))
+		log.Debug(fmt.Sprintf("<=== AnnounceMsg from peer %v:", p.id))
 
 		var req announceData
 		if err := msg.Decode(&req); err != nil {

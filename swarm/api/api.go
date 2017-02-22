@@ -84,7 +84,7 @@ func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error
 		err = ErrResolve(err)
 		log.Warn(fmt.Sprintf("DNS error : %v", err))
 	}
-	log.Trace(fmt.Sprintf("host lookup: %v -> %v", err))
+	log.Trace(fmt.Sprintf("host lookup: %v -> %v", hostPort, contentHash))
 	return contentHash[:], err
 }
 func Parse(uri string) (hostPort, path string) {
