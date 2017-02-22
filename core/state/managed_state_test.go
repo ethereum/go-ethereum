@@ -30,7 +30,7 @@ func create() (*ManagedState, *account) {
 	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
 	ms.StateDB.SetNonce(addr, 100)
-	ms.accounts[addr] = newAccount(ms.StateDB.GetStateObject(addr))
+	ms.accounts[addr] = newAccount(ms.StateDB.getStateObject(addr))
 	return ms, ms.accounts[addr]
 }
 

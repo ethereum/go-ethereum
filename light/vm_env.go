@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/net/context"
 )
@@ -64,27 +63,10 @@ func (self *VMState) RevertToSnapshot(idx int) {
 	self.snapshots = self.snapshots[:idx]
 }
 
-// GetAccount returns the account object of the given account or nil if the
-// account does not exist
-func (s *VMState) GetAccount(addr common.Address) vm.Account {
-	so, err := s.state.GetStateObject(s.ctx, addr)
-	s.errHandler(err)
-	if err != nil {
-		// return a dummy state object to avoid panics
-		so = s.state.newStateObject(addr)
-	}
-	return so
-}
-
 // CreateAccount creates creates a new account object and takes ownership.
-func (s *VMState) CreateAccount(addr common.Address) vm.Account {
-	so, err := s.state.CreateStateObject(s.ctx, addr)
+func (s *VMState) CreateAccount(addr common.Address) {
+	_, err := s.state.CreateStateObject(s.ctx, addr)
 	s.errHandler(err)
-	if err != nil {
-		// return a dummy state object to avoid panics
-		so = s.state.newStateObject(addr)
-	}
-	return so
 }
 
 // AddBalance adds the given amount to the balance of the specified account
@@ -96,6 +78,15 @@ func (s *VMState) AddBalance(addr common.Address, amount *big.Int) {
 // SubBalance adds the given amount to the balance of the specified account
 func (s *VMState) SubBalance(addr common.Address, amount *big.Int) {
 	err := s.state.SubBalance(s.ctx, addr, amount)
+	s.errHandler(err)
+}
+
+// ForEachStorage calls a callback function for every key/value pair found
+// in the local storage cache. Note that unlike core/state.StateObject,
+// light.StateObject only returns cached values and doesn't download the
+// entire storage tree.
+func (s *VMState) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
+	err := s.state.ForEachStorage(s.ctx, addr, cb)
 	s.errHandler(err)
 }
 

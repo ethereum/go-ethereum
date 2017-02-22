@@ -116,7 +116,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	var (
-		to       Account
+		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
 	)
 	if !evm.StateDB.Exist(addr) {
@@ -124,9 +124,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 			return nil, gas, nil
 		}
 
-		to = evm.StateDB.CreateAccount(addr)
-	} else {
-		to = evm.StateDB.GetAccount(addr)
+		evm.StateDB.CreateAccount(addr)
 	}
 	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
@@ -169,7 +167,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	var (
 		snapshot = evm.StateDB.Snapshot()
-		to       = evm.StateDB.GetAccount(caller.Address())
+		to       = AccountRef(caller.Address())
 	)
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped evmironment for this execution context
@@ -205,11 +203,11 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	var (
 		snapshot = evm.StateDB.Snapshot()
-		to       = evm.StateDB.GetAccount(caller.Address())
+		to       = AccountRef(caller.Address())
 	)
 
 	// Iinitialise a new contract and make initialise the delegate values
-	contract := NewContract(caller, to, caller.Value(), gas).AsDelegate()
+	contract := NewContract(caller, to, nil, gas).AsDelegate()
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
 
 	ret, err = evm.interpreter.Run(contract, input)
@@ -243,16 +241,16 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas uint64, value *big.I
 
 	snapshot := evm.StateDB.Snapshot()
 	contractAddr = crypto.CreateAddress(caller.Address(), nonce)
-	to := evm.StateDB.CreateAccount(contractAddr)
+	evm.StateDB.CreateAccount(contractAddr)
 	if evm.ChainConfig().IsEIP158(evm.BlockNumber) {
 		evm.StateDB.SetNonce(contractAddr, 1)
 	}
-	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	evm.Transfer(evm.StateDB, caller.Address(), contractAddr, value)
 
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped evmironment for this execution context
 	// only.
-	contract := NewContract(caller, to, value, gas)
+	contract := NewContract(caller, AccountRef(contractAddr), value, gas)
 	contract.SetCallCode(&contractAddr, crypto.Keccak256Hash(code), code)
 
 	ret, err = evm.interpreter.Run(contract, nil)

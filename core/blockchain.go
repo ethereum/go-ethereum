@@ -214,7 +214,6 @@ func (self *BlockChain) loadLastState() error {
 		return err
 	}
 	self.stateCache = statedb
-	self.stateCache.GetAccount(common.Address{})
 
 	// Issue a status log for the user
 	headerTd := self.GetTd(currentHeader.Hash(), currentHeader.Number.Uint64())
