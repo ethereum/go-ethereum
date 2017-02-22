@@ -64,6 +64,9 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := json.Unmarshal(contents, &genesis); err != nil {
 		return nil, err
 	}
+	if genesis.ChainConfig == nil {
+		genesis.ChainConfig = params.AllProtocolChanges
+	}
 
 	// creating with empty hash always works
 	statedb, _ := state.New(common.Hash{}, chainDb)
