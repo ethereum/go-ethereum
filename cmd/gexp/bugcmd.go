@@ -26,8 +26,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/internal/browser"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/expanse-org/go-expanse/cmd/internal/browser"
+	"github.com/expanse-org/go-expanse/params"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -35,7 +35,7 @@ import (
 var bugCommand = cli.Command{
 	Action:    reportBug,
 	Name:      "bug",
-	Usage:     "opens a window to report a bug on the geth repo",
+	Usage:     "opens a window to report a bug on the gexp repo",
 	ArgsUsage: " ",
 	Category:  "MISCELLANEOUS COMMANDS",
 }
@@ -99,10 +99,10 @@ func printCmdOut(w io.Writer, prefix, path string, args ...string) {
 const header = `Please answer these questions before submitting your issue. Thanks!
 
 #### What did you do?
- 
+
 #### What did you expect to see?
- 
+
 #### What did you see instead?
- 
+
 #### System details
 `
