@@ -30,16 +30,8 @@ var (
 	Big257  = big.NewInt(257)
 )
 
-// Bytes2Big
-func BytesToBig(data []byte) *big.Int {
-	n := new(big.Int)
-	n.SetBytes(data)
-
-	return n
-}
-
 func Bytes2Big(data []byte) *big.Int {
-	return BytesToBig(data)
+	return new(big.Int).SetBytes(data)
 }
 
 func String2Big(num string) *big.Int {

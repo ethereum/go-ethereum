@@ -300,7 +300,7 @@ func opSha3(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 		evm.StateDB.AddPreimage(common.BytesToHash(hash), data)
 	}
 
-	stack.push(common.BytesToBig(hash))
+	stack.push(new(big.Int).SetBytes(hash))
 
 	evm.interpreter.intPool.put(offset, size)
 	return nil, nil

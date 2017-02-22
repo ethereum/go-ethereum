@@ -19,6 +19,7 @@ package vm
 import (
 	"crypto/sha256"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -69,8 +70,8 @@ func (c *ecrecover) Run(in []byte) []byte {
 	// "in" is (hash, v, r, s), each 32 bytes
 	// but for ecrecover we want (r, s, v)
 
-	r := common.BytesToBig(in[64:96])
-	s := common.BytesToBig(in[96:128])
+	r := new(big.Int).SetBytes(in[64:96])
+	s := new(big.Int).SetBytes(in[96:128])
 	v := in[63] - 27
 
 	// tighter sig s values in homestead only apply to tx sigs
