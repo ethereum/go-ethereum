@@ -52,7 +52,7 @@ func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 // Get the string representation of the underlying hash
 func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
-func (h Hash) Big() *big.Int { return Bytes2Big(h[:]) }
+func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 func (h Hash) Hex() string   { return hexutil.Encode(h[:]) }
 
 // UnmarshalJSON parses a hash in its hex from to a hash.
@@ -122,7 +122,7 @@ func IsHexAddress(s string) bool {
 // Get the string representation of the underlying address
 func (a Address) Str() string   { return string(a[:]) }
 func (a Address) Bytes() []byte { return a[:] }
-func (a Address) Big() *big.Int { return Bytes2Big(a[:]) }
+func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
 func (a Address) Hex() string   { return hexutil.Encode(a[:]) }
 

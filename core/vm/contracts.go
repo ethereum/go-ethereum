@@ -75,8 +75,8 @@ func (c *ecrecover) Run(in []byte) []byte {
 	v := in[63] - 27
 
 	// tighter sig s values in homestead only apply to tx sigs
-	if common.Bytes2Big(in[32:63]).BitLen() > 0 || !crypto.ValidateSignatureValues(v, r, s, false) {
-		log.Trace(fmt.Sprintf("ECRECOVER error: v, r or s value invalid"))
+	if !allZero(in[32:63]) || !crypto.ValidateSignatureValues(v, r, s, false) {
+		log.Trace("ECRECOVER error: v, r or s value invalid")
 		return nil
 	}
 	// v needs to be at the end for libsecp256k1

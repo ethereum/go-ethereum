@@ -307,7 +307,7 @@ func opSha3(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 }
 
 func opAddress(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(common.Bytes2Big(contract.Address().Bytes()))
+	stack.push(contract.Address().Big())
 	return nil, nil
 }
 
@@ -335,7 +335,7 @@ func opCallValue(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack
 }
 
 func opCalldataLoad(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(common.Bytes2Big(getData(contract.Input, stack.pop(), common.Big32)))
+	stack.push(new(big.Int).SetBytes(getData(contract.Input, stack.pop(), common.Big32)))
 	return nil, nil
 }
 
@@ -711,7 +711,7 @@ func makeLog(size int) executionFunc {
 func makePush(size uint64, bsize *big.Int) executionFunc {
 	return func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 		byts := getData(contract.Code, evm.interpreter.intPool.get().SetUint64(*pc+1), bsize)
-		stack.push(common.Bytes2Big(byts))
+		stack.push(new(big.Int).SetBytes(byts))
 		*pc += size
 		return nil, nil
 	}
