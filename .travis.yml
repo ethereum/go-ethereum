@@ -14,11 +14,20 @@ matrix:
     - os: linux
       dist: trusty
       go: 1.7.5
+
+    # These are the latest Go versions, only run go vet and misspell on these
     - os: linux
       dist: trusty
       go: 1.8
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage -vet -misspell
+
     - os: osx
       go: 1.8
+      script:
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage -vet -misspell
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
@@ -138,7 +147,7 @@ install:
   - go get golang.org/x/tools/cmd/cover
 script:
   - go run build/ci.go install
-  - go run build/ci.go test -coverage -vet -misspell
+  - go run build/ci.go test -coverage
 
 notifications:
   webhooks:
