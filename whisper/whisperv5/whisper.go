@@ -36,6 +36,11 @@ import (
 	set "gopkg.in/fatih/set.v0"
 )
 
+type Statistics struct {
+	messages int
+	memory   int
+}
+
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
 type Whisper struct {
@@ -59,6 +64,8 @@ type Whisper struct {
 	messageQueue chan *Envelope
 	p2pMsgQueue  chan *Envelope
 	quit         chan struct{}
+
+	stats Statistics
 
 	overflow bool
 	test     bool
@@ -288,7 +295,8 @@ func (w *Whisper) Unwatch(id string) {
 // Send injects a message into the whisper send queue, to be distributed in the
 // network in the coming cycles.
 func (w *Whisper) Send(envelope *Envelope) error {
-	return w.add(envelope)
+	_, err := w.add(envelope)
+	return err
 }
 
 // Start implements node.Service, starting the background data propagation thread
@@ -361,11 +369,14 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			}
 			// inject all envelopes into the internal pool
 			for _, envelope := range envelopes {
-				if err := wh.add(envelope); err != nil {
+				cached, err := wh.add(envelope)
+				if err != nil {
 					glog.V(logger.Warn).Infof("%v: bad envelope received: [%v], peer will be disconnected", p.peer, err)
 					return fmt.Errorf("invalid envelope")
 				}
-				p.mark(envelope)
+				if cached {
+					p.mark(envelope)
+				}
 			}
 		case p2pCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
@@ -402,13 +413,13 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // add inserts a new envelope into the message pool to be distributed within the
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
-func (wh *Whisper) add(envelope *Envelope) error {
+func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
 	if sent > now {
 		if sent-SynchAllowance > now {
-			return fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
+			return false, fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
 		} else {
 			// recalculate PoW, adjusted for the time difference, plus one second for latency
 			envelope.calculatePoW(sent - now + 1)
@@ -417,34 +428,34 @@ func (wh *Whisper) add(envelope *Envelope) error {
 
 	if envelope.Expiry < now {
 		if envelope.Expiry+SynchAllowance*2 < now {
-			return fmt.Errorf("very old message")
+			return false, fmt.Errorf("very old message")
 		} else {
 			glog.V(logger.Debug).Infof("expired envelope dropped [%x]", envelope.Hash())
-			return nil // drop envelope without error
+			return false, nil // drop envelope without error
 		}
 	}
 
 	if len(envelope.Data) > MaxMessageLength {
-		return fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
+		return false, fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
 	if len(envelope.Version) > 4 {
-		return fmt.Errorf("oversized version [%x]", envelope.Hash())
+		return false, fmt.Errorf("oversized version [%x]", envelope.Hash())
 	}
 
 	if len(envelope.AESNonce) > AESNonceMaxLength {
 		// the standard AES GSM nonce size is 12,
 		// but const gcmStandardNonceSize cannot be accessed directly
-		return fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
+		return false, fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
 	}
 
 	if len(envelope.Salt) > saltLength {
-		return fmt.Errorf("oversized salt [%x]", envelope.Hash())
+		return false, fmt.Errorf("oversized salt [%x]", envelope.Hash())
 	}
 
 	if envelope.PoW() < MinimumPoW && !wh.test {
 		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash())
-		return nil // drop envelope without error
+		return false, nil // drop envelope without error
 	}
 
 	hash := envelope.Hash()
@@ -471,7 +482,7 @@ func (wh *Whisper) add(envelope *Envelope) error {
 			wh.mailServer.Archive(envelope)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // postEvent queues the message for further processing.
@@ -546,20 +557,27 @@ func (w *Whisper) expire() {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
+	w.stats.clear()
 	now := uint32(time.Now().Unix())
-	for then, hashSet := range w.expirations {
-		// Short circuit if a future time
-		if then > now {
-			continue
+	for expiry, hashSet := range w.expirations {
+		if expiry < now {
+			w.stats.messages++
+
+			// Dump all expired messages and remove timestamp
+			hashSet.Each(func(v interface{}) bool {
+				w.stats.memory += w.envelopes[v.(common.Hash)].size()
+				delete(w.envelopes, v.(common.Hash))
+				delete(w.messages, v.(common.Hash))
+				return true
+			})
+			w.expirations[expiry].Clear()
+			delete(w.expirations, expiry)
 		}
-		// Dump all expired messages and remove timestamp
-		hashSet.Each(func(v interface{}) bool {
-			delete(w.envelopes, v.(common.Hash))
-			delete(w.messages, v.(common.Hash))
-			return true
-		})
-		w.expirations[then].Clear()
 	}
+}
+
+func (w *Whisper) Stats() string {
+	return fmt.Sprintf("Latest expiry cycle cleared %d messages (%d bytes)", w.stats.messages, w.stats.memory)
 }
 
 // envelopes retrieves all the messages currently pooled by the node.
@@ -590,11 +608,24 @@ func (w *Whisper) Messages(id string) []*ReceivedMessage {
 	return result
 }
 
+func (w *Whisper) isEnvelopeCached(hash common.Hash) bool {
+	w.poolMu.Lock()
+	defer w.poolMu.Unlock()
+
+	_, exist := w.envelopes[hash]
+	return exist
+}
+
 func (w *Whisper) addDecryptedMessage(msg *ReceivedMessage) {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
 	w.messages[msg.EnvelopeHash] = msg
+}
+
+func (s *Statistics) clear() {
+	s.memory = 0
+	s.messages = 0
 }
 
 func ValidatePublicKey(k *ecdsa.PublicKey) bool {
