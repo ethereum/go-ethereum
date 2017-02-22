@@ -505,7 +505,7 @@ func opJump(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 }
 func opJumpi(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	pos, cond := stack.pop(), stack.pop()
-	if cond.Cmp(common.BigTrue) >= 0 {
+	if cond.BitLen() > 0 {
 		if !contract.jumpdests.has(contract.CodeHash, contract.Code, pos) {
 			nop := contract.GetOp(pos.Uint64())
 			return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
