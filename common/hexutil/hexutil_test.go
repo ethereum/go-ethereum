@@ -18,7 +18,6 @@ package hexutil
 
 import (
 	"bytes"
-	"encoding/hex"
 	"math/big"
 	"testing"
 )
@@ -60,10 +59,10 @@ var (
 		// invalid
 		{input: ``, wantErr: ErrEmptyString},
 		{input: `0`, wantErr: ErrMissingPrefix},
-		{input: `0x0`, wantErr: hex.ErrLength},
-		{input: `0x023`, wantErr: hex.ErrLength},
-		{input: `0xxx`, wantErr: hex.InvalidByteError('x')},
-		{input: `0x01zz01`, wantErr: hex.InvalidByteError('z')},
+		{input: `0x0`, wantErr: ErrOddLength},
+		{input: `0x023`, wantErr: ErrOddLength},
+		{input: `0xxx`, wantErr: ErrSyntax},
+		{input: `0x01zz01`, wantErr: ErrSyntax},
 		// valid
 		{input: `0x`, want: []byte{}},
 		{input: `0X`, want: []byte{}},

@@ -60,7 +60,11 @@ func Decode(input string) ([]byte, error) {
 	if !has0xPrefix(input) {
 		return nil, ErrMissingPrefix
 	}
-	return hex.DecodeString(input[2:])
+	b, err := hex.DecodeString(input[2:])
+	if err != nil {
+		err = mapError(err)
+	}
+	return b, err
 }
 
 // MustDecode decodes a hex string with 0x prefix. It panics for invalid input.
