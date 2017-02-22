@@ -181,7 +181,7 @@ func runVmTest(test VmTest) error {
 	if len(test.Gas) == 0 && err == nil {
 		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successful")
 	} else {
-		gexp := math.MustParseBig(test.Gas)
+		gexp := math.MustParseBig256(test.Gas)
 		if gexp.Cmp(gas) != 0 {
 			return fmt.Errorf("gas failed. Expected %v, got %v\n", gexp, gas)
 		}
@@ -223,8 +223,8 @@ func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, []*type
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
 		data  = common.FromHex(exec["data"])
-		gas   = math.MustParseBig(exec["gas"])
-		value = math.MustParseBig(exec["value"])
+		gas   = math.MustParseBig256(exec["gas"])
+		value = math.MustParseBig256(exec["value"])
 	)
 	caller := statedb.GetOrNewStateObject(from)
 	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)

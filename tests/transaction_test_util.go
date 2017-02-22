@@ -162,7 +162,7 @@ func verifyTxFields(chainConfig *params.ChainConfig, txTest TransactionTest, dec
 
 	var decodedSender common.Address
 
-	signer := types.MakeSigner(chainConfig, math.MustParseBig(txTest.Blocknumber))
+	signer := types.MakeSigner(chainConfig, math.MustParseBig256(txTest.Blocknumber))
 	decodedSender, err = types.Sender(signer, decodedTx)
 	if err != nil {
 		return err

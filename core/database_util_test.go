@@ -55,10 +55,10 @@ func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	d.ParentTimestamp = math.MustParseUint64(ext.ParentTimestamp)
-	d.ParentDifficulty = math.MustParseBig(ext.ParentDifficulty)
+	d.ParentDifficulty = math.MustParseBig256(ext.ParentDifficulty)
 	d.CurrentTimestamp = math.MustParseUint64(ext.CurrentTimestamp)
-	d.CurrentBlocknumber = math.MustParseBig(ext.CurrentBlocknumber)
-	d.CurrentDifficulty = math.MustParseBig(ext.CurrentDifficulty)
+	d.CurrentBlocknumber = math.MustParseBig256(ext.CurrentBlocknumber)
+	d.CurrentDifficulty = math.MustParseBig256(ext.CurrentDifficulty)
 
 	return nil
 }

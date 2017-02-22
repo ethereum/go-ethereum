@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestParseBig(t *testing.T) {
+func TestParseBig256(t *testing.T) {
 	tests := []struct {
 		input string
 		num   *big.Int
@@ -42,9 +42,11 @@ func TestParseBig(t *testing.T) {
 		// Invalid syntax:
 		{"abcdef", nil, false},
 		{"0xgg", nil, false},
+		// Larger than 256 bits:
+		{"115792089237316195423570985008687907853269984665640564039457584007913129639936", nil, false},
 	}
 	for _, test := range tests {
-		num, ok := ParseBig(test.input)
+		num, ok := ParseBig256(test.input)
 		if ok != test.ok {
 			t.Errorf("ParseBig(%q) -> ok = %t, want %t", test.input, ok, test.ok)
 			continue
@@ -55,13 +57,13 @@ func TestParseBig(t *testing.T) {
 	}
 }
 
-func TestMustParseBig(t *testing.T) {
+func TestMustParseBig256(t *testing.T) {
 	defer func() {
 		if recover() == nil {
 			t.Error("MustParseBig should've panicked")
 		}
 	}()
-	MustParseBig("ggg")
+	MustParseBig256("ggg")
 }
 
 func TestBigMax(t *testing.T) {
@@ -183,8 +185,8 @@ func TestExp(t *testing.T) {
 		{base: big.NewInt(1), exponent: big.NewInt(0), result: big.NewInt(1)},
 		{base: big.NewInt(1), exponent: big.NewInt(1), result: big.NewInt(1)},
 		{base: big.NewInt(1), exponent: big.NewInt(2), result: big.NewInt(1)},
-		{base: big.NewInt(3), exponent: big.NewInt(144), result: MustParseBig("507528786056415600719754159741696356908742250191663887263627442114881")},
-		{base: big.NewInt(2), exponent: big.NewInt(255), result: MustParseBig("57896044618658097711785492504343953926634992332820282019728792003956564819968")},
+		{base: big.NewInt(3), exponent: big.NewInt(144), result: MustParseBig256("507528786056415600719754159741696356908742250191663887263627442114881")},
+		{base: big.NewInt(2), exponent: big.NewInt(255), result: MustParseBig256("57896044618658097711785492504343953926634992332820282019728792003956564819968")},
 	}
 	for _, test := range tests {
 		if result := Exp(test.base, test.exponent); result.Cmp(test.result) != 0 {

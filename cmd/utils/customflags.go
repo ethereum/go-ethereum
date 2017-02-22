@@ -78,8 +78,8 @@ func (self DirectoryFlag) Apply(set *flag.FlagSet) {
 	})
 }
 
-// BigFlag is a command line flag that accepts big integers in decimal
-// or hexadecimal syntax.
+// BigFlag is a command line flag that accepts 256 bit big integers in decimal or
+// hexadecimal syntax.
 type BigFlag struct {
 	Name  string
 	Value *big.Int
@@ -97,7 +97,7 @@ func (b *bigValue) String() string {
 }
 
 func (b *bigValue) Set(s string) error {
-	int, ok := math.ParseBig(s)
+	int, ok := math.ParseBig256(s)
 	if !ok {
 		return errors.New("invalid integer syntax")
 	}

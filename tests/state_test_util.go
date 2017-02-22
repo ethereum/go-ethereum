@@ -171,8 +171,8 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 			return fmt.Errorf("did not find expected post-state account: %s", addr)
 		}
 
-		if balance := statedb.GetBalance(address); balance.Cmp(math.MustParseBig(account.Balance)) != 0 {
-			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", address[:4], math.MustParseBig(account.Balance), balance)
+		if balance := statedb.GetBalance(address); balance.Cmp(math.MustParseBig256(account.Balance)) != 0 {
+			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", address[:4], math.MustParseBig256(account.Balance), balance)
 		}
 
 		if nonce := statedb.GetNonce(address); nonce != math.MustParseUint64(account.Nonce) {
@@ -206,7 +206,7 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 
 func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, []*types.Log, *big.Int, error) {
 	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
-	gaspool := new(core.GasPool).AddGas(math.MustParseBig(env["currentGasLimit"]))
+	gaspool := new(core.GasPool).AddGas(math.MustParseBig256(env["currentGasLimit"]))
 
 	root, _ := statedb.Commit(false)
 	statedb.Reset(root)

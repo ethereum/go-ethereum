@@ -121,7 +121,7 @@ func insertAccount(state *state.StateDB, saddr string, account Account) {
 	addr := common.HexToAddress(saddr)
 	state.SetCode(addr, common.Hex2Bytes(account.Code))
 	state.SetNonce(addr, math.MustParseUint64(account.Nonce))
-	state.SetBalance(addr, math.MustParseBig(account.Balance))
+	state.SetBalance(addr, math.MustParseBig256(account.Balance))
 	for a, v := range account.Storage {
 		state.SetState(addr, common.HexToHash(a), common.HexToHash(v))
 	}
@@ -153,9 +153,9 @@ type VmTest struct {
 func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.EVM, core.Message) {
 	var (
 		data  = common.FromHex(tx["data"])
-		gas   = math.MustParseBig(tx["gasLimit"])
-		price = math.MustParseBig(tx["gasPrice"])
-		value = math.MustParseBig(tx["value"])
+		gas   = math.MustParseBig256(tx["gasLimit"])
+		price = math.MustParseBig256(tx["gasPrice"])
+		value = math.MustParseBig256(tx["value"])
 		nonce = math.MustParseUint64(tx["nonce"])
 	)
 
@@ -199,10 +199,10 @@ func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *st
 
 		Origin:      origin,
 		Coinbase:    common.HexToAddress(envValues["currentCoinbase"]),
-		BlockNumber: math.MustParseBig(envValues["currentNumber"]),
-		Time:        math.MustParseBig(envValues["currentTimestamp"]),
-		GasLimit:    math.MustParseBig(envValues["currentGasLimit"]),
-		Difficulty:  math.MustParseBig(envValues["currentDifficulty"]),
+		BlockNumber: math.MustParseBig256(envValues["currentNumber"]),
+		Time:        math.MustParseBig256(envValues["currentTimestamp"]),
+		GasLimit:    math.MustParseBig256(envValues["currentGasLimit"]),
+		Difficulty:  math.MustParseBig256(envValues["currentDifficulty"]),
 		GasPrice:    price,
 	}
 	if context.GasPrice == nil {

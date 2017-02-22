@@ -68,7 +68,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	// creating with empty hash always works
 	statedb, _ := state.New(common.Hash{}, chainDb)
 	for addr, account := range genesis.Alloc {
-		balance, ok := math.ParseBig(account.Balance)
+		balance, ok := math.ParseBig256(account.Balance)
 		if !ok {
 			return nil, fmt.Errorf("invalid balance for account %s: %q", addr, account.Balance)
 		}
@@ -87,7 +87,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}
 	root, stateBatch := statedb.CommitBatch(false)
 
-	difficulty, ok := math.ParseBig(genesis.Difficulty)
+	difficulty, ok := math.ParseBig256(genesis.Difficulty)
 	if !ok {
 		return nil, fmt.Errorf("invalid difficulty: %q", genesis.Difficulty)
 	}
@@ -99,7 +99,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if !ok {
 		return nil, fmt.Errorf("invalid nonce: %q", genesis.Nonce)
 	}
-	timestamp, ok := math.ParseBig(genesis.Timestamp)
+	timestamp, ok := math.ParseBig256(genesis.Timestamp)
 	if !ok {
 		return nil, fmt.Errorf("invalid timestamp: %q", genesis.Timestamp)
 	}
