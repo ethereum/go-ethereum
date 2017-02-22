@@ -373,8 +373,8 @@ type PostArgs struct {
 	Payload  hexutil.Bytes `json:"payload"`
 	WorkTime uint32        `json:"worktime"`
 	PoW      float64       `json:"pow"`
-	FilterID string        `json:"filterid"`
-	PeerID   hexutil.Bytes `json:"peerid"`
+	FilterID string        `json:"filterID"`
+	PeerID   hexutil.Bytes `json:"peerID"`
 }
 
 type WhisperFilterArgs struct {
