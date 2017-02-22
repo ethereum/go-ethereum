@@ -597,7 +597,7 @@ func (bc *BlockChain) Stop() {
 func (self *BlockChain) procFutureBlocks() {
 	blocks := make([]*types.Block, 0, self.futureBlocks.Len())
 	for _, hash := range self.futureBlocks.Keys() {
-		if block, exist := self.futureBlocks.Get(hash); exist {
+		if block, exist := self.futureBlocks.Peek(hash); exist {
 			blocks = append(blocks, block.(*types.Block))
 		}
 	}
