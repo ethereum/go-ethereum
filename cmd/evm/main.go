@@ -20,13 +20,13 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	goruntime "runtime"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
@@ -52,20 +52,20 @@ var (
 		Name:  "codefile",
 		Usage: "file containing EVM code",
 	}
-	GasFlag = cli.StringFlag{
+	GasFlag = cli.Uint64Flag{
 		Name:  "gas",
 		Usage: "gas limit for the evm",
-		Value: "10000000000",
+		Value: 10000000000,
 	}
-	PriceFlag = cli.StringFlag{
+	PriceFlag = utils.BigFlag{
 		Name:  "price",
 		Usage: "price set for the evm",
-		Value: "0",
+		Value: new(big.Int),
 	}
-	ValueFlag = cli.StringFlag{
+	ValueFlag = utils.BigFlag{
 		Name:  "value",
 		Usage: "value set for the evm",
-		Value: "0",
+		Value: new(big.Int),
 	}
 	DumpFlag = cli.BoolFlag{
 		Name:  "dump",
@@ -161,9 +161,9 @@ func run(ctx *cli.Context) error {
 		ret, _, err = runtime.Create(input, &runtime.Config{
 			Origin:   sender.Address(),
 			State:    statedb,
-			GasLimit: math.MustParseUint64(ctx.GlobalString(GasFlag.Name)),
-			GasPrice: math.MustParseBig(ctx.GlobalString(PriceFlag.Name)),
-			Value:    math.MustParseBig(ctx.GlobalString(ValueFlag.Name)),
+			GasLimit: ctx.GlobalUint64(GasFlag.Name),
+			GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
+			Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 			EVMConfig: vm.Config{
 				Tracer:             logger,
 				Debug:              ctx.GlobalBool(DebugFlag.Name),
@@ -178,9 +178,9 @@ func run(ctx *cli.Context) error {
 		ret, err = runtime.Call(receiverAddress, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
 			Origin:   sender.Address(),
 			State:    statedb,
-			GasLimit: math.MustParseUint64(ctx.GlobalString(GasFlag.Name)),
-			GasPrice: math.MustParseBig(ctx.GlobalString(PriceFlag.Name)),
-			Value:    math.MustParseBig(ctx.GlobalString(ValueFlag.Name)),
+			GasLimit: ctx.GlobalUint64(GasFlag.Name),
+			GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
+			Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 			EVMConfig: vm.Config{
 				Tracer:             logger,
 				Debug:              ctx.GlobalBool(DebugFlag.Name),
