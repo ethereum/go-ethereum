@@ -37,8 +37,9 @@ import (
 )
 
 type Statistics struct {
-	messages int
-	memory   int
+	messagesCleared int
+	memoryCleared   int
+	totalMemoryUsed int
 }
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -477,6 +478,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		glog.V(logger.Detail).Infof("whisper envelope already cached [%x]\n", envelope.Hash())
 	} else {
 		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
+		wh.stats.totalMemoryUsed += envelope.size()
 		wh.postEvent(envelope, false) // notify the local node about the new message
 		if wh.mailServer != nil {
 			wh.mailServer.Archive(envelope)
@@ -561,11 +563,13 @@ func (w *Whisper) expire() {
 	now := uint32(time.Now().Unix())
 	for expiry, hashSet := range w.expirations {
 		if expiry < now {
-			w.stats.messages++
+			w.stats.messagesCleared++
 
 			// Dump all expired messages and remove timestamp
 			hashSet.Each(func(v interface{}) bool {
-				w.stats.memory += w.envelopes[v.(common.Hash)].size()
+				sz := w.envelopes[v.(common.Hash)].size()
+				w.stats.memoryCleared += sz
+				w.stats.totalMemoryUsed -= sz
 				delete(w.envelopes, v.(common.Hash))
 				delete(w.messages, v.(common.Hash))
 				return true
@@ -577,7 +581,8 @@ func (w *Whisper) expire() {
 }
 
 func (w *Whisper) Stats() string {
-	return fmt.Sprintf("Latest expiry cycle cleared %d messages (%d bytes)", w.stats.messages, w.stats.memory)
+	return fmt.Sprintf("Latest expiry cycle cleared %d messages (%d bytes). Memory usage: %d bytes.",
+		w.stats.messagesCleared, w.stats.memoryCleared, w.stats.totalMemoryUsed)
 }
 
 // envelopes retrieves all the messages currently pooled by the node.
@@ -624,8 +629,8 @@ func (w *Whisper) addDecryptedMessage(msg *ReceivedMessage) {
 }
 
 func (s *Statistics) clear() {
-	s.memory = 0
-	s.messages = 0
+	s.memoryCleared = 0
+	s.messagesCleared = 0
 }
 
 func ValidatePublicKey(k *ecdsa.PublicKey) bool {
