@@ -307,7 +307,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
-		log.Crit(fmt.Sprintf("unable to configure swarm: %v", err))
+		utils.Fatalf("unable to configure swarm: %v", err)
 	}
 	bzzport := ctx.GlobalString(SwarmPortFlag.Name)
 	if len(bzzport) > 0 {
@@ -324,13 +324,13 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 		if len(ethapi) > 0 {
 			client, err = ethclient.Dial(ethapi)
 			if err != nil {
-				log.Crit(fmt.Sprintf("Can't connect: %v", err))
+				utils.Fatalf("Can't connect: %v", err)
 			}
 		}
 		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors)
 	}
 	if err := stack.Register(boot); err != nil {
-		log.Crit(fmt.Sprintf("Failed to register the Swarm service: %v", err))
+		utils.Fatalf("Failed to register the Swarm service: %v", err)
 	}
 }
 
@@ -338,7 +338,7 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	keyid := ctx.GlobalString(SwarmAccountFlag.Name)
 
 	if keyid == "" {
-		log.Crit(fmt.Sprintf("Option %q is required", SwarmAccountFlag.Name))
+		utils.Fatalf("Option %q is required", SwarmAccountFlag.Name)
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(keyid); err == nil {
@@ -364,14 +364,14 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 			err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
 		}
 	} else {
-		log.Crit(fmt.Sprintf("Can't find swarm account key %s", account))
+		utils.Fatalf("Can't find swarm account key %s", account)
 	}
 	if err != nil {
-		log.Crit(fmt.Sprintf("Can't find swarm account key: %v", err))
+		utils.Fatalf("Can't find swarm account key: %v", err)
 	}
 	keyjson, err := ioutil.ReadFile(a.URL.Path)
 	if err != nil {
-		log.Crit(fmt.Sprintf("Can't load swarm account key: %v", err))
+		utils.Fatalf("Can't load swarm account key: %v", err)
 	}
 	for i := 1; i <= 3; i++ {
 		passphrase := promptPassphrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i))
@@ -380,7 +380,7 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 			return key.PrivateKey
 		}
 	}
-	log.Crit(fmt.Sprintf("Can't decrypt swarm account key"))
+	utils.Fatalf("Can't decrypt swarm account key")
 	return nil
 }
 
@@ -390,7 +390,7 @@ func promptPassphrase(prompt string) string {
 	}
 	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to read passphrase: %v", err))
+		utils.Fatalf("Failed to read passphrase: %v", err)
 	}
 	return password
 }

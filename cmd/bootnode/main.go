@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -56,28 +57,28 @@ func main() {
 
 	natm, err := nat.Parse(*natdesc)
 	if err != nil {
-		log.Crit("Failed to parse requested NAT", "error", err)
+		utils.Fatalf("-nat: %v", err)
 	}
 	switch {
 	case *genKey != "":
 		nodeKey, err = crypto.GenerateKey()
 		if err != nil {
-			log.Crit("Failed to generate new key", "error", err)
+			utils.Fatalf("could not generate key: %v", err)
 		}
 		if err = crypto.SaveECDSA(*genKey, nodeKey); err != nil {
-			log.Crit("Failed to save generated key", "error", err)
+			utils.Fatalf("%v", err)
 		}
 	case *nodeKeyFile == "" && *nodeKeyHex == "":
-		log.Crit("Use -nodekey or -nodekeyhex to load a private key")
+		utils.Fatalf("Use -nodekey or -nodekeyhex to specify a private key")
 	case *nodeKeyFile != "" && *nodeKeyHex != "":
-		log.Crit("Options -nodekey and -nodekeyhex are mutually exclusive")
+		utils.Fatalf("Options -nodekey and -nodekeyhex are mutually exclusive")
 	case *nodeKeyFile != "":
 		if nodeKey, err = crypto.LoadECDSA(*nodeKeyFile); err != nil {
-			log.Crit("Failed to loading the key file", "path", *nodeKeyFile, "error", err)
+			utils.Fatalf("-nodekey: %v", err)
 		}
 	case *nodeKeyHex != "":
 		if nodeKey, err = crypto.HexToECDSA(*nodeKeyHex); err != nil {
-			log.Crit("Failed to parse the key hex", "hex", *nodeKeyHex, "error", err)
+			utils.Fatalf("-nodekeyhex: %v", err)
 		}
 	}
 
@@ -90,17 +91,17 @@ func main() {
 	if *netrestrict != "" {
 		restrictList, err = netutil.ParseNetlist(*netrestrict)
 		if err != nil {
-			log.Crit("Failed to parse the network restrictions", "error", err)
+			utils.Fatalf("-netrestrict: %v", err)
 		}
 	}
 
 	if *runv5 {
 		if _, err := discv5.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
-			log.Crit("Failed to start the v5 discovery protocol", "error", err)
+			utils.Fatalf("%v", err)
 		}
 	} else {
 		if _, err := discover.ListenUDP(nodeKey, *listenAddr, natm, "", restrictList); err != nil {
-			log.Crit("Failed to start the discovery protocol", "error", err)
+			utils.Fatalf("%v", err)
 		}
 	}
 

@@ -235,7 +235,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		copy(config.Commit[:], commit)
 		return release.NewReleaseService(ctx, config)
 	}); err != nil {
-		log.Crit(fmt.Sprintf("Failed to register the Geth release oracle service: %v", err))
+		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
 	return stack
 }
@@ -265,7 +265,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		// Create an chain state reader for self-derivation
 		rpcClient, err := stack.Attach()
 		if err != nil {
-			log.Crit(fmt.Sprintf("Failed to attach to self: %v", err))
+			utils.Fatalf("Failed to attach to self: %v", err)
 		}
 		stateReader := ethclient.NewClient(rpcClient)
 
@@ -296,10 +296,10 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		var ethereum *eth.Ethereum
 		if err := stack.Service(&ethereum); err != nil {
-			log.Crit(fmt.Sprintf("ethereum service not running: %v", err))
+			utils.Fatalf("ethereum service not running: %v", err)
 		}
 		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
-			log.Crit(fmt.Sprintf("Failed to start mining: %v", err))
+			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
 }

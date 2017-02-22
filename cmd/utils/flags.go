@@ -425,7 +425,7 @@ func MakeDataDir(ctx *cli.Context) string {
 		}
 		return path
 	}
-	log.Crit(fmt.Sprintf("Cannot determine default data directory, please set manually (--datadir)"))
+	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
 	return ""
 }
 
@@ -451,16 +451,16 @@ func MakeNodeKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	)
 	switch {
 	case file != "" && hex != "":
-		log.Crit(fmt.Sprintf("Options %q and %q are mutually exclusive", NodeKeyFileFlag.Name, NodeKeyHexFlag.Name))
+		Fatalf("Options %q and %q are mutually exclusive", NodeKeyFileFlag.Name, NodeKeyHexFlag.Name)
 
 	case file != "":
 		if key, err = crypto.LoadECDSA(file); err != nil {
-			log.Crit(fmt.Sprintf("Option %q: %v", NodeKeyFileFlag.Name, err))
+			Fatalf("Option %q: %v", NodeKeyFileFlag.Name, err)
 		}
 
 	case hex != "":
 		if key, err = crypto.HexToECDSA(hex); err != nil {
-			log.Crit(fmt.Sprintf("Option %q: %v", NodeKeyHexFlag.Name, err))
+			Fatalf("Option %q: %v", NodeKeyHexFlag.Name, err)
 		}
 	}
 	return key
@@ -536,7 +536,7 @@ func MakeDiscoveryV5Address(ctx *cli.Context) string {
 func MakeNAT(ctx *cli.Context) nat.Interface {
 	natif, err := nat.Parse(ctx.GlobalString(NATFlag.Name))
 	if err != nil {
-		log.Crit(fmt.Sprintf("Option %s: %v", NATFlag.Name, err))
+		Fatalf("Option %s: %v", NATFlag.Name, err)
 	}
 	return natif
 }
@@ -573,11 +573,11 @@ func MakeWSRpcHost(ctx *cli.Context) string {
 // for Geth and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
 	if err := raiseFdLimit(2048); err != nil {
-		log.Crit(fmt.Sprintf("Failed to raise file descriptor allowance: %v", err))
+		Fatalf("Failed to raise file descriptor allowance: %v", err)
 	}
 	limit, err := getFdLimit()
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to retrieve file descriptor allowance: %v", err))
+		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
 	if limit > 2048 { // cap database file descriptors even if more is available
 		limit = 2048
@@ -619,7 +619,7 @@ func MakeEtherbase(ks *keystore.KeyStore, ctx *cli.Context) common.Address {
 	// If the specified etherbase is a valid address, return it
 	account, err := MakeAddress(ks, etherbase)
 	if err != nil {
-		log.Crit(fmt.Sprintf("Option %q: %v", EtherbaseFlag.Name, err))
+		Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
 	}
 	return account.Address
 }
@@ -641,7 +641,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 	}
 	text, err := ioutil.ReadFile(path)
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to read password file: %v", err))
+		Fatalf("Failed to read password file: %v", err)
 	}
 	lines := strings.Split(string(text), "\n")
 	// Sanitise DOS line endings.
@@ -700,14 +700,14 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 	if netrestrict := ctx.GlobalString(NetrestrictFlag.Name); netrestrict != "" {
 		list, err := netutil.ParseNetlist(netrestrict)
 		if err != nil {
-			log.Crit(fmt.Sprintf("Option %q: %v", NetrestrictFlag.Name, err))
+			Fatalf("Option %q: %v", NetrestrictFlag.Name, err)
 		}
 		config.NetRestrict = list
 	}
 
 	stack, err := node.New(config)
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to create the protocol stack: %v", err))
+		Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	return stack
 }
@@ -723,7 +723,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		}
 	}
 	if networks > 1 {
-		log.Crit(fmt.Sprintf("The %v flags are mutually exclusive", netFlags))
+		Fatalf("The %v flags are mutually exclusive", netFlags)
 	}
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
@@ -777,7 +777,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)
 		}); err != nil {
-			log.Crit(fmt.Sprintf("Failed to register the Ethereum light node service: %v", err))
+			Fatalf("Failed to register the Ethereum light node service: %v", err)
 		}
 	} else {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
@@ -788,7 +788,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 			}
 			return fullNode, err
 		}); err != nil {
-			log.Crit(fmt.Sprintf("Failed to register the Ethereum full node service: %v", err))
+			Fatalf("Failed to register the Ethereum full node service: %v", err)
 		}
 	}
 }
@@ -796,7 +796,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 // RegisterShhService configures Whisper and adds it to the given node.
 func RegisterShhService(stack *node.Node) {
 	if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
-		log.Crit(fmt.Sprintf("Failed to register the Whisper service: %v", err))
+		Fatalf("Failed to register the Whisper service: %v", err)
 	}
 }
 
@@ -813,7 +813,7 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 		return ethstats.New(url, ethServ, lesServ)
 	}); err != nil {
-		log.Crit(fmt.Sprintf("Failed to register the Ethereum Stats service: %v", err))
+		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
 }
 
@@ -844,7 +844,7 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 		case core.ChainConfigNotFoundErr:
 			// No configs found, use empty, will populate below
 		default:
-			log.Crit(fmt.Sprintf("Could not make chain configuration: %v", err))
+			Fatalf("Could not make chain configuration: %v", err)
 		}
 	}
 	// set chain id in case it's zero.
@@ -899,7 +899,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 
 	chainDb, err := stack.OpenDatabase(name, cache, handles)
 	if err != nil {
-		log.Crit(fmt.Sprintf("Could not open database: %v", err))
+		Fatalf("Could not open database: %v", err)
 	}
 	return chainDb
 }
@@ -912,10 +912,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		_, err := core.WriteTestNetGenesisBlock(chainDb)
 		if err != nil {
-			log.Crit(fmt.Sprint(err))
+			Fatalf("Failed to write testnet genesis: %v", err)
 		}
 	}
-
 	chainConfig := MakeChainConfigFromDb(ctx, chainDb)
 
 	pow := pow.PoW(core.FakePow{})
@@ -924,7 +923,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	}
 	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
 	if err != nil {
-		log.Crit(fmt.Sprintf("Could not start chainmanager: %v", err))
+		Fatalf("Could not start chainmanager: %v", err)
 	}
 	return chain, chainDb
 }

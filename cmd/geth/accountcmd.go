@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -196,8 +195,7 @@ func accountList(ctx *cli.Context) error {
 func unlockAccount(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(ks, address)
 	if err != nil {
-		fmt.Printf("Fatal: Could not list accounts: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Could not list accounts: %v", err)
 	}
 	for trials := 0; trials < 3; trials++ {
 		prompt := fmt.Sprintf("Unlocking account %s | Attempt %d/%d", address, trials+1, 3)
@@ -217,8 +215,7 @@ func unlockAccount(ctx *cli.Context, ks *keystore.KeyStore, address string, i in
 		}
 	}
 	// All trials expended to unlock account, bail out
-	fmt.Printf("Fatal: Failed to unlock account %s (%v)\n", address, err)
-	os.Exit(1)
+	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
 
 	return accounts.Account{}, ""
 }
@@ -239,18 +236,15 @@ func getPassPhrase(prompt string, confirmation bool, i int, passwords []string) 
 	}
 	password, err := console.Stdin.PromptPassword("Passphrase: ")
 	if err != nil {
-		fmt.Printf("Fatal: Failed to read passphrase: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Failed to read passphrase: %v", err)
 	}
 	if confirmation {
 		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
 		if err != nil {
-			fmt.Printf("Fatal: Failed to read passphrase confirmation: %v\n", err)
-			os.Exit(1)
+			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
 		}
 		if password != confirm {
-			fmt.Printf("Fatal: Passphrases do not match\n")
-			os.Exit(1)
+			utils.Fatalf("Passphrases do not match")
 		}
 	}
 	return password
@@ -270,8 +264,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 		}
 	}
 	if match == nil {
-		fmt.Printf("Fatal: None of the listed files could be unlocked.\n")
-		os.Exit(1)
+		utils.Fatalf("None of the listed files could be unlocked.")
 	}
 	fmt.Printf("Your passphrase unlocked %s\n", match.URL)
 	fmt.Println("In order to avoid this warning, you need to remove the following duplicate key files:")
@@ -291,8 +284,7 @@ func accountCreate(ctx *cli.Context) error {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	account, err := ks.NewAccount(password)
 	if err != nil {
-		fmt.Printf("Fatal: Failed to create account: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Failed to create account: %v", err)
 	}
 	fmt.Printf("Address: {%x}\n", account.Address)
 	return nil
@@ -302,8 +294,7 @@ func accountCreate(ctx *cli.Context) error {
 // one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
-		fmt.Printf("Fatal: No accounts specified to update\n")
-		os.Exit(1)
+		utils.Fatalf("No accounts specified to update")
 	}
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -311,8 +302,7 @@ func accountUpdate(ctx *cli.Context) error {
 	account, oldPassword := unlockAccount(ctx, ks, ctx.Args().First(), 0, nil)
 	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
 	if err := ks.Update(account, oldPassword, newPassword); err != nil {
-		fmt.Printf("Fatal: Could not update the account: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Could not update the account: %v", err)
 	}
 	return nil
 }
@@ -320,13 +310,11 @@ func accountUpdate(ctx *cli.Context) error {
 func importWallet(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
-		fmt.Printf("Fatal: keyfile must be given as argument\n")
-		os.Exit(1)
+		utils.Fatalf("keyfile must be given as argument")
 	}
 	keyJson, err := ioutil.ReadFile(keyfile)
 	if err != nil {
-		fmt.Printf("Fatal: Could not read wallet file: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
@@ -335,8 +323,7 @@ func importWallet(ctx *cli.Context) error {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	acct, err := ks.ImportPreSaleKey(keyJson, passphrase)
 	if err != nil {
-		fmt.Printf("Fatal: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("%v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
 	return nil
@@ -345,13 +332,11 @@ func importWallet(ctx *cli.Context) error {
 func accountImport(ctx *cli.Context) error {
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
-		fmt.Printf("Fatal: keyfile must be given as argument\n")
-		os.Exit(1)
+		utils.Fatalf("keyfile must be given as argument")
 	}
 	key, err := crypto.LoadECDSA(keyfile)
 	if err != nil {
-		fmt.Printf("Fatal: Failed to load the private key: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Failed to load the private key: %v", err)
 	}
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
@@ -359,8 +344,7 @@ func accountImport(ctx *cli.Context) error {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	acct, err := ks.ImportECDSA(key, passphrase)
 	if err != nil {
-		fmt.Printf("Fatal: Could not create the account: %v\n", err)
-		os.Exit(1)
+		utils.Fatalf("Could not create the account: %v", err)
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
 	return nil

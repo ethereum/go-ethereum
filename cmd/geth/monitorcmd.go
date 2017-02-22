@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gizak/termui"
@@ -77,14 +76,14 @@ func monitor(ctx *cli.Context) error {
 	// Attach to an Ethereum node over IPC or RPC
 	endpoint := ctx.String(monitorCommandAttachFlag.Name)
 	if client, err = dialRPC(endpoint); err != nil {
-		log.Crit(fmt.Sprintf("Unable to attach to geth node: %v", err))
+		utils.Fatalf("Unable to attach to geth node: %v", err)
 	}
 	defer client.Close()
 
 	// Retrieve all the available metrics and resolve the user pattens
 	metrics, err := retrieveMetrics(client)
 	if err != nil {
-		log.Crit(fmt.Sprintf("Failed to retrieve system metrics: %v", err))
+		utils.Fatalf("Failed to retrieve system metrics: %v", err)
 	}
 	monitored := resolveMetrics(metrics, ctx.Args())
 	if len(monitored) == 0 {
@@ -92,18 +91,18 @@ func monitor(ctx *cli.Context) error {
 		sort.Strings(list)
 
 		if len(list) > 0 {
-			log.Crit(fmt.Sprintf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - ")))
+			utils.Fatalf("No metrics specified.\n\nAvailable:\n - %s", strings.Join(list, "\n - "))
 		} else {
-			log.Crit(fmt.Sprintf("No metrics collected by geth (--%s).\n", utils.MetricsEnabledFlag.Name))
+			utils.Fatalf("No metrics collected by geth (--%s).\n", utils.MetricsEnabledFlag.Name)
 		}
 	}
 	sort.Strings(monitored)
 	if cols := len(monitored) / ctx.Int(monitorCommandRowsFlag.Name); cols > 6 {
-		log.Crit(fmt.Sprintf("Requested metrics (%d) spans more that 6 columns:\n - %s", len(monitored), strings.Join(monitored, "\n - ")))
+		utils.Fatalf("Requested metrics (%d) spans more that 6 columns:\n - %s", len(monitored), strings.Join(monitored, "\n - "))
 	}
 	// Create and configure the chart UI defaults
 	if err := termui.Init(); err != nil {
-		log.Crit(fmt.Sprintf("Unable to initialize terminal UI: %v", err))
+		utils.Fatalf("Unable to initialize terminal UI: %v", err)
 	}
 	defer termui.Close()
 
@@ -187,7 +186,7 @@ func resolveMetric(metrics map[string]interface{}, pattern string, path string) 
 	if len(parts) > 1 {
 		for _, variation := range strings.Split(parts[0], ",") {
 			if submetrics, ok := metrics[variation].(map[string]interface{}); !ok {
-				log.Crit(fmt.Sprintf("Failed to retrieve system metrics: %s", path+variation))
+				utils.Fatalf("Failed to retrieve system metrics: %s", path+variation)
 				return nil
 			} else {
 				results = append(results, resolveMetric(submetrics, parts[1], path+variation+"/")...)
@@ -206,7 +205,7 @@ func resolveMetric(metrics map[string]interface{}, pattern string, path string) 
 			results = append(results, expandMetrics(metric, path+variation+"/")...)
 
 		default:
-			log.Crit(fmt.Sprintf("Metric pattern resolved to unexpected type: %v", reflect.TypeOf(metric)))
+			utils.Fatalf("Metric pattern resolved to unexpected type: %v", reflect.TypeOf(metric))
 			return nil
 		}
 	}
@@ -228,7 +227,7 @@ func expandMetrics(metrics map[string]interface{}, path string) []string {
 			list = append(list, expandMetrics(metric, path+name+"/")...)
 
 		default:
-			log.Crit(fmt.Sprintf("Metric pattern %s resolved to unexpected type: %v", path+name, reflect.TypeOf(metric)))
+			utils.Fatalf("Metric pattern %s resolved to unexpected type: %v", path+name, reflect.TypeOf(metric))
 			return nil
 		}
 	}
