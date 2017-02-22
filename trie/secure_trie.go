@@ -159,7 +159,7 @@ func (t *SecureTrie) Iterator() *Iterator {
 	return t.trie.Iterator()
 }
 
-func (t *SecureTrie) NodeIterator() *NodeIterator {
+func (t *SecureTrie) NodeIterator() NodeIterator {
 	return NewNodeIterator(&t.trie)
 }
 
