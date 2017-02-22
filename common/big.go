@@ -28,9 +28,3 @@ var (
 	Big256 = big.NewInt(0xff)
 	Big257 = big.NewInt(257)
 )
-
-func String2Big(num string) *big.Int {
-	n := new(big.Int)
-	n.SetString(num, 0)
-	return n
-}
