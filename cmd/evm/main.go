@@ -118,7 +118,7 @@ func run(ctx *cli.Context) error {
 		db, _      = ethdb.NewMemDatabase()
 		statedb, _ = state.New(common.Hash{}, db)
 		address    = common.StringToAddress("sender")
-		sender     = vm.Reference(address)
+		sender     = vm.AccountRef(address)
 	)
 	statedb.CreateAccount(common.StringToAddress("sender"))
 
