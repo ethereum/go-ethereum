@@ -105,11 +105,13 @@ func BenchmarkMipmaps(b *testing.B) {
 	}
 	b.ResetTimer()
 
-	filter := New(backend, true)
-	filter.SetAddresses([]common.Address{addr1, addr2, addr3, addr4})
-	filter.SetBeginBlock(0)
-	filter.SetEndBlock(-1)
+	crit := FilterCriteria{
+		FromBlock: big.NewInt(0),
+		ToBlock:   big.NewInt(-1),
+		Addresses: []common.Address{addr1, addr2, addr3, addr4},
+	}
 
+	filter := New(backend, crit, true)
 	for i := 0; i < b.N; i++ {
 		logs, _ := filter.Find(context.Background())
 		if len(logs) != 4 {
@@ -208,22 +210,22 @@ func TestFilters(t *testing.T) {
 		}
 	}
 
-	filter := New(backend, true)
-	filter.SetAddresses([]common.Address{addr})
-	filter.SetTopics([][]common.Hash{{hash1, hash2, hash3, hash4}})
-	filter.SetBeginBlock(0)
-	filter.SetEndBlock(-1)
+	toCrit := func(addresses []common.Address, topics [][]common.Hash, begin, end int64) FilterCriteria {
+		return FilterCriteria{
+			FromBlock: big.NewInt(begin),
+			ToBlock:   big.NewInt(end),
+			Addresses: addresses,
+			Topics:    topics,
+		}
+	}
 
+	filter := New(backend, toCrit([]common.Address{addr}, [][]common.Hash{{hash1, hash2, hash3, hash4}}, 0, -1), true)
 	logs, _ := filter.Find(context.Background())
 	if len(logs) != 4 {
 		t.Error("expected 4 log, got", len(logs))
 	}
 
-	filter = New(backend, true)
-	filter.SetAddresses([]common.Address{addr})
-	filter.SetTopics([][]common.Hash{{hash3}})
-	filter.SetBeginBlock(900)
-	filter.SetEndBlock(999)
+	filter = New(backend, toCrit([]common.Address{addr}, [][]common.Hash{{hash3}}, 900, 999), true)
 	logs, _ = filter.Find(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
@@ -232,11 +234,7 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = New(backend, true)
-	filter.SetAddresses([]common.Address{addr})
-	filter.SetTopics([][]common.Hash{{hash3}})
-	filter.SetBeginBlock(990)
-	filter.SetEndBlock(-1)
+	filter = New(backend, toCrit([]common.Address{addr}, [][]common.Hash{{hash3}}, 990, -1), true)
 	logs, _ = filter.Find(context.Background())
 	if len(logs) != 1 {
 		t.Error("expected 1 log, got", len(logs))
@@ -245,43 +243,27 @@ func TestFilters(t *testing.T) {
 		t.Errorf("expected log[0].Topics[0] to be %x, got %x", hash3, logs[0].Topics[0])
 	}
 
-	filter = New(backend, true)
-	filter.SetTopics([][]common.Hash{{hash1, hash2}})
-	filter.SetBeginBlock(1)
-	filter.SetEndBlock(10)
-
+	filter = New(backend, toCrit([]common.Address{}, [][]common.Hash{{hash1, hash2}}, 1, 10), true)
 	logs, _ = filter.Find(context.Background())
 	if len(logs) != 2 {
 		t.Error("expected 2 log, got", len(logs))
 	}
 
 	failHash := common.BytesToHash([]byte("fail"))
-	filter = New(backend, true)
-	filter.SetTopics([][]common.Hash{{failHash}})
-	filter.SetBeginBlock(0)
-	filter.SetEndBlock(-1)
-
+	filter = New(backend, toCrit([]common.Address{}, [][]common.Hash{{failHash}}, 0, -1), true)
 	logs, _ = filter.Find(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
 	failAddr := common.BytesToAddress([]byte("failmenow"))
-	filter = New(backend, true)
-	filter.SetAddresses([]common.Address{failAddr})
-	filter.SetBeginBlock(0)
-	filter.SetEndBlock(-1)
-
+	filter = New(backend, toCrit([]common.Address{failAddr}, [][]common.Hash{{}}, 0, -1), true)
 	logs, _ = filter.Find(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))
 	}
 
-	filter = New(backend, true)
-	filter.SetTopics([][]common.Hash{{failHash}, {hash1}})
-	filter.SetBeginBlock(0)
-	filter.SetEndBlock(-1)
-
+	filter = New(backend, toCrit([]common.Address{}, [][]common.Hash{{failHash}, {hash1}}, 0, -1), true)
 	logs, _ = filter.Find(context.Background())
 	if len(logs) != 0 {
 		t.Error("expected 0 log, got", len(logs))

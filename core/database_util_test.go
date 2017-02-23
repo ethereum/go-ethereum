@@ -517,10 +517,12 @@ func TestMipmapBloom(t *testing.T) {
 	WriteMipmapBloom(db, 1, types.Receipts{receipt1})
 	WriteMipmapBloom(db, 2, types.Receipts{receipt2})
 
-	for _, level := range MIPMapLevels {
-		bloom := GetMipmapBloom(db, 2, level)
-		if !bloom.Test(new(big.Int).SetBytes([]byte("address1"))) {
-			t.Error("expected test to be included on level:", level)
+	for depth, _ := range AddrBloomMapLevels {
+		_, bloom, err := GetBloomLogs(db, 2, depth)
+		if err != nil {
+			t.Errorf("could not load bloom: %v", err)
+		} else if !bloom.Test(common.BytesToAddress([]byte("address")).Bytes()) {
+			t.Error("expected test to be included on depth:", depth)
 		}
 	}
 
@@ -538,8 +540,12 @@ func TestMipmapBloom(t *testing.T) {
 	}
 	WriteMipmapBloom(db, 1000, types.Receipts{receipt})
 
-	bloom := GetMipmapBloom(db, 1000, 1000)
-	if bloom.TestBytes([]byte("test")) {
+	_, bloom, err := GetBloomLogs(db, 1000, 3)
+	if err != nil {
+		t.Fatalf("could not load bloom: %v", err)
+	}
+
+	if bloom.Test([]byte("test")) {
 		t.Error("test should not have been included")
 	}
 }
@@ -598,8 +604,11 @@ func TestMipmapChain(t *testing.T) {
 		}
 	}
 
-	bloom := GetMipmapBloom(db, 0, 1000)
-	if bloom.TestBytes(addr2[:]) {
+	_, bloom, err := GetBloomLogs(db, AddrBloomMapLevels[0]+1, 0)
+	if err != nil {
+		t.Fatalf("could not load bloom: %v", err)
+	}
+	if bloom.Test(addr2.Bytes()) {
 		t.Error("address was included in bloom and should not have")
 	}
 }
