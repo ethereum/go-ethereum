@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"strings"
@@ -108,7 +109,8 @@ func localConsole(ctx *cli.Context) error {
 // console to it.
 func remoteConsole(ctx *cli.Context) error {
 	// Attach to a remotely running geth instance and start the JavaScript console
-	client, err := dialRPC(ctx.Args().First())
+	dialctx := rpc.MakeTLSConfigContext(utils.MakeClientTLSConfig(ctx))
+	client, err := dialRPCContext(dialctx, ctx.Args().First())
 	if err != nil {
 		utils.Fatalf("Unable to attach to remote geth: %v", err)
 	}
@@ -137,9 +139,14 @@ func remoteConsole(ctx *cli.Context) error {
 }
 
 // dialRPC returns a RPC client which connects to the given endpoint.
+func dialRPC(endpoint string) (*rpc.Client, error) {
+	return dialRPCContext(context.Background(), endpoint)
+}
+
+// dialRPCContext returns a RPC client which connects to the given endpoint.
 // The check for empty endpoint implements the defaulting logic
 // for "geth attach" and "geth monitor" with no argument.
-func dialRPC(endpoint string) (*rpc.Client, error) {
+func dialRPCContext(ctx context.Context, endpoint string) (*rpc.Client, error) {
 	if endpoint == "" {
 		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
 	} else if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
@@ -147,7 +154,7 @@ func dialRPC(endpoint string) (*rpc.Client, error) {
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
-	return rpc.Dial(endpoint)
+	return rpc.DialContext(ctx, endpoint)
 }
 
 // ephemeralConsole starts a new geth node, attaches an ephemeral JavaScript
