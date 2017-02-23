@@ -18,6 +18,8 @@ package whisperv5
 
 import (
 	"crypto/ecdsa"
+	crand "crypto/rand"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -39,20 +41,41 @@ type Filter struct {
 }
 
 type Filters struct {
-	id       uint32 // can contain any value except zero
-	watchers map[uint32]*Filter
+	watchers map[string]*Filter
 	whisper  *Whisper
 	mutex    sync.RWMutex
 }
 
 func NewFilters(w *Whisper) *Filters {
 	return &Filters{
-		watchers: make(map[uint32]*Filter),
+		watchers: make(map[string]*Filter),
 		whisper:  w,
 	}
 }
 
-func (fs *Filters) Install(watcher *Filter) uint32 {
+func (fs *Filters) generateRandomID() (id string, err error) {
+	buf := make([]byte, 20)
+	for i := 0; i < 3; i++ {
+		_, err = crand.Read(buf)
+		if err != nil {
+			continue
+		}
+		if !validateSymmetricKey(buf) {
+			err = fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+			continue
+		}
+		id = common.Bytes2Hex(buf)
+		if fs.watchers[id] != nil {
+			err = fmt.Errorf("error in generateRandomID: generated same ID twice")
+			continue
+		}
+		return id, err
+	}
+
+	return "", err
+}
+
+func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
@@ -60,21 +83,23 @@ func (fs *Filters) Install(watcher *Filter) uint32 {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	fs.id++
-	fs.watchers[fs.id] = watcher
-	return fs.id
+	id, err := fs.generateRandomID()
+	if err == nil {
+		fs.watchers[id] = watcher
+	}
+	return id, err
 }
 
-func (fs *Filters) Uninstall(id uint32) {
+func (fs *Filters) Uninstall(id string) {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	delete(fs.watchers, id)
 }
 
-func (fs *Filters) Get(i uint32) *Filter {
+func (fs *Filters) Get(id string) *Filter {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
-	return fs.watchers[i]
+	return fs.watchers[id]
 }
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {

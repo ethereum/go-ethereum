@@ -22,8 +22,6 @@ package main
 import (
 	"bufio"
 	"crypto/ecdsa"
-	"crypto/sha1"
-	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/hex"
@@ -49,6 +47,7 @@ import (
 )
 
 const quitCommand = "~Q"
+const symKeyName = "da919ea33001b04dfc630522e33078ec0df11"
 
 // singletons
 var (
@@ -67,7 +66,8 @@ var (
 	asymKey    *ecdsa.PrivateKey
 	nodeid     *ecdsa.PrivateKey
 	topic      whisper.TopicType
-	filterID   uint32
+	filterID   string
+	symPass    string
 	msPassword string
 )
 
@@ -82,13 +82,13 @@ var (
 	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
 	generateKey    = flag.Bool("k", false, "generate and show the private key")
 
+	argVerbosity = flag.Int("verbosity", logger.Warn, "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
 	argPoW       = flag.Float64("pow", whisper.MinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
 	argServerPoW = flag.Float64("mspow", whisper.MinimumPoW, "PoW requirement for Mail Server request")
 
 	argIP     = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
-	argSalt   = flag.String("salt", "", "salt (for topic and key derivation)")
 	argPub    = flag.String("pub", "", "public key for asymmetric encryption")
 	argDBPath = flag.String("dbpath", "", "path to the server's DB directory")
 	argIDFile = flag.String("idfile", "", "file name with node id (private key)")
@@ -146,7 +146,6 @@ func echo() {
 	fmt.Printf("pow = %f \n", *argPoW)
 	fmt.Printf("mspow = %f \n", *argServerPoW)
 	fmt.Printf("ip = %s \n", *argIP)
-	fmt.Printf("salt = %s \n", *argSalt)
 	fmt.Printf("pub = %s \n", common.ToHex(crypto.FromECDSAPub(pub)))
 	fmt.Printf("idfile = %s \n", *argIDFile)
 	fmt.Printf("dbpath = %s \n", *argDBPath)
@@ -154,7 +153,7 @@ func echo() {
 }
 
 func initialize() {
-	glog.SetV(logger.Warn)
+	glog.SetV(*argVerbosity)
 	glog.SetToStderr(true)
 
 	done = make(chan struct{})
@@ -172,10 +171,7 @@ func initialize() {
 	}
 
 	if *testMode {
-		password := []byte("test password for symmetric encryption")
-		salt := []byte("test salt for symmetric encryption")
-		symKey = pbkdf2.Key(password, salt, 64, 32, sha256.New)
-		topic = whisper.TopicType{0xFF, 0xFF, 0xFF, 0xFF}
+		symPass = "wwww" // ascii code: 0x77777777
 		msPassword = "mail server test password"
 	}
 
@@ -286,20 +282,18 @@ func configureNode() {
 		}
 	}
 
-	if !*asymmetricMode && !*forwarderMode && !*testMode {
-		pass, err := console.Stdin.PromptPassword("Please enter the password: ")
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase: %v", err)
+	if !*asymmetricMode && !*forwarderMode {
+		if len(symPass) == 0 {
+			symPass, err = console.Stdin.PromptPassword("Please enter the password: ")
+			if err != nil {
+				utils.Fatalf("Failed to read passphrase: %v", err)
+			}
 		}
 
-		if len(*argSalt) == 0 {
-			argSalt = scanLineA("Please enter the salt: ")
-		}
-
-		symKey = pbkdf2.Key([]byte(pass), []byte(*argSalt), 65356, 32, sha256.New)
-
+		shh.AddSymKey(symKeyName, []byte(symPass))
+		symKey = shh.GetSymKey(symKeyName)
 		if len(*argTopic) == 0 {
-			generateTopic([]byte(pass), []byte(*argSalt))
+			generateTopic([]byte(symPass))
 		}
 	}
 
@@ -315,19 +309,17 @@ func configureNode() {
 		Topics:    []whisper.TopicType{topic},
 		AcceptP2P: p2pAccept,
 	}
-	filterID = shh.Watch(&filter)
+	filterID, err = shh.Watch(&filter)
+	if err != nil {
+		utils.Fatalf("Failed to install filter: %s", err)
+	}
 	fmt.Printf("Filter is configured for the topic: %x \n", topic)
 }
 
-func generateTopic(password, salt []byte) {
-	const rounds = 4000
-	const size = 128
-	x1 := pbkdf2.Key(password, salt, rounds, size, sha512.New)
-	x2 := pbkdf2.Key(password, salt, rounds, size, sha1.New)
-	x3 := pbkdf2.Key(x1, x2, rounds, size, sha256.New)
-
-	for i := 0; i < size; i++ {
-		topic[i%whisper.TopicLength] ^= x3[i]
+func generateTopic(password []byte) {
+	x := pbkdf2.Key(password, password, 8196, 128, sha512.New)
+	for i := 0; i < len(x); i++ {
+		topic[i%whisper.TopicLength] ^= x[i]
 	}
 }
 
@@ -379,9 +371,9 @@ func sendLoop() {
 		if *asymmetricMode {
 			// print your own message for convenience,
 			// because in asymmetric mode it is impossible to decrypt it
-			hour, min, sec := time.Now().Clock()
+			timestamp := time.Now().Unix()
 			from := crypto.PubkeyToAddress(asymKey.PublicKey)
-			fmt.Printf("\n%02d:%02d:%02d <%x>: %s\n", hour, min, sec, from, s)
+			fmt.Printf("\n%d <%x>: %s\n", timestamp, from, s)
 		}
 	}
 }

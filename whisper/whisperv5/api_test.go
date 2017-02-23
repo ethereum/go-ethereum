@@ -42,7 +42,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("wrong version: %d.", ver)
 	}
 
-	mail := api.GetFilterChanges(1)
+	mail := api.GetFilterChanges("non-existent-id")
 	if len(mail) != 0 {
 		t.Fatalf("failed GetFilterChanges: premature result")
 	}
@@ -152,7 +152,7 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 	"keyname":"testname",
 	"pow":2.34,
 	"topics":["0x00000000", "0x007f80ff", "0xff807f00", "0xf26e7779"],
-	"acceptP2P":true
+	"p2p":true
 	}`)
 
 	var f WhisperFilterArgs
@@ -212,8 +212,8 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	"payload":"0x7061796C6F61642073686F756C642062652070736575646F72616E646F6D",
 	"worktime":777,
 	"pow":3.1416,
-	"filterID":64,
-	"peerID":"0xf26e7779"
+	"filterid":"test-filter-id",
+	"peerid":"0xf26e7779"
 	}`)
 
 	var a PostArgs
@@ -249,15 +249,15 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	if a.PoW != 3.1416 {
 		t.Fatalf("wrong pow: %f.", a.PoW)
 	}
-	if a.FilterID != 64 {
-		t.Fatalf("wrong FilterID: %d.", a.FilterID)
+	if a.FilterID != "test-filter-id" {
+		t.Fatalf("wrong FilterID: %s.", a.FilterID)
 	}
 	if !bytes.Equal(a.PeerID[:], a.Topic[:]) {
 		t.Fatalf("wrong PeerID: %x.", a.PeerID)
 	}
 }
 
-func waitForMessage(api *PublicWhisperAPI, id uint32, target int) bool {
+func waitForMessage(api *PublicWhisperAPI, id string, target int) bool {
 	for i := 0; i < 64; i++ {
 		all := api.GetMessages(id)
 		if len(all) >= target {
