@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync/atomic"
@@ -72,16 +71,6 @@ Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.
-`,
-	}
-	upgradedbCommand = cli.Command{
-		Action:    upgradeDB,
-		Name:      "upgradedb",
-		Usage:     "Upgrade chainblock database",
-		ArgsUsage: " ",
-		Category:  "BLOCKCHAIN COMMANDS",
-		Description: `
-TODO: Please write this
 `,
 	}
 	removedbCommand = cli.Command{
@@ -255,49 +244,6 @@ func removeDB(ctx *cli.Context) error {
 	return nil
 }
 
-func upgradeDB(ctx *cli.Context) error {
-	log.Info(fmt.Sprint("Upgrading blockchain database"))
-
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	chain, chainDb := utils.MakeChain(ctx, stack)
-	bcVersion := core.GetBlockChainVersion(chainDb)
-	if bcVersion == 0 {
-		bcVersion = core.BlockChainVersion
-	}
-
-	// Export the current chain.
-	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
-	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
-	if err := utils.ExportChain(chain, exportFile); err != nil {
-		utils.Fatalf("Unable to export chain for reimport %s", err)
-	}
-	chainDb.Close()
-	if dir := dbDirectory(chainDb); dir != "" {
-		os.RemoveAll(dir)
-	}
-
-	// Import the chain file.
-	chain, chainDb = utils.MakeChain(ctx, stack)
-	core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
-	err := utils.ImportChain(chain, exportFile)
-	chainDb.Close()
-	if err != nil {
-		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)", err, exportFile)
-	} else {
-		os.Remove(exportFile)
-		log.Info(fmt.Sprint("Import finished"))
-	}
-	return nil
-}
-
-func dbDirectory(db ethdb.Database) string {
-	ldb, ok := db.(*ethdb.LDBDatabase)
-	if !ok {
-		return ""
-	}
-	return ldb.Path()
-}
-
 func dump(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
@@ -328,10 +274,4 @@ func dump(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
-}
-
-func closeAll(dbs ...ethdb.Database) {
-	for _, db := range dbs {
-		db.Close()
-	}
 }
