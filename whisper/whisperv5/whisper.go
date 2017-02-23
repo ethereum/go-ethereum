@@ -28,8 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/crypto/pbkdf2"
@@ -303,7 +302,7 @@ func (w *Whisper) Send(envelope *Envelope) error {
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
 func (w *Whisper) Start(*p2p.Server) error {
-	glog.V(logger.Info).Infoln("Whisper started")
+	log.Info(fmt.Sprint("Whisper started"))
 	go w.update()
 
 	numCPU := runtime.NumCPU()
@@ -318,7 +317,7 @@ func (w *Whisper) Start(*p2p.Server) error {
 // of the Whisper protocol.
 func (w *Whisper) Stop() error {
 	close(w.quit)
-	glog.V(logger.Info).Infoln("Whisper stopped")
+	log.Info(fmt.Sprint("Whisper stopped"))
 	return nil
 }
 
@@ -360,19 +359,19 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		switch packet.Code {
 		case statusCode:
 			// this should not happen, but no need to panic; just ignore this message.
-			glog.V(logger.Warn).Infof("%v: unxepected status message received", p.peer)
+			log.Warn(fmt.Sprintf("%v: unxepected status message received", p.peer))
 		case messagesCode:
 			// decode the contained envelopes
 			var envelopes []*Envelope
 			if err := packet.Decode(&envelopes); err != nil {
-				glog.V(logger.Warn).Infof("%v: failed to decode envelope: [%v], peer will be disconnected", p.peer, err)
+				log.Warn(fmt.Sprintf("%v: failed to decode envelope: [%v], peer will be disconnected", p.peer, err))
 				return fmt.Errorf("garbage received")
 			}
 			// inject all envelopes into the internal pool
 			for _, envelope := range envelopes {
 				cached, err := wh.add(envelope)
 				if err != nil {
-					glog.V(logger.Warn).Infof("%v: bad envelope received: [%v], peer will be disconnected", p.peer, err)
+					log.Warn(fmt.Sprintf("%v: bad envelope received: [%v], peer will be disconnected", p.peer, err))
 					return fmt.Errorf("invalid envelope")
 				}
 				if cached {
@@ -387,7 +386,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if p.trusted {
 				var envelope Envelope
 				if err := packet.Decode(&envelope); err != nil {
-					glog.V(logger.Warn).Infof("%v: failed to decode direct message: [%v], peer will be disconnected", p.peer, err)
+					log.Warn(fmt.Sprintf("%v: failed to decode direct message: [%v], peer will be disconnected", p.peer, err))
 					return fmt.Errorf("garbage received (directMessage)")
 				}
 				wh.postEvent(&envelope, true)
@@ -397,7 +396,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if wh.mailServer != nil {
 				var request Envelope
 				if err := packet.Decode(&request); err != nil {
-					glog.V(logger.Warn).Infof("%v: failed to decode p2p request message: [%v], peer will be disconnected", p.peer, err)
+					log.Warn(fmt.Sprintf("%v: failed to decode p2p request message: [%v], peer will be disconnected", p.peer, err))
 					return fmt.Errorf("garbage received (p2p request)")
 				}
 				wh.mailServer.DeliverMail(p, &request)
@@ -431,7 +430,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		if envelope.Expiry+SynchAllowance*2 < now {
 			return false, fmt.Errorf("very old message")
 		} else {
-			glog.V(logger.Debug).Infof("expired envelope dropped [%x]", envelope.Hash())
+			log.Debug(fmt.Sprintf("expired envelope dropped [%x]", envelope.Hash()))
 			return false, nil // drop envelope without error
 		}
 	}
@@ -455,7 +454,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	}
 
 	if envelope.PoW() < MinimumPoW && !wh.test {
-		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash())
+		log.Debug(fmt.Sprintf("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash()))
 		return false, nil // drop envelope without error
 	}
 
@@ -475,9 +474,9 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	wh.poolMu.Unlock()
 
 	if alreadyCached {
-		glog.V(logger.Detail).Infof("whisper envelope already cached [%x]\n", envelope.Hash())
+		log.Trace(fmt.Sprintf("whisper envelope already cached [%x]\n", envelope.Hash()))
 	} else {
-		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
+		log.Trace(fmt.Sprintf("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope))
 		wh.stats.totalMemoryUsed += envelope.size()
 		wh.postEvent(envelope, false) // notify the local node about the new message
 		if wh.mailServer != nil {
@@ -509,7 +508,7 @@ func (w *Whisper) checkOverflow() {
 	if queueSize == messageQueueLimit {
 		if !w.overflow {
 			w.overflow = true
-			glog.V(logger.Warn).Infoln("message queue overflow")
+			log.Warn(fmt.Sprint("message queue overflow"))
 		}
 	} else if queueSize <= messageQueueLimit/2 {
 		if w.overflow {

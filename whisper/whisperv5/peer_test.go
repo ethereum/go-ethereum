@@ -107,9 +107,6 @@ func TestSimulation(t *testing.T) {
 }
 
 func initialize(t *testing.T) {
-	//glog.SetV(6)
-	//glog.SetToStderr(true)
-
 	var err error
 	ip := net.IPv4(127, 0, 0, 1)
 	port0 := 30303
