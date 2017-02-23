@@ -18,7 +18,7 @@ package whisperv5
 
 import (
 	"crypto/ecdsa"
-	"crypto/rand"
+	crand "crypto/rand"
 	"fmt"
 	"sync"
 
@@ -55,7 +55,7 @@ func NewFilters(w *Whisper) *Filters {
 func (fs *Filters) generateRandomID() (id string, err error) {
 	buf := make([]byte, 20)
 	for i := 0; i < 3; i++ {
-		_, err = rand.Read(buf)
+		_, err = crand.Read(buf)
 		if err != nil {
 			continue
 		}

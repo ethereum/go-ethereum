@@ -133,20 +133,14 @@ func (peer *Peer) marked(envelope *Envelope) bool {
 // expire iterates over all the known envelopes in the host and removes all
 // expired (unknown) ones from the known list.
 func (peer *Peer) expire() {
-	// Assemble the list of available envelopes
-	available := set.NewNonTS()
-	for _, envelope := range peer.host.Envelopes() {
-		available.Add(envelope.Hash())
-	}
-	// Cross reference availability with known status
 	unmark := make(map[common.Hash]struct{})
 	peer.known.Each(func(v interface{}) bool {
-		if !available.Has(v.(common.Hash)) {
+		if !peer.host.isEnvelopeCached(v.(common.Hash)) {
 			unmark[v.(common.Hash)] = struct{}{}
 		}
 		return true
 	})
-	// Dump all known but unavailable
+	// Dump all known but no longer cached
 	for hash := range unmark {
 		peer.known.Remove(hash)
 	}

@@ -64,6 +64,14 @@ func (api *PublicWhisperAPI) Version() (hexutil.Uint, error) {
 	return hexutil.Uint(api.whisper.Version()), nil
 }
 
+// Stats returns the Whisper statistics for diagnostics.
+func (api *PublicWhisperAPI) Stats() (string, error) {
+	if api.whisper == nil {
+		return "", whisperOffLineErr
+	}
+	return api.whisper.Stats(), nil
+}
+
 // MarkPeerTrusted marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
 func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
