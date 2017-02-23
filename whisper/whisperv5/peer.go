@@ -21,7 +21,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	set "gopkg.in/fatih/set.v0"
@@ -55,13 +56,13 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // into the network.
 func (p *Peer) start() {
 	go p.update()
-	log.Debug(fmt.Sprintf("%v: whisper started", p.peer))
+	glog.V(logger.Debug).Infof("%v: whisper started", p.peer)
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
 func (p *Peer) stop() {
 	close(p.quit)
-	log.Debug(fmt.Sprintf("%v: whisper stopped", p.peer))
+	glog.V(logger.Debug).Infof("%v: whisper stopped", p.peer)
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
@@ -110,7 +111,7 @@ func (p *Peer) update() {
 
 		case <-transmit.C:
 			if err := p.broadcast(); err != nil {
-				log.Info(fmt.Sprintf("%v: broadcast failed: %v", p.peer, err))
+				glog.V(logger.Info).Infof("%v: broadcast failed: %v", p.peer, err)
 				return
 			}
 
@@ -133,20 +134,14 @@ func (peer *Peer) marked(envelope *Envelope) bool {
 // expire iterates over all the known envelopes in the host and removes all
 // expired (unknown) ones from the known list.
 func (peer *Peer) expire() {
-	// Assemble the list of available envelopes
-	available := set.NewNonTS()
-	for _, envelope := range peer.host.Envelopes() {
-		available.Add(envelope.Hash())
-	}
-	// Cross reference availability with known status
 	unmark := make(map[common.Hash]struct{})
 	peer.known.Each(func(v interface{}) bool {
-		if !available.Has(v.(common.Hash)) {
+		if !peer.host.isEnvelopeCached(v.(common.Hash)) {
 			unmark[v.(common.Hash)] = struct{}{}
 		}
 		return true
 	})
-	// Dump all known but unavailable
+	// Dump all known but no longer cached
 	for hash := range unmark {
 		peer.known.Remove(hash)
 	}
@@ -171,7 +166,7 @@ func (p *Peer) broadcast() error {
 	if err := p2p.Send(p.ws, messagesCode, transmit); err != nil {
 		return err
 	}
-	log.Trace(fmt.Sprint(p.peer, "broadcasted", len(transmit), "message(s)"))
+	glog.V(logger.Detail).Infoln(p.peer, "broadcasted", len(transmit), "message(s)")
 	return nil
 }
 

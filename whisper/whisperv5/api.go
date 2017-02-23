@@ -25,7 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var whisperOffLineErr = errors.New("whisper is offline")
@@ -62,6 +63,14 @@ func (api *PublicWhisperAPI) Version() (hexutil.Uint, error) {
 		return 0, whisperOffLineErr
 	}
 	return hexutil.Uint(api.whisper.Version()), nil
+}
+
+// Stats returns the Whisper statistics for diagnostics.
+func (api *PublicWhisperAPI) Stats() (string, error) {
+	if api.whisper == nil {
+		return "", whisperOffLineErr
+	}
+	return api.whisper.Stats(), nil
 }
 
 // MarkPeerTrusted marks specific peer trusted, which will allow it
@@ -169,25 +178,25 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 
 	if len(args.Topics) == 0 && len(args.KeyName) != 0 {
 		info := "NewFilter: at least one topic must be specified"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return "", errors.New(info)
 	}
 
 	if len(args.KeyName) != 0 && len(filter.KeySym) == 0 {
 		info := "NewFilter: key was not found by name: " + args.KeyName
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return "", errors.New(info)
 	}
 
 	if len(args.To) == 0 && len(filter.KeySym) == 0 {
 		info := "NewFilter: filter must contain either symmetric or asymmetric key"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return "", errors.New(info)
 	}
 
 	if len(args.To) != 0 && len(filter.KeySym) != 0 {
 		info := "NewFilter: filter must not contain both symmetric and asymmetric key"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return "", errors.New(info)
 	}
 
@@ -195,13 +204,13 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 		dst := crypto.ToECDSAPub(common.FromHex(args.To))
 		if !ValidatePublicKey(dst) {
 			info := "NewFilter: Invalid 'To' address"
-			log.Error(fmt.Sprintf(info))
+			glog.V(logger.Error).Infof(info)
 			return "", errors.New(info)
 		}
 		filter.KeyAsym = api.whisper.GetIdentity(string(args.To))
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
-			log.Error(fmt.Sprintf(info))
+			glog.V(logger.Error).Infof(info)
 			return "", errors.New(info)
 		}
 	}
@@ -209,7 +218,7 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 	if len(args.From) > 0 {
 		if !ValidatePublicKey(filter.Src) {
 			info := "NewFilter: Invalid 'From' address"
-			log.Error(fmt.Sprintf(info))
+			glog.V(logger.Error).Infof(info)
 			return "", errors.New(info)
 		}
 	}
@@ -268,13 +277,13 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		pub := crypto.ToECDSAPub(common.FromHex(args.From))
 		if !ValidatePublicKey(pub) {
 			info := "Post: Invalid 'From' address"
-			log.Error(fmt.Sprintf(info))
+			glog.V(logger.Error).Infof(info)
 			return errors.New(info)
 		}
 		params.Src = api.whisper.GetIdentity(string(args.From))
 		if params.Src == nil {
 			info := "Post: non-existent identity provided"
-			log.Error(fmt.Sprintf(info))
+			glog.V(logger.Error).Infof(info)
 			return errors.New(info)
 		}
 	}
@@ -282,7 +291,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	filter := api.whisper.GetFilter(args.FilterID)
 	if filter == nil && len(args.FilterID) > 0 {
 		info := fmt.Sprintf("Post: wrong filter id %s", args.FilterID)
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 
@@ -298,7 +307,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 			sz := len(filter.Topics)
 			if sz < 1 {
 				info := fmt.Sprintf("Post: no topics in filter # %s", args.FilterID)
-				log.Error(fmt.Sprintf(info))
+				glog.V(logger.Error).Infof(info)
 				return errors.New(info)
 			} else if sz == 1 {
 				params.Topic = filter.Topics[0]
@@ -313,26 +322,26 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	// validate
 	if len(args.KeyName) != 0 && len(params.KeySym) == 0 {
 		info := "Post: key was not found by name: " + args.KeyName
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 
 	if len(args.To) == 0 && len(params.KeySym) == 0 {
 		info := "Post: message must be encrypted either symmetrically or asymmetrically"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 
 	if len(args.To) != 0 && len(params.KeySym) != 0 {
 		info := "Post: ambigous encryption method requested"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 
 	if len(args.To) > 0 {
 		if !ValidatePublicKey(params.Dst) {
 			info := "Post: Invalid 'To' address"
-			log.Error(fmt.Sprintf(info))
+			glog.V(logger.Error).Infof(info)
 			return errors.New(info)
 		}
 	}
@@ -341,17 +350,17 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	message := NewSentMessage(&params)
 	envelope, err := message.Wrap(&params)
 	if err != nil {
-		log.Error(fmt.Sprintf(err.Error()))
+		glog.V(logger.Error).Infof(err.Error())
 		return err
 	}
 	if len(envelope.Data) > MaxMessageLength {
 		info := "Post: message is too big"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 	if (envelope.Topic == TopicType{} && envelope.IsSymmetric()) {
 		info := "Post: topic is missing for symmetric encryption"
-		log.Error(fmt.Sprintf(info))
+		glog.V(logger.Error).Infof(info)
 		return errors.New(info)
 	}
 

@@ -107,7 +107,8 @@ func TestSimulation(t *testing.T) {
 }
 
 func initialize(t *testing.T) {
-	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat())))
+	//glog.SetV(6)
+	//glog.SetToStderr(true)
 
 	var err error
 	ip := net.IPv4(127, 0, 0, 1)
