@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,6 +18,30 @@ const (
 	floatFormat    = 'f'
 	termMsgJust    = 40
 )
+
+// locationTrims are trimmed for display to avoid unwieldy log lines.
+var locationTrims = []string{
+	"github.com/ethereum/go-ethereum/",
+	"github.com/ethereum/ethash/",
+}
+
+// PrintOrigins sets or unsets log location (file:line) printing for terminal
+// format output.
+func PrintOrigins(print bool) {
+	if print {
+		atomic.StoreUint32(&locationEnabled, 1)
+	} else {
+		atomic.StoreUint32(&locationEnabled, 0)
+	}
+}
+
+// locationEnabled is an atomic flag controlling whether the terminal formatter
+// should append the log locations too when printing entries.
+var locationEnabled uint32
+
+// locationLength is the maxmimum path length encountered, which all logs are
+// padded to to aid in alignment.
+var locationLength uint32
 
 type Format interface {
 	Format(r *Record) []byte
@@ -64,12 +89,33 @@ func TerminalFormat() Format {
 
 		b := &bytes.Buffer{}
 		lvl := strings.ToUpper(r.Lvl.String())
-		if color > 0 {
-			fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), r.Msg)
-		} else {
-			fmt.Fprintf(b, "[%s] [%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Msg)
-		}
+		if atomic.LoadUint32(&locationEnabled) != 0 {
+			// Log origin printing was requested, format the location path and line number
+			location := fmt.Sprintf("%+v", r.Call)
+			for _, prefix := range locationTrims {
+				location = strings.TrimPrefix(location, prefix)
+			}
+			// Maintain the maximum location length for fancyer alignment
+			align := int(atomic.LoadUint32(&locationLength))
+			if align < len(location) {
+				align = len(location)
+				atomic.StoreUint32(&locationLength, uint32(align))
+			}
+			padding := strings.Repeat(" ", align-len(location))
 
+			// Assemble and print the log heading
+			if color > 0 {
+				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s|%s]%s %s ", color, lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
+			} else {
+				fmt.Fprintf(b, "[%s] [%s|%s]%s %s ", lvl, r.Time.Format(termTimeFormat), location, padding, r.Msg)
+			}
+		} else {
+			if color > 0 {
+				fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %s ", color, lvl, r.Time.Format(termTimeFormat), r.Msg)
+			} else {
+				fmt.Fprintf(b, "[%s] [%s] %s ", lvl, r.Time.Format(termTimeFormat), r.Msg)
+			}
+		}
 		// try to justify the log output for short messages
 		if len(r.Ctx) > 0 && len(r.Msg) < termMsgJust {
 			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-len(r.Msg)))
