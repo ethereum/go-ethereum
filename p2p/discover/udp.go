@@ -26,8 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -224,7 +223,7 @@ func ListenUDP(priv *ecdsa.PrivateKey, laddr string, natm nat.Interface, nodeDBP
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Info).Infoln("Listening,", tab.self)
+	log.Info(fmt.Sprint("Listening,", tab.self))
 	return tab, nil
 }
 
@@ -294,7 +293,7 @@ func (t *udp) findnode(toid NodeID, toaddr *net.UDPAddr, target NodeID) ([]*Node
 			nreceived++
 			n, err := t.nodeFromRPC(toaddr, rn)
 			if err != nil {
-				glog.V(logger.Detail).Infof("invalid neighbor node (%v) from %v: %v", rn.IP, toaddr, err)
+				log.Trace(fmt.Sprintf("invalid neighbor node (%v) from %v: %v", rn.IP, toaddr, err))
 				continue
 			}
 			nodes = append(nodes, n)
@@ -464,9 +463,9 @@ func (t *udp) send(toaddr *net.UDPAddr, ptype byte, req interface{}) error {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infof(">>> %v %T\n", toaddr, req)
+	log.Trace(fmt.Sprintf(">>> %v %T", toaddr, req))
 	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
-		glog.V(logger.Detail).Infoln("UDP send failed:", err)
+		log.Trace(fmt.Sprint("UDP send failed:", err))
 	}
 	return err
 }
@@ -476,13 +475,13 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) ([]byte, 
 	b.Write(headSpace)
 	b.WriteByte(ptype)
 	if err := rlp.Encode(b, req); err != nil {
-		glog.V(logger.Error).Infoln("error encoding packet:", err)
+		log.Error(fmt.Sprint("error encoding packet:", err))
 		return nil, err
 	}
 	packet := b.Bytes()
 	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
-		glog.V(logger.Error).Infoln("could not sign packet:", err)
+		log.Error(fmt.Sprint("could not sign packet:", err))
 		return nil, err
 	}
 	copy(packet[macSize:], sig)
@@ -504,11 +503,11 @@ func (t *udp) readLoop() {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
 		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
-			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
+			log.Debug(fmt.Sprintf("Temporary read error: %v", err))
 			continue
 		} else if err != nil {
 			// Shut down the loop for permament errors.
-			glog.V(logger.Debug).Infof("Read error: %v", err)
+			log.Debug(fmt.Sprintf("Read error: %v", err))
 			return
 		}
 		t.handlePacket(from, buf[:nbytes])
@@ -518,14 +517,14 @@ func (t *udp) readLoop() {
 func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	packet, fromID, hash, err := decodePacket(buf)
 	if err != nil {
-		glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
+		log.Debug(fmt.Sprintf("Bad packet from %v: %v", from, err))
 		return err
 	}
 	status := "ok"
 	if err = packet.handle(t, from, fromID, hash); err != nil {
 		status = err.Error()
 	}
-	glog.V(logger.Detail).Infof("<<< %v %T: %s\n", from, packet, status)
+	log.Trace(fmt.Sprintf("<<< %v %T: %s", from, packet, status))
 	return err
 }
 

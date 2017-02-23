@@ -30,8 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/hashicorp/golang-lru"
@@ -102,7 +101,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, getValid
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		log.Info(fmt.Sprint("WARNING: Wrote default ethereum genesis block"))
 		hc.genesisHeader = genesisBlock.Header()
 	}
 
@@ -155,10 +154,10 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 
 	// Irrelevant of the canonical status, write the td and header to the database
 	if err := hc.WriteTd(hash, number, externTd); err != nil {
-		glog.Fatalf("failed to write header total difficulty: %v", err)
+		log.Crit(fmt.Sprintf("failed to write header total difficulty: %v", err))
 	}
 	if err := WriteHeader(hc.chainDb, header); err != nil {
-		glog.Fatalf("failed to write header contents: %v", err)
+		log.Crit(fmt.Sprintf("failed to write header contents: %v", err))
 	}
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
@@ -189,10 +188,10 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 
 		// Extend the canonical chain with the new header
 		if err := WriteCanonicalHash(hc.chainDb, hash, number); err != nil {
-			glog.Fatalf("failed to insert header number: %v", err)
+			log.Crit(fmt.Sprintf("failed to insert header number: %v", err))
 		}
 		if err := WriteHeadHeaderHash(hc.chainDb, hash); err != nil {
-			glog.Fatalf("failed to insert head header hash: %v", err)
+			log.Crit(fmt.Sprintf("failed to insert head header hash: %v", err))
 		}
 
 		hc.currentHeaderHash, hc.currentHeader = hash, types.CopyHeader(header)
@@ -231,7 +230,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, w
 			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])",
 				i-1, chain[i-1].Number.Uint64(), chain[i-1].Hash().Bytes()[:4], i, chain[i].Number.Uint64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash.Bytes()[:4])
 
-			glog.V(logger.Error).Info(failure.Error())
+			log.Error(fmt.Sprint(failure.Error()))
 			return 0, failure
 		}
 	}
@@ -317,7 +316,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, w
 	for i, header := range chain {
 		// Short circuit insertion if shutting down
 		if hc.procInterrupt() {
-			glog.V(logger.Debug).Infoln("premature abort during header chain processing")
+			log.Debug(fmt.Sprint("premature abort during header chain processing"))
 			break
 		}
 		hash := header.Hash()
@@ -339,7 +338,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, checkFreq int, w
 	if stats.ignored > 0 {
 		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
 	}
-	glog.V(logger.Info).Infof("imported %4d headers%s in %9v. #%v [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4])
+	log.Info(fmt.Sprintf("imported %4d headers%s in %9v. #%v [%x… / %x…]", stats.processed, ignored, common.PrettyDuration(time.Since(start)), last.Number, first.Hash().Bytes()[:4], last.Hash().Bytes()[:4]))
 
 	return 0, nil
 }
@@ -446,7 +445,7 @@ func (hc *HeaderChain) CurrentHeader() *types.Header {
 // SetCurrentHeader sets the current head header of the canonical chain.
 func (hc *HeaderChain) SetCurrentHeader(head *types.Header) {
 	if err := WriteHeadHeaderHash(hc.chainDb, head.Hash()); err != nil {
-		glog.Fatalf("failed to insert head header hash: %v", err)
+		log.Crit(fmt.Sprintf("failed to insert head header hash: %v", err))
 	}
 	hc.currentHeader = head
 	hc.currentHeaderHash = head.Hash()
@@ -489,7 +488,7 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	hc.currentHeaderHash = hc.currentHeader.Hash()
 
 	if err := WriteHeadHeaderHash(hc.chainDb, hc.currentHeaderHash); err != nil {
-		glog.Fatalf("failed to reset head header hash: %v", err)
+		log.Crit(fmt.Sprintf("failed to reset head header hash: %v", err))
 	}
 }
 

@@ -24,8 +24,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
@@ -134,7 +133,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 	var newtasks []task
 	addDial := func(flag connFlag, n *discover.Node) bool {
 		if err := s.checkDial(n, peers); err != nil {
-			glog.V(logger.Debug).Infof("skipping dial candidate %x@%v:%d: %v", n.ID[:8], n.IP, n.TCP, err)
+			log.Debug(fmt.Sprintf("skipping dial candidate %x@%v:%d: %v", n.ID[:8], n.IP, n.TCP, err))
 			return false
 		}
 		s.dialing[n.ID] = flag
@@ -163,7 +162,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 		err := s.checkDial(t.dest, peers)
 		switch err {
 		case errNotWhitelisted, errSelf:
-			glog.V(logger.Debug).Infof("removing static dial candidate %x@%v:%d: %v", t.dest.ID[:8], t.dest.IP, t.dest.TCP, err)
+			log.Debug(fmt.Sprintf("removing static dial candidate %x@%v:%d: %v", t.dest.ID[:8], t.dest.IP, t.dest.TCP, err))
 			delete(s.static, t.dest.ID)
 		case nil:
 			s.dialing[id] = t.flags
@@ -267,7 +266,7 @@ func (t *dialTask) Do(srv *Server) {
 // The backoff delay resets when the node is found.
 func (t *dialTask) resolve(srv *Server) bool {
 	if srv.ntab == nil {
-		glog.V(logger.Debug).Infof("can't resolve node %x: discovery is disabled", t.dest.ID[:6])
+		log.Debug(fmt.Sprintf("can't resolve node %x: discovery is disabled", t.dest.ID[:6]))
 		return false
 	}
 	if t.resolveDelay == 0 {
@@ -283,23 +282,23 @@ func (t *dialTask) resolve(srv *Server) bool {
 		if t.resolveDelay > maxResolveDelay {
 			t.resolveDelay = maxResolveDelay
 		}
-		glog.V(logger.Debug).Infof("resolving node %x failed (new delay: %v)", t.dest.ID[:6], t.resolveDelay)
+		log.Debug(fmt.Sprintf("resolving node %x failed (new delay: %v)", t.dest.ID[:6], t.resolveDelay))
 		return false
 	}
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.dest = resolved
-	glog.V(logger.Debug).Infof("resolved node %x: %v:%d", t.dest.ID[:6], t.dest.IP, t.dest.TCP)
+	log.Debug(fmt.Sprintf("resolved node %x: %v:%d", t.dest.ID[:6], t.dest.IP, t.dest.TCP))
 	return true
 }
 
 // dial performs the actual connection attempt.
 func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
 	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
-	glog.V(logger.Debug).Infof("dial tcp %v (%x)\n", addr, dest.ID[:6])
+	log.Debug(fmt.Sprintf("dial tcp %v (%x)", addr, dest.ID[:6]))
 	fd, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
-		glog.V(logger.Detail).Infof("%v", err)
+		log.Trace(fmt.Sprintf("%v", err))
 		return false
 	}
 	mfd := newMeteredConn(fd, false)

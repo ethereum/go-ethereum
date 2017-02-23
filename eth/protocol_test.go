@@ -30,8 +30,7 @@ import (
 )
 
 func init() {
-	// glog.SetToStderr(true)
-	// glog.SetV(6)
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat())))
 }
 
 var testAccount, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")

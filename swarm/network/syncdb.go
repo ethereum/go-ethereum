@@ -20,8 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -80,7 +79,7 @@ func newSyncDb(db *storage.LDBDatabase, key storage.Key, priority uint, bufferSi
 		batch:       make(chan chan int),
 		dbBatchSize: dbBatchSize,
 	}
-	glog.V(logger.Detail).Infof("syncDb[peer: %v, priority: %v] - initialised", key.Log(), priority)
+	log.Trace(fmt.Sprintf("syncDb[peer: %v, priority: %v] - initialised", key.Log(), priority))
 
 	// starts the main forever loop reading from buffer
 	go syncdb.bufferRead(deliver)
@@ -126,9 +125,9 @@ func (self *syncDb) bufferRead(deliver func(interface{}, chan bool) bool) {
 	var counter uint64
 	if err == nil {
 		counter = binary.BigEndian.Uint64(data)
-		glog.V(logger.Detail).Infof("syncDb[%v/%v] - counter read from db at %v", self.key.Log(), self.priority, counter)
+		log.Trace(fmt.Sprintf("syncDb[%v/%v] - counter read from db at %v", self.key.Log(), self.priority, counter))
 	} else {
-		glog.V(logger.Detail).Infof("syncDb[%v/%v] - counter starts at %v", self.key.Log(), self.priority, counter)
+		log.Trace(fmt.Sprintf("syncDb[%v/%v] - counter starts at %v", self.key.Log(), self.priority, counter))
 	}
 
 LOOP:
@@ -142,7 +141,7 @@ LOOP:
 			// if syncdb is stopped. In this case we need to save the item to the db
 			more = deliver(req, self.quit)
 			if !more {
-				glog.V(logger.Debug).Infof("syncDb[%v/%v] quit: switching to db. session tally (db/total): %v/%v", self.key.Log(), self.priority, self.dbTotal, self.total)
+				log.Debug(fmt.Sprintf("syncDb[%v/%v] quit: switching to db. session tally (db/total): %v/%v", self.key.Log(), self.priority, self.dbTotal, self.total))
 				// received quit signal, save request currently waiting delivery
 				// by switching to db mode and closing the buffer
 				buffer = nil
@@ -152,12 +151,12 @@ LOOP:
 				break      // break from select, this item will be written to the db
 			}
 			self.total++
-			glog.V(logger.Detail).Infof("syncDb[%v/%v] deliver (db/total): %v/%v", self.key.Log(), self.priority, self.dbTotal, self.total)
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] deliver (db/total): %v/%v", self.key.Log(), self.priority, self.dbTotal, self.total))
 			// by the time deliver returns, there were new writes to the buffer
 			// if buffer contention is detected, switch to db mode which drains
 			// the buffer so no process will block on pushing store requests
 			if len(buffer) == cap(buffer) {
-				glog.V(logger.Debug).Infof("syncDb[%v/%v] buffer full %v: switching to db. session tally (db/total): %v/%v", self.key.Log(), self.priority, cap(buffer), self.dbTotal, self.total)
+				log.Debug(fmt.Sprintf("syncDb[%v/%v] buffer full %v: switching to db. session tally (db/total): %v/%v", self.key.Log(), self.priority, cap(buffer), self.dbTotal, self.total))
 				buffer = nil
 				db = self.buffer
 			}
@@ -170,7 +169,7 @@ LOOP:
 				binary.BigEndian.PutUint64(counterValue, counter)
 				batch.Put(self.counterKey, counterValue) // persist counter in batch
 				self.writeSyncBatch(batch)               // save batch
-				glog.V(logger.Detail).Infof("syncDb[%v/%v] quitting: save current batch to db", self.key.Log(), self.priority)
+				log.Trace(fmt.Sprintf("syncDb[%v/%v] quitting: save current batch to db", self.key.Log(), self.priority))
 				break LOOP
 			}
 			self.dbTotal++
@@ -181,7 +180,7 @@ LOOP:
 			if inBatch == 0 && quit != nil {
 				// there was no writes since the last batch so db depleted
 				// switch to buffer mode
-				glog.V(logger.Debug).Infof("syncDb[%v/%v] empty db: switching to buffer", self.key.Log(), self.priority)
+				log.Debug(fmt.Sprintf("syncDb[%v/%v] empty db: switching to buffer", self.key.Log(), self.priority))
 				db = nil
 				buffer = self.buffer
 				dbSize <- 0 // indicates to 'caller' that batch has been written
@@ -190,7 +189,7 @@ LOOP:
 			}
 			binary.BigEndian.PutUint64(counterValue, counter)
 			batch.Put(self.counterKey, counterValue)
-			glog.V(logger.Debug).Infof("syncDb[%v/%v] write batch %v/%v - %x - %x", self.key.Log(), self.priority, inBatch, counter, self.counterKey, counterValue)
+			log.Debug(fmt.Sprintf("syncDb[%v/%v] write batch %v/%v - %x - %x", self.key.Log(), self.priority, inBatch, counter, self.counterKey, counterValue))
 			batch = self.writeSyncBatch(batch)
 			dbSize <- inBatch // indicates to 'caller' that batch has been written
 			inBatch = 0
@@ -202,7 +201,7 @@ LOOP:
 			db = self.buffer
 			buffer = nil
 			quit = nil
-			glog.V(logger.Detail).Infof("syncDb[%v/%v] quitting: save buffer to db", self.key.Log(), self.priority)
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] quitting: save buffer to db", self.key.Log(), self.priority))
 			close(db)
 			continue LOOP
 		}
@@ -210,15 +209,15 @@ LOOP:
 		// only get here if we put req into db
 		entry, err = self.newSyncDbEntry(req, counter)
 		if err != nil {
-			glog.V(logger.Warn).Infof("syncDb[%v/%v] saving request %v (#%v/%v) failed: %v", self.key.Log(), self.priority, req, inBatch, inDb, err)
+			log.Warn(fmt.Sprintf("syncDb[%v/%v] saving request %v (#%v/%v) failed: %v", self.key.Log(), self.priority, req, inBatch, inDb, err))
 			continue LOOP
 		}
 		batch.Put(entry.key, entry.val)
-		glog.V(logger.Detail).Infof("syncDb[%v/%v] to batch %v '%v' (#%v/%v/%v)", self.key.Log(), self.priority, req, entry, inBatch, inDb, counter)
+		log.Trace(fmt.Sprintf("syncDb[%v/%v] to batch %v '%v' (#%v/%v/%v)", self.key.Log(), self.priority, req, entry, inBatch, inDb, counter))
 		// if just switched to db mode and not quitting, then launch dbRead
 		// in a parallel go routine to send deliveries from db
 		if inDb == 0 && quit != nil {
-			glog.V(logger.Detail).Infof("syncDb[%v/%v] start dbRead")
+			log.Trace(fmt.Sprintf("syncDb[%v/%v] start dbRead", self.key.Log(), self.priority))
 			go self.dbRead(true, counter, deliver)
 		}
 		inDb++
@@ -229,7 +228,7 @@ LOOP:
 			batch = self.writeSyncBatch(batch)
 		}
 	}
-	glog.V(logger.Info).Infof("syncDb[%v:%v]: saved %v keys (saved counter at %v)", self.key.Log(), self.priority, inBatch, counter)
+	log.Info(fmt.Sprintf("syncDb[%v:%v]: saved %v keys (saved counter at %v)", self.key.Log(), self.priority, inBatch, counter))
 	close(self.done)
 }
 
@@ -237,7 +236,7 @@ LOOP:
 func (self *syncDb) writeSyncBatch(batch *leveldb.Batch) *leveldb.Batch {
 	err := self.db.Write(batch)
 	if err != nil {
-		glog.V(logger.Warn).Infof("syncDb[%v/%v] saving batch to db failed: %v", self.key.Log(), self.priority, err)
+		log.Warn(fmt.Sprintf("syncDb[%v/%v] saving batch to db failed: %v", self.key.Log(), self.priority, err))
 		return batch
 	}
 	return new(leveldb.Batch)
@@ -311,7 +310,7 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			continue
 		}
 		del = new(leveldb.Batch)
-		glog.V(logger.Detail).Infof("syncDb[%v/%v]: new iterator: %x (batch %v, count %v)", self.key.Log(), self.priority, key, batches, cnt)
+		log.Trace(fmt.Sprintf("syncDb[%v/%v]: new iterator: %x (batch %v, count %v)", self.key.Log(), self.priority, key, batches, cnt))
 
 		for n = 0; !useBatches || n < cnt; it.Next() {
 			copy(key, it.Key())
@@ -323,11 +322,11 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			val := make([]byte, 40)
 			copy(val, it.Value())
 			entry = &syncDbEntry{key, val}
-			// glog.V(logger.Detail).Infof("syncDb[%v/%v] - %v, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, self.key.Log(), batches, total, self.dbTotal, self.total)
+			// log.Trace(fmt.Sprintf("syncDb[%v/%v] - %v, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, self.key.Log(), batches, total, self.dbTotal, self.total))
 			more = fun(entry, self.quit)
 			if !more {
 				// quit received when waiting to deliver entry, the entry will not be deleted
-				glog.V(logger.Detail).Infof("syncDb[%v/%v] batch %v quit after %v/%v items", self.key.Log(), self.priority, batches, n, cnt)
+				log.Trace(fmt.Sprintf("syncDb[%v/%v] batch %v quit after %v/%v items", self.key.Log(), self.priority, batches, n, cnt))
 				break
 			}
 			// since subsequent batches of the same db session are indexed incrementally
@@ -337,7 +336,7 @@ func (self *syncDb) dbRead(useBatches bool, counter uint64, fun func(interface{}
 			n++
 			total++
 		}
-		glog.V(logger.Debug).Infof("syncDb[%v/%v] - db session closed, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, batches, total, self.dbTotal, self.total)
+		log.Debug(fmt.Sprintf("syncDb[%v/%v] - db session closed, batches: %v, total: %v, session total from db: %v/%v", self.key.Log(), self.priority, batches, total, self.dbTotal, self.total))
 		self.db.Write(del) // this could be async called only when db is idle
 		it.Release()
 	}

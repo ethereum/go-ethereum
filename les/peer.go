@@ -27,8 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -196,51 +195,51 @@ func (p *peer) SendHeaderProofs(reqID, bv uint64, proofs []ChtResp) error {
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
-	glog.V(logger.Debug).Infof("%v fetching %d headers from %x, skipping %d (reverse = %v)", p, amount, origin[:4], skip, reverse)
+	log.Debug(fmt.Sprintf("%v fetching %d headers from %x, skipping %d (reverse = %v)", p, amount, origin[:4], skip, reverse))
 	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *peer) RequestHeadersByNumber(reqID, cost, origin uint64, amount int, skip int, reverse bool) error {
-	glog.V(logger.Debug).Infof("%v fetching %d headers from #%d, skipping %d (reverse = %v)", p, amount, origin, skip, reverse)
+	log.Debug(fmt.Sprintf("%v fetching %d headers from #%d, skipping %d (reverse = %v)", p, amount, origin, skip, reverse))
 	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
 func (p *peer) RequestBodies(reqID, cost uint64, hashes []common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching %d block bodies", p, len(hashes))
+	log.Debug(fmt.Sprintf("%v fetching %d block bodies", p, len(hashes)))
 	return sendRequest(p.rw, GetBlockBodiesMsg, reqID, cost, hashes)
 }
 
 // RequestCode fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
 func (p *peer) RequestCode(reqID, cost uint64, reqs []*CodeReq) error {
-	glog.V(logger.Debug).Infof("%v fetching %v state data", p, len(reqs))
+	log.Debug(fmt.Sprintf("%v fetching %v state data", p, len(reqs)))
 	return sendRequest(p.rw, GetCodeMsg, reqID, cost, reqs)
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *peer) RequestReceipts(reqID, cost uint64, hashes []common.Hash) error {
-	glog.V(logger.Debug).Infof("%v fetching %v receipts", p, len(hashes))
+	log.Debug(fmt.Sprintf("%v fetching %v receipts", p, len(hashes)))
 	return sendRequest(p.rw, GetReceiptsMsg, reqID, cost, hashes)
 }
 
 // RequestProofs fetches a batch of merkle proofs from a remote node.
 func (p *peer) RequestProofs(reqID, cost uint64, reqs []*ProofReq) error {
-	glog.V(logger.Debug).Infof("%v fetching %v proofs", p, len(reqs))
+	log.Debug(fmt.Sprintf("%v fetching %v proofs", p, len(reqs)))
 	return sendRequest(p.rw, GetProofsMsg, reqID, cost, reqs)
 }
 
 // RequestHeaderProofs fetches a batch of header merkle proofs from a remote node.
 func (p *peer) RequestHeaderProofs(reqID, cost uint64, reqs []*ChtReq) error {
-	glog.V(logger.Debug).Infof("%v fetching %v header proofs", p, len(reqs))
+	log.Debug(fmt.Sprintf("%v fetching %v header proofs", p, len(reqs)))
 	return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqs)
 }
 
 func (p *peer) SendTxs(cost uint64, txs types.Transactions) error {
-	glog.V(logger.Debug).Infof("%v relaying %v txs", p, len(txs))
+	log.Debug(fmt.Sprintf("%v relaying %v txs", p, len(txs)))
 	reqID := getNextReqID()
 	p.fcServer.MustAssignRequest(reqID)
 	p.fcServer.SendRequest(reqID, cost)

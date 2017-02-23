@@ -41,8 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -493,7 +492,7 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			log.Error(fmt.Sprintf("Bootstrap URL %s: %v\n", url, err))
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -513,7 +512,7 @@ func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			log.Error(fmt.Sprintf("Bootstrap URL %s: %v\n", url, err))
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -610,7 +609,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func MakeEtherbase(ks *keystore.KeyStore, ctx *cli.Context) common.Address {
 	accounts := ks.Accounts()
 	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
-		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
+		log.Error(fmt.Sprint("WARNING: No etherbase set and no accounts found as default"))
 		return common.Address{}
 	}
 	etherbase := ctx.GlobalString(EtherbaseFlag.Name)
@@ -913,10 +912,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		_, err := core.WriteTestNetGenesisBlock(chainDb)
 		if err != nil {
-			glog.Fatalln(err)
+			Fatalf("Failed to write testnet genesis: %v", err)
 		}
 	}
-
 	chainConfig := MakeChainConfigFromDb(ctx, chainDb)
 
 	pow := pow.PoW(core.FakePow{})

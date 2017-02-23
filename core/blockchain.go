@@ -36,8 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
@@ -161,9 +160,9 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 			headerByNumber := bc.GetHeaderByNumber(header.Number.Uint64())
 			// make sure the headerByNumber (if present) is in our current canonical chain
 			if headerByNumber != nil && headerByNumber.Hash() == header.Hash() {
-				glog.V(logger.Error).Infof("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4])
+				log.Error(fmt.Sprintf("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4]))
 				bc.SetHead(header.Number.Uint64() - 1)
-				glog.V(logger.Error).Infoln("Chain rewind was successful, resuming normal operation")
+				log.Error(fmt.Sprint("Chain rewind was successful, resuming normal operation"))
 			}
 		}
 	}
@@ -220,9 +219,9 @@ func (self *BlockChain) loadLastState() error {
 	blockTd := self.GetTd(self.currentBlock.Hash(), self.currentBlock.NumberU64())
 	fastTd := self.GetTd(self.currentFastBlock.Hash(), self.currentFastBlock.NumberU64())
 
-	glog.V(logger.Info).Infof("Last header: #%d [%x…] TD=%v", currentHeader.Number, currentHeader.Hash().Bytes()[:4], headerTd)
-	glog.V(logger.Info).Infof("Last block: #%d [%x…] TD=%v", self.currentBlock.Number(), self.currentBlock.Hash().Bytes()[:4], blockTd)
-	glog.V(logger.Info).Infof("Fast block: #%d [%x…] TD=%v", self.currentFastBlock.Number(), self.currentFastBlock.Hash().Bytes()[:4], fastTd)
+	log.Info(fmt.Sprintf("Last header: #%d [%x…] TD=%v", currentHeader.Number, currentHeader.Hash().Bytes()[:4], headerTd))
+	log.Info(fmt.Sprintf("Last block: #%d [%x…] TD=%v", self.currentBlock.Number(), self.currentBlock.Hash().Bytes()[:4], blockTd))
+	log.Info(fmt.Sprintf("Fast block: #%d [%x…] TD=%v", self.currentFastBlock.Number(), self.currentFastBlock.Hash().Bytes()[:4], fastTd))
 
 	return nil
 }
@@ -263,10 +262,10 @@ func (bc *BlockChain) SetHead(head uint64) {
 	}
 
 	if err := WriteHeadBlockHash(bc.chainDb, bc.currentBlock.Hash()); err != nil {
-		glog.Fatalf("failed to reset head block hash: %v", err)
+		log.Crit(fmt.Sprintf("failed to reset head block hash: %v", err))
 	}
 	if err := WriteHeadFastBlockHash(bc.chainDb, bc.currentFastBlock.Hash()); err != nil {
-		glog.Fatalf("failed to reset head fast block hash: %v", err)
+		log.Crit(fmt.Sprintf("failed to reset head fast block hash: %v", err))
 	}
 	bc.loadLastState()
 }
@@ -287,7 +286,7 @@ func (self *BlockChain) FastSyncCommitHead(hash common.Hash) error {
 	self.currentBlock = block
 	self.mu.Unlock()
 
-	glog.V(logger.Info).Infof("committed block #%d [%x…] as new head", block.Number(), hash[:4])
+	log.Info(fmt.Sprintf("committed block #%d [%x…] as new head", block.Number(), hash[:4]))
 	return nil
 }
 
@@ -391,10 +390,10 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 	// Prepare the genesis block and reinitialise the chain
 	if err := bc.hc.WriteTd(genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
-		glog.Fatalf("failed to write genesis block TD: %v", err)
+		log.Crit(fmt.Sprintf("failed to write genesis block TD: %v", err))
 	}
 	if err := WriteBlock(bc.chainDb, genesis); err != nil {
-		glog.Fatalf("failed to write genesis block: %v", err)
+		log.Crit(fmt.Sprintf("failed to write genesis block: %v", err))
 	}
 	bc.genesisBlock = genesis
 	bc.insert(bc.genesisBlock)
@@ -418,7 +417,7 @@ func (self *BlockChain) ExportN(w io.Writer, first uint64, last uint64) error {
 		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
 	}
 
-	glog.V(logger.Info).Infof("exporting %d blocks...\n", last-first+1)
+	log.Info(fmt.Sprintf("exporting %d blocks...\n", last-first+1))
 
 	for nr := first; nr <= last; nr++ {
 		block := self.GetBlockByNumber(nr)
@@ -446,10 +445,10 @@ func (bc *BlockChain) insert(block *types.Block) {
 
 	// Add the block to the canonical chain number scheme and mark as the head
 	if err := WriteCanonicalHash(bc.chainDb, block.Hash(), block.NumberU64()); err != nil {
-		glog.Fatalf("failed to insert block number: %v", err)
+		log.Crit(fmt.Sprintf("failed to insert block number: %v", err))
 	}
 	if err := WriteHeadBlockHash(bc.chainDb, block.Hash()); err != nil {
-		glog.Fatalf("failed to insert head block hash: %v", err)
+		log.Crit(fmt.Sprintf("failed to insert head block hash: %v", err))
 	}
 	bc.currentBlock = block
 
@@ -458,7 +457,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		bc.hc.SetCurrentHeader(block.Header())
 
 		if err := WriteHeadFastBlockHash(bc.chainDb, block.Hash()); err != nil {
-			glog.Fatalf("failed to insert head fast block hash: %v", err)
+			log.Crit(fmt.Sprintf("failed to insert head fast block hash: %v", err))
 		}
 		bc.currentFastBlock = block
 	}
@@ -590,7 +589,7 @@ func (bc *BlockChain) Stop() {
 
 	bc.wg.Wait()
 
-	glog.V(logger.Info).Infoln("Chain manager stopped")
+	log.Info(fmt.Sprint("Chain manager stopped"))
 }
 
 func (self *BlockChain) procFutureBlocks() {
@@ -687,7 +686,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, blockChain[i-1].NumberU64(),
 				blockChain[i-1].Hash().Bytes()[:4], i, blockChain[i].NumberU64(), blockChain[i].Hash().Bytes()[:4], blockChain[i].ParentHash().Bytes()[:4])
 
-			glog.V(logger.Error).Info(failure.Error())
+			log.Error(fmt.Sprint(failure.Error()))
 			return 0, failure
 		}
 	}
@@ -735,31 +734,31 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 			if err := WriteBody(self.chainDb, block.Hash(), block.NumberU64(), block.Body()); err != nil {
 				errs[index] = fmt.Errorf("failed to write block body: %v", err)
 				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
+				log.Crit(fmt.Sprint(errs[index]))
 				return
 			}
 			if err := WriteBlockReceipts(self.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
 				errs[index] = fmt.Errorf("failed to write block receipts: %v", err)
 				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
+				log.Crit(fmt.Sprint(errs[index]))
 				return
 			}
 			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
 				errs[index] = fmt.Errorf("failed to write log blooms: %v", err)
 				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
+				log.Crit(fmt.Sprint(errs[index]))
 				return
 			}
 			if err := WriteTransactions(self.chainDb, block); err != nil {
 				errs[index] = fmt.Errorf("failed to write individual transactions: %v", err)
 				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
+				log.Crit(fmt.Sprint(errs[index]))
 				return
 			}
 			if err := WriteReceipts(self.chainDb, receipts); err != nil {
 				errs[index] = fmt.Errorf("failed to write individual receipts: %v", err)
 				atomic.AddInt32(&failed, 1)
-				glog.Fatal(errs[index])
+				log.Crit(fmt.Sprint(errs[index]))
 				return
 			}
 			atomic.AddInt32(&stats.processed, 1)
@@ -785,7 +784,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 		}
 	}
 	if atomic.LoadInt32(&self.procInterrupt) == 1 {
-		glog.V(logger.Debug).Infoln("premature abort during receipt chain processing")
+		log.Debug(fmt.Sprint("premature abort during receipt chain processing"))
 		return 0, nil
 	}
 	// Update the head fast sync block if better
@@ -793,7 +792,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	head := blockChain[len(errs)-1]
 	if self.GetTd(self.currentFastBlock.Hash(), self.currentFastBlock.NumberU64()).Cmp(self.GetTd(head.Hash(), head.NumberU64())) < 0 {
 		if err := WriteHeadFastBlockHash(self.chainDb, head.Hash()); err != nil {
-			glog.Fatalf("failed to update head fast block hash: %v", err)
+			log.Crit(fmt.Sprintf("failed to update head fast block hash: %v", err))
 		}
 		self.currentFastBlock = head
 	}
@@ -806,7 +805,7 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	if stats.ignored > 0 {
 		ignored = fmt.Sprintf(" (%d ignored)", stats.ignored)
 	}
-	glog.V(logger.Info).Infof("imported %4d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignored)
+	log.Info(fmt.Sprintf("imported %4d receipts in %9v. #%d [%x… / %x…]%s", stats.processed, common.PrettyDuration(time.Since(start)), last.Number(), first.Hash().Bytes()[:4], last.Hash().Bytes()[:4], ignored))
 
 	return 0, nil
 }
@@ -830,10 +829,10 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 
 	// Irrelevant of the canonical status, write the block itself to the database
 	if err := self.hc.WriteTd(block.Hash(), block.NumberU64(), externTd); err != nil {
-		glog.Fatalf("failed to write block total difficulty: %v", err)
+		log.Crit(fmt.Sprintf("failed to write block total difficulty: %v", err))
 	}
 	if err := WriteBlock(self.chainDb, block); err != nil {
-		glog.Fatalf("failed to write block contents: %v", err)
+		log.Crit(fmt.Sprintf("failed to write block contents: %v", err))
 	}
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
@@ -867,7 +866,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			failure := fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])",
 				i-1, chain[i-1].NumberU64(), chain[i-1].Hash().Bytes()[:4], i, chain[i].NumberU64(), chain[i].Hash().Bytes()[:4], chain[i].ParentHash().Bytes()[:4])
 
-			glog.V(logger.Error).Info(failure.Error())
+			log.Error(fmt.Sprint(failure.Error()))
 			return 0, failure
 		}
 	}
@@ -894,7 +893,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 	for i, block := range chain {
 		if atomic.LoadInt32(&self.procInterrupt) == 1 {
-			glog.V(logger.Debug).Infoln("Premature abort during block chain processing")
+			log.Debug(fmt.Sprint("Premature abort during block chain processing"))
 			break
 		}
 		bstart := time.Now()
@@ -991,9 +990,9 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 
 		switch status {
 		case CanonStatTy:
-			if glog.V(logger.Debug) {
-				glog.Infof("inserted block #%d [%x…] in %9v: %3d txs %7v gas %d uncles.", block.Number(), block.Hash().Bytes()[0:4], common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), block.GasUsed(), len(block.Uncles()))
-			}
+			log.Debug("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("inserted block #%d [%x…] in %9v: %3d txs %7v gas %d uncles.", block.Number(), block.Hash().Bytes()[0:4], common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), block.GasUsed(), len(block.Uncles()))
+			}})
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainEvent{block, block.Hash(), logs})
 
@@ -1014,9 +1013,9 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				return i, err
 			}
 		case SideStatTy:
-			if glog.V(logger.Detail) {
-				glog.Infof("inserted forked block #%d [%x…] (TD=%v) in %9v: %3d txs %d uncles.", block.Number(), block.Hash().Bytes()[0:4], block.Difficulty(), common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), len(block.Uncles()))
-			}
+			log.Trace("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("inserted forked block #%d [%x…] (TD=%v) in %9v: %3d txs %d uncles.", block.Number(), block.Hash().Bytes()[0:4], block.Difficulty(), common.PrettyDuration(time.Since(bstart)), len(block.Transactions()), len(block.Uncles()))
+			}})
 			blockInsertTimer.UpdateSince(bstart)
 			events = append(events, ChainSideEvent{block})
 
@@ -1025,10 +1024,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 
 		stats.processed++
-		if glog.V(logger.Info) {
-			stats.usedGas += usedGas.Uint64()
-			stats.report(chain, i)
-		}
+		stats.usedGas += usedGas.Uint64()
+		stats.report(chain, i)
 	}
 
 	go self.postChainEvents(events, coalescedLogs)
@@ -1070,7 +1067,7 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 		} else {
 			hashes = fmt.Sprintf("%x…", end.Hash().Bytes()[:4])
 		}
-		glog.Infof("imported %4d blocks, %5d txs (%7.3f Mg) in %9v (%6.3f Mg/s). #%v [%s]%s", st.processed, txcount, float64(st.usedGas)/1000000, common.PrettyDuration(elapsed), float64(st.usedGas)*1000/float64(elapsed), end.Number(), hashes, extra)
+		log.Info(fmt.Sprintf("imported %4d blocks, %5d txs (%7.3f Mg) in %9v (%6.3f Mg/s). #%v [%s]%s", st.processed, txcount, float64(st.usedGas)/1000000, common.PrettyDuration(elapsed), float64(st.usedGas)*1000/float64(elapsed), end.Number(), hashes, extra))
 
 		*st = insertStats{startTime: now, lastIndex: index}
 	}
@@ -1150,21 +1147,24 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			return fmt.Errorf("Invalid new chain")
 		}
 	}
+	// Ensure the user sees large reorgs
+	logFn := log.Debug
+	if len(oldChain) > 63 {
+		logFn = log.Warn
+	}
+	logFn("", "msg", log.Lazy{Fn: func() string {
+		oldLen, newLen := len(oldChain), len(newChain)
+		newLast, newFirst := newChain[0], newChain[newLen-1]
+		oldLast, oldFirst := oldChain[0], oldChain[oldLen-1]
 
-	if oldLen := len(oldChain); oldLen > 63 || glog.V(logger.Debug) {
-		newLen := len(newChain)
-		newLast := newChain[0]
-		newFirst := newChain[newLen-1]
-		oldLast := oldChain[0]
-		oldFirst := oldChain[oldLen-1]
-		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks), rejecting #%v-#%v [%x…/%x…] in favour of #%v-#%v [%x…/%x…]",
+		return fmt.Sprintf("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks), rejecting #%v-#%v [%x…/%x…] in favour of #%v-#%v [%x…/%x…]",
 			commonBlock.Number(), commonBlock.Hash().Bytes()[:4],
 			oldLen, newLen,
 			oldFirst.Number(), oldLast.Number(),
 			oldFirst.Hash().Bytes()[:4], oldLast.Hash().Bytes()[:4],
 			newFirst.Number(), newLast.Number(),
 			newFirst.Hash().Bytes()[:4], newLast.Hash().Bytes()[:4])
-	}
+	}})
 
 	var addedTxs types.Transactions
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
@@ -1271,12 +1271,12 @@ func (bc *BlockChain) addBadBlock(block *types.Block) {
 // reportBlock logs a bad block error.
 func (bc *BlockChain) reportBlock(block *types.Block, receipts types.Receipts, err error) {
 	bc.addBadBlock(block)
-	if glog.V(logger.Error) {
+	log.Error("", "msg", log.Lazy{Fn: func() string {
 		var receiptString string
 		for _, receipt := range receipts {
 			receiptString += fmt.Sprintf("\t%v\n", receipt)
 		}
-		glog.Errorf(`
+		return fmt.Sprintf(`
 ########## BAD BLOCK #########
 Chain config: %v
 
@@ -1287,7 +1287,7 @@ Hash: 0x%x
 Error: %v
 ##############################
 `, bc.config, block.Number(), block.Hash(), receiptString, err)
-	}
+	}})
 }
 
 // InsertHeaderChain attempts to insert the given header chain in to the local

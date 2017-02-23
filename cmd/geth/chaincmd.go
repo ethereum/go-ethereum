@@ -32,8 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
@@ -129,7 +128,7 @@ func initGenesis(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
-	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	log.Info(fmt.Sprintf("successfully wrote genesis block and/or chain rule set: %x", block.Hash()))
 	return nil
 }
 
@@ -257,7 +256,7 @@ func removeDB(ctx *cli.Context) error {
 }
 
 func upgradeDB(ctx *cli.Context) error {
-	glog.Infoln("Upgrading blockchain database")
+	log.Info(fmt.Sprint("Upgrading blockchain database"))
 
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	chain, chainDb := utils.MakeChain(ctx, stack)
@@ -286,7 +285,7 @@ func upgradeDB(ctx *cli.Context) error {
 		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)", err, exportFile)
 	} else {
 		os.Remove(exportFile)
-		glog.Infoln("Import finished")
+		log.Info(fmt.Sprint("Import finished"))
 	}
 	return nil
 }

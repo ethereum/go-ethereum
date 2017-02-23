@@ -47,7 +47,7 @@ var (
 		// boring stuff
 		"vendor/", "tests/files/", "build/",
 		// don't relicense vendored sources
-		"crypto/sha3/", "crypto/ecies/", "logger/glog/",
+		"crypto/sha3/", "crypto/ecies/", "log/",
 		"crypto/secp256k1/curve.go",
 		// don't license generated files
 		"contracts/chequebook/contract/",

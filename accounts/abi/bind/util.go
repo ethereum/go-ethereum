@@ -22,26 +22,26 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/net/context"
 )
 
 // WaitMined waits for tx to be mined on the blockchain.
 // It stops waiting when the context is canceled.
 func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*types.Receipt, error) {
-	queryTicker := time.NewTicker(1 * time.Second)
+	queryTicker := time.NewTicker(time.Second)
 	defer queryTicker.Stop()
-	loghash := tx.Hash().Hex()[:8]
+
+	logger := log.New("hash", tx.Hash().Hex()[:8])
 	for {
 		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
 		if receipt != nil {
 			return receipt, nil
 		}
 		if err != nil {
-			glog.V(logger.Detail).Infof("tx %x error: %v", loghash, err)
+			logger.Trace("Receipt retrieval failed", "error", err)
 		} else {
-			glog.V(logger.Detail).Infof("tx %x not yet mined...", loghash)
+			logger.Trace("Transaction not yet mined")
 		}
 		// Wait for the next round.
 		select {

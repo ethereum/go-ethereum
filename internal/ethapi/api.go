@@ -36,8 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -475,7 +474,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context,
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			glog.V(logger.Debug).Infof("uncle block on index %d not found for block #%d", index, blockNr)
+			log.Debug(fmt.Sprintf("uncle block on index %d not found for block #%d", index, blockNr))
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -491,7 +490,7 @@ func (s *PublicBlockChainAPI) GetUncleByBlockHashAndIndex(ctx context.Context, b
 	if block != nil {
 		uncles := block.Uncles()
 		if index >= hexutil.Uint(len(uncles)) {
-			glog.V(logger.Debug).Infof("uncle block on index %d not found for block %s", index, blockHash.Hex())
+			log.Debug(fmt.Sprintf("uncle block on index %d not found for block %s", index, blockHash.Hex()))
 			return nil, nil
 		}
 		block = types.NewBlockWithHeader(uncles[index])
@@ -577,7 +576,7 @@ type CallArgs struct {
 }
 
 func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr rpc.BlockNumber, vmCfg vm.Config) ([]byte, *big.Int, error) {
-	defer func(start time.Time) { glog.V(logger.Debug).Infof("call took %v", time.Since(start)) }(time.Now())
+	defer func(start time.Time) { log.Debug(fmt.Sprintf("call took %v", time.Since(start))) }(time.Now())
 
 	state, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
@@ -1003,7 +1002,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, txH
 	var err error
 
 	if tx, isPending, err = getTransaction(s.b.ChainDb(), s.b, txHash); err != nil {
-		glog.V(logger.Debug).Infof("%v\n", err)
+		log.Debug(fmt.Sprintf("%v\n", err))
 		return nil, nil
 	} else if tx == nil {
 		return nil, nil
@@ -1015,7 +1014,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, txH
 
 	blockHash, _, _, err := getTransactionBlockData(s.b.ChainDb(), txHash)
 	if err != nil {
-		glog.V(logger.Debug).Infof("%v\n", err)
+		log.Debug(fmt.Sprintf("%v\n", err))
 		return nil, nil
 	}
 
@@ -1032,7 +1031,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 	var err error
 
 	if tx, _, err = getTransaction(s.b.ChainDb(), s.b, txHash); err != nil {
-		glog.V(logger.Debug).Infof("%v\n", err)
+		log.Debug(fmt.Sprintf("%v\n", err))
 		return nil, nil
 	} else if tx == nil {
 		return nil, nil
@@ -1045,19 +1044,19 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(txHash common.Hash) (map[string]interface{}, error) {
 	receipt := core.GetReceipt(s.b.ChainDb(), txHash)
 	if receipt == nil {
-		glog.V(logger.Debug).Infof("receipt not found for transaction %s", txHash.Hex())
+		log.Debug(fmt.Sprintf("receipt not found for transaction %s", txHash.Hex()))
 		return nil, nil
 	}
 
 	tx, _, err := getTransaction(s.b.ChainDb(), s.b, txHash)
 	if err != nil {
-		glog.V(logger.Debug).Infof("%v\n", err)
+		log.Debug(fmt.Sprintf("%v\n", err))
 		return nil, nil
 	}
 
 	txBlock, blockIndex, index, err := getTransactionBlockData(s.b.ChainDb(), txHash)
 	if err != nil {
-		glog.V(logger.Debug).Infof("%v\n", err)
+		log.Debug(fmt.Sprintf("%v\n", err))
 		return nil, nil
 	}
 
@@ -1160,9 +1159,9 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 		from, _ := types.Sender(signer, tx)
 		addr := crypto.CreateAddress(from, tx.Nonce())
-		glog.V(logger.Info).Infof("Tx(%s) created: %s\n", tx.Hash().Hex(), addr.Hex())
+		log.Info(fmt.Sprintf("Tx(%s) created: %s\n", tx.Hash().Hex(), addr.Hex()))
 	} else {
-		glog.V(logger.Info).Infof("Tx(%s) to: %s\n", tx.Hash().Hex(), tx.To().Hex())
+		log.Info(fmt.Sprintf("Tx(%s) to: %s\n", tx.Hash().Hex(), tx.To().Hex()))
 	}
 	return tx.Hash(), nil
 }
@@ -1214,9 +1213,9 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 			return "", err
 		}
 		addr := crypto.CreateAddress(from, tx.Nonce())
-		glog.V(logger.Info).Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
+		log.Info(fmt.Sprintf("Tx(%x) created: %x\n", tx.Hash(), addr))
 	} else {
-		glog.V(logger.Info).Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
+		log.Info(fmt.Sprintf("Tx(%x) to: %x\n", tx.Hash(), tx.To()))
 	}
 
 	return tx.Hash().Hex(), nil
@@ -1421,10 +1420,10 @@ func (api *PrivateDebugAPI) ChaindbCompact() error {
 		return fmt.Errorf("chaindbCompact does not work for memory databases")
 	}
 	for b := byte(0); b < 255; b++ {
-		glog.V(logger.Info).Infof("compacting chain DB range 0x%0.2X-0x%0.2X", b, b+1)
+		log.Info(fmt.Sprintf("compacting chain DB range 0x%0.2X-0x%0.2X", b, b+1))
 		err := ldb.LDB().CompactRange(util.Range{Start: []byte{b}, Limit: []byte{b + 1}})
 		if err != nil {
-			glog.Errorf("compaction error: %v", err)
+			log.Error(fmt.Sprintf("compaction error: %v", err))
 			return err
 		}
 	}

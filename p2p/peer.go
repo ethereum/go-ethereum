@@ -25,8 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -157,27 +156,27 @@ loop:
 			// A write finished. Allow the next write to start if
 			// there was no error.
 			if err != nil {
-				glog.V(logger.Detail).Infof("%v: write error: %v\n", p, err)
+				log.Trace(fmt.Sprintf("%v: write error: %v", p, err))
 				reason = DiscNetworkError
 				break loop
 			}
 			writeStart <- struct{}{}
 		case err := <-readErr:
 			if r, ok := err.(DiscReason); ok {
-				glog.V(logger.Debug).Infof("%v: remote requested disconnect: %v\n", p, r)
+				log.Debug(fmt.Sprintf("%v: remote requested disconnect: %v", p, r))
 				requested = true
 				reason = r
 			} else {
-				glog.V(logger.Detail).Infof("%v: read error: %v\n", p, err)
+				log.Trace(fmt.Sprintf("%v: read error: %v", p, err))
 				reason = DiscNetworkError
 			}
 			break loop
 		case err := <-p.protoErr:
 			reason = discReasonForError(err)
-			glog.V(logger.Debug).Infof("%v: protocol error: %v (%v)\n", p, err, reason)
+			log.Debug(fmt.Sprintf("%v: protocol error: %v (%v)", p, err, reason))
 			break loop
 		case reason = <-p.disc:
-			glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
+			log.Debug(fmt.Sprintf("%v: locally requested disconnect: %v", p, reason))
 			break loop
 		}
 	}
@@ -298,14 +297,14 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
-		glog.V(logger.Detail).Infof("%v: Starting protocol %s/%d\n", p, proto.Name, proto.Version)
+		log.Trace(fmt.Sprintf("%v: Starting protocol %s/%d", p, proto.Name, proto.Version))
 		go func() {
 			err := proto.Run(p, proto)
 			if err == nil {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d returned\n", p, proto.Name, proto.Version)
+				log.Trace(fmt.Sprintf("%v: Protocol %s/%d returned", p, proto.Name, proto.Version))
 				err = errors.New("protocol returned")
 			} else if err != io.EOF {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d error: %v\n", p, proto.Name, proto.Version, err)
+				log.Trace(fmt.Sprintf("%v: Protocol %s/%d error: %v", p, proto.Name, proto.Version, err))
 			}
 			p.protoErr <- err
 			p.wg.Done()

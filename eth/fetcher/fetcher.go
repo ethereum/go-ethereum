@@ -26,8 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -221,7 +220,7 @@ func (f *Fetcher) Enqueue(peer string, block *types.Block) error {
 // FilterHeaders extracts all the headers that were explicitly requested by the fetcher,
 // returning those that should be handled differently.
 func (f *Fetcher) FilterHeaders(headers []*types.Header, time time.Time) []*types.Header {
-	glog.V(logger.Detail).Infof("[eth/62] filtering %d headers", len(headers))
+	log.Trace(fmt.Sprintf("[eth/62] filtering %d headers", len(headers)))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *headerFilterTask)
@@ -249,7 +248,7 @@ func (f *Fetcher) FilterHeaders(headers []*types.Header, time time.Time) []*type
 // FilterBodies extracts all the block bodies that were explicitly requested by
 // the fetcher, returning those that should be handled differently.
 func (f *Fetcher) FilterBodies(transactions [][]*types.Transaction, uncles [][]*types.Header, time time.Time) ([][]*types.Transaction, [][]*types.Header) {
-	glog.V(logger.Detail).Infof("[eth/62] filtering %d:%d bodies", len(transactions), len(uncles))
+	log.Trace(fmt.Sprintf("[eth/62] filtering %d:%d bodies", len(transactions), len(uncles)))
 
 	// Send the filter channel to the fetcher
 	filter := make(chan *bodyFilterTask)
@@ -324,14 +323,14 @@ func (f *Fetcher) loop() {
 
 			count := f.announces[notification.origin] + 1
 			if count > hashLimit {
-				glog.V(logger.Debug).Infof("Peer %s: exceeded outstanding announces (%d)", notification.origin, hashLimit)
+				log.Debug(fmt.Sprintf("Peer %s: exceeded outstanding announces (%d)", notification.origin, hashLimit))
 				propAnnounceDOSMeter.Mark(1)
 				break
 			}
 			// If we have a valid block number, check that it's potentially useful
 			if notification.number > 0 {
 				if dist := int64(notification.number) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
-					glog.V(logger.Debug).Infof("[eth/62] Peer %s: discarded announcement #%d [%x…], distance %d", notification.origin, notification.number, notification.hash[:4], dist)
+					log.Debug(fmt.Sprintf("[eth/62] Peer %s: discarded announcement #%d [%x…], distance %d", notification.origin, notification.number, notification.hash[:4], dist))
 					propAnnounceDropMeter.Mark(1)
 					break
 				}
@@ -381,13 +380,15 @@ func (f *Fetcher) loop() {
 			}
 			// Send out all block header requests
 			for peer, hashes := range request {
-				if glog.V(logger.Detail) && len(hashes) > 0 {
-					list := "["
-					for _, hash := range hashes {
-						list += fmt.Sprintf("%x…, ", hash[:4])
-					}
-					list = list[:len(list)-2] + "]"
-					glog.V(logger.Detail).Infof("[eth/62] Peer %s: fetching headers %s", peer, list)
+				if len(hashes) > 0 {
+					log.Trace("", "msg", log.Lazy{Fn: func() string {
+						list := "["
+						for _, hash := range hashes {
+							list += fmt.Sprintf("%x…, ", hash[:4])
+						}
+						list = list[:len(list)-2] + "]"
+						return fmt.Sprintf("[eth/62] Peer %s: fetching headers %s", peer, list)
+					}})
 				}
 				// Create a closure of the fetch and schedule in on a new thread
 				fetchHeader, hashes := f.fetching[hashes[0]].fetchHeader, hashes
@@ -421,14 +422,16 @@ func (f *Fetcher) loop() {
 			}
 			// Send out all block body requests
 			for peer, hashes := range request {
-				if glog.V(logger.Detail) && len(hashes) > 0 {
-					list := "["
-					for _, hash := range hashes {
-						list += fmt.Sprintf("%x…, ", hash[:4])
-					}
-					list = list[:len(list)-2] + "]"
+				if len(hashes) > 0 {
+					log.Trace("", "msg", log.Lazy{Fn: func() string {
+						list := "["
+						for _, hash := range hashes {
+							list += fmt.Sprintf("%x…, ", hash[:4])
+						}
+						list = list[:len(list)-2] + "]"
 
-					glog.V(logger.Detail).Infof("[eth/62] Peer %s: fetching bodies %s", peer, list)
+						return fmt.Sprintf("[eth/62] Peer %s: fetching bodies %s", peer, list)
+					}})
 				}
 				// Create a closure of the fetch and schedule in on a new thread
 				if f.completingHook != nil {
@@ -462,7 +465,7 @@ func (f *Fetcher) loop() {
 				if announce := f.fetching[hash]; announce != nil && f.fetched[hash] == nil && f.completing[hash] == nil && f.queued[hash] == nil {
 					// If the delivered header does not match the promised number, drop the announcer
 					if header.Number.Uint64() != announce.number {
-						glog.V(logger.Detail).Infof("[eth/62] Peer %s: invalid block number for [%x…]: announced %d, provided %d", announce.origin, header.Hash().Bytes()[:4], announce.number, header.Number.Uint64())
+						log.Trace(fmt.Sprintf("[eth/62] Peer %s: invalid block number for [%x…]: announced %d, provided %d", announce.origin, header.Hash().Bytes()[:4], announce.number, header.Number.Uint64()))
 						f.dropPeer(announce.origin)
 						f.forgetHash(hash)
 						continue
@@ -474,7 +477,7 @@ func (f *Fetcher) loop() {
 
 						// If the block is empty (header only), short circuit into the final import queue
 						if header.TxHash == types.DeriveSha(types.Transactions{}) && header.UncleHash == types.CalcUncleHash([]*types.Header{}) {
-							glog.V(logger.Detail).Infof("[eth/62] Peer %s: block #%d [%x…] empty, skipping body retrieval", announce.origin, header.Number.Uint64(), header.Hash().Bytes()[:4])
+							log.Trace(fmt.Sprintf("[eth/62] Peer %s: block #%d [%x…] empty, skipping body retrieval", announce.origin, header.Number.Uint64(), header.Hash().Bytes()[:4]))
 
 							block := types.NewBlockWithHeader(header)
 							block.ReceivedAt = task.time
@@ -486,7 +489,7 @@ func (f *Fetcher) loop() {
 						// Otherwise add to the list of blocks needing completion
 						incomplete = append(incomplete, announce)
 					} else {
-						glog.V(logger.Detail).Infof("[eth/62] Peer %s: block #%d [%x…] already imported, discarding header", announce.origin, header.Number.Uint64(), header.Hash().Bytes()[:4])
+						log.Trace(fmt.Sprintf("[eth/62] Peer %s: block #%d [%x…] already imported, discarding header", announce.origin, header.Number.Uint64(), header.Hash().Bytes()[:4]))
 						f.forgetHash(hash)
 					}
 				} else {
@@ -617,14 +620,14 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 	// Ensure the peer isn't DOSing us
 	count := f.queues[peer] + 1
 	if count > blockLimit {
-		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x…], exceeded allowance (%d)", peer, block.NumberU64(), hash.Bytes()[:4], blockLimit)
+		log.Debug(fmt.Sprintf("Peer %s: discarded block #%d [%x…], exceeded allowance (%d)", peer, block.NumberU64(), hash.Bytes()[:4], blockLimit))
 		propBroadcastDOSMeter.Mark(1)
 		f.forgetHash(hash)
 		return
 	}
 	// Discard any past or too distant blocks
 	if dist := int64(block.NumberU64()) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
-		glog.V(logger.Debug).Infof("Peer %s: discarded block #%d [%x…], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist)
+		log.Debug(fmt.Sprintf("Peer %s: discarded block #%d [%x…], distance %d", peer, block.NumberU64(), hash.Bytes()[:4], dist))
 		propBroadcastDropMeter.Mark(1)
 		f.forgetHash(hash)
 		return
@@ -641,9 +644,9 @@ func (f *Fetcher) enqueue(peer string, block *types.Block) {
 		if f.queueChangeHook != nil {
 			f.queueChangeHook(op.block.Hash(), true)
 		}
-		if glog.V(logger.Debug) {
-			glog.Infof("Peer %s: queued block #%d [%x…], total %v", peer, block.NumberU64(), hash.Bytes()[:4], f.queue.Size())
-		}
+		log.Debug("", "msg", log.Lazy{Fn: func() string {
+			return fmt.Sprintf("Peer %s: queued block #%d [%x…], total %v", peer, block.NumberU64(), hash.Bytes()[:4], f.queue.Size())
+		}})
 	}
 }
 
@@ -654,14 +657,14 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 	hash := block.Hash()
 
 	// Run the import on a new thread
-	glog.V(logger.Debug).Infof("Peer %s: importing block #%d [%x…]", peer, block.NumberU64(), hash[:4])
+	log.Debug(fmt.Sprintf("Peer %s: importing block #%d [%x…]", peer, block.NumberU64(), hash[:4]))
 	go func() {
 		defer func() { f.done <- hash }()
 
 		// If the parent's unknown, abort insertion
 		parent := f.getBlock(block.ParentHash())
 		if parent == nil {
-			glog.V(logger.Debug).Infof("Peer %s: parent [%x…] of block #%d [%x…] unknown", peer, block.ParentHash().Bytes()[:4], block.NumberU64(), hash[:4])
+			log.Debug(fmt.Sprintf("Peer %s: parent [%x…] of block #%d [%x…] unknown", peer, block.ParentHash().Bytes()[:4], block.NumberU64(), hash[:4]))
 			return
 		}
 		// Quickly validate the header and propagate the block if it passes
@@ -676,13 +679,13 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 
 		default:
 			// Something went very wrong, drop the peer
-			glog.V(logger.Debug).Infof("Peer %s: block #%d [%x…] verification failed: %v", peer, block.NumberU64(), hash[:4], err)
+			log.Debug(fmt.Sprintf("Peer %s: block #%d [%x…] verification failed: %v", peer, block.NumberU64(), hash[:4], err))
 			f.dropPeer(peer)
 			return
 		}
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
-			glog.V(logger.Warn).Infof("Peer %s: block #%d [%x…] import failed: %v", peer, block.NumberU64(), hash[:4], err)
+			log.Warn(fmt.Sprintf("Peer %s: block #%d [%x…] import failed: %v", peer, block.NumberU64(), hash[:4], err))
 			return
 		}
 		// If import succeeded, broadcast the block

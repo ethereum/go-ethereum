@@ -35,8 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -278,7 +277,7 @@ func bzzd(ctx *cli.Context) error {
 		signal.Notify(sigc, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		glog.V(logger.Info).Infoln("Got sigterm, shutting down...")
+		log.Info(fmt.Sprint("Got sigterm, shutting down..."))
 		stack.Stop()
 	}()
 	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
@@ -343,7 +342,7 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(keyid); err == nil {
-		glog.V(logger.Info).Infof("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey))
+		log.Info(fmt.Sprintf("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey)))
 		return key
 	}
 	// Otherwise try getting it from the keystore.
@@ -400,7 +399,7 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 	for _, url := range nodes {
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			glog.Errorf("invalid bootnode %q", err)
+			log.Error(fmt.Sprintf("invalid bootnode %q", err))
 			continue
 		}
 		srv.AddPeer(n)

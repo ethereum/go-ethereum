@@ -233,7 +233,7 @@ func (c *client) postRaw(mimetype string, size int64, body io.ReadCloser) (strin
 func (c *client) downloadManifest(mhash string) (manifest, error) {
 
 	mroot := manifest{}
-	req, err := http.NewRequest("GET", c.api + "/bzzr:/" + mhash, nil)
+	req, err := http.NewRequest("GET", c.api+"/bzzr:/"+mhash, nil)
 	if err != nil {
 		return mroot, err
 	}

@@ -19,7 +19,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 
@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
@@ -46,35 +46,34 @@ func main() {
 	flag.Parse()
 
 	// Enable logging errors, we really do want to see those
-	glog.SetV(2)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat())))
 
 	// Load the test suite to run the RPC against
 	tests, err := tests.LoadBlockTests(*testFile)
 	if err != nil {
-		log.Fatalf("Failed to load test suite: %v", err)
+		log.Crit(fmt.Sprintf("Failed to load test suite: %v", err))
 	}
 	test, found := tests[*testName]
 	if !found {
-		log.Fatalf("Requested test (%s) not found within suite", *testName)
+		log.Crit(fmt.Sprintf("Requested test (%s) not found within suite", *testName))
 	}
 
 	stack, err := MakeSystemNode(*testKey, test)
 	if err != nil {
-		log.Fatalf("Failed to assemble test stack: %v", err)
+		log.Crit(fmt.Sprintf("Failed to assemble test stack: %v", err))
 	}
 	if err := stack.Start(); err != nil {
-		log.Fatalf("Failed to start test node: %v", err)
+		log.Crit(fmt.Sprintf("Failed to start test node: %v", err))
 	}
 	defer stack.Stop()
 
-	log.Println("Test node started...")
+	log.Info("Test node started...")
 
 	// Make sure the tests contained within the suite pass
 	if err := RunTest(stack, test); err != nil {
-		log.Fatalf("Failed to run the pre-configured test: %v", err)
+		log.Crit(fmt.Sprintf("Failed to run the pre-configured test: %v", err))
 	}
-	log.Println("Initial test suite passed...")
+	log.Info("Initial test suite passed...")
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt)

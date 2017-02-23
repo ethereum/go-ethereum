@@ -31,8 +31,7 @@ import (
 )
 
 func init() {
-	// glog.SetV(6)
-	// glog.SetToStderr(true)
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat())))
 }
 
 type testTransport struct {
