@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -36,12 +37,13 @@ type Backend interface {
 	EventMux() *event.TypeMux
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
+	GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([]bloombits.CompVector, error)
 }
 
 // Filter can be used to retrieve and filter logs.
 type Filter struct {
-	backend   Backend
-	useMipMap bool
+	backend                 Backend
+	useMipMap, useBloomBits bool
 
 	created time.Time
 
@@ -49,6 +51,8 @@ type Filter struct {
 	begin, end int64
 	addresses  []common.Address
 	topics     [][]common.Hash
+
+	matcher *bloombits.Matcher
 }
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
@@ -57,9 +61,11 @@ type Filter struct {
 // to light clients.
 func New(backend Backend, useMipMap bool) *Filter {
 	return &Filter{
-		backend:   backend,
-		useMipMap: useMipMap,
-		db:        backend.ChainDb(),
+		backend:      backend,
+		useMipMap:    useMipMap,
+		useBloomBits: !useMipMap,
+		db:           backend.ChainDb(),
+		matcher:      bloombits.NewMatcher(),
 	}
 }
 
@@ -79,11 +85,17 @@ func (f *Filter) SetEndBlock(end int64) {
 // in the given addresses.
 func (f *Filter) SetAddresses(addr []common.Address) {
 	f.addresses = addr
+	if f.useBloomBits {
+		f.matcher.SetAddresses(addr)
+	}
 }
 
 // SetTopics matches only logs that have topics matching the given topics.
 func (f *Filter) SetTopics(topics [][]common.Hash) {
 	f.topics = topics
+	if f.useBloomBits {
+		f.matcher.SetTopics(topics)
+	}
 }
 
 // FindOnce searches the blockchain for matching log entries, returning
@@ -167,7 +179,109 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []*types.Log, block
 	return nil, end
 }
 
+func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}) chan error {
+	errChn := make(chan error)
+	for i := 0; i < 10; i++ {
+		go func(i int) {
+			for {
+				//fmt.Println(i, "NextRequest")
+				b, s := f.matcher.NextRequest(stop)
+				//fmt.Println(i, "NextRequest ret", b, s)
+				if s == nil {
+					return
+				}
+				data, err := f.backend.GetBloomBits(ctx, uint64(b), s)
+				//fmt.Println(i, "GetBloomBits", len(data), err)
+				if err != nil {
+					f.matcher.Deliver(b, s, nil)
+					errChn <- err
+					return
+				}
+				decomp := make([]bloombits.BitVector, len(data))
+				for i, d := range data {
+					decomp[i] = bloombits.DecompressBloomBits(bloombits.CompVector(d))
+				}
+				//fmt.Println(i, "Deliver")
+				f.matcher.Deliver(b, s, decomp)
+				//fmt.Println(i, "Deliver ret")
+			}
+		}(i)
+	}
+
+	return errChn
+}
+
 func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.Log, blockNumber uint64, err error) {
+
+	checkBlock := func(i uint64, header *types.Header) (logs []*types.Log, blockNumber uint64, err error) {
+		// Get the logs of the block
+		receipts, err := f.backend.GetReceipts(ctx, header.Hash())
+		if err != nil {
+			return nil, end, err
+		}
+		var unfiltered []*types.Log
+		for _, receipt := range receipts {
+			unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
+		}
+		logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+		if len(logs) > 0 {
+			return logs, i, nil
+		}
+		return nil, i, nil
+	}
+
+	if f.useBloomBits {
+		haveBloomBitsBefore := core.GetBloomBitsAvailable(f.db) * bloombits.SectionSize
+		e := end
+		if haveBloomBitsBefore <= e {
+			e = haveBloomBitsBefore - 1
+		}
+
+		stop := make(chan struct{})
+		defer close(stop)
+		//fmt.Println("GetMatches")
+		matches := f.matcher.GetMatches(start, e, stop)
+		//fmt.Println("GetMatches ret")
+		errChn := f.serveMatcher(ctx, stop)
+
+	loop:
+		for {
+			select {
+			case i, ok := <-matches:
+				if !ok {
+					break loop
+				}
+
+				blockNumber := rpc.BlockNumber(i)
+				header, err := f.backend.HeaderByNumber(ctx, blockNumber)
+				if header == nil || err != nil {
+					return logs, end, err
+				}
+
+				l, b, e := checkBlock(i, header)
+
+				//fmt.Println("match", i, f.bloomFilter(header.Bloom), len(l))
+				/*for i := 0; i < 16; i++ {
+					fmt.Println(header.Bloom[i*16 : i*16+16])
+				}*/
+
+				if l != nil || e != nil {
+					return l, b, e
+				}
+			case err := <-errChn:
+				return logs, end, err
+			case <-ctx.Done():
+				return nil, end, ctx.Err()
+			}
+		}
+
+		if end < haveBloomBitsBefore {
+			return logs, end, nil
+		} else {
+			start = haveBloomBitsBefore
+		}
+	}
+
 	for i := start; i <= end; i++ {
 		blockNumber := rpc.BlockNumber(i)
 		header, err := f.backend.HeaderByNumber(ctx, blockNumber)
@@ -178,18 +292,9 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 		// Use bloom filtering to see if this block is interesting given the
 		// current parameters
 		if f.bloomFilter(header.Bloom) {
-			// Get the logs of the block
-			receipts, err := f.backend.GetReceipts(ctx, header.Hash())
-			if err != nil {
-				return nil, end, err
-			}
-			var unfiltered []*types.Log
-			for _, receipt := range receipts {
-				unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
-			}
-			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
-			if len(logs) > 0 {
-				return logs, uint64(blockNumber), nil
+			l, b, e := checkBlock(i, header)
+			if l != nil || e != nil {
+				return l, b, e
 			}
 		}
 	}

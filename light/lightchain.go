@@ -65,6 +65,8 @@ type LightChain struct {
 	procInterrupt int32 // interrupt signaler for block processing
 	wg            sync.WaitGroup
 
+	newHeadCallback newHeadCallback
+
 	pow       pow.PoW
 	validator core.HeaderValidator
 }
@@ -102,14 +104,15 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 			return nil, err
 		}
 		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		core.StoreBloomBitsAvailable(odr.Database(), 0)
 	}
 
 	if bc.genesisBlock.Hash() == (common.Hash{212, 229, 103, 64, 248, 118, 174, 248, 192, 16, 184, 106, 64, 213, 245, 103, 69, 161, 24, 208, 144, 106, 52, 230, 154, 236, 140, 13, 177, 203, 143, 163}) {
 		// add trusted CHT
 		if config.DAOForkSupport {
 			WriteTrustedCht(bc.chainDb, TrustedCht{
-				Number: 637,
-				Root:   common.HexToHash("01e408d9b1942f05dba1a879f3eaafe34d219edaeb8223fecf1244cc023d3e23"),
+				Number: 752,
+				Root:   common.HexToHash("4d2e4d9ce20626b62d6fe7598fffd8f63175c8cc2a60dc4211cf6d88f52a78e8"),
 			})
 		} else {
 			WriteTrustedCht(bc.chainDb, TrustedCht{
@@ -143,6 +146,15 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 		}
 	}
 	return bc, nil
+}
+
+type newHeadCallback func(*types.Header, bool)
+
+func (self *LightChain) AddNewHeadCallback(cb newHeadCallback) {
+	self.chainmu.Lock()
+	self.newHeadCallback = cb
+	cb(self.hc.CurrentHeader(), false)
+	self.chainmu.Unlock()
 }
 
 func (self *LightChain) getProcInterrupt() bool {
@@ -355,12 +367,19 @@ func (self *LightChain) Rollback(chain []common.Hash) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
+	var rollbackHead *types.Header
+
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
 		if head := self.hc.CurrentHeader(); head.Hash() == hash {
-			self.hc.SetCurrentHeader(self.GetHeader(head.ParentHash, head.Number.Uint64()-1))
+			rollbackHead = self.GetHeader(head.ParentHash, head.Number.Uint64()-1)
+			self.hc.SetCurrentHeader(rollbackHead)
 		}
+	}
+
+	if rollbackHead != nil && self.newHeadCallback != nil {
+		self.newHeadCallback(rollbackHead, true)
 	}
 }
 
@@ -402,7 +421,11 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		self.mu.Lock()
 		defer self.mu.Unlock()
 
-		status, err := self.hc.WriteHeader(header)
+		status, err := self.hc.WriteHeader(header, func(head *types.Header) {
+			if self.newHeadCallback != nil {
+				self.newHeadCallback(head, true)
+			}
+		})
 
 		switch status {
 		case core.CanonStatTy:
@@ -424,6 +447,11 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		return err
 	}
 	i, err := self.hc.InsertHeaderChain(chain, checkFreq, whFunc)
+
+	if self.newHeadCallback != nil {
+		self.newHeadCallback(self.hc.CurrentHeader(), false)
+	}
+
 	go self.postChainEvents(events)
 	return i, err
 }

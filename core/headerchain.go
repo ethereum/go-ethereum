@@ -130,6 +130,8 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
 	return number
 }
 
+type ReorgCallback func(*types.Header)
+
 // WriteHeader writes a header into the local chain, given that its parent is
 // already known. If the total difficulty of the newly inserted header becomes
 // greater than the current known TD, the canonical chain is re-routed.
@@ -139,7 +141,7 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) uint64 {
 // without the real blocks. Hence, writing headers directly should only be done
 // in two scenarios: pure-header mode of operation (light clients), or properly
 // separated header/block phases (non-archive clients).
-func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, err error) {
+func (hc *HeaderChain) WriteHeader(header *types.Header, reorgCallback ReorgCallback) (status WriteStatus, err error) {
 	// Cache some values to prevent constant recalculation
 	var (
 		hash   = header.Hash()
@@ -185,6 +187,10 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 			headHash = headHeader.ParentHash
 			headNumber = headHeader.Number.Uint64() - 1
 			headHeader = hc.GetHeader(headHash, headNumber)
+		}
+
+		if reorgCallback != nil && headNumber < hc.currentHeader.Number.Uint64() {
+			reorgCallback(headHeader)
 		}
 
 		// Extend the canonical chain with the new header
