@@ -69,22 +69,24 @@ func (f formatFunc) Format(r *Record) []byte {
 //
 //     [May 16 20:58:45] [DBUG] remove route ns=haproxy addr=127.0.0.1:50002
 //
-func TerminalFormat() Format {
+func TerminalFormat(usecolor bool) Format {
 	return FormatFunc(func(r *Record) []byte {
 		var color = 0
-		switch r.Lvl {
-		case LvlCrit:
-			color = 35
-		case LvlError:
-			color = 31
-		case LvlWarn:
-			color = 33
-		case LvlInfo:
-			color = 32
-		case LvlDebug:
-			color = 36
-		case LvlTrace:
-			color = 34
+		if usecolor {
+			switch r.Lvl {
+			case LvlCrit:
+				color = 35
+			case LvlError:
+				color = 31
+			case LvlWarn:
+				color = 33
+			case LvlInfo:
+				color = 32
+			case LvlDebug:
+				color = 36
+			case LvlTrace:
+				color = 34
+			}
 		}
 
 		b := &bytes.Buffer{}
