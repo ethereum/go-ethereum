@@ -16,33 +16,28 @@
 
 // +build linux darwin freebsd
 
-package api
+package fuse
 
 import (
+	"bazil.org/fuse"
+	"bazil.org/fuse/fs"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
-
-	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-)
-
-var (
-	inode     uint64 = 1
-	inodeLock sync.RWMutex
 )
 
 var (
 	errEmptyMountPoint = errors.New("need non-empty mount point")
 	errMaxMountCount   = errors.New("max FUSE mount count reached")
 	errMountTimeout    = errors.New("mount timeout")
+	errAlreadyMounted  = errors.New("mount point is already serving")
 )
 
 func isFUSEUnsupportedError(err error) bool {
@@ -52,16 +47,17 @@ func isFUSEUnsupportedError(err error) bool {
 	return err == fuse.ErrOSXFUSENotFound
 }
 
-// MountInfo contains information about every active mount
+// information about every active mount
 type MountInfo struct {
 	MountPoint     string
-	ManifestHash   string
-	resolvedKey    storage.Key
-	rootDir        *Dir
+	StartManifest  string
+	LatestManifest string
+	rootDir        *SwarmDir
 	fuseConnection *fuse.Conn
+	swarmApi       *api.Api
+	lock           *sync.RWMutex
 }
 
-// newInode creates a new inode number.
 // Inode numbers need to be unique, they are used for caching inside fuse
 func newInode() uint64 {
 	inodeLock.Lock()
@@ -70,7 +66,21 @@ func newInode() uint64 {
 	return inode
 }
 
+func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
+	newMountInfo := &MountInfo{
+		MountPoint:     mpoint,
+		StartManifest:  mhash,
+		LatestManifest: mhash,
+		rootDir:        nil,
+		fuseConnection: nil,
+		swarmApi:       sapi,
+		lock:           &sync.RWMutex{},
+	}
+	return newMountInfo
+}
+
 func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
+
 	if mountpoint == "" {
 		return nil, errEmptyMountPoint
 	}
@@ -79,8 +89,8 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 	}
 
-	self.activeLock.Lock()
-	defer self.activeLock.Unlock()
+	self.swarmFsLock.Lock()
+	defer self.swarmFsLock.Unlock()
 
 	noOfActiveMounts := len(self.activeMounts)
 	if noOfActiveMounts >= maxFuseMounts {
@@ -88,44 +98,27 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	}
 
 	if _, ok := self.activeMounts[cleanedMountPoint]; ok {
-		return nil, fmt.Errorf("%s is already mounted", cleanedMountPoint)
+		return nil, errAlreadyMounted
 	}
 
-	uri, err := Parse("bzz:/" + mhash)
+	log.Info(fmt.Sprintf("Attempting to mount %s ", cleanedMountPoint))
+	key, manifestEntryMap, err := self.swarmApi.BuildDirectoryTree(mhash, true)
 	if err != nil {
 		return nil, err
 	}
-	key, err := self.swarmApi.Resolve(uri)
-	if err != nil {
-		return nil, err
-	}
 
-	path := uri.Path
-	if len(path) > 0 {
-		path += "/"
-	}
+	mi := NewMountInfo(mhash, cleanedMountPoint, self.swarmApi)
 
-	quitC := make(chan bool)
-	trie, err := loadManifest(self.swarmApi.dpa, key, quitC)
-	if err != nil {
-		return nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
-	}
+	dirTree := map[string]*SwarmDir{}
+	rootDir := NewSwarmDir("/", mi)
+	dirTree["/"] = rootDir
+	mi.rootDir = rootDir
 
-	dirTree := map[string]*Dir{}
+	for suffix, entry := range manifestEntryMap {
 
-	rootDir := &Dir{
-		inode:       newInode(),
-		name:        "root",
-		directories: nil,
-		files:       nil,
-	}
-	dirTree["root"] = rootDir
-
-	err = trie.listWithPrefix(path, quitC, func(entry *manifestTrieEntry, suffix string) {
 		key = common.Hex2Bytes(entry.Hash)
 		fullpath := "/" + suffix
 		basepath := filepath.Dir(fullpath)
-		filename := filepath.Base(fullpath)
 
 		parentDir := rootDir
 		dirUntilNow := ""
@@ -136,13 +129,7 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 				dirUntilNow = dirUntilNow + "/" + thisDir
 
 				if _, ok := dirTree[dirUntilNow]; !ok {
-					dirTree[dirUntilNow] = &Dir{
-						inode:       newInode(),
-						name:        thisDir,
-						path:        dirUntilNow,
-						directories: nil,
-						files:       nil,
-					}
+					dirTree[dirUntilNow] = NewSwarmDir(dirUntilNow, mi)
 					parentDir.directories = append(parentDir.directories, dirTree[dirUntilNow])
 					parentDir = dirTree[dirUntilNow]
 
@@ -152,29 +139,32 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 			}
 		}
-		thisFile := &File{
-			inode:    newInode(),
-			name:     filename,
-			path:     fullpath,
-			key:      key,
-			swarmApi: self.swarmApi,
-		}
+		thisFile := NewSwarmFile(basepath, filepath.Base(fullpath), mi)
+		thisFile.key = key
+
 		parentDir.files = append(parentDir.files, thisFile)
-	})
+	}
 
 	fconn, err := fuse.Mount(cleanedMountPoint, fuse.FSName("swarmfs"), fuse.VolumeName(mhash))
-	if err != nil {
+	if isFUSEUnsupportedError(err) {
+		log.Warn("Fuse not installed", "mountpoint", cleanedMountPoint, "err", err)
+		return nil, err
+	} else if err != nil {
 		fuse.Unmount(cleanedMountPoint)
 		log.Warn("Error mounting swarm manifest", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 	}
+	mi.fuseConnection = fconn
 
-	mounterr := make(chan error, 1)
+	serverr := make(chan error, 1)
 	go func() {
-		filesys := &FS{root: rootDir}
+		log.Info(fmt.Sprintf("Serving %s at %s", mhash, cleanedMountPoint))
+		filesys := &SwarmRoot{root: rootDir}
 		if err := fs.Serve(fconn, filesys); err != nil {
-			mounterr <- err
+			log.Warn(fmt.Sprintf("Could not Serve SwarmFileSystem error: %v", err))
+			serverr <- err
 		}
+
 	}()
 
 	// Check if the mount process has an error to report.
@@ -183,7 +173,8 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		fuse.Unmount(cleanedMountPoint)
 		return nil, errMountTimeout
 
-	case err := <-mounterr:
+	case err := <-serverr:
+		fuse.Unmount(cleanedMountPoint)
 		log.Warn("Error serving swarm FUSE FS", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 
@@ -191,46 +182,47 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		log.Info("Now serving swarm FUSE FS", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
-	// Assemble and Store the mount information for future use
-	mi := &MountInfo{
-		MountPoint:     cleanedMountPoint,
-		ManifestHash:   mhash,
-		resolvedKey:    key,
-		rootDir:        rootDir,
-		fuseConnection: fconn,
-	}
 	self.activeMounts[cleanedMountPoint] = mi
 	return mi, nil
 }
 
-func (self *SwarmFS) Unmount(mountpoint string) (bool, error) {
-	self.activeLock.Lock()
-	defer self.activeLock.Unlock()
+func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
+
+	self.swarmFsLock.Lock()
+	defer self.swarmFsLock.Unlock()
 
 	cleanedMountPoint, err := filepath.Abs(filepath.Clean(mountpoint))
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	mountInfo := self.activeMounts[cleanedMountPoint]
+
 	if mountInfo == nil || mountInfo.MountPoint != cleanedMountPoint {
-		return false, fmt.Errorf("%s is not mounted", cleanedMountPoint)
+		return nil, fmt.Errorf("%s is not mounted", cleanedMountPoint)
 	}
 	err = fuse.Unmount(cleanedMountPoint)
 	if err != nil {
-		// TODO(jmozah): try forceful unmount if normal unmount fails
-		return false, err
+		err1 := externalUnMount(cleanedMountPoint)
+		if err1 != nil {
+			errStr := fmt.Sprintf("UnMount error: %v", err)
+			log.Warn(errStr)
+			return nil, err1
+		}
 	}
 
-	// remove the mount information from the active map
 	mountInfo.fuseConnection.Close()
 	delete(self.activeMounts, cleanedMountPoint)
-	return true, nil
+
+	succString := fmt.Sprintf("UnMounting %v succeeded", cleanedMountPoint)
+	log.Info(succString)
+
+	return mountInfo, nil
 }
 
 func (self *SwarmFS) Listmounts() []*MountInfo {
-	self.activeLock.RLock()
-	defer self.activeLock.RUnlock()
+	self.swarmFsLock.RLock()
+	defer self.swarmFsLock.RUnlock()
 
 	rows := make([]*MountInfo, 0, len(self.activeMounts))
 	for _, mi := range self.activeMounts {

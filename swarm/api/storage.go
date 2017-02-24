@@ -83,7 +83,7 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	return &Response{mimeType, status, expsize, string(body[:size])}, err
 }
 
-// Modify(rootHash, path, contentHash, contentType) takes th e manifest trie rooted in rootHash,
+// Modify(rootHash, basePath, contentHash, contentType) takes th e manifest trie rooted in rootHash,
 // and merge on  to it. creating an entry w conentType (mime)
 //
 // DEPRECATED: Use the HTTP API instead

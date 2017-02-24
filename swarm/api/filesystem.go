@@ -68,7 +68,6 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		log.Debug(fmt.Sprintf("uploading '%s'", localpath))
 		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 			if (err == nil) && !info.IsDir() {
-				//fmt.Printf("lp %s  path %s\n", localpath, path)
 				if len(path) <= start {
 					return fmt.Errorf("Path is too short")
 				}
@@ -170,7 +169,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	return hs, err2
 }
 
-// Download replicates the manifest path structure on the local filesystem
+// Download replicates the manifest basePath structure on the local filesystem
 // under localpath
 //
 // DEPRECATED: Use the HTTP API instead
@@ -269,7 +268,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 }
 
 func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Key, path string) error {
-	f, err := os.Create(path) // TODO: path separators
+	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err
 	}

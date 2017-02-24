@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package api
+package fuse
 
 import (
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"sync"
 	"time"
 )
@@ -24,20 +25,40 @@ import (
 const (
 	Swarmfs_Version = "0.1"
 	mountTimeout    = time.Second * 5
+	unmountTimeout  = time.Second * 10
 	maxFuseMounts   = 5
 )
 
+var (
+	swarmfs     *SwarmFS // Swarm file system singleton
+	swarmfsLock sync.Once
+
+	inode     uint64 = 1 // global inode
+	inodeLock sync.RWMutex
+)
+
 type SwarmFS struct {
-	swarmApi     *Api
+	swarmApi     *api.Api
 	activeMounts map[string]*MountInfo
-	activeLock   *sync.RWMutex
+	swarmFsLock  *sync.RWMutex
 }
 
-func NewSwarmFS(api *Api) *SwarmFS {
-	swarmfs := &SwarmFS{
-		swarmApi:     api,
-		activeLock:   &sync.RWMutex{},
-		activeMounts: map[string]*MountInfo{},
-	}
+func NewSwarmFS(api *api.Api) *SwarmFS {
+	swarmfsLock.Do(func() {
+		swarmfs = &SwarmFS{
+			swarmApi:     api,
+			swarmFsLock:  &sync.RWMutex{},
+			activeMounts: map[string]*MountInfo{},
+		}
+	})
 	return swarmfs
+
+}
+
+// Inode numbers need to be unique, they are used for caching inside fuse
+func NewInode() uint64 {
+	inodeLock.Lock()
+	defer inodeLock.Unlock()
+	inode += 1
+	return inode
 }

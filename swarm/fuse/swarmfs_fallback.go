@@ -16,7 +16,7 @@
 
 // +build !linux,!darwin,!freebsd
 
-package api
+package fuse
 
 import (
 	"errors"
@@ -29,8 +29,9 @@ func isFUSEUnsupportedError(err error) bool {
 }
 
 type MountInfo struct {
-	MountPoint   string
-	ManifestHash string
+	MountPoint     string
+	StartManifest  string
+	LatestManifest string
 }
 
 func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
