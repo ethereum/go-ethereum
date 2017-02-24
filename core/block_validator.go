@@ -32,6 +32,7 @@ import (
 
 var (
 	ExpDiffPeriod = big.NewInt(100000)
+	big9          = big.NewInt(9)
 	big10         = big.NewInt(10)
 	bigMinus99    = big.NewInt(-99)
 )
@@ -203,7 +204,7 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 // Validates a header. Returns an error if the header is invalid.
 //
 // See YP section 4.3.4. "Block Header Validity"
-func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
+func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header, parent *types.Header, checkPow, uncle bool) error {
 	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
@@ -221,7 +222,7 @@ func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Heade
 		return BlockEqualTSErr
 	}
 
-	expd := CalcDifficulty(config, header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
+	expd := CalcDifficulty(config, header.Time.Uint64(), parent)
 	if expd.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("Difficulty check failed for header (remote: %v local: %v)", header.Difficulty, expd)
 	}
@@ -262,15 +263,64 @@ func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Heade
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	if config.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
-		return calcDifficultyHomestead(time, parentTime, parentNumber, parentDiff)
-	} else {
-		return calcDifficultyFrontier(time, parentTime, parentNumber, parentDiff)
+func CalcDifficulty(config *params.ChainConfig, time uint64, parent *types.Header) *big.Int {
+	next := new(big.Int).Add(parent.Number, common.Big1)
+	switch {
+	case config.IsEIP100(next):
+		return CalcDifficultyMetropolis(time, parent)
+	case config.IsHomestead(next):
+		return calcDifficultyHomestead(time, parent)
+	default:
+		return calcDifficultyFrontier(time, parent)
 	}
 }
 
-func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+func CalcDifficultyMetropolis(time uint64, parent *types.Header) *big.Int {
+	bigTime := new(big.Int).SetUint64(time)
+	bigParentTime := new(big.Int).Set(parent.Time)
+
+	// adj_factor = max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99)
+	var x *big.Int
+	if parent.UncleHash == types.EmptyUncleHash {
+		x = big.NewInt(1)
+	} else {
+		x = big.NewInt(2)
+	}
+	z := new(big.Int).Sub(bigTime, bigParentTime)
+	z.Div(x, big9)
+	x.Sub(x, z)
+
+	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
+	if x.Cmp(bigMinus99) < 0 {
+		x.Set(bigMinus99)
+	}
+
+	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
+	y := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
+	x.Mul(y, x)
+	x.Add(parent.Difficulty, x)
+
+	// minimum difficulty can ever be (before exponential factor)
+	if x.Cmp(params.MinimumDifficulty) < 0 {
+		x.Set(params.MinimumDifficulty)
+	}
+
+	// for the exponential factor
+	periodCount := new(big.Int).Add(parent.Number, common.Big1)
+	periodCount.Div(periodCount, ExpDiffPeriod)
+
+	// the exponential factor, commonly referred to as "the bomb"
+	// diff = diff + 2^(periodCount - 2)
+	if periodCount.Cmp(common.Big1) > 0 {
+		y.Sub(periodCount, common.Big2)
+		y.Exp(common.Big2, y, nil)
+		x.Add(x, y)
+	}
+
+	return x
+}
+
+func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.mediawiki
 	// algorithm:
 	// diff = (parent_diff +
@@ -278,7 +328,7 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 	//        ) + 2^(periodCount - 2)
 
 	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parentTime)
+	bigParentTime := new(big.Int).Set(parent.Time)
 
 	// holds intermediate values to make the algo easier to read & audit
 	x := new(big.Int)
@@ -295,9 +345,9 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 	}
 
 	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDiff, params.DifficultyBoundDivisor)
+	y.Div(parent.Difficulty, params.DifficultyBoundDivisor)
 	x.Mul(y, x)
-	x.Add(parentDiff, x)
+	x.Add(parent.Difficulty, x)
 
 	// minimum difficulty can ever be (before exponential factor)
 	if x.Cmp(params.MinimumDifficulty) < 0 {
@@ -305,7 +355,7 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 	}
 
 	// for the exponential factor
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
+	periodCount := new(big.Int).Add(parent.Number, common.Big1)
 	periodCount.Div(periodCount, ExpDiffPeriod)
 
 	// the exponential factor, commonly referred to as "the bomb"
@@ -319,25 +369,25 @@ func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *
 	return x
 }
 
-func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
+func calcDifficultyFrontier(time uint64, parent *types.Header) *big.Int {
 	diff := new(big.Int)
-	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
+	adjust := new(big.Int).Div(parent.Difficulty, params.DifficultyBoundDivisor)
 	bigTime := new(big.Int)
 	bigParentTime := new(big.Int)
 
 	bigTime.SetUint64(time)
-	bigParentTime.SetUint64(parentTime)
+	bigParentTime.Set(parent.Time)
 
 	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parentDiff, adjust)
+		diff.Add(parent.Difficulty, adjust)
 	} else {
-		diff.Sub(parentDiff, adjust)
+		diff.Sub(parent.Difficulty, adjust)
 	}
 	if diff.Cmp(params.MinimumDifficulty) < 0 {
 		diff.Set(params.MinimumDifficulty)
 	}
 
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
+	periodCount := new(big.Int).Add(parent.Number, common.Big1)
 	periodCount.Div(periodCount, ExpDiffPeriod)
 	if periodCount.Cmp(common.Big1) > 0 {
 		// diff = diff + 2^(periodCount - 2)
