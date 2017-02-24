@@ -364,20 +364,20 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 		// Make sure chain order is honoured and preserved throughout
 		hash := header.Hash()
 		if header.Number == nil || header.Number.Uint64() != from {
-			log.Warn(fmt.Sprintf("Header #%v [%x…] broke chain ordering, expected %d", header.Number, hash[:4], from))
+			log.Warn("Header broke chain ordering", "number", header.Number, "hash", hash.Hex()[2:10], "expected", from)
 			break
 		}
 		if q.headerHead != (common.Hash{}) && q.headerHead != header.ParentHash {
-			log.Warn(fmt.Sprintf("Header #%v [%x…] broke chain ancestry", header.Number, hash[:4]))
+			log.Warn("Header broke chain ancestry", "number", header.Number, "hash", hash.Hex()[2:10])
 			break
 		}
 		// Make sure no duplicate requests are executed
 		if _, ok := q.blockTaskPool[hash]; ok {
-			log.Warn(fmt.Sprintf("Header #%d [%x…] already scheduled for block fetch", header.Number.Uint64(), hash[:4]))
+			log.Warn("Header  already scheduled for block fetch", "number", header.Number, "hash", hash.Hex()[2:10])
 			continue
 		}
 		if _, ok := q.receiptTaskPool[hash]; ok {
-			log.Warn(fmt.Sprintf("Header #%d [%x…] already scheduled for receipt fetch", header.Number.Uint64(), hash[:4]))
+			log.Warn("Header already scheduled for receipt fetch", "number", header.Number, "hash", hash.Hex()[2:10])
 			continue
 		}
 		// Queue the header for content retrieval
@@ -391,7 +391,7 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 		}
 		if q.mode == FastSync && header.Number.Uint64() == q.fastSyncPivot {
 			// Pivoting point of the fast sync, switch the state retrieval to this
-			log.Debug(fmt.Sprintf("Switching state downloads to %d [%x…]", header.Number.Uint64(), header.Hash().Bytes()[:4]))
+			log.Debug("Switching state downloads to new block", "number", header.Number, "hash", hash.Hex()[2:10])
 
 			q.stateTaskIndex = 0
 			q.stateTaskPool = make(map[common.Hash]int)
@@ -872,10 +872,10 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	accepted := len(headers) == MaxHeaderFetch
 	if accepted {
 		if headers[0].Number.Uint64() != request.From {
-			log.Trace(fmt.Sprintf("Peer %s: first header #%v [%x…] broke chain ordering, expected %d", id, headers[0].Number, headers[0].Hash().Bytes()[:4], request.From))
+			log.Trace("First header broke chain ordering", "peer", id, "number", headers[0].Number, "hash", headers[0].Hash().Hex()[2:10], request.From)
 			accepted = false
 		} else if headers[len(headers)-1].Hash() != target {
-			log.Trace(fmt.Sprintf("Peer %s: last header #%v [%x…] broke skeleton structure, expected %x", id, headers[len(headers)-1].Number, headers[len(headers)-1].Hash().Bytes()[:4], target[:4]))
+			log.Trace("Last header broke skeleton structure ", "peer", id, "number", headers[len(headers)-1].Number, "hash", headers[len(headers)-1].Hash().Hex()[2:10], "expected", target.Hex()[2:10])
 			accepted = false
 		}
 	}
@@ -883,12 +883,12 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 		for i, header := range headers[1:] {
 			hash := header.Hash()
 			if want := request.From + 1 + uint64(i); header.Number.Uint64() != want {
-				log.Warn(fmt.Sprintf("Peer %s: header #%v [%x…] broke chain ordering, expected %d", id, header.Number, hash[:4], want))
+				log.Warn("Header broke chain ordering", "peer", id, "number", header.Number, "hash", hash.Hex()[2:10], "expected", want)
 				accepted = false
 				break
 			}
 			if headers[i].Hash() != header.ParentHash {
-				log.Warn(fmt.Sprintf("Peer %s: header #%v [%x…] broke chain ancestry", id, header.Number, hash[:4]))
+				log.Warn("Header broke chain ancestry", "peer", id, "number", header.Number, "hash", hash.Hex()[2:10])
 				accepted = false
 				break
 			}
@@ -896,7 +896,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
 	if !accepted {
-		log.Trace(fmt.Sprintf("Peer %s: skeleton filling from header #%d not accepted", id, request.From))
+		log.Trace("Skeleton filling not accepted", "peer", id, "from", request.From)
 
 		miss := q.headerPeerMiss[id]
 		if miss == nil {
@@ -923,7 +923,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 
 		select {
 		case headerProcCh <- process:
-			log.Trace(fmt.Sprintf("%s: pre-scheduled %d headers from #%v", id, len(process), process[0].Number))
+			log.Trace("Pre-scheduled new headers", "peer", id, "count", len(process), "from", process[0].Number)
 			q.headerProced += len(process)
 		default:
 		}

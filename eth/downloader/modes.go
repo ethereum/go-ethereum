@@ -24,3 +24,11 @@ const (
 	FastSync                  // Quickly download the headers, full sync only at the chain head
 	LightSync                 // Download only the headers and terminate afterwards
 )
+
+// syncModeLabels contains a mapping of sync modes to textual label used by the
+// logging system.
+var syncModeLabels = map[SyncMode]string{
+	FullSync:  "full",
+	FastSync:  "fast",
+	LightSync: "light",
+}
