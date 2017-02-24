@@ -5,19 +5,34 @@ matrix:
   include:
     - os: linux
       dist: trusty
+      sudo: required
       go: 1.7.5
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
 
     # These are the latest Go versions, only run go vet and misspell on these
     - os: linux
       dist: trusty
+      sudo: required
       go: 1.8
       script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
         - go run build/ci.go install
         - go run build/ci.go test -coverage -vet -misspell
 
     - os: osx
       go: 1.8
+      sudo: required
       script:
+        - brew update
+        - brew install caskroom/cask/brew-cask
+        - brew cask install osxfuse
         - go run build/ci.go install
         - go run build/ci.go test -coverage -vet -misspell
 

@@ -27,8 +27,11 @@ var Modules = map[string]string{
 	"personal":   Personal_JS,
 	"rpc":        RPC_JS,
 	"shh":        Shh_JS,
+	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
+
 }
+
 
 const Chequebook_JS = `
 web3._extend({
@@ -484,6 +487,32 @@ web3._extend({
 			outputFormatter: web3._extend.utils.toDecimal
 		})
 	]
+});
+`
+const SWARMFS_JS = `
+web3._extend({
+  property: 'swarmfs',
+  methods:
+  [
+    new web3._extend.Method({
+      name: 'mount',
+      call: 'swarmfs_mount',
+      params: 2,
+      inputFormatter: [null,null]
+    }),
+    new web3._extend.Method({
+      name: 'unmount',
+      call: 'swarmfs_unmount',
+      params: 1,
+      inputFormatter: [null]
+    }),
+    new web3._extend.Method({
+      name: 'listmounts',
+      call: 'swarmfs_listmounts',
+      params: 0,
+      inputFormatter: []
+    })
+  ]
 });
 `
 

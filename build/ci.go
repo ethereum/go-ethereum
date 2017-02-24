@@ -173,6 +173,20 @@ func doInstall(cmdline []string) {
 	if flag.NArg() > 0 {
 		packages = flag.Args()
 	}
+
+	// Resolve ./... manually and remove vendor/bazil/fuse (fuse is not in windows)
+	out, err := goTool("list", "./...").CombinedOutput()
+	if err != nil {
+		log.Fatalf("package listing failed: %v\n%s", err, string(out))
+	}
+	packages = []string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "vendor") {
+			packages = append(packages, strings.TrimSpace(line))
+		}
+	}
+
+
 	if *arch == "" || *arch == runtime.GOARCH {
 		goinstall := goTool("install", buildFlags(env)...)
 		goinstall.Args = append(goinstall.Args, "-v")
