@@ -24,6 +24,7 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -161,7 +162,7 @@ func verifyTxFields(chainConfig *params.ChainConfig, txTest TransactionTest, dec
 
 	var decodedSender common.Address
 
-	signer := types.MakeSigner(chainConfig, common.String2Big(txTest.Blocknumber))
+	signer := types.MakeSigner(chainConfig, math.MustParseBig256(txTest.Blocknumber))
 	decodedSender, err = types.Sender(signer, decodedTx)
 	if err != nil {
 		return err

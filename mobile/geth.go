@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
@@ -145,9 +144,9 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			LightMode:               true,
 			DatabaseCache:           config.EthereumDatabaseCache,
 			NetworkId:               config.EthereumNetworkID,
-			GasPrice:                new(big.Int).Mul(big.NewInt(20), common.Shannon),
-			GpoMinGasPrice:          new(big.Int).Mul(big.NewInt(20), common.Shannon),
-			GpoMaxGasPrice:          new(big.Int).Mul(big.NewInt(500), common.Shannon),
+			GasPrice:                new(big.Int).SetUint64(20 * params.Shannon),
+			GpoMinGasPrice:          new(big.Int).SetUint64(50 * params.Shannon),
+			GpoMaxGasPrice:          new(big.Int).SetUint64(500 * params.Shannon),
 			GpoFullBlockRatio:       80,
 			GpobaseStepDown:         10,
 			GpobaseStepUp:           100,

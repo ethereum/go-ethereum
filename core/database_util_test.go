@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -53,11 +54,11 @@ func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	d.ParentTimestamp = common.String2Big(ext.ParentTimestamp).Uint64()
-	d.ParentDifficulty = common.String2Big(ext.ParentDifficulty)
-	d.CurrentTimestamp = common.String2Big(ext.CurrentTimestamp).Uint64()
-	d.CurrentBlocknumber = common.String2Big(ext.CurrentBlocknumber)
-	d.CurrentDifficulty = common.String2Big(ext.CurrentDifficulty)
+	d.ParentTimestamp = math.MustParseUint64(ext.ParentTimestamp)
+	d.ParentDifficulty = math.MustParseBig256(ext.ParentDifficulty)
+	d.CurrentTimestamp = math.MustParseUint64(ext.CurrentTimestamp)
+	d.CurrentBlocknumber = math.MustParseBig256(ext.CurrentBlocknumber)
+	d.CurrentDifficulty = math.MustParseBig256(ext.CurrentDifficulty)
 
 	return nil
 }

@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -67,23 +68,48 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	// creating with empty hash always works
 	statedb, _ := state.New(common.Hash{}, chainDb)
 	for addr, account := range genesis.Alloc {
+		balance, ok := math.ParseBig256(account.Balance)
+		if !ok {
+			return nil, fmt.Errorf("invalid balance for account %s: %q", addr, account.Balance)
+		}
+		nonce, ok := math.ParseUint64(account.Nonce)
+		if !ok {
+			return nil, fmt.Errorf("invalid nonce for account %s: %q", addr, account.Nonce)
+		}
+
 		address := common.HexToAddress(addr)
-		statedb.AddBalance(address, common.String2Big(account.Balance))
+		statedb.AddBalance(address, balance)
 		statedb.SetCode(address, common.FromHex(account.Code))
-		statedb.SetNonce(address, common.String2Big(account.Nonce).Uint64())
+		statedb.SetNonce(address, nonce)
 		for key, value := range account.Storage {
 			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
 		}
 	}
 	root, stateBatch := statedb.CommitBatch(false)
 
-	difficulty := common.String2Big(genesis.Difficulty)
+	difficulty, ok := math.ParseBig256(genesis.Difficulty)
+	if !ok {
+		return nil, fmt.Errorf("invalid difficulty: %q", genesis.Difficulty)
+	}
+	gaslimit, ok := math.ParseUint64(genesis.GasLimit)
+	if !ok {
+		return nil, fmt.Errorf("invalid gas limit: %q", genesis.GasLimit)
+	}
+	nonce, ok := math.ParseUint64(genesis.Nonce)
+	if !ok {
+		return nil, fmt.Errorf("invalid nonce: %q", genesis.Nonce)
+	}
+	timestamp, ok := math.ParseBig256(genesis.Timestamp)
+	if !ok {
+		return nil, fmt.Errorf("invalid timestamp: %q", genesis.Timestamp)
+	}
+
 	block := types.NewBlock(&types.Header{
-		Nonce:      types.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
-		Time:       common.String2Big(genesis.Timestamp),
+		Nonce:      types.EncodeNonce(nonce),
+		Time:       timestamp,
 		ParentHash: common.HexToHash(genesis.ParentHash),
 		Extra:      common.FromHex(genesis.ExtraData),
-		GasLimit:   common.String2Big(genesis.GasLimit),
+		GasLimit:   new(big.Int).SetUint64(gaslimit),
 		Difficulty: difficulty,
 		MixDigest:  common.HexToHash(genesis.Mixhash),
 		Coinbase:   common.HexToAddress(genesis.Coinbase),
@@ -153,7 +179,7 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 		if i != 0 {
 			accountJson += ","
 		}
-		accountJson += fmt.Sprintf(`"0x%x":{"balance":"0x%x"}`, account.Address, account.Balance.Bytes())
+		accountJson += fmt.Sprintf(`"0x%x":{"balance":"%d"}`, account.Address, account.Balance)
 	}
 	accountJson += "}"
 
@@ -163,7 +189,10 @@ func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) 
 	"difficulty":"0x%x",
 	"alloc": %s
 }`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), accountJson)
-	block, _ := WriteGenesisBlock(db, strings.NewReader(testGenesis))
+	block, err := WriteGenesisBlock(db, strings.NewReader(testGenesis))
+	if err != nil {
+		panic(err)
+	}
 	return block
 }
 

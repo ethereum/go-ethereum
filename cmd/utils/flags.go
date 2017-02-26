@@ -179,10 +179,10 @@ var (
 		Usage: "Number of CPU threads to use for mining",
 		Value: runtime.NumCPU(),
 	}
-	TargetGasLimitFlag = cli.StringFlag{
+	TargetGasLimitFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value: params.GenesisGasLimit.String(),
+		Value: params.GenesisGasLimit.Uint64(),
 	}
 	AutoDAGFlag = cli.BoolFlag{
 		Name:  "autodag",
@@ -193,10 +193,10 @@ var (
 		Usage: "Public address for block mining rewards (default = first account created)",
 		Value: "0",
 	}
-	GasPriceFlag = cli.StringFlag{
+	GasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: new(big.Int).Mul(big.NewInt(20), common.Shannon).String(),
+		Value: big.NewInt(20 * params.Shannon),
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -382,15 +382,15 @@ var (
 	}
 
 	// Gas price oracle settings
-	GpoMinGasPriceFlag = cli.StringFlag{
+	GpoMinGasPriceFlag = BigFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(20), common.Shannon).String(),
+		Value: big.NewInt(20 * params.Shannon),
 	}
-	GpoMaxGasPriceFlag = cli.StringFlag{
+	GpoMaxGasPriceFlag = BigFlag{
 		Name:  "gpomax",
 		Usage: "Maximum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
+		Value: big.NewInt(500 * params.Shannon),
 	}
 	GpoFullBlockRatioFlag = cli.IntFlag{
 		Name:  "gpofull",
@@ -741,9 +741,9 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
-		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
-		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
-		GpoMaxGasPrice:          common.String2Big(ctx.GlobalString(GpoMaxGasPriceFlag.Name)),
+		GasPrice:                GlobalBig(ctx, GasPriceFlag.Name),
+		GpoMinGasPrice:          GlobalBig(ctx, GpoMinGasPriceFlag.Name),
+		GpoMaxGasPrice:          GlobalBig(ctx, GpoMaxGasPriceFlag.Name),
 		GpoFullBlockRatio:       ctx.GlobalInt(GpoFullBlockRatioFlag.Name),
 		GpobaseStepDown:         ctx.GlobalInt(GpobaseStepDownFlag.Name),
 		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
@@ -819,7 +819,7 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 // SetupNetwork configures the system for either the main net or some test network.
 func SetupNetwork(ctx *cli.Context) {
-	params.TargetGasLimit = common.String2Big(ctx.GlobalString(TargetGasLimitFlag.Name))
+	params.TargetGasLimit = new(big.Int).SetUint64(ctx.GlobalUint64(TargetGasLimitFlag.Name))
 }
 
 // MakeChainConfig reads the chain configuration from the database in ctx.Datadir.

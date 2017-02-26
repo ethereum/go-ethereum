@@ -17,15 +17,10 @@
 package vm
 
 import (
-	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-)
-
-var (
-	U256 = common.U256 // Shortcut to common.U256
-	S256 = common.S256 // Shortcut to common.S256
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 // calculates the memory size required for a step
@@ -42,8 +37,8 @@ func calcMemSize(off, l *big.Int) *big.Int {
 func getData(data []byte, start, size *big.Int) []byte {
 	dlen := big.NewInt(int64(len(data)))
 
-	s := common.BigMin(start, dlen)
-	e := common.BigMin(new(big.Int).Add(s, size), dlen)
+	s := math.BigMin(start, dlen)
+	e := math.BigMin(new(big.Int).Add(s, size), dlen)
 	return common.RightPadBytes(data[s.Uint64():e.Uint64()], int(size.Uint64()))
 }
 
@@ -60,4 +55,13 @@ func toWordSize(size uint64) uint64 {
 	}
 
 	return (size + 31) / 32
+}
+
+func allZero(b []byte) bool {
+	for _, byte := range b {
+		if byte != 0 {
+			return false
+		}
+	}
+	return true
 }

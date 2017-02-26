@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -169,14 +170,14 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 			statedb, err := state.New(header.Root, db)
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
-				from.SetBalance(common.MaxBig)
+				from.SetBalance(math.MaxBig256)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 
 				context := core.NewEVMContext(msg, header, bc)
 				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
 
-				gp := new(core.GasPool).AddGas(common.MaxBig)
+				gp := new(core.GasPool).AddGas(math.MaxBig256)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
 			}
@@ -186,12 +187,12 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 			vmstate := NewVMState(ctx, state)
 			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
 			if err == nil {
-				from.SetBalance(common.MaxBig)
+				from.SetBalance(math.MaxBig256)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 				context := core.NewEVMContext(msg, header, lc)
 				vmenv := vm.NewEVM(context, vmstate, config, vm.Config{})
-				gp := new(core.GasPool).AddGas(common.MaxBig)
+				gp := new(core.GasPool).AddGas(math.MaxBig256)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				if vmstate.Error() == nil {
 					res = append(res, ret...)

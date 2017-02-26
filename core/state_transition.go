@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -281,7 +282,7 @@ func (self *StateTransition) refundGas() {
 
 	// Apply refund counter, capped to half of the used gas.
 	uhalf := remaining.Div(self.gasUsed(), common.Big2)
-	refund := common.BigMin(uhalf, self.state.GetRefund())
+	refund := math.BigMin(uhalf, self.state.GetRefund())
 	self.gas += refund.Uint64()
 
 	self.state.AddBalance(sender.Address(), refund.Mul(refund, self.gasPrice))

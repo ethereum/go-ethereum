@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -60,7 +59,7 @@ func (b *Bloom) Add(d *big.Int) {
 
 // Big converts b to a big integer.
 func (b Bloom) Big() *big.Int {
-	return common.Bytes2Big(b[:])
+	return new(big.Int).SetBytes(b[:])
 }
 
 func (b Bloom) Bytes() []byte {
@@ -72,7 +71,8 @@ func (b Bloom) Test(test *big.Int) bool {
 }
 
 func (b Bloom) TestBytes(test []byte) bool {
-	return b.Test(common.BytesToBig(test))
+	return b.Test(new(big.Int).SetBytes(test))
+
 }
 
 // MarshalJSON encodes b as a hex string with 0x prefix.
