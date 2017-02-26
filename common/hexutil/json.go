@@ -25,9 +25,8 @@ import (
 )
 
 var (
-	textZero          = []byte(`0x0`)
-	errNonString      = errors.New("cannot unmarshal non-string as hex data")
-	errNegativeBigInt = errors.New("hexutil.Big: can't marshal negative integer")
+	textZero     = []byte(`0x0`)
+	errNonString = errors.New("cannot unmarshal non-string as hex data")
 )
 
 // Bytes marshals/unmarshals as a JSON string with 0x prefix.
@@ -101,18 +100,7 @@ type Big big.Int
 
 // MarshalText implements encoding.TextMarshaler
 func (b Big) MarshalText() ([]byte, error) {
-	bigint := (big.Int)(b)
-	if bigint.Sign() == -1 {
-		return nil, errNegativeBigInt
-	}
-	nbits := bigint.BitLen()
-	if nbits == 0 {
-		return textZero, nil
-	}
-	enc := make([]byte, 2, nbits/4+2)
-	copy(enc, "0x")
-	enc = bigint.Append(enc, 16)
-	return enc, nil
+	return []byte(EncodeBig((*big.Int)(&b))), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

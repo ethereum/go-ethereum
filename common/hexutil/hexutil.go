@@ -178,7 +178,7 @@ func EncodeBig(bigint *big.Int) string {
 	if nbits == 0 {
 		return "0x0"
 	}
-	return fmt.Sprintf("0x%x", bigint)
+	return fmt.Sprintf("%#x", bigint)
 }
 
 func has0xPrefix(input string) bool {
