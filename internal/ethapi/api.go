@@ -720,7 +720,7 @@ func FormatLogs(structLogs []vm.StructLog) []StructLogRes {
 		}
 
 		for i, stackValue := range trace.Stack {
-			formattedStructLogs[index].Stack[i] = fmt.Sprintf("%x", common.LeftPadBytes(stackValue.Bytes(), 32))
+			formattedStructLogs[index].Stack[i] = fmt.Sprintf("%x", math.PaddedBigBytes(stackValue, 32))
 		}
 
 		for i := 0; i+32 <= len(trace.Memory); i += 32 {

@@ -23,6 +23,7 @@ import (
 	"unicode"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 type Storage map[common.Hash]common.Hash
@@ -180,7 +181,7 @@ func StdErrFormat(logs []StructLog) {
 		fmt.Fprintln(os.Stderr, "STACK =", len(log.Stack))
 
 		for i := len(log.Stack) - 1; i >= 0; i-- {
-			fmt.Fprintf(os.Stderr, "%04d: %x\n", len(log.Stack)-i-1, common.LeftPadBytes(log.Stack[i].Bytes(), 32))
+			fmt.Fprintf(os.Stderr, "%04d: %x\n", len(log.Stack)-i-1, math.PaddedBigBytes(log.Stack[i], 32))
 		}
 
 		const maxMem = 10

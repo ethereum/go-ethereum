@@ -131,6 +131,13 @@ func TestPaddedBigBytes(t *testing.T) {
 	}
 }
 
+func BenchmarkPaddedBigBytes(b *testing.B) {
+	bigint := MustParseBig256("123456789123456789123456789123456789")
+	for i := 0; i < b.N; i++ {
+		PaddedBigBytes(bigint, 32)
+	}
+}
+
 func TestU256(t *testing.T) {
 	tests := []struct{ x, y *big.Int }{
 		{x: big.NewInt(0), y: big.NewInt(0)},

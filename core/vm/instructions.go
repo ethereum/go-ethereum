@@ -252,10 +252,11 @@ func opXor(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	evm.interpreter.intPool.put(y)
 	return nil, nil
 }
+
 func opByte(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	th, val := stack.pop(), stack.pop()
 	if th.Cmp(big.NewInt(32)) < 0 {
-		byte := evm.interpreter.intPool.get().SetInt64(int64(common.LeftPadBytes(val.Bytes(), 32)[th.Int64()]))
+		byte := evm.interpreter.intPool.get().SetInt64(int64(math.PaddedBigBytes(val, 32)[th.Int64()]))
 		stack.push(byte)
 	} else {
 		stack.push(new(big.Int))
