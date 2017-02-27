@@ -55,6 +55,24 @@ func (h Hash) Bytes() []byte { return h[:] }
 func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 func (h Hash) Hex() string   { return hexutil.Encode(h[:]) }
 
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (h Hash) TerminalString() string {
+	return fmt.Sprintf("%x…%x", h[:3], h[29:])
+}
+
+// String implements the stringer interface and is used also by the logger when
+// doing full logging into a file.
+func (h Hash) String() string {
+	return h.Hex()
+}
+
+// Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
+// without going through the stringer interface used for logging.
+func (h Hash) Format(s fmt.State, c rune) {
+	fmt.Fprintf(s, "%"+string(c), h[:])
+}
+
 // UnmarshalJSON parses a hash in its hex from to a hash.
 func (h *Hash) UnmarshalJSON(input []byte) error {
 	return hexutil.UnmarshalJSON("Hash", input, h[:])
