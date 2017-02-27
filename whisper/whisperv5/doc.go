@@ -55,7 +55,7 @@ const (
 	saltLength        = 12
 	AESNonceMaxLength = 12
 
-	MaxMessageLength = 0x0FFFFF // todo: remove this restriction after testing. this should be regulated by PoW.
+	MaxMessageLength = 1024 * 1024
 	MinimumPoW       = 10.0     // todo: review after testing.
 
 	padSizeLimitLower = 128 // it can not be less - we don't want to reveal the absence of signature

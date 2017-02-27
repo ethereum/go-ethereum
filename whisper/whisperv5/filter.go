@@ -102,11 +102,16 @@ func (fs *Filters) Get(id string) *Filter {
 }
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
-	fs.mutex.RLock()
+	var j int
 	var msg *ReceivedMessage
-	for j, watcher := range fs.watchers {
+
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
+	for _, watcher := range fs.watchers {
+		j++
 		if p2pMessage && !watcher.AcceptP2P {
-			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: p2p messages are not allowed", env.Hash(), j))
+			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), j))
 			continue
 		}
 
@@ -118,10 +123,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					log.Trace(fmt.Sprintf("msg [%x], filter [%s]: failed to open", env.Hash(), j))
+					log.Trace(fmt.Sprintf("msg [%x], filter [%d]: failed to open", env.Hash(), j))
 				}
 			} else {
-				log.Trace(fmt.Sprintf("msg [%x], filter [%s]: does not match", env.Hash(), j))
+				log.Trace(fmt.Sprintf("msg [%x], filter [%d]: does not match", env.Hash(), j))
 			}
 		}
 
@@ -129,11 +134,20 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			watcher.Trigger(msg)
 		}
 	}
-	fs.mutex.RUnlock() // we need to unlock before calling addDecryptedMessage
+}
 
-	if msg != nil {
-		fs.whisper.addDecryptedMessage(msg)
+func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
+	if f.MatchEnvelope(env) {
+		msg := env.Open(f)
+		if msg != nil {
+			return msg
+		} else {
+			log.Trace(fmt.Sprintf("processing msg [%x]: failed to open", env.Hash()))
+		}
+	} else {
+		log.Trace(fmt.Sprintf("processing msg [%x]: does not match", env.Hash()))
 	}
+	return nil
 }
 
 func (f *Filter) expectsAsymmetricEncryption() bool {

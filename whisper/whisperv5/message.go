@@ -258,6 +258,10 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	if err != nil {
 		return nil, err
 	}
+	if envelope.size() > MaxMessageLength {
+		log.Error(fmt.Sprintf("Envelope size must not exceed %d bytes", MaxMessageLength))
+		return nil, errors.New("Oversized message")
+	}
 
 	return envelope, nil
 }

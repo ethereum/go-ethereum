@@ -102,12 +102,12 @@ func (api *PublicWhisperAPI) HasIdentity(identity string) (bool, error) {
 }
 
 // DeleteIdentity deletes the specifies key if it exists.
-func (api *PublicWhisperAPI) DeleteIdentity(identity string) error {
+func (api *PublicWhisperAPI) DeleteIdentity(identity string) (bool, error) {
 	if api.whisper == nil {
-		return whisperOffLineErr
+		return false, whisperOffLineErr
 	}
-	api.whisper.DeleteIdentity(identity)
-	return nil
+	success := api.whisper.DeleteIdentity(identity)
+	return success, nil
 }
 
 // NewIdentity generates a new cryptographic identity for the client, and injects
@@ -352,7 +352,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		log.Error(fmt.Sprintf(err.Error()))
 		return err
 	}
-	if len(envelope.Data) > MaxMessageLength {
+	if envelope.size() > MaxMessageLength {
 		info := "Post: message is too big"
 		log.Error(fmt.Sprintf(info))
 		return errors.New(info)
