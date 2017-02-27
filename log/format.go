@@ -59,6 +59,13 @@ func (f formatFunc) Format(r *Record) []byte {
 	return f(r)
 }
 
+// TerminalStringer is an analogous interface to the stdlib stringer, allowing
+// own types to have custom shortened serialization formats when printed to the
+// screen.
+type TerminalStringer interface {
+	TerminalString() string
+}
+
 // TerminalFormat formats log records optimized for human readability on
 // a terminal with color-coded level output and terser human friendly timestamp.
 // This format should only be used for interactive programs or while developing.
@@ -124,7 +131,7 @@ func TerminalFormat(usecolor bool) Format {
 		}
 
 		// print the keys logfmt style
-		logfmt(b, r.Ctx, color)
+		logfmt(b, r.Ctx, color, true)
 		return b.Bytes()
 	})
 }
@@ -138,21 +145,21 @@ func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
 		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
 		buf := &bytes.Buffer{}
-		logfmt(buf, append(common, r.Ctx...), 0)
+		logfmt(buf, append(common, r.Ctx...), 0, false)
 		return buf.Bytes()
 	})
 }
 
-func logfmt(buf *bytes.Buffer, ctx []interface{}, color int) {
+func logfmt(buf *bytes.Buffer, ctx []interface{}, color int, term bool) {
 	for i := 0; i < len(ctx); i += 2 {
 		if i != 0 {
 			buf.WriteByte(' ')
 		}
 
 		k, ok := ctx[i].(string)
-		v := formatLogfmtValue(ctx[i+1])
+		v := formatLogfmtValue(ctx[i+1], term)
 		if !ok {
-			k, v = errorKey, formatLogfmtValue(k)
+			k, v = errorKey, formatLogfmtValue(k, term)
 		}
 
 		// XXX: we should probably check that all of your key bytes aren't invalid
@@ -253,7 +260,7 @@ func formatJsonValue(value interface{}) interface{} {
 }
 
 // formatValue formats a value for serialization
-func formatLogfmtValue(value interface{}) string {
+func formatLogfmtValue(value interface{}, term bool) string {
 	if value == nil {
 		return "nil"
 	}
@@ -263,6 +270,12 @@ func formatLogfmtValue(value interface{}) string {
 		// timeFormat doesn't have any escape characters, and escaping is
 		// expensive.
 		return t.Format(timeFormat)
+	}
+	if term {
+		if s, ok := value.(TerminalStringer); ok {
+			// Custom terminal stringer provided, use that
+			return escapeString(s.TerminalString())
+		}
 	}
 	value = formatShared(value)
 	switch v := value.(type) {

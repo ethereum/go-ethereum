@@ -383,7 +383,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		return errTooOld
 	}
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash.Hex()[2:10], "td", td, "mode", d.mode)
+	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "td", td, "mode", d.mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", time.Since(start))
 	}(time.Now())
@@ -544,7 +544,7 @@ func (d *Downloader) fetchHeight(p *peer) (*types.Header, error) {
 				return nil, errBadPeer
 			}
 			head := headers[0]
-			p.logger.Debug("Remote head header identified", "number", head.Number, "hash", head.Hash().Hex()[2:10])
+			p.logger.Debug("Remote head header identified", "number", head.Number, "hash", head.Hash())
 			return head, nil
 
 		case <-timeout:
@@ -657,10 +657,10 @@ func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 	// If the head fetch already found an ancestor, return
 	if !common.EmptyHash(hash) {
 		if int64(number) <= floor {
-			p.logger.Warn("Ancestor below allowance", "number", number, "hash", hash.Hex()[2:10], "allowance", floor)
+			p.logger.Warn("Ancestor below allowance", "number", number, "hash", hash, "allowance", floor)
 			return 0, errInvalidAncestor
 		}
-		p.logger.Debug("Found common ancestor", "number", number, "hash", hash.Hex()[2:10])
+		p.logger.Debug("Found common ancestor", "number", number, "hash", hash)
 		return number, nil
 	}
 	// Ancestor not found, we need to binary search over our chain
@@ -704,7 +704,7 @@ func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 				}
 				header := d.getHeader(headers[0].Hash()) // Independent of sync mode, header surely exists
 				if header.Number.Uint64() != check {
-					p.logger.Debug("Received non requested header", "number", header.Number, "hash", header.Hash().Hex()[2:10], "request", check)
+					p.logger.Debug("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
 					return 0, errBadPeer
 				}
 				start = check
@@ -722,10 +722,10 @@ func (d *Downloader) findAncestor(p *peer, height uint64) (uint64, error) {
 	}
 	// Ensure valid ancestry and return
 	if int64(start) <= floor {
-		p.logger.Warn("Ancestor below allowance", "number", start, "hash", hash.Hex()[2:10], "allowance", floor)
+		p.logger.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
 		return 0, errInvalidAncestor
 	}
-	p.logger.Debug("Found common ancestor", "number", start, "hash", hash.Hex()[2:10])
+	p.logger.Debug("Found common ancestor", "number", start, "hash", hash)
 	return start, nil
 }
 
@@ -1208,7 +1208,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				if atomic.LoadUint32(&d.fsPivotFails) == 0 {
 					for _, header := range rollback {
 						if header.Number.Uint64() == pivot {
-							log.Warn("Fast-sync critical section failure, locked pivot to header", "number", pivot, "hash", header.Hash().Hex()[2:10])
+							log.Warn("Fast-sync critical section failure, locked pivot to header", "number", pivot, "hash", header.Hash())
 							d.fsPivotLock = header
 						}
 					}
@@ -1304,7 +1304,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 						if n > 0 {
 							rollback = append(rollback, chunk[:n]...)
 						}
-						log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash().Hex()[2:10], "err", err)
+						log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err)
 						return errInvalidChain
 					}
 					// All verifications passed, store newly found uncertain headers
@@ -1316,7 +1316,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				// If we're fast syncing and just pulled in the pivot, make sure it's the one locked in
 				if d.mode == FastSync && d.fsPivotLock != nil && chunk[0].Number.Uint64() <= pivot && chunk[len(chunk)-1].Number.Uint64() >= pivot {
 					if pivot := chunk[int(pivot-chunk[0].Number.Uint64())]; pivot.Hash() != d.fsPivotLock.Hash() {
-						log.Warn("Pivot doesn't match locked in one", "remoteNumber", pivot.Number, "remoteHash", pivot.Hash().Hex()[2:10], "localNumber", d.fsPivotLock.Number, "localHash", d.fsPivotLock.Hash().Hex()[2:10])
+						log.Warn("Pivot doesn't match locked in one", "remoteNumber", pivot.Number, "remoteHash", pivot.Hash(), "localNumber", d.fsPivotLock.Number, "localHash", d.fsPivotLock.Hash())
 						return errInvalidChain
 					}
 				}
@@ -1366,13 +1366,9 @@ func (d *Downloader) processContent() error {
 		// Actually import the blocks
 		first, last := results[0].Header, results[len(results)-1].Header
 		log.Debug("Inserting downloaded chain", "items", len(results),
-			"from", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("#%d [%x…]", first.Number, first.Hash().Bytes()[:4])
-			}},
-			"till", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("#%d [%x…]", last.Number, last.Hash().Bytes()[:4])
-			}})
-
+			"firstnum", first.Number, "firsthash", first.Hash(),
+			"lastnum", last.Number, "lasthash", last.Hash(),
+		)
 		for len(results) != 0 {
 			// Check for any termination requests
 			select {
@@ -1406,14 +1402,14 @@ func (d *Downloader) processContent() error {
 			case len(receipts) > 0:
 				index, err = d.insertReceipts(blocks, receipts)
 				if err == nil && blocks[len(blocks)-1].NumberU64() == pivot {
-					log.Debug("Committing block as new head", "number", blocks[len(blocks)-1].Number(), "hash", blocks[len(blocks)-1].Hash().Hex()[2:10])
+					log.Debug("Committing block as new head", "number", blocks[len(blocks)-1].Number(), "hash", blocks[len(blocks)-1].Hash())
 					index, err = len(blocks)-1, d.commitHeadBlock(blocks[len(blocks)-1].Hash())
 				}
 			default:
 				index, err = d.insertBlocks(blocks)
 			}
 			if err != nil {
-				log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash().Hex()[2:10], "err", err)
+				log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash(), "err", err)
 				return errInvalidChain
 			}
 			// Shift the results to the next batch
