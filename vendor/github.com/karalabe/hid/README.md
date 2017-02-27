@@ -1,7 +1,13 @@
+[![Travis][travisimg]][travisurl]
+[![AppVeyor][appveyorimg]][appveyorurl]
 [![GoDoc][docimg]][docurl]
 
-[docimg]: https://godoc.org/github.com/karalabe/hid?status.svg
-[docurl]: https://godoc.org/github.com/karalabe/hid
+[travisimg]:   https://travis-ci.org/karalabe/hid.svg?branch=master
+[travisurl]:   https://travis-ci.org/karalabe/hid
+[appveyorimg]: https://ci.appveyor.com/api/projects/status/plroy54odykb0ch3/branch/master?svg=true
+[appveyorurl]: https://ci.appveyor.com/project/karalabe/hid
+[docimg]:      https://godoc.org/github.com/karalabe/hid?status.svg
+[docurl]:      https://godoc.org/github.com/karalabe/hid
 
 # Gopher Interface Devices (USB HID)
 
@@ -34,8 +40,8 @@ such, `gowchar` was also vendored in inline (copyright headers and origins prese
 The components of `hid` are licensed as such:
 
  * `hidapi` is released under the [3-clause BSD](https://github.com/signal11/hidapi/blob/master/LICENSE-bsd.txt) license.
- * `libusb` is released under the [GNU GPL 2.1](https://github.com/libusb/libusb/blob/master/COPYING)license.
+ * `libusb` is released under the [GNU LGPL 2.1](https://github.com/libusb/libusb/blob/master/COPYING)license.
  * `go.hid` is released under the [2-clause BSD](https://github.com/GeertJohan/go.hid/blob/master/LICENSE) license.
  * `gowchar` is released under the [3-clause BSD](https://github.com/orofarne/gowchar/blob/master/LICENSE) license.
 
-Given the above, `hid` is licensed under GNU GPL 2.1 or later on Linux and 3-clause BSD on other platforms.
+Given the above, `hid` is licensed under GNU LGPL 2.1 or later on Linux and 3-clause BSD on other platforms.
