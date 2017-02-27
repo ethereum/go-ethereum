@@ -25,12 +25,12 @@ import (
 	"math"
 	"math/big"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -86,7 +86,8 @@ type peer struct {
 	getReceipts receiptFetcherFn // [eth/63] Method to retrieve a batch of block transaction receipts
 	getNodeData stateFetcherFn   // [eth/63] Method to retrieve a batch of state trie data
 
-	version int // Eth protocol version number to switch strategies
+	version int        // Eth protocol version number to switch strategies
+	logger  log.Logger // Contextual logger to add extra infos to peer logs
 	lock    sync.RWMutex
 }
 
@@ -94,7 +95,8 @@ type peer struct {
 // mechanisms.
 func newPeer(id string, version int, currentHead currentHeadRetrievalFn,
 	getRelHeaders relativeHeaderFetcherFn, getAbsHeaders absoluteHeaderFetcherFn, getBlockBodies blockBodyFetcherFn,
-	getReceipts receiptFetcherFn, getNodeData stateFetcherFn) *peer {
+	getReceipts receiptFetcherFn, getNodeData stateFetcherFn, logger log.Logger) *peer {
+
 	return &peer{
 		id:      id,
 		lacking: make(map[common.Hash]struct{}),
@@ -108,6 +110,7 @@ func newPeer(id string, version int, currentHead currentHeadRetrievalFn,
 		getNodeData: getNodeData,
 
 		version: version,
+		logger:  logger,
 	}
 }
 
@@ -268,6 +271,11 @@ func (p *peer) setIdle(started time.Time, delivered int, throughput *float64, id
 
 	*throughput = (1-measurementImpact)*(*throughput) + measurementImpact*measured
 	p.rtt = time.Duration((1-measurementImpact)*float64(p.rtt) + measurementImpact*float64(elapsed))
+
+	p.logger.Trace("Peer throughput measurements updated",
+		"hps", p.headerThroughput, "bps", p.blockThroughput,
+		"rps", p.receiptThroughput, "sps", p.stateThroughput,
+		"miss", len(p.lacking), "rtt", p.rtt)
 }
 
 // HeaderCapacity retrieves the peers header download allowance based on its
@@ -330,21 +338,6 @@ func (p *peer) Lacks(hash common.Hash) bool {
 
 	_, ok := p.lacking[hash]
 	return ok
-}
-
-// String implements fmt.Stringer.
-func (p *peer) String() string {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
-
-	return fmt.Sprintf("Peer %s [%s]", p.id, strings.Join([]string{
-		fmt.Sprintf("hs %3.2f/s", p.headerThroughput),
-		fmt.Sprintf("bs %3.2f/s", p.blockThroughput),
-		fmt.Sprintf("rs %3.2f/s", p.receiptThroughput),
-		fmt.Sprintf("ss %3.2f/s", p.stateThroughput),
-		fmt.Sprintf("miss %4d", len(p.lacking)),
-		fmt.Sprintf("rtt %v", p.rtt),
-	}, ", "))
 }
 
 // peerSet represents the collection of active peer participating in the chain
