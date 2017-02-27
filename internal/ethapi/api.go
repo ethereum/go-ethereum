@@ -596,10 +596,10 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	}
 	// Set default gas & gas price if none were set
 	gas, gasPrice := args.Gas.ToInt(), args.GasPrice.ToInt()
-	if gas.BitLen() == 0 {
+	if gas.Sign() == 0 {
 		gas = big.NewInt(50000000)
 	}
-	if gasPrice.BitLen() == 0 {
+	if gasPrice.Sign() == 0 {
 		gasPrice = new(big.Int).SetUint64(defaultGasPrice)
 	}
 
@@ -653,7 +653,7 @@ func (s *PublicBlockChainAPI) Call(ctx context.Context, args CallArgs, blockNr r
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args CallArgs) (*hexutil.Big, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var lo, hi uint64
-	if (*big.Int)(&args.Gas).BitLen() > 0 {
+	if (*big.Int)(&args.Gas).Sign() != 0 {
 		hi = (*big.Int)(&args.Gas).Uint64()
 	} else {
 		// Retrieve the current pending block to act as the gas ceiling

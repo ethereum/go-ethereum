@@ -237,7 +237,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	if call.GasPrice == nil {
 		call.GasPrice = big.NewInt(1)
 	}
-	if call.Gas == nil || call.Gas.BitLen() == 0 {
+	if call.Gas == nil || call.Gas.Sign() == 0 {
 		call.Gas = big.NewInt(50000000)
 	}
 	if call.Value == nil {

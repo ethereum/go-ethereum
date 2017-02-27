@@ -88,7 +88,7 @@ func TestIssueAndReceive(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	if chbook.Balance().Cmp(common.Big0) != 0 {
+	if chbook.Balance().Sign() != 0 {
 		t.Errorf("expected: %v, got %v", "0", chbook.Balance())
 	}
 

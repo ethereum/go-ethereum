@@ -416,7 +416,7 @@ func (w *ledgerWallet) selfDerive() {
 				break
 			}
 			// If the next account is empty, stop self-derivation, but add it nonetheless
-			if balance.BitLen() == 0 && nonce == 0 {
+			if balance.Sign() == 0 && nonce == 0 {
 				empty = true
 			}
 			// We've just self-derived a new account, start tracking it locally

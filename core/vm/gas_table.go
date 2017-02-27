@@ -273,7 +273,7 @@ func gasExp(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem 
 func gasCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	var (
 		gas            = gt.Calls
-		transfersValue = stack.Back(2).BitLen() > 0
+		transfersValue = stack.Back(2).Sign() != 0
 		address        = common.BigToAddress(stack.Back(1))
 		eip158         = evm.ChainConfig().IsEIP158(evm.BlockNumber)
 	)
@@ -316,7 +316,7 @@ func gasCall(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem
 
 func gasCallCode(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	gas := gt.Calls
-	if stack.Back(2).BitLen() > 0 {
+	if stack.Back(2).Sign() != 0 {
 		gas += params.CallValueTransferGas
 	}
 	memoryGas, err := memoryGasCost(mem, memorySize)
@@ -362,7 +362,7 @@ func gasSuicide(gt params.GasTable, evm *EVM, contract *Contract, stack *Stack, 
 
 		if eip158 {
 			// if empty and transfers value
-			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).BitLen() > 0 {
+			if evm.StateDB.Empty(address) && evm.StateDB.GetBalance(contract.Address()).Sign() != 0 {
 				gas += gt.CreateBySuicide
 			}
 		} else if !evm.StateDB.Exist(address) {
