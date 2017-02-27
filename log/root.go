@@ -2,28 +2,16 @@ package log
 
 import (
 	"os"
-
-	"github.com/ethereum/go-ethereum/log/term"
-	"github.com/mattn/go-colorable"
 )
 
 var (
-	root          *logger
+	root          = &logger{[]interface{}{}, new(swapHandler)}
 	StdoutHandler = StreamHandler(os.Stdout, LogfmtFormat())
 	StderrHandler = StreamHandler(os.Stderr, LogfmtFormat())
 )
 
 func init() {
-	if term.IsTty(os.Stdout.Fd()) {
-		StdoutHandler = StreamHandler(colorable.NewColorableStdout(), TerminalFormat())
-	}
-
-	if term.IsTty(os.Stderr.Fd()) {
-		StderrHandler = StreamHandler(colorable.NewColorableStderr(), TerminalFormat())
-	}
-
-	root = &logger{[]interface{}{}, new(swapHandler)}
-	root.SetHandler(LvlFilterHandler(LvlInfo, StdoutHandler))
+	root.SetHandler(DiscardHandler())
 }
 
 // New returns a new logger with the given context.

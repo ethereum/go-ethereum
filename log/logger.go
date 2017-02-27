@@ -24,7 +24,27 @@ const (
 	LvlTrace
 )
 
-// Returns the name of a Lvl
+// Aligned returns a 5-character string containing the name of a Lvl.
+func (l Lvl) AlignedString() string {
+	switch l {
+	case LvlTrace:
+		return "TRACE"
+	case LvlDebug:
+		return "DEBUG"
+	case LvlInfo:
+		return "INFO "
+	case LvlWarn:
+		return "WARN "
+	case LvlError:
+		return "ERROR"
+	case LvlCrit:
+		return "CRIT "
+	default:
+		panic("bad level")
+	}
+}
+
+// Strings returns the name of a Lvl.
 func (l Lvl) String() string {
 	switch l {
 	case LvlTrace:

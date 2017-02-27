@@ -41,7 +41,7 @@ var (
 )
 
 func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat())))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 	if os.Getenv("JITVM") == "true" {
 		ForceJit = true
 		EnableJit = true
