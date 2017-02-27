@@ -250,7 +250,7 @@ func (d *Downloader) RegisterPeer(id string, version int, currentHead currentHea
 	logger := log.New("peer", id)
 	logger.Trace("Registering sync peer")
 	if err := d.peers.Register(newPeer(id, version, currentHead, getRelHeaders, getAbsHeaders, getBlockBodies, getReceipts, getNodeData, logger)); err != nil {
-		logger.Error("Failed to register sync peer", "error", err)
+		logger.Error("Failed to register sync peer", "err", err)
 		return err
 	}
 	d.qosReduceConfidence()
@@ -266,7 +266,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	logger := log.New("peer", id)
 	logger.Trace("Unregistering sync peer")
 	if err := d.peers.Unregister(id); err != nil {
-		logger.Error("Failed to unregister sync peer", "error", err)
+		logger.Error("Failed to unregister sync peer", "err", err)
 		return err
 	}
 	d.queue.Revoke(id)
@@ -293,11 +293,11 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 	case errTimeout, errBadPeer, errStallingPeer,
 		errEmptyHeaderSet, errPeersUnavailable, errTooOld,
 		errInvalidAncestor, errInvalidChain:
-		log.Warn("Synchronisation failed, dropping peer", "peer", id, "error", err)
+		log.Warn("Synchronisation failed, dropping peer", "peer", id, "err", err)
 		d.dropPeer(id)
 
 	default:
-		log.Warn("Synchronisation failed, retrying", "error", err)
+		log.Warn("Synchronisation failed, retrying", "err", err)
 	}
 	return err
 }
@@ -802,7 +802,7 @@ func (d *Downloader) fetchHeaders(p *peer, from uint64) error {
 			if skeleton {
 				filled, proced, err := d.fillHeaderSkeleton(from, headers)
 				if err != nil {
-					p.logger.Debug("Skeleton chain invalid", "error", err)
+					p.logger.Debug("Skeleton chain invalid", "err", err)
 					return errInvalidChain
 				}
 				headers = filled[proced:]
@@ -873,7 +873,7 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 		d.queue.PendingHeaders, d.queue.InFlightHeaders, throttle, reserve,
 		nil, fetch, d.queue.CancelHeaders, capacity, d.peers.HeaderIdlePeers, setIdle, "headers")
 
-	log.Debug("Skeleton fill terminated", "error", err)
+	log.Debug("Skeleton fill terminated", "err", err)
 
 	filled, proced := d.queue.RetrieveHeaders()
 	return filled, proced, err
@@ -899,7 +899,7 @@ func (d *Downloader) fetchBodies(from uint64) error {
 		d.queue.PendingBlocks, d.queue.InFlightBlocks, d.queue.ShouldThrottleBlocks, d.queue.ReserveBodies,
 		d.bodyFetchHook, fetch, d.queue.CancelBodies, capacity, d.peers.BodyIdlePeers, setIdle, "bodies")
 
-	log.Debug("Block body download terminated", "error", err)
+	log.Debug("Block body download terminated", "err", err)
 	return err
 }
 
@@ -923,7 +923,7 @@ func (d *Downloader) fetchReceipts(from uint64) error {
 		d.queue.PendingReceipts, d.queue.InFlightReceipts, d.queue.ShouldThrottleReceipts, d.queue.ReserveReceipts,
 		d.receiptFetchHook, fetch, d.queue.CancelReceipts, capacity, d.peers.ReceiptIdlePeers, setIdle, "receipts")
 
-	log.Debug("Transaction receipt download terminated", "error", err)
+	log.Debug("Transaction receipt download terminated", "err", err)
 	return err
 }
 
@@ -944,7 +944,7 @@ func (d *Downloader) fetchNodeData() error {
 				}
 				if err != nil {
 					// If the node data processing failed, the root hash is very wrong, abort
-					log.Error("State processing failed", "peer", packet.PeerId(), "error", err)
+					log.Error("State processing failed", "peer", packet.PeerId(), "err", err)
 					d.cancel()
 					return
 				}
@@ -985,7 +985,7 @@ func (d *Downloader) fetchNodeData() error {
 		d.queue.PendingNodeData, d.queue.InFlightNodeData, throttle, reserve, nil, fetch,
 		d.queue.CancelNodeData, capacity, d.peers.NodeDataIdlePeers, setIdle, "states")
 
-	log.Debug("Node state data download terminated", "error", err)
+	log.Debug("Node state data download terminated", "err", err)
 	return err
 }
 
@@ -1054,7 +1054,7 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 				case err == nil:
 					peer.logger.Trace("Delivered new batch of data", "type", kind, "count", packet.Stats())
 				default:
-					peer.logger.Trace("Failed to deliver retrieved data", "type", kind, "error", err)
+					peer.logger.Trace("Failed to deliver retrieved data", "type", kind, "err", err)
 				}
 			}
 			// Blocks assembled, try to update the progress
@@ -1304,7 +1304,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 						if n > 0 {
 							rollback = append(rollback, chunk[:n]...)
 						}
-						log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash().Hex()[2:10], "error", err)
+						log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash().Hex()[2:10], "err", err)
 						return errInvalidChain
 					}
 					// All verifications passed, store newly found uncertain headers
@@ -1413,7 +1413,7 @@ func (d *Downloader) processContent() error {
 				index, err = d.insertBlocks(blocks)
 			}
 			if err != nil {
-				log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash().Hex()[2:10], "error", err)
+				log.Debug("Downloaded item processing failed", "number", results[index].Header.Number, "hash", results[index].Header.Hash().Hex()[2:10], "err", err)
 				return errInvalidChain
 			}
 			// Shift the results to the next batch

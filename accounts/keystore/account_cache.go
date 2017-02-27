@@ -210,7 +210,7 @@ func (ac *accountCache) close() {
 func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
 	if err != nil {
-		log.Debug("Failed to reload keystore contents", "error", err)
+		log.Debug("Failed to reload keystore contents", "err", err)
 	}
 	ac.all = accounts
 	sort.Sort(ac.all)
@@ -250,7 +250,7 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 
 		fd, err := os.Open(path)
 		if err != nil {
-			logger.Trace("Failed to open keystore file", "error", err)
+			logger.Trace("Failed to open keystore file", "err", err)
 			continue
 		}
 		buf.Reset(fd)
@@ -260,7 +260,7 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		addr := common.HexToAddress(keyJSON.Address)
 		switch {
 		case err != nil:
-			logger.Debug("Failed to decode keystore key", "error", err)
+			logger.Debug("Failed to decode keystore key", "err", err)
 		case (addr == common.Address{}):
 			logger.Debug("Failed to decode keystore key", "error", "missing or zero address")
 		default:

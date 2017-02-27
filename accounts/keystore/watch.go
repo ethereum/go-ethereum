@@ -66,7 +66,7 @@ func (w *watcher) loop() {
 	logger := log.New("path", w.ac.keydir)
 
 	if err := notify.Watch(w.ac.keydir, w.ev, notify.All); err != nil {
-		logger.Trace("Failed to watch keystore folder", "error", err)
+		logger.Trace("Failed to watch keystore folder", "err", err)
 		return
 	}
 	defer notify.Stop(w.ev)

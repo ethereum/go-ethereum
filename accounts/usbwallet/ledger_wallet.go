@@ -262,7 +262,7 @@ func (w *ledgerWallet) heartbeat() {
 	}
 	// In case of error, wait for termination
 	if err != nil {
-		w.logger.Debug("Ledger health-check failed", "error", err)
+		w.logger.Debug("Ledger health-check failed", "err", err)
 		errc = <-w.healthQuit
 	}
 	errc <- err
@@ -396,7 +396,7 @@ func (w *ledgerWallet) selfDerive() {
 			// Retrieve the next derived Ethereum account
 			if nextAddr == (common.Address{}) {
 				if nextAddr, err = w.ledgerDerive(nextPath); err != nil {
-					w.logger.Warn("Ledger account derivation failed", "error", err)
+					w.logger.Warn("Ledger account derivation failed", "err", err)
 					break
 				}
 			}
@@ -407,12 +407,12 @@ func (w *ledgerWallet) selfDerive() {
 			)
 			balance, err = w.deriveChain.BalanceAt(context, nextAddr, nil)
 			if err != nil {
-				w.logger.Warn("Ledger balance retrieval failed", "error", err)
+				w.logger.Warn("Ledger balance retrieval failed", "err", err)
 				break
 			}
 			nonce, err = w.deriveChain.NonceAt(context, nextAddr, nil)
 			if err != nil {
-				w.logger.Warn("Ledger nonce retrieval failed", "error", err)
+				w.logger.Warn("Ledger nonce retrieval failed", "err", err)
 				break
 			}
 			// If the next account is empty, stop self-derivation, but add it nonetheless
@@ -471,7 +471,7 @@ func (w *ledgerWallet) selfDerive() {
 	}
 	// In case of error, wait for termination
 	if err != nil {
-		w.logger.Debug("Ledger self-derivation failed", "error", err)
+		w.logger.Debug("Ledger self-derivation failed", "err", err)
 		errc = <-w.deriveQuit
 	}
 	errc <- err
