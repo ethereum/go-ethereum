@@ -383,7 +383,7 @@ func (d *Downloader) syncWithPeer(p *peer, hash common.Hash, td *big.Int) (err e
 		return errTooOld
 	}
 
-	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash.Hex()[2:10], "td", td, "mode", syncModeLabels[d.mode])
+	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash.Hex()[2:10], "td", td, "mode", d.mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", time.Since(start))
 	}(time.Now())

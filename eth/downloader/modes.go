@@ -25,10 +25,16 @@ const (
 	LightSync                 // Download only the headers and terminate afterwards
 )
 
-// syncModeLabels contains a mapping of sync modes to textual label used by the
-// logging system.
-var syncModeLabels = map[SyncMode]string{
-	FullSync:  "full",
-	FastSync:  "fast",
-	LightSync: "light",
+// String implements the stringer interface.
+func (mode SyncMode) String() string {
+	switch mode {
+	case FullSync:
+		return "full"
+	case FastSync:
+		return "fast"
+	case LightSync:
+		return "light"
+	default:
+		return "unknown"
+	}
 }
