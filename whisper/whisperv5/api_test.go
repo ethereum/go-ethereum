@@ -55,9 +55,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed initial HasIdentity: false positive.")
 	}
 
-	err = api.DeleteIdentity(id)
+	success, err := api.DeleteIdentity(id)
 	if err != nil {
 		t.Fatalf("failed DeleteIdentity: %s.", err)
+	}
+	if success {
+		t.Fatalf("deleted non-existing identity: false positive.")
 	}
 
 	pub, err := api.NewIdentity()
@@ -76,9 +79,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasIdentity: false negative.")
 	}
 
-	err = api.DeleteIdentity(pub)
+	success, err = api.DeleteIdentity(pub)
 	if err != nil {
 		t.Fatalf("failed to delete second identity: %s.", err)
+	}
+	if !success {
+		t.Fatalf("failed to delete second identity.")
 	}
 
 	exist, err = api.HasIdentity(pub)
@@ -257,17 +263,23 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	}
 }
 
-func waitForMessage(api *PublicWhisperAPI, id string, target int) bool {
-	for i := 0; i < 64; i++ {
-		all := api.GetMessages(id)
-		if len(all) >= target {
-			return true
+func waitForMessages(api *PublicWhisperAPI, id string, target int) []*WhisperMessage {
+	// timeout: 2 seconds
+	result := make([]*WhisperMessage, 0, target)
+	for i := 0; i < 100; i++ {
+		mail := api.GetFilterChanges(id)
+		if len(mail) > 0 {
+			for _, m := range mail {
+				result = append(result, m)
+			}
+			if len(result) >= target {
+				break
+			}
 		}
-		time.Sleep(time.Millisecond * 16)
+		time.Sleep(time.Millisecond * 20)
 	}
 
-	// timeout 1024 milliseconds
-	return false
+	return result
 }
 
 func TestIntegrationAsym(t *testing.T) {
@@ -334,12 +346,7 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Errorf("failed to post message: %s.", err)
 	}
 
-	ok := waitForMessage(api, id, 1)
-	if !ok {
-		t.Fatalf("failed to receive first message: timeout.")
-	}
-
-	mail := api.GetFilterChanges(id)
+	mail := waitForMessages(api, id, 1)
 	if len(mail) != 1 {
 		t.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -356,12 +363,7 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("failed to post next message: %s.", err)
 	}
 
-	ok = waitForMessage(api, id, 2)
-	if !ok {
-		t.Fatalf("failed to receive second message: timeout.")
-	}
-
-	mail = api.GetFilterChanges(id)
+	mail = waitForMessages(api, id, 1)
 	if len(mail) != 1 {
 		t.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -434,12 +436,7 @@ func TestIntegrationSym(t *testing.T) {
 		t.Fatalf("failed to post first message: %s.", err)
 	}
 
-	ok := waitForMessage(api, id, 1)
-	if !ok {
-		t.Fatalf("failed to receive first message: timeout.")
-	}
-
-	mail := api.GetFilterChanges(id)
+	mail := waitForMessages(api, id, 1)
 	if len(mail) != 1 {
 		t.Fatalf("failed GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -456,12 +453,7 @@ func TestIntegrationSym(t *testing.T) {
 		t.Fatalf("failed to post second message: %s.", err)
 	}
 
-	ok = waitForMessage(api, id, 2)
-	if !ok {
-		t.Fatalf("failed to receive second message: timeout.")
-	}
-
-	mail = api.GetFilterChanges(id)
+	mail = waitForMessages(api, id, 1)
 	if len(mail) != 1 {
 		t.Fatalf("failed second GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -534,12 +526,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 		t.Fatalf("failed to post message: %s.", err)
 	}
 
-	ok := waitForMessage(api, id, 1)
-	if !ok {
-		t.Fatalf("failed to receive first message: timeout.")
-	}
-
-	mail := api.GetFilterChanges(id)
+	mail := waitForMessages(api, id, 1)
 	if len(mail) != 1 {
 		t.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}
@@ -556,12 +543,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 		t.Fatalf("failed to post next message: %s.", err)
 	}
 
-	ok = waitForMessage(api, id, 2)
-	if !ok {
-		t.Fatalf("failed to receive second message: timeout.")
-	}
-
-	mail = api.GetFilterChanges(id)
+	mail = waitForMessages(api, id, 1)
 	if len(mail) != 1 {
 		t.Fatalf("failed to GetFilterChanges: got %d messages.", len(mail))
 	}

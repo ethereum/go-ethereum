@@ -51,10 +51,9 @@ type Whisper struct {
 	symKeys     map[string][]byte
 	keyMu       sync.RWMutex
 
-	envelopes   map[common.Hash]*Envelope        // Pool of envelopes currently tracked by this node
-	messages    map[common.Hash]*ReceivedMessage // Pool of successfully decrypted messages, which are not expired yet
-	expirations map[uint32]*set.SetNonTS         // Message expiration pool
-	poolMu      sync.RWMutex                     // Mutex to sync the message and expiration pools
+	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
+	expirations map[uint32]*set.SetNonTS  // Message expiration pool
+	poolMu      sync.RWMutex              // Mutex to sync the message and expiration pools
 
 	peers  map[*Peer]struct{} // Set of currently active peers
 	peerMu sync.RWMutex       // Mutex to sync the active peer set
@@ -78,7 +77,6 @@ func New() *Whisper {
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
 		envelopes:    make(map[common.Hash]*Envelope),
-		messages:     make(map[common.Hash]*ReceivedMessage),
 		expirations:  make(map[uint32]*set.SetNonTS),
 		peers:        make(map[*Peer]struct{}),
 		messageQueue: make(chan *Envelope, messageQueueLimit),
@@ -188,10 +186,15 @@ func (w *Whisper) NewIdentity() *ecdsa.PrivateKey {
 }
 
 // DeleteIdentity deletes the specified key if it exists.
-func (w *Whisper) DeleteIdentity(key string) {
+func (w *Whisper) DeleteIdentity(key string) bool {
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	delete(w.privateKeys, key)
+
+	if w.privateKeys[key] != nil {
+		delete(w.privateKeys, key)
+		return true
+	}
+	return false
 }
 
 // HasIdentity checks if the the whisper node is configured with the private key
@@ -355,6 +358,9 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		if err != nil {
 			return err
 		}
+		if packet.Size > MaxMessageLength {
+			return fmt.Errorf("oversized message received")
+		}
 
 		switch packet.Code {
 		case statusCode:
@@ -435,7 +441,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		}
 	}
 
-	if len(envelope.Data) > MaxMessageLength {
+	if envelope.size() > MaxMessageLength {
 		return false, fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
@@ -558,7 +564,7 @@ func (w *Whisper) expire() {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
-	w.stats.clear()
+	w.stats.reset()
 	now := uint32(time.Now().Unix())
 	for expiry, hashSet := range w.expirations {
 		if expiry < now {
@@ -570,7 +576,6 @@ func (w *Whisper) expire() {
 				w.stats.memoryCleared += sz
 				w.stats.totalMemoryUsed -= sz
 				delete(w.envelopes, v.(common.Hash))
-				delete(w.messages, v.(common.Hash))
 				return true
 			})
 			w.expirations[expiry].Clear()
@@ -596,15 +601,17 @@ func (w *Whisper) Envelopes() []*Envelope {
 	return all
 }
 
-// Messages retrieves all the decrypted messages matching a filter id.
+// Messages iterates through all currently floating envelopes
+// and retrieves all the messages, that this filter could decrypt.
 func (w *Whisper) Messages(id string) []*ReceivedMessage {
 	result := make([]*ReceivedMessage, 0)
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()
 
 	if filter := w.filters.Get(id); filter != nil {
-		for _, msg := range w.messages {
-			if filter.MatchMessage(msg) {
+		for _, env := range w.envelopes {
+			msg := filter.processEnvelope(env)
+			if msg != nil {
 				result = append(result, msg)
 			}
 		}
@@ -620,14 +627,7 @@ func (w *Whisper) isEnvelopeCached(hash common.Hash) bool {
 	return exist
 }
 
-func (w *Whisper) addDecryptedMessage(msg *ReceivedMessage) {
-	w.poolMu.Lock()
-	defer w.poolMu.Unlock()
-
-	w.messages[msg.EnvelopeHash] = msg
-}
-
-func (s *Statistics) clear() {
+func (s *Statistics) reset() {
 	s.memoryCleared = 0
 	s.messagesCleared = 0
 }
