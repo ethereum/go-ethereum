@@ -47,6 +47,16 @@ var TestnetChainConfig = &ChainConfig{
 	EIP158Block:    big.NewInt(10),
 }
 
+// AllProtocolChanges contains every protocol change (EIPs)
+// introduced and accepted by the Ethereum core developers.
+//
+// This configuration is intentionally not using keyed fields.
+// This configuration must *always* have all forks enabled, which
+// means that all fields must be set at all times. This forces
+// anyone adding flags to the config to also have to set these
+// fields.
+var AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
+
 // ChainConfig is the core config which determines the blockchain settings.
 //
 // ChainConfig is stored in the database on a per block basis. This means

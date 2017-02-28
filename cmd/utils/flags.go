@@ -861,6 +861,8 @@ func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainCon
 	if defaults {
 		if ctx.GlobalBool(TestNetFlag.Name) {
 			config = params.TestnetChainConfig
+		} else if ctx.GlobalBool(DevModeFlag.Name) {
+			config = params.AllProtocolChanges
 		} else {
 			// Homestead fork
 			config.HomesteadBlock = params.MainNetHomesteadBlock
