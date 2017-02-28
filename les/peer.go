@@ -367,7 +367,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	}
 
 	if rGenesis != genesis {
-		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis, genesis)
+		return errResp(ErrGenesisBlockMismatch, "%x (!= %x)", rGenesis[:8], genesis[:8])
 	}
 	if int(rNetwork) != p.network {
 		return errResp(ErrNetworkIdMismatch, "%d (!= %d)", rNetwork, p.network)
