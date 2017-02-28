@@ -117,7 +117,7 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	}, nil, nil, nil)
 
 	if block := GetBlock(chainDb, block.Hash(), block.NumberU64()); block != nil {
-		log.Info(fmt.Sprint("Genesis block already in chain. Writing canonical number"))
+		log.Info("Genesis block known, writing canonical number")
 		err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
 			return nil, err
@@ -146,7 +146,6 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 	if err := WriteChainConfig(chainDb, block.Hash(), genesis.ChainConfig); err != nil {
 		return nil, err
 	}
-
 	return block, nil
 }
 

@@ -47,8 +47,6 @@ func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
 func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
 func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 
-// Don't use the default 'String' method in case we want to overwrite
-
 // Get the string representation of the underlying hash
 func (h Hash) Str() string   { return string(h[:]) }
 func (h Hash) Bytes() []byte { return h[:] }
@@ -143,6 +141,17 @@ func (a Address) Bytes() []byte { return a[:] }
 func (a Address) Big() *big.Int { return new(big.Int).SetBytes(a[:]) }
 func (a Address) Hash() Hash    { return BytesToHash(a[:]) }
 func (a Address) Hex() string   { return hexutil.Encode(a[:]) }
+
+// String implements the stringer interface and is used also by the logger.
+func (a Address) String() string {
+	return a.Hex()
+}
+
+// Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
+// without going through the stringer interface used for logging.
+func (a Address) Format(s fmt.State, c rune) {
+	fmt.Fprintf(s, "%"+string(c), a[:])
+}
 
 // Sets the address to the value of b. If b is larger than len(a) it will panic
 func (a *Address) SetBytes(b []byte) {

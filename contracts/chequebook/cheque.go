@@ -37,6 +37,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -104,6 +105,8 @@ type Chequebook struct {
 	txhash    string   // tx hash of last deposit tx
 	threshold *big.Int // threshold that triggers autodeposit if not nil
 	buffer    *big.Int // buffer to keep on top of balance for fork protection
+
+	log log.Logger // contextual logger with the contrac address embedded
 }
 
 func (self *Chequebook) String() string {
@@ -135,11 +138,12 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 		owner:        transactOpts.From,
 		contract:     chbook,
 		session:      session,
+		log:          log.New("contract", contractAddr),
 	}
 
 	if (contractAddr != common.Address{}) {
 		self.setBalanceFromBlockChain()
-		log.Trace(fmt.Sprintf("new chequebook initialised from %s (owner: %v, balance: %s)", contractAddr.Hex(), self.owner.Hex(), self.balance.String()))
+		self.log.Trace("New chequebook initialised", "owner", self.owner, "balance", self.balance)
 	}
 	return
 }
@@ -147,7 +151,7 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 func (self *Chequebook) setBalanceFromBlockChain() {
 	balance, err := self.backend.BalanceAt(context.TODO(), self.contractAddr, nil)
 	if err != nil {
-		log.Error(fmt.Sprintf("can't get balance: %v", err))
+		log.Error("Failed to retrieve chequebook balance", "err", err)
 	} else {
 		self.balance.Set(balance)
 	}
@@ -160,7 +164,6 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, chec
 	if err != nil {
 		return
 	}
-
 	self, _ = NewChequebook(path, common.Address{}, prvKey, backend)
 
 	err = json.Unmarshal(data, self)
@@ -170,8 +173,7 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, chec
 	if checkBalance {
 		self.setBalanceFromBlockChain()
 	}
-
-	log.Trace(fmt.Sprintf("loaded chequebook (%s, owner: %v, balance: %v) initialised from %v", self.contractAddr.Hex(), self.owner.Hex(), self.balance, path))
+	log.Trace("Loaded chequebook from disk", "path", path)
 
 	return
 }
@@ -226,7 +228,7 @@ func (self *Chequebook) Save() (err error) {
 	if err != nil {
 		return err
 	}
-	log.Trace(fmt.Sprintf("saving chequebook (%s) to %v", self.contractAddr.Hex(), self.path))
+	self.log.Trace("Saving chequebook to disk", self.path)
 
 	return ioutil.WriteFile(self.path, data, os.ModePerm)
 }
@@ -339,12 +341,12 @@ func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	chbookRaw := &contract.ChequebookRaw{Contract: self.contract}
 	tx, err := chbookRaw.Transfer(depositTransactor)
 	if err != nil {
-		log.Warn(fmt.Sprintf("error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contractAddr.Hex(), self.balance, self.buffer, err))
+		self.log.Warn("Failed to fund chequebook", "amount", amount, "balance", self.balance, "target", self.buffer, "err", err)
 		return "", err
 	}
 	// assume that transaction is actually successful, we add the amount to balance right away
 	self.balance.Add(self.balance, amount)
-	log.Trace(fmt.Sprintf("deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contractAddr.Hex(), self.balance, self.buffer))
+	self.log.Trace("Deposited funds to chequebook", "amount", amount, "balance", self.balance, "target", self.buffer)
 	return tx.Hash().Hex(), nil
 }
 
@@ -440,6 +442,7 @@ type Inbox struct {
 	maxUncashed *big.Int                    // threshold that triggers autocashing
 	cashed      *big.Int                    // cumulative amount cashed
 	cheque      *Cheque                     // last cheque, nil if none yet received
+	log         log.Logger                  // contextual logger with the contrac address embedded
 }
 
 // NewInbox creates an Inbox. An Inboxes is not persisted, the cumulative sum is updated
@@ -467,8 +470,9 @@ func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address
 		signer:      signer,
 		session:     session,
 		cashed:      new(big.Int).Set(common.Big0),
+		log:         log.New("contract", contractAddr),
 	}
-	log.Trace(fmt.Sprintf("initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer)))
+	self.log.Trace("New chequebook inbox initialized", "beneficiary", self.beneficiary, "signer", hexutil.Bytes(crypto.FromECDSAPub(signer)))
 	return
 }
 
@@ -490,7 +494,7 @@ func (self *Inbox) Stop() {
 func (self *Inbox) Cash() (txhash string, err error) {
 	if self.cheque != nil {
 		txhash, err = self.cheque.Cash(self.session)
-		log.Trace(fmt.Sprintf("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex()))
+		self.log.Trace("Cashing in chequebook cheque", "amount", self.cheque.Amount, "beneficiary", self.beneficiary)
 		self.cashed = self.cheque.Amount
 	}
 	return
@@ -574,7 +578,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 				self.Cash()
 			}
 		}
-		log.Trace(fmt.Sprintf("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed))
+		self.log.Trace("Received cheque in chequebook inbox", "amount", amount, "uncashed", uncashed)
 	}
 
 	return amount, err
@@ -582,7 +586,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 
 // Verify verifies cheque for signer, contract, beneficiary, amount, valid signature.
 func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary common.Address, sum *big.Int) (*big.Int, error) {
-	log.Trace(fmt.Sprintf("verify cheque: %v - sum: %v", self, sum))
+	log.Trace("Verifying chequebook cheque", "cheque", self, "sum", sum)
 	if sum == nil {
 		return nil, fmt.Errorf("invalid amount")
 	}

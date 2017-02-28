@@ -123,13 +123,9 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		}
 	}()
 
-	log.Debug("", "msg", log.Lazy{Fn: func() string {
-		return fmt.Sprintf("evm running: %x\n", codehash[:4])
-	}})
+	log.Debug("EVM running contract", "hash", codehash[:])
 	tstart := time.Now()
-	defer log.Debug("", "msg", log.Lazy{Fn: func() string {
-		return fmt.Sprintf("evm done: %x. time: %v\n", codehash[:4], time.Since(tstart))
-	}})
+	defer log.Debug("EVM finished running contract", "hash", codehash[:], "elapsed", time.Since(tstart))
 
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during

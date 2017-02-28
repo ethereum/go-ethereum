@@ -262,7 +262,7 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		case err != nil:
 			logger.Debug("Failed to decode keystore key", "err", err)
 		case (addr == common.Address{}):
-			logger.Debug("Failed to decode keystore key", "error", "missing or zero address")
+			logger.Debug("Failed to decode keystore key", "err", "missing or zero address")
 		default:
 			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
 		}

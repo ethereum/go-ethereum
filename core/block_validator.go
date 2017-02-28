@@ -170,7 +170,7 @@ func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
 			for h := range ancestors {
 				branch += fmt.Sprintf("  O - %x\n  |\n", h)
 			}
-			log.Info(fmt.Sprint(branch))
+			log.Warn(branch)
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 

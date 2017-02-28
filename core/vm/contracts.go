@@ -18,7 +18,6 @@ package vm
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -83,7 +82,7 @@ func (c *ecrecover) Run(in []byte) []byte {
 	pubKey, err := crypto.Ecrecover(in[:32], append(in[64:128], v))
 	// make sure the public key is a valid one
 	if err != nil {
-		log.Trace(fmt.Sprint("ECRECOVER error: ", err))
+		log.Trace("ECRECOVER failed", "err", err)
 		return nil
 	}
 
