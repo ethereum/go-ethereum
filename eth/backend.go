@@ -176,9 +176,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		solcPath:       config.SolcPath,
 	}
 
-	if err := upgradeChainDatabase(chainDb); err != nil {
-		return nil, err
-	}
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}

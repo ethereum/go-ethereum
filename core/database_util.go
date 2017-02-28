@@ -539,24 +539,6 @@ func DeleteReceipt(db ethdb.Database, hash common.Hash) {
 	db.Delete(append(receiptsPrefix, hash.Bytes()...))
 }
 
-// [deprecated by the header/block split, remove eventually]
-// GetBlockByHashOld returns the old combined block corresponding to the hash
-// or nil if not found. This method is only used by the upgrade mechanism to
-// access the old combined block representation. It will be dropped after the
-// network transitions to eth/63.
-func GetBlockByHashOld(db ethdb.Database, hash common.Hash) *types.Block {
-	data, _ := db.Get(append(oldBlockHashPrefix, hash[:]...))
-	if len(data) == 0 {
-		return nil
-	}
-	var block types.StorageBlock
-	if err := rlp.Decode(bytes.NewReader(data), &block); err != nil {
-		log.Error(fmt.Sprintf("invalid block RLP for hash %x: %v", hash, err))
-		return nil
-	}
-	return (*types.Block)(&block)
-}
-
 // returns a formatted MIP mapped key by adding prefix, canonical number and level
 //
 // ex. fn(98, 1000) = (prefix || 1000 || 0)
