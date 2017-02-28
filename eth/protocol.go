@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -103,6 +104,9 @@ type txPool interface {
 	// Pending should return pending transactions.
 	// The slice should be modifiable by the caller.
 	Pending() (map[common.Address]types.Transactions, error)
+
+	// Returns when the transaction was added to the pool
+	TxSeen(common.Hash) time.Time
 }
 
 // statusData is the network packet for the status message.
