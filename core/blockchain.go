@@ -798,8 +798,8 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 
 	// Report some public statistics so the user has a clue what's going on
 	last := blockChain[len(blockChain)-1]
-	log.Info("Imported new block receipts", "count", stats.processed, "number", last.Number(), "hash", last.Hash(),
-		"elapsed", common.PrettyDuration(time.Since(start)), "ignored", stats.ignored)
+	log.Info("Imported new block receipts", "count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
+		"number", last.Number(), "hash", last.Hash(), "ignored", stats.ignored)
 
 	return 0, nil
 }
@@ -1054,9 +1054,9 @@ func (st *insertStats) report(chain []*types.Block, index int) {
 			txs = countTransactions(chain[st.lastIndex : index+1])
 		)
 		context := []interface{}{
-			"blocks", st.processed, "number", end.Number(), "hash", end.Hash(), "txs", txs,
-			"mgas", float64(st.usedGas) / 1000000, "elapsed", common.PrettyDuration(elapsed),
-			"mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
+			"blocks", st.processed, "txs", txs, "mgas", float64(st.usedGas) / 1000000,
+			"elapsed", common.PrettyDuration(elapsed), "mgasps", float64(st.usedGas) * 1000 / float64(elapsed),
+			"number", end.Number(), "hash", end.Hash(),
 		}
 		if st.queued > 0 {
 			context = append(context, []interface{}{"queued", st.queued}...)
