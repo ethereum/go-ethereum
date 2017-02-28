@@ -124,7 +124,7 @@ type ledgerWallet struct {
 	commsLock chan struct{} // Mutex (buf=1) for the USB comms without keeping the state locked
 	stateLock sync.RWMutex  // Protects read and write access to the wallet struct fields
 
-	logger log.Logger // Contextual logger to tag the ledger with its id
+	log log.Logger // Contextual logger to tag the ledger with its id
 }
 
 // URL implements accounts.Wallet, returning the URL of the Ledger device.
@@ -222,8 +222,8 @@ func (w *ledgerWallet) Open(passphrase string) error {
 //  - libusb on Windows doesn't support hotplug, so we can't detect USB unplugs
 //  - communication timeout on the Ledger requires a device power cycle to fix
 func (w *ledgerWallet) heartbeat() {
-	w.logger.Debug("Ledger health-check started")
-	defer w.logger.Debug("Ledger health-check stopped")
+	w.log.Debug("Ledger health-check started")
+	defer w.log.Debug("Ledger health-check stopped")
 
 	// Execute heartbeat checks until termination or error
 	var (
@@ -262,7 +262,7 @@ func (w *ledgerWallet) heartbeat() {
 	}
 	// In case of error, wait for termination
 	if err != nil {
-		w.logger.Debug("Ledger health-check failed", "err", err)
+		w.log.Debug("Ledger health-check failed", "err", err)
 		errc = <-w.healthQuit
 	}
 	errc <- err
@@ -350,8 +350,8 @@ func (w *ledgerWallet) Accounts() []accounts.Account {
 // selfDerive is an account derivation loop that upon request attempts to find
 // new non-zero accounts.
 func (w *ledgerWallet) selfDerive() {
-	w.logger.Debug("Ledger self-derivation started")
-	defer w.logger.Debug("Ledger self-derivation stopped")
+	w.log.Debug("Ledger self-derivation started")
+	defer w.log.Debug("Ledger self-derivation stopped")
 
 	// Execute self-derivations until termination or error
 	var (
@@ -396,7 +396,7 @@ func (w *ledgerWallet) selfDerive() {
 			// Retrieve the next derived Ethereum account
 			if nextAddr == (common.Address{}) {
 				if nextAddr, err = w.ledgerDerive(nextPath); err != nil {
-					w.logger.Warn("Ledger account derivation failed", "err", err)
+					w.log.Warn("Ledger account derivation failed", "err", err)
 					break
 				}
 			}
@@ -407,12 +407,12 @@ func (w *ledgerWallet) selfDerive() {
 			)
 			balance, err = w.deriveChain.BalanceAt(context, nextAddr, nil)
 			if err != nil {
-				w.logger.Warn("Ledger balance retrieval failed", "err", err)
+				w.log.Warn("Ledger balance retrieval failed", "err", err)
 				break
 			}
 			nonce, err = w.deriveChain.NonceAt(context, nextAddr, nil)
 			if err != nil {
-				w.logger.Warn("Ledger nonce retrieval failed", "err", err)
+				w.log.Warn("Ledger nonce retrieval failed", "err", err)
 				break
 			}
 			// If the next account is empty, stop self-derivation, but add it nonetheless
@@ -432,7 +432,7 @@ func (w *ledgerWallet) selfDerive() {
 
 			// Display a log message to the user for new (or previously empty accounts)
 			if _, known := w.paths[nextAddr]; !known || (!empty && nextAddr == w.deriveNextAddr) {
-				w.logger.Info("Ledger discovered new account", "address", nextAddr.Hex(), "path", path, "balance", balance, "nonce", nonce)
+				w.log.Info("Ledger discovered new account", "address", nextAddr, "path", path, "balance", balance, "nonce", nonce)
 			}
 			// Fetch the next potential account
 			if !empty {
@@ -471,7 +471,7 @@ func (w *ledgerWallet) selfDerive() {
 	}
 	// In case of error, wait for termination
 	if err != nil {
-		w.logger.Debug("Ledger self-derivation failed", "err", err)
+		w.log.Debug("Ledger self-derivation failed", "err", err)
 		errc = <-w.deriveQuit
 	}
 	errc <- err
@@ -851,7 +851,7 @@ func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 			apdu = nil
 		}
 		// Send over to the device
-		w.logger.Trace("Data chunk sent to the Ledger", "chunk", hexutil.Bytes(chunk))
+		w.log.Trace("Data chunk sent to the Ledger", "chunk", hexutil.Bytes(chunk))
 		if _, err := w.device.Write(chunk); err != nil {
 			return nil, err
 		}
@@ -864,7 +864,7 @@ func (w *ledgerWallet) ledgerExchange(opcode ledgerOpcode, p1 ledgerParam1, p2 l
 		if _, err := io.ReadFull(w.device, chunk); err != nil {
 			return nil, err
 		}
-		w.logger.Trace("Data chunk received from the Ledger", "chunk", hexutil.Bytes(chunk))
+		w.log.Trace("Data chunk received from the Ledger", "chunk", hexutil.Bytes(chunk))
 
 		// Make sure the transport header matches
 		if chunk[0] != 0x01 || chunk[1] != 0x01 || chunk[2] != 0x05 {

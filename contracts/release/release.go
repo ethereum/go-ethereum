@@ -127,10 +127,10 @@ func (r *ReleaseService) checker() {
 			version, err := r.oracle.CurrentVersion(opts)
 			if err != nil {
 				if err == bind.ErrNoCode {
-					log.Debug(fmt.Sprintf("Release oracle not found at %x", r.config.Oracle))
+					log.Debug("Release oracle not found", "contract", r.config.Oracle)
 					continue
 				}
-				log.Error(fmt.Sprintf("Failed to retrieve current release: %v", err))
+				log.Error("Failed to retrieve current release", "err", err)
 				continue
 			}
 			// Version was successfully retrieved, notify if newer than ours
@@ -143,13 +143,14 @@ func (r *ReleaseService) checker() {
 				howtofix := fmt.Sprintf("Please check https://github.com/ethereum/go-ethereum/releases for new releases")
 				separator := strings.Repeat("-", len(warning))
 
-				log.Warn(fmt.Sprint(separator))
-				log.Warn(fmt.Sprint(warning))
-				log.Warn(fmt.Sprint(howtofix))
-				log.Warn(fmt.Sprint(separator))
+				log.Warn(separator)
+				log.Warn(warning)
+				log.Warn(howtofix)
+				log.Warn(separator)
 			} else {
-				log.Debug(fmt.Sprintf("Client v%d.%d.%d-%x seems up to date with upstream v%d.%d.%d-%x",
-					r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4]))
+				log.Debug("Client seems up to date with upstream",
+					"local", fmt.Sprintf("v%d.%d.%d-%x", r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4]),
+					"upstream", fmt.Sprintf("v%d.%d.%d-%x", version.Major, version.Minor, version.Patch, version.Commit[:4]))
 			}
 
 		// If termination was requested, return

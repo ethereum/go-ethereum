@@ -305,7 +305,7 @@ func setError(resp *otto.Object, code int, msg string) {
 func throwJSException(msg interface{}) otto.Value {
 	val, err := otto.ToValue(msg)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to serialize JavaScript exception %v: %v", msg, err))
+		log.Error("Failed to serialize JavaScript exception", "exception", msg, "err", err)
 	}
 	panic(val)
 }
