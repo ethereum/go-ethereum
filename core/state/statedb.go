@@ -410,7 +410,7 @@ func (self *StateDB) getStateObject(addr common.Address) (stateObject *stateObje
 	}
 	var data Account
 	if err := rlp.DecodeBytes(enc, &data); err != nil {
-		log.Error(fmt.Sprintf("can't decode object at %x: %v", addr[:], err))
+		log.Error("Failed to decode state object", "addr", addr, "err", err)
 		return nil
 	}
 	// Insert into the live set.
@@ -445,9 +445,6 @@ func (self *StateDB) createObject(addr common.Address) (newobj, prev *stateObjec
 	newobj = newObject(self, addr, Account{}, self.MarkStateObjectDirty)
 	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
-		log.Debug("", "msg", log.Lazy{Fn: func() string {
-			return fmt.Sprintf("(+) %x\n", addr)
-		}})
 		self.journal = append(self.journal, createObjectChange{account: &addr})
 	} else {
 		self.journal = append(self.journal, resetObjectChange{prev: prev})
@@ -616,7 +613,7 @@ func (s *StateDB) CommitBatch(deleteEmptyObjects bool) (root common.Hash, batch 
 	batch = s.db.NewBatch()
 	root, _ = s.commit(batch, deleteEmptyObjects)
 
-	log.Debug(fmt.Sprintf("Trie cache stats: %d misses, %d unloads", trie.CacheMisses(), trie.CacheUnloads()))
+	log.Debug("Trie cache stats after commit", "misses", trie.CacheMisses(), "unloads", trie.CacheUnloads())
 	return root, batch
 }
 
