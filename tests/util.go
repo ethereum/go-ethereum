@@ -71,7 +71,7 @@ func checkLogs(tlog []Log, logs []*types.Log) error {
 					}
 				}
 			}
-			genBloom := common.LeftPadBytes(types.LogsBloom([]*types.Log{logs[i]}).Bytes(), 256)
+			genBloom := math.PaddedBigBytes(types.LogsBloom([]*types.Log{logs[i]}), 256)
 
 			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 				return fmt.Errorf("bloom mismatch")

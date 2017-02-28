@@ -28,6 +28,13 @@ var (
 	MaxBig256 = new(big.Int).Set(tt256m1)
 )
 
+const (
+	// number of bits in a big.Word
+	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
+	// number of bytes in a big.Word
+	wordBytes = wordBits / 8
+)
+
 // ParseBig256 parses s as a 256 bit integer in decimal or hexadecimal syntax.
 // Leading zeros are accepted. The empty string parses as zero.
 func ParseBig256(s string) (*big.Int, bool) {
@@ -91,12 +98,25 @@ func FirstBitSet(v *big.Int) int {
 // PaddedBigBytes encodes a big integer as a big-endian byte slice. The length
 // of the slice is at least n bytes.
 func PaddedBigBytes(bigint *big.Int, n int) []byte {
-	bytes := bigint.Bytes()
-	if len(bytes) >= n {
-		return bytes
+	if bigint.BitLen()/8 >= n {
+		return bigint.Bytes()
 	}
 	ret := make([]byte, n)
-	return append(ret[:len(ret)-len(bytes)], bytes...)
+	ReadBits(bigint, ret)
+	return ret
+}
+
+// ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure
+// that buf has enough space. If buf is too short the result will be incomplete.
+func ReadBits(bigint *big.Int, buf []byte) {
+	i := len(buf)
+	for _, d := range bigint.Bits() {
+		for j := 0; j < wordBytes && i > 0; j++ {
+			i--
+			buf[i] = byte(d)
+			d >>= 8
+		}
+	}
 }
 
 // U256 encodes as a 256 bit two's complement number. This operation is destructive.
@@ -119,9 +139,6 @@ func S256(x *big.Int) *big.Int {
 	}
 }
 
-// wordSize is the size number of bits in a big.Word.
-const wordSize = 32 << (uint64(^big.Word(0)) >> 63)
-
 // Exp implements exponentiation by squaring.
 // Exp returns a newly-allocated big integer and does not change
 // base or exponent. The result is truncated to 256 bits.
@@ -131,7 +148,7 @@ func Exp(base, exponent *big.Int) *big.Int {
 	result := big.NewInt(1)
 
 	for _, word := range exponent.Bits() {
-		for i := 0; i < wordSize; i++ {
+		for i := 0; i < wordBits; i++ {
 			if word&1 == 1 {
 				U256(result.Mul(result, base))
 			}

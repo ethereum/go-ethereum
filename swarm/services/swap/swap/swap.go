@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -120,11 +119,11 @@ func (self *Swap) SetRemote(remote *Profile) {
 	self.lock.Lock()
 
 	self.remote = remote
-	if self.Sells && (remote.BuyAt.Cmp(common.Big0) <= 0 || self.local.SellAt.Cmp(common.Big0) <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
+	if self.Sells && (remote.BuyAt.Sign() <= 0 || self.local.SellAt.Sign() <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
 		self.Out.Stop()
 		self.Sells = false
 	}
-	if self.Buys && (remote.SellAt.Cmp(common.Big0) <= 0 || self.local.BuyAt.Cmp(common.Big0) <= 0 || self.local.BuyAt.Cmp(self.remote.SellAt) < 0) {
+	if self.Buys && (remote.SellAt.Sign() <= 0 || self.local.BuyAt.Sign() <= 0 || self.local.BuyAt.Cmp(self.remote.SellAt) < 0) {
 		self.In.Stop()
 		self.Buys = false
 	}

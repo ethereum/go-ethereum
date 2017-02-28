@@ -36,6 +36,8 @@ import (
 	"math/big"
 	"sync"
 	"unsafe"
+
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 /*
@@ -230,8 +232,8 @@ func (BitCurve *BitCurve) ScalarMult(Bx, By *big.Int, scalar []byte) (*big.Int, 
 
 	// Do the multiplication in C, updating point.
 	point := make([]byte, 64)
-	readBits(point[:32], Bx)
-	readBits(point[32:], By)
+	math.ReadBits(Bx, point[:32])
+	math.ReadBits(By, point[32:])
 	pointPtr := (*C.uchar)(unsafe.Pointer(&point[0]))
 	scalarPtr := (*C.uchar)(unsafe.Pointer(&scalar[0]))
 	res := C.secp256k1_pubkey_scalar_mul(context, pointPtr, scalarPtr)

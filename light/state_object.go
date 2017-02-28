@@ -202,7 +202,7 @@ func (self *StateObject) Copy() *StateObject {
 
 // empty returns whether the account is considered empty.
 func (self *StateObject) empty() bool {
-	return self.nonce == 0 && self.balance.BitLen() == 0 && bytes.Equal(self.codeHash, emptyCodeHash)
+	return self.nonce == 0 && self.balance.Sign() == 0 && bytes.Equal(self.codeHash, emptyCodeHash)
 }
 
 // Balance returns the account balance

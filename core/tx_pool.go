@@ -299,7 +299,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	// Transactions can't be negative. This may never happen
 	// using RLP decoded transactions but may occur if you create
 	// a transaction using the RPC for example.
-	if tx.Value().Cmp(common.Big0) < 0 {
+	if tx.Value().Sign() < 0 {
 		return ErrNegativeValue
 	}
 

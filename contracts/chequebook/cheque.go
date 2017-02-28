@@ -247,7 +247,7 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 	defer self.lock.Unlock()
 	self.lock.Lock()
 
-	if amount.Cmp(common.Big0) <= 0 {
+	if amount.Sign() <= 0 {
 		return nil, fmt.Errorf("amount must be greater than zero (%v)", amount)
 	}
 	if self.balance.Cmp(amount) < 0 {
@@ -515,7 +515,7 @@ func (self *Inbox) autoCash(cashInterval time.Duration) {
 		self.quit = nil
 	}
 	// if maxUncashed is set to 0, then autocash on receipt
-	if cashInterval == time.Duration(0) || self.maxUncashed != nil && self.maxUncashed.Cmp(common.Big0) == 0 {
+	if cashInterval == time.Duration(0) || self.maxUncashed != nil && self.maxUncashed.Sign() == 0 {
 		return
 	}
 
@@ -597,7 +597,7 @@ func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary com
 	amount := new(big.Int).Set(self.Amount)
 	if sum != nil {
 		amount.Sub(amount, sum)
-		if amount.Cmp(common.Big0) <= 0 {
+		if amount.Sign() <= 0 {
 			return nil, fmt.Errorf("incorrect amount: %v <= 0", amount)
 		}
 	}
