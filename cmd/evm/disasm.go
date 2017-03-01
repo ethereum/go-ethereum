@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -14,29 +14,40 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// disasm is a pretty-printer for EVM bytecode.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/core/asm"
+	cli "gopkg.in/urfave/cli.v1"
+	"strings"
 )
 
-func main() {
-	in, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+var disasmCommand = cli.Command{
+	Action:    disasmCmd,
+	Name:      "disasm",
+	Usage:     "disassembles evm binary",
+	ArgsUsage: "<file>",
+}
+
+func disasmCmd(ctx *cli.Context) error {
+	if len(ctx.Args().First()) == 0 {
+		return errors.New("filename required")
 	}
+
+	fn := ctx.Args().First()
+	in, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return err
+	}
+
 	code := strings.TrimSpace(string(in[:]))
 	fmt.Printf("%v\n", code)
-	err = asm.PrintDisassembled(code)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return
+	if err = asm.PrintDisassembled(code); err != nil {
+		return err
 	}
+	return nil
 }
