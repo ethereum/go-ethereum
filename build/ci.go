@@ -23,15 +23,15 @@ Usage: go run ci.go <command> <command flags/arguments>
 
 Available commands are:
 
-   install    [-arch architecture] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ -misspell ] [ packages... ]                           -- runs the tests
-   archive    [-arch architecture] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
-   importkeys                                                                                -- imports signing keys from env
-   debsrc     [ -signer key-id ] [ -upload dest ]                                            -- creates a debian source package
-   nsis                                                                                      -- creates a Windows NSIS installer
-   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an Android archive
-   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                    -- creates an iOS XCode framework
-   xgo        [ options ]                                                                    -- cross builds according to options
+   install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
+   test       [ -coverage ] [ -vet ] [ -misspell ] [ packages... ]                             -- runs the tests
+   archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
+   importkeys                                                                                  -- imports signing keys from env
+   debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
+   nsis                                                                                        -- creates a Windows NSIS installer
+   aar        [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an Android archive
+   xcode      [ -local ] [ -sign key-id ] [-deploy repo] [ -upload dest ]                      -- creates an iOS XCode framework
+   xgo        [ -alltools ] [ options ]                                                        -- cross builds according to options
 
 For all commands, -n prevents execution of external programs (dry run mode).
 
@@ -917,6 +917,9 @@ func newPodMetadata(env build.Environment, archive string) podMetadata {
 // Cross compilation
 
 func doXgo(cmdline []string) {
+	var (
+		alltools = flag.Bool("alltools", false, `Flag whether we're building all known tools, or only on in particular`)
+	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
@@ -924,8 +927,24 @@ func doXgo(cmdline []string) {
 	gogetxgo := goTool("get", "github.com/karalabe/xgo")
 	build.MustRun(gogetxgo)
 
-	// Execute the actual cross compilation
-	xgo := xgoTool(append(buildFlags(env), flag.Args()...))
+	// If all tools building is requested, build everything the builder wants
+	args := append(buildFlags(env), flag.Args()...)
+	args = append(args, []string{"--dest", GOBIN}...)
+
+	if *alltools {
+		for _, res := range allToolsArchiveFiles {
+			if strings.HasPrefix(res, GOBIN) {
+				// Binary tool found, cross build it explicitly
+				args = append(args, "./"+filepath.Join("cmd", filepath.Base(res)))
+				xgo := xgoTool(args)
+				build.MustRun(xgo)
+				args = args[:len(args)-1]
+			}
+		}
+		return
+	}
+	// Otherwise xxecute the explicit cross compilation
+	xgo := xgoTool(args)
 	build.MustRun(xgo)
 }
 
