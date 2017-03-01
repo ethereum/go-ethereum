@@ -53,7 +53,6 @@ func runCmd(ctx *cli.Context) error {
 		statedb, _ = state.New(common.Hash{}, db)
 		sender     = common.StringToAddress("sender")
 		logger     = vm.NewStructLogger(nil)
-		tstart     = time.Now()
 	)
 	statedb.CreateAccount(sender)
 
@@ -84,36 +83,28 @@ func runCmd(ctx *cli.Context) error {
 		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
 	}
 
+	runtimeConfig := runtime.Config{
+		Origin:   sender,
+		State:    statedb,
+		GasLimit: ctx.GlobalUint64(GasFlag.Name),
+		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
+		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
+		EVMConfig: vm.Config{
+			Tracer:             logger,
+			Debug:              ctx.GlobalBool(DebugFlag.Name),
+			DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
+		},
+	}
+
+	tstart := time.Now()
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, err = runtime.Create(input, &runtime.Config{
-			Origin:   sender,
-			State:    statedb,
-			GasLimit: ctx.GlobalUint64(GasFlag.Name),
-			GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
-			Value:    utils.GlobalBig(ctx, ValueFlag.Name),
-			EVMConfig: vm.Config{
-				Tracer:             logger,
-				Debug:              ctx.GlobalBool(DebugFlag.Name),
-				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
-			},
-		})
+		ret, _, err = runtime.Create(input, &runtimeConfig)
 	} else {
 		receiver := common.StringToAddress("receiver")
 		statedb.SetCode(receiver, code)
 
-		ret, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
-			Origin:   sender,
-			State:    statedb,
-			GasLimit: ctx.GlobalUint64(GasFlag.Name),
-			GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
-			Value:    utils.GlobalBig(ctx, ValueFlag.Name),
-			EVMConfig: vm.Config{
-				Tracer:             logger,
-				Debug:              ctx.GlobalBool(DebugFlag.Name),
-				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
-			},
-		})
+		ret, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
 	vmdone := time.Since(tstart)
 
@@ -121,7 +112,13 @@ func runCmd(ctx *cli.Context) error {
 		statedb.Commit(true)
 		fmt.Println(string(statedb.Dump()))
 	}
-	vm.StdErrFormat(logger.StructLogs())
+
+	if ctx.GlobalBool(DebugFlag.Name) {
+		fmt.Fprintln(os.Stderr, "#### TRACE ####")
+		vm.WriteTrace(os.Stderr, logger.StructLogs())
+		fmt.Fprintln(os.Stderr, "#### LOGS ####")
+		vm.WriteLogs(os.Stderr, statedb.Logs())
+	}
 
 	if ctx.GlobalBool(SysStatFlag.Name) {
 		var mem goruntime.MemStats
@@ -136,7 +133,7 @@ num gc:     %d
 `, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
 	}
 
-	fmt.Printf("OUT: 0x%x", ret)
+	fmt.Printf("0x%x", ret)
 	if err != nil {
 		fmt.Printf(" error: %v", err)
 	}
