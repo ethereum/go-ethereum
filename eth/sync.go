@@ -17,7 +17,6 @@
 package eth
 
 import (
-	"fmt"
 	"math/rand"
 	"sync/atomic"
 	"time"
@@ -87,7 +86,7 @@ func (pm *ProtocolManager) txsyncLoop() {
 			delete(pending, s.p.ID())
 		}
 		// Send the pack in the background.
-		log.Trace(fmt.Sprintf("%v: sending %d transactions (%v)", s.p.Peer, len(pack.txs), size))
+		s.p.Log().Trace("Sending batch of transactions", "count", len(pack.txs), "bytes", size)
 		sending = true
 		go func() { done <- pack.p.SendTransactions(pack.txs) }()
 	}
@@ -117,7 +116,7 @@ func (pm *ProtocolManager) txsyncLoop() {
 			sending = false
 			// Stop tracking peers that cause send failures.
 			if err != nil {
-				log.Debug(fmt.Sprintf("%v: tx send failed: %v", pack.p.Peer, err))
+				pack.p.Log().Debug("Transaction send failed", "err", err)
 				delete(pending, pack.p.ID())
 			}
 			// Schedule the next send.
@@ -187,7 +186,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		// Disable fast sync if we indeed have something in our chain
 		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
-			log.Info(fmt.Sprintf("fast sync complete, auto disabling"))
+			log.Info("Fast sync complete, auto disabling")
 			atomic.StoreUint32(&pm.fastSync, 0)
 		}
 	}

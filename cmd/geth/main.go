@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/eth"
@@ -202,11 +203,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
 	extra, err := rlp.EncodeToBytes(clientInfo)
 	if err != nil {
-		log.Warn(fmt.Sprint("error setting canonical miner information:", err))
+		log.Warn("Failed to set canonical miner information", "err", err)
 	}
 	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		log.Warn(fmt.Sprint("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize))
-		log.Debug(fmt.Sprintf("extra: %x\n", extra))
+		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
 		extra = nil
 	}
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
@@ -271,7 +271,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		// Open and self derive any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
 			if err := wallet.Open(""); err != nil {
-				log.Warn(fmt.Sprintf("Failed to open wallet %s: %v", wallet.URL(), err))
+				log.Warn("Failed to open wallet", "url", wallet.URL(), "err", err)
 			} else {
 				wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 			}
@@ -280,13 +280,13 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		for event := range events {
 			if event.Arrive {
 				if err := event.Wallet.Open(""); err != nil {
-					log.Info(fmt.Sprintf("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err))
+					log.Warn("New wallet appeared, failed to open", "url", event.Wallet.URL(), "err", err)
 				} else {
-					log.Info(fmt.Sprintf("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status()))
+					log.Info("New wallet appeared", "url", event.Wallet.URL(), "status", event.Wallet.Status())
 					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
 				}
 			} else {
-				log.Info(fmt.Sprintf("Old wallet dropped:  %s", event.Wallet.URL()))
+				log.Info("Old wallet dropped", "url", event.Wallet.URL())
 				event.Wallet.Close()
 			}
 		}

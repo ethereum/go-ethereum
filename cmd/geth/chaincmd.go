@@ -117,7 +117,7 @@ func initGenesis(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
-	log.Info(fmt.Sprintf("successfully wrote genesis block and/or chain rule set: %x", block.Hash()))
+	log.Info("Successfully wrote genesis state", "hash", block.Hash())
 	return nil
 }
 

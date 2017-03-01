@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -103,17 +102,17 @@ func (s *PublicMinerAPI) SubmitWork(nonce types.BlockNonce, solution, digest com
 // result[0], 32 bytes hex encoded current block header pow-hash
 // result[1], 32 bytes hex encoded seed hash used for DAG
 // result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-func (s *PublicMinerAPI) GetWork() (work [3]string, err error) {
+func (s *PublicMinerAPI) GetWork() ([3]string, error) {
 	if !s.e.IsMining() {
 		if err := s.e.StartMining(0); err != nil {
-			return work, err
+			return [3]string{}, err
 		}
 	}
-	if work, err = s.agent.GetWork(); err == nil {
-		return
+	work, err := s.agent.GetWork()
+	if err != nil {
+		return work, fmt.Errorf("mining not ready: %v", err)
 	}
-	log.Debug(fmt.Sprintf("%v", err))
-	return work, fmt.Errorf("mining not ready")
+	return work, nil
 }
 
 // SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined

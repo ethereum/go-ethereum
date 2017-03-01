@@ -87,7 +87,7 @@ type peer struct {
 	getNodeData stateFetcherFn   // [eth/63] Method to retrieve a batch of state trie data
 
 	version int        // Eth protocol version number to switch strategies
-	logger  log.Logger // Contextual logger to add extra infos to peer logs
+	log     log.Logger // Contextual logger to add extra infos to peer logs
 	lock    sync.RWMutex
 }
 
@@ -110,7 +110,7 @@ func newPeer(id string, version int, currentHead currentHeadRetrievalFn,
 		getNodeData: getNodeData,
 
 		version: version,
-		logger:  logger,
+		log:     logger,
 	}
 }
 
@@ -272,7 +272,7 @@ func (p *peer) setIdle(started time.Time, delivered int, throughput *float64, id
 	*throughput = (1-measurementImpact)*(*throughput) + measurementImpact*measured
 	p.rtt = time.Duration((1-measurementImpact)*float64(p.rtt) + measurementImpact*float64(elapsed))
 
-	p.logger.Trace("Peer throughput measurements updated",
+	p.log.Trace("Peer throughput measurements updated",
 		"hps", p.headerThroughput, "bps", p.blockThroughput,
 		"rps", p.receiptThroughput, "sps", p.stateThroughput,
 		"miss", len(p.lacking), "rtt", p.rtt)

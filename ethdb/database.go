@@ -17,7 +17,6 @@
 package ethdb
 
 import (
-	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -67,6 +66,8 @@ type LDBDatabase struct {
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
+
+	log log.Logger // Contextual logger tracking the database path
 }
 
 // NewLDBDatabase returns a LevelDB wrapped object.
@@ -80,7 +81,8 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	log.Info(fmt.Sprintf("Allotted %dMB cache and %d file handles to %s", cache, handles, file))
+	logger := log.New("database", file)
+	logger.Info("Allocated cache and file handles", "cache", cache, "handles", handles)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
@@ -97,8 +99,9 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 		return nil, err
 	}
 	return &LDBDatabase{
-		fn: file,
-		db: db,
+		fn:  file,
+		db:  db,
+		log: logger,
 	}, nil
 }
 
@@ -167,14 +170,14 @@ func (self *LDBDatabase) Close() {
 		errc := make(chan error)
 		self.quitChan <- errc
 		if err := <-errc; err != nil {
-			log.Error(fmt.Sprintf("metrics failure in '%s': %v\n", self.fn, err))
+			self.log.Error("Metrics collection failed", "err", err)
 		}
 	}
 	err := self.db.Close()
 	if err == nil {
-		log.Info(fmt.Sprint("closed db:", self.fn))
+		self.log.Info("Database closed")
 	} else {
-		log.Error(fmt.Sprintf("error closing db %s: %v", self.fn, err))
+		self.log.Error("Failed to close database", "err", err)
 	}
 }
 
@@ -229,7 +232,7 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 		// Retrieve the database stats
 		stats, err := self.db.GetProperty("leveldb.stats")
 		if err != nil {
-			log.Error(fmt.Sprintf("failed to read database stats: %v", err))
+			self.log.Error("Failed to read database stats", "err", err)
 			return
 		}
 		// Find the compaction table, skip the header
@@ -238,7 +241,7 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 			lines = lines[1:]
 		}
 		if len(lines) <= 3 {
-			log.Error(fmt.Sprintf("compaction table not found"))
+			self.log.Error("Compaction table not found")
 			return
 		}
 		lines = lines[3:]
@@ -253,12 +256,12 @@ func (self *LDBDatabase) meter(refresh time.Duration) {
 				break
 			}
 			for idx, counter := range parts[3:] {
-				if value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64); err != nil {
-					log.Error(fmt.Sprintf("compaction entry parsing failed: %v", err))
+				value, err := strconv.ParseFloat(strings.TrimSpace(counter), 64)
+				if err != nil {
+					self.log.Error("Compaction entry parsing failed", "err", err)
 					return
-				} else {
-					counters[i%2][idx] += value
 				}
+				counters[i%2][idx] += value
 			}
 		}
 		// Update all the requested meters

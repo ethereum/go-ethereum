@@ -20,19 +20,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"mime"
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
 func add(ctx *cli.Context) {
-
 	args := ctx.Args()
 	if len(args) < 3 {
-		log.Fatal("need atleast three arguments <MHASH> <path> <HASH> [<content-type>]")
+		utils.Fatalf("Need atleast three arguments <MHASH> <path> <HASH> [<content-type>]")
 	}
 
 	var (
@@ -66,7 +65,7 @@ func update(ctx *cli.Context) {
 
 	args := ctx.Args()
 	if len(args) < 3 {
-		log.Fatal("need atleast three arguments <MHASH> <path> <HASH>")
+		utils.Fatalf("Need atleast three arguments <MHASH> <path> <HASH>")
 	}
 
 	var (
@@ -98,7 +97,7 @@ func update(ctx *cli.Context) {
 func remove(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) < 2 {
-		log.Fatal("need atleast two arguments <MHASH> <path>")
+		utils.Fatalf("Need atleast two arguments <MHASH> <path>")
 	}
 
 	var (
@@ -134,19 +133,19 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 
 	mroot, err := client.downloadManifest(mhash)
 	if err != nil {
-		log.Fatalln("manifest download failed:", err)
+		utils.Fatalf("Manifest download failed: %v", err)
 	}
 
 	//TODO: check if the "hash" to add is valid and present in swarm
 	_, err = client.downloadManifest(hash)
 	if err != nil {
-		log.Fatalln("hash to add is not present:", err)
+		utils.Fatalf("Hash to add is not present: %v", err)
 	}
 
 	// See if we path is in this Manifest or do we have to dig deeper
 	for _, entry := range mroot.Entries {
 		if path == entry.Path {
-			log.Fatal(path, "Already present, not adding anything")
+			utils.Fatalf("Path %s already present, not adding anything", path)
 		} else {
 			if entry.ContentType == "application/bzz-manifest+json" {
 				prfxlen := strings.HasPrefix(path, entry.Path)
@@ -183,7 +182,7 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 
 	newManifestHash, err := client.uploadManifest(mroot)
 	if err != nil {
-		log.Fatalln("manifest upload failed:", err)
+		utils.Fatalf("Manifest upload failed: %v", err)
 	}
 	return newManifestHash
 
@@ -208,7 +207,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 
 	mroot, err := client.downloadManifest(mhash)
 	if err != nil {
-		log.Fatalln("manifest download failed:", err)
+		utils.Fatalf("Manifest download failed: %v", err)
 	}
 
 	//TODO: check if the "hash" with which to update is valid and present in swarm
@@ -228,7 +227,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 	}
 
 	if longestPathEntry.Path == "" && newEntry.Path == "" {
-		log.Fatal(path, " Path not present in the Manifest, not setting anything")
+		utils.Fatalf("Path %s not present in the Manifest, not setting anything", path)
 	}
 
 	if longestPathEntry.Path != "" {
@@ -268,7 +267,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 
 	newManifestHash, err := client.uploadManifest(mroot)
 	if err != nil {
-		log.Fatalln("manifest upload failed:", err)
+		utils.Fatalf("Manifest upload failed: %v", err)
 	}
 	return newManifestHash
 }
@@ -292,7 +291,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 
 	mroot, err := client.downloadManifest(mhash)
 	if err != nil {
-		log.Fatalln("manifest download failed:", err)
+		utils.Fatalf("Manifest download failed: %v", err)
 	}
 
 	// See if we path is in this Manifest or do we have to dig deeper
@@ -310,7 +309,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 	}
 
 	if longestPathEntry.Path == "" && entryToRemove.Path == "" {
-		log.Fatal(path, "Path not present in the Manifest, not removing anything")
+		utils.Fatalf("Path %s not present in the Manifest, not removing anything", path)
 	}
 
 	if longestPathEntry.Path != "" {
@@ -342,8 +341,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 
 	newManifestHash, err := client.uploadManifest(mroot)
 	if err != nil {
-		log.Fatalln("manifest upload failed:", err)
+		utils.Fatalf("Manifest upload failed: %v", err)
 	}
 	return newManifestHash
-
 }

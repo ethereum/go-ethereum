@@ -492,7 +492,7 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			log.Error(fmt.Sprintf("Bootstrap URL %s: %v\n", url, err))
+			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -512,7 +512,7 @@ func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
-			log.Error(fmt.Sprintf("Bootstrap URL %s: %v\n", url, err))
+			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -609,7 +609,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func MakeEtherbase(ks *keystore.KeyStore, ctx *cli.Context) common.Address {
 	accounts := ks.Accounts()
 	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
-		log.Error(fmt.Sprint("WARNING: No etherbase set and no accounts found as default"))
+		log.Warn("No etherbase set and no accounts found as default")
 		return common.Address{}
 	}
 	etherbase := ctx.GlobalString(EtherbaseFlag.Name)

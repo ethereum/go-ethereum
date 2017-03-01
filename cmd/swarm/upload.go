@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -32,6 +31,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -44,7 +45,7 @@ func upload(ctx *cli.Context) {
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 	)
 	if len(args) != 1 {
-		log.Fatal("need filename as the first and only argument")
+		utils.Fatalf("Need filename as the first and only argument")
 	}
 
 	var (
@@ -53,25 +54,25 @@ func upload(ctx *cli.Context) {
 	)
 	fi, err := os.Stat(expandPath(file))
 	if err != nil {
-		log.Fatal(err)
+		utils.Fatalf("Failed to stat file: %v", err)
 	}
 	if fi.IsDir() {
 		if !recursive {
-			log.Fatal("argument is a directory and recursive upload is disabled")
+			utils.Fatalf("Argument is a directory and recursive upload is disabled")
 		}
 		if !wantManifest {
-			log.Fatal("manifest is required for directory uploads")
+			utils.Fatalf("Manifest is required for directory uploads")
 		}
 		mhash, err := client.uploadDirectory(file, defaultPath)
 		if err != nil {
-			log.Fatal(err)
+			utils.Fatalf("Failed to upload directory: %v", err)
 		}
 		fmt.Println(mhash)
 		return
 	}
 	entry, err := client.uploadFile(file, fi)
 	if err != nil {
-		log.Fatalln("upload failed:", err)
+		utils.Fatalf("Upload failed: %v", err)
 	}
 	mroot := manifest{[]manifestEntry{entry}}
 	if !wantManifest {
@@ -82,7 +83,7 @@ func upload(ctx *cli.Context) {
 	}
 	hash, err := client.uploadManifest(mroot)
 	if err != nil {
-		log.Fatalln("manifest upload failed:", err)
+		utils.Fatalf("Manifest upload failed: %v", err)
 	}
 	fmt.Println(hash)
 }
@@ -173,7 +174,7 @@ func (c *client) uploadFileContent(file string, fi os.FileInfo) (string, error) 
 		return "", err
 	}
 	defer fd.Close()
-	log.Printf("uploading file %s (%d bytes)", file, fi.Size())
+	log.Info("Uploading swarm content", "file", file, "bytes", fi.Size())
 	return c.postRaw("application/octet-stream", fi.Size(), fd)
 }
 
@@ -182,7 +183,7 @@ func (c *client) uploadManifest(m manifest) (string, error) {
 	if err != nil {
 		panic(err)
 	}
-	log.Println("uploading manifest")
+	log.Info("Uploading swarm manifest")
 	return c.postRaw("application/json", int64(len(jsm)), ioutil.NopCloser(bytes.NewReader(jsm)))
 }
 
@@ -192,7 +193,7 @@ func (c *client) uploadToManifest(mhash string, path string, fpath string, fi os
 		return "", err
 	}
 	defer fd.Close()
-	log.Printf("uploading file %s (%d bytes) and adding path %v", fpath, fi.Size(), path)
+	log.Info("Uploading swarm content and path", "file", fpath, "bytes", fi.Size(), "path", path)
 	req, err := http.NewRequest("PUT", c.api+"/bzz:/"+mhash+"/"+path, fd)
 	if err != nil {
 		return "", err
