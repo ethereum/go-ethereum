@@ -101,6 +101,7 @@ func init() {
 	}
 	app.Commands = []cli.Command{
 		compileCommand,
+		disasmCommand,
 		runCommand,
 	}
 }
