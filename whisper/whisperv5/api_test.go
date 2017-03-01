@@ -323,7 +323,7 @@ func TestIntegrationAsym(t *testing.T) {
 	f.To = key
 	f.From = sig
 	f.Topics = topics[:]
-	f.PoW = MinimumPoW / 2
+	f.PoW = DefaultMinimumPoW / 2
 	f.AcceptP2P = true
 
 	id, err := api.NewFilter(f)
@@ -337,7 +337,7 @@ func TestIntegrationAsym(t *testing.T) {
 	p.To = f.To
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = MinimumPoW
+	p.PoW = DefaultMinimumPoW
 	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	p.WorkTime = 2
 
@@ -427,7 +427,7 @@ func TestIntegrationSym(t *testing.T) {
 	p.From = f.From
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = MinimumPoW
+	p.PoW = DefaultMinimumPoW
 	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	p.WorkTime = 2
 
@@ -517,7 +517,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	p.From = sig
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = MinimumPoW
+	p.PoW = DefaultMinimumPoW
 	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	p.WorkTime = 2
 

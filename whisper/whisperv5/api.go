@@ -72,6 +72,20 @@ func (api *PublicWhisperAPI) Stats() (string, error) {
 	return api.whisper.Stats(), nil
 }
 
+func (api *PublicWhisperAPI) SetMaxMessageLength(val int) error {
+	if api.whisper == nil {
+		return whisperOffLineErr
+	}
+	return api.whisper.SetMaxMessageLength(val)
+}
+
+func (api *PublicWhisperAPI) SetMinimumPoW(val float64) error {
+	if api.whisper == nil {
+		return whisperOffLineErr
+	}
+	return api.whisper.SetMinimumPoW(val)
+}
+
 // MarkPeerTrusted marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
 func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
@@ -352,7 +366,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		log.Error(fmt.Sprintf(err.Error()))
 		return err
 	}
-	if envelope.size() > MaxMessageLength {
+	if envelope.size() > api.whisper.maxMsgLength {
 		info := "Post: message is too big"
 		log.Error(fmt.Sprintf(info))
 		return errors.New(info)

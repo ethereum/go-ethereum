@@ -55,8 +55,8 @@ const (
 	saltLength        = 12
 	AESNonceMaxLength = 12
 
-	MaxMessageLength = 1024 * 1024
-	MinimumPoW       = 10.0     // todo: review after testing.
+	DefaultMaxMessageLength = 1024 * 1024
+	DefaultMinimumPoW       = 10.0 // todo: review after testing.
 
 	padSizeLimitLower = 128 // it can not be less - we don't want to reveal the absence of signature
 	padSizeLimitUpper = 256 // just an arbitrary number, could be changed without losing compatibility
