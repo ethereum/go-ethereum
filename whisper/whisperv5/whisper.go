@@ -317,7 +317,10 @@ func (w *Whisper) Unwatch(id string) {
 // Send injects a message into the whisper send queue, to be distributed in the
 // network in the coming cycles.
 func (w *Whisper) Send(envelope *Envelope) error {
-	_, err := w.add(envelope)
+	ok, err := w.add(envelope)
+	if !ok {
+		return fmt.Errorf("failed to add envelope")
+	}
 	return err
 }
 

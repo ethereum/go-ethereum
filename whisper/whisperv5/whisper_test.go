@@ -354,3 +354,87 @@ func TestExpiry(t *testing.T) {
 		t.Fatalf("expire failed, seed: %d.", seed)
 	}
 }
+
+func TestCustomization(t *testing.T) {
+	InitSingleTest()
+
+	w := New()
+	defer w.SetMinimumPoW(DefaultMinimumPoW)
+	defer w.SetMaxMessageLength(DefaultMaxMessageLength)
+	w.Start(nil)
+	defer w.Stop()
+
+	const smallPoW = 0.00001
+
+	f, err := generateFilter(t, true)
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+
+	params.KeySym = f.KeySym
+	params.Topic = f.Topics[2]
+	params.PoW = smallPoW
+	params.TTL = 3600 * 24 // one day
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	err = w.Send(env)
+	if err == nil {
+		t.Fatalf("successfully sent envelope with PoW %.06f, false positive (seed %d).", env.PoW(), seed)
+	}
+
+	w.SetMinimumPoW(smallPoW / 2)
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("failed to send envelope with seed %d: %s.", seed, err)
+	}
+
+	params.TTL++
+	msg = NewSentMessage(params)
+	env, err = msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+	w.SetMaxMessageLength(env.size() - 1)
+	err = w.Send(env)
+	if err == nil {
+		t.Fatalf("successfully sent oversized envelope (seed %d): false positive.", seed)
+	}
+
+	w.SetMaxMessageLength(DefaultMaxMessageLength)
+	err = w.Send(env)
+	if err != nil {
+		t.Fatalf("failed to send second envelope with seed %d: %s.", seed, err)
+	}
+
+	// wait till received or timeout
+	var received bool
+	for j := 0; j < 20; j++ {
+		time.Sleep(100 * time.Millisecond)
+		if len(w.Envelopes()) > 1 {
+			received = true
+			break
+		}
+	}
+
+	if !received {
+		t.Fatalf("did not receive the sent envelope, seed: %d.", seed)
+	}
+
+	// check w.messages()
+	id, err := w.Watch(f)
+	time.Sleep(5 * time.Millisecond)
+	mail := f.Retrieve()
+	if len(mail) > 0 {
+		t.Fatalf("received premature mail")
+	}
+
+	mail = w.Messages(id)
+	if len(mail) != 2 {
+		t.Fatalf("failed to get whisper messages")
+	}
+}
