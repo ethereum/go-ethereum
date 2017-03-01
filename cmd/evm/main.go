@@ -19,19 +19,10 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
-	goruntime "runtime"
-	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/vm/runtime"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -108,113 +99,10 @@ func init() {
 		InputFlag,
 		DisableGasMeteringFlag,
 	}
-	app.Action = run
-}
-
-func run(ctx *cli.Context) error {
-	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
-	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
-	log.Root().SetHandler(glogger)
-
-	var (
-		db, _      = ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, db)
-		address    = common.StringToAddress("sender")
-		sender     = vm.AccountRef(address)
-	)
-	statedb.CreateAccount(common.StringToAddress("sender"))
-
-	logger := vm.NewStructLogger(nil)
-
-	tstart := time.Now()
-
-	var (
-		code []byte
-		ret  []byte
-		err  error
-	)
-
-	if ctx.GlobalString(CodeFlag.Name) != "" {
-		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
-	} else {
-		var hexcode []byte
-		if ctx.GlobalString(CodeFileFlag.Name) != "" {
-			var err error
-			hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
-			if err != nil {
-				fmt.Printf("Could not load code from file: %v\n", err)
-				os.Exit(1)
-			}
-		} else {
-			var err error
-			hexcode, err = ioutil.ReadAll(os.Stdin)
-			if err != nil {
-				fmt.Printf("Could not load code from stdin: %v\n", err)
-				os.Exit(1)
-			}
-		}
-		code = common.Hex2Bytes(string(hexcode[:]))
+	app.Commands = []cli.Command{
+		compileCommand,
+		runCommand,
 	}
-
-	if ctx.GlobalBool(CreateFlag.Name) {
-		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, err = runtime.Create(input, &runtime.Config{
-			Origin:   sender.Address(),
-			State:    statedb,
-			GasLimit: ctx.GlobalUint64(GasFlag.Name),
-			GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
-			Value:    utils.GlobalBig(ctx, ValueFlag.Name),
-			EVMConfig: vm.Config{
-				Tracer:             logger,
-				Debug:              ctx.GlobalBool(DebugFlag.Name),
-				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
-			},
-		})
-	} else {
-		receiverAddress := common.StringToAddress("receiver")
-		statedb.CreateAccount(receiverAddress)
-		statedb.SetCode(receiverAddress, code)
-
-		ret, err = runtime.Call(receiverAddress, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtime.Config{
-			Origin:   sender.Address(),
-			State:    statedb,
-			GasLimit: ctx.GlobalUint64(GasFlag.Name),
-			GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
-			Value:    utils.GlobalBig(ctx, ValueFlag.Name),
-			EVMConfig: vm.Config{
-				Tracer:             logger,
-				Debug:              ctx.GlobalBool(DebugFlag.Name),
-				DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
-			},
-		})
-	}
-	vmdone := time.Since(tstart)
-
-	if ctx.GlobalBool(DumpFlag.Name) {
-		statedb.Commit(true)
-		fmt.Println(string(statedb.Dump()))
-	}
-	vm.StdErrFormat(logger.StructLogs())
-
-	if ctx.GlobalBool(SysStatFlag.Name) {
-		var mem goruntime.MemStats
-		goruntime.ReadMemStats(&mem)
-		fmt.Printf("vm took %v\n", vmdone)
-		fmt.Printf(`alloc:      %d
-tot alloc:  %d
-no. malloc: %d
-heap alloc: %d
-heap objs:  %d
-num gc:     %d
-`, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
-	}
-
-	fmt.Printf("OUT: 0x%x", ret)
-	if err != nil {
-		fmt.Printf(" error: %v", err)
-	}
-	fmt.Println()
-	return nil
 }
 
 func main() {
