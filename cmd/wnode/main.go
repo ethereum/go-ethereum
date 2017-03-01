@@ -84,8 +84,8 @@ var (
 	argVerbosity = flag.Int("verbosity", int(log.LvlWarn), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
-	argPoW       = flag.Float64("pow", whisper.MinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
-	argServerPoW = flag.Float64("mspow", whisper.MinimumPoW, "PoW requirement for Mail Server request")
+	argPoW       = flag.Float64("pow", whisper.DefaultMinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
+	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
 	argIP     = flag.String("ip", "", "IP address and port of this node (e.g. 127.0.0.1:30303)")
 	argPub    = flag.String("pub", "", "public key for asymmetric encryption")

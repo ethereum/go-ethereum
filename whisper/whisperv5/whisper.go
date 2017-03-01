@@ -66,8 +66,9 @@ type Whisper struct {
 
 	stats Statistics
 
-	overflow bool
-	test     bool
+	minPoW       float64
+	maxMsgLength int
+	overflow     bool
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -82,6 +83,8 @@ func New() *Whisper {
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
 		quit:         make(chan struct{}),
+		minPoW:       DefaultMinimumPoW,
+		maxMsgLength: DefaultMaxMessageLength,
 	}
 	whisper.filters = NewFilters(whisper)
 
@@ -120,6 +123,22 @@ func (w *Whisper) Protocols() []p2p.Protocol {
 // Version returns the whisper sub-protocols version number.
 func (w *Whisper) Version() uint {
 	return w.protocol.Version
+}
+
+func (w *Whisper) SetMaxMessageLength(val int) error {
+	if val <= 0 {
+		return fmt.Errorf("Invalid message length: %d", val)
+	}
+	w.maxMsgLength = val
+	return nil
+}
+
+func (w *Whisper) SetMinimumPoW(val float64) error {
+	if val <= 0.0 {
+		return fmt.Errorf("Invalid PoW: %f", val)
+	}
+	w.minPoW = val
+	return nil
 }
 
 func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
@@ -358,7 +377,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		if err != nil {
 			return err
 		}
-		if packet.Size > MaxMessageLength {
+		if packet.Size > uint32(wh.maxMsgLength) {
 			return fmt.Errorf("oversized message received")
 		}
 
@@ -441,7 +460,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		}
 	}
 
-	if envelope.size() > MaxMessageLength {
+	if envelope.size() > wh.maxMsgLength {
 		return false, fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
@@ -459,7 +478,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		return false, fmt.Errorf("oversized salt [%x]", envelope.Hash())
 	}
 
-	if envelope.PoW() < MinimumPoW && !wh.test {
+	if envelope.PoW() < wh.minPoW {
 		log.Debug(fmt.Sprintf("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash()))
 		return false, nil // drop envelope without error
 	}
@@ -519,6 +538,7 @@ func (w *Whisper) checkOverflow() {
 	} else if queueSize <= messageQueueLimit/2 {
 		if w.overflow {
 			w.overflow = false
+			log.Warn(fmt.Sprint("message queue overflow fixed (back to normal)"))
 		}
 	}
 }
