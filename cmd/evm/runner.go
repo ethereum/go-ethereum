@@ -25,6 +25,7 @@ import (
 
 	goruntime "runtime"
 
+	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -61,7 +62,18 @@ func runCmd(ctx *cli.Context) error {
 		ret  []byte
 		err  error
 	)
-	if ctx.GlobalString(CodeFlag.Name) != "" {
+	if fn := ctx.Args().First(); len(fn) > 0 {
+		src, err := ioutil.ReadFile(fn)
+		if err != nil {
+			return err
+		}
+
+		bin, err := compiler.Compile(fn, src, false)
+		if err != nil {
+			return err
+		}
+		code = common.Hex2Bytes(bin)
+	} else if ctx.GlobalString(CodeFlag.Name) != "" {
 		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
 	} else {
 		var hexcode []byte
@@ -106,7 +118,7 @@ func runCmd(ctx *cli.Context) error {
 
 		ret, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
-	vmdone := time.Since(tstart)
+	execTime := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
 		statedb.Commit(true)
@@ -118,19 +130,16 @@ func runCmd(ctx *cli.Context) error {
 		vm.WriteTrace(os.Stderr, logger.StructLogs())
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
 		vm.WriteLogs(os.Stderr, statedb.Logs())
-	}
 
-	if ctx.GlobalBool(SysStatFlag.Name) {
 		var mem goruntime.MemStats
 		goruntime.ReadMemStats(&mem)
-		fmt.Printf("vm took %v\n", vmdone)
-		fmt.Printf(`alloc:      %d
-tot alloc:  %d
-no. malloc: %d
-heap alloc: %d
-heap objs:  %d
-num gc:     %d
-`, mem.Alloc, mem.TotalAlloc, mem.Mallocs, mem.HeapAlloc, mem.HeapObjects, mem.NumGC)
+		fmt.Fprintf(os.Stderr, `evm execution time: %v
+heap objects:       %d
+allocations:        %d
+total allocations:  %d
+GC calls:           %d
+
+`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC)
 	}
 
 	fmt.Printf("0x%x", ret)
