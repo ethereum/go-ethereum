@@ -102,7 +102,14 @@ func TestMailServer(t *testing.T) {
 }
 
 func deliverTest(t *testing.T, server *WMailServer, env *whisper.Envelope) {
-	testPeerID := shh.NewIdentity()
+	id, err := shh.NewIdentity()
+	if err != nil {
+		t.Fatalf("failed to generate new key pair with seed %d: %s.", seed, err)
+	}
+	testPeerID, err := shh.GetIdentity(id)
+	if err != nil {
+		t.Fatalf("failed to retireve new key pair with seed %d: %s.", seed, err)
+	}
 	birth := env.Expiry - env.TTL
 	p := &ServerTestParams{
 		topic: env.Topic,

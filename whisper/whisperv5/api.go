@@ -108,19 +108,19 @@ func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
 
 // HasIdentity checks if the whisper node is configured with the private key
 // of the specified public pair.
-func (api *PublicWhisperAPI) HasIdentity(identity string) (bool, error) {
+func (api *PublicWhisperAPI) HasIdentity(id string) (bool, error) {
 	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	return api.whisper.HasIdentity(identity), nil
+	return api.whisper.HasIdentity(id), nil
 }
 
 // DeleteIdentity deletes the specifies key if it exists.
-func (api *PublicWhisperAPI) DeleteIdentity(identity string) (bool, error) {
+func (api *PublicWhisperAPI) DeleteIdentity(id string) (bool, error) {
 	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	success := api.whisper.DeleteIdentity(identity)
+	success := api.whisper.DeleteIdentity(id)
 	return success, nil
 }
 
@@ -130,17 +130,32 @@ func (api *PublicWhisperAPI) NewIdentity() (string, error) {
 	if api.whisper == nil {
 		return "", whisperOffLineErr
 	}
-	identity := api.whisper.NewIdentity()
-	return common.ToHex(crypto.FromECDSAPub(&identity.PublicKey)), nil
+	return api.whisper.NewIdentity()
 }
 
-// todo: implement
-//func (api *PublicWhisperAPI) GetPublicKey(id string) (bool, error) {
-//	if api.whisper == nil {
-//		return false, whisperOffLineErr
-//	}
-//	return api.whisper.HasIdentity(identity), nil
-//}
+// GetPublicKey returns the public key for identity id
+func (api *PublicWhisperAPI) GetPublicKey(id string) (string, error) {
+	if api.whisper == nil {
+		return "", whisperOffLineErr
+	}
+	key, err := api.whisper.GetIdentity(id)
+	if err != nil {
+		return "", err
+	}
+	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey)), nil
+}
+
+// GetPrivateKey returns the private key for identity id
+func (api *PublicWhisperAPI) GetPrivateKey(id string) (string, error) {
+	if api.whisper == nil {
+		return "", whisperOffLineErr
+	}
+	key, err := api.whisper.GetIdentity(id)
+	if err != nil {
+		return "", err
+	}
+	return common.ToHex(crypto.FromECDSA(key)), nil
+}
 
 // GenerateSymKey generates a random symmetric key and stores it under id,
 // which is then returned. Will be used in the future for session key exchange.
@@ -249,7 +264,10 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 			log.Error(fmt.Sprintf(info))
 			return "", errors.New(info)
 		}
-		filter.KeyAsym = api.whisper.GetIdentity(string(args.To))
+		filter.KeyAsym, err = api.whisper.GetIdentity(string(args.To))
+		if err != nil {
+			return "", err
+		}
 		if filter.KeyAsym == nil {
 			info := "NewFilter: non-existent identity provided"
 			log.Error(fmt.Sprintf(info))
@@ -334,7 +352,10 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 			log.Error(fmt.Sprintf(info))
 			return errors.New(info)
 		}
-		params.Src = api.whisper.GetIdentity(string(args.From))
+		params.Src, err = api.whisper.GetIdentity(string(args.From))
+		if err != nil {
+			return err
+		}
 		if params.Src == nil {
 			info := "Post: non-existent identity provided"
 			log.Error(fmt.Sprintf(info))

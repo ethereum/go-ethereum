@@ -188,22 +188,32 @@ func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
 }
 
 // NewIdentity generates a new cryptographic identity for the client, and injects
-// it into the known identities for message decryption.
-func (w *Whisper) NewIdentity() *ecdsa.PrivateKey {
+// it into the known identities for message decryption. Returns ID of the new key pair.
+func (w *Whisper) NewIdentity() (string, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil || !validatePrivateKey(key) {
 		key, err = crypto.GenerateKey() // retry once
 	}
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	if !validatePrivateKey(key) {
-		panic("Failed to generate valid key")
+		return "", fmt.Errorf("Failed to generate valid key")
 	}
+
+	id, err := GenerateRandomID()
+	if err != nil {
+		return "", fmt.Errorf("Failed to generate ID: %s", err)
+	}
+
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	w.privateKeys[common.ToHex(crypto.FromECDSAPub(&key.PublicKey))] = key
-	return key
+
+	if w.privateKeys[id] != nil {
+		return "", fmt.Errorf("Failed to generate unique ID")
+	}
+	w.privateKeys[id] = key
+	return id, nil
 }
 
 // DeleteIdentity deletes the specified key if it exists.
@@ -220,17 +230,21 @@ func (w *Whisper) DeleteIdentity(key string) bool {
 
 // HasIdentity checks if the the whisper node is configured with the private key
 // of the specified public pair.
-func (w *Whisper) HasIdentity(pubKey string) bool {
+func (w *Whisper) HasIdentity(id string) bool {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.privateKeys[pubKey] != nil
+	return w.privateKeys[id] != nil
 }
 
 // GetIdentity retrieves the private key of the specified public identity.
-func (w *Whisper) GetIdentity(pubKey string) *ecdsa.PrivateKey {
+func (w *Whisper) GetIdentity(pubKey string) (*ecdsa.PrivateKey, error) {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.privateKeys[pubKey]
+	key := w.privateKeys[pubKey]
+	if key == nil {
+		return nil, fmt.Errorf("invalid id")
+	}
+	return key, nil
 }
 
 func (w *Whisper) GenerateSymKey() (string, error) {

@@ -64,6 +64,7 @@ var (
 	asymKey    *ecdsa.PrivateKey
 	nodeid     *ecdsa.PrivateKey
 	topic      whisper.TopicType
+	asymKeyID  string
 	filterID   string
 	symPass    string
 	msPassword string
@@ -198,9 +199,26 @@ func initialize() {
 		shh = whisper.New()
 	}
 
-	asymKey = shh.NewIdentity()
+	asymKeyID, err = shh.NewIdentity()
+	if err != nil {
+		utils.Fatalf("Failed to generate a new key pair: %s", err)
+	}
+
+	asymKey, err = shh.GetIdentity(asymKeyID)
+	if err != nil {
+		utils.Fatalf("Failed to retrieve a new key pair: %s", err)
+	}
+
 	if nodeid == nil {
-		nodeid = shh.NewIdentity()
+		tmpID, err := shh.NewIdentity()
+		if err != nil {
+			utils.Fatalf("Failed to generate a new key pair: %s", err)
+		}
+
+		nodeid, err = shh.GetIdentity(tmpID)
+		if err != nil {
+			utils.Fatalf("Failed to retrieve a new key pair: %s", err)
+		}
 	}
 
 	maxPeers := 80
