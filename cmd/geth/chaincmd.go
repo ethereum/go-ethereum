@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -110,17 +111,22 @@ func initGenesis(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
 	chaindb := utils.MakeChainDatabase(ctx, stack)
 
-	genesisFile, err := os.Open(genesisPath)
+	file, err := os.Open(genesisPath)
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
-	defer genesisFile.Close()
+	defer file.Close()
 
-	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		utils.Fatalf("invalid genesis file: %v", err)
+	}
+
+	_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
-	log.Info("Successfully wrote genesis state", "hash", block.Hash())
+	log.Info("Successfully wrote genesis state", "hash", hash)
 	return nil
 }
 

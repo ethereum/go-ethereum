@@ -251,9 +251,10 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 		pow     = new(pow.FakePow)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
-		genesis = core.WriteGenesisBlockForTesting(sdb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
+		genesis = gspec.MustCommit(sdb)
 	)
-	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+	gspec.MustCommit(ldb)
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
 	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}

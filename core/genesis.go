@@ -17,230 +17,286 @@
 package core
 
 import (
-	"compress/bzip2"
-	"compress/gzip"
-	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// WriteGenesisBlock writes the genesis block to the database as block number 0
-func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, error) {
-	contents, err := ioutil.ReadAll(reader)
+//go:generate gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
+//go:generate gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
+
+var errGenesisNoConfig = errors.New("genesis has no chain configuration")
+
+// Genesis specifies the header fields, state of a genesis block. It also defines hard
+// fork switch-over blocks through the chain configuration.
+type Genesis struct {
+	Config     *params.ChainConfig `json:"config" optional:"true"`
+	Nonce      uint64              `json:"nonce" optional:"true"`
+	Timestamp  uint64              `json:"timestamp" optional:"true"`
+	ParentHash common.Hash         `json:"parentHash" optional:"true"`
+	ExtraData  []byte              `json:"extraData" optional:"true"`
+	GasLimit   uint64              `json:"gasLimit"`
+	Difficulty *big.Int            `json:"difficulty"`
+	Mixhash    common.Hash         `json:"mixHash" optional:"true"`
+	Coinbase   common.Address      `json:"coinbase" optional:"true"`
+	Alloc      GenesisAlloc        `json:"alloc"`
+}
+
+// GenesisAlloc specifies the initial state that is part of the genesis block.
+type GenesisAlloc map[common.Address]GenesisAccount
+
+// GenesisAccount is an account in the state of the genesis block.
+type GenesisAccount struct {
+	Code    []byte                      `json:"code" optional:"true"`
+	Storage map[common.Hash]common.Hash `json:"storage" optional:"true"`
+	Balance *big.Int                    `json:"balance"`
+	Nonce   uint64                      `json:"nonce" optional:"true"`
+}
+
+// field type overrides for gencodec
+type genesisSpecMarshaling struct {
+	Nonce      math.HexOrDecimal64
+	Timestamp  math.HexOrDecimal64
+	ExtraData  hexutil.Bytes
+	GasLimit   math.HexOrDecimal64
+	Difficulty *math.HexOrDecimal256
+	Alloc      map[common.UnprefixedAddress]GenesisAccount
+}
+type genesisAccountMarshaling struct {
+	Code    hexutil.Bytes
+	Balance *math.HexOrDecimal256
+	Nonce   math.HexOrDecimal64
+}
+
+// GenesisMismatchError is raised when trying to overwrite an existing
+// genesis block with an incompatible one.
+type GenesisMismatchError struct {
+	Stored, New common.Hash
+}
+
+func (e *GenesisMismatchError) Error() string {
+	return fmt.Sprintf("wrong genesis block in database (have %x, new %x)", e.Stored[:8], e.New[:8])
+}
+
+// SetupGenesisBlock writes or updates the genesis block in db.
+// The block that will be used is:
+//
+//                          genesis == nil       genesis != nil
+//                       +------------------------------------------
+//     db has no genesis |  main-net default  |  genesis
+//     db has genesis    |  from DB           |  genesis (if compatible)
+//
+// The stored chain configuration will be updated if it is compatible (i.e. does not
+// specify a fork block below the local head block). In case of a conflict, the
+// error is a *params.ConfigCompatError and the new, unwritten config is returned.
+//
+// The returned chain configuration is never nil.
+func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
+	if genesis != nil && genesis.Config == nil {
+		return params.AllProtocolChanges, common.Hash{}, errGenesisNoConfig
+	}
+
+	// Just commit the new block if there is no stored genesis block.
+	stored := GetCanonicalHash(db, 0)
+	if (stored == common.Hash{}) {
+		if genesis == nil {
+			log.Info("Writing default main-net genesis block")
+			genesis = DefaultGenesisBlock()
+		} else {
+			log.Info("Writing custom genesis block")
+		}
+		block, err := genesis.Commit(db)
+		return genesis.Config, block.Hash(), err
+	}
+
+	// Check whether the genesis block is already written.
+	if genesis != nil {
+		block, _ := genesis.ToBlock()
+		hash := block.Hash()
+		if hash != stored {
+			return genesis.Config, block.Hash(), &GenesisMismatchError{stored, hash}
+		}
+	}
+
+	// Get the existing chain configuration.
+	newcfg := genesis.configOrDefault(stored)
+	storedcfg, err := GetChainConfig(db, stored)
 	if err != nil {
-		return nil, err
-	}
-
-	var genesis struct {
-		ChainConfig *params.ChainConfig `json:"config"`
-		Nonce       string
-		Timestamp   string
-		ParentHash  string
-		ExtraData   string
-		GasLimit    string
-		Difficulty  string
-		Mixhash     string
-		Coinbase    string
-		Alloc       map[string]struct {
-			Code    string
-			Storage map[string]string
-			Balance string
-			Nonce   string
+		if err == ChainConfigNotFoundErr {
+			// This case happens if a genesis write was interrupted.
+			log.Warn("Found genesis block without chain config")
+			err = WriteChainConfig(db, stored, newcfg)
 		}
+		return newcfg, stored, err
+	}
+	// Special case: don't change the existing config of a non-mainnet chain if no new
+	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
+	// if we just continued here.
+	if genesis == nil && stored != params.MainNetGenesisHash {
+		return storedcfg, stored, nil
 	}
 
-	if err := json.Unmarshal(contents, &genesis); err != nil {
-		return nil, err
+	// Check config compatibility and write the config. Compatibility errors
+	// are returned to the caller unless we're already at block zero.
+	height := GetBlockNumber(db, GetHeadHeaderHash(db))
+	if height == missingNumber {
+		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
 	}
-	if genesis.ChainConfig == nil {
-		genesis.ChainConfig = params.AllProtocolChanges
+	compatErr := storedcfg.CheckCompatible(newcfg, height)
+	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
+		return newcfg, stored, compatErr
 	}
+	return newcfg, stored, WriteChainConfig(db, stored, newcfg)
+}
 
-	// creating with empty hash always works
-	statedb, _ := state.New(common.Hash{}, chainDb)
-	for addr, account := range genesis.Alloc {
-		balance, ok := math.ParseBig256(account.Balance)
-		if !ok {
-			return nil, fmt.Errorf("invalid balance for account %s: %q", addr, account.Balance)
-		}
-		nonce, ok := math.ParseUint64(account.Nonce)
-		if !ok {
-			return nil, fmt.Errorf("invalid nonce for account %s: %q", addr, account.Nonce)
-		}
+func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
+	switch {
+	case g != nil:
+		return g.Config
+	case ghash == params.MainNetGenesisHash:
+		return params.MainnetChainConfig
+	case ghash == params.TestNetGenesisHash:
+		return params.TestnetChainConfig
+	default:
+		return params.AllProtocolChanges
+	}
+}
 
-		address := common.HexToAddress(addr)
-		statedb.AddBalance(address, balance)
-		statedb.SetCode(address, common.FromHex(account.Code))
-		statedb.SetNonce(address, nonce)
+// ToBlock creates the block and state of a genesis specification.
+func (g *Genesis) ToBlock() (*types.Block, *state.StateDB) {
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+	for addr, account := range g.Alloc {
+		statedb.AddBalance(addr, account.Balance)
+		statedb.SetCode(addr, account.Code)
+		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
-			statedb.SetState(address, common.HexToHash(key), common.HexToHash(value))
+			statedb.SetState(addr, key, value)
 		}
 	}
-	root, stateBatch := statedb.CommitBatch(false)
-
-	difficulty, ok := math.ParseBig256(genesis.Difficulty)
-	if !ok {
-		return nil, fmt.Errorf("invalid difficulty: %q", genesis.Difficulty)
-	}
-	gaslimit, ok := math.ParseUint64(genesis.GasLimit)
-	if !ok {
-		return nil, fmt.Errorf("invalid gas limit: %q", genesis.GasLimit)
-	}
-	nonce, ok := math.ParseUint64(genesis.Nonce)
-	if !ok {
-		return nil, fmt.Errorf("invalid nonce: %q", genesis.Nonce)
-	}
-	timestamp, ok := math.ParseBig256(genesis.Timestamp)
-	if !ok {
-		return nil, fmt.Errorf("invalid timestamp: %q", genesis.Timestamp)
-	}
-
-	block := types.NewBlock(&types.Header{
-		Nonce:      types.EncodeNonce(nonce),
-		Time:       timestamp,
-		ParentHash: common.HexToHash(genesis.ParentHash),
-		Extra:      common.FromHex(genesis.ExtraData),
-		GasLimit:   new(big.Int).SetUint64(gaslimit),
-		Difficulty: difficulty,
-		MixDigest:  common.HexToHash(genesis.Mixhash),
-		Coinbase:   common.HexToAddress(genesis.Coinbase),
+	root := statedb.IntermediateRoot(false)
+	head := &types.Header{
+		Nonce:      types.EncodeNonce(g.Nonce),
+		Time:       new(big.Int).SetUint64(g.Timestamp),
+		ParentHash: g.ParentHash,
+		Extra:      g.ExtraData,
+		GasLimit:   new(big.Int).SetUint64(g.GasLimit),
+		Difficulty: g.Difficulty,
+		MixDigest:  g.Mixhash,
+		Coinbase:   g.Coinbase,
 		Root:       root,
-	}, nil, nil, nil)
-
-	if block := GetBlock(chainDb, block.Hash(), block.NumberU64()); block != nil {
-		log.Info("Genesis block known, writing canonical number")
-		err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
-		if err != nil {
-			return nil, err
-		}
-		return block, nil
 	}
+	if g.GasLimit == 0 {
+		head.GasLimit = params.GenesisGasLimit
+	}
+	if g.Difficulty == nil {
+		head.Difficulty = params.GenesisDifficulty
+	}
+	return types.NewBlock(head, nil, nil, nil), statedb
+}
 
-	if err := stateBatch.Write(); err != nil {
+// Commit writes the block and state of a genesis specification to the database.
+// The block is committed as the canonical head block.
+func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
+	block, statedb := g.ToBlock()
+	if _, err := statedb.CommitTo(db, false); err != nil {
 		return nil, fmt.Errorf("cannot write state: %v", err)
 	}
-	if err := WriteTd(chainDb, block.Hash(), block.NumberU64(), difficulty); err != nil {
+	if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
 		return nil, err
 	}
-	if err := WriteBlock(chainDb, block); err != nil {
+	if err := WriteBlock(db, block); err != nil {
 		return nil, err
 	}
-	if err := WriteBlockReceipts(chainDb, block.Hash(), block.NumberU64(), nil); err != nil {
+	if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), nil); err != nil {
 		return nil, err
 	}
-	if err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64()); err != nil {
+	if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
 		return nil, err
 	}
-	if err := WriteHeadBlockHash(chainDb, block.Hash()); err != nil {
+	if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
 		return nil, err
 	}
-	if err := WriteChainConfig(chainDb, block.Hash(), genesis.ChainConfig); err != nil {
+	if err := WriteHeadHeaderHash(db, block.Hash()); err != nil {
 		return nil, err
 	}
-	return block, nil
+	config := g.Config
+	if config == nil {
+		config = params.AllProtocolChanges
+	}
+	return block, WriteChainConfig(db, block.Hash(), config)
 }
 
-// GenesisBlockForTesting creates a block in which addr has the given wei balance.
-// The state trie of the block is written to db. the passed db needs to contain a state root
-func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
-	statedb, _ := state.New(common.Hash{}, db)
-	obj := statedb.GetOrNewStateObject(addr)
-	obj.SetBalance(balance)
-	root, err := statedb.Commit(false)
-	if err != nil {
-		panic(fmt.Sprintf("cannot write state: %v", err))
-	}
-	block := types.NewBlock(&types.Header{
-		Difficulty: params.GenesisDifficulty,
-		GasLimit:   params.GenesisGasLimit,
-		Root:       root,
-	}, nil, nil, nil)
-	return block
-}
-
-type GenesisAccount struct {
-	Address common.Address
-	Balance *big.Int
-}
-
-func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *types.Block {
-	accountJson := "{"
-	for i, account := range accounts {
-		if i != 0 {
-			accountJson += ","
-		}
-		accountJson += fmt.Sprintf(`"0x%x":{"balance":"%d"}`, account.Address, account.Balance)
-	}
-	accountJson += "}"
-
-	testGenesis := fmt.Sprintf(`{
-	"nonce":"0x%x",
-	"gasLimit":"0x%x",
-	"difficulty":"0x%x",
-	"alloc": %s
-}`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), accountJson)
-	block, err := WriteGenesisBlock(db, strings.NewReader(testGenesis))
+// MustCommit writes the genesis block and state to db, panicking on error.
+// The block is committed as the canonical head block.
+func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
+	block, err := g.Commit(db)
 	if err != nil {
 		panic(err)
 	}
 	return block
 }
 
-// WriteDefaultGenesisBlock assembles the official Ethereum genesis block and
-// writes it - along with all associated state - into a chain database.
-func WriteDefaultGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
-	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultGenesisBlock()))
+// GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+	g := Genesis{Alloc: GenesisAlloc{addr: {Balance: balance}}}
+	return g.MustCommit(db)
 }
 
-// WriteTestNetGenesisBlock assembles the test network genesis block and
-// writes it - along with all associated state - into a chain database.
-func WriteTestNetGenesisBlock(chainDb ethdb.Database) (*types.Block, error) {
-	return WriteGenesisBlock(chainDb, strings.NewReader(DefaultTestnetGenesisBlock()))
+// DefaultGenesisBlock returns the Ethereum main net genesis block.
+func DefaultGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.MainnetChainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
+		GasLimit:   5000,
+		Difficulty: big.NewInt(17179869184),
+		Alloc:      decodePrealloc(mainnetAllocData),
+	}
 }
 
-// DefaultGenesisBlock assembles a JSON string representing the default Ethereum
-// genesis block.
-func DefaultGenesisBlock() string {
-	reader, err := gzip.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultGenesisBlock)))
-	if err != nil {
-		panic(fmt.Sprintf("failed to access default genesis: %v", err))
+// DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
+func DefaultTestnetGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.TestnetChainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
+		GasLimit:   16777216,
+		Difficulty: big.NewInt(1048576),
+		Alloc:      decodePrealloc(testnetAllocData),
 	}
-	blob, err := ioutil.ReadAll(reader)
-	if err != nil {
-		panic(fmt.Sprintf("failed to load default genesis: %v", err))
-	}
-	return string(blob)
 }
 
-// DefaultTestnetGenesisBlock assembles a JSON string representing the default Ethereum
-// test network genesis block.
-func DefaultTestnetGenesisBlock() string {
-	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultTestnetGenesisBlock)))
-	blob, err := ioutil.ReadAll(reader)
-	if err != nil {
-		panic(fmt.Sprintf("failed to load default genesis: %v", err))
+// DevGenesisBlock returns the 'geth --dev' genesis block.
+func DevGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.AllProtocolChanges,
+		Nonce:      42,
+		GasLimit:   4712388,
+		Difficulty: big.NewInt(131072),
+		Alloc:      decodePrealloc(devAllocData),
 	}
-	return string(blob)
 }
 
-// DevGenesisBlock assembles a JSON string representing a local dev genesis block.
-func DevGenesisBlock() string {
-	reader := bzip2.NewReader(base64.NewDecoder(base64.StdEncoding, strings.NewReader(defaultDevnetGenesisBlock)))
-	blob, err := ioutil.ReadAll(reader)
-	if err != nil {
-		panic(fmt.Sprintf("failed to load dev genesis: %v", err))
+func decodePrealloc(data string) GenesisAlloc {
+	var p []struct{ Addr, Balance *big.Int }
+	if err := rlp.NewStream(strings.NewReader(data), 0).Decode(&p); err != nil {
+		panic(err)
 	}
-	return string(blob)
+	ga := make(GenesisAlloc, len(p))
+	for _, account := range p {
+		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
+	}
+	return ga
 }

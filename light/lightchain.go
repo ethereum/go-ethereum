@@ -96,11 +96,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 
 	bc.genesisBlock, _ = bc.GetBlockByNumber(NoOdr, 0)
 	if bc.genesisBlock == nil {
-		bc.genesisBlock, err = core.WriteDefaultGenesisBlock(odr.Database())
-		if err != nil {
-			return nil, err
-		}
-		log.Warn("Wrote default ethereum genesis block")
+		return nil, core.ErrNoGenesis
 	}
 
 	if bc.genesisBlock.Hash() == params.MainNetGenesisHash {

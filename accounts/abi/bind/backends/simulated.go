@@ -37,9 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-// Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)
-var chainConfig = &params.ChainConfig{HomesteadBlock: big.NewInt(0), EIP150Block: new(big.Int), EIP158Block: new(big.Int)}
-
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
 var _ bind.ContractBackend = (*SimulatedBackend)(nil)
 
@@ -60,11 +57,12 @@ type SimulatedBackend struct {
 
 // NewSimulatedBackend creates a new binding backend using a simulated blockchain
 // for testing purposes.
-func NewSimulatedBackend(accounts ...core.GenesisAccount) *SimulatedBackend {
+func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 	database, _ := ethdb.NewMemDatabase()
-	core.WriteGenesisBlockForTesting(database, accounts...)
-	blockchain, _ := core.NewBlockChain(database, chainConfig, new(pow.FakePow), new(event.TypeMux), vm.Config{})
-	backend := &SimulatedBackend{database: database, blockchain: blockchain}
+	genesis := core.Genesis{Config: params.AllProtocolChanges, Alloc: alloc}
+	genesis.MustCommit(database)
+	blockchain, _ := core.NewBlockChain(database, genesis.Config, new(pow.FakePow), new(event.TypeMux), vm.Config{})
+	backend := &SimulatedBackend{database: database, blockchain: blockchain, config: genesis.Config}
 	backend.rollback()
 	return backend
 }
@@ -90,7 +88,7 @@ func (b *SimulatedBackend) Rollback() {
 }
 
 func (b *SimulatedBackend) rollback() {
-	blocks, _ := core.GenerateChain(chainConfig, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.database, 1, func(int, *core.BlockGen) {})
 	b.pendingBlock = blocks[0]
 	b.pendingState, _ = state.New(b.pendingBlock.Root(), b.database)
 }
@@ -253,7 +251,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(evmContext, statedb, chainConfig, vm.Config{})
+	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{})
 	gaspool := new(core.GasPool).AddGas(math.MaxBig256)
 	ret, gasUsed, _, err := core.NewStateTransition(vmenv, msg, gaspool).TransitionDb()
 	return ret, gasUsed, err
@@ -274,7 +272,7 @@ func (b *SimulatedBackend) SendTransaction(ctx context.Context, tx *types.Transa
 		panic(fmt.Errorf("invalid transaction nonce: got %d, want %d", tx.Nonce(), nonce))
 	}
 
-	blocks, _ := core.GenerateChain(chainConfig, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
+	blocks, _ := core.GenerateChain(b.config, b.blockchain.CurrentBlock(), b.database, 1, func(number int, block *core.BlockGen) {
 		for _, tx := range b.pendingBlock.Transactions() {
 			block.AddTx(tx)
 		}

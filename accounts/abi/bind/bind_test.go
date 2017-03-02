@@ -169,7 +169,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy an interaction tester contract and call a transaction on it
 			_, _, interactor, err := DeployInteractor(auth, sim, "Deploy string")
@@ -210,7 +210,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, getter, err := DeployGetter(auth, sim)
@@ -242,7 +242,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, tupler, err := DeployTupler(auth, sim)
@@ -284,7 +284,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
@@ -318,7 +318,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a default method invoker contract and execute its default method
 			_, _, defaulter, err := DeployDefaulter(auth, sim)
@@ -351,7 +351,7 @@ var bindTests = []struct {
 		`[{"constant":true,"inputs":[],"name":"String","outputs":[{"name":"","type":"string"}],"type":"function"}]`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewSimulatedBackend()
+			sim := backends.NewSimulatedBackend(nil)
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
 			if err != nil {
@@ -387,7 +387,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a funky gas pattern contract
 			_, _, limiter, err := DeployFunkyGasPattern(auth, sim)
@@ -423,7 +423,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a sender tester contract and execute a structured call on it
 			_, _, callfrom, err := DeployCallFrom(auth, sim)
@@ -458,7 +458,7 @@ func TestBindings(t *testing.T) {
 		t.Skip("go sdk not found for testing")
 	}
 	// Skip the test if the go-ethereum sources are symlinked (https://github.com/golang/go/issues/14845)
-	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend())\n}")
+	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend(nil))\n}")
 	linkTestDeps, err := imports.Process("", []byte(linkTestCode), nil)
 	if err != nil {
 		t.Fatalf("failed check for goimports symlink bug: %v", err)
