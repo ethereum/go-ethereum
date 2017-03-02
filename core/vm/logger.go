@@ -19,11 +19,12 @@ package vm
 import (
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/big"
-	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type Storage map[common.Hash]common.Hash
@@ -168,29 +169,38 @@ func (l *StructLogger) StructLogs() []StructLog {
 	return l.logs
 }
 
-// StdErrFormat formats a slice of StructLogs to human readable format
-func StdErrFormat(logs []StructLog) {
-	fmt.Fprintf(os.Stderr, "VM STAT %d OPs\n", len(logs))
+// WriteTrace writes a formatted trace to the given writer
+func WriteTrace(writer io.Writer, logs []StructLog) {
 	for _, log := range logs {
-		fmt.Fprintf(os.Stderr, "PC %08d: %s GAS: %v COST: %v", log.Pc, log.Op, log.Gas, log.GasCost)
+		fmt.Fprintf(writer, "%-10spc=%08d gas=%v cost=%v", log.Op, log.Pc, log.Gas, log.GasCost)
 		if log.Err != nil {
-			fmt.Fprintf(os.Stderr, " ERROR: %v", log.Err)
+			fmt.Fprintf(writer, " ERROR: %v", log.Err)
 		}
-		fmt.Fprintf(os.Stderr, "\n")
-
-		fmt.Fprintln(os.Stderr, "STACK =", len(log.Stack))
+		fmt.Fprintf(writer, "\n")
 
 		for i := len(log.Stack) - 1; i >= 0; i-- {
-			fmt.Fprintf(os.Stderr, "%04d: %x\n", len(log.Stack)-i-1, math.PaddedBigBytes(log.Stack[i], 32))
+			fmt.Fprintf(writer, "%08d  %x\n", len(log.Stack)-i-1, math.PaddedBigBytes(log.Stack[i], 32))
 		}
 
-		fmt.Fprintln(os.Stderr, "MEM =", len(log.Memory))
-		fmt.Fprintln(os.Stderr, hex.Dump(log.Memory))
+		fmt.Fprint(writer, hex.Dump(log.Memory))
 
-		fmt.Fprintln(os.Stderr, "STORAGE =", len(log.Storage))
 		for h, item := range log.Storage {
-			fmt.Fprintf(os.Stderr, "%x: %x\n", h, item)
+			fmt.Fprintf(writer, "%x: %x\n", h, item)
 		}
-		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(writer)
+	}
+}
+
+// WriteLogs writes vm logs in a readable format to the given writer
+func WriteLogs(writer io.Writer, logs []*types.Log) {
+	for _, log := range logs {
+		fmt.Fprintf(writer, "LOG%d: %x bn=%d txi=%x\n", len(log.Topics), log.Address, log.BlockNumber, log.TxIndex)
+
+		for i, topic := range log.Topics {
+			fmt.Fprintf(writer, "%08d  %x\n", i, topic)
+		}
+
+		fmt.Fprint(writer, hex.Dump(log.Data))
+		fmt.Fprintln(writer)
 	}
 }

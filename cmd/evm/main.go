@@ -66,10 +66,6 @@ var (
 		Name:  "input",
 		Usage: "input for the EVM",
 	}
-	SysStatFlag = cli.BoolFlag{
-		Name:  "sysstat",
-		Usage: "display system stats",
-	}
 	VerbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Usage: "sets the verbosity level",
@@ -89,7 +85,6 @@ func init() {
 		CreateFlag,
 		DebugFlag,
 		VerbosityFlag,
-		SysStatFlag,
 		CodeFlag,
 		CodeFileFlag,
 		GasFlag,
