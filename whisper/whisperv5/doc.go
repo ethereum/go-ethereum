@@ -54,6 +54,7 @@ const (
 	aesKeyLength      = 32
 	saltLength        = 12
 	AESNonceMaxLength = 12
+	keyIdSize         = 32
 
 	DefaultMaxMessageLength = 1024 * 1024
 	DefaultMinimumPoW       = 10.0 // todo: review after testing.

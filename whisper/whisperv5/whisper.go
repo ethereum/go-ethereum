@@ -48,8 +48,9 @@ type Whisper struct {
 	filters  *Filters
 
 	privateKeys map[string]*ecdsa.PrivateKey
-	symKeys     map[string][]byte
-	keyMu       sync.RWMutex
+	//identities map[string]*ecdsa.PrivateKey
+	symKeys map[string][]byte
+	keyMu   sync.RWMutex
 
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
 	expirations map[uint32]*set.SetNonTS  // Message expiration pool
@@ -75,7 +76,8 @@ type Whisper struct {
 // Param s should be passed if you want to implement mail server, otherwise nil.
 func New() *Whisper {
 	whisper := &Whisper{
-		privateKeys:  make(map[string]*ecdsa.PrivateKey),
+		privateKeys: make(map[string]*ecdsa.PrivateKey),
+		//identities:   make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
 		envelopes:    make(map[common.Hash]*Envelope),
 		expirations:  make(map[uint32]*set.SetNonTS),
@@ -231,72 +233,108 @@ func (w *Whisper) GetIdentity(pubKey string) *ecdsa.PrivateKey {
 	return w.privateKeys[pubKey]
 }
 
-func (w *Whisper) GenerateSymKey(name string) error {
+func (w *Whisper) GenerateSymKey() (string, error) {
 	const size = aesKeyLength * 2
 	buf := make([]byte, size)
 	_, err := crand.Read(buf)
 	if err != nil {
-		return err
+		return "", err
 	} else if !validateSymmetricKey(buf) {
-		return fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
+		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
 	}
 
 	key := buf[:aesKeyLength]
 	salt := buf[aesKeyLength:]
 	derived, err := DeriveOneTimeKey(key, salt, EnvelopeVersion)
 	if err != nil {
-		return err
+		return "", err
 	} else if !validateSymmetricKey(derived) {
-		return fmt.Errorf("failed to derive valid key")
+		return "", fmt.Errorf("failed to derive valid key")
 	}
 
-	w.keyMu.Lock()
-	defer w.keyMu.Unlock()
-
-	if w.symKeys[name] != nil {
-		return fmt.Errorf("Key with name [%s] already exists", name)
-	}
-	w.symKeys[name] = derived
-	return nil
-}
-
-func (w *Whisper) AddSymKey(name string, key []byte) error {
-	if w.HasSymKey(name) {
-		return fmt.Errorf("Key with name [%s] already exists", name)
-	}
-
-	derived, err := deriveKeyMaterial(key, EnvelopeVersion)
+	id, err := GenerateRandomID()
 	if err != nil {
-		return err
+		return "", fmt.Errorf("Failed to generate ID: %s", err)
 	}
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
 
-	// double check is necessary, because deriveKeyMaterial() is slow
-	if w.symKeys[name] != nil {
-		return fmt.Errorf("Key with name [%s] already exists", name)
+	if w.symKeys[id] != nil {
+		return "", fmt.Errorf("Failed to generate unique ID")
 	}
-	w.symKeys[name] = derived
-	return nil
+	w.symKeys[id] = derived
+	return id, nil
 }
 
-func (w *Whisper) HasSymKey(name string) bool {
-	w.keyMu.RLock()
-	defer w.keyMu.RUnlock()
-	return w.symKeys[name] != nil
-}
+func (w *Whisper) AddSymKeyDirect(key []byte) (string, error) {
+	if len(key) != aesKeyLength {
+		return "", fmt.Errorf("Wrong key size: %d", len(key))
+	}
 
-func (w *Whisper) DeleteSymKey(name string) {
+	id, err := GenerateRandomID()
+	if err != nil {
+		return "", fmt.Errorf("Failed to generate ID: %s", err)
+	}
+
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
-	delete(w.symKeys, name)
+
+	if w.symKeys[id] != nil {
+		return "", fmt.Errorf("Failed to generate unique ID")
+	}
+	w.symKeys[id] = key
+	return id, nil
 }
 
-func (w *Whisper) GetSymKey(name string) []byte {
+func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
+	id, err := GenerateRandomID()
+	if err != nil {
+		return "", fmt.Errorf("Failed to generate ID: %s", err)
+	}
+	if w.HasSymKey(id) {
+		return "", fmt.Errorf("Failed to generate unique ID")
+	}
+
+	derived, err := deriveKeyMaterial([]byte(password), EnvelopeVersion)
+	if err != nil {
+		return "", err
+	}
+
+	w.keyMu.Lock()
+	defer w.keyMu.Unlock()
+
+	// double check is necessary, because deriveKeyMaterial() is very slow
+	if w.symKeys[id] != nil {
+		return "", fmt.Errorf("Severe error: failed to generate unique ID")
+	}
+	w.symKeys[id] = derived
+	return id, nil
+}
+
+func (w *Whisper) HasSymKey(id string) bool {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	return w.symKeys[name]
+	return w.symKeys[id] != nil
+}
+
+func (w *Whisper) DeleteSymKey(id string) bool {
+	w.keyMu.Lock()
+	defer w.keyMu.Unlock()
+	if w.symKeys[id] != nil {
+		delete(w.symKeys, id)
+		return true
+	}
+	return false
+}
+
+func (w *Whisper) GetSymKey(id string) ([]byte, error) {
+	w.keyMu.RLock()
+	defer w.keyMu.RUnlock()
+	if w.symKeys[id] != nil {
+		return w.symKeys[id], nil
+	}
+	return nil, fmt.Errorf("non-existent ID")
 }
 
 // Watch installs a new message handler to run in case a matching packet arrives
@@ -708,4 +746,17 @@ func deriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error
 	} else {
 		return nil, unknownVersionError(version)
 	}
+}
+
+func GenerateRandomID() (id string, err error) {
+	buf := make([]byte, keyIdSize)
+	_, err = crand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	if !validateSymmetricKey(buf) {
+		return "", fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+	}
+	id = common.Bytes2Hex(buf)
+	return id, err
 }

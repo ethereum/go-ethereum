@@ -18,7 +18,6 @@ package whisperv5
 
 import (
 	"crypto/ecdsa"
-	crand "crypto/rand"
 	"fmt"
 	"sync"
 
@@ -52,40 +51,24 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
-func (fs *Filters) generateRandomID() (id string, err error) {
-	buf := make([]byte, 20)
-	for i := 0; i < 3; i++ {
-		_, err = crand.Read(buf)
-		if err != nil {
-			continue
-		}
-		if !validateSymmetricKey(buf) {
-			err = fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
-			continue
-		}
-		id = common.Bytes2Hex(buf)
-		if fs.watchers[id] != nil {
-			err = fmt.Errorf("error in generateRandomID: generated same ID twice")
-			continue
-		}
-		return id, err
-	}
-
-	return "", err
-}
-
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
 
+	id, err := GenerateRandomID()
+	if err != nil {
+		return "", err
+	}
+
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	id, err := fs.generateRandomID()
-	if err == nil {
-		fs.watchers[id] = watcher
+	if fs.watchers[id] != nil {
+		return "", fmt.Errorf("failed to generate unique ID")
 	}
+
+	fs.watchers[id] = watcher
 	return id, err
 }
 

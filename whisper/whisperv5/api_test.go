@@ -106,7 +106,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasSymKey: false positive.")
 	}
 
-	err = api.GenerateSymKey(id)
+	id, err = api.GenerateSymKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey: %s.", err)
 	}
@@ -119,12 +119,13 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasSymKey(): false negative.")
 	}
 
-	err = api.AddSymKey(id, []byte("some stuff here"))
-	if err == nil {
+	const password = "some stuff here"
+	id, err = api.AddSymKeyFromPassword(password)
+	if err != nil {
 		t.Fatalf("failed AddSymKey: %s.", err)
 	}
 
-	err = api.AddSymKey(id2, []byte("some stuff here"))
+	id2, err = api.AddSymKeyFromPassword(password)
 	if err != nil {
 		t.Fatalf("failed AddSymKey: %s.", err)
 	}
@@ -137,9 +138,25 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasSymKey(id2): false negative.")
 	}
 
-	err = api.DeleteSymKey(id)
+	k1, err := api.GetSymKey(id)
+	if err != nil {
+		t.Fatalf("failed GetSymKey(id): %s.", err)
+	}
+	k2, err := api.GetSymKey(id2)
+	if err != nil {
+		t.Fatalf("failed GetSymKey(id2): %s.", err)
+	}
+
+	if !bytes.Equal(k1, k2) {
+		t.Fatalf("installed keys are not equal")
+	}
+
+	exist, err = api.DeleteSymKey(id)
 	if err != nil {
 		t.Fatalf("failed DeleteSymKey(id): %s.", err)
+	}
+	if !exist {
+		t.Fatalf("failed DeleteSymKey(id): false negative.")
 	}
 
 	exist, err = api.HasSymKey(id)
@@ -384,8 +401,7 @@ func TestIntegrationSym(t *testing.T) {
 	api.Start()
 	defer api.Stop()
 
-	keyname := "schluessel"
-	err := api.GenerateSymKey(keyname)
+	keyID, err := api.GenerateSymKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey: %s.", err)
 	}
@@ -410,7 +426,7 @@ func TestIntegrationSym(t *testing.T) {
 	topics[0] = TopicType{0x00, 0x7f, 0x80, 0xff}
 	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
-	f.KeyName = keyname
+	f.KeyName = keyID
 	f.Topics = topics[:]
 	f.PoW = 0.324
 	f.From = sig
@@ -423,7 +439,7 @@ func TestIntegrationSym(t *testing.T) {
 
 	var p PostArgs
 	p.TTL = 1
-	p.KeyName = keyname
+	p.KeyName = keyID
 	p.From = f.From
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
@@ -474,8 +490,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	api.Start()
 	defer api.Stop()
 
-	keyname := "schluessel"
-	err := api.GenerateSymKey(keyname)
+	keyID, err := api.GenerateSymKey()
 	if err != nil {
 		t.Fatalf("failed to GenerateSymKey: %s.", err)
 	}
@@ -500,7 +515,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	topics[0] = TopicType{0x00, 0x7f, 0x80, 0xff}
 	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
-	f.KeyName = keyname
+	f.KeyName = keyID
 	f.Topics = topics[:]
 	f.PoW = 0.324
 	f.From = sig

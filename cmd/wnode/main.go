@@ -46,7 +46,6 @@ import (
 )
 
 const quitCommand = "~Q"
-const symKeyName = "da919ea33001b04dfc630522e33078ec0df11"
 
 // singletons
 var (
@@ -288,8 +287,14 @@ func configureNode() {
 			}
 		}
 
-		shh.AddSymKey(symKeyName, []byte(symPass))
-		symKey = shh.GetSymKey(symKeyName)
+		symKeyID, err := shh.AddSymKeyFromPassword(symPass)
+		if err != nil {
+			utils.Fatalf("Failed to create symmetric key: %s", err)
+		}
+		symKey, err = shh.GetSymKey(symKeyID)
+		if err != nil {
+			utils.Fatalf("Failed to save symmetric key: %s", err)
+		}
 		if len(*argTopic) == 0 {
 			generateTopic([]byte(symPass))
 		}
@@ -470,11 +475,14 @@ func requestExpiredMessagesLoop() {
 	var t string
 	var xt, empty whisper.TopicType
 
-	err := shh.AddSymKey(mailserver.MailServerKeyName, []byte(msPassword))
+	keyID, err := shh.AddSymKeyFromPassword(msPassword)
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
-	key = shh.GetSymKey(mailserver.MailServerKeyName)
+	key, err = shh.GetSymKey(keyID)
+	if err != nil {
+		utils.Fatalf("Failed to save symmetric key for mail request: %s", err)
+	}
 	peerID = extractIdFromEnode(*argEnode)
 	shh.MarkPeerTrusted(peerID)
 
