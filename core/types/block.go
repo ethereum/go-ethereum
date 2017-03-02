@@ -62,14 +62,14 @@ func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
 }
 
-// MarshalJSON implements json.Marshaler
-func (n BlockNonce) MarshalJSON() ([]byte, error) {
-	return hexutil.Bytes(n[:]).MarshalJSON()
+// MarshalText encodes n as a hex string with 0x prefix.
+func (n BlockNonce) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(n[:]).MarshalText()
 }
 
-// UnmarshalJSON implements json.Unmarshaler
-func (n *BlockNonce) UnmarshalJSON(input []byte) error {
-	return hexutil.UnmarshalJSON("BlockNonce", input, n[:])
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (n *BlockNonce) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
 
 // Header represents a block header in the Ethereum blockchain.
