@@ -17,6 +17,7 @@
 package common
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"math/rand"
@@ -30,13 +31,8 @@ const (
 	AddressLength = 20
 )
 
-type (
-	// Hash represents the 32 byte Keccak256 hash of arbitrary data.
-	Hash [HashLength]byte
-
-	// Address represents the 20 byte address of an Ethereum account.
-	Address [AddressLength]byte
-)
+// Hash represents the 32 byte Keccak256 hash of arbitrary data.
+type Hash [HashLength]byte
 
 func BytesToHash(b []byte) Hash {
 	var h Hash
@@ -113,7 +109,24 @@ func EmptyHash(h Hash) bool {
 	return h == Hash{}
 }
 
+// UnprefixedHash allows marshaling a Hash without 0x prefix.
+type UnprefixedHash Hash
+
+// UnmarshalText decodes the hash from hex. The 0x prefix is optional.
+func (h *UnprefixedHash) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedUnprefixedText("UnprefixedHash", input, h[:])
+}
+
+// MarshalText encodes the hash as hex.
+func (h UnprefixedHash) MarshalText() ([]byte, error) {
+	return []byte(hex.EncodeToString(h[:])), nil
+}
+
 /////////// Address
+
+// Address represents the 20 byte address of an Ethereum account.
+type Address [AddressLength]byte
+
 func BytesToAddress(b []byte) Address {
 	var a Address
 	a.SetBytes(b)
@@ -181,12 +194,15 @@ func (a *Address) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("Address", input, a[:])
 }
 
-// PP Pretty Prints a byte slice in the following format:
-// 	hex(value[:4])...(hex[len(value)-4:])
-func PP(value []byte) string {
-	if len(value) <= 8 {
-		return Bytes2Hex(value)
-	}
+// UnprefixedHash allows marshaling an Address without 0x prefix.
+type UnprefixedAddress Address
 
-	return fmt.Sprintf("%x...%x", value[:4], value[len(value)-4])
+// UnmarshalText decodes the address from hex. The 0x prefix is optional.
+func (a *UnprefixedAddress) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedUnprefixedText("UnprefixedAddress", input, a[:])
+}
+
+// MarshalText encodes the address as hex.
+func (a UnprefixedAddress) MarshalText() ([]byte, error) {
+	return []byte(hex.EncodeToString(a[:])), nil
 }
