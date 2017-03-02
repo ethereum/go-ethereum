@@ -415,6 +415,18 @@
                     case "arm64":
                       arch = "ARM64";
                       break;
+                    case "mips":
+                      arch = "MIPS32";
+                      break;
+                    case "mipsle":
+                      arch = "MIPS32(le)";
+                      break;
+                    case "mips64":
+                      arch = "MIPS64";
+                      break;
+                    case "mips64le":
+                      arch = "MIPS64(le)";
+                      break;
                   }
                   var primary = (os == "android" && arch == "all") || (os == "ios" && arch == "all") ||
                     (os == "linux" && arch == "64-bit") || (os == "darwin" && arch == "64-bit") || (os == "windows" && arch == "64-bit" && kind == "Installer");
