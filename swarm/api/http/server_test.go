@@ -40,8 +40,8 @@ func TestBzzrGetPath(t *testing.T) {
 
 	testrequests := make(map[string]int)
 	testrequests["/"] = 0
-	testrequests["/a"] = 1
-	testrequests["/a/b"] = 2
+	testrequests["/a/"] = 1
+	testrequests["/a/b/"] = 2
 	testrequests["/x"] = 0
 	testrequests[""] = 0
 

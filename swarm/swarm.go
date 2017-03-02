@@ -53,8 +53,8 @@ type Swarm struct {
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
-	lstore      *storage.LocalStore  // local store, needs to store for releasing resources after node stopped
-	sfs          *api.SwarmFS         // need this to cleanup all the active mounts on node exit
+	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	sfs         *api.SwarmFS        // need this to cleanup all the active mounts on node exit
 }
 
 type SwarmAPI struct {
@@ -244,22 +244,10 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
-			Service:   api.NewStorage(self.api),
-			Public:    true,
-		},
-
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
 			Service:   &Info{self.config, chequebook.ContractParams},
 			Public:    true,
 		},
 		// admin APIs
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
-			Service:   api.NewFileSystem(self.api),
-			Public:    false},
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
@@ -276,6 +264,20 @@ func (self *Swarm) APIs() []rpc.API {
 			Namespace: "swarmfs",
 			Version:   api.Swarmfs_Version,
 			Service:   self.sfs,
+			Public:    false,
+		},
+		// storage APIs
+		// DEPRECATED: Use the HTTP API instead
+		{
+			Namespace: "bzz",
+			Version:   "0.1",
+			Service:   api.NewStorage(self.api),
+			Public:    true,
+		},
+		{
+			Namespace: "bzz",
+			Version:   "0.1",
+			Service:   api.NewFileSystem(self.api),
 			Public:    false,
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},
