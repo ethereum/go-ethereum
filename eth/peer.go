@@ -190,7 +190,7 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 // RequestHeaders is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *peer) RequestOneHeader(hash common.Hash) error {
-	p.Log().Debug("Fetching a single header", "hash", hash)
+	p.Log().Debug("Fetching single header", "hash", hash)
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Hash: hash}, Amount: uint64(1), Skip: uint64(0), Reverse: false})
 }
 

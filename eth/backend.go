@@ -179,7 +179,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
-	log.Info("Initializing Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
+	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
 		bcVersion := core.GetBlockChainVersion(chainDb)
@@ -207,7 +207,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth.chainConfig = config.ChainConfig
 
-	log.Info("Initialized chain configuration", "config", eth.chainConfig)
+	log.Info("Initialised chain configuration", "config", eth.chainConfig)
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
 	if err != nil {
@@ -464,14 +464,14 @@ func (self *Ethereum) StartAutoDAG() {
 		return // already started
 	}
 	go func() {
-		log.Info("Pregeneration of ethash DAG on", "dagdir", ethash.DefaultDir)
+		log.Info("Pre-generation of ethash DAG on", "dir", ethash.DefaultDir)
 		var nextEpoch uint64
 		timer := time.After(0)
 		self.autodagquit = make(chan bool)
 		for {
 			select {
 			case <-timer:
-				log.Info("Checking DAG availability", "dagdir", ethash.DefaultDir)
+				log.Info("Checking DAG availability", "dir", ethash.DefaultDir)
 				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
 				thisEpoch := currentBlock / epochLength
 				if nextEpoch <= thisEpoch {
@@ -485,7 +485,7 @@ func (self *Ethereum) StartAutoDAG() {
 						nextEpoch = thisEpoch + 1
 						dag, _ := dagFiles(nextEpoch)
 						if _, err := os.Stat(dag); os.IsNotExist(err) {
-							log.Info("Pregenerating next DAG", "epoch", nextEpoch, "dag", dag)
+							log.Info("Pre-generating next DAG", "epoch", nextEpoch, "dag", dag)
 							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
 							if err != nil {
 								log.Error("Error generating DAG", "epoch", nextEpoch, "dag", dag, "err", err)
@@ -510,7 +510,7 @@ func (self *Ethereum) StopAutoDAG() {
 		close(self.autodagquit)
 		self.autodagquit = nil
 	}
-	log.Info("Pregeneration of ethash DAG off", "dagdir", ethash.DefaultDir)
+	log.Info("Pre-generation of ethash DAG off", "dir", ethash.DefaultDir)
 }
 
 // dagFiles(epoch) returns the two alternative DAG filenames (not a path)
