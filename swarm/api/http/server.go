@@ -56,9 +56,9 @@ type sequentialReader struct {
 	lock   sync.Mutex
 }
 
-// Server is the basic configuration needs for the HTTP server and also
+// ServerConfig is the basic configuration needed for the HTTP server and also
 // includes CORS settings.
-type Server struct {
+type ServerConfig struct {
 	Addr       string
 	CorsString string
 }
@@ -69,13 +69,9 @@ type Server struct {
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // starts up http server
-func StartHttpServer(api *api.Api, server *Server) {
-	serveMux := http.NewServeMux()
-	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		handler(w, r, api)
-	})
+func StartHttpServer(api *api.Api, config *ServerConfig) {
 	var allowedOrigins []string
-	for _, domain := range strings.Split(server.CorsString, ",") {
+	for _, domain := range strings.Split(config.CorsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
 	}
 	c := cors.New(cors.Options{
@@ -84,13 +80,21 @@ func StartHttpServer(api *api.Api, server *Server) {
 		MaxAge:         600,
 		AllowedHeaders: []string{"*"},
 	})
-	hdlr := c.Handler(serveMux)
+	hdlr := c.Handler(NewServer(api))
 
-	go http.ListenAndServe(server.Addr, hdlr)
-	log.Info(fmt.Sprintf("Swarm HTTP proxy started on localhost:%s", server.Addr))
+	go http.ListenAndServe(config.Addr, hdlr)
+	log.Info(fmt.Sprintf("Swarm HTTP proxy started on localhost:%s", config.Addr))
 }
 
-func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
+func NewServer(api *api.Api) *Server {
+	return &Server{api}
+}
+
+type Server struct {
+	api *api.Api
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestURL := r.URL
 	// This is wrong
 	//	if requestURL.Host == "" {
@@ -135,7 +139,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			http.Error(w, "Missing Content-Length header in request.", http.StatusBadRequest)
 			return
 		}
-		key, err := a.Store(io.LimitReader(r.Body, r.ContentLength), r.ContentLength, nil)
+		key, err := s.api.Store(io.LimitReader(r.Body, r.ContentLength), r.ContentLength, nil)
 		if err == nil {
 			log.Debug(fmt.Sprintf("Content for %v stored", key.Log()))
 		} else {
@@ -160,7 +164,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				mime := r.Header.Get("Content-Type")
 				// TODO proper root hash separation
 				log.Debug(fmt.Sprintf("Modify '%s' to store %v as '%s'.", path, key.Log(), mime))
-				newKey, err := a.Modify(path, common.Bytes2Hex(key), mime, nameresolver)
+				newKey, err := s.api.Modify(path, common.Bytes2Hex(key), mime, nameresolver)
 				if err == nil {
 					log.Debug(fmt.Sprintf("Swarm replaced manifest by '%s'", newKey))
 					w.Header().Set("Content-Type", "text/plain")
@@ -178,7 +182,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		} else {
 			path = api.RegularSlashes(path)
 			log.Debug(fmt.Sprintf("Delete '%s'.", path))
-			newKey, err := a.Modify(path, "", "", nameresolver)
+			newKey, err := s.api.Modify(path, "", "", nameresolver)
 			if err == nil {
 				log.Debug(fmt.Sprintf("Swarm replaced manifest by '%s'", newKey))
 				w.Header().Set("Content-Type", "text/plain")
@@ -199,16 +203,16 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			parsedurl, _ := api.Parse(path)
 
 			if parsedurl == path {
-				key, err := a.Resolve(parsedurl, nameresolver)
+				key, err := s.api.Resolve(parsedurl, nameresolver)
 				if err != nil {
 					log.Error(fmt.Sprintf("%v", err))
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
 				}
-				reader = a.Retrieve(key)
+				reader = s.api.Retrieve(key)
 			} else {
 				var status int
-				readertmp, _, status, err := a.Get(path, nameresolver)
+				readertmp, _, status, err := s.api.Get(path, nameresolver)
 				if err != nil {
 					http.Error(w, err.Error(), status)
 					return
@@ -247,7 +251,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				http.Redirect(w, r, path+"/", http.StatusFound)
 				return
 			}
-			reader, mimeType, status, err := a.Get(path, nameresolver)
+			reader, mimeType, status, err := s.api.Get(path, nameresolver)
 			if err != nil {
 				if _, ok := err.(api.ErrResolve); ok {
 					log.Debug(fmt.Sprintf("%v", err))
