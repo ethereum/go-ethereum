@@ -59,6 +59,10 @@ func (a Address) Bin() string {
 	return strings.Join(bs, "")
 }
 
+func (a Address) Bytes() []byte {
+	return a[:]
+}
+
 /*
 Proximity(x, y) returns the proximity order of the MSB distance between x and y
 
@@ -209,7 +213,7 @@ func NewHashAddress(s string) *HashAddress {
 	ha := [32]byte{}
 
 	t := s + string(zerosBin)[:len(zerosBin)-len(s)]
-	for i := 0; i < len(t)/64; i++ {
+	for i := 0; i < 4; i++ {
 		n, err := strconv.ParseUint(t[i*64:(i+1)*64], 2, 64)
 		if err != nil {
 			panic("wrong format: " + err.Error())

@@ -7,13 +7,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	// "github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
 func init() {
-	glog.SetV(6)
+	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 }
 

@@ -31,7 +31,7 @@ type ExchangeSession struct {
 // higher level or network behaviour should be tested with network simulators
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id adapters.NodeAdapter) adapters.ProtoCall) *ExchangeSession {
 	simPipe := adapters.NewSimPipe
-	network := simulations.NewNetwork(nil, nil)
+	network := simulations.NewNetwork(&simulations.NetworkConfig{})
 	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
 		na := adapters.NewSimNode(conf.Id, network, simPipe)
 		if conf.Id.NodeID == id.NodeID {

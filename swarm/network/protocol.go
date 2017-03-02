@@ -112,7 +112,7 @@ func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols
 			return err
 		}
 
-		// mount external service models on the peer connection (swap, sync)
+		// mount external service models on the peer connection (swap, sync, hive)
 		if services != nil {
 			err = services(bee)
 			if err != nil {

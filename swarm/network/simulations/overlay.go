@@ -6,12 +6,10 @@
 package main
 
 import (
-	"fmt"
-	"reflect"
+	"math/rand"
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -61,8 +59,8 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, adapters.NewSimPipe)
 	addr := network.NewPeerAddrFromNodeId(id)
-	// to := network.NewKademlia(addr.OverlayAddr(), nil) // overlay topology driver
-	to := network.NewTestOverlay(addr.OverlayAddr())   // overlay topology driver
+	to := network.NewKademlia(addr.OverlayAddr(), nil) // overlay topology driver
+	// to := network.NewTestOverlay(addr.OverlayAddr())   // overlay topology driver
 	pp := network.NewHive(network.NewHiveParams(), to) // hive
 	self.hives = append(self.hives, pp)                // remember hive
 	// bzz protocol Run function. messaging through SimPipe
@@ -87,60 +85,50 @@ func NewNetwork(network *simulations.Network) *Network {
 	return n
 }
 
-// NewSessionController sits as the top-most controller for this simulation
-// creates an inprocess simulation of basic node running their own bzz+hive
-func NewSessionController() (*simulations.ResourceController, chan bool) {
-	quitc := make(chan bool)
-	return simulations.NewResourceContoller(
-		&simulations.ResourceHandlers{
-			// POST /
-			Create: &simulations.ResourceHandler{
-				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					conf := msg.(*simulations.NetworkConfig)
-					net := simulations.NewNetwork(nil, &event.TypeMux{})
-					ppnet := NewNetwork(net)
-					c := simulations.NewNetworkController(conf, net.Events(), simulations.NewJournal())
-					if len(conf.Id) == 0 {
-						conf.Id = fmt.Sprintf("%d", 0)
-					}
-					glog.V(logger.Debug).Infof("new network controller on %v", conf.Id)
-					if parent != nil {
-						parent.SetResource(conf.Id, c)
-					}
-					ids := p2ptest.RandomNodeIds(50)
-					for _, id := range ids {
-						ppnet.NewNode(&simulations.NodeConfig{Id: id})
-						ppnet.Start(id)
-						glog.V(logger.Debug).Infof("node %v starting up", id)
-					}
-					// the nodes only know about their 2 neighbours (cyclically)
-					for i, _ := range ids {
-						var peerId *adapters.NodeId
-						if i == 0 {
-							peerId = ids[len(ids)-1]
-						} else {
-							peerId = ids[i-1]
-						}
-						err := ppnet.hives[i].Register(network.NewPeerAddrFromNodeId(peerId))
-						if err != nil {
-							panic(err.Error())
-						}
-					}
-					return struct{}{}, nil
-				},
-				Type: reflect.TypeOf(&simulations.NetworkConfig{}),
-			},
-			// DELETE /
-			Destroy: &simulations.ResourceHandler{
-				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					glog.V(logger.Debug).Infof("destroy handler called")
-					// this can quit the entire app (shut down the backend server)
-					quitc <- true
-					return struct{}{}, nil
-				},
-			},
-		},
-	), quitc
+func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simulations.ResourceController) {
+	conf.DefaultMockerConfig = simulations.DefaultMockerConfig()
+	conf.DefaultMockerConfig.SwitchonRate = 100
+	// conf.DefaultMockerConfig.NodesTarget = 15
+	conf.DefaultMockerConfig.NewConnCount = 1
+	conf.DefaultMockerConfig.DegreeTarget = 0
+	conf.Id = "0"
+	conf.Backend = true
+	net := NewNetwork(simulations.NewNetwork(conf))
+
+	ids := p2ptest.RandomNodeIds(5)
+
+	for i, id := range ids {
+		net.NewNode(&simulations.NodeConfig{Id: id})
+		var peerId *adapters.NodeId
+		if i == 0 {
+			peerId = ids[len(ids)-1]
+		} else {
+			peerId = ids[i-1]
+		}
+		err := net.hives[i].Register(network.NewPeerAddrFromNodeId(peerId))
+		if err != nil {
+			panic(err.Error())
+		}
+	}
+	go func() {
+		for _, id := range ids {
+			net.NewNode(&simulations.NodeConfig{Id: id})
+			net.Start(id)
+			glog.V(logger.Debug).Infof("node %v starting up", id)
+			n := rand.Intn(1000)
+			time.Sleep(time.Duration(n) * time.Millisecond)
+			// net.Stop(id)
+		}
+	}()
+	// go func() {
+	// for _, id := range ids {
+	// 	net.Stop(id)
+	// 	glog.V(logger.Debug).Infof("node %v shutting down", id)
+	// 	n := rand.Intn(500)
+	// 	time.Sleep(time.Duration(n) * time.Millisecond)
+	// }
+	// }()
+	return net, nil
 }
 
 // var server
@@ -149,7 +137,7 @@ func main() {
 	glog.SetV(logger.Info)
 	glog.SetToStderr(true)
 
-	c, quitc := NewSessionController()
+	c, quitc := simulations.NewSessionController(nethook)
 
 	simulations.StartRestApiServer("8888", c)
 	// wait until server shuts down

@@ -45,8 +45,8 @@ type Overlay interface {
 	On(Peer)
 	Off(Peer)
 
-	EachLivePeer([]byte, int, func(Peer) bool)
-	EachPeer([]byte, int, func(PeerAddr) bool)
+	EachLivePeer([]byte, int, func(Peer, int) bool)
+	EachPeer([]byte, int, func(PeerAddr, int) bool)
 
 	SuggestPeer() (PeerAddr, int, bool)
 
@@ -57,7 +57,7 @@ type Overlay interface {
 type Hive struct {
 	*HiveParams // settings
 	Overlay     // the overlay topology driver
-	peers       map[discover.NodeID]Peer
+	disc        Discovery
 
 	lock   sync.Mutex
 	quit   chan bool
@@ -66,15 +66,15 @@ type Hive struct {
 }
 
 const (
-	peersBroadcastSetSize = 1
+	peersBroadcastSetSize = 2
 	maxPeersPerRequest    = 5
-	callInterval          = 3000000000
+	callInterval          = 1000
 )
 
 type HiveParams struct {
 	PeersBroadcastSetSize uint
 	MaxPeersPerRequest    uint
-	CallInterval          uint64
+	CallInterval          uint
 }
 
 func NewHiveParams() *HiveParams {
@@ -92,7 +92,6 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,
-		peers:      make(map[discover.NodeID]Peer),
 	}
 }
 
@@ -100,42 +99,7 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 var HiveMsgs = []interface{}{
 	&getPeersMsg{},
 	&peersMsg{},
-}
-
-/*
-peersMsg is the message to pass peer information
-It is always a response to a peersRequestMsg
-
-The encoding of a peer is identical to that in the devp2p base protocol peers
-messages: [IP, Port, NodeID]
-note that a node's DPA address is not the NodeID but the hash of the NodeID.
-
-To mitigate against spurious peers messages, requests should be remembered
-and correctness of responses should be checked
-
-If the proxBin of peers in the response is incorrect the sender should be
-disconnected
-*/
-
-// peersMsg encapsulates an array of peer addresses
-// used for communicating about known peers
-// relevvant for bootstrapping connectivity and updating peersets
-type peersMsg struct {
-	Peers []*peerAddr
-}
-
-func (self peersMsg) String() string {
-	return fmt.Sprintf("%T: %v", self, self.Peers)
-}
-
-// getPeersMsg is sent to (random) peers to request (Max) peers of a specific order
-type getPeersMsg struct {
-	Order uint
-	Max   uint
-}
-
-func (self getPeersMsg) String() string {
-	return fmt.Sprintf("%T: accept max %v peers of PO%03d", self, self.Max, self.Order)
+	&subPeersMsg{},
 }
 
 // Start receives network info only at startup
@@ -143,7 +107,7 @@ func (self getPeersMsg) String() string {
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
 // af() returns an arbitrary ticker channel
 // there are called on the p2p.Server which runs on the node
-func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Time) (err error) {
+func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Time) error {
 
 	self.toggle = make(chan bool)
 	self.more = make(chan bool)
@@ -163,11 +127,13 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 			addr, order, want := self.SuggestPeer()
 
 			if addr != nil {
-				glog.V(logger.Detail).Infof("========> connect to bee %v", addr)
+				glog.V(logger.Info).Infof("========> connect to bee %v", addr)
 				err := connectPeer(NodeId(addr).NodeID.String())
 				if err != nil {
 					glog.V(logger.Detail).Infof("===X====> connect to bee %v failed: %v", addr, err)
 				}
+			} else {
+				glog.V(logger.Detail).Infof("cannot suggest peers")
 			}
 			if want {
 				req := &getPeersMsg{
@@ -176,8 +142,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 				}
 				var i uint
 				var err error
-				glog.V(logger.Detail).Infof("requesting bees of PO%03d from %v (each max %v)", order, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
-				self.EachLivePeer(nil, order, func(n Peer) bool {
+				self.EachLivePeer(nil, order, func(n Peer, po int) bool {
 					glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
 					err = n.Send(req)
 					if err == nil {
@@ -188,9 +153,8 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 					}
 					return true
 				})
-				glog.V(logger.Detail).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
+				glog.V(logger.Info).Infof("requesting bees of PO%03d from %v/%v (each max %v)", order, i, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
 			}
-			glog.V(logger.Info).Infof("%v", self)
 
 			select {
 			case self.toggle <- want:
@@ -198,14 +162,14 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 			case <-self.quit:
 				return
 			}
+			glog.V(logger.Info).Infof("%v", self)
 		}
-		glog.V(logger.Warn).Infof("%v", self)
 	}()
-	return
+	return nil
 }
 
 func (self *Hive) ticker() <-chan time.Time {
-	return time.NewTicker(time.Duration(self.CallInterval)).C
+	return time.NewTicker(time.Duration(self.CallInterval) * time.Millisecond).C
 }
 
 // keepAlive is a forever loop
@@ -256,15 +220,13 @@ func (self *Hive) Add(p Peer) error {
 	defer self.wake()
 	glog.V(logger.Debug).Infof("to add new bee %v", p)
 	self.On(p)
+	glog.V(logger.Warn).Infof("%v", self)
 
-	self.lock.Lock()
-	self.peers[p.ID()] = p
-	self.lock.Unlock()
+	// self.lock.Lock()
+	// self.peers[p.ID()] = p
+	// self.lock.Unlock()
 
-	p.Register(&peersMsg{}, self.handlePeersMsg(p))
-	p.Register(&getPeersMsg{}, self.handleGetPeersMsg(p))
-
-	return nil
+	return NewDiscovery(p, self)
 }
 
 // Remove called after peer is disconnected
@@ -275,53 +237,6 @@ func (self *Hive) Remove(p Peer) {
 	self.lock.Lock()
 	delete(self.peers, p.ID())
 	self.lock.Unlock()
-}
-
-// handlePeersMsg called by the protocol when receiving peerset (for target address)
-// list of nodes ([]PeerAddr in peersMsg) is added to the overlay db using the
-// Register interface method
-func (self *Hive) handlePeersMsg(p Peer) func(interface{}) error {
-	return func(msg interface{}) error {
-		// wake up the hive on news of new arrival
-		defer self.wake()
-		// register all addresses
-		var nas []PeerAddr
-		for _, na := range msg.(*peersMsg).Peers {
-			nas = append(nas, PeerAddr(na))
-		}
-		return self.Register(nas...)
-	}
-}
-
-// handleGetPeersMsg is called by the protocol when receiving a
-// peerset (for target address) request
-// peers suggestions are retrieved from the overlay topology driver
-// using the EachLivePeer interface iterator method
-// peers sent are remembered throughout a session and not sent twice
-func (self *Hive) handleGetPeersMsg(p Peer) func(interface{}) error {
-	return func(msg interface{}) error {
-		req := msg.(*getPeersMsg)
-		var peers []*peerAddr
-		alreadySent := p.Peers()
-		self.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer) bool {
-			if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 &&
-				// only send peers we have not sent before in this session
-				!alreadySent[n.ID()] {
-				alreadySent[n.ID()] = true
-				peers = append(peers, &peerAddr{n.OverlayAddr(), n.UnderlayAddr()})
-			}
-			return len(peers) < int(req.Max)
-		})
-
-		resp := &peersMsg{
-			Peers: peers,
-		}
-		err := p.Send(resp)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
 }
 
 func (self *Hive) NodeInfo() interface{} {

@@ -97,14 +97,14 @@ func (self *testOverlay) off(po []*testPeerAddr) (nas []PeerAddr) {
 	return nas
 }
 
-func (self *testOverlay) EachLivePeer(base []byte, o int, f func(Peer) bool) {
+func (self *testOverlay) EachLivePeer(base []byte, o int, f func(Peer, int) bool) {
 	if base == nil {
 		base = self.addr
 	}
 	for i := o; i < len(self.pos); i++ {
 		for _, na := range self.pos[i] {
 			if na.Peer != nil {
-				if !f(na.Peer) {
+				if !f(na.Peer, o) {
 					return
 				}
 			}
@@ -112,13 +112,13 @@ func (self *testOverlay) EachLivePeer(base []byte, o int, f func(Peer) bool) {
 	}
 }
 
-func (self *testOverlay) EachPeer(base []byte, o int, f func(PeerAddr) bool) {
+func (self *testOverlay) EachPeer(base []byte, o int, f func(PeerAddr, int) bool) {
 	if base == nil {
 		base = self.addr
 	}
 	for i := o; i < len(self.pos); i++ {
 		for _, na := range self.pos[i] {
-			if !f(na) {
+			if !f(na, i) {
 				return
 			}
 		}

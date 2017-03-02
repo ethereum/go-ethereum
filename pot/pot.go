@@ -110,7 +110,7 @@ func add(t *pot, val PotVal) (*pot, int, bool) {
 		}
 		return r, 0, false
 	}
-	po, found := val.PO(t.pin, t.po)
+	po, found := t.pin.PO(val, t.po)
 	if found {
 		r = &pot{
 			pin:  val,
@@ -188,7 +188,7 @@ func Remove(t *Pot, v PotVal) (*Pot, int, bool) {
 
 func remove(t *pot, val PotVal) (r *pot, po int, found bool) {
 	size := t.size
-	po, found = val.PO(t.pin, t.po)
+	po, found = t.pin.PO(val, t.po)
 	if found {
 		size--
 		if size == 0 {
@@ -392,6 +392,12 @@ func Union(t0, t1 *Pot) (*Pot, int) {
 }
 
 func union(t0, t1 *pot) (*pot, int) {
+	if t0 == nil || t0.size == 0 {
+		return t1, 0
+	}
+	if t1 == nil || t1.size == 0 {
+		return t0, 0
+	}
 	po, eq := t0.pin.PO(t1.pin, 0)
 	var pin PotVal
 	var bins []*pot
@@ -509,7 +515,6 @@ func union(t0, t1 *pot) (*pot, int) {
 }
 
 // Each(f) is a synchronous iterator over the bins of a node
-// it does NOT include the pinned item of the root
 // respecting an ordering
 // proximity > pinnedness
 func (t *Pot) Each(f func(PotVal, int) bool) bool {
@@ -527,32 +532,94 @@ func (t *pot) each(f func(PotVal, int) bool) bool {
 			return false
 		}
 	}
-	next = f(t.pin, t.po)
-	if !next {
-		return false
-	}
-
-	return true
+	return f(t.pin, t.po)
 }
 
-// EachBin iterates over bins of the top node and offers iterators to the caller on each
+// EachFrom(f, start) is a synchronous iterator over the elements of a pot
+// within the inclusive range starting from proximity order start
+// the function argument is passed the value and the proximity order wrt the root pin
+// it does NOT include the pinned item of the root
+// respecting an ordering
+// proximity > pinnedness
+// the iteration ends if the function return false or there are no more elements
+// end of a po range can be implemented since po is passed to the function
+func (t *Pot) EachFrom(f func(PotVal, int) bool, po int) bool {
+	t.lock.RLock()
+	n := t.pot
+	t.lock.RUnlock()
+	return n.eachFrom(f, po)
+}
+
+func (t *pot) eachFrom(f func(PotVal, int) bool, po int) bool {
+	var next bool
+	_, lim := t.getPos(po)
+	for i := lim; i < len(t.bins); i++ {
+		n := t.bins[i]
+		next = n.each(f)
+		if !next {
+			return false
+		}
+	}
+	return f(t.pin, t.po)
+}
+
+// EachBin iterates over bins of the pivot node and offers iterators to the caller on each
 // subtree passing the proximity order and the size
 // the iteration continues until the function's return value is false
 // or there are no more subtries
-func (t *Pot) EachBin(po int, f func(int, int, func(func(val PotVal, i int) bool) bool) bool) {
-	for _, n := range t.bins {
+func (t *Pot) EachBin(val PotVal, po int, f func(int, int, func(func(val PotVal, i int) bool) bool) bool) {
+	t.lock.RLock()
+	n := t.pot
+	t.lock.RUnlock()
+	n.eachBin(val, po, f)
+}
+
+func (t *pot) eachBin(val PotVal, po int, f func(int, int, func(func(val PotVal, i int) bool) bool) bool) {
+	if t == nil || t.size == 0 {
+		return
+	}
+	spr, _ := t.pin.PO(val, t.po)
+	_, lim := t.getPos(spr)
+	var size int
+	var n *pot
+	for i := 0; i < lim; i++ {
+		n = t.bins[i]
+		size += n.size
 		if n.po < po {
 			continue
 		}
 		if !f(n.po, n.size, n.each) {
-			break
+			return
 		}
+	}
+	if lim == len(t.bins) {
+		f(spr, 1, func(g func(PotVal, int) bool) bool {
+			return g(t.pin, spr)
+		})
+		return
+	}
+	n = t.bins[lim]
+
+	spo := spr
+	if n.po == spr {
+		spo++
+		size += n.size
+	}
+	if !f(spr, t.size-size, func(g func(PotVal, int) bool) bool {
+		return t.eachFrom(func(v PotVal, j int) bool {
+			return g(v, spr)
+		}, spo)
+	}) {
+		return
+	}
+	if spo > spr {
+		n.eachBin(val, spo, f)
 	}
 }
 
 // syncronous iterator over neighbours of any target val
-// even if an item at val's exact address is in the pbtree,
-// it is not included in the iteration: $val \not\in Neighbours(val)$
+// the order of elements retrieved reflect proximity order to the target
+// TODO: add maximum proxbin to start range of iteration
 func (t *Pot) EachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 	t.lock.RLock()
 	n := t.pot
@@ -561,12 +628,15 @@ func (t *Pot) EachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 }
 
 func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
+	if t == nil || t.size == 0 {
+		return false
+	}
 	var next bool
 	l := len(t.bins)
 	var n *pot
 	ir := l
 	il := l
-	po, eq := val.PO(t.pin, t.po)
+	po, eq := t.pin.PO(val, t.po)
 	if !eq {
 		n, il = t.getPos(po)
 		if n != nil {
@@ -606,6 +676,17 @@ func (t *pot) eachNeighbour(val PotVal, f func(PotVal, int) bool) bool {
 	return true
 }
 
+// EachNeighnbourAsync(val, max, maxPos, f, wait) is an asyncronous iterator
+// over elements not closer than maxPos wrt val.
+// val does not need to be match an element of the pot, but if it does, and
+// maxPos is keylength than it is included in the iteration
+// Calls to f are parallelised, the order of calls is undefined.
+// proximity order is respected in that there is no element in the pot that
+// is not visited if a closer node is visited.
+// The iteration is finished when max number of nearest nodes is visited
+// or if the entire there are no nodes not closer than maxPos that is not visited
+// if wait is true, the iterator returns only if all calls to f are finished
+// TODO: implement minPos for proper prox range iteration
 func (t *Pot) EachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal, int), wait bool) {
 	t.lock.RLock()
 	n := t.pot
@@ -631,7 +712,7 @@ func (t *pot) eachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal,
 	ir := l
 	// ic := l
 
-	po, eq := val.PO(t.pin, t.po)
+	po, eq := t.pin.PO(val, t.po)
 
 	// if po is too close, set the pivot branch (pom) to maxPos
 	pom := po
@@ -746,7 +827,6 @@ func (t *pot) eachNeighbourAsync(val PotVal, max int, maxPos int, f func(PotVal,
 
 	}
 	return max + extra
-
 }
 
 // getPos(n) returns the forking node at PO n and its index if it exists
