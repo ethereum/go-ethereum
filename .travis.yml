@@ -66,6 +66,32 @@ matrix:
         # - CC=aarch64-linux-gnu-gcc go run build/ci.go install -arch arm64
         # - go run build/ci.go archive -arch arm64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
 
+    # This builder does the Linux Azure MIPS xgo uploads
+    - os: linux
+      dist: trusty
+      sudo: required
+      services:
+        - docker
+      go: 1.8
+      env:
+        - azure-linux-mips
+      script:
+        - go run build/ci.go xgo --alltools -- --targets=linux/mips --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mips; do mv -f "${bin}" "${bin/-linux-mips/}"; done
+        - go run build/ci.go archive -arch mips -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        - go run build/ci.go xgo --alltools -- --targets=linux/mipsle --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mipsle; do mv -f "${bin}" "${bin/-linux-mipsle/}"; done
+        - go run build/ci.go archive -arch mipsle -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        - go run build/ci.go xgo --alltools -- --targets=linux/mips64 --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mips64; do mv -f "${bin}" "${bin/-linux-mips64/}"; done
+        - go run build/ci.go archive -arch mips64 -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
+        - go run build/ci.go xgo --alltools -- --targets=linux/mips64le --ldflags '-extldflags "-static"' -v
+        - for bin in build/bin/*-linux-mips64le; do mv -f "${bin}" "${bin/-linux-mips64le/}"; done
+        - go run build/ci.go archive -arch mips64le -type tar -signer LINUX_SIGNING_KEY -upload gethstore/builds
+
     # This builder is a temporary fallback for building ARM64 while Go 1.8 is fixed
     - os: linux
       dist: trusty
