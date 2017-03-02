@@ -55,6 +55,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	const topicNum = 8
 	f.Topics = make([]TopicType, topicNum)
 	for i := 0; i < topicNum; i++ {
+		f.Topics[i] = make([]byte, 4)
 		mrand.Read(f.Topics[i][:])
 		f.Topics[i][0] = 0x01
 	}
@@ -108,7 +109,7 @@ func TestInstallFilters(t *testing.T) {
 			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
 		}
 		tst[i].id = j
-		if len(j) != 40 {
+		if len(j) != keyIdSize*2 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
 		}
 	}

@@ -30,8 +30,8 @@ import (
 )
 
 const powRequirement = 0.00001
-const keyName = "6d604bac5401ce9a6b995f1b45a4ab"
 
+var keyID string
 var shh *whisper.Whisper
 var seed = time.Now().Unix()
 
@@ -90,7 +90,7 @@ func TestMailServer(t *testing.T) {
 	server.Init(shh, dir, password, powRequirement)
 	defer server.Close()
 
-	err = shh.AddSymKey(keyName, []byte(password))
+	keyID, err = shh.AddSymKeyFromPassword(password)
 	if err != nil {
 		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
@@ -167,8 +167,13 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 	binary.BigEndian.PutUint32(data[4:], p.upp)
 	copy(data[8:], p.topic[:])
 
+	key, err := shh.GetSymKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to retrieve sym key with seed %d: %s.", seed, err)
+	}
+
 	params := &whisper.MessageParams{
-		KeySym:   shh.GetSymKey(keyName),
+		KeySym:   key,
 		Topic:    p.topic,
 		Payload:  data,
 		PoW:      powRequirement * 2,

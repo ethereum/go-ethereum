@@ -62,9 +62,12 @@ func TestWhisperBasic(t *testing.T) {
 	if exist {
 		t.Fatalf("failed HasSymKey.")
 	}
-	key := w.GetSymKey("non-existing")
+	key, err := w.GetSymKey("non-existing")
+	if err == nil {
+		t.Fatalf("failed GetSymKey(non-existing): false positive.")
+	}
 	if key != nil {
-		t.Fatalf("failed GetSymKey.")
+		t.Fatalf("failed GetSymKey: false positive.")
 	}
 	mail := w.Envelopes()
 	if len(mail) != 0 {
@@ -80,7 +83,7 @@ func TestWhisperBasic(t *testing.T) {
 	if _, err := deriveKeyMaterial(peerID, ver); err != unknownVersionError(ver) {
 		t.Fatalf("failed deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
-	derived, err := deriveKeyMaterial(peerID, 0)
+	derived, err = deriveKeyMaterial(peerID, 0)
 	if err != nil {
 		t.Fatalf("failed second deriveKeyMaterial with param = %v: %s.", peerID, err)
 	}
@@ -186,23 +189,30 @@ func TestWhisperIdentityManagement(t *testing.T) {
 func TestWhisperSymKeyManagement(t *testing.T) {
 	InitSingleTest()
 
+	var err error
 	var k1, k2 []byte
 	w := New()
 	id1 := string("arbitrary-string-1")
 	id2 := string("arbitrary-string-2")
 
-	err := w.GenerateSymKey(id1)
+	id1, err = w.GenerateSymKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey with seed %d: %s.", seed, err)
 	}
 
-	k1 = w.GetSymKey(id1)
-	k2 = w.GetSymKey(id2)
+	k1, err = w.GetSymKey(id1)
+	if err != nil {
+		t.Fatalf("failed GetSymKey(id1).")
+	}
+	k2, err = w.GetSymKey(id2)
+	if err == nil {
+		t.Fatalf("failed GetSymKey(id2): false positive.")
+	}
 	if !w.HasSymKey(id1) {
 		t.Fatalf("failed HasSymKey(id1).")
 	}
 	if w.HasSymKey(id2) {
-		t.Fatalf("failed HasSymKey(id2).")
+		t.Fatalf("failed HasSymKey(id2): false positive.")
 	}
 	if k1 == nil {
 		t.Fatalf("first key does not exist.")
@@ -212,37 +222,49 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 
 	// add existing id, nothing should change
-	randomKey := make([]byte, 16)
+	randomKey := make([]byte, aesKeyLength)
 	mrand.Read(randomKey)
-	err = w.AddSymKey(id1, randomKey)
-	if err == nil {
-		t.Fatalf("failed AddSymKey with seed %d.", seed)
+	id1, err = w.AddSymKeyDirect(randomKey)
+	if err != nil {
+		t.Fatalf("failed AddSymKey with seed %d: %s.", seed, err)
 	}
 
-	k1 = w.GetSymKey(id1)
-	k2 = w.GetSymKey(id2)
+	k1, err = w.GetSymKey(id1)
+	if err != nil {
+		t.Fatalf("failed w.GetSymKey(id1).")
+	}
+	k2, err = w.GetSymKey(id2)
+	if err == nil {
+		t.Fatalf("failed w.GetSymKey(id2): false positive.")
+	}
 	if !w.HasSymKey(id1) {
 		t.Fatalf("failed w.HasSymKey(id1).")
 	}
 	if w.HasSymKey(id2) {
-		t.Fatalf("failed w.HasSymKey(id2).")
+		t.Fatalf("failed w.HasSymKey(id2): false positive.")
 	}
 	if k1 == nil {
 		t.Fatalf("first key does not exist.")
 	}
-	if bytes.Equal(k1, randomKey) {
-		t.Fatalf("k1 == randomKey.")
+	if !bytes.Equal(k1, randomKey) {
+		t.Fatalf("k1 != randomKey.")
 	}
 	if k2 != nil {
 		t.Fatalf("second key already exist.")
 	}
 
-	err = w.AddSymKey(id2, randomKey) // add non-existing (yet)
+	id2, err = w.AddSymKeyDirect(randomKey)
 	if err != nil {
 		t.Fatalf("failed AddSymKey(id2) with seed %d: %s.", seed, err)
 	}
-	k1 = w.GetSymKey(id1)
-	k2 = w.GetSymKey(id2)
+	k1, err = w.GetSymKey(id1)
+	if err != nil {
+		t.Fatalf("failed w.GetSymKey(id1).")
+	}
+	k2, err = w.GetSymKey(id2)
+	if err != nil {
+		t.Fatalf("failed w.GetSymKey(id2).")
+	}
 	if !w.HasSymKey(id1) {
 		t.Fatalf("HasSymKey(id1) failed.")
 	}
@@ -255,11 +277,11 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	if k2 == nil {
 		t.Fatalf("k2 does not exist.")
 	}
-	if bytes.Equal(k1, k2) {
-		t.Fatalf("k1 == k2.")
+	if !bytes.Equal(k1, k2) {
+		t.Fatalf("k1 != k2.")
 	}
-	if bytes.Equal(k1, randomKey) {
-		t.Fatalf("k1 == randomKey.")
+	if !bytes.Equal(k1, randomKey) {
+		t.Fatalf("k1 != randomKey.")
 	}
 	if len(k1) != aesKeyLength {
 		t.Fatalf("wrong length of k1.")
@@ -269,8 +291,17 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 
 	w.DeleteSymKey(id1)
-	k1 = w.GetSymKey(id1)
-	k2 = w.GetSymKey(id2)
+	k1, err = w.GetSymKey(id1)
+	if err == nil {
+		t.Fatalf("failed w.GetSymKey(id1): false positive.")
+	}
+	if k1 != nil {
+		t.Fatalf("failed GetSymKey(id1): false positive.")
+	}
+	k2, err = w.GetSymKey(id2)
+	if err != nil {
+		t.Fatalf("failed w.GetSymKey(id2).")
+	}
 	if w.HasSymKey(id1) {
 		t.Fatalf("failed to delete first key: still exist.")
 	}
@@ -286,8 +317,17 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	w.DeleteSymKey(id1)
 	w.DeleteSymKey(id2)
-	k1 = w.GetSymKey(id1)
-	k2 = w.GetSymKey(id2)
+	k1, err = w.GetSymKey(id1)
+	if err == nil {
+		t.Fatalf("failed w.GetSymKey(id1): false positive.")
+	}
+	k2, err = w.GetSymKey(id2)
+	if err == nil {
+		t.Fatalf("failed w.GetSymKey(id2): false positive.")
+	}
+	if k1 != nil || k2 != nil {
+		t.Fatalf("k1 or k2 is not nil")
+	}
 	if w.HasSymKey(id1) {
 		t.Fatalf("failed to delete second key: first key exist.")
 	}
@@ -299,6 +339,55 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 	if k2 != nil {
 		t.Fatalf("failed to delete second key: second key is not nil.")
+	}
+
+	randomKey = make([]byte, aesKeyLength+1)
+	randomize(randomKey)
+	id1, err = w.AddSymKeyDirect(randomKey)
+	if err == nil {
+		t.Fatalf("added the key with wrong size, seed %d.", seed)
+	}
+
+	const password = "arbitrary data here"
+	id1, err = w.AddSymKeyFromPassword(password)
+	if err != nil {
+		t.Fatalf("failed AddSymKeyFromPassword(id1) with seed %d: %s.", seed, err)
+	}
+	id2, err = w.AddSymKeyFromPassword(password)
+	if err != nil {
+		t.Fatalf("failed AddSymKeyFromPassword(id2) with seed %d: %s.", seed, err)
+	}
+	k1, err = w.GetSymKey(id1)
+	if err != nil {
+		t.Fatalf("failed w.GetSymKey(id1).")
+	}
+	k2, err = w.GetSymKey(id2)
+	if err != nil {
+		t.Fatalf("failed w.GetSymKey(id2).")
+	}
+	if !w.HasSymKey(id1) {
+		t.Fatalf("HasSymKey(id1) failed.")
+	}
+	if !w.HasSymKey(id2) {
+		t.Fatalf("HasSymKey(id2) failed.")
+	}
+	if k1 == nil {
+		t.Fatalf("k1 does not exist.")
+	}
+	if k2 == nil {
+		t.Fatalf("k2 does not exist.")
+	}
+	if !bytes.Equal(k1, k2) {
+		t.Fatalf("k1 != k2.")
+	}
+	if len(k1) != aesKeyLength {
+		t.Fatalf("wrong length of k1.")
+	}
+	if len(k2) != aesKeyLength {
+		t.Fatalf("wrong length of k2.")
+	}
+	if !validateSymmetricKey(k2) {
+		t.Fatalf("key validation failed.")
 	}
 }
 

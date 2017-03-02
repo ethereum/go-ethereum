@@ -134,40 +134,63 @@ func (api *PublicWhisperAPI) NewIdentity() (string, error) {
 	return common.ToHex(crypto.FromECDSAPub(&identity.PublicKey)), nil
 }
 
-// GenerateSymKey generates a random symmetric key and stores it under
-// the 'name' id. Will be used in the future for session key exchange.
-func (api *PublicWhisperAPI) GenerateSymKey(name string) error {
+// todo: implement
+//func (api *PublicWhisperAPI) GetPublicKey(id string) (bool, error) {
+//	if api.whisper == nil {
+//		return false, whisperOffLineErr
+//	}
+//	return api.whisper.HasIdentity(identity), nil
+//}
+
+// GenerateSymKey generates a random symmetric key and stores it under id,
+// which is then returned. Will be used in the future for session key exchange.
+func (api *PublicWhisperAPI) GenerateSymKey() (string, error) {
 	if api.whisper == nil {
-		return whisperOffLineErr
+		return "", whisperOffLineErr
 	}
-	return api.whisper.GenerateSymKey(name)
+	return api.whisper.GenerateSymKey()
 }
 
-// AddSymKey stores the key under the 'name' id.
-func (api *PublicWhisperAPI) AddSymKey(name string, key hexutil.Bytes) error {
+// AddSymKeyDirect stores the key, and returns its id.
+func (api *PublicWhisperAPI) AddSymKeyDirect(key hexutil.Bytes) (string, error) {
 	if api.whisper == nil {
-		return whisperOffLineErr
+		return "", whisperOffLineErr
 	}
-	return api.whisper.AddSymKey(name, key)
+	return api.whisper.AddSymKeyDirect(key)
 }
 
-// HasSymKey returns true if there is a key associated with the name string.
+// AddSymKeyFromPassword generates the key from password, stores it, and returns its id.
+func (api *PublicWhisperAPI) AddSymKeyFromPassword(password string) (string, error) {
+	if api.whisper == nil {
+		return "", whisperOffLineErr
+	}
+	return api.whisper.AddSymKeyFromPassword(password)
+}
+
+// HasSymKey returns true if there is a key associated with the given id.
 // Otherwise returns false.
-func (api *PublicWhisperAPI) HasSymKey(name string) (bool, error) {
+func (api *PublicWhisperAPI) HasSymKey(id string) (bool, error) {
 	if api.whisper == nil {
 		return false, whisperOffLineErr
 	}
-	res := api.whisper.HasSymKey(name)
+	res := api.whisper.HasSymKey(id)
 	return res, nil
 }
 
-// DeleteSymKey deletes the key associated with the name string if it exists.
-func (api *PublicWhisperAPI) DeleteSymKey(name string) error {
+func (api *PublicWhisperAPI) GetSymKey(name string) ([]byte, error) {
 	if api.whisper == nil {
-		return whisperOffLineErr
+		return nil, whisperOffLineErr
 	}
-	api.whisper.DeleteSymKey(name)
-	return nil
+	return api.whisper.GetSymKey(name)
+}
+
+// DeleteSymKey deletes the key associated with the name string if it exists.
+func (api *PublicWhisperAPI) DeleteSymKey(name string) (bool, error) {
+	if api.whisper == nil {
+		return false, whisperOffLineErr
+	}
+	res := api.whisper.DeleteSymKey(name)
+	return res, nil
 }
 
 // NewWhisperFilter creates and registers a new message filter to watch for inbound whisper messages.
@@ -177,9 +200,21 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 		return "", whisperOffLineErr
 	}
 
+	var err error
+	var symKey []byte
+
+	if len(args.KeyName) > 0 {
+		symKey, err = api.whisper.GetSymKey(args.KeyName)
+		if err != nil {
+			info := "NewFilter: symmetric key ID does not exist: " + args.KeyName
+			log.Error(fmt.Sprintf(info))
+			return "", errors.New(info)
+		}
+	}
+
 	filter := Filter{
 		Src:       crypto.ToECDSAPub(common.FromHex(args.From)),
-		KeySym:    api.whisper.GetSymKey(args.KeyName),
+		KeySym:    symKey,
 		PoW:       args.PoW,
 		Messages:  make(map[common.Hash]*ReceivedMessage),
 		AcceptP2P: args.AcceptP2P,
@@ -191,12 +226,6 @@ func (api *PublicWhisperAPI) NewFilter(args WhisperFilterArgs) (string, error) {
 
 	if len(args.Topics) == 0 && len(args.KeyName) != 0 {
 		info := "NewFilter: at least one topic must be specified"
-		log.Error(fmt.Sprintf(info))
-		return "", errors.New(info)
-	}
-
-	if len(args.KeyName) != 0 && len(filter.KeySym) == 0 {
-		info := "NewFilter: key was not found by name: " + args.KeyName
 		log.Error(fmt.Sprintf(info))
 		return "", errors.New(info)
 	}
@@ -275,10 +304,22 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		return whisperOffLineErr
 	}
 
+	var err error
+	var symKey []byte
+
+	if len(args.KeyName) > 0 {
+		symKey, err = api.whisper.GetSymKey(args.KeyName)
+		if err != nil {
+			info := "NewFilter: symmetric key ID does not exist: " + args.KeyName
+			log.Error(fmt.Sprintf(info))
+			return errors.New(info)
+		}
+	}
+
 	params := MessageParams{
 		TTL:      args.TTL,
 		Dst:      crypto.ToECDSAPub(common.FromHex(args.To)),
-		KeySym:   api.whisper.GetSymKey(args.KeyName),
+		KeySym:   symKey,
 		Topic:    args.Topic,
 		Payload:  args.Payload,
 		Padding:  args.Padding,
@@ -333,12 +374,6 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	// validate
-	if len(args.KeyName) != 0 && len(params.KeySym) == 0 {
-		info := "Post: key was not found by name: " + args.KeyName
-		log.Error(fmt.Sprintf(info))
-		return errors.New(info)
-	}
-
 	if len(args.To) == 0 && len(params.KeySym) == 0 {
 		info := "Post: message must be encrypted either symmetrically or asymmetrically"
 		log.Error(fmt.Sprintf(info))
