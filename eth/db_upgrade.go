@@ -49,7 +49,7 @@ func upgradeSequentialKeys(db ethdb.Database) (stopFn func()) {
 		return nil // empty database, nothing to do
 	}
 
-	log.Info(fmt.Sprintf("Upgrading chain database to use sequential keys"))
+	log.Warn("Upgrading chain database to use sequential keys")
 
 	stopChn := make(chan struct{})
 	stoppedChn := make(chan struct{})
@@ -72,11 +72,11 @@ func upgradeSequentialKeys(db ethdb.Database) (stopFn func()) {
 			err, stopped = upgradeSequentialOrphanedReceipts(db, stopFn)
 		}
 		if err == nil && !stopped {
-			log.Info(fmt.Sprintf("Database conversion successful"))
+			log.Info("Database conversion successful")
 			db.Put(useSequentialKeys, []byte{42})
 		}
 		if err != nil {
-			log.Error(fmt.Sprintf("Database conversion failed: %v", err))
+			log.Error("Database conversion failed", "err", err)
 		}
 		close(stoppedChn)
 	}()
@@ -105,7 +105,7 @@ func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (e
 				it.Release()
 				it = db.(*ethdb.LDBDatabase).NewIterator()
 				it.Seek(keyPtr)
-				log.Info(fmt.Sprintf("converting %d canonical numbers...", cnt))
+				log.Info("Converting canonical numbers", "count", cnt)
 			}
 			number := big.NewInt(0).SetBytes(keyPtr[10:]).Uint64()
 			newKey := []byte("h12345678n")
@@ -124,7 +124,7 @@ func upgradeSequentialCanonicalNumbers(db ethdb.Database, stopFn func() bool) (e
 		it.Next()
 	}
 	if cnt > 0 {
-		log.Info(fmt.Sprintf("converted %d canonical numbers...", cnt))
+		log.Info("converted canonical numbers", "count", cnt)
 	}
 	return nil, false
 }
@@ -148,7 +148,7 @@ func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool
 				it.Release()
 				it = db.(*ethdb.LDBDatabase).NewIterator()
 				it.Seek(keyPtr)
-				log.Info(fmt.Sprintf("converting %d blocks...", cnt))
+				log.Info("Converting blocks", "count", cnt)
 			}
 			// convert header, body, td and block receipts
 			var keyPrefix [38]byte
@@ -176,7 +176,7 @@ func upgradeSequentialBlocks(db ethdb.Database, stopFn func() bool) (error, bool
 		}
 	}
 	if cnt > 0 {
-		log.Info(fmt.Sprintf("converted %d blocks...", cnt))
+		log.Info("Converted blocks", "count", cnt)
 	}
 	return nil, false
 }
@@ -203,7 +203,7 @@ func upgradeSequentialOrphanedReceipts(db ethdb.Database, stopFn func() bool) (e
 		it.Next()
 	}
 	if cnt > 0 {
-		log.Info(fmt.Sprintf("removed %d orphaned block receipts...", cnt))
+		log.Info("Removed orphaned block receipts", "count", cnt)
 	}
 	return nil, false
 }
@@ -283,7 +283,7 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 	}
 
 	tstart := time.Now()
-	log.Info(fmt.Sprint("upgrading db log bloom bins"))
+	log.Warn("Upgrading db log bloom bins")
 	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
 		hash := core.GetCanonicalHash(db, i)
 		if (hash == common.Hash{}) {
@@ -291,6 +291,6 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 		}
 		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
 	}
-	log.Info(fmt.Sprint("upgrade completed in", time.Since(tstart)))
+	log.Info("Bloom-bin upgrade completed", "elapsed", common.PrettyDuration(time.Since(tstart)))
 	return nil
 }

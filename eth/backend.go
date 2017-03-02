@@ -179,8 +179,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
-
-	log.Info(fmt.Sprintf("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId))
+	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
 		bcVersion := core.GetBlockChainVersion(chainDb)
@@ -198,7 +197,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Info(fmt.Sprint("WARNING: Wrote default ethereum genesis block"))
+		log.Warn("Wrote default Ethereum genesis block")
 	}
 
 	if config.ChainConfig == nil {
@@ -208,7 +207,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth.chainConfig = config.ChainConfig
 
-	log.Info(fmt.Sprint("Chain config:", eth.chainConfig))
+	log.Info("Initialised chain configuration", "config", eth.chainConfig)
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
 	if err != nil {
@@ -269,7 +268,7 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 		if err != nil {
 			return err
 		}
-		log.Info(fmt.Sprintf("Successfully wrote custom genesis block: %x", block.Hash()))
+		log.Info("Successfully wrote custom genesis block", "hash", block.Hash())
 	}
 	// Load up a test setup if directly injected
 	if config.TestGenesisState != nil {
@@ -288,13 +287,13 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 func CreatePoW(config *Config) (pow.PoW, error) {
 	switch {
 	case config.PowFake:
-		log.Info(fmt.Sprintf("ethash used in fake mode"))
+		log.Warn("Ethash used in fake mode")
 		return pow.PoW(core.FakePow{}), nil
 	case config.PowTest:
-		log.Info(fmt.Sprintf("ethash used in test mode"))
+		log.Warn("Ethash used in test mode")
 		return ethash.NewForTesting()
 	case config.PowShared:
-		log.Info(fmt.Sprintf("ethash used in shared mode"))
+		log.Warn("Ethash used in shared mode")
 		return ethash.NewShared(), nil
 	default:
 		return ethash.New(), nil
@@ -377,9 +376,8 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 func (s *Ethereum) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
-		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
-		log.Error(fmt.Sprint(err))
-		return err
+		log.Error("Cannot start mining without etherbase", "err", err)
+		return fmt.Errorf("etherbase missing: %v", err)
 	}
 	go s.miner.Start(eb, threads)
 	return nil
@@ -466,14 +464,14 @@ func (self *Ethereum) StartAutoDAG() {
 		return // already started
 	}
 	go func() {
-		log.Info(fmt.Sprintf("Automatic pregeneration of ethash DAG ON (ethash dir: %s)", ethash.DefaultDir))
+		log.Info("Pre-generation of ethash DAG on", "dir", ethash.DefaultDir)
 		var nextEpoch uint64
 		timer := time.After(0)
 		self.autodagquit = make(chan bool)
 		for {
 			select {
 			case <-timer:
-				log.Info(fmt.Sprintf("checking DAG (ethash dir: %s)", ethash.DefaultDir))
+				log.Info("Checking DAG availability", "dir", ethash.DefaultDir)
 				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
 				thisEpoch := currentBlock / epochLength
 				if nextEpoch <= thisEpoch {
@@ -482,19 +480,19 @@ func (self *Ethereum) StartAutoDAG() {
 							previousDag, previousDagFull := dagFiles(thisEpoch - 1)
 							os.Remove(filepath.Join(ethash.DefaultDir, previousDag))
 							os.Remove(filepath.Join(ethash.DefaultDir, previousDagFull))
-							log.Info(fmt.Sprintf("removed DAG for epoch %d (%s)", thisEpoch-1, previousDag))
+							log.Info("Removed previous DAG", "epoch", thisEpoch-1, "dag", previousDag)
 						}
 						nextEpoch = thisEpoch + 1
 						dag, _ := dagFiles(nextEpoch)
 						if _, err := os.Stat(dag); os.IsNotExist(err) {
-							log.Info(fmt.Sprintf("Pregenerating DAG for epoch %d (%s)", nextEpoch, dag))
+							log.Info("Pre-generating next DAG", "epoch", nextEpoch, "dag", dag)
 							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
 							if err != nil {
-								log.Error(fmt.Sprintf("Error generating DAG for epoch %d (%s)", nextEpoch, dag))
+								log.Error("Error generating DAG", "epoch", nextEpoch, "dag", dag, "err", err)
 								return
 							}
 						} else {
-							log.Error(fmt.Sprintf("DAG for epoch %d (%s)", nextEpoch, dag))
+							log.Warn("DAG already exists", "epoch", nextEpoch, "dag", dag)
 						}
 					}
 				}
@@ -512,7 +510,7 @@ func (self *Ethereum) StopAutoDAG() {
 		close(self.autodagquit)
 		self.autodagquit = nil
 	}
-	log.Info(fmt.Sprintf("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir))
+	log.Info("Pre-generation of ethash DAG off", "dir", ethash.DefaultDir)
 }
 
 // dagFiles(epoch) returns the two alternative DAG filenames (not a path)

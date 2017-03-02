@@ -65,9 +65,9 @@ func sendBadBlockReport(block *types.Block, err error) {
 	client := http.Client{Timeout: 8 * time.Second}
 	resp, err := client.Post(badBlocksURL, "application/json", bytes.NewReader(jsonStr))
 	if err != nil {
-		log.Debug(fmt.Sprint(err))
+		log.Debug("Failed to report bad block", "err", err)
 		return
 	}
-	log.Debug(fmt.Sprintf("Bad Block Report posted (%d)", resp.StatusCode))
+	log.Debug("Bad block report posted", "status", resp.StatusCode)
 	resp.Body.Close()
 }

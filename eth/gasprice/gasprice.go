@@ -17,7 +17,6 @@
 package gasprice
 
 import (
-	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -176,7 +175,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 	self.lastBase = newBase
 	self.lastBaseMutex.Unlock()
 
-	log.Trace(fmt.Sprintf("Processed block #%v, base price is %v\n", i, newBase.Int64()))
+	log.Trace("Processed block, base price updated", "number", i, "base", newBase)
 }
 
 // returns the lowers possible price with which a tx was or could have been included
