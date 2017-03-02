@@ -21,9 +21,6 @@ import (
 	mrand "math/rand"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestWhisperBasic(t *testing.T) {
@@ -104,7 +101,14 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed BytesToIntBigEndian: %d.", be)
 	}
 
-	pk := w.NewIdentity()
+	id, err := w.NewIdentity()
+	if err != nil {
+		t.Fatalf("failed to generate new key pair: %s.", err)
+	}
+	pk, err := w.GetIdentity(id)
+	if err != nil {
+		t.Fatalf("failed to retrieve new key pair: %s.", err)
+	}
 	if !validatePrivateKey(pk) {
 		t.Fatalf("failed validatePrivateKey: %v.", pk)
 	}
@@ -115,67 +119,110 @@ func TestWhisperBasic(t *testing.T) {
 
 func TestWhisperIdentityManagement(t *testing.T) {
 	w := New()
-	id1 := w.NewIdentity()
-	id2 := w.NewIdentity()
-	pub1 := common.ToHex(crypto.FromECDSAPub(&id1.PublicKey))
-	pub2 := common.ToHex(crypto.FromECDSAPub(&id2.PublicKey))
-	pk1 := w.GetIdentity(pub1)
-	pk2 := w.GetIdentity(pub2)
-	if !w.HasIdentity(pub1) {
+	id1, err := w.NewIdentity()
+	if err != nil {
+		t.Fatalf("failed to generate new key pair: %s.", err)
+	}
+	id2, err := w.NewIdentity()
+	if err != nil {
+		t.Fatalf("failed to generate new key pair: %s.", err)
+	}
+	pk1, err := w.GetIdentity(id1)
+	if err != nil {
+		t.Fatalf("failed to retrieve the key pair: %s.", err)
+	}
+	pk2, err := w.GetIdentity(id2)
+	if err != nil {
+		t.Fatalf("failed to retrieve the key pair: %s.", err)
+	}
+	// todo: delete
+	//pub1 := common.ToHex(crypto.FromECDSAPub(&id1.PublicKey))
+	//pub2 := common.ToHex(crypto.FromECDSAPub(&id2.PublicKey))
+	//pub1 := pk1.PublicKey
+	//pub2 := pk2.PublicKey
+
+	if !w.HasIdentity(id1) {
 		t.Fatalf("failed HasIdentity(pub1).")
 	}
-	if !w.HasIdentity(pub2) {
+	if !w.HasIdentity(id2) {
 		t.Fatalf("failed HasIdentity(pub2).")
 	}
-	if pk1 != id1 {
+	if pk1 == nil {
 		t.Fatalf("failed GetIdentity(pub1).")
 	}
-	if pk2 != id2 {
+	if pk2 == nil {
 		t.Fatalf("failed GetIdentity(pub2).")
 	}
 
 	// Delete one identity
-	w.DeleteIdentity(pub1)
-	pk1 = w.GetIdentity(pub1)
-	pk2 = w.GetIdentity(pub2)
-	if w.HasIdentity(pub1) {
+	done := w.DeleteIdentity(id1)
+	if !done {
+		t.Fatalf("failed to delete id1.")
+	}
+	pk1, err = w.GetIdentity(id1)
+	if err == nil {
+		t.Fatalf("retrieve the key pair: false positive.")
+	}
+	pk2, err = w.GetIdentity(id2)
+	if err != nil {
+		t.Fatalf("failed to retrieve the key pair: %s.", err)
+	}
+	if w.HasIdentity(id1) {
 		t.Fatalf("failed DeleteIdentity(pub1): still exist.")
 	}
-	if !w.HasIdentity(pub2) {
+	if !w.HasIdentity(id2) {
 		t.Fatalf("failed DeleteIdentity(pub1): pub2 does not exist.")
 	}
 	if pk1 != nil {
 		t.Fatalf("failed DeleteIdentity(pub1): first key still exist.")
 	}
-	if pk2 != id2 {
+	if pk2 == nil {
 		t.Fatalf("failed DeleteIdentity(pub1): second key does not exist.")
 	}
 
 	// Delete again non-existing identity
-	w.DeleteIdentity(pub1)
-	pk1 = w.GetIdentity(pub1)
-	pk2 = w.GetIdentity(pub2)
-	if w.HasIdentity(pub1) {
+	done = w.DeleteIdentity(id1)
+	if done {
+		t.Fatalf("delete id1: false positive.")
+	}
+	pk1, err = w.GetIdentity(id1)
+	if err == nil {
+		t.Fatalf("retrieve the key pair: false positive.")
+	}
+	pk2, err = w.GetIdentity(id2)
+	if err != nil {
+		t.Fatalf("failed to retrieve the key pair: %s.", err)
+	}
+	if w.HasIdentity(id1) {
 		t.Fatalf("failed delete non-existing identity: exist.")
 	}
-	if !w.HasIdentity(pub2) {
+	if !w.HasIdentity(id2) {
 		t.Fatalf("failed delete non-existing identity: pub2 does not exist.")
 	}
 	if pk1 != nil {
 		t.Fatalf("failed delete non-existing identity: first key exist.")
 	}
-	if pk2 != id2 {
+	if pk2 == nil {
 		t.Fatalf("failed delete non-existing identity: second key does not exist.")
 	}
 
 	// Delete second identity
-	w.DeleteIdentity(pub2)
-	pk1 = w.GetIdentity(pub1)
-	pk2 = w.GetIdentity(pub2)
-	if w.HasIdentity(pub1) {
+	done = w.DeleteIdentity(id2)
+	if !done {
+		t.Fatalf("failed to delete id2.")
+	}
+	pk1, err = w.GetIdentity(id1)
+	if err == nil {
+		t.Fatalf("retrieve the key pair: false positive.")
+	}
+	pk2, err = w.GetIdentity(id2)
+	if err == nil {
+		t.Fatalf("retrieve the key pair: false positive.")
+	}
+	if w.HasIdentity(id1) {
 		t.Fatalf("failed delete second identity: first identity exist.")
 	}
-	if w.HasIdentity(pub2) {
+	if w.HasIdentity(id2) {
 		t.Fatalf("failed delete second identity: still exist.")
 	}
 	if pk1 != nil {
