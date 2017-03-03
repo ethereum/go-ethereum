@@ -68,7 +68,7 @@ func upload(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("Upload failed: %v", err)
 	}
-	mroot := swarm.Manifest{[]swarm.ManifestEntry{entry}}
+	mroot := swarm.Manifest{Entries: []swarm.ManifestEntry{entry}}
 	if !wantManifest {
 		// Print the manifest. This is the only output to stdout.
 		mrootJSON, _ := json.MarshalIndent(mroot, "", "  ")

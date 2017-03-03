@@ -186,3 +186,113 @@ func (c *Client) DownloadManifest(mhash string) (Manifest, error) {
 	}
 	return mroot, err
 }
+
+// ManifestFileList downloads the manifest with the given hash and generates a
+// list of files and directory prefixes which have the specified prefix.
+//
+// For example, if the manifest represents the following directory structure:
+//
+// file1.txt
+// file2.txt
+// dir1/file3.txt
+// dir1/dir2/file4.txt
+//
+// Then:
+//
+// - a prefix of ""      would return [dir1/, file1.txt, file2.txt]
+// - a prefix of "file"  would return [file1.txt, file2.txt]
+// - a prefix of "dir1/" would return [dir1/dir2/, dir1/file3.txt]
+func (c *Client) ManifestFileList(hash, prefix string) (entries []ManifestEntry, err error) {
+	manifest, err := c.DownloadManifest(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// handleFile handles a manifest entry which is a direct reference to a
+	// file (i.e. it is not a swarm manifest)
+	handleFile := func(entry ManifestEntry) {
+		// ignore the file if it doesn't have the specified prefix
+		if !strings.HasPrefix(entry.Path, prefix) {
+			return
+		}
+		// if the path after the prefix contains a directory separator,
+		// add a directory prefix to the entries, otherwise add the
+		// file
+		suffix := strings.TrimPrefix(entry.Path, prefix)
+		if sepIndex := strings.Index(suffix, "/"); sepIndex > -1 {
+			entries = append(entries, ManifestEntry{
+				Path:        prefix + suffix[:sepIndex+1],
+				ContentType: "DIR",
+			})
+		} else {
+			if entry.Path == "" {
+				entry.Path = "/"
+			}
+			entries = append(entries, entry)
+		}
+	}
+
+	// handleManifest handles a manifest entry which is a reference to
+	// another swarm manifest.
+	handleManifest := func(entry ManifestEntry) error {
+		// if the manifest's path is a prefix of the specified prefix
+		// then just recurse into the manifest by stripping its path
+		// from the prefix
+		if strings.HasPrefix(prefix, entry.Path) {
+			subPrefix := strings.TrimPrefix(prefix, entry.Path)
+			subEntries, err := c.ManifestFileList(entry.Hash, subPrefix)
+			if err != nil {
+				return err
+			}
+			// prefix the manifest's path to the sub entries and
+			// add them to the returned entries
+			for i, subEntry := range subEntries {
+				subEntry.Path = entry.Path + subEntry.Path
+				subEntries[i] = subEntry
+			}
+			entries = append(entries, subEntries...)
+			return nil
+		}
+
+		// if the manifest's path has the specified prefix, then if the
+		// path after the prefix contains a directory separator, add a
+		// directory prefix to the entries, otherwise recurse into the
+		// manifest
+		if strings.HasPrefix(entry.Path, prefix) {
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			sepIndex := strings.Index(suffix, "/")
+			if sepIndex > -1 {
+				entries = append(entries, ManifestEntry{
+					Path:        prefix + suffix[:sepIndex+1],
+					ContentType: "DIR",
+				})
+				return nil
+			}
+			subEntries, err := c.ManifestFileList(entry.Hash, "")
+			if err != nil {
+				return err
+			}
+			// prefix the manifest's path to the sub entries and
+			// add them to the returned entries
+			for i, subEntry := range subEntries {
+				subEntry.Path = entry.Path + subEntry.Path
+				subEntries[i] = subEntry
+			}
+			entries = append(entries, subEntries...)
+			return nil
+		}
+		return nil
+	}
+
+	for _, entry := range manifest.Entries {
+		if entry.ContentType == "application/bzz-manifest+json" {
+			if err := handleManifest(entry); err != nil {
+				return nil, err
+			}
+		} else {
+			handleFile(entry)
+		}
+	}
+
+	return
+}
