@@ -30,49 +30,101 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
+func getStdin(b []byte) (int, error) {
+	s := os.Stdin
+	return s.Read(b)
+}
+
 func upload(ctx *cli.Context) {
+
 	args := ctx.Args()
 	var (
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
+		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 	)
+
+	var client = &client{api: bzzapi}
+
+	var entry manifestEntry
+
+	data := make([]byte, 1024*1000)
+	datalength := int(0)
+
 	if len(args) != 1 {
-		utils.Fatalf("Need filename as the first and only argument")
+		if fromStdin {
+			var err error
+			datalength, err = getStdin(data)
+			if err != nil {
+				utils.Fatalf("Read from stdin failed")
+			}
+		} else {
+			utils.Fatalf("Need filename as the first and only argument")
+		}
 	}
 
-	var (
-		file   = args[0]
-		client = &client{api: bzzapi}
-	)
-	fi, err := os.Stat(expandPath(file))
-	if err != nil {
-		utils.Fatalf("Failed to stat file: %v", err)
-	}
-	if fi.IsDir() {
-		if !recursive {
-			utils.Fatalf("Argument is a directory and recursive upload is disabled")
-		}
-		if !wantManifest {
-			utils.Fatalf("Manifest is required for directory uploads")
-		}
-		mhash, err := client.uploadDirectory(file, defaultPath)
+	// if we have data already (stdin)
+	if datalength > 0 {
+
+		var hash string
+		wg := &sync.WaitGroup{}
+
+		pr, pw := io.Pipe()
+
+		go func(hash *string, wg *sync.WaitGroup) {
+			wg.Add(1)
+			mhash, err := client.postRaw("text/plain", int64(datalength), pr)
+			*hash = mhash
+			if err != nil {
+				utils.Fatalf("Failed to post data: %v", err)
+			}
+			wg.Done()
+		}(&hash, wg)
+
+		_, err := pw.Write(data[:datalength])
+
 		if err != nil {
-			utils.Fatalf("Failed to upload directory: %v", err)
+			utils.Fatalf("Failed to write to HTTP pipe: %v", err)
 		}
-		fmt.Println(mhash)
-		return
-	}
-	entry, err := client.uploadFile(file, fi)
-	if err != nil {
-		utils.Fatalf("Upload failed: %v", err)
+		pw.Close()
+		wg.Wait()
+
+		entry.Hash = hash
+		entry.ContentType = "text/plain"
+
+	} else {
+		file := args[0]
+		fi, err := os.Stat(expandPath(file))
+		if err != nil {
+			utils.Fatalf("Failed to stat file: %v", err)
+		}
+		if fi.IsDir() {
+			if !recursive {
+				utils.Fatalf("Argument is a directory and recursive upload is disabled")
+			}
+			if !wantManifest {
+				utils.Fatalf("Manifest is required for directory uploads")
+			}
+			mhash, err := client.uploadDirectory(file, defaultPath)
+			if err != nil {
+				utils.Fatalf("Failed to upload directory: %v", err)
+			}
+			fmt.Println(mhash)
+			return
+		}
+		entry, err = client.uploadFile(file, fi)
+		if err != nil {
+			utils.Fatalf("Upload failed: %v", err)
+		}
 	}
 	mroot := manifest{[]manifestEntry{entry}}
 	if !wantManifest {
