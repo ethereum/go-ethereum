@@ -1016,12 +1016,10 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		case SplitStatTy:
 			events = append(events, ChainSplitEvent{block, logs})
 		}
-
 		stats.processed++
 		stats.usedGas += usedGas.Uint64()
 		stats.report(chain, i)
 	}
-
 	go self.postChainEvents(events, coalescedLogs)
 
 	return 0, nil

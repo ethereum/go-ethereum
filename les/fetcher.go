@@ -18,7 +18,6 @@
 package les
 
 import (
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -174,7 +173,7 @@ func (f *lightFetcher) syncLoop() {
 			f.reqMu.Unlock()
 			if ok {
 				f.pm.serverPool.adjustResponseTime(req.peer.poolEntry, time.Duration(mclock.Now()-req.sent), true)
-				log.Debug(fmt.Sprintf("hard timeout by peer %v", req.peer.id))
+				req.peer.Log().Debug("Fetching data timed out hard")
 				go f.pm.removePeer(req.peer.id)
 			}
 		case resp := <-f.deliverChn:
@@ -192,13 +191,13 @@ func (f *lightFetcher) syncLoop() {
 			}
 			f.lock.Lock()
 			if !ok || !(f.syncing || f.processResponse(req, resp)) {
-				log.Debug(fmt.Sprintf("failed processing response by peer %v", resp.peer.id))
+				resp.peer.Log().Debug("Failed processing response")
 				go f.pm.removePeer(resp.peer.id)
 			}
 			f.lock.Unlock()
 		case p := <-f.syncDone:
 			f.lock.Lock()
-			log.Debug(fmt.Sprintf("done synchronising with peer %v", p.id))
+			p.Log().Debug("Done synchronising with peer")
 			f.checkSyncedHeaders(p)
 			f.syncing = false
 			f.lock.Unlock()
@@ -239,17 +238,17 @@ func (f *lightFetcher) removePeer(p *peer) {
 func (f *lightFetcher) announce(p *peer, head *announceData) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	log.Debug(fmt.Sprintf("received announce from peer %v  #%d  %016x  reorg: %d", p.id, head.Number, head.Hash[:8], head.ReorgDepth))
+	p.Log().Debug("Received new announcement", "number", head.Number, "hash", head.Hash, "reorg", head.ReorgDepth)
 
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("announce: unknown peer"))
+		p.Log().Debug("Announcement from unknown peer")
 		return
 	}
 
 	if fp.lastAnnounced != nil && head.Td.Cmp(fp.lastAnnounced.td) <= 0 {
 		// announced tds should be strictly monotonic
-		log.Debug(fmt.Sprintf("non-monotonic Td from peer %v", p.id))
+		p.Log().Debug("Received non-monotonic td", "current", head.Td, "previous", fp.lastAnnounced.td)
 		go f.pm.removePeer(p.id)
 		return
 	}
@@ -355,14 +354,14 @@ func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bo
 func (f *lightFetcher) request(p *peer, reqID uint64, n *fetcherTreeNode, amount uint64) (uint64, bool) {
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("request: unknown peer"))
+		p.Log().Debug("Requesting from unknown peer")
 		p.fcServer.DeassignRequest(reqID)
 		return 0, false
 	}
 	if fp.bestConfirmed == nil || fp.root == nil || !f.checkKnownNode(p, fp.root) {
 		f.syncing = true
 		go func() {
-			log.Debug(fmt.Sprintf("synchronising with peer %v", p.id))
+			p.Log().Debug("Synchronisation started")
 			f.pm.synchronise(p)
 			f.syncDone <- p
 		}()
@@ -457,7 +456,7 @@ func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types
 // processResponse processes header download request responses, returns true if successful
 func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) bool {
 	if uint64(len(resp.headers)) != req.amount || resp.headers[0].Hash() != req.hash {
-		log.Debug(fmt.Sprintf("response mismatch %v %016x != %v %016x", len(resp.headers), resp.headers[0].Hash().Bytes()[:8], req.amount, req.hash[:8]))
+		req.peer.Log().Debug("Response content mismatch", "requested", len(resp.headers), "reqfrom", resp.headers[0], "delivered", req.amount, "delfrom", req.hash)
 		return false
 	}
 	headers := make([]*types.Header, req.amount)
@@ -468,14 +467,14 @@ func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) boo
 		if err == core.BlockFutureErr {
 			return true
 		}
-		log.Debug(fmt.Sprintf("InsertHeaderChain error: %v", err))
+		log.Debug("Failed to insert header chain", "err", err)
 		return false
 	}
 	tds := make([]*big.Int, len(headers))
 	for i, header := range headers {
 		td := f.chain.GetTd(header.Hash(), header.Number.Uint64())
 		if td == nil {
-			log.Debug(fmt.Sprintf("TD not found for header %v of %v", i+1, len(headers)))
+			log.Debug("Total difficulty not found for header", "index", i+1, "number", header.Number, "hash", header.Hash())
 			return false
 		}
 		tds[i] = td
@@ -490,7 +489,7 @@ func (f *lightFetcher) newHeaders(headers []*types.Header, tds []*big.Int) {
 	var maxTd *big.Int
 	for p, fp := range f.peers {
 		if !f.checkAnnouncedHeaders(fp, headers, tds) {
-			log.Debug(fmt.Sprintf("announce inconsistency by peer %v", p.id))
+			p.Log().Debug("Inconsistent announcement")
 			go f.pm.removePeer(p.id)
 		}
 		if fp.confirmedTd != nil && (maxTd == nil || maxTd.Cmp(fp.confirmedTd) > 0) {
@@ -576,7 +575,7 @@ func (f *lightFetcher) checkAnnouncedHeaders(fp *fetcherPeerInfo, headers []*typ
 func (f *lightFetcher) checkSyncedHeaders(p *peer) {
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("checkSyncedHeaders: unknown peer"))
+		p.Log().Debug("Unknown peer to check sync headers")
 		return
 	}
 	n := fp.lastAnnounced
@@ -589,7 +588,7 @@ func (f *lightFetcher) checkSyncedHeaders(p *peer) {
 	}
 	// now n is the latest downloaded header after syncing
 	if n == nil {
-		log.Debug(fmt.Sprintf("synchronisation failed with peer %v", p.id))
+		p.Log().Debug("Synchronisation failed")
 		go f.pm.removePeer(p.id)
 	} else {
 		header := f.chain.GetHeader(n.hash, n.number)
@@ -610,12 +609,12 @@ func (f *lightFetcher) checkKnownNode(p *peer, n *fetcherTreeNode) bool {
 
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("checkKnownNode: unknown peer"))
+		p.Log().Debug("Unknown peer to check known nodes")
 		return false
 	}
 	header := f.chain.GetHeader(n.hash, n.number)
 	if !f.checkAnnouncedHeaders(fp, []*types.Header{header}, []*big.Int{td}) {
-		log.Debug(fmt.Sprintf("announce inconsistency by peer %v", p.id))
+		p.Log().Debug("Inconsistent announcement")
 		go f.pm.removePeer(p.id)
 	}
 	if fp.confirmedTd != nil {
@@ -700,7 +699,7 @@ func (f *lightFetcher) checkUpdateStats(p *peer, newEntry *updateStatsEntry) {
 	now := mclock.Now()
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("checkUpdateStats: unknown peer"))
+		p.Log().Debug("Unknown peer to check update stats")
 		return
 	}
 	if newEntry != nil && fp.firstUpdateStats == nil {

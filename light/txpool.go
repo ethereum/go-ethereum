@@ -320,7 +320,7 @@ func (pool *TxPool) eventLoop() {
 func (pool *TxPool) Stop() {
 	close(pool.quit)
 	pool.events.Unsubscribe()
-	log.Info(fmt.Sprint("Transaction pool stopped"))
+	log.Info("Transaction pool stopped")
 }
 
 // Stats returns the number of currently pending (locally created) transactions
@@ -416,20 +416,8 @@ func (self *TxPool) add(ctx context.Context, tx *types.Transaction) error {
 		go self.eventMux.Post(core.TxPreEvent{Tx: tx})
 	}
 
-	log.Debug("", "msg", log.Lazy{Fn: func() string {
-		var toname string
-		if to := tx.To(); to != nil {
-			toname = common.Bytes2Hex(to[:4])
-		} else {
-			toname = "[NEW_CONTRACT]"
-		}
-		// we can ignore the error here because From is
-		// verified in ValidateTransaction.
-		f, _ := types.Sender(self.signer, tx)
-		from := common.Bytes2Hex(f[:4])
-		return fmt.Sprintf("(t) %x => %s (%v) %x\n", from, toname, tx.Value(), hash)
-	}})
-
+	// Print a log message if low enough level is set
+	log.Debug("Pooled new transaction", "hash", hash, "from", log.Lazy{Fn: func() common.Address { from, _ := types.Sender(self.signer, tx); return from }}, "to", tx.To())
 	return nil
 }
 
@@ -462,15 +450,10 @@ func (self *TxPool) AddBatch(ctx context.Context, txs []*types.Transaction) {
 	var sendTx types.Transactions
 
 	for _, tx := range txs {
-		if err := self.add(ctx, tx); err != nil {
-			log.Debug(fmt.Sprint("tx error:", err))
-		} else {
+		if err := self.add(ctx, tx); err == nil {
 			sendTx = append(sendTx, tx)
-			h := tx.Hash()
-			log.Debug(fmt.Sprintf("tx %x\n", h[:4]))
 		}
 	}
-
 	if len(sendTx) > 0 {
 		self.relay.Send(sendTx)
 	}

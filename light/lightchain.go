@@ -17,11 +17,9 @@
 package light
 
 import (
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -101,7 +99,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 		if err != nil {
 			return nil, err
 		}
-		log.Info(fmt.Sprint("WARNING: Wrote default ethereum genesis block"))
+		log.Warn("Wrote default ethereum genesis block")
 	}
 
 	if bc.genesisBlock.Hash() == (common.Hash{212, 229, 103, 64, 248, 118, 174, 248, 192, 16, 184, 106, 64, 213, 245, 103, 69, 161, 24, 208, 144, 106, 52, 230, 154, 236, 140, 13, 177, 203, 143, 163}) {
@@ -117,7 +115,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 				Root:   common.HexToHash("c035076523faf514038f619715de404a65398c51899b5dccca9c05b00bc79315"),
 			})
 		}
-		log.Info(fmt.Sprint("Added trusted CHT for mainnet"))
+		log.Info("Added trusted CHT for mainnet")
 	} else {
 		if bc.genesisBlock.Hash() == (common.Hash{12, 215, 134, 162, 66, 93, 22, 241, 82, 198, 88, 49, 108, 66, 62, 108, 225, 24, 30, 21, 195, 41, 88, 38, 215, 201, 144, 76, 186, 156, 227, 3}) {
 			// add trusted CHT for testnet
@@ -125,7 +123,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 				Number: 452,
 				Root:   common.HexToHash("511da2c88e32b14cf4a4e62f7fcbb297139faebc260a4ab5eb43cce6edcba324"),
 			})
-			log.Info(fmt.Sprint("Added trusted CHT for testnet"))
+			log.Info("Added trusted CHT for testnet")
 		} else {
 			DeleteTrustedCht(bc.chainDb)
 		}
@@ -137,9 +135,9 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range core.BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
-			log.Error(fmt.Sprintf("Found bad hash, rewinding chain to block #%d [%x…]", header.Number, header.ParentHash[:4]))
+			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
 			bc.SetHead(header.Number.Uint64() - 1)
-			log.Error(fmt.Sprint("Chain rewind was successful, resuming normal operation"))
+			log.Error("Chain rewind was successful, resuming normal operation")
 		}
 	}
 	return bc, nil
@@ -169,7 +167,7 @@ func (self *LightChain) loadLastState() error {
 	// Issue a status log and return
 	header := self.hc.CurrentHeader()
 	headerTd := self.GetTd(header.Hash(), header.Number.Uint64())
-	log.Info(fmt.Sprintf("Last header: #%d [%x…] TD=%v", self.hc.CurrentHeader().Number, self.hc.CurrentHeader().Hash().Bytes()[:4], headerTd))
+	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd)
 
 	return nil
 }
@@ -246,10 +244,10 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 	// Prepare the genesis block and reinitialise the chain
 	if err := core.WriteTd(bc.chainDb, genesis.Hash(), genesis.NumberU64(), genesis.Difficulty()); err != nil {
-		log.Crit(fmt.Sprintf("failed to write genesis block TD: %v", err))
+		log.Crit("Failed to write genesis block TD", "err", err)
 	}
 	if err := core.WriteBlock(bc.chainDb, genesis); err != nil {
-		log.Crit(fmt.Sprintf("failed to write genesis block: %v", err))
+		log.Crit("Failed to write genesis block", "err", err)
 	}
 	bc.genesisBlock = genesis
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
@@ -345,8 +343,7 @@ func (bc *LightChain) Stop() {
 	atomic.StoreInt32(&bc.procInterrupt, 1)
 
 	bc.wg.Wait()
-
-	log.Info(fmt.Sprint("Chain manager stopped"))
+	log.Info("Blockchain manager stopped")
 }
 
 // Rollback is designed to remove a chain of links from the database that aren't
@@ -406,21 +403,16 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 
 		switch status {
 		case core.CanonStatTy:
-			log.Debug("", "msg", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("[%v] inserted header #%d (%x...).\n", time.Now().UnixNano(), header.Number, header.Hash().Bytes()[0:4])
-			}})
+			log.Debug("Inserted new header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainEvent{Block: types.NewBlockWithHeader(header), Hash: header.Hash()})
 
 		case core.SideStatTy:
-			log.Trace("", "msg", log.Lazy{Fn: func() string {
-				return fmt.Sprintf("inserted forked header #%d (TD=%v) (%x...).\n", header.Number, header.Difficulty, header.Hash().Bytes()[0:4])
-			}})
+			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
 
 		case core.SplitStatTy:
 			events = append(events, core.ChainSplitEvent{Block: types.NewBlockWithHeader(header)})
 		}
-
 		return err
 	}
 	i, err := self.hc.InsertHeaderChain(chain, checkFreq, whFunc)

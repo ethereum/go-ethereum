@@ -162,7 +162,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 	if entry == nil {
 		entry = pool.findOrNewNode(p.ID(), ip, port)
 	}
-	log.Debug(fmt.Sprintf("connecting to %v, state: %v", p.id, entry.state))
+	p.Log().Debug("Connecting to new peer", "state", entry.state)
 	if entry.state == psConnected || entry.state == psRegistered {
 		return nil
 	}
@@ -184,7 +184,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
-	log.Debug(fmt.Sprintf("registered %v", entry.id.String()))
+	log.Debug("Registered new entry", "enode", entry.id)
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -202,7 +202,7 @@ func (pool *serverPool) registered(entry *poolEntry) {
 // can be updated optionally (not updated if no registration happened, in this case
 // only connection statistics are updated, just like in case of timeout)
 func (pool *serverPool) disconnect(entry *poolEntry) {
-	log.Debug(fmt.Sprintf("disconnected %v", entry.id.String()))
+	log.Debug("Disconnected old entry", "enode", entry.id)
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -418,7 +418,7 @@ func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16
 	now := mclock.Now()
 	entry := pool.entries[id]
 	if entry == nil {
-		log.Debug(fmt.Sprintf("discovered %v", id.String()))
+		log.Debug("Discovered new entry", "id", id)
 		entry = &poolEntry{
 			id:         id,
 			addr:       make(map[string]*poolEntryAddress),
@@ -459,11 +459,15 @@ func (pool *serverPool) loadNodes() {
 	var list []*poolEntry
 	err = rlp.DecodeBytes(enc, &list)
 	if err != nil {
-		log.Debug(fmt.Sprintf("node list decode error: %v", err))
+		log.Debug("Failed to decode node list", "err", err)
 		return
 	}
 	for _, e := range list {
-		log.Debug(fmt.Sprintf("loaded server stats %016x  fails: %v  connStats: %v / %v  delayStats: %v / %v  responseStats: %v / %v  timeoutStats: %v / %v", e.id[0:8], e.lastConnected.fails, e.connectStats.avg, e.connectStats.weight, time.Duration(e.delayStats.avg), e.delayStats.weight, time.Duration(e.responseStats.avg), e.responseStats.weight, e.timeoutStats.avg, e.timeoutStats.weight))
+		log.Debug("Loaded server stats", "id", e.id, "fails", e.lastConnected.fails,
+			"conn", fmt.Sprintf("%v/%v", e.connectStats.avg, e.connectStats.weight),
+			"delay", fmt.Sprintf("%v/%v", time.Duration(e.delayStats.avg), e.delayStats.weight),
+			"response", fmt.Sprintf("%v/%v", time.Duration(e.responseStats.avg), e.responseStats.weight),
+			"timeout", fmt.Sprintf("%v/%v", e.timeoutStats.avg, e.timeoutStats.weight))
 		pool.entries[e.id] = e
 		pool.knownQueue.setLatest(e)
 		pool.knownSelect.update((*knownEntry)(e))
@@ -568,7 +572,7 @@ func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
 		pool.newSelected++
 	}
 	addr := entry.addrSelect.choose().(*poolEntryAddress)
-	log.Debug(fmt.Sprintf("dialing %v out of %v, known: %v", entry.id.String()+"@"+addr.strKey(), len(entry.addr), knownSelected))
+	log.Debug("Dialing new peer", "lesaddr", entry.id.String()+"@"+addr.strKey(), "set", len(entry.addr), "known", knownSelected)
 	entry.dialed = addr
 	go func() {
 		pool.server.AddPeer(discover.NewNode(entry.id, addr.ip, addr.port, addr.port))
@@ -589,7 +593,7 @@ func (pool *serverPool) checkDialTimeout(entry *poolEntry) {
 	if entry.state != psDialed {
 		return
 	}
-	log.Debug(fmt.Sprintf("timeout %v", entry.id.String()+"@"+entry.dialed.strKey()))
+	log.Debug("Dial timeout", "lesaddr", entry.id.String()+"@"+entry.dialed.strKey())
 	entry.state = psNotConnected
 	if entry.knownSelected {
 		pool.knownSelected--

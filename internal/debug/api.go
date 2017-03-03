@@ -22,7 +22,6 @@ package debug
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/user"
@@ -111,7 +110,7 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 	}
 	h.cpuW = f
 	h.cpuFile = file
-	log.Info(fmt.Sprint("CPU profiling started, writing to", h.cpuFile))
+	log.Info("CPU profiling started", "dump", h.cpuFile)
 	return nil
 }
 
@@ -123,7 +122,7 @@ func (h *HandlerT) StopCPUProfile() error {
 	if h.cpuW == nil {
 		return errors.New("CPU profiling not in progress")
 	}
-	log.Info(fmt.Sprint("done writing CPU profile to", h.cpuFile))
+	log.Info("Done writing CPU profile", "dump", h.cpuFile)
 	h.cpuW.Close()
 	h.cpuW = nil
 	h.cpuFile = ""
@@ -179,7 +178,7 @@ func (*HandlerT) Stacks() string {
 
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
-	log.Info(fmt.Sprintf("writing %d %s profile records to %s", p.Count(), name, file))
+	log.Info("Writing profile records", "count", p.Count(), "type", name, "dump", file)
 	f, err := os.Create(expandHome(file))
 	if err != nil {
 		return err
