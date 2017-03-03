@@ -19,7 +19,6 @@ package les
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"sync"
 	"time"
 
@@ -70,9 +69,8 @@ func (odr *LesOdr) Database() ethdb.Database {
 	return odr.db
 }
 
-// validatorFunc is a function that processes a message and returns true if
-// it was a meaningful answer to a given request
-type validatorFunc func(ethdb.Database, *Msg) bool
+// validatorFunc is a function that processes a message.
+type validatorFunc func(ethdb.Database, *Msg) error
 
 // sentReq is a request waiting for an answer that satisfies its valFunc
 type sentReq struct {
@@ -113,18 +111,19 @@ func (self *LesOdr) Deliver(peer *peer, msg *Msg) error {
 		return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
 	}
 
-	if req.valFunc(self.db, msg) {
-		close(delivered)
-		req.lock.Lock()
-		delete(req.sentTo, peer)
-		if req.answered != nil {
-			close(req.answered)
-			req.answered = nil
-		}
-		req.lock.Unlock()
-		return nil
+	if err := req.valFunc(self.db, msg); err != nil {
+		peer.Log().Warn("Invalid odr response", "err", err)
+		return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
 	}
-	return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
+	close(delivered)
+	req.lock.Lock()
+	delete(req.sentTo, peer)
+	if req.answered != nil {
+		close(req.answered)
+		req.answered = nil
+	}
+	req.lock.Unlock()
+	return nil
 }
 
 func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout chan struct{}, reqWg *sync.WaitGroup) {
@@ -151,7 +150,7 @@ func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout cha
 	select {
 	case <-delivered:
 	case <-time.After(hardRequestTimeout):
-		log.Debug(fmt.Sprintf("ODR hard request timeout from peer %v", peer.id))
+		peer.Log().Debug("Request timed out hard")
 		go self.removePeer(peer.id)
 	case <-self.stop:
 		return
@@ -237,7 +236,7 @@ func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err err
 		// retrieved from network, store in db
 		req.StoreResult(self.db)
 	} else {
-		log.Debug(fmt.Sprintf("networkRequest  err = %v", err))
+		log.Debug("Failed to retrieve data from network", "err", err)
 	}
 	return
 }

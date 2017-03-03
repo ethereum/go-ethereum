@@ -129,8 +129,10 @@ func Setup(ctx *cli.Context) error {
 	if ctx.GlobalBool(pprofFlag.Name) {
 		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
 		go func() {
-			log.Info(fmt.Sprintf("starting pprof server at http://%s/debug/pprof", address))
-			log.Error(fmt.Sprint(http.ListenAndServe(address, nil)))
+			log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
+			if err := http.ListenAndServe(address, nil); err != nil {
+				log.Error("Failure in running pprof server", "err", err)
+			}
 		}()
 	}
 	return nil

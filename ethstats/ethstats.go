@@ -95,13 +95,13 @@ func (s *Service) Start(server *p2p.Server) error {
 	s.server = server
 	go s.loop()
 
-	log.Info(fmt.Sprint("Stats daemon started"))
+	log.Info("Stats daemon started")
 	return nil
 }
 
 // Stop implements node.Service, terminating the monitoring and reporting daemon.
 func (s *Service) Stop() error {
-	log.Info(fmt.Sprint("Stats daemon stopped"))
+	log.Info("Stats daemon stopped")
 	return nil
 }
 
@@ -130,7 +130,7 @@ func (s *Service) loop() {
 		}
 		conn, err := websocket.Dial(url, "", "http://localhost/")
 		if err != nil {
-			log.Warn(fmt.Sprintf("Stats server unreachable: %v", err))
+			log.Warn("Stats server unreachable", "err", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -138,7 +138,7 @@ func (s *Service) loop() {
 		out := json.NewEncoder(conn)
 
 		if err = s.login(in, out); err != nil {
-			log.Warn(fmt.Sprintf("Stats login failed: %v", err))
+			log.Warn("Stats login failed", "err", err)
 			conn.Close()
 			time.Sleep(10 * time.Second)
 			continue
@@ -147,12 +147,12 @@ func (s *Service) loop() {
 
 		// Send the initial stats so our node looks decent from the get go
 		if err = s.report(out); err != nil {
-			log.Warn(fmt.Sprintf("Initial stats report failed: %v", err))
+			log.Warn("Initial stats report failed", "err", err)
 			conn.Close()
 			continue
 		}
 		if err = s.reportHistory(out, nil); err != nil {
-			log.Warn(fmt.Sprintf("History report failed: %v", err))
+			log.Warn("Initial history report failed", "err", err)
 			conn.Close()
 			continue
 		}
@@ -163,11 +163,11 @@ func (s *Service) loop() {
 			select {
 			case <-fullReport.C:
 				if err = s.report(out); err != nil {
-					log.Warn(fmt.Sprintf("Full stats report failed: %v", err))
+					log.Warn("Full stats report failed", "err", err)
 				}
 			case list := <-s.histCh:
 				if err = s.reportHistory(out, list); err != nil {
-					log.Warn(fmt.Sprintf("Block history report failed: %v", err))
+					log.Warn("Requested history report failed", "err", err)
 				}
 			case head, ok := <-headSub.Chan():
 				if !ok { // node stopped
@@ -175,10 +175,10 @@ func (s *Service) loop() {
 					return
 				}
 				if err = s.reportBlock(out, head.Data.(core.ChainHeadEvent).Block); err != nil {
-					log.Warn(fmt.Sprintf("Block stats report failed: %v", err))
+					log.Warn("Block stats report failed", "err", err)
 				}
 				if err = s.reportPending(out); err != nil {
-					log.Warn(fmt.Sprintf("Post-block transaction stats report failed: %v", err))
+					log.Warn("Post-block transaction stats report failed", "err", err)
 				}
 			case _, ok := <-txSub.Chan():
 				if !ok { // node stopped
@@ -194,7 +194,7 @@ func (s *Service) loop() {
 					}
 				}
 				if err = s.reportPending(out); err != nil {
-					log.Warn(fmt.Sprintf("Transaction stats report failed: %v", err))
+					log.Warn("Transaction stats report failed", "err", err)
 				}
 			}
 		}
@@ -215,16 +215,16 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 		// Retrieve the next generic network packet and bail out on error
 		var msg map[string][]interface{}
 		if err := in.Decode(&msg); err != nil {
-			log.Warn(fmt.Sprintf("Failed to decode stats server message: %v", err))
+			log.Warn("Failed to decode stats server message", "err", err)
 			return
 		}
 		if len(msg["emit"]) == 0 {
-			log.Warn(fmt.Sprintf("Stats server sent non-broadcast: %v", msg))
+			log.Warn("Stats server sent non-broadcast", "msg", msg)
 			return
 		}
 		command, ok := msg["emit"][0].(string)
 		if !ok {
-			log.Warn(fmt.Sprintf("Invalid stats server message type: %v", msg["emit"][0]))
+			log.Warn("Invalid stats server message type", "type", msg["emit"][0])
 			return
 		}
 		// If the message is a ping reply, deliver (someone must be listening!)
@@ -235,7 +235,7 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 				continue
 			default:
 				// Ping routine dead, abort
-				log.Warn(fmt.Sprintf("Stats server pinger seems to have died"))
+				log.Warn("Stats server pinger seems to have died")
 				return
 			}
 		}
@@ -244,12 +244,12 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 			// Make sure the request is valid and doesn't crash us
 			request, ok := msg["emit"][1].(map[string]interface{})
 			if !ok {
-				log.Warn(fmt.Sprintf("Invalid history request: %v", msg["emit"][1]))
+				log.Warn("Invalid history request", "msg", msg["emit"][1])
 				return
 			}
 			list, ok := request["list"].([]interface{})
 			if !ok {
-				log.Warn(fmt.Sprintf("Invalid history block list: %v", request["list"]))
+				log.Warn("Invalid history block list", "list", request["list"])
 				return
 			}
 			// Convert the block number list to an integer list
@@ -257,7 +257,7 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 			for i, num := range list {
 				n, ok := num.(float64)
 				if !ok {
-					log.Warn(fmt.Sprintf("Invalid history block number: %v", num))
+					log.Warn("Invalid history block number", "number", num)
 					return
 				}
 				numbers[i] = uint64(n)
@@ -269,7 +269,7 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 			}
 		}
 		// Report anything else and continue
-		log.Info(fmt.Sprintf("Unknown stats message: %v", msg))
+		log.Info("Unknown stats message", "msg", msg)
 	}
 }
 

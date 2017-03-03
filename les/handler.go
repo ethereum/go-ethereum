@@ -198,7 +198,6 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 	}
 
 	if lightSync {
-		log.Debug(fmt.Sprintf("LES: create downloader"))
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
 			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, removePeer)
@@ -225,16 +224,13 @@ func (pm *ProtocolManager) removePeer(id string) {
 	if peer == nil {
 		return
 	}
+	log.Debug("Removing light Ethereum peer", "peer", id)
 	if err := pm.peers.Unregister(id); err != nil {
 		if err == errNotRegistered {
 			return
 		}
-		log.Error(fmt.Sprint("Removal failed:", err))
 	}
-	log.Debug(fmt.Sprint("Removing peer", id))
-
 	// Unregister the peer from the downloader and Ethereum peer set
-	log.Debug(fmt.Sprintf("LES: unregister peer %v", id))
 	if pm.lightSync {
 		pm.downloader.UnregisterPeer(id)
 		if pm.txrelay != nil {
@@ -267,9 +263,11 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	} else {
 		if topicDisc != nil {
 			go func() {
-				log.Info(fmt.Sprint("Starting registering topic", string(lesTopic)))
+				logger := log.New("topic", lesTopic)
+				logger.Info("Starting topic registration")
+				defer logger.Info("Terminated topic registration")
+
 				topicDisc.RegisterTopic(lesTopic, pm.quitSync)
-				log.Info(fmt.Sprint("Stopped registering topic", string(lesTopic)))
 			}()
 		}
 		go func() {
@@ -282,7 +280,7 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 func (pm *ProtocolManager) Stop() {
 	// Showing a log message. During download / process this could actually
 	// take between 5 to 10 seconds and therefor feedback is required.
-	log.Info(fmt.Sprint("Stopping light ethereum protocol handler..."))
+	log.Info("Stopping light Ethereum protocol")
 
 	// Quit the sync loop.
 	// After this send has completed, no new peers will be accepted.
@@ -299,7 +297,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for any process action
 	pm.wg.Wait()
 
-	log.Info(fmt.Sprint("Light ethereum protocol handler stopped"))
+	log.Info("Light Ethereum protocol stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -309,22 +307,21 @@ func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter
 // handle is the callback invoked to manage the life cycle of a les peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
-	log.Debug(fmt.Sprintf("%v: peer connected [%s]", p, p.Name()))
+	p.Log().Debug("Light Ethereum peer connected", "name", p.Name())
 
 	// Execute the LES handshake
 	td, head, genesis := pm.blockchain.Status()
 	headNum := core.GetBlockNumber(pm.chainDb, head)
 	if err := p.Handshake(td, head, headNum, genesis, pm.server); err != nil {
-		log.Debug(fmt.Sprintf("%v: handshake failed: %v", p, err))
+		p.Log().Debug("Light Ethereum handshake failed", "err", err)
 		return err
 	}
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
 	}
 	// Register the peer locally
-	log.Trace(fmt.Sprintf("%v: adding peer", p))
 	if err := pm.peers.Register(p); err != nil {
-		log.Error(fmt.Sprintf("%v: addition failed: %v", p, err))
+		p.Log().Error("Light Ethereum peer registration failed", "err", err)
 		return err
 	}
 	defer func() {
@@ -333,9 +330,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 		pm.removePeer(p.id)
 	}()
-
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	log.Debug(fmt.Sprintf("LES: register peer %v", p.id))
 	if pm.lightSync {
 		requestHeadersByHash := func(origin common.Hash, amount int, skip int, reverse bool) error {
 			reqID := getNextReqID()
@@ -389,7 +384,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			log.Debug(fmt.Sprintf("%v: message handling failed: %v", p, err))
+			p.Log().Debug("Light Ethereum message handling failed", "err", err)
 			return err
 		}
 	}
@@ -405,8 +400,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	if err != nil {
 		return err
 	}
-
-	log.Debug(fmt.Sprint("msg:", msg.Code, msg.Size))
+	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
 
 	costs := p.fcCosts[msg.Code]
 	reject := func(reqCnt, maxCnt uint64) bool {
@@ -419,7 +413,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			cost = pm.server.defParams.BufLimit
 		}
 		if cost > bufValue {
-			log.Error(fmt.Sprintf("Request from %v came %v too early", p.id, time.Duration((cost-bufValue)*1000000/pm.server.defParams.MinRecharge)))
+			recharge := time.Duration((cost - bufValue) * 1000000 / pm.server.defParams.MinRecharge)
+			p.Log().Error("Request came too early", "recharge", common.PrettyDuration(recharge))
 			return true
 		}
 		return false
@@ -435,25 +430,25 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	// Handle the message depending on its contents
 	switch msg.Code {
 	case StatusMsg:
-		log.Debug(fmt.Sprintf("<=== StatusMsg from peer %v", p.id))
+		p.Log().Trace("Received status message")
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
 	// Block header query, collect the requested headers and reply
 	case AnnounceMsg:
-		log.Debug(fmt.Sprintf("<=== AnnounceMsg from peer %v:", p.id))
+		p.Log().Trace("Received announce message")
 
 		var req announceData
 		if err := msg.Decode(&req); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-		log.Trace(fmt.Sprint("AnnounceMsg:", req.Number, req.Hash, req.Td, req.ReorgDepth))
+		p.Log().Trace("Announce message content", "number", req.Number, "hash", req.Hash, "td", req.Td, "reorg", req.ReorgDepth)
 		if pm.fetcher != nil {
 			pm.fetcher.announce(p, &req)
 		}
 
 	case GetBlockHeadersMsg:
-		log.Debug(fmt.Sprintf("<=== GetBlockHeadersMsg from peer %v", p.id))
+		p.Log().Trace("Received block header request")
 		// Decode the complex header query
 		var req struct {
 			ReqID uint64
@@ -538,7 +533,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		log.Debug(fmt.Sprintf("<=== BlockHeadersMsg from peer %v", p.id))
+		p.Log().Trace("Received block header response message")
 		// A batch of headers arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -558,7 +553,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetBlockBodiesMsg:
-		log.Debug(fmt.Sprintf("<===  GetBlockBodiesMsg from peer %v", p.id))
+		p.Log().Trace("Received block bodies request")
 		// Decode the retrieval message
 		var req struct {
 			ReqID  uint64
@@ -595,7 +590,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		log.Debug(fmt.Sprintf("<===  BlockBodiesMsg from peer %v", p.id))
+		p.Log().Trace("Received block bodies response")
 		// A batch of block bodies arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -612,7 +607,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetCodeMsg:
-		log.Debug(fmt.Sprintf("<===  GetCodeMsg from peer %v", p.id))
+		p.Log().Trace("Received code request")
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
@@ -656,7 +651,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		log.Debug(fmt.Sprintf("<=== CodeMsg from peer %v", p.id))
+		p.Log().Trace("Received code response")
 		// A batch of node state data arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -673,7 +668,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetReceiptsMsg:
-		log.Debug(fmt.Sprintf("<===  GetReceiptsMsg from peer %v", p.id))
+		p.Log().Trace("Received receipts request")
 		// Decode the retrieval message
 		var req struct {
 			ReqID  uint64
@@ -704,7 +699,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// If known, encode and queue for response packet
 			if encoded, err := rlp.EncodeToBytes(results); err != nil {
-				log.Error(fmt.Sprintf("failed to encode receipt: %v", err))
+				log.Error("Failed to encode receipt", "err", err)
 			} else {
 				receipts = append(receipts, encoded)
 				bytes += len(encoded)
@@ -719,7 +714,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		log.Debug(fmt.Sprintf("<=== ReceiptsMsg from peer %v", p.id))
+		p.Log().Trace("Received receipts response")
 		// A batch of receipts arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -736,7 +731,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetProofsMsg:
-		log.Debug(fmt.Sprintf("<=== GetProofsMsg from peer %v", p.id))
+		p.Log().Trace("Received proofs request")
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
@@ -786,7 +781,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		log.Debug(fmt.Sprintf("<=== ProofsMsg from peer %v", p.id))
+		p.Log().Trace("Received proofs response")
 		// A batch of merkle proofs arrived to one of our previous requests
 		var resp struct {
 			ReqID, BV uint64
@@ -803,7 +798,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetHeaderProofsMsg:
-		log.Debug(fmt.Sprintf("<=== GetHeaderProofsMsg from peer %v", p.id))
+		p.Log().Trace("Received headers proof request")
 		// Decode the retrieval message
 		var req struct {
 			ReqID uint64
@@ -847,7 +842,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrUnexpectedResponse, "")
 		}
 
-		log.Debug(fmt.Sprintf("<=== HeaderProofsMsg from peer %v", p.id))
+		p.Log().Trace("Received headers proof response")
 		var resp struct {
 			ReqID, BV uint64
 			Data      []ChtResp
@@ -884,14 +879,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
 
 	default:
-		log.Debug(fmt.Sprintf("<=== unknown message with code %d from peer %v", msg.Code, p.id))
+		p.Log().Trace("Received unknown message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 
 	if deliverMsg != nil {
 		return pm.odr.Deliver(p, deliverMsg)
 	}
-
 	return nil
 }
 
