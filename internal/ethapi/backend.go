@@ -73,8 +73,7 @@ type State interface {
 }
 
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
-	compiler := makeCompilerAPIs(solcPath)
-	all := []rpc.API{
+	return []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -116,5 +115,4 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Public:    false,
 		},
 	}
-	return append(compiler, all...)
 }
