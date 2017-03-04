@@ -36,9 +36,11 @@ import (
 )
 
 type Statistics struct {
-	messagesCleared int
-	memoryCleared   int
-	totalMemoryUsed int
+	messagesCleared      int
+	memoryCleared        int
+	memoryUsed           int
+	cycles               int
+	totalMessagesCleared int
 }
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -189,7 +191,7 @@ func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
 
 // NewIdentity generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption. Returns ID of the new key pair.
-func (w *Whisper) NewIdentity() (string, error) {
+func (w *Whisper) NewKeyPair() (string, error) {
 	key, err := crypto.GenerateKey()
 	if err != nil || !validatePrivateKey(key) {
 		key, err = crypto.GenerateKey() // retry once
@@ -217,7 +219,7 @@ func (w *Whisper) NewIdentity() (string, error) {
 }
 
 // DeleteIdentity deletes the specified key if it exists.
-func (w *Whisper) DeleteIdentity(key string) bool {
+func (w *Whisper) DeleteKeyPair(key string) bool {
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
 
@@ -230,14 +232,14 @@ func (w *Whisper) DeleteIdentity(key string) bool {
 
 // HasIdentity checks if the the whisper node is configured with the private key
 // of the specified public pair.
-func (w *Whisper) HasIdentity(id string) bool {
+func (w *Whisper) HasKeyPair(id string) bool {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
 	return w.privateKeys[id] != nil
 }
 
 // GetIdentity retrieves the private key of the specified public identity.
-func (w *Whisper) GetIdentity(pubKey string) (*ecdsa.PrivateKey, error) {
+func (w *Whisper) GetPrivateKey(pubKey string) (*ecdsa.PrivateKey, error) {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
 	key := w.privateKeys[pubKey]
@@ -361,9 +363,13 @@ func (w *Whisper) GetFilter(id string) *Filter {
 	return w.filters.Get(id)
 }
 
-// Unwatch removes an installed message handler.
-func (w *Whisper) Unwatch(id string) {
-	w.filters.Uninstall(id)
+// Unsubscribe removes an installed message handler.
+func (w *Whisper) Unsubscribe(id string) error {
+	ok := w.filters.Uninstall(id)
+	if !ok {
+		return fmt.Errorf("Invalid ID")
+	}
+	return nil
 }
 
 // Send injects a message into the whisper send queue, to be distributed in the
@@ -557,7 +563,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		log.Trace(fmt.Sprintf("whisper envelope already cached [%x]\n", envelope.Hash()))
 	} else {
 		log.Trace(fmt.Sprintf("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope))
-		wh.stats.totalMemoryUsed += envelope.size()
+		wh.stats.memoryUsed += envelope.size()
 		wh.postEvent(envelope, false) // notify the local node about the new message
 		if wh.mailServer != nil {
 			wh.mailServer.Archive(envelope)
@@ -649,7 +655,7 @@ func (w *Whisper) expire() {
 			hashSet.Each(func(v interface{}) bool {
 				sz := w.envelopes[v.(common.Hash)].size()
 				w.stats.memoryCleared += sz
-				w.stats.totalMemoryUsed -= sz
+				w.stats.memoryUsed -= sz
 				delete(w.envelopes, v.(common.Hash))
 				return true
 			})
@@ -660,8 +666,13 @@ func (w *Whisper) expire() {
 }
 
 func (w *Whisper) Stats() string {
-	return fmt.Sprintf("Latest expiry cycle cleared %d messages (%d bytes). Memory usage: %d bytes.",
-		w.stats.messagesCleared, w.stats.memoryCleared, w.stats.totalMemoryUsed)
+	result := fmt.Sprintf("Memory usage: %d bytes.\nAverage messages cleared per expiry cycle: %d.",
+		w.stats.memoryUsed, w.stats.totalMessagesCleared/w.stats.cycles)
+	if w.stats.messagesCleared > 0 {
+		result += fmt.Sprintf("\nLatest expiry cycle cleared %d messages (%d bytes).",
+			w.stats.messagesCleared, w.stats.memoryCleared)
+	}
+	return result
 }
 
 // envelopes retrieves all the messages currently pooled by the node.
@@ -703,8 +714,18 @@ func (w *Whisper) isEnvelopeCached(hash common.Hash) bool {
 }
 
 func (s *Statistics) reset() {
+	s.cycles++
+	s.totalMessagesCleared += s.messagesCleared
+
 	s.memoryCleared = 0
 	s.messagesCleared = 0
+}
+
+func ValidateKeyID(id string) error {
+	if len(id) != keyIdSize*2 {
+		return fmt.Errorf("Wrong size of key ID")
+	}
+	return nil
 }
 
 func ValidatePublicKey(k *ecdsa.PublicKey) bool {

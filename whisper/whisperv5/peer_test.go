@@ -166,7 +166,7 @@ func stopServers() {
 	for i := 0; i < NumNodes; i++ {
 		n := nodes[i]
 		if n != nil {
-			n.shh.Unwatch(n.filerId)
+			n.shh.Unsubscribe(n.filerId)
 			n.shh.Stop()
 			n.server.Stop()
 		}

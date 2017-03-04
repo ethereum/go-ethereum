@@ -264,7 +264,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []by
 	}
 	if len(nonce) != aesgcm.NonceSize() {
 		info := fmt.Sprintf("Wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
-		log.Error(fmt.Sprintf(info))
+		log.Error(info)
 		return errors.New(info)
 	}
 	decrypted, err := aesgcm.Open(nil, nonce, msg.Raw, nil)

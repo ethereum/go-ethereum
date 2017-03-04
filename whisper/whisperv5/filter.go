@@ -31,11 +31,11 @@ type Filter struct {
 	KeySym     []byte            // Key associated with the Topic
 	Topics     []TopicType       // Topics to filter messages with
 	PoW        float64           // Proof of work as described in the Whisper spec
-	AcceptP2P  bool              // Indicates whether this filter is interested in direct peer-to-peer messages
+	AllowP2P   bool              // Indicates whether this filter is interested in direct peer-to-peer messages
 	SymKeyHash common.Hash       // The Keccak256Hash of the symmetric key, needed for optimization
 
-	Messages map[common.Hash]*ReceivedMessage
-	mutex    sync.RWMutex
+	Messages   map[common.Hash]*ReceivedMessage
+	mutex      sync.RWMutex
 }
 
 type Filters struct {
@@ -72,10 +72,14 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 	return id, err
 }
 
-func (fs *Filters) Uninstall(id string) {
+func (fs *Filters) Uninstall(id string) bool {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
-	delete(fs.watchers, id)
+	if fs.watchers[id] != nil {
+		delete(fs.watchers, id)
+		return true
+	}
+	return false
 }
 
 func (fs *Filters) Get(id string) *Filter {
@@ -93,7 +97,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 
 	for _, watcher := range fs.watchers {
 		j++
-		if p2pMessage && !watcher.AcceptP2P {
+		if p2pMessage && !watcher.AllowP2P {
 			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), j))
 			continue
 		}
