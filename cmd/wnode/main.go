@@ -199,23 +199,23 @@ func initialize() {
 		shh = whisper.New()
 	}
 
-	asymKeyID, err = shh.NewIdentity()
+	asymKeyID, err = shh.NewKeyPair()
 	if err != nil {
 		utils.Fatalf("Failed to generate a new key pair: %s", err)
 	}
 
-	asymKey, err = shh.GetIdentity(asymKeyID)
+	asymKey, err = shh.GetPrivateKey(asymKeyID)
 	if err != nil {
 		utils.Fatalf("Failed to retrieve a new key pair: %s", err)
 	}
 
 	if nodeid == nil {
-		tmpID, err := shh.NewIdentity()
+		tmpID, err := shh.NewKeyPair()
 		if err != nil {
 			utils.Fatalf("Failed to generate a new key pair: %s", err)
 		}
 
-		nodeid, err = shh.GetIdentity(tmpID)
+		nodeid, err = shh.GetPrivateKey(tmpID)
 		if err != nil {
 			utils.Fatalf("Failed to retrieve a new key pair: %s", err)
 		}
@@ -325,10 +325,10 @@ func configureNode() {
 	}
 
 	filter := whisper.Filter{
-		KeySym:    symKey,
-		KeyAsym:   asymKey,
-		Topics:    []whisper.TopicType{topic},
-		AcceptP2P: p2pAccept,
+		KeySym:   symKey,
+		KeyAsym:  asymKey,
+		Topics:   []whisper.TopicType{topic},
+		AllowP2P: p2pAccept,
 	}
 	filterID, err = shh.Watch(&filter)
 	if err != nil {

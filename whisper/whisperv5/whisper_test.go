@@ -101,11 +101,11 @@ func TestWhisperBasic(t *testing.T) {
 		t.Fatalf("failed BytesToIntBigEndian: %d.", be)
 	}
 
-	id, err := w.NewIdentity()
+	id, err := w.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate new key pair: %s.", err)
 	}
-	pk, err := w.GetIdentity(id)
+	pk, err := w.GetPrivateKey(id)
 	if err != nil {
 		t.Fatalf("failed to retrieve new key pair: %s.", err)
 	}
@@ -119,58 +119,60 @@ func TestWhisperBasic(t *testing.T) {
 
 func TestWhisperIdentityManagement(t *testing.T) {
 	w := New()
-	id1, err := w.NewIdentity()
+	id1, err := w.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate new key pair: %s.", err)
 	}
-	id2, err := w.NewIdentity()
+	id2, err := w.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed to generate new key pair: %s.", err)
 	}
-	pk1, err := w.GetIdentity(id1)
+	pk1, err := w.GetPrivateKey(id1)
 	if err != nil {
 		t.Fatalf("failed to retrieve the key pair: %s.", err)
 	}
-	pk2, err := w.GetIdentity(id2)
+	pk2, err := w.GetPrivateKey(id2)
 	if err != nil {
 		t.Fatalf("failed to retrieve the key pair: %s.", err)
 	}
-	// todo: delete
-	//pub1 := common.ToHex(crypto.FromECDSAPub(&id1.PublicKey))
-	//pub2 := common.ToHex(crypto.FromECDSAPub(&id2.PublicKey))
-	//pub1 := pk1.PublicKey
-	//pub2 := pk2.PublicKey
 
-	if !w.HasIdentity(id1) {
-		t.Fatalf("failed HasIdentity(pub1).")
+	if !w.HasKeyPair(id1) {
+		t.Fatalf("failed HasIdentity(pk1).")
 	}
-	if !w.HasIdentity(id2) {
-		t.Fatalf("failed HasIdentity(pub2).")
+	if !w.HasKeyPair(id2) {
+		t.Fatalf("failed HasIdentity(pk2).")
 	}
 	if pk1 == nil {
-		t.Fatalf("failed GetIdentity(pub1).")
+		t.Fatalf("failed GetIdentity(pk1).")
 	}
 	if pk2 == nil {
-		t.Fatalf("failed GetIdentity(pub2).")
+		t.Fatalf("failed GetIdentity(pk2).")
+	}
+
+	if !validatePrivateKey(pk1) {
+		t.Fatalf("pk1 is invalid.")
+	}
+	if !validatePrivateKey(pk2) {
+		t.Fatalf("pk2 is invalid.")
 	}
 
 	// Delete one identity
-	done := w.DeleteIdentity(id1)
+	done := w.DeleteKeyPair(id1)
 	if !done {
 		t.Fatalf("failed to delete id1.")
 	}
-	pk1, err = w.GetIdentity(id1)
+	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
 		t.Fatalf("retrieve the key pair: false positive.")
 	}
-	pk2, err = w.GetIdentity(id2)
+	pk2, err = w.GetPrivateKey(id2)
 	if err != nil {
 		t.Fatalf("failed to retrieve the key pair: %s.", err)
 	}
-	if w.HasIdentity(id1) {
+	if w.HasKeyPair(id1) {
 		t.Fatalf("failed DeleteIdentity(pub1): still exist.")
 	}
-	if !w.HasIdentity(id2) {
+	if !w.HasKeyPair(id2) {
 		t.Fatalf("failed DeleteIdentity(pub1): pub2 does not exist.")
 	}
 	if pk1 != nil {
@@ -181,22 +183,22 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 
 	// Delete again non-existing identity
-	done = w.DeleteIdentity(id1)
+	done = w.DeleteKeyPair(id1)
 	if done {
 		t.Fatalf("delete id1: false positive.")
 	}
-	pk1, err = w.GetIdentity(id1)
+	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
 		t.Fatalf("retrieve the key pair: false positive.")
 	}
-	pk2, err = w.GetIdentity(id2)
+	pk2, err = w.GetPrivateKey(id2)
 	if err != nil {
 		t.Fatalf("failed to retrieve the key pair: %s.", err)
 	}
-	if w.HasIdentity(id1) {
+	if w.HasKeyPair(id1) {
 		t.Fatalf("failed delete non-existing identity: exist.")
 	}
-	if !w.HasIdentity(id2) {
+	if !w.HasKeyPair(id2) {
 		t.Fatalf("failed delete non-existing identity: pub2 does not exist.")
 	}
 	if pk1 != nil {
@@ -207,22 +209,22 @@ func TestWhisperIdentityManagement(t *testing.T) {
 	}
 
 	// Delete second identity
-	done = w.DeleteIdentity(id2)
+	done = w.DeleteKeyPair(id2)
 	if !done {
 		t.Fatalf("failed to delete id2.")
 	}
-	pk1, err = w.GetIdentity(id1)
+	pk1, err = w.GetPrivateKey(id1)
 	if err == nil {
 		t.Fatalf("retrieve the key pair: false positive.")
 	}
-	pk2, err = w.GetIdentity(id2)
+	pk2, err = w.GetPrivateKey(id2)
 	if err == nil {
 		t.Fatalf("retrieve the key pair: false positive.")
 	}
-	if w.HasIdentity(id1) {
+	if w.HasKeyPair(id1) {
 		t.Fatalf("failed delete second identity: first identity exist.")
 	}
-	if w.HasIdentity(id2) {
+	if w.HasKeyPair(id2) {
 		t.Fatalf("failed delete second identity: still exist.")
 	}
 	if pk1 != nil {

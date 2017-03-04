@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func TestBasic(t *testing.T) {
@@ -47,7 +48,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed GetFilterChanges: premature result")
 	}
 
-	exist, err := api.HasIdentity(id)
+	exist, err := api.HasKeyPair(id)
 	if err != nil {
 		t.Fatalf("failed initial HasIdentity: %s.", err)
 	}
@@ -55,7 +56,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed initial HasIdentity: false positive.")
 	}
 
-	success, err := api.DeleteIdentity(id)
+	success, err := api.DeleteKeyPair(id)
 	if err != nil {
 		t.Fatalf("failed DeleteIdentity: %s.", err)
 	}
@@ -63,7 +64,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("deleted non-existing identity: false positive.")
 	}
 
-	pub, err := api.NewIdentity()
+	pub, err := api.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed NewIdentity: %s.", err)
 	}
@@ -71,7 +72,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed NewIdentity: empty")
 	}
 
-	exist, err = api.HasIdentity(pub)
+	exist, err = api.HasKeyPair(pub)
 	if err != nil {
 		t.Fatalf("failed HasIdentity: %s.", err)
 	}
@@ -79,7 +80,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasIdentity: false negative.")
 	}
 
-	success, err = api.DeleteIdentity(pub)
+	success, err = api.DeleteKeyPair(pub)
 	if err != nil {
 		t.Fatalf("failed to delete second identity: %s.", err)
 	}
@@ -87,7 +88,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed to delete second identity.")
 	}
 
-	exist, err = api.HasIdentity(pub)
+	exist, err = api.HasKeyPair(pub)
 	if err != nil {
 		t.Fatalf("failed HasIdentity(): %s.", err)
 	}
@@ -98,7 +99,7 @@ func TestBasic(t *testing.T) {
 	id = "arbitrary text"
 	id2 := "another arbitrary string"
 
-	exist, err = api.HasSymKey(id)
+	exist, err = api.HasSymmetricKey(id)
 	if err != nil {
 		t.Fatalf("failed HasSymKey: %s.", err)
 	}
@@ -106,12 +107,12 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasSymKey: false positive.")
 	}
 
-	id, err = api.GenerateSymKey()
+	id, err = api.GenerateSymmetricKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey: %s.", err)
 	}
 
-	exist, err = api.HasSymKey(id)
+	exist, err = api.HasSymmetricKey(id)
 	if err != nil {
 		t.Fatalf("failed HasSymKey(): %s.", err)
 	}
@@ -120,17 +121,17 @@ func TestBasic(t *testing.T) {
 	}
 
 	const password = "some stuff here"
-	id, err = api.AddSymKeyFromPassword(password)
+	id, err = api.AddSymmetricKeyFromPassword(password)
 	if err != nil {
 		t.Fatalf("failed AddSymKey: %s.", err)
 	}
 
-	id2, err = api.AddSymKeyFromPassword(password)
+	id2, err = api.AddSymmetricKeyFromPassword(password)
 	if err != nil {
 		t.Fatalf("failed AddSymKey: %s.", err)
 	}
 
-	exist, err = api.HasSymKey(id2)
+	exist, err = api.HasSymmetricKey(id2)
 	if err != nil {
 		t.Fatalf("failed HasSymKey(id2): %s.", err)
 	}
@@ -138,11 +139,11 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed HasSymKey(id2): false negative.")
 	}
 
-	k1, err := api.GetSymKey(id)
+	k1, err := api.GetSymmetricKey(id)
 	if err != nil {
 		t.Fatalf("failed GetSymKey(id): %s.", err)
 	}
-	k2, err := api.GetSymKey(id2)
+	k2, err := api.GetSymmetricKey(id2)
 	if err != nil {
 		t.Fatalf("failed GetSymKey(id2): %s.", err)
 	}
@@ -151,7 +152,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("installed keys are not equal")
 	}
 
-	exist, err = api.DeleteSymKey(id)
+	exist, err = api.DeleteSymmetricKey(id)
 	if err != nil {
 		t.Fatalf("failed DeleteSymKey(id): %s.", err)
 	}
@@ -159,7 +160,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed DeleteSymKey(id): false negative.")
 	}
 
-	exist, err = api.HasSymKey(id)
+	exist, err = api.HasSymmetricKey(id)
 	if err != nil {
 		t.Fatalf("failed HasSymKey(id): %s.", err)
 	}
@@ -170,12 +171,12 @@ func TestBasic(t *testing.T) {
 
 func TestUnmarshalFilterArgs(t *testing.T) {
 	s := []byte(`{
-	"to":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
-	"from":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
-	"keyname":"testname",
-	"pow":2.34,
+	"type":"asym",
+	"key":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
+	"signedWith":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
+	"minPoW":2.34,
 	"topics":["0x00000000", "0x007f80ff", "0xff807f00", "0xf26e7779"],
-	"p2p":true
+	"allowP2P":true
 	}`)
 
 	var f WhisperFilterArgs
@@ -184,20 +185,20 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 		t.Fatalf("failed UnmarshalJSON: %s.", err)
 	}
 
-	if f.To != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
-		t.Fatalf("wrong To: %x.", f.To)
+	if f.Symmetric {
+		t.Fatalf("wrong type.")
 	}
-	if f.From != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
-		t.Fatalf("wrong From: %x.", f.To)
+	if f.Key != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
+		t.Fatalf("wrong key: %s.", f.Key)
 	}
-	if f.KeyName != "testname" {
-		t.Fatalf("wrong KeyName: %s.", f.KeyName)
+	if f.SignedWith != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
+		t.Fatalf("wrong SignedWith: %s.", f.SignedWith)
 	}
-	if f.PoW != 2.34 {
-		t.Fatalf("wrong pow: %f.", f.PoW)
+	if f.MinPoW != 2.34 {
+		t.Fatalf("wrong MinPoW: %f.", f.MinPoW)
 	}
-	if !f.AcceptP2P {
-		t.Fatalf("wrong AcceptP2P: %v.", f.AcceptP2P)
+	if !f.AllowP2P {
+		t.Fatalf("wrong AllowP2P.")
 	}
 	if len(f.Topics) != 4 {
 		t.Fatalf("wrong topics number: %d.", len(f.Topics))
@@ -226,17 +227,16 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 
 func TestUnmarshalPostArgs(t *testing.T) {
 	s := []byte(`{
+	"type":"sym",
 	"ttl":12345,
-	"from":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
-	"to":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
-	"keyname":"shh_test",
+	"signWith":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
+	"key":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
 	"topic":"0xf26e7779",
 	"padding":"0x74686973206973206D79207465737420737472696E67",
 	"payload":"0x7061796C6F61642073686F756C642062652070736575646F72616E646F6D",
-	"worktime":777,
-	"pow":3.1416,
-	"filterid":"test-filter-id",
-	"peerid":"0xf26e7779"
+	"powTime":777,
+	"powTarget":3.1416,
+	"targetPeer":"enode://915533f667b1369793ebb9bda022416b1295235a1420799cd87a969467372546d808ebf59c5c9ce23f103d59b61b97df8af91f0908552485975397181b993461@127.0.0.1:12345"
 	}`)
 
 	var a PostArgs
@@ -245,19 +245,20 @@ func TestUnmarshalPostArgs(t *testing.T) {
 		t.Fatalf("failed UnmarshalJSON: %s.", err)
 	}
 
+	if a.Type != "sym" {
+		t.Fatalf("wrong Type: %s.", a.Type)
+	}
 	if a.TTL != 12345 {
 		t.Fatalf("wrong ttl: %d.", a.TTL)
 	}
-	if a.From != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
-		t.Fatalf("wrong From: %x.", a.To)
+	if a.SignWith != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
+		t.Fatalf("wrong From: %s.", a.SignWith)
 	}
-	if a.To != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
-		t.Fatalf("wrong To: %x.", a.To)
+	if a.Key != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
+		t.Fatalf("wrong Key: %s.", a.Key)
 	}
-	if a.KeyName != "shh_test" {
-		t.Fatalf("wrong KeyName: %s.", a.KeyName)
-	}
-	if a.Topic != (TopicType{0xf2, 0x6e, 0x77, 0x79}) {
+
+	if BytesToTopic(a.Topic) != (TopicType{0xf2, 0x6e, 0x77, 0x79}) {
 		t.Fatalf("wrong topic: %x.", a.Topic)
 	}
 	if string(a.Padding) != "this is my test string" {
@@ -266,17 +267,14 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	if string(a.Payload) != "payload should be pseudorandom" {
 		t.Fatalf("wrong Payload: %s.", string(a.Payload))
 	}
-	if a.WorkTime != 777 {
-		t.Fatalf("wrong WorkTime: %d.", a.WorkTime)
+	if a.PowTime != 777 {
+		t.Fatalf("wrong PowTime: %d.", a.PowTime)
 	}
-	if a.PoW != 3.1416 {
-		t.Fatalf("wrong pow: %f.", a.PoW)
+	if a.PowTarget != 3.1416 {
+		t.Fatalf("wrong PowTarget: %f.", a.PowTarget)
 	}
-	if a.FilterID != "test-filter-id" {
-		t.Fatalf("wrong FilterID: %s.", a.FilterID)
-	}
-	if !bytes.Equal(a.PeerID[:], a.Topic[:]) {
-		t.Fatalf("wrong PeerID: %x.", a.PeerID)
+	if a.TargetPeer != "enode://915533f667b1369793ebb9bda022416b1295235a1420799cd87a969467372546d808ebf59c5c9ce23f103d59b61b97df8af91f0908552485975397181b993461@127.0.0.1:12345" {
+		t.Fatalf("wrong PeerID: %s.", a.TargetPeer)
 	}
 }
 
@@ -309,7 +307,7 @@ func TestIntegrationAsym(t *testing.T) {
 	api.Start()
 	defer api.Stop()
 
-	sig, err := api.NewIdentity()
+	sig, err := api.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed NewIdentity: %s.", err)
 	}
@@ -317,7 +315,7 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("wrong signature")
 	}
 
-	exist, err := api.HasIdentity(sig)
+	exist, err := api.HasKeyPair(sig)
 	if err != nil {
 		t.Fatalf("failed HasIdentity: %s.", err)
 	}
@@ -325,7 +323,7 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("failed HasIdentity: false negative.")
 	}
 
-	key, err := api.NewIdentity()
+	key, err := api.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed NewIdentity(): %s.", err)
 	}
@@ -337,26 +335,27 @@ func TestIntegrationAsym(t *testing.T) {
 	topics[0] = TopicType{0x00, 0x64, 0x00, 0xff}
 	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
-	f.To = key
-	f.From = sig
+	f.Symmetric = false
+	f.Key = key
+	f.SignedWith = sig
 	f.Topics = topics[:]
-	f.PoW = DefaultMinimumPoW / 2
-	f.AcceptP2P = true
+	f.MinPoW = DefaultMinimumPoW / 2
+	f.AllowP2P = true
 
-	id, err := api.NewFilter(f)
+	id, err := api.Subscribe(f)
 	if err != nil {
 		t.Fatalf("failed to create new filter: %s.", err)
 	}
 
 	var p PostArgs
 	p.TTL = 2
-	p.From = f.From
-	p.To = f.To
+	p.SignWith = f.SignedWith
+	p.Key = f.Key
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = DefaultMinimumPoW
-	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
-	p.WorkTime = 2
+	p.PowTarget = DefaultMinimumPoW
+	p.PowTime = 2
+	p.Topic = hexutil.Bytes{0xf2, 0x6e, 0x77, 0x79} // topics[1]
 
 	err = api.Post(p)
 	if err != nil {
@@ -401,12 +400,12 @@ func TestIntegrationSym(t *testing.T) {
 	api.Start()
 	defer api.Stop()
 
-	keyID, err := api.GenerateSymKey()
+	symKeyID, err := api.GenerateSymmetricKey()
 	if err != nil {
 		t.Fatalf("failed GenerateSymKey: %s.", err)
 	}
 
-	sig, err := api.NewIdentity()
+	sig, err := api.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed NewIdentity: %s.", err)
 	}
@@ -414,7 +413,7 @@ func TestIntegrationSym(t *testing.T) {
 		t.Fatalf("wrong signature")
 	}
 
-	exist, err := api.HasIdentity(sig)
+	exist, err := api.HasKeyPair(sig)
 	if err != nil {
 		t.Fatalf("failed HasIdentity: %s.", err)
 	}
@@ -426,26 +425,28 @@ func TestIntegrationSym(t *testing.T) {
 	topics[0] = TopicType{0x00, 0x7f, 0x80, 0xff}
 	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
-	f.KeyName = keyID
+	f.Symmetric = true
+	f.Key = symKeyID
 	f.Topics = topics[:]
-	f.PoW = 0.324
-	f.From = sig
-	f.AcceptP2P = false
+	f.MinPoW = 0.324
+	f.SignedWith = sig
+	f.AllowP2P = false
 
-	id, err := api.NewFilter(f)
+	id, err := api.Subscribe(f)
 	if err != nil {
 		t.Fatalf("failed to create new filter: %s.", err)
 	}
 
 	var p PostArgs
+	p.Type = "sym"
 	p.TTL = 1
-	p.KeyName = keyID
-	p.From = f.From
+	p.Key = symKeyID
+	p.SignWith = f.SignedWith
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = DefaultMinimumPoW
-	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
-	p.WorkTime = 2
+	p.PowTarget = DefaultMinimumPoW
+	p.PowTime = 2
+	p.Topic = hexutil.Bytes{0xf2, 0x6e, 0x77, 0x79}
 
 	err = api.Post(p)
 	if err != nil {
@@ -490,20 +491,20 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	api.Start()
 	defer api.Stop()
 
-	keyID, err := api.GenerateSymKey()
+	symKeyID, err := api.GenerateSymmetricKey()
 	if err != nil {
 		t.Fatalf("failed to GenerateSymKey: %s.", err)
 	}
 
-	sig, err := api.NewIdentity()
+	sigKeyID, err := api.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed NewIdentity: %s.", err)
 	}
-	if len(sig) == 0 {
+	if len(sigKeyID) == 0 {
 		t.Fatalf("wrong signature.")
 	}
 
-	exist, err := api.HasIdentity(sig)
+	exist, err := api.HasKeyPair(sigKeyID)
 	if err != nil {
 		t.Fatalf("failed HasIdentity: %s.", err)
 	}
@@ -511,30 +512,36 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 		t.Fatalf("failed HasIdentity: does not exist.")
 	}
 
+	sigPubKey, err := api.GetPublicKey(sigKeyID)
+	if err != nil {
+		t.Fatalf("failed GetPublicKey: %s.", err)
+	}
+
 	var topics [2]TopicType
 	topics[0] = TopicType{0x00, 0x7f, 0x80, 0xff}
 	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
-	f.KeyName = keyID
+	f.Symmetric = true
+	f.Key = symKeyID
 	f.Topics = topics[:]
-	f.PoW = 0.324
-	f.From = sig
-	f.AcceptP2P = false
+	f.MinPoW = 0.324
+	f.SignedWith = sigPubKey
+	f.AllowP2P = false
 
-	id, err := api.NewFilter(f)
+	id, err := api.Subscribe(f)
 	if err != nil {
 		t.Fatalf("failed to create new filter: %s.", err)
 	}
 
 	var p PostArgs
+	p.Type = "sym"
 	p.TTL = 1
-	p.FilterID = id
-	p.From = sig
+	p.SignWith = sigKeyID
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
-	p.PoW = DefaultMinimumPoW
-	p.Topic = TopicType{0xf2, 0x6e, 0x77, 0x79}
-	p.WorkTime = 2
+	p.PowTarget = DefaultMinimumPoW
+	p.PowTime = 2
+	p.Topic = hexutil.Bytes{0xf2, 0x6e, 0x77, 0x79}
 
 	err = api.Post(p)
 	if err != nil {

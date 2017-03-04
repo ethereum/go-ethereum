@@ -492,7 +492,7 @@ func cloneFilter(orig *Filter) *Filter {
 	clone.KeySym = orig.KeySym
 	clone.Topics = orig.Topics
 	clone.PoW = orig.PoW
-	clone.AcceptP2P = orig.AcceptP2P
+	clone.AllowP2P = orig.AllowP2P
 	clone.SymKeyHash = orig.SymKeyHash
 	return &clone
 }
@@ -656,7 +656,7 @@ func TestWatchers(t *testing.T) {
 	if f == nil {
 		t.Fatalf("failed to get the filter with seed %d.", seed)
 	}
-	f.AcceptP2P = true
+	f.AllowP2P = true
 	total = 0
 	filters.NotifyWatchers(envelopes[0], true)
 
