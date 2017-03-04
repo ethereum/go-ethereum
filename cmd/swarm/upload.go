@@ -36,35 +36,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func cleanupAndDie(file *string, description string) {
-	if file != nil {
-		os.Remove(*file)
-	}
-	utils.Fatalf(description)
-}
-
-func swapStdin(f *os.File) (size int) {
-	b := make([]byte, 1024)
-	path := f.Name()
-	size = 0
-
-	r := io.TeeReader(os.Stdin, f)
-
-	for true {
-		n, err := r.Read(b)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			cleanupAndDie(&path, "STDIN read failed")
-		}
-		size += n
-	}
-	if size == 0 {
-		cleanupAndDie(&path, "STDIN zero length input")
-	}
-	return size
-}
-
 func upload(ctx *cli.Context) {
 
 	args := ctx.Args()
@@ -80,17 +51,21 @@ func upload(ctx *cli.Context) {
 	var client = &client{api: bzzapi}
 	var entry manifestEntry
 	var file string
-	var cleanfile *string
 
 	if len(args) != 1 {
 		if fromStdin {
-			f, err := ioutil.TempFile("", "swarm-stdin")
+			tmp, err := ioutil.TempFile("", "swarm-stdin")
 			if err != nil {
-				utils.Fatalf("Could not create tempfile")
+				utils.Fatalf("error create tempfile: %s", err)
 			}
-			swapStdin(f)
-			file = f.Name()
-			cleanfile = &file
+			defer os.Remove(tmp.Name())
+			n, err := io.Copy(tmp, os.Stdin)
+			if err != nil {
+				utils.Fatalf("error copying stdin to tempfile: %s", err)
+			} else if n == 0 {
+				utils.Fatalf("error reading from stdin: zero length")
+			}
+			file = tmp.Name()
 		} else {
 			utils.Fatalf("Need filename as the first and only argument")
 		}
@@ -100,29 +75,25 @@ func upload(ctx *cli.Context) {
 
 	fi, err := os.Stat(expandPath(file))
 	if err != nil {
-		cleanupAndDie(cleanfile, fmt.Sprintf("Failed to stat file: %v", err))
+		utils.Fatalf("Failed to stat file: %v", err)
 	}
 	if fi.IsDir() {
 		if !recursive {
-			cleanupAndDie(cleanfile, "Argument is a directory and recursive upload is disabled")
+			utils.Fatalf("Argument is a directory and recursive upload is disabled")
 		}
 		if !wantManifest {
-			cleanupAndDie(cleanfile, "Manifest is required for directory uploads")
+			utils.Fatalf("Manifest is required for directory uploads")
 		}
 		mhash, err := client.uploadDirectory(file, defaultPath)
 		if err != nil {
-			cleanupAndDie(cleanfile, fmt.Sprintf("Failed to upload directory: %v", err))
+			utils.Fatalf("Failed to upload directory: %v", err)
 		}
 		fmt.Println(mhash)
 		return
 	}
 	entry, err = client.uploadFile(file, fi, mimeType)
 	if err != nil {
-		cleanupAndDie(cleanfile, fmt.Sprintf("Upload failed: %v", err))
-	}
-	if cleanfile != nil {
-		os.Remove(file)
-		cleanfile = nil
+		utils.Fatalf("Upload failed: %v", err)
 	}
 	mroot := manifest{[]manifestEntry{entry}}
 	if !wantManifest {
