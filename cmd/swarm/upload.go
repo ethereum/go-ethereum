@@ -30,16 +30,45 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func getStdin(b []byte) (int, error) {
-	s := os.Stdin
-	return s.Read(b)
+var (
+	MAX_STDIN_SIZE = 1024 * 1000 * 100
+)
+
+func swapStdin() (size int, path string) {
+	b := make([]byte, 1024)
+	size = 0
+
+	td, err := ioutil.TempDir("", "swarm-stdin")
+	if err != nil {
+		utils.Fatalf("Could not create temporary directory: %s", err)
+	}
+	path = filepath.Join(td, "data")
+	f, err := os.Create(path)
+	if err != nil {
+		utils.Fatalf("Could not create temporary file: %s", err)
+	}
+	r := io.TeeReader(os.Stdin, f)
+
+	for true {
+		n, err := r.Read(b)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			utils.Fatalf("STDIN Read failed: %s", err)
+		} else if n > MAX_STDIN_SIZE {
+			utils.Fatalf("STDIN beyond max byte limit %d", MAX_STDIN_SIZE)
+		}
+
+		size += n
+	}
+
+	return
 }
 
 func upload(ctx *cli.Context) {
@@ -51,80 +80,47 @@ func upload(ctx *cli.Context) {
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
+		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
 	)
 
 	var client = &client{api: bzzapi}
-
 	var entry manifestEntry
-
-	data := make([]byte, 1024*1000)
-	datalength := int(0)
+	var file string
 
 	if len(args) != 1 {
 		if fromStdin {
-			var err error
-			datalength, err = getStdin(data)
-			if err != nil {
-				utils.Fatalf("Read from stdin failed")
-			}
+			_, file = swapStdin()
 		} else {
 			utils.Fatalf("Need filename as the first and only argument")
 		}
+	} else {
+		file = args[0]
 	}
 
-	// if we have data already (stdin)
-	if datalength > 0 {
-
-		var hash string
-		wg := &sync.WaitGroup{}
-
-		pr, pw := io.Pipe()
-
-		go func(hash *string, wg *sync.WaitGroup) {
-			wg.Add(1)
-			mhash, err := client.postRaw("text/plain", int64(datalength), pr)
-			*hash = mhash
-			if err != nil {
-				utils.Fatalf("Failed to post data: %v", err)
-			}
-			wg.Done()
-		}(&hash, wg)
-
-		_, err := pw.Write(data[:datalength])
-
+	fi, err := os.Stat(expandPath(file))
+	if err != nil {
+		utils.Fatalf("Failed to stat file: %v", err)
+	}
+	if fi.IsDir() {
+		if !recursive {
+			utils.Fatalf("Argument is a directory and recursive upload is disabled")
+		}
+		if !wantManifest {
+			utils.Fatalf("Manifest is required for directory uploads")
+		}
+		mhash, err := client.uploadDirectory(file, defaultPath)
 		if err != nil {
-			utils.Fatalf("Failed to write to HTTP pipe: %v", err)
+			utils.Fatalf("Failed to upload directory: %v", err)
 		}
-		pw.Close()
-		wg.Wait()
-
-		entry.Hash = hash
-		entry.ContentType = "text/plain"
-
-	} else {
-		file := args[0]
-		fi, err := os.Stat(expandPath(file))
-		if err != nil {
-			utils.Fatalf("Failed to stat file: %v", err)
-		}
-		if fi.IsDir() {
-			if !recursive {
-				utils.Fatalf("Argument is a directory and recursive upload is disabled")
-			}
-			if !wantManifest {
-				utils.Fatalf("Manifest is required for directory uploads")
-			}
-			mhash, err := client.uploadDirectory(file, defaultPath)
-			if err != nil {
-				utils.Fatalf("Failed to upload directory: %v", err)
-			}
-			fmt.Println(mhash)
-			return
-		}
-		entry, err = client.uploadFile(file, fi)
-		if err != nil {
-			utils.Fatalf("Upload failed: %v", err)
-		}
+		fmt.Println(mhash)
+		return
+	}
+	entry, err = client.uploadFile(file, fi, mimeType)
+	if err != nil {
+		utils.Fatalf("Upload failed: %v", err)
+	}
+	if fromStdin {
+		os.RemoveAll(filepath.Dir(file))
 	}
 	mroot := manifest{[]manifestEntry{entry}}
 	if !wantManifest {
@@ -211,11 +207,17 @@ func (c *client) uploadDirectory(dir string, defaultPath string) (string, error)
 	return mhash, err
 }
 
-func (c *client) uploadFile(file string, fi os.FileInfo) (manifestEntry, error) {
+func (c *client) uploadFile(file string, fi os.FileInfo, mimetype_ string) (manifestEntry, error) {
+	var mimetype string
 	hash, err := c.uploadFileContent(file, fi)
+	if mimetype_ != "" {
+		mimetype = mimetype_
+	} else {
+		mimetype = mime.TypeByExtension(filepath.Ext(fi.Name()))
+	}
 	m := manifestEntry{
 		Hash:        hash,
-		ContentType: mime.TypeByExtension(filepath.Ext(fi.Name())),
+		ContentType: mimetype,
 	}
 	return m, err
 }
