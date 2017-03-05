@@ -323,6 +323,11 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("failed HasIdentity: false negative.")
 	}
 
+	sigPubKey, err := api.GetPublicKey(sig)
+	if err != nil {
+		t.Fatalf("failed GetPublicKey: %s.", err)
+	}
+
 	key, err := api.NewKeyPair()
 	if err != nil {
 		t.Fatalf("failed NewIdentity(): %s.", err)
@@ -331,13 +336,18 @@ func TestIntegrationAsym(t *testing.T) {
 		t.Fatalf("wrong key")
 	}
 
+	dstPubKey, err := api.GetPublicKey(key)
+	if err != nil {
+		t.Fatalf("failed GetPublicKey: %s.", err)
+	}
+
 	var topics [2]TopicType
 	topics[0] = TopicType{0x00, 0x64, 0x00, 0xff}
 	topics[1] = TopicType{0xf2, 0x6e, 0x77, 0x79}
 	var f WhisperFilterArgs
 	f.Symmetric = false
 	f.Key = key
-	f.SignedWith = sig
+	f.SignedWith = sigPubKey
 	f.Topics = topics[:]
 	f.MinPoW = DefaultMinimumPoW / 2
 	f.AllowP2P = true
@@ -348,9 +358,10 @@ func TestIntegrationAsym(t *testing.T) {
 	}
 
 	var p PostArgs
+	p.Type = "asym"
 	p.TTL = 2
-	p.SignWith = f.SignedWith
-	p.Key = f.Key
+	p.SignWith = sig
+	p.Key = dstPubKey
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
 	p.PowTarget = DefaultMinimumPoW
@@ -407,10 +418,15 @@ func TestIntegrationSym(t *testing.T) {
 
 	sig, err := api.NewKeyPair()
 	if err != nil {
-		t.Fatalf("failed NewIdentity: %s.", err)
+		t.Fatalf("failed NewKeyPair: %s.", err)
 	}
 	if len(sig) == 0 {
 		t.Fatalf("wrong signature")
+	}
+
+	sigPubKey, err := api.GetPublicKey(sig)
+	if err != nil {
+		t.Fatalf("failed GetPublicKey: %s.", err)
 	}
 
 	exist, err := api.HasKeyPair(sig)
@@ -429,7 +445,7 @@ func TestIntegrationSym(t *testing.T) {
 	f.Key = symKeyID
 	f.Topics = topics[:]
 	f.MinPoW = 0.324
-	f.SignedWith = sig
+	f.SignedWith = sigPubKey
 	f.AllowP2P = false
 
 	id, err := api.Subscribe(f)
@@ -441,7 +457,7 @@ func TestIntegrationSym(t *testing.T) {
 	p.Type = "sym"
 	p.TTL = 1
 	p.Key = symKeyID
-	p.SignWith = f.SignedWith
+	p.SignWith = sig
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
 	p.PowTarget = DefaultMinimumPoW
@@ -536,6 +552,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	var p PostArgs
 	p.Type = "sym"
 	p.TTL = 1
+	p.Key = symKeyID
 	p.SignWith = sigKeyID
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")

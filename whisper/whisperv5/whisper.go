@@ -50,9 +50,8 @@ type Whisper struct {
 	filters  *Filters
 
 	privateKeys map[string]*ecdsa.PrivateKey
-	//identities map[string]*ecdsa.PrivateKey
-	symKeys map[string][]byte
-	keyMu   sync.RWMutex
+	symKeys     map[string][]byte
+	keyMu       sync.RWMutex
 
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
 	expirations map[uint32]*set.SetNonTS  // Message expiration pool
@@ -238,13 +237,13 @@ func (w *Whisper) HasKeyPair(id string) bool {
 	return w.privateKeys[id] != nil
 }
 
-// GetIdentity retrieves the private key of the specified public identity.
-func (w *Whisper) GetPrivateKey(pubKey string) (*ecdsa.PrivateKey, error) {
+// GetIdentity retrieves the private key of the specified identity.
+func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
-	key := w.privateKeys[pubKey]
+	key := w.privateKeys[id]
 	if key == nil {
-		return nil, fmt.Errorf("invalid id")
+		return nil, fmt.Errorf("GetPrivateKey: invalid id")
 	}
 	return key, nil
 }
@@ -367,7 +366,7 @@ func (w *Whisper) GetFilter(id string) *Filter {
 func (w *Whisper) Unsubscribe(id string) error {
 	ok := w.filters.Uninstall(id)
 	if !ok {
-		return fmt.Errorf("Invalid ID")
+		return fmt.Errorf("Unsubscribe: Invalid ID")
 	}
 	return nil
 }
@@ -722,8 +721,9 @@ func (s *Statistics) reset() {
 }
 
 func ValidateKeyID(id string) error {
-	if len(id) != keyIdSize*2 {
-		return fmt.Errorf("Wrong size of key ID")
+	const target = keyIdSize * 2
+	if len(id) != target {
+		return fmt.Errorf("Wrong size of key ID (expected %d bytes, got %d)", target, len(id))
 	}
 	return nil
 }
