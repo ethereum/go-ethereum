@@ -169,6 +169,9 @@ func (self *LightChain) loadLastState() error {
 	headerTd := self.GetTd(header.Hash(), header.Number.Uint64())
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd)
 
+	// Try to be smart and issue a pow verification for the head to pre-generate caches
+	go self.pow.Verify(types.NewBlockWithHeader(header))
+
 	return nil
 }
 

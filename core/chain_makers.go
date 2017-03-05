@@ -43,17 +43,6 @@ func MakeChainConfig() *params.ChainConfig {
 	}
 }
 
-// FakePow is a non-validating proof of work implementation.
-// It returns true from Verify for any block.
-type FakePow struct{}
-
-func (f FakePow) Search(block pow.Block, stop <-chan struct{}, index int) (uint64, []byte) {
-	return 0, nil
-}
-func (f FakePow) Verify(block pow.Block) bool { return true }
-func (f FakePow) GetHashrate() int64          { return 0 }
-func (f FakePow) Turbo(bool)                  {}
-
 // So we can deterministically seed different blockchains
 var (
 	canonicalSeed = 1
@@ -256,7 +245,7 @@ func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
 	// Initialize a fresh chain with only a genesis block
 	genesis, _ := WriteTestNetGenesisBlock(db)
 
-	blockchain, _ := NewBlockChain(db, MakeChainConfig(), FakePow{}, evmux, vm.Config{})
+	blockchain, _ := NewBlockChain(db, MakeChainConfig(), pow.FakePow{}, evmux, vm.Config{})
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil

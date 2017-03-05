@@ -223,6 +223,9 @@ func (self *BlockChain) loadLastState() error {
 	log.Info("Loaded most recent local full block", "number", self.currentBlock.Number(), "hash", self.currentBlock.Hash(), "td", blockTd)
 	log.Info("Loaded most recent local fast block", "number", self.currentFastBlock.Number(), "hash", self.currentFastBlock.Hash(), "td", fastTd)
 
+	// Try to be smart and issue a pow verification for the head to pre-generate caches
+	go self.pow.Verify(types.NewBlockWithHeader(currentHeader))
+
 	return nil
 }
 

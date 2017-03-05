@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 )
 
 func ExampleGenerateChain() {
@@ -82,7 +83,7 @@ func ExampleGenerateChain() {
 
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, chainConfig, FakePow{}, evmux, vm.Config{})
+	blockchain, _ := NewBlockChain(db, chainConfig, pow.FakePow{}, evmux, vm.Config{})
 	if i, err := blockchain.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return

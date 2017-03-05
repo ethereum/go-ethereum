@@ -675,14 +675,14 @@ func TestHashimoto(t *testing.T) {
 	}
 }
 
-// Becnhmarks the cache generation performance.
+// Benchmarks the cache generation performance.
 func BenchmarkCacheGeneration(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		generateCache(cacheSize(1), make([]byte, 32))
 	}
 }
 
-// Becnhmarks the dataset (small) generation performance.
+// Benchmarks the dataset (small) generation performance.
 func BenchmarkSmallDatasetGeneration(b *testing.B) {
 	rawCache := generateCache(65536, make([]byte, 32))
 	cache := prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
@@ -693,7 +693,7 @@ func BenchmarkSmallDatasetGeneration(b *testing.B) {
 	}
 }
 
-// Becnhmarks the light verification performace.
+// Benchmarks the light verification performance.
 func BenchmarkHashimotoLight(b *testing.B) {
 	var (
 		rawCache = generateCache(cacheSize(1), make([]byte, 32))
@@ -706,7 +706,7 @@ func BenchmarkHashimotoLight(b *testing.B) {
 	}
 }
 
-// Becnhmarks the full (small) verification performace.
+// Benchmarks the full (small) verification performance.
 func BenchmarkHashimotoFullSmall(b *testing.B) {
 	var (
 		rawCache   = generateCache(65536, make([]byte, 32))

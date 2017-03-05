@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {
@@ -171,7 +172,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewBlockChain(db, &params.ChainConfig{HomesteadBlock: new(big.Int)}, FakePow{}, evmux, vm.Config{})
+	chainman, _ := NewBlockChain(db, &params.ChainConfig{HomesteadBlock: new(big.Int)}, pow.FakePow{}, evmux, vm.Config{})
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -281,7 +282,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
-		chain, err := NewBlockChain(db, testChainConfig(), FakePow{}, new(event.TypeMux), vm.Config{})
+		chain, err := NewBlockChain(db, testChainConfig(), pow.FakePow{}, new(event.TypeMux), vm.Config{})
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

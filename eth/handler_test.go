@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 )
 
 var bigTxGas = new(big.Int).SetUint64(params.TxGas)
@@ -468,7 +469,7 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	// Create a DAO aware protocol manager
 	var (
 		evmux         = new(event.TypeMux)
-		pow           = new(core.FakePow)
+		pow           = new(pow.FakePow)
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db)
 		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}

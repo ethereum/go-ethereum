@@ -288,15 +288,15 @@ func CreatePoW(config *Config) (pow.PoW, error) {
 	switch {
 	case config.PowFake:
 		log.Warn("Ethash used in fake mode")
-		return pow.PoW(core.FakePow{}), nil
+		return pow.FakePow{}, nil
 	case config.PowTest:
 		log.Warn("Ethash used in test mode")
-		return ethash.NewForTesting()
+		return pow.NewTestEthash(), nil
 	case config.PowShared:
 		log.Warn("Ethash used in shared mode")
-		return ethash.NewShared(), nil
+		return pow.NewSharedEthash(), nil
 	default:
-		return ethash.New(), nil
+		return pow.NewFullEthash("", ""), nil
 	}
 }
 

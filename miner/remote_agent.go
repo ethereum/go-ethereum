@@ -24,7 +24,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -115,7 +114,7 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 		block := a.currentWork.Block
 
 		res[0] = block.HashNoNonce().Hex()
-		seedHash, _ := ethash.GetSeedHash(block.NumberU64())
+		seedHash := pow.EthashSeedHash(block.NumberU64())
 		res[1] = common.BytesToHash(seedHash).Hex()
 		// Calculate the "target" to be returned to the external miner
 		n := big.NewInt(1)
@@ -145,8 +144,8 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 	}
 	// Make sure the PoW solutions is indeed valid
 	block := work.Block.WithMiningResult(nonce, mixDigest)
-	if !a.pow.Verify(block) {
-		log.Warn(fmt.Sprintf("Invalid PoW submitted for %x", hash))
+	if err := a.pow.Verify(block); err != nil {
+		log.Warn(fmt.Sprintf("Invalid PoW submitted for %x: %v", hash, err))
 		return false
 	}
 	// Solutions seems to be valid, return to the miner and notify acceptance

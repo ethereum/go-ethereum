@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 	"golang.org/x/net/context"
 )
 
@@ -82,7 +83,7 @@ func TestTxPool(t *testing.T) {
 
 	var (
 		evmux   = new(event.TypeMux)
-		pow     = new(core.FakePow)
+		pow     = new(pow.FakePow)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
 		genesis = core.WriteGenesisBlockForTesting(sdb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})

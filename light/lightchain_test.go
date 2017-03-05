@@ -22,7 +22,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -67,7 +66,7 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	// Initialize a fresh chain with only a genesis block
 	genesis, _ := core.WriteTestNetGenesisBlock(db)
 
-	blockchain, _ := NewLightChain(&dummyOdr{db: db}, testChainConfig(), core.FakePow{}, evmux)
+	blockchain, _ := NewLightChain(&dummyOdr{db: db}, testChainConfig(), pow.FakePow{}, evmux)
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil
@@ -82,15 +81,10 @@ func init() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
 
-func thePow() pow.PoW {
-	pow, _ := ethash.NewForTesting()
-	return pow
-}
-
 func theLightChain(db ethdb.Database, t *testing.T) *LightChain {
 	var eventMux event.TypeMux
 	core.WriteTestNetGenesisBlock(db)
-	LightChain, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), thePow(), &eventMux)
+	LightChain, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), pow.NewTestEthash(), &eventMux)
 	if err != nil {
 		t.Error("failed creating LightChain:", err)
 		t.FailNow()
@@ -311,7 +305,7 @@ func (odr *dummyOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 func chm(genesis *types.Block, db ethdb.Database) *LightChain {
 	odr := &dummyOdr{db: db}
 	var eventMux event.TypeMux
-	bc := &LightChain{odr: odr, chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: core.FakePow{}}
+	bc := &LightChain{odr: odr, chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: pow.FakePow{}}
 	bc.hc, _ = core.NewHeaderChain(db, testChainConfig(), bc.Validator, bc.getProcInterrupt)
 	bc.bodyCache, _ = lru.New(100)
 	bc.bodyRLPCache, _ = lru.New(100)
@@ -394,7 +388,7 @@ func TestReorgBadHeaderHashes(t *testing.T) {
 	core.BadHashes[headers[3].Hash()] = true
 	defer func() { delete(core.BadHashes, headers[3].Hash()) }()
 	// Create a new chain manager and check it rolled back the state
-	ncm, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), core.FakePow{}, new(event.TypeMux))
+	ncm, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), pow.FakePow{}, new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}
