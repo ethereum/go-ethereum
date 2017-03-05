@@ -159,7 +159,7 @@ func (self *Miner) Mining() bool {
 }
 
 func (self *Miner) HashRate() (tot int64) {
-	tot += self.pow.GetHashrate()
+	tot += int64(self.pow.Hashrate())
 	// do we care this might race? is it worth we're rewriting some
 	// aspects of the worker/locking up agents so we can get an accurate
 	// hashrate?
