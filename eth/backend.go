@@ -239,6 +239,10 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
+	var bbSection uint64
+	if useBloomBits {
+		bbSection = bloomBitsSection
+	}
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
 		{
@@ -264,7 +268,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false, bbSection),
 			Public:    true,
 		}, {
 			Namespace: "admin",

@@ -51,25 +51,27 @@ type filter struct {
 // PublicFilterAPI offers support to create and manage filters. This will allow external clients to retrieve various
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
-	backend   Backend
-	useMipMap bool
-	mux       *event.TypeMux
-	quit      chan struct{}
-	chainDb   ethdb.Database
-	events    *EventSystem
-	filtersMu sync.Mutex
-	filters   map[rpc.ID]*filter
+	backend          Backend
+	useMipMap        bool
+	bloomBitsSection uint64
+	mux              *event.TypeMux
+	quit             chan struct{}
+	chainDb          ethdb.Database
+	events           *EventSystem
+	filtersMu        sync.Mutex
+	filters          map[rpc.ID]*filter
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool, bloomBitsSection uint64) *PublicFilterAPI {
 	api := &PublicFilterAPI{
-		backend:   backend,
-		useMipMap: !lightMode,
-		mux:       backend.EventMux(),
-		chainDb:   backend.ChainDb(),
-		events:    NewEventSystem(backend.EventMux(), backend, lightMode),
-		filters:   make(map[rpc.ID]*filter),
+		backend:          backend,
+		useMipMap:        bloomBitsSection == 0,
+		bloomBitsSection: bloomBitsSection,
+		mux:              backend.EventMux(),
+		chainDb:          backend.ChainDb(),
+		events:           NewEventSystem(backend.EventMux(), backend, lightMode),
+		filters:          make(map[rpc.ID]*filter),
 	}
 
 	go api.timeoutLoop()
@@ -333,7 +335,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
 	}
 
-	filter := New(api.backend, api.useMipMap)
+	filter := New(api.backend, api.useMipMap, api.bloomBitsSection)
 	filter.SetBeginBlock(crit.FromBlock.Int64())
 	filter.SetEndBlock(crit.ToBlock.Int64())
 	filter.SetAddresses(crit.Addresses)
@@ -373,7 +375,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
-	filter := New(api.backend, api.useMipMap)
+	filter := New(api.backend, api.useMipMap, api.bloomBitsSection)
 	if f.crit.FromBlock != nil {
 		filter.SetBeginBlock(f.crit.FromBlock.Int64())
 	} else {

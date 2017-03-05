@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -70,6 +71,9 @@ var (
 
 	preimageCounter    = metrics.NewCounter("db/preimage/total")
 	preimageHitCounter = metrics.NewCounter("db/preimage/hits")
+
+	bloomBitsPrefix   = []byte("bloomBits-")
+	bloomBitsAvailKey = []byte("bloomBitsAvailable")
 )
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -674,4 +678,39 @@ func FindCommonAncestor(db ethdb.Database, a, b *types.Header) *types.Header {
 		}
 	}
 	return a
+}
+
+// GetBloomBits reads the compressed bloomBits vector belonging to the given section and bit index from the db
+func GetBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64) (bloombits.CompVector, error) {
+	var encKey [10]byte
+	binary.BigEndian.PutUint16(encKey[0:2], uint16(bitIdx))
+	binary.BigEndian.PutUint64(encKey[2:10], sectionIdx)
+	key := append(bloomBitsPrefix, encKey[:]...)
+	bloomBits, err := db.Get(key)
+	return bloombits.CompVector(bloomBits), err
+}
+
+// StoreBloomBits writes the compressed bloomBits vector belonging to the given section and bit index to the db
+func StoreBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64, bloomBits bloombits.CompVector) {
+	var encKey [10]byte
+	binary.BigEndian.PutUint16(encKey[0:2], uint16(bitIdx))
+	binary.BigEndian.PutUint64(encKey[2:10], sectionIdx)
+	key := append(bloomBitsPrefix, encKey[:]...)
+	db.Put(key, bloomBits)
+}
+
+// GetBloomBitsAvailable reads the number of available bloomBits sections from the db
+func GetBloomBitsAvailable(db ethdb.Database) uint64 {
+	data, _ := db.Get(bloomBitsAvailKey)
+	if len(data) == 8 {
+		return binary.BigEndian.Uint64(data[:])
+	}
+	return 0
+}
+
+// StoreBloomBitsAvailable writes the number of available bloomBits sections to the db
+func StoreBloomBitsAvailable(db ethdb.Database, cnt uint64) {
+	var data [8]byte
+	binary.BigEndian.PutUint64(data[:], cnt)
+	db.Put(bloomBitsAvailKey, data[:])
 }

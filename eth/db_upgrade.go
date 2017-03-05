@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -293,4 +294,65 @@ func addMipmapBloomBins(db ethdb.Database) (err error) {
 	}
 	log.Info("Bloom-bin upgrade completed", "elapsed", common.PrettyDuration(time.Since(tstart)))
 	return nil
+}
+
+// BloomBitsProcessorBackend implements ChainSectionProcessorBackend
+type BloomBitsProcessorBackend struct {
+	db                  ethdb.Database
+	lastCount, lastProg uint64
+}
+
+// number of confirmation blocks before a section is considered probably final and its bloom bits are calculated
+const bloomBitsConfirmations = 512
+
+// NewBloomBitsProcessor returns a chain processor that generates bloom bits data for the canonical chain
+func NewBloomBitsProcessor(db ethdb.Database, stop chan struct{}) *core.ChainSectionProcessor {
+	backend := &BloomBitsProcessorBackend{db: db, lastCount: core.GetBloomBitsAvailable(db)}
+	return core.NewChainSectionProcessor(backend, bloomBitsSection, bloomBitsConfirmations, time.Millisecond*100, stop)
+}
+
+// Process calculates bloom bits for a given section
+func (b *BloomBitsProcessorBackend) Process(sectionIdx uint64) bool {
+	bc := bloombits.NewBloomBitsCreator(bloomBitsSection)
+	var header *types.Header
+	for i := sectionIdx * bloomBitsSection; i < (sectionIdx+1)*bloomBitsSection; i++ {
+		hash := core.GetCanonicalHash(b.db, i)
+		header = core.GetHeader(b.db, hash, i)
+		if header == nil {
+			log.Error("Error creating bloomBits data", "section", sectionIdx, "missing header", i)
+			return false
+		}
+		bc.AddHeaderBloom(header.Bloom)
+	}
+
+	for i := 0; i < bloombits.BloomLength; i++ {
+		core.StoreBloomBits(b.db, uint64(i), sectionIdx, bloombits.CompressBloomBits(bc.GetBitVector(uint(i)), bloomBitsSection))
+	}
+
+	return true
+}
+
+// SetStored sets the number of stored sections (last valid section is count-1)
+func (b *BloomBitsProcessorBackend) SetStored(count uint64) {
+	if count > b.lastCount {
+		log.Debug("Stored bloomBits data", "count", count)
+	} else {
+		log.Debug("Rolled back bloomBits data", "count", count)
+	}
+	b.lastCount = count
+	core.StoreBloomBitsAvailable(b.db, count)
+}
+
+// GetStored retrieves the number of stored sections (last valid section is count-1)
+func (b *BloomBitsProcessorBackend) GetStored() uint64 {
+	return core.GetBloomBitsAvailable(b.db)
+}
+
+// UpdateMsg prints an update message after each 5% of progress
+func (b *BloomBitsProcessorBackend) UpdateMsg(done, all uint64) {
+	prog := done * 20 / all
+	if done == 0 || prog > b.lastProg {
+		b.lastProg = prog
+		log.Info("Updating quick bloom filter database", "%", prog*5)
+	}
 }
