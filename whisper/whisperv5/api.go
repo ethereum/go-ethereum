@@ -224,23 +224,19 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 
 	filter.Topics = append(filter.Topics, args.Topics...)
 
+	err := ValidateKeyID(args.Key)
+	if err != nil {
+		info := "NewFilter: " + err.Error()
+		log.Error(info)
+		return "", errors.New(info)
+	}
+
 	if len(args.SignedWith) > 0 {
 		if !ValidatePublicKey(filter.Src) {
-			info := "NewFilter: Invalid 'From' address"
+			info := "NewFilter: Invalid 'SignedWith' field"
 			log.Error(info)
 			return "", errors.New(info)
 		}
-	}
-
-	err := ValidateKeyID(args.Key)
-	if err != nil {
-		return "", err
-	}
-
-	if !ValidatePublicKey(filter.Src) {
-		info := "NewFilter: 'SignedWith' public key is invalid"
-		log.Error(info)
-		return "", errors.New(info)
 	}
 
 	if args.Symmetric {
@@ -249,10 +245,9 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 			log.Error(info)
 			return "", errors.New(info)
 		}
-
 		symKey, err := api.whisper.GetSymKey(args.Key)
 		if err != nil {
-			info := "NewFilter: invalid key ID: " + args.Key
+			info := "NewFilter: invalid key ID"
 			log.Error(info)
 			return "", errors.New(info)
 		}
@@ -267,7 +262,7 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 	} else {
 		filter.KeyAsym, err = api.whisper.GetPrivateKey(args.Key)
 		if err != nil {
-			info := "NewFilter: invalid key ID: " + args.Key
+			info := "NewFilter: invalid key ID"
 			log.Error(info)
 			return "", errors.New(info)
 		}
@@ -326,6 +321,12 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		Padding:  args.Padding,
 	}
 
+	if len(args.Key) == 0 {
+		info := "Post: key is missing"
+		log.Error(info)
+		return errors.New(info)
+	}
+
 	if len(args.SignWith) > 0 {
 		params.Src, err = api.whisper.GetPrivateKey(args.SignWith)
 		if err != nil {
@@ -358,6 +359,11 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 			log.Error(err.Error())
 			return err
 		}
+		if !validateSymmetricKey(params.KeySym) {
+			info := "Post: key for symmetric encryption is invalid"
+			log.Error(info)
+			return errors.New(info)
+		}
 		if len(params.Topic) == 0 {
 			info := "Post: topic is missing for symmetric encryption"
 			log.Error(info)
@@ -366,7 +372,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	} else if args.Type == "asym" {
 		params.Dst = crypto.ToECDSAPub(common.FromHex(args.Key))
 		if !ValidatePublicKey(params.Dst) {
-			info := "NewFilter: 'SignWith' public key is invalid"
+			info := "Post: public key for asymmetric encryption is invalid"
 			log.Error(info)
 			return errors.New(info)
 		}
