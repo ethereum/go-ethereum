@@ -108,7 +108,7 @@ func deliverTest(t *testing.T, server *WMailServer, env *whisper.Envelope) {
 	}
 	testPeerID, err := shh.GetPrivateKey(id)
 	if err != nil {
-		t.Fatalf("failed to retireve new key pair with seed %d: %s.", seed, err)
+		t.Fatalf("failed to retrieve new key pair with seed %d: %s.", seed, err)
 	}
 	birth := env.Expiry - env.TTL
 	p := &ServerTestParams{
