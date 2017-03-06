@@ -84,6 +84,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.EthashCachesInMemoryFlag,
 			utils.EthashCachesOnDiskFlag,
 			utils.EthashDatasetDirFlag,
+			utils.EthashDatasetsInMemoryFlag,
 			utils.EthashDatasetsOnDiskFlag,
 		},
 	},
@@ -141,7 +142,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.AutoDAGFlag,
 			utils.EtherbaseFlag,
 			utils.TargetGasLimitFlag,
 			utils.GasPriceFlag,

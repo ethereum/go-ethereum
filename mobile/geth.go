@@ -151,6 +151,9 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			GpobaseStepDown:         10,
 			GpobaseStepUp:           100,
 			GpobaseCorrectionFactor: 110,
+			EthashCacheDir:          "ethash",
+			EthashCachesInMem:       2,
+			EthashCachesOnDisk:      3,
 		}
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)

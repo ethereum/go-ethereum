@@ -21,14 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -78,7 +75,6 @@ type Config struct {
 	DatabaseHandles    int
 
 	DocRoot   string
-	AutoDAG   bool
 	PowFake   bool
 	PowTest   bool
 	PowShared bool
@@ -88,6 +84,7 @@ type Config struct {
 	EthashCachesInMem    int
 	EthashCachesOnDisk   int
 	EthashDatasetDir     string
+	EthashDatasetsInMem  int
 	EthashDatasetsOnDisk int
 
 	Etherbase    common.Address
@@ -138,8 +135,6 @@ type Ethereum struct {
 	miner        *miner.Miner
 	Mining       bool
 	MinerThreads int
-	AutoDAG      bool
-	autodagquit  chan bool
 	etherbase    common.Address
 	solcPath     string
 
@@ -173,7 +168,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		netVersionId:   config.NetworkId,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
-		AutoDAG:        config.AutoDAG,
 		solcPath:       config.SolcPath,
 	}
 
@@ -298,7 +292,7 @@ func CreatePoW(ctx *node.ServiceContext, config *Config) pow.PoW {
 		return pow.NewSharedEthash()
 	default:
 		return pow.NewFullEthash(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
-			config.EthashDatasetDir, config.EthashDatasetsOnDisk)
+			config.EthashDatasetDir, config.EthashDatasetsInMem, config.EthashDatasetsOnDisk)
 	}
 }
 
@@ -414,9 +408,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Ethereum protocol implementation.
 func (s *Ethereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
-	if s.AutoDAG {
-		s.StartAutoDAG()
-	}
+
 	s.protocolManager.Start()
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
@@ -439,8 +431,6 @@ func (s *Ethereum) Stop() error {
 	s.miner.Stop()
 	s.eventMux.Stop()
 
-	s.StopAutoDAG()
-
 	s.chainDb.Close()
 	close(s.shutdownChan)
 
@@ -450,75 +440,4 @@ func (s *Ethereum) Stop() error {
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
 	<-s.shutdownChan
-}
-
-// StartAutoDAG() spawns a go routine that checks the DAG every autoDAGcheckInterval
-// by default that is 10 times per epoch
-// in epoch n, if we past autoDAGepochHeight within-epoch blocks,
-// it calls ethash.MakeDAG  to pregenerate the DAG for the next epoch n+1
-// if it does not exist yet as well as remove the DAG for epoch n-1
-// the loop quits if autodagquit channel is closed, it can safely restart and
-// stop any number of times.
-// For any more sophisticated pattern of DAG generation, use CLI subcommand
-// makedag
-func (self *Ethereum) StartAutoDAG() {
-	if self.autodagquit != nil {
-		return // already started
-	}
-	go func() {
-		log.Info("Pre-generation of ethash DAG on", "dir", ethash.DefaultDir)
-		var nextEpoch uint64
-		timer := time.After(0)
-		self.autodagquit = make(chan bool)
-		for {
-			select {
-			case <-timer:
-				log.Info("Checking DAG availability", "dir", ethash.DefaultDir)
-				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
-				thisEpoch := currentBlock / epochLength
-				if nextEpoch <= thisEpoch {
-					if currentBlock%epochLength > autoDAGepochHeight {
-						if thisEpoch > 0 {
-							previousDag, previousDagFull := dagFiles(thisEpoch - 1)
-							os.Remove(filepath.Join(ethash.DefaultDir, previousDag))
-							os.Remove(filepath.Join(ethash.DefaultDir, previousDagFull))
-							log.Info("Removed previous DAG", "epoch", thisEpoch-1, "dag", previousDag)
-						}
-						nextEpoch = thisEpoch + 1
-						dag, _ := dagFiles(nextEpoch)
-						if _, err := os.Stat(dag); os.IsNotExist(err) {
-							log.Info("Pre-generating next DAG", "epoch", nextEpoch, "dag", dag)
-							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
-							if err != nil {
-								log.Error("Error generating DAG", "epoch", nextEpoch, "dag", dag, "err", err)
-								return
-							}
-						} else {
-							log.Warn("DAG already exists", "epoch", nextEpoch, "dag", dag)
-						}
-					}
-				}
-				timer = time.After(autoDAGcheckInterval)
-			case <-self.autodagquit:
-				return
-			}
-		}
-	}()
-}
-
-// stopAutoDAG stops automatic DAG pregeneration by quitting the loop
-func (self *Ethereum) StopAutoDAG() {
-	if self.autodagquit != nil {
-		close(self.autodagquit)
-		self.autodagquit = nil
-	}
-	log.Info("Pre-generation of ethash DAG off", "dir", ethash.DefaultDir)
-}
-
-// dagFiles(epoch) returns the two alternative DAG filenames (not a path)
-// 1) <revision>-<hex(seedhash[8])> 2) full-R<revision>-<hex(seedhash[8])>
-func dagFiles(epoch uint64) (string, string) {
-	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
-	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
-	return dag, "full-R" + dag
 }
