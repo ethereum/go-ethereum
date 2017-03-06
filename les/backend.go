@@ -77,11 +77,6 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	if err := eth.SetupGenesisBlock(&chainDb, config); err != nil {
 		return nil, err
 	}
-	pow, err := eth.CreatePoW(config)
-	if err != nil {
-		return nil, err
-	}
-
 	odr := NewLesOdr(chainDb)
 	relay := NewLesTxRelay()
 	eth := &LightEthereum{
@@ -90,7 +85,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		chainDb:        chainDb,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		pow:            pow,
+		pow:            eth.CreatePoW(ctx, config),
 		shutdownChan:   make(chan bool),
 		netVersionId:   config.NetworkId,
 		solcPath:       config.SolcPath,
