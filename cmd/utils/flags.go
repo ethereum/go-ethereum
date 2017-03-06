@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -112,6 +113,29 @@ var (
 	KeyStoreDirFlag = DirectoryFlag{
 		Name:  "keystore",
 		Usage: "Directory for the keystore (default = inside the datadir)",
+	}
+	EthashCacheDirFlag = DirectoryFlag{
+		Name:  "ethash.cachedir",
+		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
+	}
+	EthashCachesInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.cachesinmem",
+		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
+		Value: 2,
+	}
+	EthashCachesOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.cachesondisk",
+		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
+		Value: 3,
+	}
+	EthashDatasetDirFlag = DirectoryFlag{
+		Name:  "ethash.dagdir",
+		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
+	}
+	EthashDatasetsOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.dagsondisk",
+		Usage: "Number of ethash mining DAGs to keep on disk (1+GB each)",
+		Value: 2,
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
@@ -429,6 +453,36 @@ func MakeDataDir(ctx *cli.Context) string {
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
 	return ""
+}
+
+// MakeEthashCacheDir returns the directory to use for storing the ethash cache
+// dumps.
+func MakeEthashCacheDir(ctx *cli.Context) string {
+	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) && ctx.GlobalString(EthashCacheDirFlag.Name) == "" {
+		return ""
+	}
+	if !ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
+		return "ethash"
+	}
+	return ctx.GlobalString(EthashCacheDirFlag.Name)
+}
+
+// MakeEthashDatasetDir returns the directory to use for storing the full ethash
+// dataset dumps.
+func MakeEthashDatasetDir(ctx *cli.Context) string {
+	if !ctx.GlobalIsSet(EthashDatasetDirFlag.Name) {
+		home := os.Getenv("HOME")
+		if home == "" {
+			if user, err := user.Current(); err == nil {
+				home = user.HomeDir
+			}
+		}
+		if runtime.GOOS == "windows" {
+			return filepath.Join(home, "AppData", "Ethash")
+		}
+		return filepath.Join(home, ".ethash")
+	}
+	return ctx.GlobalString(EthashDatasetDirFlag.Name)
 }
 
 // MakeIPCPath creates an IPC path configuration from the set command line flags,
@@ -751,6 +805,11 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
+		EthashCacheDir:          MakeEthashCacheDir(ctx),
+		EthashCachesInMem:       ctx.GlobalInt(EthashCachesInMemoryFlag.Name),
+		EthashCachesOnDisk:      ctx.GlobalInt(EthashCachesOnDiskFlag.Name),
+		EthashDatasetDir:        MakeEthashDatasetDir(ctx),
+		EthashDatasetsOnDisk:    ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 		EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name),
 	}
@@ -923,7 +982,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	seal := pow.PoW(pow.FakePow{})
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
-		seal = pow.NewFullEthash("", "")
+		seal = pow.NewFullEthash("", 1, 0, "", 0)
 	}
 	chain, err = core.NewBlockChain(chainDb, chainConfig, seal, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
 	if err != nil {

@@ -84,6 +84,12 @@ type Config struct {
 	PowShared bool
 	ExtraData []byte
 
+	EthashCacheDir       string
+	EthashCachesInMem    int
+	EthashCachesOnDisk   int
+	EthashDatasetDir     string
+	EthashDatasetsOnDisk int
+
 	Etherbase    common.Address
 	GasPrice     *big.Int
 	MinerThreads int
@@ -157,16 +163,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if err := SetupGenesisBlock(&chainDb, config); err != nil {
 		return nil, err
 	}
-	pow, err := CreatePoW(config)
-	if err != nil {
-		return nil, err
-	}
-
 	eth := &Ethereum{
 		chainDb:        chainDb,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		pow:            pow,
+		pow:            CreatePoW(ctx, config),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		netVersionId:   config.NetworkId,
@@ -284,19 +285,20 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 }
 
 // CreatePoW creates the required type of PoW instance for an Ethereum service
-func CreatePoW(config *Config) (pow.PoW, error) {
+func CreatePoW(ctx *node.ServiceContext, config *Config) pow.PoW {
 	switch {
 	case config.PowFake:
 		log.Warn("Ethash used in fake mode")
-		return pow.FakePow{}, nil
+		return pow.FakePow{}
 	case config.PowTest:
 		log.Warn("Ethash used in test mode")
-		return pow.NewTestEthash(), nil
+		return pow.NewTestEthash()
 	case config.PowShared:
 		log.Warn("Ethash used in shared mode")
-		return pow.NewSharedEthash(), nil
+		return pow.NewSharedEthash()
 	default:
-		return pow.NewFullEthash("", ""), nil
+		return pow.NewFullEthash(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
+			config.EthashDatasetDir, config.EthashDatasetsOnDisk)
 	}
 }
 

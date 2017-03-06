@@ -17,12 +17,19 @@
 package pow
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"math/big"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	metrics "github.com/rcrowley/go-metrics"
 )
@@ -36,6 +43,15 @@ var (
 var (
 	// maxUint256 is a big integer representing 2^256-1
 	maxUint256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
+
+	// sharedEthash is a full instance that can be shared between multiple users.
+	sharedEthash = NewFullEthash("", 3, 0, "", 0)
+
+	// algorithmRevision is the data structure version used for file naming.
+	algorithmRevision = 23
+
+	// dumpMagic is a dataset dump header to sanity check a data dump.
+	dumpMagic = hexutil.MustDecode("0xfee1deadbaddcafe")
 )
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
@@ -48,21 +64,65 @@ type cache struct {
 }
 
 // generate ensures that the cache content is generates.
-func (c *cache) generate(test bool) {
+func (c *cache) generate(dir string, limit int, test bool) {
 	c.once.Do(func() {
-		cacheSize := cacheSize(c.epoch*epochLength + 1)
+		// If we have a testing cache, generate and return
 		if test {
-			cacheSize = 1024
+			rawCache := generateCache(1024, seedHash(c.epoch*epochLength+1))
+			c.cache = prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
+			return
 		}
-		rawCache := generateCache(cacheSize, seedHash(c.epoch*epochLength+1))
-		c.cache = prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
+		// Full cache generation is needed, check cache dir for existing data
+		size := cacheSize(c.epoch*epochLength + 1)
+		seed := seedHash(c.epoch*epochLength + 1)
+
+		path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x", algorithmRevision, seed))
+		logger := log.New("seed", hexutil.Bytes(seed))
+
+		if dir != "" {
+			dump, err := os.Open(path)
+			if err == nil {
+				logger.Info("Loading ethash cache from disk")
+				start := time.Now()
+				c.cache = prepare(size, bufio.NewReader(dump))
+				logger.Info("Loaded ethash cache from disk", "elapsed", common.PrettyDuration(time.Since(start)))
+
+				dump.Close()
+				return
+			}
+		}
+		// No previous disk cache was available, generate on the fly
+		rawCache := generateCache(size, seed)
+		c.cache = prepare(size, bytes.NewReader(rawCache))
+
+		// If a cache directory is given, attempt to serialize for next time
+		if dir != "" {
+			// Store the ethash cache to disk
+			start := time.Now()
+			if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+				logger.Error("Failed to create ethash cache dir", "err", err)
+			} else if err := ioutil.WriteFile(path, rawCache, os.ModePerm); err != nil {
+				logger.Error("Failed to write ethash cache to disk", "err", err)
+			} else {
+				logger.Info("Stored ethash cache to disk", "elapsed", common.PrettyDuration(time.Since(start)))
+			}
+			// Iterate over all previous instances and delete old ones
+			for ep := int(c.epoch) - limit; ep >= 0; ep-- {
+				seed := seedHash(uint64(ep)*epochLength + 1)
+				path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x", algorithmRevision, seed))
+				os.Remove(path)
+			}
+		}
 	})
 }
 
 // Ethash is a PoW data struture implementing the ethash algorithm.
 type Ethash struct {
-	cachedir string // Data directory to store the verification caches
-	dagdir   string // Data directory to store full mining datasets
+	cachedir     string // Data directory to store the verification caches
+	cachesinmem  int    // Number of caches to keep in memory
+	cachesondisk int    // Number of caches to keep on disk
+	dagdir       string // Data directory to store full mining datasets
+	dagsondisk   int    // Number of mining datasets to keep on disk
 
 	caches map[uint64]*cache // In memory caches to avoid regenerating too often
 	future *cache            // Pre-generated cache for the estimated future epoch
@@ -71,15 +131,27 @@ type Ethash struct {
 	hashrate *metrics.StandardMeter // Meter tracking the average hashrate
 
 	tester bool // Flag whether to use a smaller test dataset
-	shared bool // Flag whether to use a global chared dataset
 }
 
 // NewFullEthash creates a full sized ethash PoW scheme.
-func NewFullEthash(cachedir, dagdir string) PoW {
+func NewFullEthash(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsondisk int) PoW {
+	if cachesinmem <= 0 {
+		log.Warn("One ethash cache must alwast be in memory", "requested", cachesinmem)
+		cachesinmem = 1
+	}
+	if cachedir != "" && cachesondisk > 0 {
+		log.Info("Disk storage enabled for ethash caches", "dir", cachedir, "count", cachesondisk)
+	}
+	if dagdir != "" && dagsondisk > 0 {
+		log.Info("Disk storage enabled for ethash DAGs", "dir", dagdir, "count", dagsondisk)
+	}
 	return &Ethash{
-		cachedir: cachedir,
-		dagdir:   dagdir,
-		caches:   make(map[uint64]*cache),
+		cachedir:     cachedir,
+		cachesinmem:  cachesinmem,
+		cachesondisk: cachesondisk,
+		dagdir:       dagdir,
+		dagsondisk:   dagsondisk,
+		caches:       make(map[uint64]*cache),
 	}
 }
 
@@ -87,18 +159,16 @@ func NewFullEthash(cachedir, dagdir string) PoW {
 // purposes.
 func NewTestEthash() PoW {
 	return &Ethash{
-		caches: make(map[uint64]*cache),
-		tester: true,
+		cachesinmem: 1,
+		caches:      make(map[uint64]*cache),
+		tester:      true,
 	}
 }
 
 // NewSharedEthash creates a full sized ethash PoW shared between all requesters
 // running in the same process.
 func NewSharedEthash() PoW {
-	return &Ethash{
-		caches: make(map[uint64]*cache),
-		shared: true,
-	}
+	return sharedEthash
 }
 
 // Verify implements PoW, checking whether the given block satisfies the PoW
@@ -140,7 +210,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 	current, future := ethash.caches[epoch], (*cache)(nil)
 	if current == nil {
 		// No in-memory cache, evict the oldest if the cache limit was reached
-		for len(ethash.caches) >= 3 {
+		for len(ethash.caches) >= ethash.cachesinmem {
 			var evict *cache
 			for _, cache := range ethash.caches {
 				if evict == nil || evict.used.After(cache.used) {
@@ -149,21 +219,21 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 			}
 			delete(ethash.caches, evict.epoch)
 
-			log.Debug("Evictinged ethash cache", "old", evict.epoch, "used", evict.used)
+			log.Debug("Evicted ethash cache", "epoch", evict.epoch, "used", evict.used)
 		}
 		// If we have the new cache pre-generated, use that, otherwise create a new one
 		if ethash.future != nil && ethash.future.epoch == epoch {
 			log.Debug("Using pre-generated cache", "epoch", epoch)
 			current, ethash.future = ethash.future, nil
 		} else {
-			log.Debug("Generating new ethash cache", "epoch", epoch)
+			log.Debug("Requiring new ethash cache", "epoch", epoch)
 			current = &cache{epoch: epoch}
 		}
 		ethash.caches[epoch] = current
 
 		// If we just used up the future cache, or need a refresh, regenerate
 		if ethash.future == nil || ethash.future.epoch <= epoch {
-			log.Debug("Pre-generating cache for the future", "epoch", epoch+1)
+			log.Debug("Requiring new future ethash cache", "epoch", epoch+1)
 			future = &cache{epoch: epoch + 1}
 			ethash.future = future
 		}
@@ -172,16 +242,15 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
-	current.once.Do(func() {
-		current.generate(ethash.tester)
-	})
+	current.generate(ethash.cachedir, ethash.cachesondisk, ethash.tester)
+
 	current.lock.Lock()
 	current.used = time.Now()
 	current.lock.Unlock()
 
 	// If we exhusted the future cache, now's a goot time to regenerate it
 	if future != nil {
-		go future.generate(ethash.tester)
+		go future.generate(ethash.cachedir, ethash.cachesondisk, ethash.tester)
 	}
 	return current.cache
 }

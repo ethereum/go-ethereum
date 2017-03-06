@@ -45,12 +45,6 @@ const (
 	loopAccesses       = 64      // Number of accesses in hashimoto loop
 )
 
-var (
-	// Metadata fields to be compatible with the C++ ethash
-	ethashRevision = 23                                       // Data structure version
-	ethashMagic    = hexutil.MustDecode("0xfee1deadbaddcafe") // Dataset dump magic number
-)
-
 // cacheSize calculates and returns the size of the ethash verification cache that
 // belongs to a certain block number. The cache size grows linearly, however, we
 // always take the highest prime below the linearly growing threshold in order to
@@ -108,16 +102,33 @@ func seedHash(block uint64) []byte {
 // set of 524288 64-byte values.
 func generateCache(size uint64, seed []byte) []byte {
 	// Print some debug logs to allow analysis on low end devices
-	logger := log.New("size", size, "seed", hexutil.Bytes(seed))
-	logger.Debug("Generating ethash cache")
+	logger := log.New("seed", hexutil.Bytes(seed))
+	logger.Debug("Generating ethash verification cache")
 
-	defer func(start time.Time) {
-		logger.Debug("Generated ethash cache", "elapsed", common.PrettyDuration(time.Since(start)))
-	}(time.Now())
+	start := time.Now()
+	defer func() {
+		logger.Info("Generated ethash verification cache", "elapsed", common.PrettyDuration(time.Since(start)))
+	}()
 
 	// Calculate the number of thoretical rows (we'll store in one buffer nonetheless)
 	rows := int(size) / hashBytes
 
+	// Start a monitoring goroutine to report progress on low end devices
+	var progress uint32
+
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case <-time.After(3 * time.Second):
+				logger.Info("Generating ethash verification cache", "percentage", atomic.LoadUint32(&progress)*100/uint32(rows)/4, "elapsed", common.PrettyDuration(time.Since(start)))
+			}
+		}
+	}()
 	// Create a hasher to reuse between invocations
 	keccak512 := crypto.Keccak512Hasher()
 
@@ -126,6 +137,7 @@ func generateCache(size uint64, seed []byte) []byte {
 	copy(cache, keccak512(seed))
 	for offset := uint64(hashBytes); offset < size; offset += hashBytes {
 		copy(cache[offset:], keccak512(cache[offset-hashBytes:offset]))
+		atomic.AddUint32(&progress, 1)
 	}
 	// Use a low-round version of randmemohash
 	temp := make([]byte, hashBytes)
@@ -139,6 +151,8 @@ func generateCache(size uint64, seed []byte) []byte {
 			)
 			xorBytes(temp, cache[srcOff:srcOff+hashBytes], cache[xorOff:xorOff+hashBytes])
 			copy(cache[dstOff:], keccak512(temp))
+
+			atomic.AddUint32(&progress, 1)
 		}
 	}
 	return cache
