@@ -35,12 +35,6 @@
 			"revisionTime": "2016-10-29T20:57:26Z"
 		},
 		{
-			"checksumSHA1": "HdOu+ISNyVWMyBao7vDI21uZH6U=",
-			"path": "github.com/ethereum/ethash",
-			"revision": "214d4c008e101d4f7b18318389fb8c2e00323f24",
-			"revisionTime": "2016-10-25T09:19:48Z"
-		},
-		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",

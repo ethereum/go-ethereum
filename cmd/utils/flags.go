@@ -132,9 +132,14 @@ var (
 		Name:  "ethash.dagdir",
 		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
 	}
+	EthashDatasetsInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.dagsinmem",
+		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
+		Value: 1,
+	}
 	EthashDatasetsOnDiskFlag = cli.IntFlag{
 		Name:  "ethash.dagsondisk",
-		Usage: "Number of ethash mining DAGs to keep on disk (1+GB each)",
+		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: 2,
 	}
 	NetworkIdFlag = cli.IntFlag{
@@ -206,10 +211,6 @@ var (
 		Name:  "targetgaslimit",
 		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
 		Value: params.GenesisGasLimit.Uint64(),
-	}
-	AutoDAGFlag = cli.BoolFlag{
-		Name:  "autodag",
-		Usage: "Enable automatic DAG pregeneration",
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
@@ -809,8 +810,8 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		EthashCachesInMem:       ctx.GlobalInt(EthashCachesInMemoryFlag.Name),
 		EthashCachesOnDisk:      ctx.GlobalInt(EthashCachesOnDiskFlag.Name),
 		EthashDatasetDir:        MakeEthashDatasetDir(ctx),
+		EthashDatasetsInMem:     ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name),
 		EthashDatasetsOnDisk:    ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name),
-		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 		EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name),
 	}
 
@@ -982,7 +983,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 
 	seal := pow.PoW(pow.FakePow{})
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
-		seal = pow.NewFullEthash("", 1, 0, "", 0)
+		seal = pow.NewFullEthash("", 1, 0, "", 1, 0)
 	}
 	chain, err = core.NewBlockChain(chainDb, chainConfig, seal, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
 	if err != nil {

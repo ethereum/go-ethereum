@@ -164,7 +164,9 @@ func (self *Miner) HashRate() (tot int64) {
 	// aspects of the worker/locking up agents so we can get an accurate
 	// hashrate?
 	for agent := range self.worker.agents {
-		tot += agent.GetHashRate()
+		if _, ok := agent.(*CpuAgent); !ok {
+			tot += agent.GetHashRate()
+		}
 	}
 	return
 }
