@@ -35,6 +35,7 @@ import (
 )
 
 var (
+	ErrNonceOutOfRange   = errors.New("nonce out of range")
 	ErrInvalidDifficulty = errors.New("non-positive difficulty")
 	ErrInvalidMixDigest  = errors.New("invalid mix digest")
 	ErrInvalidPoW        = errors.New("pow difficulty invalid")
@@ -174,13 +175,18 @@ func NewSharedEthash() PoW {
 // Verify implements PoW, checking whether the given block satisfies the PoW
 // difficulty requirements.
 func (ethash *Ethash) Verify(block Block) error {
+	// Sanity check that the block number is below the lookup table size (60M blocks)
+	number := block.NumberU64()
+	if number/epochLength >= uint64(len(cacheSizes)) {
+		// Go < 1.7 cannot calculate new cache/dataset sizes (no fast prime check)
+		return ErrNonceOutOfRange
+	}
 	// Ensure twe have a valid difficulty for the block
 	difficulty := block.Difficulty()
 	if difficulty.Sign() <= 0 {
 		return ErrInvalidDifficulty
 	}
 	// Recompute the digest and PoW value and verify against the block
-	number := block.NumberU64()
 	cache := ethash.cache(number)
 
 	size := datasetSize(number)
