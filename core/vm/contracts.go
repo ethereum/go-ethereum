@@ -21,6 +21,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -47,8 +48,8 @@ var PrecompiledContracts = map[common.Address]PrecompiledContract{
 // for EIP198.
 var PrecompiledContractsEIP198 = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
-	common.BytesToAddress([]byte{2}): &sha256{},
-	common.BytesToAddress([]byte{3}): &ripemd160{},
+	common.BytesToAddress([]byte{2}): &sha256hash{},
+	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
 	common.BytesToAddress([]byte{5}): &bigModexp{},
 }
@@ -159,11 +160,11 @@ func (c *bigModexp) RequiredGas(input []byte) uint64 {
 		input = append(input, make([]byte, 3*32-len(input))...)
 	}
 	var (
-		baseLen = common.BytesToBig(input[:31])
-		expLen  = common.BigMax(common.BytesToBig(input[32:64]), big.NewInt(1))
-		modLen  = common.BytesToBig(input[65:97])
+		baseLen = new(big.Int).SetBytes(input[:31])
+		expLen  = math.BigMax(new(big.Int).SetBytes(input[32:64]), big.NewInt(1))
+		modLen  = new(big.Int).SetBytes(input[65:97])
 	)
-	x := new(big.Int).Set(common.BigMax(baseLen, modLen))
+	x := new(big.Int).Set(math.BigMax(baseLen, modLen))
 	x.Mul(x, x)
 	x.Mul(x, expLen)
 	x.Div(x, new(big.Int).SetUint64(params.QuadCoeffDiv))
@@ -177,28 +178,28 @@ func (c *bigModexp) Run(input []byte) []byte {
 	}
 	// why 32-byte? These values won't fit anyway
 	var (
-		baseLen = common.BytesToBig(input[:32]).Uint64()
-		expLen  = common.BytesToBig(input[32:64]).Uint64()
-		modLen  = common.BytesToBig(input[64:96]).Uint64()
+		baseLen = new(big.Int).SetBytes(input[:32]).Uint64()
+		expLen  = new(big.Int).SetBytes(input[32:64]).Uint64()
+		modLen  = new(big.Int).SetBytes(input[64:96]).Uint64()
 	)
 
 	input = input[96:]
 	if uint64(len(input)) < baseLen {
 		input = append(input, make([]byte, baseLen-uint64(len(input)))...)
 	}
-	base := common.BytesToBig(input[:baseLen])
+	base := new(big.Int).SetBytes(input[:baseLen])
 
 	input = input[baseLen:]
 	if uint64(len(input)) < expLen {
 		input = append(input, make([]byte, expLen-uint64(len(input)))...)
 	}
-	exp := common.BytesToBig(input[:expLen])
+	exp := new(big.Int).SetBytes(input[:expLen])
 
 	input = input[expLen:]
 	if uint64(len(input)) < modLen {
 		input = append(input, make([]byte, modLen-uint64(len(input)))...)
 	}
-	mod := common.BytesToBig(input[:modLen])
+	mod := new(big.Int).SetBytes(input[:modLen])
 
 	return base.Exp(base, exp, mod).Bytes()
 }
