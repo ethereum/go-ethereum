@@ -17,20 +17,21 @@
 package pow
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
-	"github.com/ethereum/go-ethereum/common"
+	mmap "github.com/edsrzf/mmap-go"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	metrics "github.com/rcrowley/go-metrics"
@@ -57,10 +58,89 @@ var (
 	dumpMagic = hexutil.MustDecode("0xfee1deadbaddcafe")
 )
 
+// isLittleEndian returns whether the local system is running in little or big
+// endian byte order.
+func isLittleEndian() bool {
+	n := uint32(0x01020304)
+	return *(*byte)(unsafe.Pointer(&n)) == 0x04
+}
+
+// memoryMap tries to memory map a file of uint32s for read only access.
+func memoryMap(path string) (*os.File, mmap.MMap, []uint32, error) {
+	file, err := os.OpenFile(path, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	mem, buffer, err := memoryMapFile(file, false)
+	if err != nil {
+		file.Close()
+		return nil, nil, nil, err
+	}
+	return file, mem, buffer, err
+}
+
+// memoryMapFile tries to memory map an already opened file descriptor.
+func memoryMapFile(file *os.File, write bool) (mmap.MMap, []uint32, error) {
+	// Try to memory map the file
+	flag := mmap.RDONLY
+	if write {
+		flag = mmap.RDWR
+	}
+	mem, err := mmap.Map(file, flag, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Yay, we managed to memory map the file, here be dragons
+	header := *(*reflect.SliceHeader)(unsafe.Pointer(&mem))
+	header.Len /= 4
+	header.Cap /= 4
+
+	return mem, *(*[]uint32)(unsafe.Pointer(&header)), nil
+}
+
+// memoryMapAndGenerate tries to memory map a temporary file of uint32s for write
+// access, fill it with the data from a generator and then move it into the final
+// path requested.
+func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint32)) (*os.File, mmap.MMap, []uint32, error) {
+	// Ensure the data folder exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return nil, nil, nil, err
+	}
+	// Create a huge temporary empty file to fill with data
+	temp := path + "." + strconv.Itoa(rand.Int())
+
+	dump, err := os.Create(temp)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err = dump.Truncate(int64(size)); err != nil {
+		return nil, nil, nil, err
+	}
+	// Memory map the file for writing and fill it with the generator
+	mem, buffer, err := memoryMapFile(dump, true)
+	if err != nil {
+		dump.Close()
+		return nil, nil, nil, err
+	}
+	generator(buffer)
+
+	if err := mem.Flush(); err != nil {
+		mem.Unmap()
+		dump.Close()
+		return nil, nil, nil, err
+	}
+	os.Rename(temp, path)
+	return dump, mem, buffer, nil
+}
+
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
 type cache struct {
-	epoch uint64     // Epoch for which this cache is relevant
-	cache []uint32   // The actual cache data content
+	epoch uint64 // Epoch for which this cache is relevant
+
+	dump *os.File  // File descriptor of the memory mapped cache
+	mmap mmap.MMap // Memory map itself to unmap before releasing
+
+	cache []uint32   // The actual cache data content (may be memory mapped)
 	used  time.Time  // Timestamp of the last use for smarter eviction
 	once  sync.Once  // Ensures the cache is generated only once
 	lock  sync.Mutex // Ensures thread safety for updating the usage time
@@ -71,57 +151,72 @@ func (c *cache) generate(dir string, limit int, test bool) {
 	c.once.Do(func() {
 		// If we have a testing cache, generate and return
 		if test {
-			rawCache := generateCache(1024, seedHash(c.epoch*epochLength+1))
-			c.cache = prepare(1024, bytes.NewReader(rawCache))
+			c.cache = make([]uint32, 1024/4)
+			generateCache(c.cache, c.epoch, seedHash(c.epoch*epochLength+1))
 			return
 		}
-		// Full cache generation is needed, check cache dir for existing data
+		// If we don't store anything on disk, generate and return
 		size := cacheSize(c.epoch*epochLength + 1)
 		seed := seedHash(c.epoch*epochLength + 1)
 
-		path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x", algorithmRevision, seed))
-		logger := log.New("seed", hexutil.Bytes(seed))
-
-		if dir != "" {
-			dump, err := os.Open(path)
-			if err == nil {
-				logger.Info("Loading ethash cache from disk")
-				start := time.Now()
-				c.cache = prepare(size, bufio.NewReader(dump))
-				logger.Info("Loaded ethash cache from disk", "elapsed", common.PrettyDuration(time.Since(start)))
-
-				dump.Close()
-				return
-			}
+		if dir == "" {
+			c.cache = make([]uint32, size/4)
+			generateCache(c.cache, c.epoch, seed)
+			return
 		}
-		// No previous disk cache was available, generate on the fly
-		rawCache := generateCache(size, seed)
-		c.cache = prepare(size, bytes.NewReader(rawCache))
+		// Disk storage is needed, this will get fancy
+		endian := "le"
+		if !isLittleEndian() {
+			endian = "be"
+		}
+		path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x.%s", algorithmRevision, seed, endian))
+		logger := log.New("epoch", c.epoch)
 
-		// If a cache directory is given, attempt to serialize for next time
-		if dir != "" {
-			// Store the ethash cache to disk
-			start := time.Now()
-			if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
-				logger.Error("Failed to create ethash cache dir", "err", err)
-			} else if err := ioutil.WriteFile(path, rawCache, os.ModePerm); err != nil {
-				logger.Error("Failed to write ethash cache to disk", "err", err)
-			} else {
-				logger.Info("Stored ethash cache to disk", "elapsed", common.PrettyDuration(time.Since(start)))
-			}
-			// Iterate over all previous instances and delete old ones
-			for ep := int(c.epoch) - limit; ep >= 0; ep-- {
-				seed := seedHash(uint64(ep)*epochLength + 1)
-				path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x", algorithmRevision, seed))
-				os.Remove(path)
-			}
+		// Try to load the file from disk and memory map it
+		var err error
+		c.dump, c.mmap, c.cache, err = memoryMap(path)
+		if err == nil {
+			logger.Debug("Loaded old ethash cache from disk")
+			return
+		}
+		logger.Debug("Failed to load old ethash cache", "err", err)
+
+		// No previous cache available, create a new cache file to fill
+		c.dump, c.mmap, c.cache, err = memoryMapAndGenerate(path, size, func(buffer []uint32) { generateCache(buffer, c.epoch, seed) })
+		if err != nil {
+			logger.Error("Failed to generate mapped ethash cache", "err", err)
+
+			c.cache = make([]uint32, size/4)
+			generateCache(c.cache, c.epoch, seed)
+		}
+		// Iterate over all previous instances and delete old ones
+		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
+			seed := seedHash(uint64(ep)*epochLength + 1)
+			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x.%s", algorithmRevision, seed, endian))
+			os.Remove(path)
 		}
 	})
 }
 
+// release closes any file handlers and memory maps open.
+func (c *cache) release() {
+	if c.mmap != nil {
+		c.mmap.Unmap()
+		c.mmap = nil
+	}
+	if c.dump != nil {
+		c.dump.Close()
+		c.dump = nil
+	}
+}
+
 // dataset wraps an ethash dataset with some metadata to allow easier concurrent use.
 type dataset struct {
-	epoch   uint64     // Epoch for which this cache is relevant
+	epoch uint64 // Epoch for which this cache is relevant
+
+	dump *os.File  // File descriptor of the memory mapped cache
+	mmap mmap.MMap // Memory map itself to unmap before releasing
+
 	dataset []uint32   // The actual cache data content
 	used    time.Time  // Timestamp of the last use for smarter eviction
 	once    sync.Once  // Ensures the cache is generated only once
@@ -129,78 +224,91 @@ type dataset struct {
 }
 
 // generate ensures that the dataset content is generated before use.
-func (d *dataset) generate(dir string, limit int, test bool, discard bool) {
+func (d *dataset) generate(dir string, limit int, test bool) {
 	d.once.Do(func() {
 		// If we have a testing dataset, generate and return
 		if test {
-			rawCache := generateCache(1024, seedHash(d.epoch*epochLength+1))
-			intCache := prepare(1024, bytes.NewReader(rawCache))
+			cache := make([]uint32, 1024/4)
+			generateCache(cache, d.epoch, seedHash(d.epoch*epochLength+1))
 
-			rawDataset := generateDataset(32*1024, intCache)
-			d.dataset = prepare(32*1024, bytes.NewReader(rawDataset))
+			d.dataset = make([]uint32, 32*1024/4)
+			generateDataset(d.dataset, d.epoch, cache)
 
 			return
 		}
-		// Full dataset generation is needed, check dataset dir for existing data
+		// If we don't store anything on disk, generate and return
 		csize := cacheSize(d.epoch*epochLength + 1)
 		dsize := datasetSize(d.epoch*epochLength + 1)
 		seed := seedHash(d.epoch*epochLength + 1)
 
-		path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x", algorithmRevision, seed))
-		logger := log.New("seed", hexutil.Bytes(seed))
+		if dir == "" {
+			cache := make([]uint32, csize/4)
+			generateCache(cache, d.epoch, seed)
 
-		if dir != "" {
-			dump, err := os.Open(path)
-			if err == nil {
-				if !discard {
-					logger.Info("Loading ethash DAG from disk")
-					start := time.Now()
-					d.dataset = prepare(dsize, bufio.NewReader(dump))
-					logger.Info("Loaded ethash DAG from disk", "elapsed", common.PrettyDuration(time.Since(start)))
-				}
-				dump.Close()
-				return
-			}
+			d.dataset = make([]uint32, dsize/4)
+			generateDataset(d.dataset, d.epoch, cache)
 		}
-		// No previous disk dataset was available, generate on the fly
-		rawCache := generateCache(csize, seed)
-		intCache := prepare(csize, bytes.NewReader(rawCache))
+		// Disk storage is needed, this will get fancy
+		endian := "le"
+		if !isLittleEndian() {
+			endian = "be"
+		}
+		path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x.%s", algorithmRevision, seed, endian))
+		logger := log.New("epoch", d.epoch)
 
-		rawDataset := generateDataset(dsize, intCache)
-		if !discard {
-			d.dataset = prepare(dsize, bytes.NewReader(rawDataset))
+		// Try to load the file from disk and memory map it
+		var err error
+		d.dump, d.mmap, d.dataset, err = memoryMap(path)
+		if err == nil {
+			logger.Debug("Loaded old ethash dataset from disk")
+			return
 		}
-		// If a dataset directory is given, attempt to serialize for next time
-		if dir != "" {
-			// Store the ethash dataset to disk
-			start := time.Now()
-			if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
-				logger.Error("Failed to create ethash DAG dir", "err", err)
-			} else if err := ioutil.WriteFile(path, rawDataset, os.ModePerm); err != nil {
-				logger.Error("Failed to write ethash DAG to disk", "err", err)
-			} else {
-				logger.Info("Stored ethash DAG to disk", "elapsed", common.PrettyDuration(time.Since(start)))
-			}
-			// Iterate over all previous instances and delete old ones
-			for ep := int(d.epoch) - limit; ep >= 0; ep-- {
-				seed := seedHash(uint64(ep)*epochLength + 1)
-				path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x", algorithmRevision, seed))
-				os.Remove(path)
-			}
+		logger.Debug("Failed to load old ethash dataset", "err", err)
+
+		// No previous dataset available, create a new dataset file to fill
+		cache := make([]uint32, csize/4)
+		generateCache(cache, d.epoch, seed)
+
+		d.dump, d.mmap, d.dataset, err = memoryMapAndGenerate(path, dsize, func(buffer []uint32) { generateDataset(buffer, d.epoch, cache) })
+		if err != nil {
+			logger.Error("Failed to generate mapped ethash dataset", "err", err)
+
+			d.dataset = make([]uint32, dsize/2)
+			generateDataset(d.dataset, d.epoch, cache)
+		}
+		// Iterate over all previous instances and delete old ones
+		for ep := int(d.epoch) - limit; ep >= 0; ep-- {
+			seed := seedHash(uint64(ep)*epochLength + 1)
+			path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x.%s", algorithmRevision, seed, endian))
+			os.Remove(path)
 		}
 	})
+}
+
+// release closes any file handlers and memory maps open.
+func (d *dataset) release() {
+	if d.mmap != nil {
+		d.mmap.Unmap()
+		d.mmap = nil
+	}
+	if d.dump != nil {
+		d.dump.Close()
+		d.dump = nil
+	}
 }
 
 // MakeCache generates a new ethash cache and optionally stores it to disk.
 func MakeCache(block uint64, dir string) {
 	c := cache{epoch: block/epochLength + 1}
 	c.generate(dir, math.MaxInt32, false)
+	c.release()
 }
 
 // MakeDataset generates a new ethash dataset and optionally stores it to disk.
 func MakeDataset(block uint64, dir string) {
 	d := dataset{epoch: block/epochLength + 1}
-	d.generate(dir, math.MaxInt32, false, true)
+	d.generate(dir, math.MaxInt32, false)
+	d.release()
 }
 
 // Ethash is a PoW data struture implementing the ethash algorithm.
@@ -318,22 +426,26 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 				}
 			}
 			delete(ethash.caches, evict.epoch)
+			evict.release()
 
-			log.Debug("Evicted ethash cache", "epoch", evict.epoch, "used", evict.used)
+			log.Trace("Evicted ethash cache", "epoch", evict.epoch, "used", evict.used)
 		}
 		// If we have the new cache pre-generated, use that, otherwise create a new one
 		if ethash.fcache != nil && ethash.fcache.epoch == epoch {
-			log.Debug("Using pre-generated cache", "epoch", epoch)
+			log.Trace("Using pre-generated cache", "epoch", epoch)
 			current, ethash.fcache = ethash.fcache, nil
 		} else {
-			log.Debug("Requiring new ethash cache", "epoch", epoch)
+			log.Trace("Requiring new ethash cache", "epoch", epoch)
 			current = &cache{epoch: epoch}
 		}
 		ethash.caches[epoch] = current
 
 		// If we just used up the future cache, or need a refresh, regenerate
 		if ethash.fcache == nil || ethash.fcache.epoch <= epoch {
-			log.Debug("Requiring new future ethash cache", "epoch", epoch+1)
+			if ethash.fcache != nil {
+				ethash.fcache.release()
+			}
+			log.Trace("Requiring new future ethash cache", "epoch", epoch+1)
 			future = &cache{epoch: epoch + 1}
 			ethash.fcache = future
 		}
@@ -418,23 +530,27 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 				}
 			}
 			delete(ethash.datasets, evict.epoch)
+			evict.release()
 
-			log.Debug("Evicted ethash dataset", "epoch", evict.epoch, "used", evict.used)
+			log.Trace("Evicted ethash dataset", "epoch", evict.epoch, "used", evict.used)
 		}
 		// If we have the new cache pre-generated, use that, otherwise create a new one
 		if ethash.fdataset != nil && ethash.fdataset.epoch == epoch {
-			log.Debug("Using pre-generated dataset", "epoch", epoch)
+			log.Trace("Using pre-generated dataset", "epoch", epoch)
 			current = &dataset{epoch: ethash.fdataset.epoch} // Reload from disk
 			ethash.fdataset = nil
 		} else {
-			log.Debug("Requiring new ethash dataset", "epoch", epoch)
+			log.Trace("Requiring new ethash dataset", "epoch", epoch)
 			current = &dataset{epoch: epoch}
 		}
 		ethash.datasets[epoch] = current
 
 		// If we just used up the future dataset, or need a refresh, regenerate
 		if ethash.fdataset == nil || ethash.fdataset.epoch <= epoch {
-			log.Debug("Requiring new future ethash dataset", "epoch", epoch+1)
+			if ethash.fdataset != nil {
+				ethash.fdataset.release()
+			}
+			log.Trace("Requiring new future ethash dataset", "epoch", epoch+1)
 			future = &dataset{epoch: epoch + 1}
 			ethash.fdataset = future
 		}
@@ -443,7 +559,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
-	current.generate(ethash.dagdir, ethash.dagsondisk, ethash.tester, false)
+	current.generate(ethash.dagdir, ethash.dagsondisk, ethash.tester)
 
 	current.lock.Lock()
 	current.used = time.Now()
@@ -451,7 +567,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 
 	// If we exhausted the future dataset, now's a good time to regenerate it
 	if future != nil {
-		go future.generate(ethash.dagdir, ethash.dagsondisk, ethash.tester, true) // Discard results from memorys
+		go future.generate(ethash.dagdir, ethash.dagsondisk, ethash.tester)
 	}
 	return current.dataset
 }

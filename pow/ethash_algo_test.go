@@ -18,21 +18,28 @@ package pow
 
 import (
 	"bytes"
+	"io/ioutil"
+	"math/big"
+	"os"
+	"reflect"
+	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Tests that verification caches can be correctly generated.
 func TestCacheGeneration(t *testing.T) {
 	tests := []struct {
 		size  uint64
-		seed  []byte
+		epoch uint64
 		cache []byte
 	}{
 		{
-			size: 1024,
-			seed: make([]byte, 32),
+			size:  1024,
+			epoch: 0,
 			cache: hexutil.MustDecode("0x" +
 				"7ce2991c951f7bf4c4c1bb119887ee07871eb5339d7b97b8588e85c742de90e5bafd5bbe6ce93a134fb6be9ad3e30db99d9528a2ea7846833f52e9ca119b6b54" +
 				"8979480c46e19972bd0738779c932c1b43e665a2fd3122fc3ddb2691f353ceb0ed3e38b8f51fd55b6940290743563c9f8fa8822e611924657501a12aafab8a8d" +
@@ -52,8 +59,8 @@ func TestCacheGeneration(t *testing.T) {
 				"845f64fd8324bb85312979dead74f764c9677aab89801ad4f927f1c00f12e28f22422bb44200d1969d9ab377dd6b099dc6dbc3222e9321b2c1e84f8e2f07731c"),
 		},
 		{
-			size: 1024,
-			seed: hexutil.MustDecode("0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"),
+			size:  1024,
+			epoch: 1,
 			cache: hexutil.MustDecode("0x" +
 				"1f56855d59cc5a085720899b4377a0198f1abe948d85fe5820dc0e346b7c0931b9cde8e541d751de3b2b3275d0aabfae316209d5879297d8bd99f8a033c9d4df" +
 				"35add1029f4e6404a022d504fb8023e42989aba985a65933b0109c7218854356f9284983c9e7de97de591828ae348b63d1fc78d8db58157344d4e06530ffd422" +
@@ -74,22 +81,28 @@ func TestCacheGeneration(t *testing.T) {
 		},
 	}
 	for i, tt := range tests {
-		if cache := generateCache(tt.size, tt.seed); !bytes.Equal(cache, tt.cache) {
-			t.Errorf("cache %d: content mismatch: have %x, want %x", i, cache, tt.cache)
+		cache := make([]uint32, tt.size/4)
+		generateCache(cache, tt.epoch, seedHash(tt.epoch*epochLength+1))
+
+		want := make([]uint32, tt.size/4)
+		prepare(want, tt.cache)
+
+		if !reflect.DeepEqual(cache, want) {
+			t.Errorf("cache %d: content mismatch: have %x, want %x", i, cache, want)
 		}
 	}
 }
 
 func TestDatasetGeneration(t *testing.T) {
 	tests := []struct {
+		epoch       uint64
 		cacheSize   uint64
-		cacheSeed   []byte
 		datasetSize uint64
 		dataset     []byte
 	}{
 		{
+			epoch:       0,
 			cacheSize:   1024,
-			cacheSeed:   make([]byte, 32),
 			datasetSize: 32 * 1024,
 			dataset: hexutil.MustDecode("0x" +
 				"4bc09fbd530a041dd2ec296110a29e8f130f179c59d223f51ecce3126e8b0c74326abc2f32ccd9d7f976bd0944e3ccf8479db39343cbbffa467046ca97e2da63" +
@@ -608,11 +621,17 @@ func TestDatasetGeneration(t *testing.T) {
 		},
 	}
 	for i, tt := range tests {
-		rawCache := generateCache(tt.cacheSize, tt.cacheSeed)
-		cache := prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
+		cache := make([]uint32, tt.cacheSize/4)
+		generateCache(cache, tt.epoch, seedHash(tt.epoch*epochLength+1))
 
-		if dataset := generateDataset(tt.datasetSize, cache); !bytes.Equal(dataset, tt.dataset) {
-			t.Errorf("dataset %d: content mismatch: have %x, want %x", i, dataset, tt.dataset)
+		dataset := make([]uint32, tt.datasetSize/4)
+		generateDataset(dataset, tt.epoch, cache)
+
+		want := make([]uint32, tt.datasetSize/4)
+		prepare(want, tt.dataset)
+
+		if !reflect.DeepEqual(dataset, want) {
+			t.Errorf("dataset %d: content mismatch: have %x, want %x", i, dataset, want)
 		}
 	}
 }
@@ -621,12 +640,12 @@ func TestDatasetGeneration(t *testing.T) {
 // datasets.
 func TestHashimoto(t *testing.T) {
 	// Create the verification cache and mining dataset
-	var (
-		rawCache   = generateCache(1024, make([]byte, 32))
-		cache      = prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
-		rawDataset = generateDataset(32*1024, cache)
-		dataset    = prepare(uint64(len(rawDataset)), bytes.NewReader(rawDataset))
-	)
+	cache := make([]uint32, 1024/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	dataset := make([]uint32, 32*1024/4)
+	generateDataset(dataset, 0, cache)
+
 	// Create a block to verify
 	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
 	nonce := uint64(0)
@@ -650,31 +669,77 @@ func TestHashimoto(t *testing.T) {
 	}
 }
 
+// Tests that caches generated on disk may be done concurrently.
+func TestConcurrentDiskCacheGeneration(t *testing.T) {
+	// Create a temp folder to generate the caches into
+	cachedir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("Failed to create temporary cache dir: %v", err)
+	}
+	defer os.RemoveAll(cachedir)
+
+	// Define a heavy enough block, one from mainnet should do
+	block := types.NewBlockWithHeader(&types.Header{
+		Number:      big.NewInt(3311058),
+		ParentHash:  common.HexToHash("0xd783efa4d392943503f28438ad5830b2d5964696ffc285f338585e9fe0a37a05"),
+		UncleHash:   common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
+		Coinbase:    common.HexToAddress("0xc0ea08a2d404d3172d2add29a45be56da40e2949"),
+		Root:        common.HexToHash("0x77d14e10470b5850332524f8cd6f69ad21f070ce92dca33ab2858300242ef2f1"),
+		TxHash:      common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+		ReceiptHash: common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+		Difficulty:  big.NewInt(167925187834220),
+		GasLimit:    big.NewInt(4015682),
+		GasUsed:     big.NewInt(0),
+		Time:        big.NewInt(1488928920),
+		Extra:       []byte("www.bw.com"),
+		MixDigest:   common.HexToHash("0x3e140b0784516af5e5ec6730f2fb20cca22f32be399b9e4ad77d32541f798cd0"),
+		Nonce:       types.EncodeNonce(0xf400cd0006070c49),
+	})
+	// Simulate multiple processes sharing the same datadir
+	var pend sync.WaitGroup
+
+	for i := 0; i < 3; i++ {
+		pend.Add(1)
+
+		go func(idx int) {
+			defer pend.Done()
+
+			ethash := NewFullEthash(cachedir, 0, 1, "", 0, 0)
+			if err := ethash.Verify(block); err != nil {
+				t.Errorf("proc %d: block verification failed: %v", idx, err)
+			}
+		}(i)
+	}
+	pend.Wait()
+}
+
 // Benchmarks the cache generation performance.
 func BenchmarkCacheGeneration(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		generateCache(cacheSize(1), make([]byte, 32))
+		cache := make([]uint32, cacheSize(1)/4)
+		generateCache(cache, 0, make([]byte, 32))
 	}
 }
 
 // Benchmarks the dataset (small) generation performance.
 func BenchmarkSmallDatasetGeneration(b *testing.B) {
-	rawCache := generateCache(65536, make([]byte, 32))
-	cache := prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
+	cache := make([]uint32, 65536/4)
+	generateCache(cache, 0, make([]byte, 32))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		generateDataset(32*65536, cache)
+		dataset := make([]uint32, 32*65536/4)
+		generateDataset(dataset, 0, cache)
 	}
 }
 
 // Benchmarks the light verification performance.
 func BenchmarkHashimotoLight(b *testing.B) {
-	var (
-		rawCache = generateCache(cacheSize(1), make([]byte, 32))
-		cache    = prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
-		hash     = hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
-	)
+	cache := make([]uint32, cacheSize(1)/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		hashimotoLight(datasetSize(1), cache, hash, 0)
@@ -683,13 +748,14 @@ func BenchmarkHashimotoLight(b *testing.B) {
 
 // Benchmarks the full (small) verification performance.
 func BenchmarkHashimotoFullSmall(b *testing.B) {
-	var (
-		rawCache   = generateCache(65536, make([]byte, 32))
-		cache      = prepare(uint64(len(rawCache)), bytes.NewReader(rawCache))
-		rawDataset = generateDataset(32*65536, cache)
-		dataset    = prepare(uint64(len(rawDataset)), bytes.NewReader(rawDataset))
-		hash       = hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
-	)
+	cache := make([]uint32, 65536/4)
+	generateCache(cache, 0, make([]byte, 32))
+
+	dataset := make([]uint32, 32*65536/4)
+	generateDataset(dataset, 0, cache)
+
+	hash := hexutil.MustDecode("0xc9149cc0386e689d789a1c2f3d5d169a61a6218ed30e74414dc736e442ef3d1f")
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		hashimotoFull(32*65536, dataset, hash, 0)

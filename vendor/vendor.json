@@ -35,6 +35,12 @@
 			"revisionTime": "2016-10-29T20:57:26Z"
 		},
 		{
+			"checksumSHA1": "zYnPsNAVm1/ViwCkN++dX2JQhBo=",
+			"path": "github.com/edsrzf/mmap-go",
+			"revision": "935e0e8a636ca4ba70b713f3e38a19e1b77739e8",
+			"revisionTime": "2016-05-12T03:30:02Z"
+		},
+		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",
