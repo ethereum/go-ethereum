@@ -37,10 +37,6 @@ var (
 	secp256k1_halfN = new(big.Int).Div(secp256k1_N, big.NewInt(2))
 )
 
-// Hasher is a repetitive hasher allowing the same hash data structures to be
-// reused between hash runs instead of requiring new ones to be created.
-type Hasher func(data []byte) []byte
-
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	d := sha3.NewKeccak256()
@@ -61,22 +57,6 @@ func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	return h
 }
 
-// Keccak256Hasher creates a repetitive Keccak256 hasher, allowing the same hash
-// data structures to be reused between hash runs instead of requiring new ones
-// to be created.
-//
-// The returned function is not thread safe!
-func Keccak256Hasher() Hasher {
-	hasher := sha3.NewKeccak256()
-
-	return func(data []byte) []byte {
-		hasher.Write(data)
-		result := hasher.Sum(nil)
-		hasher.Reset()
-		return result
-	}
-}
-
 // Keccak512 calculates and returns the Keccak512 hash of the input data.
 func Keccak512(data ...[]byte) []byte {
 	d := sha3.NewKeccak512()
@@ -84,22 +64,6 @@ func Keccak512(data ...[]byte) []byte {
 		d.Write(b)
 	}
 	return d.Sum(nil)
-}
-
-// Keccak512Hasher creates a repetitive Keccak512 hasher, allowing the same hash
-// data structures to be reused between hash runs instead of requiring new ones
-// to be created.
-//
-// The returned function is not thread safe!
-func Keccak512Hasher() Hasher {
-	hasher := sha3.NewKeccak512()
-
-	return func(data []byte) []byte {
-		hasher.Write(data)
-		result := hasher.Sum(nil)
-		hasher.Reset()
-		return result
-	}
 }
 
 // Deprecated: For backward compatibility as other packages depend on these
