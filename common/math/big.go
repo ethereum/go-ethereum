@@ -18,6 +18,7 @@
 package math
 
 import (
+	"fmt"
 	"math/big"
 )
 
@@ -34,6 +35,24 @@ const (
 	// number of bytes in a big.Word
 	wordBytes = wordBits / 8
 )
+
+// HexOrDecimal256 marshals big.Int as hex or decimal.
+type HexOrDecimal256 big.Int
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (i *HexOrDecimal256) UnmarshalText(input []byte) error {
+	bigint, ok := ParseBig256(string(input))
+	if !ok {
+		return fmt.Errorf("invalid hex or decimal integer %q", input)
+	}
+	*i = HexOrDecimal256(*bigint)
+	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (i *HexOrDecimal256) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%#x", (*big.Int)(i))), nil
+}
 
 // ParseBig256 parses s as a 256 bit integer in decimal or hexadecimal syntax.
 // Leading zeros are accepted. The empty string parses as zero.

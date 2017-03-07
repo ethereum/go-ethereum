@@ -65,7 +65,7 @@ func TestOverflow(t *testing.T) {
 	}
 }
 
-func TestParseUint64(t *testing.T) {
+func TestHexOrDecimal64(t *testing.T) {
 	tests := []struct {
 		input string
 		num   uint64
@@ -88,12 +88,13 @@ func TestParseUint64(t *testing.T) {
 		{"18446744073709551617", 0, false},
 	}
 	for _, test := range tests {
-		num, ok := ParseUint64(test.input)
-		if ok != test.ok {
-			t.Errorf("ParseUint64(%q) -> ok = %t, want %t", test.input, ok, test.ok)
+		var num HexOrDecimal64
+		err := num.UnmarshalText([]byte(test.input))
+		if (err == nil) != test.ok {
+			t.Errorf("ParseUint64(%q) -> (err == nil) = %t, want %t", test.input, err == nil, test.ok)
 			continue
 		}
-		if ok && num != test.num {
+		if err == nil && uint64(num) != test.num {
 			t.Errorf("ParseUint64(%q) -> %d, want %d", test.input, num, test.num)
 		}
 	}
