@@ -369,6 +369,11 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	start := time.Now()
+	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+		return i, err
+	}
+
 	// Make sure only one thread manipulates the chain at once
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
@@ -397,7 +402,7 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		}
 		return err
 	}
-	i, err := self.hc.InsertHeaderChain(chain, checkFreq, whFunc)
+	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
 	go self.postChainEvents(events)
 	return i, err
 }
