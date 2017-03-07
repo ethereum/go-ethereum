@@ -32,8 +32,8 @@ import (
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
 type PrecompiledContract interface {
-	RequiredGas(input []byte) uint64 // RequiredPrice calculates the contract gas use
-	Run(input []byte) []byte         // Run runs the precompiled contract
+	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
+	Run(input []byte) ([]byte, error) // Run runs the precompiled contract
 }
 
 // PrecompiledContracts contains the default set of ethereum contracts
@@ -58,9 +58,7 @@ var PrecompiledContractsEIP198 = map[common.Address]PrecompiledContract{
 func RunPrecompiledContract(p PrecompiledContract, input []byte, contract *Contract) (ret []byte, err error) {
 	gas := p.RequiredGas(input)
 	if contract.UseGas(gas) {
-		ret = p.Run(input)
-
-		return ret, nil
+		return p.Run(input)
 	} else {
 		return nil, ErrOutOfGas
 	}
@@ -73,7 +71,7 @@ func (c *ecrecover) RequiredGas(input []byte) uint64 {
 	return params.EcrecoverGas
 }
 
-func (c *ecrecover) Run(in []byte) []byte {
+func (c *ecrecover) Run(in []byte) ([]byte, error) {
 	const ecRecoverInputLength = 128
 
 	in = common.RightPadBytes(in, ecRecoverInputLength)
@@ -94,11 +92,11 @@ func (c *ecrecover) Run(in []byte) []byte {
 	// make sure the public key is a valid one
 	if err != nil {
 		log.Trace("ECRECOVER failed", "err", err)
-		return nil
+		return nil, nil
 	}
 
 	// the first byte of pubkey is bitcoin heritage
-	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32)
+	return common.LeftPadBytes(crypto.Keccak256(pubKey[1:])[12:], 32), nil
 }
 
 // SHA256 implemented as a native contract
@@ -111,9 +109,9 @@ type sha256hash struct{}
 func (c *sha256hash) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.Sha256WordGas + params.Sha256Gas
 }
-func (c *sha256hash) Run(in []byte) []byte {
+func (c *sha256hash) Run(in []byte) ([]byte, error) {
 	h := sha256.Sum256(in)
-	return h[:]
+	return h[:], nil
 }
 
 // RIPMED160 implemented as a native contract
@@ -126,10 +124,10 @@ type ripemd160hash struct{}
 func (c *ripemd160hash) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.Ripemd160WordGas + params.Ripemd160Gas
 }
-func (c *ripemd160hash) Run(in []byte) []byte {
+func (c *ripemd160hash) Run(in []byte) ([]byte, error) {
 	ripemd := ripemd160.New()
 	ripemd.Write(in)
-	return common.LeftPadBytes(ripemd.Sum(nil), 32)
+	return common.LeftPadBytes(ripemd.Sum(nil), 32), nil
 }
 
 // data copy implemented as a native contract
@@ -142,8 +140,8 @@ type dataCopy struct{}
 func (c *dataCopy) RequiredGas(input []byte) uint64 {
 	return uint64(len(input)+31)/32*params.IdentityWordGas + params.IdentityGas
 }
-func (c *dataCopy) Run(in []byte) []byte {
-	return in
+func (c *dataCopy) Run(in []byte) ([]byte, error) {
+	return in, nil
 }
 
 // bigModexp implements a native big integer exponential modular operation.
@@ -172,7 +170,7 @@ func (c *bigModexp) RequiredGas(input []byte) uint64 {
 	return x.Uint64()
 }
 
-func (c *bigModexp) Run(input []byte) []byte {
+func (c *bigModexp) Run(input []byte) ([]byte, error) {
 	if len(input) < 3*32 {
 		input = append(input, make([]byte, 3*32-len(input))...)
 	}
@@ -201,5 +199,5 @@ func (c *bigModexp) Run(input []byte) []byte {
 	}
 	mod := new(big.Int).SetBytes(input[:modLen])
 
-	return base.Exp(base, exp, mod).Bytes()
+	return base.Exp(base, exp, mod).Bytes(), nil
 }
