@@ -244,7 +244,10 @@ var (
 		Name:  "fakepow",
 		Usage: "Disables proof-of-work verification",
 	}
-
+	NoCompactionFlag = cli.BoolFlag{
+		Name:  "nocompaction",
+		Usage: "Disables db compaction after import",
+	}
 	// RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",

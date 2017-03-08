@@ -140,6 +140,7 @@ func init() {
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
+		utils.NoCompactionFlag,
 		utils.SolcPathFlag,
 		utils.GpoMinGasPriceFlag,
 		utils.GpoMaxGasPriceFlag,

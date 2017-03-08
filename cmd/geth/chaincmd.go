@@ -54,10 +54,13 @@ participating.
 		Action:    importChain,
 		Name:      "import",
 		Usage:     "Import a blockchain file",
-		ArgsUsage: "<filename>",
+		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
-TODO: Please write this
+The import command imports blocks from an RLP-encoded form. The form can be one file 
+with several RLP-encoded blocks, or several files can be used. 
+If only one file is used, import error will result in failure. If several files are used, 
+processing will proceed even if an individual RLP-file import failure occurs.   
 `,
 	}
 	exportCommand = cli.Command{
@@ -122,7 +125,7 @@ func initGenesis(ctx *cli.Context) error {
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) != 1 {
+	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
@@ -146,9 +149,19 @@ func importChain(ctx *cli.Context) error {
 	}()
 	// Import the chain
 	start := time.Now()
-	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
-		utils.Fatalf("Import error: %v", err)
+
+	if len(ctx.Args()) == 1 {
+		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
+			utils.Fatalf("Import error: %v", err)
+		}
+	} else {
+		for _, arg := range ctx.Args() {
+			if err := utils.ImportChain(chain, arg); err != nil {
+				log.Error("Import error", "file", arg, "err", err)
+			}
+		}
 	}
+
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing
@@ -170,6 +183,10 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("System memory: %.3f MB current, %.3f MB peak\n", float64(mem.Sys)/1024/1024, float64(atomic.LoadUint64(&peakMemSys))/1024/1024)
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
+
+	if ctx.GlobalIsSet(utils.NoCompactionFlag.Name) {
+		return nil
+	}
 
 	// Compact the entire database to more accurately measure disk io and print the stats
 	start = time.Now()
