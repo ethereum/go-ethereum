@@ -157,7 +157,7 @@ func importChain(ctx *cli.Context) error {
 	} else {
 		for _, arg := range ctx.Args() {
 			if err := utils.ImportChain(chain, arg); err != nil {
-				log.Error("Import error", "file",arg, "err", err)
+				log.Error("Import error", "file", arg, "err", err)
 			}
 		}
 	}
