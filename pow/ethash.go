@@ -32,12 +32,12 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
 var (
+	ErrInvalidDumpMagic  = errors.New("invalid dump magic")
 	ErrNonceOutOfRange   = errors.New("nonce out of range")
 	ErrInvalidDifficulty = errors.New("non-positive difficulty")
 	ErrInvalidMixDigest  = errors.New("invalid mix digest")
@@ -55,7 +55,7 @@ var (
 	algorithmRevision = 23
 
 	// dumpMagic is a dataset dump header to sanity check a data dump.
-	dumpMagic = hexutil.MustDecode("0xfee1deadbaddcafe")
+	dumpMagic = []uint32{0xbaddcafe, 0xfee1dead}
 )
 
 // isLittleEndian returns whether the local system is running in little or big
@@ -76,7 +76,14 @@ func memoryMap(path string) (*os.File, mmap.MMap, []uint32, error) {
 		file.Close()
 		return nil, nil, nil, err
 	}
-	return file, mem, buffer, err
+	for i, magic := range dumpMagic {
+		if buffer[i] != magic {
+			mem.Unmap()
+			file.Close()
+			return nil, nil, nil, ErrInvalidDumpMagic
+		}
+	}
+	return file, mem, buffer[len(dumpMagic):], err
 }
 
 // memoryMapFile tries to memory map an already opened file descriptor.
@@ -113,7 +120,7 @@ func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err = dump.Truncate(int64(size)); err != nil {
+	if err = dump.Truncate(int64(len(dumpMagic))*4 + int64(size)); err != nil {
 		return nil, nil, nil, err
 	}
 	// Memory map the file for writing and fill it with the generator
@@ -122,7 +129,10 @@ func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint
 		dump.Close()
 		return nil, nil, nil, err
 	}
-	generator(buffer)
+	copy(buffer, dumpMagic)
+
+	data := buffer[len(dumpMagic):]
+	generator(data)
 
 	if err := mem.Flush(); err != nil {
 		mem.Unmap()
@@ -130,7 +140,7 @@ func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint
 		return nil, nil, nil, err
 	}
 	os.Rename(temp, path)
-	return dump, mem, buffer, nil
+	return dump, mem, data, nil
 }
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
@@ -165,11 +175,11 @@ func (c *cache) generate(dir string, limit int, test bool) {
 			return
 		}
 		// Disk storage is needed, this will get fancy
-		endian := "le"
+		var endian string
 		if !isLittleEndian() {
-			endian = "be"
+			endian = ".be"
 		}
-		path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x.%s", algorithmRevision, seed, endian))
+		path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
 		logger := log.New("epoch", c.epoch)
 
 		// Try to load the file from disk and memory map it
@@ -192,7 +202,7 @@ func (c *cache) generate(dir string, limit int, test bool) {
 		// Iterate over all previous instances and delete old ones
 		for ep := int(c.epoch) - limit; ep >= 0; ep-- {
 			seed := seedHash(uint64(ep)*epochLength + 1)
-			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x.%s", algorithmRevision, seed, endian))
+			path := filepath.Join(dir, fmt.Sprintf("cache-R%d-%x%s", algorithmRevision, seed[:8], endian))
 			os.Remove(path)
 		}
 	})
@@ -249,11 +259,11 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 			generateDataset(d.dataset, d.epoch, cache)
 		}
 		// Disk storage is needed, this will get fancy
-		endian := "le"
+		var endian string
 		if !isLittleEndian() {
-			endian = "be"
+			endian = ".be"
 		}
-		path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x.%s", algorithmRevision, seed, endian))
+		path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x%s", algorithmRevision, seed[:8], endian))
 		logger := log.New("epoch", d.epoch)
 
 		// Try to load the file from disk and memory map it
@@ -279,7 +289,7 @@ func (d *dataset) generate(dir string, limit int, test bool) {
 		// Iterate over all previous instances and delete old ones
 		for ep := int(d.epoch) - limit; ep >= 0; ep-- {
 			seed := seedHash(uint64(ep)*epochLength + 1)
-			path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x.%s", algorithmRevision, seed, endian))
+			path := filepath.Join(dir, fmt.Sprintf("full-R%d-%x%s", algorithmRevision, seed[:8], endian))
 			os.Remove(path)
 		}
 	})
