@@ -18,6 +18,7 @@ package vm
 
 import (
 	"fmt"
+	"math/big"
 	"sync/atomic"
 	"time"
 
@@ -81,8 +82,13 @@ func NewInterpreter(env *EVM, cfg Config) *Interpreter {
 	}
 }
 
-// Run loops and evaluates the contract's code with the given input data
-func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
+// Run loops and evaluates the contract's code with the given input data and returns
+// the return byte-slice and an error if one occured.
+//
+// It's important to note that any errors returned by the interpreter should be
+// considered a revert-and-consume-all-gas operation. No error specific checks
+// should be handled to reduce complexity and errors further down the EVM.
+func (evm *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
 	evm.env.depth++
 	defer func() { evm.env.depth-- }()
 
@@ -101,7 +107,8 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		mem   = NewMemory() // bound memory
 		stack = newstack()  // local stack
 		// For optimisation reason we're using uint64 as the program counter.
-		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
+		// It's theoretically possible to go above 2^64. The YP defines the PC
+		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
 		cost uint64
 	)
@@ -112,6 +119,8 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		if err != nil && evm.cfg.Debug {
 			// XXX For debugging
 			//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d ERR = %v\n", pc, op, cost, stack.len(), err)
+			// TODO update the tracer to accept uint64 instead of *big.Int
+			g, c := new(big.Int).SetUint64(contract.Gas), new(big.Int).SetUint64(cost)
 			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
 		}
 	}()
@@ -179,7 +188,9 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		}
 
 		if evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
+			// TODO update the tracer to accept uint64 instead of *big.Int
+			g, c := new(big.Int).SetUint64(contract.Gas), new(big.Int).SetUint64(cost)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, g, c, mem, stack, contract, evm.env.depth, err)
 		}
 		// XXX For debugging
 		//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d\n", pc, op, cost, stack.len())
@@ -191,6 +202,12 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		if verifyPool {
 			verifyIntegerPool(evm.intPool)
 		}
+
+		// checks whether the operation should revert state.
+		if operation.reverts {
+			evm.env.StateDB.RevertToSnapshot(snapshot)
+		}
+
 		switch {
 		case err != nil:
 			return nil, err

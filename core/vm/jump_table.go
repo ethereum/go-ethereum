@@ -51,6 +51,8 @@ type operation struct {
 	writes bool
 	// valid is used to check whether the retrieved operation is valid and known
 	valid bool
+	// reverts determined whether the operation reverts state
+	reverts bool
 }
 
 var defaultJumpTable = NewJumpTable()
@@ -400,6 +402,7 @@ func NewJumpTable() [256]operation {
 			gasCost:       constGasFunc(GasFastestStep),
 			validateStack: makeStackFunc(2, 0),
 			valid:         true,
+			reverts:       true,
 		},
 		JUMPDEST: {
 			execute:       opJumpdest,

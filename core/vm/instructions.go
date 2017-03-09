@@ -31,7 +31,6 @@ import (
 var (
 	bigZero            = new(big.Int)
 	errWriteProtection = errors.New("evm write protection")
-	errRevert          = errors.New("standard throw")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -719,7 +718,7 @@ func opRevert(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	ret := memory.GetPtr(offset.Int64(), size.Int64())
 
 	evm.interpreter.intPool.put(offset, size)
-	return ret, errRevert
+	return ret, nil
 }
 
 func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
