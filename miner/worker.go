@@ -114,7 +114,8 @@ type worker struct {
 	txQueueMu sync.Mutex
 	txQueue   map[common.Hash]*types.Transaction
 
-	unconfirmed *unconfirmedBlocks // set of locally mined blocks pending canonicalness confirmations
+	unconfirmed *unconfirmedBlocks // Set of locally mined blocks pending confirmation
+	strategies  []*Strategy        // Miner strategies currently ran by the miner
 
 	// atomic status counters
 	mining int32
@@ -123,7 +124,7 @@ type worker struct {
 	fullValidation bool
 }
 
-func newWorker(config *params.ChainConfig, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
+func newWorker(config *params.ChainConfig, coinbase common.Address, eth Backend, mux *event.TypeMux, strategies []*Strategy) *worker {
 	worker := &worker{
 		config:         config,
 		eth:            eth,
@@ -138,6 +139,7 @@ func newWorker(config *params.ChainConfig, coinbase common.Address, eth Backend,
 		txQueue:        make(map[common.Hash]*types.Transaction),
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), 5),
+		strategies:     strategies,
 		fullValidation: false,
 	}
 	worker.events = worker.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
@@ -275,6 +277,22 @@ func (self *worker) wait() {
 			block := result.Block
 			work := result.Work
 
+			// Run any miner strategies interested in block mine results and ensure none denies this block
+			denied := false
+			for _, strat := range self.strategies {
+				if strat.OnMinedBlock != nil {
+					glog.V(logger.Debug).Infof("Passing mined block #%d [%x…] to strategy %s", block.Number(), block.Hash().Bytes()[:4], strat.Name)
+					if err := strat.OnMinedBlock(self.mux, self.chain, self.eth.TxPool(), block); err != nil {
+						glog.V(logger.Debug).Infof("Mined block #%d [%x…] denied by strategy %s: %v", block.Number(), block.Hash().Bytes()[:4], strat.Name, err)
+						denied = true
+						break
+					}
+					glog.V(logger.Debug).Infof("Mined block #%d [%x…] accepted by strategy %s", block.Number(), block.Hash().Bytes()[:4], strat.Name)
+				}
+			}
+			if denied {
+				continue
+			}
 			if self.fullValidation {
 				if _, err := self.chain.InsertChain(types.Blocks{block}); err != nil {
 					log.Error(fmt.Sprint("mining err", err))
@@ -349,9 +367,22 @@ func (self *worker) wait() {
 
 // push sends a new work task to currently live miner agents.
 func (self *worker) push(work *Work) {
+	// If there are no agents mining, bail out
 	if atomic.LoadInt32(&self.mining) != 1 {
 		return
 	}
+	// Iterate over all miner strategies and ensure none denies this block
+	for _, strat := range self.strategies {
+		if strat.OnMinedBlock != nil {
+			glog.V(logger.Debug).Infof("Passing mining request #%d [%x…] to strategy %s", work.Block.Number(), work.Block.Hash().Bytes()[:4], strat.Name)
+			if err := strat.OnNewWork(self.mux, self.chain, work.Block); err != nil {
+				glog.V(logger.Debug).Infof("Mining request #%d [%x…] denied by strategy %s: %v", work.Block.Number(), work.Block.Hash().Bytes()[:4], strat.Name, err)
+				return
+			}
+			glog.V(logger.Debug).Infof("Mining request #%d [%x…] accepted by strategy %s", work.Block.Number(), work.Block.Hash().Bytes()[:4], strat.Name)
+		}
+	}
+	// Block accepted for mining, proceed
 	for agent := range self.agents {
 		atomic.AddInt32(&self.atWork, 1)
 		if ch := agent.Work(); ch != nil {
@@ -515,7 +546,7 @@ func (self *worker) commitNewWork() {
 		log.Info(fmt.Sprintf("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
-	self.push(work)
+	go self.push(work)
 }
 
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
