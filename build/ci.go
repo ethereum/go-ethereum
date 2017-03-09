@@ -84,6 +84,10 @@ var (
 			Description: "Ethereum CLI client.",
 		},
 		{
+			Name:        "bootnode",
+			Description: "Ethereum bootnode.",
+		},
+		{
 			Name:        "rlpdump",
 			Description: "Developer utility tool that prints RLP structures.",
 		},
