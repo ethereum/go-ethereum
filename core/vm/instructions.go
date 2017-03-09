@@ -604,7 +604,7 @@ func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stac
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -637,7 +637,7 @@ func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Sta
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -671,7 +671,7 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(addr, value, inOffset, inSize, retOffset, retSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -696,7 +696,7 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 	contract.Gas += returnGas
 
 	evm.interpreter.intPool.put(to, inOffset, inSize, outOffset, outSize)
-	return nil, nil
+	return ret, nil
 }
 
 func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -704,6 +704,7 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	ret := memory.GetPtr(offset.Int64(), size.Int64())
 
 	evm.interpreter.intPool.put(offset, size)
+
 	return ret, nil
 }
 
@@ -731,6 +732,31 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 
 	evm.StateDB.Suicide(contract.Address())
 
+	return nil, nil
+}
+
+func opReturnDataSize(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
+		return nil, fmt.Errorf("invalid opcode %x", RETURNDATASIZE)
+	}
+
+	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(memory.lastReturn))))
+	return nil, nil
+}
+
+func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
+		return nil, fmt.Errorf("invalid opcode %x", RETURNDATACOPY)
+	}
+
+	var (
+		mOff = stack.pop()
+		cOff = stack.pop()
+		l    = stack.pop()
+	)
+	memory.Set(mOff.Uint64(), l.Uint64(), getData(memory.lastReturn, cOff, l))
+
+	evm.interpreter.intPool.put(mOff, cOff, l)
 	return nil, nil
 }
 

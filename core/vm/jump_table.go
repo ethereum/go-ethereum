@@ -829,6 +829,19 @@ func NewJumpTable() [256]operation {
 			memorySize:    memoryLog,
 			valid:         true,
 		},
+		RETURNDATASIZE: {
+			execute:       opReturnDataSize,
+			gasCost:       constGasFunc(0), // TODO
+			validateStack: makeStackFunc(0, 1),
+			valid:         true,
+		},
+		RETURNDATACOPY: {
+			execute:       opReturnDataCopy,
+			gasCost:       gasReturnDataCopy,
+			validateStack: makeStackFunc(3, 0),
+			memorySize:    memoryReturnDataCopy,
+			valid:         true,
+		},
 		CREATE: {
 			execute:       opCreate,
 			gasCost:       gasCreate,

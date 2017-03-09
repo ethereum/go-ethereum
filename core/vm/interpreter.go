@@ -216,6 +216,11 @@ func (evm *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret
 		case !operation.jumps:
 			pc++
 		}
+		// if the operation returned a value make sure that is also set
+		// the last return data.
+		if res != nil {
+			mem.lastReturn = ret
+		}
 	}
 	return nil, nil
 }
