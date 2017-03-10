@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -110,9 +111,9 @@ func TestBzzrGetPath(t *testing.T) {
 	}
 
 	nonhashresponses := []string{
-		"error resolving name: no DNS to resolve name: \"name\"\n",
-		"error resolving nonhash: immutable address not a content hash: \"nonhash\"\n",
-		"error resolving nonhash: no DNS to resolve name: \"nonhash\"\n",
+		"error resolving name: no DNS to resolve name: &#34;name&#34;",
+		"error resolving nonhash: immutable address not a content hash: &#34;nonhash&#34;",
+		"error resolving nonhash: no DNS to resolve name: &#34;nonhash&#34;",
 	}
 
 	for i, url := range nonhashtests {
@@ -129,7 +130,7 @@ func TestBzzrGetPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ReadAll failed: %v", err)
 		}
-		if string(respbody) != nonhashresponses[i] {
+		if !strings.Contains(string(respbody), nonhashresponses[i]) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}
 	}
