@@ -574,11 +574,6 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 }
 
 func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	// EIP116 availability check; return an invalid opcode error on fault
-	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", STATIC_CALL)
-	}
-
 	// pop gas
 	gas := stack.pop().Uint64()
 	// pop address
@@ -675,12 +670,6 @@ func opCallCode(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack 
 }
 
 func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	// if not homestead return an error. DELEGATECALL is not supported
-	// during pre-homestead.
-	if !evm.ChainConfig().IsHomestead(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", DELEGATECALL)
-	}
-
 	gas, to, inOffset, inSize, outOffset, outSize := stack.pop().Uint64(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
 
 	toAddr := common.BigToAddress(to)
@@ -709,12 +698,6 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 }
 
 func opRevert(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	// if not metropolis return an error. REVERT is not supported
-	// during pre-metropolis.
-	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", REVERT)
-	}
-
 	offset, size := stack.pop(), stack.pop()
 	ret := memory.GetPtr(offset.Int64(), size.Int64())
 
@@ -736,19 +719,11 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 }
 
 func opReturnDataSize(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", RETURNDATASIZE)
-	}
-
 	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(memory.lastReturn))))
 	return nil, nil
 }
 
 func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	if !evm.ChainConfig().IsMetropolis(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", RETURNDATACOPY)
-	}
-
 	var (
 		mOff = stack.pop()
 		cOff = stack.pop()

@@ -71,7 +71,14 @@ func NewInterpreter(env *EVM, cfg Config) *Interpreter {
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
-		cfg.JumpTable = defaultJumpTable
+		switch {
+		case env.ChainConfig().IsMetropolis(env.BlockNumber):
+			cfg.JumpTable = metropolisInstructionSet
+		case env.ChainConfig().IsHomestead(env.BlockNumber):
+			cfg.JumpTable = homesteadInstructionSet
+		default:
+			cfg.JumpTable = baseInstructionSet
+		}
 	}
 
 	return &Interpreter{

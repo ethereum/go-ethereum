@@ -55,9 +55,57 @@ type operation struct {
 	reverts bool
 }
 
-var defaultJumpTable = NewJumpTable()
+var (
+	baseInstructionSet       = NewBaseInstructionSet()
+	homesteadInstructionSet  = NewHomesteadInstructionSet()
+	metropolisInstructionSet = NewMetropolisInstructionSet()
+)
 
-func NewJumpTable() [256]operation {
+func NewMetropolisInstructionSet() [256]operation {
+	instructionSet := NewHomesteadInstructionSet()
+	instructionSet[STATIC_CALL] = operation{
+		execute:       opStaticCall,
+		gasCost:       gasStaticCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryStaticCall,
+		valid:         true,
+	}
+	instructionSet[REVERT] = operation{
+		execute:       opRevert,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 0),
+		valid:         true,
+		reverts:       true,
+	}
+	instructionSet[RETURNDATASIZE] = operation{
+		execute:       opReturnDataSize,
+		gasCost:       constGasFunc(0), // TODO
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+	instructionSet[RETURNDATACOPY] = operation{
+		execute:       opReturnDataCopy,
+		gasCost:       gasReturnDataCopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryReturnDataCopy,
+		valid:         true,
+	}
+	return instructionSet
+}
+
+func NewHomesteadInstructionSet() [256]operation {
+	instructionSet := NewBaseInstructionSet()
+	instructionSet[DELEGATECALL] = operation{
+		execute:       opDelegateCall,
+		gasCost:       gasDelegateCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryDelegateCall,
+		valid:         true,
+	}
+	return instructionSet
+}
+
+func NewBaseInstructionSet() [256]operation {
 	return [256]operation{
 		STOP: {
 			execute:       opStop,
@@ -394,15 +442,6 @@ func NewJumpTable() [256]operation {
 			gasCost:       constGasFunc(GasQuickStep),
 			validateStack: makeStackFunc(0, 1),
 			valid:         true,
-		},
-		// TODO:
-		// * Determine cost
-		REVERT: {
-			execute:       opRevert,
-			gasCost:       constGasFunc(GasFastestStep),
-			validateStack: makeStackFunc(2, 0),
-			valid:         true,
-			reverts:       true,
 		},
 		JUMPDEST: {
 			execute:       opJumpdest,
@@ -829,19 +868,6 @@ func NewJumpTable() [256]operation {
 			memorySize:    memoryLog,
 			valid:         true,
 		},
-		RETURNDATASIZE: {
-			execute:       opReturnDataSize,
-			gasCost:       constGasFunc(0), // TODO
-			validateStack: makeStackFunc(0, 1),
-			valid:         true,
-		},
-		RETURNDATACOPY: {
-			execute:       opReturnDataCopy,
-			gasCost:       gasReturnDataCopy,
-			validateStack: makeStackFunc(3, 0),
-			memorySize:    memoryReturnDataCopy,
-			valid:         true,
-		},
 		CREATE: {
 			execute:       opCreate,
 			gasCost:       gasCreate,
@@ -870,13 +896,6 @@ func NewJumpTable() [256]operation {
 			validateStack: makeStackFunc(2, 0),
 			memorySize:    memoryReturn,
 			halts:         true,
-			valid:         true,
-		},
-		DELEGATECALL: {
-			execute:       opDelegateCall,
-			gasCost:       gasDelegateCall,
-			validateStack: makeStackFunc(6, 1),
-			memorySize:    memoryDelegateCall,
 			valid:         true,
 		},
 		SELFDESTRUCT: {
