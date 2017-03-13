@@ -110,7 +110,7 @@ func newBzzTester(t *testing.T, addr *peerAddr, pp PeerPool, ct *protocols.CodeM
 		p.Register(&protocols.Disconnect{}, func(e interface{}) error { pp.Remove(p) })
 		return services(p)
 	}
-	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, extarservices))
+	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, extraservices))
 	return &bzzTester{
 		addr: addr,
 		// flushCode:       4,
