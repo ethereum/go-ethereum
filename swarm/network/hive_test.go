@@ -44,7 +44,7 @@ func TestOverlayRegistration(t *testing.T) {
 	pp := NewHive(NewHiveParams(), to)       // hive
 	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
 
-	s := newBzzTester(t, 1, addr, ct, nil)
+	s := newBzzTester(t, addr, pp, ct, nil)
 
 	// connect to the other peer
 	id := s.Ids[0]
@@ -62,7 +62,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	to := NewTestOverlay(addr.OverlayAddr())
 	pp := NewHive(NewHiveParams(), to)
 	ct := BzzCodeMap(HiveMsgs...)
-	s := newBzzTester(t, 0, addr, pp, ct, nil)
+	s := newBzzTester(t, addr, pp, ct, nil)
 
 	// register the node with the peerPool
 	id := p2ptest.RandomNodeId()
@@ -103,7 +103,7 @@ func TestRegisterAndConnect(t *testing.T) {
 			p2ptest.Expect{
 				Code: 3,
 				Msg:  &SubPeersMsg{ProxLimit: 0, MinProxBinSize: 8},
-				Peer: s.ExchangeSession.Id(1),
+				Peer: s.ExchangeSession.Ids[1],
 			},
 		},
 	})

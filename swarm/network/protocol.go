@@ -43,16 +43,13 @@ type bzzPeer struct {
 	localAddr  *peerAddr
 	*peerAddr  // remote address
 	lastActive time.Time
-	peers      map[discover.NodeID]bool
+	//peers      map[discover.NodeID]bool
 }
 
 func (self *bzzPeer) LastActive() time.Time {
 	return self.lastActive
 }
 
-func (self *bzzPeer) Peers() map[discover.NodeID]bool {
-	return self.peers
-}
 
 // implemented by peerAddr
 type PeerAddr interface {
@@ -65,7 +62,6 @@ type Peer interface {
 	PeerAddr
 	String() string      // pretty printable the Node
 	ID() discover.NodeID // the key that uniquely identifies the Node for the peerPool
-	Peers() map[discover.NodeID]bool
 	Send(interface{}) error                               // can send messages
 	Drop(error)                                           // disconnect this peer
 	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
@@ -80,7 +76,7 @@ func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 
 // Bzz is the protocol constructor
 // returns p2p.Protocol that is to be offered by the node.Service
-func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error) *p2p.Protocol {
+func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 	run := func(p *protocols.Peer) error {
 		addr := &peerAddr{localAddr, na.LocalAddr()}
 
@@ -88,7 +84,6 @@ func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, servi
 			Peer:      p,
 			network:   na,
 			localAddr: addr,
-			peers:     make(map[discover.NodeID]bool),
 		}
 		// protocol handshake and its validation
 		// sets remote peer address

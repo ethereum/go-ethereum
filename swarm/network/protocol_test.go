@@ -2,12 +2,10 @@ package network
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
@@ -36,30 +34,34 @@ func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest
 	}
 }
 
-func newTestBzzProtocol(addr *peerAddr, ct *protocols.CodeMap, services func(Peer) error) func(adapters.NodeAdapter) adapters.ProtoCall {
+func newBzzTester(t *testing.T, addr *peerAddr, pp *Hive, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
 	if ct == nil {
 		ct = BzzCodeMap()
 	}
-	// ct.Register(p2ptest.FlushMsg)
-	return func(na adapters.NodeAdapter) adapters.ProtoCall {
-		srv := func(p Peer) error {
-			if services != nil {
-				err := services(p)
-				if err != nil {
-					return err
-				}
-			}
-			// id := p.ID()
-			// p.Register(p2ptest.FlushMsg, func(interface{}) error {
-			// 	flushc := na.(p2ptest.TestNetAdapter).GetPeer(&adapters.NodeId{id}).Flushc
-			// 	flushc <- true
-			// 	return nil
-			// })
-			return nil
-		}
+	extraservices := func(p Peer) error {
+		pp.Add(p)
+		p.Register(&protocols.Disconnect{}, func(e interface{}) error { pp.Remove(p) })
 
-		protocol := Bzz(addr.OverlayAddr(), pp, na, ct, srv)
+		if services != nil {
+			err := services(p)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	protocall := func(na adapters.NodeAdapter) adapters.ProtoCall {
+		protocol := Bzz(addr.OverlayAddr(), pp, na, ct, extraservices, nil, nil)
 		return protocol.Run
+	}
+
+	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
+
+	return &bzzTester{
+		addr: addr,
+		// flushCode:       4,
+		ExchangeSession: s,
 	}
 }
 
@@ -101,21 +103,6 @@ func (s *bzzTester) runHandshakes(ids ...*adapters.NodeId) {
 
 func correctBzzHandshake(addr *peerAddr) *bzzHandshake {
 	return &bzzHandshake{0, 322, addr}
-}
-
-func newBzzTester(t *testing.T, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
-
-	extraservices := func(p Peer) error {
-		pp.Add(p)
-		p.Register(&protocols.Disconnect{}, func(e interface{}) error { pp.Remove(p) })
-		return services(p)
-	}
-	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, extraservices))
-	return &bzzTester{
-		addr: addr,
-		// flushCode:       4,
-		ExchangeSession: s,
-	}
 }
 
 func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {

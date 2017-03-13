@@ -11,7 +11,7 @@ func TestDiscovery(t *testing.T) {
 	to := NewKademlia(addr.OAddr, NewKadParams())
 	pp := NewHive(NewHiveParams(), to)
 	ct := BzzCodeMap(HiveMsgs...)
-	s := newBzzTester(t, 1, addr, pp, ct, nil)
+	s := newBzzTester(t, addr, pp, ct, nil)
 
 	s.runHandshakes()
 	s.TestExchanges(p2ptest.Exchange{
@@ -19,7 +19,7 @@ func TestDiscovery(t *testing.T) {
 			p2ptest.Expect{
 				Code: 3,
 				Msg:  &SubPeersMsg{ProxLimit: 0, MinProxBinSize: 8},
-				Peer: s.ExchangeSession.Id(1),
+				Peer: s.ExchangeSession.Ids[1],
 			},
 		},
 	})
