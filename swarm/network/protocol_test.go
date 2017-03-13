@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -37,11 +36,11 @@ func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest
 	}
 }
 
-func newTestBzzProtocol(addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) func(adapters.NodeAdapter) adapters.ProtoCall {
+func newTestBzzProtocol(addr *peerAddr, ct *protocols.CodeMap, services func(Peer) error) func(adapters.NodeAdapter) adapters.ProtoCall {
 	if ct == nil {
 		ct = BzzCodeMap()
 	}
-	ct.Register(p2ptest.FlushMsg)
+	// ct.Register(p2ptest.FlushMsg)
 	return func(na adapters.NodeAdapter) adapters.ProtoCall {
 		srv := func(p Peer) error {
 			if services != nil {
@@ -50,12 +49,12 @@ func newTestBzzProtocol(addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, serv
 					return err
 				}
 			}
-			id := p.ID()
-			p.Register(p2ptest.FlushMsg, func(interface{}) error {
-				flushc := na.(p2ptest.TestNetAdapter).GetPeer(&adapters.NodeId{id}).Flushc
-				flushc <- true
-				return nil
-			})
+			// id := p.ID()
+			// p.Register(p2ptest.FlushMsg, func(interface{}) error {
+			// 	flushc := na.(p2ptest.TestNetAdapter).GetPeer(&adapters.NodeId{id}).Flushc
+			// 	flushc <- true
+			// 	return nil
+			// })
 			return nil
 		}
 
@@ -66,8 +65,8 @@ func newTestBzzProtocol(addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, serv
 
 type bzzTester struct {
 	*p2ptest.ExchangeSession
-	flushCode int
-	addr      *peerAddr
+	// flushCode int
+	addr *peerAddr
 }
 
 // should test handshakes in one exchange? parallelisation
@@ -81,27 +80,23 @@ func (s *bzzTester) testHandshake(lhs, rhs *bzzHandshake, disconnects ...*p2ptes
 	} else {
 		peers = []*adapters.NodeId{id}
 	}
-	s.TestConnected(false, peers...)
+	s.TestConnected(peers...)
 	s.TestExchanges(bzzHandshakeExchange(lhs, rhs, id)...)
 	s.TestDisconnected(disconnects...)
 }
 
-func (s *bzzTester) flush(ids ...*adapters.NodeId) {
-	s.Flush(s.flushCode, ids...)
-}
+// func (s *bzzTester) flush(ids ...*adapters.NodeId) {
+// 	s.Flush(s.flushCode, ids...)
+// }
 
 func (s *bzzTester) runHandshakes(ids ...*adapters.NodeId) {
 	if len(ids) == 0 {
 		ids = s.Ids
 	}
 	for _, id := range ids {
-		glog.V(6).Infof("\n\n\nrun handshake with %v", id)
-		time.Sleep(1)
 		s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NewPeerAddrFromNodeId(id)))
-		time.Sleep(1)
 	}
-	glog.V(6).Infof("flush %v", ids)
-	s.flush(ids...)
+
 }
 
 func correctBzzHandshake(addr *peerAddr) *bzzHandshake {
@@ -109,16 +104,22 @@ func correctBzzHandshake(addr *peerAddr) *bzzHandshake {
 }
 
 func newBzzTester(t *testing.T, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
-	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, services))
+
+	extraservices := func(p Peer) error {
+		pp.Add(p)
+		p.Register(&protocols.Disconnect{}, func(e interface{}) error { pp.Remove(p) })
+		return services(p)
+	}
+	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, extarservices))
 	return &bzzTester{
-		addr:            addr,
-		flushCode:       1,
+		addr: addr,
+		// flushCode:       4,
 		ExchangeSession: s,
 	}
 }
 
 func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, addr, pp, nil, nil)
 	id := s.Ids[0]
@@ -130,7 +131,7 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 }
 
 func TestBzzHandshakeVersionMismatch(t *testing.T) {
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, addr, pp, nil, nil)
 	id := s.Ids[0]
@@ -142,7 +143,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 }
 
 func TestBzzHandshakeSuccess(t *testing.T) {
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, addr, pp, nil, nil)
 	id := s.Ids[0]
@@ -153,13 +154,14 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 }
 
 func TestBzzPeerPoolAdd(t *testing.T) {
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, addr, pp, nil, nil)
 
 	id := s.Ids[0]
 	glog.V(6).Infof("handshake with %v", id)
 	s.runHandshakes()
+	// s.TestConnected()
 	if !pp.Has(id) {
 		t.Fatalf("peer '%v' not added: %v", id, pp)
 	}
@@ -167,7 +169,7 @@ func TestBzzPeerPoolAdd(t *testing.T) {
 
 func TestBzzPeerPoolRemove(t *testing.T) {
 	addr := RandomAddr()
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	s := newBzzTester(t, addr, pp, nil, nil)
 	s.runHandshakes()
 
@@ -181,7 +183,7 @@ func TestBzzPeerPoolRemove(t *testing.T) {
 
 func TestBzzPeerPoolBothAddRemove(t *testing.T) {
 	addr := RandomAddr()
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	s := newBzzTester(t, addr, pp, nil, nil)
 	s.runHandshakes()
 
@@ -199,7 +201,7 @@ func TestBzzPeerPoolBothAddRemove(t *testing.T) {
 
 func TestBzzPeerPoolNotAdd(t *testing.T) {
 	addr := RandomAddr()
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	s := newBzzTester(t, addr, pp, nil, nil)
 
 	id := s.Ids[0]
@@ -207,41 +209,4 @@ func TestBzzPeerPoolNotAdd(t *testing.T) {
 	if pp.Has(id) {
 		t.Fatalf("peer %v incorrectly added: %v", id, pp)
 	}
-}
-
-// TestPeerPool is an example peerPool to demonstrate registration of peer connections
-type TestPeerPool struct {
-	lock  sync.Mutex
-	peers map[discover.NodeID]Peer
-}
-
-func NewTestPeerPool() *TestPeerPool {
-	return &TestPeerPool{peers: make(map[discover.NodeID]Peer)}
-}
-
-func (self *TestPeerPool) Add(p Peer) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	self.peers[p.ID()] = p
-	return nil
-}
-
-func (self *TestPeerPool) Remove(p Peer) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	// glog.V(6).Infof("removing peer %v", p.ID())
-	delete(self.peers, p.ID())
-}
-
-func (self *TestPeerPool) Has(n *adapters.NodeId) bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	_, ok := self.peers[n.NodeID]
-	return ok
-}
-
-func (self *TestPeerPool) Get(n *adapters.NodeId) Peer {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	return self.peers[n.NodeID]
 }

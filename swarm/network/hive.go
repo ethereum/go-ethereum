@@ -17,13 +17,12 @@
 package network
 
 import (
-	"bytes"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -57,7 +56,7 @@ type Overlay interface {
 type Hive struct {
 	*HiveParams // settings
 	Overlay     // the overlay topology driver
-	disc        Discovery
+	// disc        Discovery
 
 	lock   sync.Mutex
 	quit   chan bool
@@ -72,8 +71,8 @@ const (
 )
 
 type HiveParams struct {
-	PeersBroadcastSetSize uint
-	MaxPeersPerRequest    uint
+	PeersBroadcastSetSize uint8
+	MaxPeersPerRequest    uint8
 	CallInterval          uint
 }
 
@@ -95,18 +94,17 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 	}
 }
 
-// messages that hive regusters handles for
+// messages that hive handles
 var HiveMsgs = []interface{}{
 	&getPeersMsg{},
 	&peersMsg{},
-	&subPeersMsg{},
+	&SubPeersMsg{},
 }
 
 // Start receives network info only at startup
-// listedAddr is a function to retrieve listening address to advertise to peers
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
+// these are called on the p2p.Server which runs on the node
 // af() returns an arbitrary ticker channel
-// there are called on the p2p.Server which runs on the node
 func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Time) error {
 
 	self.toggle = make(chan bool)
@@ -137,10 +135,10 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 			}
 			if want {
 				req := &getPeersMsg{
-					Order: uint(order),
+					Order: uint8(order),
 					Max:   self.MaxPeersPerRequest,
 				}
-				var i uint
+				var i uint8
 				var err error
 				self.EachLivePeer(nil, order, func(n Peer, po int) bool {
 					glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
@@ -218,15 +216,12 @@ func (self *Hive) wake() {
 // to register a connected (live) peer
 func (self *Hive) Add(p Peer) error {
 	defer self.wake()
+	dp := NewDiscovery(p, self)
 	glog.V(logger.Debug).Infof("to add new bee %v", p)
-	self.On(p)
+	self.On(dp)
 	glog.V(logger.Warn).Infof("%v", self)
-
-	// self.lock.Lock()
-	// self.peers[p.ID()] = p
-	// self.lock.Unlock()
-
-	return NewDiscovery(p, self)
+	dp.NotifyProx(0)
+	return nil
 }
 
 // Remove called after peer is disconnected
@@ -234,9 +229,6 @@ func (self *Hive) Remove(p Peer) {
 	defer self.wake()
 	glog.V(logger.Debug).Infof("remove bee %v", p)
 	self.Off(p)
-	self.lock.Lock()
-	delete(self.peers, p.ID())
-	self.lock.Unlock()
 }
 
 func (self *Hive) NodeInfo() interface{} {
@@ -246,11 +238,8 @@ func (self *Hive) NodeInfo() interface{} {
 func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	p, ok := self.peers[id]
-	if !ok {
-		return nil
-	}
-	return interface{}(&peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
+	addr := NewPeerAddrFromNodeId(adapters.NewNodeId(id[:]))
+	return interface{}(addr)
 }
 
 func HexToBytes(s string) []byte {

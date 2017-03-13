@@ -1,7 +1,3 @@
-// Package protocols helpers_test make it easier to
-// write protocol tests by providing convenience functions and structures
-// protocols uses these helpers for  its own tests
-// but ideally should sit in p2p/protocols/testing/ subpackage
 package testing
 
 import (
@@ -34,7 +30,6 @@ type TestNetAdapter interface {
 }
 
 type TestMessenger interface {
-	// MsgPipe([]byte, []byte) p2p,MsgPipe
 	ExpectMsg(uint64, interface{}) error
 	TriggerMsg(uint64, interface{}) error
 }
@@ -42,6 +37,7 @@ type TestMessenger interface {
 // exchanges are the basic units of protocol tests
 // an exchange is defined on a session
 type Exchange struct {
+	Label    string
 	Triggers []Trigger
 	Expects  []Expect
 }
@@ -62,8 +58,8 @@ type Expect struct {
 }
 
 type Disconnect struct {
-	Peer  *adapters.NodeId // the peer that expects the message
-	Error error
+	Peer  *adapters.NodeId // discconnected peer
+	Error error            // disconnect reason
 }
 
 // NewExchangeTestSession takes a network session and Messenger
@@ -81,12 +77,11 @@ func NewExchangeTestSession(t *testing.T, n TestNetAdapter, ids []*adapters.Node
 	}
 }
 
-type TestPeerInfo struct {
-	//RW     p2p.MsgReadWriter
-	Messenger	TestMessenger
-	Flushc chan bool
-	Errc   chan error
-}
+// type PeerTester struct {
+// 	Messenger TestMessenger
+// 	Flushc    chan bool
+// 	Errc      chan error
+// }
 
 // trigger sends messages from peers
 func (self *ExchangeTestSession) trigger(trig Trigger) error {
@@ -102,10 +97,10 @@ func (self *ExchangeTestSession) trigger(trig Trigger) error {
 	errc := make(chan error)
 
 	go func() {
-		glog.V(6).Infof("trigger....")
+		glog.V(6).Infof("trigger %v (%v)....", trig.Msg, trig.Code)
 		//errc <- self.TriggerMsg(rw, trig.Code, trig.Msg)
 		errc <- m.(TestMessenger).TriggerMsg(trig.Code, trig.Msg)
-		glog.V(6).Infof("triggered")
+		glog.V(6).Infof("triggered %v (%v)", trig.Msg, trig.Code)
 	}()
 
 	t := trig.Timeout
@@ -168,18 +163,13 @@ func (self *ExchangeTestSession) TestExchanges(exchanges ...Exchange) {
 	// launch all triggers of this exchanges
 
 	for i, e := range exchanges {
-		errc := make(chan error)
+		errc := make(chan error, 1)
 		wg := &sync.WaitGroup{}
 		for _, trig := range e.Triggers {
-			wg.Add(1)
-			// separate go routing to allow parallel requests
-			go func(t Trigger) {
-				defer wg.Done()
-				err := self.trigger(t)
-				if err != nil {
-					errc <- err
-				}
-			}(trig)
+			err := self.trigger(trig)
+			if err != nil {
+				errc <- err
+			}
 		}
 
 		// each expectation is spawned in separate go-routine
@@ -217,40 +207,16 @@ func (self *ExchangeTestSession) TestExchanges(exchanges ...Exchange) {
 			if err != nil {
 				self.t.Fatalf("exchange failed with: %v", err)
 			} else {
-				glog.V(6).Infof("exchange %v run successfully", i)
+				glog.V(6).Infof("exchange %v: '%v' run successfully", i, e.Label)
 			}
 		case <-alarm.C:
-			self.t.Fatalf("exchange timed out")
+			self.t.Fatalf("exchange %v: '%v' timed out", i, e.Label)
 		}
 	}
 }
 
-type flushMsg struct{}
-
-func flushExchange(c int, ids ...*adapters.NodeId) Exchange {
-	var triggers []Trigger
-	for _, id := range ids {
-		triggers = append(triggers,
-			Trigger{
-				Code: uint64(c),
-				Msg:  &flushMsg{},
-				Peer: id,
-			})
-	}
-	return Exchange{
-		Triggers: triggers,
-	}
-}
-
-var FlushMsg = &flushMsg{}
-
-func (self *ExchangeTestSession) TestConnected(flush bool, peers ...*adapters.NodeId) {
+func (self *ExchangeTestSession) TestConnected(peers ...*adapters.NodeId) {
 	timeout := time.NewTimer(1000 * time.Millisecond)
-	var flushc chan bool
-	if !flush {
-		flushc = make(chan bool)
-		close(flushc)
-	}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(peers))
 	for _, id := range peers {
@@ -260,15 +226,12 @@ func (self *ExchangeTestSession) TestConnected(flush bool, peers ...*adapters.No
 			for {
 				peer := self.GetPeer(p)
 				if peer != nil {
-					if flush {
-						flushc = peer.Flushc
-					}
 					select {
 					case <-timeout.C:
 						self.t.Fatalf("exchange timed out waiting for peer %v to flush", p)
 					case err := <-peer.Errc:
 						self.t.Fatalf("peer %v disconnected with error %v", p, err)
-					case <-flushc:
+					case <-peer.Flushc:
 						glog.V(6).Infof("peer %v is connected", p)
 						return
 					}

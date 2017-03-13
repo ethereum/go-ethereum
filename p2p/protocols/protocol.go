@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // error codes used by this  protocol scheme
@@ -158,8 +159,11 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 	}
 }
 
-func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap) *p2p.Protocol {
+func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 
+	// PeerInfo is an optional helper method to retrieve protocol specific metadata
+	// about a certain peer in the network. If an info retrieval function is set,
+	// but returns nil, it is assumed that the protocol handshake is still running.
 	r := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 		m := na.Messenger(rw)
@@ -176,11 +180,17 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 	}
 
 	return &p2p.Protocol{
-		Name:    protocolname,
-		Version: protocolversion,
-		Length:  ct.Length(),
-		Run:     r,
+		Name:     protocolname,
+		Version:  protocolversion,
+		Length:   ct.Length(),
+		Run:      r,
+		PeerInfo: peerInfo,
+		NodeInfo: nodeInfo,
 	}
+}
+
+type Disconnect struct {
+	err error
 }
 
 // A Peer represents a remote peer or protocol instance that is running on a peer connection with
@@ -192,6 +202,7 @@ type Peer struct {
 	rw         p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers   map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
 	disconnect func()                                     // Disconnect function set differently for testing
+	Err        error
 }
 
 // NewPeer returns a new peer
@@ -222,7 +233,7 @@ func (self *Peer) Register(msg interface{}, handler func(interface{}) error) uin
 	if !found {
 		panic(fmt.Sprintf("message type '%v' unknown ", typ))
 	}
-	glog.V(logger.Detail).Infof("registered handle for %v %v", msg, typ)
+	glog.V(logger.Detail).Infof("register handle for %v", typ)
 	self.handlers[typ] = append(self.handlers[typ], handler)
 	return code
 }
@@ -233,9 +244,13 @@ func (self *Peer) Run() error {
 	var err error
 	for {
 		_, err = self.handleIncoming()
-		if err != nil {
-			return err
+		if self.Err == nil {
+			err = self.Err
 		}
+		for _, f := range self.handlers[reflect.TypeOf(&Disconnect{})] {
+			f(err)
+		}
+		return err
 	}
 }
 
@@ -245,8 +260,8 @@ func (self *Peer) Run() error {
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
 // overwrite Disconnect for testing, so that protocol readloop quits
-func (self *Peer) Drop() {
-	self.disconnect()
+func (self *Peer) Drop(err error) {
+	self.Err = err
 }
 
 // Send takes a message, encodes it in RLP, finds the right message code and sends the
@@ -261,8 +276,9 @@ func (self *Peer) Send(msg interface{}) error {
 	glog.V(logger.Detail).Infof("=> %v (%d)", msg, code)
 	err := self.m.SendMsg(uint64(code), msg)
 	if err != nil {
-		self.Drop()
-		return errorf(ErrWrite, "(msg code: %v): %v", code, err)
+		err = errorf(ErrWrite, "(msg code: %v): %v", code, err)
+		self.Drop(err)
+		return err
 	}
 	return nil
 }

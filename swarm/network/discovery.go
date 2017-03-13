@@ -1,56 +1,57 @@
 package network
 
 import (
+	"bytes"
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-// discovery bzz hive extension for efficient peer relaying
-// this will be triggered by p2p/protocol already
+// discovery bzz hive extension doing peer relaying
+// can be switched off
 
 type discPeer struct {
 	Peer
-	hive  Hive
-	sub   overlaySubscription
-	peers map[discover.NodeID]bool
+	hive      *Hive
+	proxLimit uint8
+	peers     map[discover.NodeID]bool
 }
 
-type overlaySubscription interface {
-	Subscribe(proxLimit uint) chan interface{}
-	SubscribeProxChange(proxLimit uint) chan interface{}
+// NotifyPeer notifies the receiver remote end of a peer p or PO po.
+// callback for overlay driver
+func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
+	if po < self.proxLimit || self.peers[p.ID()] {
+		return nil
+	}
+	resp := &peersMsg{
+		Peers: []*peerAddr{p.(*bzzPeer).peerAddr},
+	}
+	return p.Send(resp)
+}
+
+// NotifyProx sends a subPeers Msg to the receiver notifying them about
+// a change in the prox limit (radius of the set including the nearest X peers
+// or first empty row)
+// callback for overlay driver
+func (self *discPeer) NotifyProx(po uint8) error {
+	return self.Send(&SubPeersMsg{ProxLimit: po, MinProxBinSize: 8})
 }
 
 // new discovery contructor
-func NewDiscovery(p Peer, h Hive) error {
-	overlay, ok := h.Overlay.(overlaySubscription)
-	if !ok {
-		return fmt.Errorf("overlay does not support subscription")
-	}
+func NewDiscovery(p Peer, h *Hive) *discPeer {
 	self := &discPeer{
-		sub:   overlay,
 		hive:  h,
 		Peer:  p,
-		peers: make(map[discover.NodeID]Peer),
+		peers: make(map[discover.NodeID]bool),
 	}
 
-	c := sub.SubscribeProxChange()
-	go func() {
-		for {
-			select {
-			case <-h.quit:
-				return
-			case p := <-c:
-				resp := &peersMsg{
-					Peers: []*peerAddr{p.PeerAddr.(*peerAddr)},
-				}
-				p.Send(resp)
-			}
-		}
-	}()
-	p.Register(&subPeersMsg{}, self.handleSubPeersMsg)
 	p.Register(&peersMsg{}, self.handlePeersMsg)
 	p.Register(&getPeersMsg{}, self.handleGetPeersMsg)
+	p.Register(&SubPeersMsg{}, self.handleSubPeersMsg)
 
-	return nil
+	return self
 }
 
 /*
@@ -61,6 +62,7 @@ The encoding of a peer is identical to that in the devp2p base protocol peers
 messages: [IP, Port, NodeID]
 note that a node's DPA address is not the NodeID but the hash of the NodeID.
 
+TODO:
 To mitigate against spurious peers messages, requests should be remembered
 and correctness of responses should be checked
 
@@ -70,7 +72,7 @@ disconnected
 
 // peersMsg encapsulates an array of peer addresses
 // used for communicating about known peers
-// relevvant for bootstrapping connectivity and updating peersets
+// relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
 	Peers []*peerAddr
 }
@@ -81,8 +83,8 @@ func (self peersMsg) String() string {
 
 // getPeersMsg is sent to (random) peers to request (Max) peers of a specific order
 type getPeersMsg struct {
-	Order uint
-	Max   uint
+	Order uint8
+	Max   uint8
 }
 
 func (self getPeersMsg) String() string {
@@ -90,20 +92,19 @@ func (self getPeersMsg) String() string {
 }
 
 // subPeers msg is communicating the depth/sharpness/focus  of the overlay table of a peer
-type subPeersMsg struct {
-	MinProxBinSize uint
-	ProxLimit      uint
-	// Offset  uint
-	// Batch   uint
+type SubPeersMsg struct {
+	MinProxBinSize uint8
+	ProxLimit      uint8
 }
 
-func (self subPeersMsg) String() string {
-	return fmt.Sprintf("request peers > PO%02d. ProxLimit: %02d", self.Request, self.ProxLimit)
+func (self SubPeersMsg) String() string {
+	return fmt.Sprintf("%T: request peers > PO%02d. ", self, self.ProxLimit)
 }
 
 func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
-	spm := msg.(*subPeersMsg)
-	self.sub.Subscribe(spm.ProxLimit)
+	spm := msg.(*SubPeersMsg)
+	self.proxLimit = spm.ProxLimit
+	return nil
 }
 
 // handlePeersMsg called by the protocol when receiving peerset (for target address)
@@ -115,7 +116,7 @@ func (p *discPeer) handlePeersMsg(msg interface{}) error {
 	for _, na := range msg.(*peersMsg).Peers {
 		addr := PeerAddr(na)
 		nas = append(nas, addr)
-		p.peers[NodeId(addr)] = true
+		p.peers[NodeId(addr).NodeID] = true
 	}
 	return p.hive.Register(nas...)
 }
@@ -130,7 +131,7 @@ func (p *discPeer) handleGetPeersMsg(msg interface{}) error {
 	var peers []*peerAddr
 	alreadySent := p.peers
 	i := 0
-	p.Overlay.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer, po int) bool {
+	p.hive.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer, po int) bool {
 		i++
 		if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 &&
 			// only send peers we have not sent before in this session
@@ -149,9 +150,5 @@ func (p *discPeer) handleGetPeersMsg(msg interface{}) error {
 	resp := &peersMsg{
 		Peers: peers,
 	}
-	err := p.Send(resp)
-	if err != nil {
-		return err
-	}
-	return nil
+	return p.Send(resp)
 }

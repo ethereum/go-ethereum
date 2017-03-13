@@ -39,7 +39,6 @@ const (
 // bzz is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
 type bzzPeer struct {
 	*protocols.Peer
-	hive       PeerPool
 	network    adapters.NodeAdapter
 	localAddr  *peerAddr
 	*peerAddr  // remote address
@@ -68,20 +67,8 @@ type Peer interface {
 	ID() discover.NodeID // the key that uniquely identifies the Node for the peerPool
 	Peers() map[discover.NodeID]bool
 	Send(interface{}) error                               // can send messages
-	Drop()                                                // disconnect this peer
+	Drop(error)                                           // disconnect this peer
 	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
-}
-
-// PeerPool is the interface for the connectivity manager
-// directly interacts with the p2p server to suggest connections
-type PeerPool interface {
-	Add(Peer) error
-	Remove(Peer)
-}
-
-type PeerInfo interface {
-	NodeInfo() interface{}
-	PeerInfo(discover.NodeID) interface{}
 }
 
 func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
@@ -93,13 +80,12 @@ func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 
 // Bzz is the protocol constructor
 // returns p2p.Protocol that is to be offered by the node.Service
-func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error) *p2p.Protocol {
+func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error) *p2p.Protocol {
 	run := func(p *protocols.Peer) error {
 		addr := &peerAddr{localAddr, na.LocalAddr()}
 
 		bee := &bzzPeer{
 			Peer:      p,
-			hive:      hive,
 			network:   na,
 			localAddr: addr,
 			peers:     make(map[discover.NodeID]bool),
@@ -121,24 +107,10 @@ func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols
 			}
 		}
 
-		err = hive.Add(bee)
-		if err != nil {
-			glog.V(6).Infof("failed to add peer '%v' to hive: %v", bee.ID(), err)
-			return err
-		}
-
-		defer hive.Remove(bee)
 		return bee.Run()
 	}
 
-	proto := protocols.NewProtocol(ProtocolName, Version, run, na, ct)
-
-	if o, ok := hive.(PeerInfo); ok {
-		proto.NodeInfo = o.NodeInfo
-		proto.PeerInfo = o.PeerInfo
-	}
-
-	return proto
+	return protocols.NewProtocol(ProtocolName, Version, run, na, ct, peerInfo, nodeInfo)
 }
 
 /*

@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -12,7 +14,7 @@ import (
 )
 
 func init() {
-	glog.SetV(6)
+	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 }
 
@@ -55,9 +57,8 @@ const networkId = "420"
 // newProtocol sets up a protocol
 // the run function here demonstrates a typical protocol using peerPool, handshake
 // and messages registered to handlers
-func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.NodeAdapter) adapters.ProtoCall {
+func newProtocol(pp *TestPeerPool, wg *sync.WaitGroup) func(adapters.NodeAdapter) adapters.ProtoCall {
 	ct := NewCodeMap("test", 42, 1024, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
-
 	return func(na adapters.NodeAdapter) adapters.ProtoCall {
 		return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			if wg != nil {
@@ -69,13 +70,16 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 			// demonstrates use of peerPool, killing another peer connection as a response to a message
 			peer.Register(&kill{}, func(msg interface{}) error {
 				id := msg.(*kill).C
-				pp.Get(id).Drop()
+				// pp.Get(id).Drop(fmt.Errorf("killed"))
+				glog.V(logger.Detail).Infof("id %v killed", id)
 				return nil
 			})
 
 			// for testing we can trigger self induced disconnect upon receiving drop message
 			peer.Register(&drop{}, func(msg interface{}) error {
-				return fmt.Errorf("received disconnect request")
+				glog.V(logger.Detail).Infof("dropped")
+				// return fmt.Errorf("dropped")
+				return
 			})
 
 			// initiate one-off protohandshake and check validity
@@ -110,20 +114,21 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 				return peer.Send(lhs)
 			})
 
-			// add/remove peer from pool
+			glog.V(logger.Detail).Infof("adding peer  %v", peer)
 			pp.Add(peer)
 			defer pp.Remove(peer)
-			// this launches a forever read loop
 			err = peer.Run()
 			if wg != nil {
 				wg.Done()
 			}
+			glog.V(logger.Detail).Infof("peer  %v protocol quitting: %v", peer, err)
+
 			return err
 		}
 	}
 }
 
-func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) *p2ptest.ExchangeSession {
+func protocolTester(t *testing.T, pp *TestPeerPool, wg *sync.WaitGroup) *p2ptest.ExchangeSession {
 	id := p2ptest.RandomNodeId()
 	return p2ptest.NewProtocolTester(t, id, 2, newProtocol(pp, wg))
 }
@@ -153,7 +158,7 @@ func protoHandshakeExchange(id *adapters.NodeId, proto *protoHandshake) []p2ptes
 }
 
 func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
-	pp := p2ptest.NewTestPeerPool()
+	pp := NewTestPeerPool()
 	s := protocolTester(t, pp, nil)
 	// TODO: make this more than one handshake
 	id := s.Ids[0]
@@ -202,7 +207,7 @@ func moduleHandshakeExchange(id *adapters.NodeId, resp uint) []p2ptest.Exchange 
 }
 
 func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
-	pp := p2ptest.NewTestPeerPool()
+	pp := NewTestPeerPool()
 	s := protocolTester(t, pp, nil)
 	id := s.Ids[0]
 	s.TestExchanges(protoHandshakeExchange(id, &protoHandshake{42, "420"})...)
@@ -227,6 +232,7 @@ func testMultiPeerSetup(a, b *adapters.NodeId) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		p2ptest.Exchange{
+			Label: "primary handshake",
 			Expects: []p2ptest.Expect{
 				p2ptest.Expect{
 					Code: 0,
@@ -241,6 +247,7 @@ func testMultiPeerSetup(a, b *adapters.NodeId) []p2ptest.Exchange {
 			},
 		},
 		p2ptest.Exchange{
+			Label: "module handshake",
 			Triggers: []p2ptest.Trigger{
 				p2ptest.Trigger{
 					Code: 0,
@@ -266,53 +273,30 @@ func testMultiPeerSetup(a, b *adapters.NodeId) []p2ptest.Exchange {
 				},
 			},
 		},
-		p2ptest.Exchange{
-			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
-					Code: 1,
-					Msg:  &hs0{41},
-					Peer: a,
-				},
-				p2ptest.Trigger{
-					Code: 1,
-					Msg:  &hs0{41},
-					Peer: b,
-				},
-			},
-		},
-		p2ptest.Exchange{
-			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
-					Code: 1,
-					Msg:  &hs0{1},
-					Peer: a,
-				},
-			},
-		},
-		p2ptest.Exchange{
-			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
-					Code: 1,
-					Msg:  &hs0{43},
-					Peer: a,
-				},
-			},
-		},
-	}
+
+		p2ptest.Exchange{Label: "alternative module handshake", Triggers: []p2ptest.Trigger{p2ptest.Trigger{Code: 1, Msg: &hs0{41}, Peer: a},
+			p2ptest.Trigger{Code: 1, Msg: &hs0{41}, Peer: b}}},
+		p2ptest.Exchange{Label: "repeated module handshake", Triggers: []p2ptest.Trigger{p2ptest.Trigger{Code: 1, Msg: &hs0{1}, Peer: a}}},
+		p2ptest.Exchange{Label: "receiving repeated module handshake", Expects: []p2ptest.Expect{p2ptest.Expect{Code: 1, Msg: &hs0{43}, Peer: a}}}}
 }
 
 func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	wg := &sync.WaitGroup{}
-	pp := p2ptest.NewTestPeerPool()
+	pp := NewTestPeerPool()
 	s := protocolTester(t, pp, wg)
 
 	s.TestExchanges(testMultiPeerSetup(s.Ids[0], s.Ids[1])...)
 	// after some exchanges of messages, we can test state changes
 	// here this is simply demonstrated by the peerPool
-	// after the handshake negotiations peers must be addded to the pool
-	if !pp.Has(s.Ids[0]) {
-		t.Fatalf("missing peer test-0: %v (%v)", pp, s.Ids)
+	// after the handshake negotiations peers must be added to the pool
+	// time.Sleep(1)
+	for !pp.Has(s.Ids[0]) {
+		time.Sleep(1)
+		glog.V(logger.Detail).Infof("missing peer test-0: %v (%v)", pp, s.Ids)
 	}
+	// if !pp.Has(s.Ids[0]) {
+	// 	t.Fatalf("missing peer test-0: %v (%v)", pp, s.Ids)
+	// }
 	if !pp.Has(s.Ids[1]) {
 		t.Fatalf("missing peer test-1: %v (%v)", pp, s.Ids)
 	}
@@ -355,13 +339,13 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 func TestMultiplePeersDropSelf(t *testing.T) {
 	runMultiplePeers(t, 0,
 		fmt.Errorf("p2p: read or write on closed message pipe"),
-		fmt.Errorf("Message handler error: (msg code 3): received disconnect request"),
+		fmt.Errorf("Message handler error: (msg code 3): killed"),
 	)
 }
 
 func TestMultiplePeersDropOther(t *testing.T) {
 	runMultiplePeers(t, 1,
-		fmt.Errorf("Message handler error: (msg code 3): received disconnect request"),
+		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 		fmt.Errorf("p2p: read or write on closed message pipe"),
 	)
 }

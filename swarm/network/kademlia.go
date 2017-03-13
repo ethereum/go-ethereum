@@ -50,6 +50,10 @@ adjust Prox (proxLimit and proxSize after an insertion/removal of nodes)
 caller holds the lock
 
 */
+type KadDiscovery interface {
+	NotifyPeer(Peer, uint8) error
+	NotifyProx(uint8) error
+}
 
 type KadParams struct {
 	// adjustable parameters
@@ -199,12 +203,21 @@ func (self *Kademlia) On(p Peer) {
 	})
 	kp.seenAt = time.Now()
 	kp.retries = 0
-	f := func(val pot.PotVal, po int) {
-		vp := val.(*KadPeer).Peer
-		dp.NotifyPeer(kp.PeerAddr, po)
-	}
+	prox := self.proxLimit()
 
-	self.conns.EachNeighbourAsync(pp, 256, 256, f, nil)
+	vp, ok := kp.Peer.(KadDiscovery)
+	if !ok {
+		glog.V(logger.Detail).Infof("not discovery peer")
+		return
+	}
+	// vp.NotifyProx(uint8(prox))
+	f := func(val pot.PotVal, po int) {
+		glog.V(logger.Detail).Infof("peer %v nofified", vp)
+		dp := val.(KadDiscovery)
+		dp.NotifyPeer(kp.Peer, uint8(po))
+		dp.NotifyProx(uint8(prox))
+	}
+	self.conns.EachNeighbourAsync(pp, 255, 255, f, false)
 }
 
 // Off removes a peer from among live peers

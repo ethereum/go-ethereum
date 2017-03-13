@@ -34,7 +34,6 @@ func newPeer(m Messenger) *Peer {
 }
 
 type Peer struct {
-	//RW     p2p.MsgReadWriter
 	Messenger
 	Errc   chan error
 	Flushc chan bool
@@ -174,9 +173,9 @@ func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc cha
 	p := p2p.NewPeer(id.NodeID, Name(id.Bytes()), []p2p.Cap{})
 	go func() {
 		err := self.Run(p, rw)
-		glog.V(6).Infof("protocol quit on peer %v (connection with %v broken)", self.Id, id)
+		glog.V(6).Infof("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err)
 		<-runc
-		self.Disconnect(id.Bytes())
+		// self.Disconnect(id.Bytes())
 		peer.Errc <- err
 	}()
 	return nil

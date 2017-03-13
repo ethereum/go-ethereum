@@ -62,13 +62,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id ada
 	return self
 }
 
-func (self *ExchangeTestSession) Flush(code int, ids ...*adapters.NodeId) {
-	self.TestConnected(false, ids...)
-	glog.V(6).Infof("flushing peers %v (code %v)", ids, code)
-	self.TestExchanges(flushExchange(code, ids...))
-	self.TestConnected(true, ids...)
-}
-
+//
 func (self *ExchangeSession) Start(id *adapters.NodeId) error {
 	err := self.network.NewNode(&simulations.NodeConfig{Id: id})
 	if err != nil {
@@ -102,6 +96,10 @@ func (self *ExchangeSession) Connect(ids ...*adapters.NodeId) {
 	}
 
 }
+
+// func (self *ExchangeSession) Id(i int) *adapters.NodeId {
+// 	return self.network.Nodes[i].Id
+// }
 
 func RandomNodeId() *adapters.NodeId {
 	key, err := crypto.GenerateKey()
