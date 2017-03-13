@@ -91,6 +91,8 @@ type EVM struct {
 
 	// chainConfig contains information about the current chain
 	chainConfig *params.ChainConfig
+	// chain rules contains the chain rules for the current epoch
+	chainRules params.Rules
 	// virtual machine configuration options used to initialise the
 	// evm.
 	vmConfig Config
@@ -110,6 +112,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		StateDB:     statedb,
 		vmConfig:    vmConfig,
 		chainConfig: chainConfig,
+		chainRules:  chainConfig.Rules(ctx.BlockNumber),
 	}
 
 	evm.interpreter = NewInterpreter(evm, vmConfig)
