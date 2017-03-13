@@ -510,7 +510,7 @@ func TestCustomization(t *testing.T) {
 	}
 
 	params.KeySym = f.KeySym
-	params.Topic = f.Topics[2]
+	params.Topic = BytesToTopic(f.Topics[2])
 	params.PoW = smallPoW
 	params.TTL = 3600 * 24 // one day
 	msg := NewSentMessage(params)
