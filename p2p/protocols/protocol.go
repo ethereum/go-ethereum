@@ -168,12 +168,7 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 
 		m := na.Messenger(rw)
 
-		disc := func() {
-			id := p.ID()
-			na.Disconnect(id[:])
-		}
-
-		peer := NewPeer(p, ct, m, disc)
+		peer := NewPeer(p, ct, m)
 
 		return run(peer)
 
@@ -201,7 +196,6 @@ type Peer struct {
 	*p2p.Peer                                             // the p2p.Peer object representing the remote
 	rw         p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers   map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
-	disconnect func()                                     // Disconnect function set differently for testing
 	Err        error
 }
 
@@ -209,13 +203,12 @@ type Peer struct {
 // this constructor is called by the p2p.Protocol#Run function
 // the first two arguments are comming the arguments passed to p2p.Protocol.Run function
 // the third argument is the CodeMap describing the protocol messages and options
-func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger, disconn func()) *Peer {
+func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger) *Peer {
 	return &Peer{
 		ct:         ct,
 		m:          m,
 		Peer:       p,
 		handlers:   make(map[reflect.Type][]func(interface{}) error),
-		disconnect: disconn,
 	}
 }
 
@@ -244,14 +237,18 @@ func (self *Peer) Run() error {
 	var err error
 	for {
 		_, err = self.handleIncoming()
-		if self.Err == nil {
-			err = self.Err
+		if self.Err != nil {
+			self.Err = err
 		}
-		for _, f := range self.handlers[reflect.TypeOf(&Disconnect{})] {
-			f(err)
+		if self.Err != nil {
+			break
 		}
-		return err
+		
 	}
+	for _, f := range self.handlers[reflect.TypeOf(&Disconnect{})] {
+		f(err)
+	}
+	return err
 }
 
 // Drop disconnects a peer.
@@ -282,6 +279,12 @@ func (self *Peer) Send(msg interface{}) error {
 	}
 	return nil
 }
+
+func (self *Peer) DisconnectHook(f func(e interface{}) error) {
+	typ := reflect.TypeOf(&Disconnect{})
+	self.handlers[typ] = append(self.handlers[typ], f)
+}
+
 
 // handleIncoming(code)
 // is called each cycle of the main forever loop that handles and dispatches incoming messages

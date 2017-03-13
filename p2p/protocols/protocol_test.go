@@ -158,7 +158,7 @@ func protoHandshakeExchange(id *adapters.NodeId, proto *protoHandshake) []p2ptes
 }
 
 func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp, nil)
 	// TODO: make this more than one handshake
 	id := s.Ids[0]
@@ -207,7 +207,7 @@ func moduleHandshakeExchange(id *adapters.NodeId, resp uint) []p2ptest.Exchange 
 }
 
 func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp, nil)
 	id := s.Ids[0]
 	s.TestExchanges(protoHandshakeExchange(id, &protoHandshake{42, "420"})...)
@@ -282,7 +282,7 @@ func testMultiPeerSetup(a, b *adapters.NodeId) []p2ptest.Exchange {
 
 func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	wg := &sync.WaitGroup{}
-	pp := NewTestPeerPool()
+	pp := p2ptest.NewTestPeerPool()
 	s := protocolTester(t, pp, wg)
 
 	s.TestExchanges(testMultiPeerSetup(s.Ids[0], s.Ids[1])...)

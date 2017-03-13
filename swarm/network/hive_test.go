@@ -43,22 +43,40 @@ func TestOverlayRegistration(t *testing.T) {
 	to := NewTestOverlay(addr.OverlayAddr()) // overlay topology driver
 	pp := NewHive(NewHiveParams(), to)       // hive
 	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
-
-	s := newBzzTester(t, addr, pp, ct, nil)
-
-	// connect to the other peer
+	services := func(p Peer) error {
+		pp.Add(p)
+		p.DisconnectHook(func(e interface{}) error {
+			pp.Remove(p)
+			return nil
+		})
+		return nil
+	}
+	
+	protocall := func (na adapters.NodeAdapter) adapters.ProtoCall {
+		protocol := Bzz(addr.OverlayAddr(), na, ct, services, nil, nil)	
+		return protocol.Run
+	}
+	
+	es := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
+	
+	s := &bzzTester{
+		addr: addr,
+		ExchangeSession: es,
+	}
 	id := s.Ids[0]
 	raddr := NewPeerAddrFromNodeId(id)
+	
 	s.runHandshakes()
 
 	// hive should have called the overlay
 	if to.posMap[string(raddr.OverlayAddr())] == nil {
 		t.Fatalf("Overlay#On not called on new peer")
 	}
+	
 }
 
 func TestRegisterAndConnect(t *testing.T) {
-	addr := RandomAddr()
+	/*addr := RandomAddr()
 	to := NewTestOverlay(addr.OverlayAddr())
 	pp := NewHive(NewHiveParams(), to)
 	ct := BzzCodeMap(HiveMsgs...)
@@ -86,7 +104,39 @@ func TestRegisterAndConnect(t *testing.T) {
 	tc.ticker <- time.Now()
 
 	// run bzz handshake
+	s.runHandshakes()*/
+	
+	// setup
+	addr := RandomAddr()                     // tested peers peer address
+	to := NewTestOverlay(addr.OverlayAddr()) // overlay topology driver
+	pp := NewHive(NewHiveParams(), to)       // hive
+	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
+	services := func(p Peer) error {
+		pp.Add(p)
+		p.DisconnectHook(func(e interface{}) error {
+			pp.Remove(p)
+			return nil
+		})
+		return nil
+	}
+	
+	protocall := func (na adapters.NodeAdapter) adapters.ProtoCall {
+		protocol := Bzz(addr.OverlayAddr(), na, ct, services, nil, nil)	
+		return protocol.Run
+	}
+	
+	es := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
+	
+	s := &bzzTester{
+		addr: addr,
+		ExchangeSession: es,
+	}
+	id := s.Ids[0]
+	raddr := NewPeerAddrFromNodeId(id)
+	
 	s.runHandshakes()
+	
+	
 	if to.posMap[string(raddr.OverlayAddr())] == nil {
 		t.Fatalf("Overlay#On not called on new peer")
 	}

@@ -9,12 +9,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-// discovery bzz hive extension doing peer relaying
+// discovery bzz overlay extension doing peer relaying
 // can be switched off
 
 type discPeer struct {
 	Peer
-	hive      *Hive
+	overlay		Overlay
 	proxLimit uint8
 	peers     map[discover.NodeID]bool
 }
@@ -40,9 +40,9 @@ func (self *discPeer) NotifyProx(po uint8) error {
 }
 
 // new discovery contructor
-func NewDiscovery(p Peer, h *Hive) *discPeer {
+func NewDiscovery(p Peer, o Overlay) *discPeer {
 	self := &discPeer{
-		hive:  h,
+		overlay: o,
 		Peer:  p,
 		peers: make(map[discover.NodeID]bool),
 	}
@@ -118,7 +118,7 @@ func (p *discPeer) handlePeersMsg(msg interface{}) error {
 		nas = append(nas, addr)
 		p.peers[NodeId(addr).NodeID] = true
 	}
-	return p.hive.Register(nas...)
+	return p.overlay.Register(nas...)
 }
 
 // handleGetPeersMsg is called by the protocol when receiving a
@@ -131,7 +131,7 @@ func (p *discPeer) handleGetPeersMsg(msg interface{}) error {
 	var peers []*peerAddr
 	alreadySent := p.peers
 	i := 0
-	p.hive.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer, po int) bool {
+	p.overlay.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer, po int) bool {
 		i++
 		if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 &&
 			// only send peers we have not sent before in this session

@@ -216,11 +216,11 @@ func (self *Hive) wake() {
 // to register a connected (live) peer
 func (self *Hive) Add(p Peer) error {
 	defer self.wake()
-	dp := NewDiscovery(p, self)
+	dp := NewDiscovery(p, self.Overlay)
 	glog.V(logger.Debug).Infof("to add new bee %v", p)
 	self.On(dp)
 	glog.V(logger.Warn).Infof("%v", self)
-	dp.NotifyProx(0)
+	//dp.NotifyProx(0)
 	return nil
 }
 

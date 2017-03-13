@@ -130,7 +130,8 @@ func (self *SimNode) Disconnect(rid []byte) error {
 	// peer = na.(*SimNode).GetPeer(self.Id)
 	// peer.RW = nil
 	glog.V(6).Infof("dropped peer %v", id)
-	return self.network.DidDisconnect(self.Id, id)
+	
+	return nil
 }
 
 func (self *SimNode) Connect(rid []byte) error {
@@ -155,7 +156,7 @@ func (self *SimNode) Connect(rid []byte) error {
 	if err != nil {
 		return fmt.Errorf("cannot run protocol (%v -> %v): %v", id, self.Id, err)
 	}
-	self.network.DidConnect(self.Id, id)
+	
 	return nil
 }
 
@@ -172,11 +173,13 @@ func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc cha
 	peer = self.setPeer(id, self.Messenger(rrw))
 	p := p2p.NewPeer(id.NodeID, Name(id.Bytes()), []p2p.Cap{})
 	go func() {
+		self.network.DidConnect(self.Id, id)
 		err := self.Run(p, rw)
-		glog.V(6).Infof("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err)
 		<-runc
-		// self.Disconnect(id.Bytes())
+		self.Disconnect(id.Bytes())
 		peer.Errc <- err
+		glog.V(6).Infof("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err)
+		self.network.DidDisconnect(self.Id, id)
 	}()
 	return nil
 }
