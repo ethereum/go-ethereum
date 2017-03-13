@@ -53,7 +53,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	f.Messages = make(map[common.Hash]*ReceivedMessage)
 
 	const topicNum = 8
-	f.Topics = make([]TopicType, topicNum)
+	f.Topics = make([][]byte, topicNum)
 	for i := 0; i < topicNum; i++ {
 		f.Topics[i] = make([]byte, 4)
 		mrand.Read(f.Topics[i][:])
@@ -194,9 +194,15 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 
 	// encrypt symmetrically
+<<<<<<< d4e2ecd2e1164b6a5106b20d135742a35656838f
 	i := mrand.Int() % 4
 	fsym.Topics[i] = params.Topic
 	fasym.Topics[i] = params.Topic
+=======
+	i := rand.Int() % 4
+	fsym.Topics[i] = params.Topic[:]
+	fasym.Topics[i] = params.Topic[:]
+>>>>>>> whisper: variable topic size allowed for a filter
 	msg = NewSentMessage(params)
 	env, err = msg.Wrap(params)
 	if err != nil {
@@ -321,7 +327,7 @@ func TestMatchMessageSym(t *testing.T) {
 
 	const index = 1
 	params.KeySym = f.KeySym
-	params.Topic = f.Topics[index]
+	params.Topic = BytesToTopic(f.Topics[index])
 
 	sentMessage := NewSentMessage(params)
 	env, err := sentMessage.Wrap(params)
@@ -414,7 +420,7 @@ func TestMatchMessageAsym(t *testing.T) {
 	}
 
 	const index = 1
-	params.Topic = f.Topics[index]
+	params.Topic = BytesToTopic(f.Topics[index])
 	params.Dst = &f.KeyAsym.PublicKey
 	keySymOrig := params.KeySym
 	params.KeySym = nil
@@ -505,7 +511,7 @@ func generateCompatibeEnvelope(t *testing.T, f *Filter) *Envelope {
 	}
 
 	params.KeySym = f.KeySym
-	params.Topic = f.Topics[2]
+	params.Topic = BytesToTopic(f.Topics[2])
 	sentMessage := NewSentMessage(params)
 	env, err := sentMessage.Wrap(params)
 	if err != nil {

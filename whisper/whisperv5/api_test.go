@@ -204,22 +204,22 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 	}
 
 	i := 0
-	if f.Topics[i] != (TopicType{0x00, 0x00, 0x00, 0x00}) {
+	if !bytes.Equal(f.Topics[i], []byte{0x00, 0x00, 0x00, 0x00}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 
 	i++
-	if f.Topics[i] != (TopicType{0x00, 0x7f, 0x80, 0xff}) {
+	if !bytes.Equal(f.Topics[i], []byte{0x00, 0x7f, 0x80, 0xff}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 
 	i++
-	if f.Topics[i] != (TopicType{0xff, 0x80, 0x7f, 0x00}) {
+	if !bytes.Equal(f.Topics[i], []byte{0xff, 0x80, 0x7f, 0x00}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 
 	i++
-	if f.Topics[i] != (TopicType{0xf2, 0x6e, 0x77, 0x79}) {
+	if !bytes.Equal(f.Topics[i], []byte{0xf2, 0x6e, 0x77, 0x79}) {
 		t.Fatalf("wrong topic[%d]: %x.", i, f.Topics[i])
 	}
 }
@@ -347,7 +347,9 @@ func TestIntegrationAsym(t *testing.T) {
 	f.Symmetric = false
 	f.Key = key
 	f.SignedWith = sigPubKey
-	f.Topics = topics[:]
+	f.Topics = make([][]byte, 2)
+	f.Topics[0] = topics[0][:]
+	f.Topics[1] = topics[1][:]
 	f.MinPoW = DefaultMinimumPoW / 2
 	f.AllowP2P = true
 
@@ -442,7 +444,9 @@ func TestIntegrationSym(t *testing.T) {
 	var f WhisperFilterArgs
 	f.Symmetric = true
 	f.Key = symKeyID
-	f.Topics = topics[:]
+	f.Topics = make([][]byte, 2)
+	f.Topics[0] = topics[0][:]
+	f.Topics[1] = topics[1][:]
 	f.MinPoW = 0.324
 	f.SignedWith = sigPubKey
 	f.AllowP2P = false
@@ -538,7 +542,9 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	var f WhisperFilterArgs
 	f.Symmetric = true
 	f.Key = symKeyID
-	f.Topics = topics[:]
+	f.Topics = make([][]byte, 2)
+	f.Topics[0] = topics[0][:]
+	f.Topics[1] = topics[1][:]
 	f.MinPoW = 0.324
 	f.SignedWith = sigPubKey
 	f.AllowP2P = false

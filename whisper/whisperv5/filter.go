@@ -29,13 +29,13 @@ type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
 	KeySym     []byte            // Key associated with the Topic
-	Topics     []TopicType       // Topics to filter messages with
+	Topics     [][]byte          // Topics to filter messages with
 	PoW        float64           // Proof of work as described in the Whisper spec
 	AllowP2P   bool              // Indicates whether this filter is interested in direct peer-to-peer messages
 	SymKeyHash common.Hash       // The Keccak256Hash of the symmetric key, needed for optimization
 
-	Messages   map[common.Hash]*ReceivedMessage
-	mutex      sync.RWMutex
+	Messages map[common.Hash]*ReceivedMessage
+	mutex    sync.RWMutex
 }
 
 type Filters struct {
@@ -201,12 +201,14 @@ func (f *Filter) MatchTopic(topic TopicType) bool {
 		return true
 	}
 
-	for _, t := range f.Topics {
-		if t == topic {
-			return true
+	for _, bt := range f.Topics {
+		for j, b := range bt {
+			if topic[j] != b {
+				return false
+			}
 		}
 	}
-	return false
+	return true
 }
 
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {

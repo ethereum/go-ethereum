@@ -233,7 +233,9 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 		AllowP2P: args.AllowP2P,
 	}
 
-	filter.Topics = append(filter.Topics, args.Topics...)
+	for _, bt := range args.Topics {
+		filter.Topics = append(filter.Topics, bt)
+	}
 
 	err := ValidateKeyID(args.Key)
 	if err != nil {
@@ -441,7 +443,7 @@ type WhisperFilterArgs struct {
 	Key        string
 	SignedWith string
 	MinPoW     float64
-	Topics     []TopicType
+	Topics     [][]byte
 	AllowP2P   bool
 }
 
@@ -487,13 +489,13 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 				return fmt.Errorf("topic[%d] is not a string", i)
 			}
 		}
-		topicsDecoded := make([]TopicType, len(topics))
+		topicsDecoded := make([][]byte, len(topics))
 		for j, s := range topics {
 			x := common.FromHex(s)
-			if x == nil || len(x) != TopicLength {
+			if x == nil || len(x) > TopicLength {
 				return fmt.Errorf("topic[%d] is invalid", j)
 			}
-			topicsDecoded[j] = BytesToTopic(x)
+			topicsDecoded[j] = x
 		}
 		args.Topics = topicsDecoded
 	}
