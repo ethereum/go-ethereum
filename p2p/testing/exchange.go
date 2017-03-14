@@ -77,19 +77,12 @@ func NewExchangeTestSession(t *testing.T, n TestNetAdapter, ids []*adapters.Node
 	}
 }
 
-// type PeerTester struct {
-// 	Messenger TestMessenger
-// 	Flushc    chan bool
-// 	Errc      chan error
-// }
-
 // trigger sends messages from peers
 func (self *ExchangeTestSession) trigger(trig Trigger) error {
 	peer := self.GetPeer(trig.Peer)
 	if peer == nil {
 		panic(fmt.Sprintf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids)))
 	}
-	//rw := peer.RW
 	m := peer.Messenger
 	if m == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", trig.Peer)
@@ -98,7 +91,6 @@ func (self *ExchangeTestSession) trigger(trig Trigger) error {
 
 	go func() {
 		glog.V(6).Infof("trigger %v (%v)....", trig.Msg, trig.Code)
-		//errc <- self.TriggerMsg(rw, trig.Code, trig.Msg)
 		errc <- m.(TestMessenger).TriggerMsg(trig.Code, trig.Msg)
 		glog.V(6).Infof("triggered %v (%v)", trig.Msg, trig.Code)
 	}()
@@ -129,7 +121,6 @@ func (self *ExchangeTestSession) expect(exp Expect) error {
 	if peer == nil {
 		panic(fmt.Sprintf("expect: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids)))
 	}
-	//rw := peer.RW
 	m := peer.Messenger
 	if m == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", exp.Peer)
@@ -138,7 +129,6 @@ func (self *ExchangeTestSession) expect(exp Expect) error {
 	errc := make(chan error)
 	go func() {
 		glog.V(6).Infof("waiting for msg, %v", exp.Msg)
-		//errc <- self.ExpectMsg(rw, exp.Code, exp.Msg)
 		errc <- m.(TestMessenger).ExpectMsg(exp.Code, exp.Msg)
 	}()
 
@@ -215,40 +205,40 @@ func (self *ExchangeTestSession) TestExchanges(exchanges ...Exchange) {
 	}
 }
 
-func (self *ExchangeTestSession) TestConnected(peers ...*adapters.NodeId) {
-	timeout := time.NewTimer(1000 * time.Millisecond)
-	wg := &sync.WaitGroup{}
-	wg.Add(len(peers))
-	for _, id := range peers {
-		ticker := time.NewTicker(100 * time.Millisecond)
-		go func(p *adapters.NodeId) {
-			defer wg.Done()
-			for {
-				peer := self.GetPeer(p)
-				if peer != nil {
-					select {
-					case <-timeout.C:
-						self.t.Fatalf("exchange timed out waiting for peer %v to flush", p)
-					case err := <-peer.Errc:
-						self.t.Fatalf("peer %v disconnected with error %v", p, err)
-					case <-peer.Flushc:
-						glog.V(6).Infof("peer %v is connected", p)
-						return
-					}
-				}
-				select {
-				case <-ticker.C:
-					glog.V(6).Infof("waiting for %v to connect", p)
-				case <-timeout.C:
-					self.t.Fatalf("exchange timed out waiting for peer %v to connect", p)
-				}
-			}
-		}(id)
-	}
-	wg.Wait()
-	glog.V(6).Infof("checking complete")
+// func (self *ExchangeTestSession) TestConnected(peers ...*adapters.NodeId) {
+// 	timeout := time.NewTimer(1000 * time.Millisecond)
+// 	wg := &sync.WaitGroup{}
+// 	wg.Add(len(peers))
+// 	for _, id := range peers {
+// 		ticker := time.NewTicker(100 * time.Millisecond)
+// 		go func(p *adapters.NodeId) {
+// 			defer wg.Done()
+// 			for {
+// 				peer := self.GetPeer(p)
+// 				if peer != nil {
+// 					select {
+// 					case <-timeout.C:
+// 						self.t.Fatalf("exchange timed out waiting for peer %v to flush", p)
+// 					case err := <-peer.Errc:
+// 						self.t.Fatalf("peer %v disconnected with error %v", p, err)
+// 					case <-peer.Flushc:
+// 						glog.V(6).Infof("peer %v is connected", p)
+// 						return
+// 					}
+// 				}
+// 				select {
+// 				case <-ticker.C:
+// 					glog.V(6).Infof("waiting for %v to connect", p)
+// 				case <-timeout.C:
+// 					self.t.Fatalf("timed out waiting for peer %v to connect", p)
+// 				}
+// 			}
+// 		}(id)
+// 	}
+// 	wg.Wait()
+// 	glog.V(6).Infof("checking complete")
 
-}
+// }
 
 func (self *ExchangeTestSession) TestDisconnected(disconnects ...*Disconnect) {
 	for _, disconnect := range disconnects {
@@ -259,7 +249,7 @@ func (self *ExchangeTestSession) TestDisconnected(disconnects ...*Disconnect) {
 		select {
 		case derr := <-errc:
 			if !((err == nil && derr == nil) || err != nil && derr != nil && err.Error() == derr.Error()) {
-				self.t.Fatalf("unexpected error on peer %v: '%v', wanted '%v'", id, derr, err)
+				self.t.Fatalf("unexpected error on peer %v. expected '%v', got '%v'", id, err, derr)
 			}
 		case <-alarm.C:
 			self.t.Fatalf("exchange timed out waiting for peer %v to disconnect", id)

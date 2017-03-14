@@ -7,20 +7,17 @@ import (
 )
 
 /***
- * 
+ *
  * - after connect, that outgoing subpeersmsg is sent
- * 
+ *
  */
 func TestDiscovery(t *testing.T) {
 	addr := RandomAddr()
 	to := NewKademlia(addr.OAddr, NewKadParams())
-	pp := p2ptest.NewTestPeerPool()
-	//pp := NewHive(NewHiveParams(), to)
 	ct := BzzCodeMap(HiveMsgs...)
-	
+
 	services := func(p Peer) error {
 		dp := NewDiscovery(p, to)
-		//pp.Add(p)
 		to.On(dp)
 		p.DisconnectHook(func(e interface{}) error {
 			dp := e.(Peer)
@@ -29,16 +26,8 @@ func TestDiscovery(t *testing.T) {
 		})
 		return nil
 	}
-	/*
-	protocall := func (na adapters.NodeAdapter) adapters.ProtoCall {
-		protocol := Bzz(addr.OverlayAddr(), na, ct, services, nil, nil)	
-		return protocol.Run
-	}
-	
-	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
-*/
 
-	s := newBzzTester(t, addr, pp, ct, services)
+	s := newBzzBaseTester(t, 1, addr, ct, services)
 
 	s.runHandshakes()
 	s.TestExchanges(p2ptest.Exchange{

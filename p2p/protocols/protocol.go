@@ -159,7 +159,7 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 	}
 }
 
-func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
+func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}, connectHook func(*Peer)) *p2p.Protocol {
 
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
@@ -169,7 +169,9 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 		m := na.Messenger(rw)
 
 		peer := NewPeer(p, ct, m)
-
+		if connectHook != nil {
+			connectHook(peer)
+		}
 		return run(peer)
 
 	}
@@ -191,12 +193,12 @@ type Disconnect struct {
 // A Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
-	ct         *CodeMap                                   // CodeMap for the protocol
-	m          adapters.Messenger                         // defines senf and receive
-	*p2p.Peer                                             // the p2p.Peer object representing the remote
-	rw         p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
-	handlers   map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
-	Err        error
+	ct        *CodeMap                                   // CodeMap for the protocol
+	m         adapters.Messenger                         // defines senf and receive
+	*p2p.Peer                                            // the p2p.Peer object representing the remote
+	rw        p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
+	handlers  map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
+	Err       error
 }
 
 // NewPeer returns a new peer
@@ -205,10 +207,10 @@ type Peer struct {
 // the third argument is the CodeMap describing the protocol messages and options
 func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger) *Peer {
 	return &Peer{
-		ct:         ct,
-		m:          m,
-		Peer:       p,
-		handlers:   make(map[reflect.Type][]func(interface{}) error),
+		ct:       ct,
+		m:        m,
+		Peer:     p,
+		handlers: make(map[reflect.Type][]func(interface{}) error),
 	}
 }
 
@@ -243,7 +245,7 @@ func (self *Peer) Run() error {
 		if self.Err != nil {
 			break
 		}
-		
+
 	}
 	for _, f := range self.handlers[reflect.TypeOf(&Disconnect{})] {
 		f(err)
@@ -284,7 +286,6 @@ func (self *Peer) DisconnectHook(f func(e interface{}) error) {
 	typ := reflect.TypeOf(&Disconnect{})
 	self.handlers[typ] = append(self.handlers[typ], f)
 }
-
 
 // handleIncoming(code)
 // is called each cycle of the main forever loop that handles and dispatches incoming messages
