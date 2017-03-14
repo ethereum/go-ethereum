@@ -51,7 +51,7 @@ func TestWhisperBasic(t *testing.T) {
 	if peer != nil {
 		t.Fatal("found peer for random key.")
 	}
-	if err := w.MarkPeerTrusted(peerID); err == nil {
+	if err := w.AllowP2PMessagesFromPeer(peerID); err == nil {
 		t.Fatalf("failed MarkPeerTrusted.")
 	}
 	exist := w.HasSymKey("non-existing")
