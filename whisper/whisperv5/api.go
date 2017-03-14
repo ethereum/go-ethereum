@@ -86,13 +86,19 @@ func (api *PublicWhisperAPI) SetMinimumPoW(val float64) error {
 	return api.whisper.SetMinimumPoW(val)
 }
 
-// MarkPeerTrusted marks specific peer trusted, which will allow it
+// AllowP2PMessagesFromPeer marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
-func (api *PublicWhisperAPI) MarkPeerTrusted(peerID hexutil.Bytes) error {
+func (api *PublicWhisperAPI) AllowP2PMessagesFromPeer(enode string) error {
 	if api.whisper == nil {
 		return whisperOffLineErr
 	}
-	return api.whisper.MarkPeerTrusted(peerID)
+	n, err := discover.ParseNode(enode)
+	if err != nil {
+		info := "Failed to parse enode of trusted peer: " + err.Error()
+		log.Error(info)
+		return errors.New(info)
+	}
+	return api.whisper.AllowP2PMessagesFromPeer(n.ID[:])
 }
 
 // RequestHistoricMessages requests the peer to deliver the old (expired) messages.

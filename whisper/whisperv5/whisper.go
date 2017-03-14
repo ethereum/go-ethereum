@@ -77,8 +77,7 @@ type Whisper struct {
 // Param s should be passed if you want to implement mail server, otherwise nil.
 func New() *Whisper {
 	whisper := &Whisper{
-		privateKeys: make(map[string]*ecdsa.PrivateKey),
-		//identities:   make(map[string]*ecdsa.PrivateKey),
+		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
 		envelopes:    make(map[common.Hash]*Envelope),
 		expirations:  make(map[uint32]*set.SetNonTS),
@@ -158,7 +157,7 @@ func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
 
 // MarkPeerTrusted marks specific peer trusted, which will allow it
 // to send historic (expired) messages.
-func (w *Whisper) MarkPeerTrusted(peerID []byte) error {
+func (w *Whisper) AllowP2PMessagesFromPeer(peerID []byte) error {
 	p, err := w.getPeer(peerID)
 	if err != nil {
 		return err
