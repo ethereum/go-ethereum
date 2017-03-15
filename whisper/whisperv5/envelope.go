@@ -95,6 +95,9 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		e.Expiry += options.WorkTime
 	} else {
 		target = e.powToFirstBit(options.PoW)
+		if target < 1 {
+			target = 1
+		}
 	}
 
 	buf := make([]byte, 64)
