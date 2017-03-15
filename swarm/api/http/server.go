@@ -82,6 +82,7 @@ func StartHttpServer(api *api.Api, server *Server) {
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"POST", "GET", "DELETE", "PATCH", "PUT"},
 		MaxAge:         600,
+		AllowedHeaders: []string{"*"},
 	})
 	hdlr := c.Handler(serveMux)
 
