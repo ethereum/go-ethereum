@@ -159,7 +159,7 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 	}
 }
 
-func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}, connectHook func(*Peer)) *p2p.Protocol {
+func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
@@ -169,9 +169,6 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 		m := na.Messenger(rw)
 
 		peer := NewPeer(p, ct, m)
-		if connectHook != nil {
-			connectHook(peer)
-		}
 		return run(peer)
 
 	}
@@ -198,7 +195,7 @@ type Peer struct {
 	*p2p.Peer                                            // the p2p.Peer object representing the remote
 	rw        p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers  map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
-	Err       error
+	Errc      chan error
 }
 
 // NewPeer returns a new peer
@@ -210,6 +207,7 @@ func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger) *Peer {
 		ct:       ct,
 		m:        m,
 		Peer:     p,
+		Errc:     make(chan error),
 		handlers: make(map[reflect.Type][]func(interface{}) error),
 	}
 }
@@ -236,18 +234,19 @@ func (self *Peer) Register(msg interface{}, handler func(interface{}) error) uin
 // Run starts the forever loop that handles incoming messages
 // called within the p2p.Protocol#Run function
 func (self *Peer) Run() error {
-	var err error
-	for {
-		_, err = self.handleIncoming()
-		if self.Err != nil {
-			self.Err = err
+	go func() {
+		for {
+			_, err := self.handleIncoming()
+			if err != nil {
+				self.Errc <- err
+				return
+			}
 		}
-		if self.Err != nil {
-			break
-		}
-
-	}
-	for _, f := range self.handlers[reflect.TypeOf(&Disconnect{})] {
+	}()
+	err := <-self.Errc
+	d := &Disconnect{err}
+	for _, f := range self.handlers[reflect.TypeOf(d)] {
+		glog.V(6).Infof("disconnect hook for %v", d)
 		f(err)
 	}
 	return err
@@ -260,7 +259,7 @@ func (self *Peer) Run() error {
 // if they are useful for other protocols
 // overwrite Disconnect for testing, so that protocol readloop quits
 func (self *Peer) Drop(err error) {
-	self.Err = err
+	self.Errc <- err
 }
 
 // Send takes a message, encodes it in RLP, finds the right message code and sends the
@@ -282,9 +281,12 @@ func (self *Peer) Send(msg interface{}) error {
 	return nil
 }
 
-func (self *Peer) DisconnectHook(f func(e interface{}) error) {
+func (self *Peer) DisconnectHook(f func(error)) {
 	typ := reflect.TypeOf(&Disconnect{})
-	self.handlers[typ] = append(self.handlers[typ], f)
+	self.handlers[typ] = append(self.handlers[typ], func(e interface{}) error {
+		f(e.(error))
+		return nil
+	})
 }
 
 // handleIncoming(code)

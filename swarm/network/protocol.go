@@ -64,7 +64,7 @@ type Peer interface {
 	Send(interface{}) error                               // can send messages
 	Drop(error)                                           // disconnect this peer
 	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
-	DisconnectHook(func(interface{}) error)
+	DisconnectHook(func(error))
 }
 
 func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
@@ -76,7 +76,7 @@ func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 
 // Bzz is the protocol constructor
 // returns p2p.Protocol that is to be offered by the node.Service
-func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}, connectHook func(*protocols.Peer)) *p2p.Protocol {
+func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 	run := func(p *protocols.Peer) error {
 		addr := &peerAddr{localAddr, na.LocalAddr()}
 
@@ -105,7 +105,7 @@ func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, servi
 		return bee.Run()
 	}
 
-	return protocols.NewProtocol(ProtocolName, Version, run, na, ct, peerInfo, nodeInfo, connectHook)
+	return protocols.NewProtocol(ProtocolName, Version, run, na, ct, peerInfo, nodeInfo)
 }
 
 /*

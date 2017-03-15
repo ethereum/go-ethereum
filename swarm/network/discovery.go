@@ -14,7 +14,7 @@ import (
 
 type discPeer struct {
 	Peer
-	overlay		Overlay
+	overlay   Overlay
 	proxLimit uint8
 	peers     map[discover.NodeID]bool
 }
@@ -26,7 +26,7 @@ func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
 		return nil
 	}
 	resp := &peersMsg{
-		Peers: []*peerAddr{p.(*bzzPeer).peerAddr},
+		Peers: []*peerAddr{p.(*discPeer).Peer.(*bzzPeer).peerAddr},
 	}
 	return p.Send(resp)
 }
@@ -43,8 +43,8 @@ func (self *discPeer) NotifyProx(po uint8) error {
 func NewDiscovery(p Peer, o Overlay) *discPeer {
 	self := &discPeer{
 		overlay: o,
-		Peer:  p,
-		peers: make(map[discover.NodeID]bool),
+		Peer:    p,
+		peers:   make(map[discover.NodeID]bool),
 	}
 
 	p.Register(&peersMsg{}, self.handlePeersMsg)

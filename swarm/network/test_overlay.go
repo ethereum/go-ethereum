@@ -90,7 +90,7 @@ func (self *testOverlay) on(po []*testPeerAddr) (nodes []Peer) {
 // caller must hold the lock
 func (self *testOverlay) off(po []*testPeerAddr) (nas []PeerAddr) {
 	for _, na := range po {
-		if na.Peer == nil {
+		if na.Peer == (*bzzPeer)(nil) {
 			nas = append(nas, PeerAddr(na))
 		}
 	}

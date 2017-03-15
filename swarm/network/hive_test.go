@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	glog.SetV(logger.Warn)
+	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 }
 
@@ -43,24 +43,11 @@ func TestOverlayRegistration(t *testing.T) {
 	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
 	services := func(p Peer) error {
 		pp.Add(p)
-		p.DisconnectHook(func(e interface{}) error {
+		p.DisconnectHook(func(err error) {
 			pp.Remove(p)
-			return nil
 		})
 		return nil
 	}
-
-	// protocall := func(na adapters.NodeAdapter) adapters.ProtoCall {
-	// 	protocol := Bzz(addr.OverlayAddr(), na, ct, services, nil, nil)
-	// 	return protocol.Run
-	// }
-
-	// es := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
-
-	// s := &bzzTester{
-	// 	addr:            addr,
-	// 	ExchangeSession: es,
-	// }
 
 	s := newBzzBaseTester(t, 1, addr, ct, services)
 	id := s.Ids[0]
@@ -83,25 +70,13 @@ func TestRegisterAndConnect(t *testing.T) {
 	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
 	services := func(p Peer) error {
 		pp.Add(p)
-		p.DisconnectHook(func(e interface{}) error {
+		p.DisconnectHook(func(error) {
 			pp.Remove(p)
-			return nil
 		})
 		return nil
 	}
 
 	s := newBzzBaseTester(t, 1, addr, ct, services)
-	// protocall := func(na adapters.NodeAdapter) adapters.ProtoCall {
-	// 	protocol := Bzz(addr.OverlayAddr(), na, ct, services, nil, nil)
-	// 	return protocol.Run
-	// }
-
-	// es := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
-
-	// s := &bzzTester{
-	// 	addr:            addr,
-	// 	ExchangeSession: es,
-	// }
 
 	id := s.Ids[0]
 	raddr := NewPeerAddrFromNodeId(id)
@@ -134,7 +109,7 @@ func TestRegisterAndConnect(t *testing.T) {
 		o = 1
 	}
 	s.TestExchanges(p2ptest.Exchange{
-		Label: "getPeers message",
+		Label: "getPeersMsg message",
 		Expects: []p2ptest.Expect{
 			p2ptest.Expect{
 				Code: 1,
@@ -143,14 +118,14 @@ func TestRegisterAndConnect(t *testing.T) {
 			},
 		},
 	})
-	s.TestExchanges(p2ptest.Exchange{
-		Label: "subPeers message outgoing",
-		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
-				Code: 3,
-				Msg:  &SubPeersMsg{ProxLimit: 0, MinProxBinSize: 8},
-				Peer: id,
-			},
-		},
-	})
+	// s.TestExchanges(p2ptest.Exchange{
+	// 	Label: "SubPeersMsg message outgoing",
+	// 	Expects: []p2ptest.Expect{
+	// 		p2ptest.Expect{
+	// 			Code: 3,
+	// 			Msg:  &SubPeersMsg{ProxLimit: 0, MinProxBinSize: 8},
+	// 			Peer: id,
+	// 		},
+	// 	},
+	// })
 }

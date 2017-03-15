@@ -80,7 +80,7 @@ type NodeAdapter interface {
 }
 
 type ProtocolRunner interface {
-	RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error
+	RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, p *Peer) error
 }
 
 type StartAdapter interface {
@@ -92,7 +92,6 @@ type Reporter interface {
 	DidConnect(*NodeId, *NodeId) error
 	DidDisconnect(*NodeId, *NodeId) error
 }
-
 
 func RandomNodeId() *NodeId {
 	key, err := crypto.GenerateKey()

@@ -213,11 +213,12 @@ func (self *Kademlia) On(p Peer) {
 	// vp.NotifyProx(uint8(prox))
 	f := func(val pot.PotVal, po int) {
 		glog.V(logger.Detail).Infof("peer %v nofified", vp)
-		dp := val.(KadDiscovery)
+		dp := val.(*KadPeer).Peer.(KadDiscovery)
 		dp.NotifyPeer(kp.Peer, uint8(po))
 		dp.NotifyProx(uint8(prox))
 	}
-	self.conns.EachNeighbourAsync(pp, 255, 255, f, false)
+	self.conns.EachNeighbourAsync(kp, 255, 255, f, false)
+	go vp.NotifyProx(uint8(prox))
 }
 
 // Off removes a peer from among live peers

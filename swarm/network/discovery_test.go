@@ -3,6 +3,8 @@ package network
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -19,10 +21,9 @@ func TestDiscovery(t *testing.T) {
 	services := func(p Peer) error {
 		dp := NewDiscovery(p, to)
 		to.On(dp)
-		p.DisconnectHook(func(e interface{}) error {
-			dp := e.(Peer)
-			to.Off(dp)
-			return nil
+		glog.V(logger.Detail).Infof("kademlia on %v", p)
+		p.DisconnectHook(func(err error) {
+			to.Off(p)
 		})
 		return nil
 	}
@@ -30,7 +31,9 @@ func TestDiscovery(t *testing.T) {
 	s := newBzzBaseTester(t, 1, addr, ct, services)
 
 	s.runHandshakes()
+	// o := 0
 	s.TestExchanges(p2ptest.Exchange{
+		Label: "outgoing SubPeersMsg",
 		Expects: []p2ptest.Expect{
 			p2ptest.Expect{
 				Code: 3,
