@@ -87,6 +87,7 @@ var (
 	argVerbosity = flag.Int("verbosity", int(log.LvlWarn), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
+	argMaxSize   = flag.Int("maxsize", whisper.DefaultMaxMessageLength, "max size of message")
 	argPoW       = flag.Float64("pow", whisper.DefaultMinimumPoW, "PoW for normal messages in float format (e.g. 2.7)")
 	argServerPoW = flag.Float64("mspow", whisper.DefaultMinimumPoW, "PoW requirement for Mail Server request")
 
@@ -209,6 +210,20 @@ func initialize() {
 		mailServer.Init(shh, *argDBPath, msPassword, *argServerPoW)
 	} else {
 		shh = whisper.New()
+	}
+
+	if *argPoW != whisper.DefaultMinimumPoW {
+		err := shh.SetMinimumPoW(*argPoW)
+		if err != nil {
+			utils.Fatalf("Failed to set PoW: %s", err)
+		}
+	}
+
+	if *argMaxSize != whisper.DefaultMaxMessageLength {
+		err := shh.SetMaxMessageLength(*argMaxSize)
+		if err != nil {
+			utils.Fatalf("Failed to set max message size: %s", err)
+		}
 	}
 
 	asymKeyID, err = shh.NewKeyPair()
@@ -505,7 +520,7 @@ func messageLoop() {
 		case <-ticker.C:
 			messages := f.Retrieve()
 			for _, msg := range messages {
-				if *fileExMode {
+				if *fileExMode || len(msg.Payload) > 2048 {
 					saveMessageInFile(msg)
 				} else {
 					printMessageInfo(msg)
@@ -545,14 +560,16 @@ func saveMessageInFile(msg *whisper.ReceivedMessage) {
 	if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
 		// message from myself: don't save, only report
 		fmt.Printf("\n%s <%x>: message received: '%s'\n", timestamp, address, name)
-	} else {
+	} else if len(*argSaveDir) > 0 {
 		fullpath := filepath.Join(*argSaveDir, name)
 		err := ioutil.WriteFile(fullpath, msg.Payload, 0644)
 		if err != nil {
-			fmt.Printf("\n%s [%x]: message received but not saved: %s\n", timestamp, address, err)
+			fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)
 		} else {
-			fmt.Printf("\n%s [%x]: message received and saved as '%s'\n", timestamp, address, name)
+			fmt.Printf("\n%s {%x}: message received and saved as '%s' (%d bytes)\n", timestamp, address, name, len(msg.Payload))
 		}
+	} else {
+		fmt.Printf("\n%s {%x}: big message received (%d bytes), but not saved: %s\n", timestamp, address, len(msg.Payload), name)
 	}
 }
 
