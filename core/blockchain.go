@@ -529,12 +529,12 @@ func (bc *BlockChain) CalcPastMedianTime(number uint64) *big.Int {
 
 	timestamps := make([]*big.Int, medianTimeBlocks)
 	numNodes := 0
-	iterNode := bc.GetBlockByNumber(number)
+	iterNode := bc.GetHeaderByNumber(number)
 
-	ancestors := make(map[common.Hash]*types.Block)
-	for i, ancestor := range bc.GetBlocksFromHash(iterNode.Hash(), medianTimeBlocks) {
+	ancestors := make(map[common.Hash]*types.Header)
+	for i, ancestor := range bc.GetBlockHeadersFromHash(iterNode.Hash(), medianTimeBlocks) {
 		ancestors[ancestor.Hash()] = ancestor
-		timestamps[i] = ancestor.Time()
+		timestamps[i] = ancestor.Time
 		numNodes++
 	}
 
@@ -1373,6 +1373,20 @@ func (bc *BlockChain) HasHeader(hash common.Hash) bool {
 // hash, fetching towards the genesis block.
 func (self *BlockChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
 	return self.hc.GetBlockHashesFromHash(hash, max)
+}
+
+func (self *BlockChain) GetBlockHeadersFromHash(hash common.Hash, n int) (blockHeaders []*types.Header) {
+	number := self.hc.GetBlockNumber(hash)
+	for i := 0; i < n; i++ {
+		blockHeader := self.GetHeader(hash, number)
+		if blockHeader == nil {
+			break
+		}
+		blockHeaders = append(blockHeaders, blockHeader)
+		hash = blockHeader.ParentHash
+		number--
+	}
+	return
 }
 
 // GetHeaderByNumber retrieves a block header from the database by number,
