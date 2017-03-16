@@ -647,14 +647,13 @@ func (w *Whisper) expire() {
 	now := uint32(time.Now().Unix())
 	for expiry, hashSet := range w.expirations {
 		if expiry < now {
-			w.stats.messagesCleared++
-
 			// Dump all expired messages and remove timestamp
 			hashSet.Each(func(v interface{}) bool {
 				sz := w.envelopes[v.(common.Hash)].size()
+				delete(w.envelopes, v.(common.Hash))
+				w.stats.messagesCleared++
 				w.stats.memoryCleared += sz
 				w.stats.memoryUsed -= sz
-				delete(w.envelopes, v.(common.Hash))
 				return true
 			})
 			w.expirations[expiry].Clear()
@@ -664,10 +663,10 @@ func (w *Whisper) expire() {
 }
 
 func (w *Whisper) Stats() string {
-	result := fmt.Sprintf("Memory usage: %d bytes.\nAverage messages cleared per expiry cycle: %d.",
-		w.stats.memoryUsed, w.stats.totalMessagesCleared/w.stats.cycles)
+	result := fmt.Sprintf("Memory usage: %d bytes. Average messages cleared per expiry cycle: %d. Total messages cleared: %d.",
+		w.stats.memoryUsed, w.stats.totalMessagesCleared/w.stats.cycles, w.stats.totalMessagesCleared)
 	if w.stats.messagesCleared > 0 {
-		result += fmt.Sprintf("\nLatest expiry cycle cleared %d messages (%d bytes).",
+		result += fmt.Sprintf(" Latest expiry cycle cleared %d messages (%d bytes).",
 			w.stats.messagesCleared, w.stats.memoryCleared)
 	}
 	return result
