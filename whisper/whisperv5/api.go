@@ -198,11 +198,16 @@ func (api *PublicWhisperAPI) HasSymmetricKey(id string) (bool, error) {
 	return res, nil
 }
 
-func (api *PublicWhisperAPI) GetSymmetricKey(name string) ([]byte, error) {
+func (api *PublicWhisperAPI) GetSymmetricKey(name string) (string, error) {
 	if api.whisper == nil {
-		return nil, whisperOffLineErr
+		return "", whisperOffLineErr
 	}
-	return api.whisper.GetSymKey(name)
+
+	b, err := api.whisper.GetSymKey(name)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", b), nil
 }
 
 // DeleteSymKey deletes the key associated with the name string if it exists.
@@ -232,14 +237,14 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 
 	err := ValidateKeyID(args.Key)
 	if err != nil {
-		info := "NewFilter: " + err.Error()
+		info := "Subscribe: " + err.Error()
 		log.Error(info)
 		return "", errors.New(info)
 	}
 
 	if len(args.SignedWith) > 0 {
 		if !ValidatePublicKey(filter.Src) {
-			info := "NewFilter: Invalid 'SignedWith' field"
+			info := "Subscribe: Invalid 'SignedWith' field"
 			log.Error(info)
 			return "", errors.New(info)
 		}
@@ -247,18 +252,18 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 
 	if args.Symmetric {
 		if len(args.Topics) == 0 {
-			info := "NewFilter: at least one topic must be specified with symmetric encryption"
+			info := "Subscribe: at least one topic must be specified with symmetric encryption"
 			log.Error(info)
 			return "", errors.New(info)
 		}
 		symKey, err := api.whisper.GetSymKey(args.Key)
 		if err != nil {
-			info := "NewFilter: invalid key ID"
+			info := "Subscribe: invalid key ID"
 			log.Error(info)
 			return "", errors.New(info)
 		}
 		if !validateSymmetricKey(symKey) {
-			info := "NewFilter: retrieved key is invalid"
+			info := "Subscribe: retrieved key is invalid"
 			log.Error(info)
 			return "", errors.New(info)
 		}
@@ -268,12 +273,12 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 	} else {
 		filter.KeyAsym, err = api.whisper.GetPrivateKey(args.Key)
 		if err != nil {
-			info := "NewFilter: invalid key ID"
+			info := "Subscribe: invalid key ID"
 			log.Error(info)
 			return "", errors.New(info)
 		}
 		if filter.KeyAsym == nil {
-			info := "NewFilter: non-existent identity provided"
+			info := "Subscribe: non-existent identity provided"
 			log.Error(info)
 			return "", errors.New(info)
 		}
@@ -288,7 +293,7 @@ func (api *PublicWhisperAPI) Unsubscribe(id string) {
 }
 
 // GetFilterChanges retrieves all the new messages matched by a filter since the last retrieval.
-func (api *PublicWhisperAPI) GetFilterChanges(filterId string) []*WhisperMessage {
+func (api *PublicWhisperAPI) GetSubscriptionMessages(filterId string) []*WhisperMessage {
 	f := api.whisper.GetFilter(filterId)
 	if f != nil {
 		newMail := f.Retrieve()
@@ -409,6 +414,10 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 			return errors.New(info)
 		}
 		return api.whisper.SendP2PMessage(n.ID[:], envelope)
+	} else if args.PowTarget < api.whisper.minPoW {
+		info := "Post: target PoW is less than minimum PoW, the message can not be sent"
+		log.Error(info)
+		return errors.New(info)
 	}
 
 	return api.whisper.Send(envelope)

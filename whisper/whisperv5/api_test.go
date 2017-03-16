@@ -17,7 +17,6 @@
 package whisperv5
 
 import (
-	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
@@ -43,7 +42,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("wrong version: %d.", ver)
 	}
 
-	mail := api.GetFilterChanges("non-existent-id")
+	mail := api.GetSubscriptionMessages("non-existent-id")
 	if len(mail) != 0 {
 		t.Fatalf("failed GetFilterChanges: premature result")
 	}
@@ -148,7 +147,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed GetSymKey(id2): %s.", err)
 	}
 
-	if !bytes.Equal(k1, k2) {
+	if k1 != k2 {
 		t.Fatalf("installed keys are not equal")
 	}
 
@@ -171,7 +170,7 @@ func TestBasic(t *testing.T) {
 
 func TestUnmarshalFilterArgs(t *testing.T) {
 	s := []byte(`{
-	"type":"asym",
+	"type":"sym",
 	"key":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
 	"signedWith":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
 	"minPoW":2.34,
@@ -185,7 +184,7 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 		t.Fatalf("failed UnmarshalJSON: %s.", err)
 	}
 
-	if f.Symmetric {
+	if !f.Symmetric {
 		t.Fatalf("wrong type.")
 	}
 	if f.Key != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
@@ -282,7 +281,7 @@ func waitForMessages(api *PublicWhisperAPI, id string, target int) []*WhisperMes
 	// timeout: 2 seconds
 	result := make([]*WhisperMessage, 0, target)
 	for i := 0; i < 100; i++ {
-		mail := api.GetFilterChanges(id)
+		mail := api.GetSubscriptionMessages(id)
 		if len(mail) > 0 {
 			for _, m := range mail {
 				result = append(result, m)
@@ -590,5 +589,42 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	text = string(common.FromHex(mail[0].Payload))
 	if text != string("extended new value") {
 		t.Fatalf("failed to decrypt second message: %s.", text)
+	}
+}
+
+func TestKey(t *testing.T) {
+	w := New()
+	api := NewPublicWhisperAPI(w)
+	if api == nil {
+		t.Fatalf("failed to create API.")
+	}
+
+	k, err := api.AddSymmetricKeyFromPassword("wwww")
+	if err != nil {
+		t.Fatalf("failed to create key: %s.", err)
+	}
+
+	s, err := api.GetSymmetricKey(k)
+	if err != nil {
+		t.Fatalf("failed to get sym key: %s.", err)
+	}
+
+	b := common.FromHex(s)
+	k2, err := api.AddSymmetricKeyDirect(b)
+	if err != nil {
+		t.Fatalf("failed to add sym key: %s.", err)
+	}
+
+	s2, err := api.GetSymmetricKey(k2)
+	if err != nil {
+		t.Fatalf("failed to get sym key: %s.", err)
+	}
+
+	if s != "448652d595bd6ec00b2a9ea220ad6c26592d9bf4cf79023d3c1b30cb681e6e07" {
+		t.Fatalf("wrong key from password")
+	}
+
+	if s != s2 {
+		t.Fatalf("wrong key")
 	}
 }

@@ -348,7 +348,7 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 	if w.symKeys[id] != nil {
 		return w.symKeys[id], nil
 	}
-	return nil, fmt.Errorf("non-existent ID")
+	return nil, fmt.Errorf("non-existent key ID")
 }
 
 // Watch installs a new message handler to run in case a matching packet arrives
@@ -383,7 +383,7 @@ func (w *Whisper) Send(envelope *Envelope) error {
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
 func (w *Whisper) Start(*p2p.Server) error {
-	log.Info(fmt.Sprint("Whisper started"))
+	log.Info(fmt.Sprintf("Whisper v%d started", ProtocolVersion))
 	go w.update()
 
 	numCPU := runtime.NumCPU()

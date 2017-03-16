@@ -257,7 +257,7 @@ func sendMsg(t *testing.T, expected bool, id int) {
 		return
 	}
 
-	opt := MessageParams{KeySym: sharedKey, Topic: sharedTopic, Payload: expectedMessage, PoW: 0.00000001}
+	opt := MessageParams{KeySym: sharedKey, Topic: sharedTopic, Payload: expectedMessage, PoW: 0.00000001, WorkTime: 1}
 	if !expected {
 		opt.KeySym[0]++
 		opt.Topic[0]++
@@ -267,12 +267,12 @@ func sendMsg(t *testing.T, expected bool, id int) {
 	msg := NewSentMessage(&opt)
 	envelope, err := msg.Wrap(&opt)
 	if err != nil {
-		t.Fatalf("failed to seal message.")
+		t.Fatalf("failed to seal message: %s", err)
 	}
 
 	err = nodes[id].shh.Send(envelope)
 	if err != nil {
-		t.Fatalf("failed to send message.")
+		t.Fatalf("failed to send message: %s", err)
 	}
 }
 
