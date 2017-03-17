@@ -126,8 +126,8 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 	}
 }
 
-func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) *p2ptest.ExchangeSession {
-	id := p2ptest.RandomNodeId()
+func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) *p2ptest.ProtocolTester {
+	id := adapters.RandomNodeId()
 	return p2ptest.NewProtocolTester(t, id, 2, newProtocol(pp, wg))
 }
 

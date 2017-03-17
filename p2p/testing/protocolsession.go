@@ -2,31 +2,17 @@ package testing
 
 import (
 	"fmt"
-	"sync"
-	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"sync"
+	
 	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// ExchangeTestSession assumes a network with a protocol running on multiple peer connection
-// and is used to test scanarios of message exchange among a select array of nodes
-// the scenarios are sets of exchanges, each with a trigger and an expectation
-// This rigid regime is suitable for
-// * unit testing protocol message exchanges (nodes are peers of a local node)
-// * testing routed messaging between remote non-connected nodes within a group
-type ExchangeTestSession struct {
-	lock sync.Mutex
+type ProtocolSession struct {
+	TestNodeAdapter
 	Ids  []*adapters.NodeId
-	TestNetAdapter
-	TestMessenger
-	t *testing.T
-}
-
-// implemented by simulations/
-type TestNetAdapter interface {
-	GetPeer(id *adapters.NodeId) *adapters.Peer
 }
 
 type TestMessenger interface {
@@ -34,7 +20,16 @@ type TestMessenger interface {
 	TriggerMsg(uint64, interface{}) error
 }
 
+type TestNodeAdapter interface {
+	GetPeer(id *adapters.NodeId) *adapters.Peer
+	Connect([]byte) error
+}
+
 // exchanges are the basic units of protocol tests
+// the triggers and expects in the arrays are run immediately and asynchronously
+// thus one cannot have multiple expects for the SAME peer with the DIFFERENT messagetypes
+// because it's unpredictable which expect will receive which message
+// (with expect #1 and #2, messages might be sent #2 and #1, and both expects will complain about wrong message code)
 // an exchange is defined on a session
 type Exchange struct {
 	Label    string
@@ -62,23 +57,17 @@ type Disconnect struct {
 	Error error            // disconnect reason
 }
 
-// NewExchangeTestSession takes a network session and Messenger
-// and returns an exchange session test driver that can
-// be used to unit test protocol communications
-// it allows for resource-driven scenario testing
-// disconnect reason errors are written in session.Errs
-// (correcponding to session.Peers)
-//func NewExchangeTestSession(t *testing.T, n TestNetAdapter, m TestMessenger, ids []*adapters.NodeId) *ExchangeTestSession {
-func NewExchangeTestSession(t *testing.T, n TestNetAdapter, ids []*adapters.NodeId) *ExchangeTestSession {
-	return &ExchangeTestSession{
-		Ids:            ids,
-		TestNetAdapter: n,
-		t:              t,
+
+func NewProtocolSession(na adapters.NodeAdapter, ids []*adapters.NodeId) *ProtocolSession {
+	ps := &ProtocolSession {
+		TestNodeAdapter: na.(TestNodeAdapter),
+		Ids: ids,
 	}
+	return ps
 }
 
 // trigger sends messages from peers
-func (self *ExchangeTestSession) trigger(trig Trigger) error {
+func (self *ProtocolSession) trigger(trig Trigger) error {
 	peer := self.GetPeer(trig.Peer)
 	if peer == nil {
 		panic(fmt.Sprintf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids)))
@@ -90,9 +79,9 @@ func (self *ExchangeTestSession) trigger(trig Trigger) error {
 	errc := make(chan error)
 
 	go func() {
-		glog.V(6).Infof("trigger %v (%v)....", trig.Msg, trig.Code)
+		glog.V(logger.Detail).Infof("trigger %v (%v)....", trig.Msg, trig.Code)
 		errc <- m.(TestMessenger).TriggerMsg(trig.Code, trig.Msg)
-		glog.V(6).Infof("triggered %v (%v)", trig.Msg, trig.Code)
+		glog.V(logger.Detail).Infof("triggered %v (%v)", trig.Msg, trig.Code)
 	}()
 
 	t := trig.Timeout
@@ -108,12 +97,8 @@ func (self *ExchangeTestSession) trigger(trig Trigger) error {
 	}
 }
 
-func Key(id []byte) string {
-	return string(id)
-}
-
 // expect checks an expectation
-func (self *ExchangeTestSession) expect(exp Expect) error {
+func (self *ProtocolSession) expect(exp Expect) error {
 	if exp.Msg == nil {
 		panic("no message to expect")
 	}
@@ -128,7 +113,7 @@ func (self *ExchangeTestSession) expect(exp Expect) error {
 
 	errc := make(chan error)
 	go func() {
-		glog.V(6).Infof("waiting for msg, %v", exp.Msg)
+		glog.V(logger.Detail).Infof("waiting for msg, %v", exp.Msg)
 		errc <- m.(TestMessenger).ExpectMsg(exp.Code, exp.Msg)
 	}()
 
@@ -139,17 +124,18 @@ func (self *ExchangeTestSession) expect(exp Expect) error {
 	alarm := time.NewTimer(t)
 	select {
 	case err := <-errc:
-		glog.V(6).Infof("expected msg arrives with error %v", err)
+		glog.V(logger.Detail).Infof("expected msg arrives with error %v", err)
 		return err
 	case <-alarm.C:
-		glog.V(6).Infof("caught timeout")
+		glog.V(logger.Detail).Infof("caught timeout")
 		return fmt.Errorf("timout expecting %v sent to peer %v", exp.Msg, exp.Peer)
 	}
 	// fatal upon encountering first exchange error
 }
 
+
 // TestExchange tests a series of exchanges againsts the session
-func (self *ExchangeTestSession) TestExchanges(exchanges ...Exchange) {
+func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 	// launch all triggers of this exchanges
 
 	for i, e := range exchanges {
@@ -177,7 +163,7 @@ func (self *ExchangeTestSession) TestExchanges(exchanges ...Exchange) {
 				defer wg.Done()
 				err := self.expect(exp)
 				if err != nil {
-					glog.V(6).Infof("expect msg fails %v", err)
+					glog.V(logger.Detail).Infof("expect msg fails %v", err)
 					errc <- err
 				}
 			}(ex)
@@ -195,17 +181,18 @@ func (self *ExchangeTestSession) TestExchanges(exchanges ...Exchange) {
 
 		case err := <-errc:
 			if err != nil {
-				self.t.Fatalf("exchange failed with: %v", err)
+				return fmt.Errorf("exchange failed with: %v", err)
 			} else {
-				glog.V(6).Infof("exchange %v: '%v' run successfully", i, e.Label)
+				glog.V(logger.Detail).Infof("exchange %v: '%v' run successfully", i, e.Label)
 			}
 		case <-alarm.C:
-			self.t.Fatalf("exchange %v: '%v' timed out", i, e.Label)
+			return fmt.Errorf("exchange %v: '%v' timed out", i, e.Label)
 		}
 	}
+	return nil
 }
 
-func (self *ExchangeTestSession) TestDisconnected(disconnects ...*Disconnect) {
+func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error {
 	for _, disconnect := range disconnects {
 		id := disconnect.Peer
 		err := disconnect.Error
@@ -215,10 +202,11 @@ func (self *ExchangeTestSession) TestDisconnected(disconnects ...*Disconnect) {
 		select {
 		case derr := <-peer.Errc:
 			if !((err == nil && derr == nil) || err != nil && derr != nil && err.Error() == derr.Error()) {
-				self.t.Fatalf("unexpected error on peer %v. expected '%v', got '%v'", id, err, derr)
+				return fmt.Errorf("unexpected error on peer %v. expected '%v', got '%v'", id, err, derr)
 			}
 		case <-alarm.C:
-			self.t.Fatalf("timed out waiting for peer %v to disconnect", id)
+			return fmt.Errorf("timed out waiting for peer %v to disconnect", id)
 		}
 	}
+	return nil
 }
