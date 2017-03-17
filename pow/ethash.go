@@ -428,7 +428,7 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 	current, future := ethash.caches[epoch], (*cache)(nil)
 	if current == nil {
 		// No in-memory cache, evict the oldest if the cache limit was reached
-		for len(ethash.caches) >= ethash.cachesinmem {
+		for len(ethash.caches) > 0 && len(ethash.caches) >= ethash.cachesinmem {
 			var evict *cache
 			for _, cache := range ethash.caches {
 				if evict == nil || evict.used.After(cache.used) {
@@ -480,22 +480,16 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 // Search implements PoW, attempting to find a nonce that satisfies the block's
 // difficulty requirements.
 func (ethash *Ethash) Search(block Block, stop <-chan struct{}) (uint64, []byte) {
-	// Extract some data from the block
 	var (
-		hash   = block.HashNoNonce().Bytes()
-		diff   = block.Difficulty()
-		target = new(big.Int).Div(maxUint256, diff)
-	)
-	// Retrieve the mining dataset
-	dataset, size := ethash.dataset(block.NumberU64()), datasetSize(block.NumberU64())
-
-	// Start generating random nonces until we abort or find a good one
-	var (
+		hash     = block.HashNoNonce().Bytes()
+		diff     = block.Difficulty()
+		target   = new(big.Int).Div(maxUint256, diff)
+		dataset  = ethash.dataset(block.NumberU64())
+		rand     = rand.New(rand.NewSource(time.Now().UnixNano()))
+		nonce    = uint64(rand.Int63())
 		attempts int64
-
-		rand  = rand.New(rand.NewSource(time.Now().UnixNano()))
-		nonce = uint64(rand.Int63())
 	)
+	// Start generating random nonces until we abort or find a good one
 	for {
 		select {
 		case <-stop:
@@ -511,7 +505,7 @@ func (ethash *Ethash) Search(block Block, stop <-chan struct{}) (uint64, []byte)
 				attempts = 0
 			}
 			// Compute the PoW value of this nonce
-			digest, result := hashimotoFull(size, dataset, hash, nonce)
+			digest, result := hashimotoFull(dataset, hash, nonce)
 			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
 				return nonce, digest
 			}
@@ -532,7 +526,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 	current, future := ethash.datasets[epoch], (*dataset)(nil)
 	if current == nil {
 		// No in-memory dataset, evict the oldest if the dataset limit was reached
-		for len(ethash.datasets) >= ethash.dagsinmem {
+		for len(ethash.datasets) > 0 && len(ethash.datasets) >= ethash.dagsinmem {
 			var evict *dataset
 			for _, dataset := range ethash.datasets {
 				if evict == nil || evict.used.After(dataset.used) {

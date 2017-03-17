@@ -660,7 +660,7 @@ func TestHashimoto(t *testing.T) {
 	if !bytes.Equal(result, wantResult) {
 		t.Errorf("light hashimoto result mismatch: have %x, want %x", result, wantResult)
 	}
-	digest, result = hashimotoFull(32*1024, dataset, hash, nonce)
+	digest, result = hashimotoFull(dataset, hash, nonce)
 	if !bytes.Equal(digest, wantDigest) {
 		t.Errorf("full hashimoto digest mismatch: have %x, want %x", digest, wantDigest)
 	}
@@ -713,6 +713,17 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 	pend.Wait()
 }
 
+func TestTestMode(t *testing.T) {
+	head := &types.Header{Difficulty: big.NewInt(100)}
+	ethash := NewTestEthash()
+	nonce, mix := ethash.Search(types.NewBlockWithHeader(head), nil)
+	head.Nonce = types.EncodeNonce(nonce)
+	copy(head.MixDigest[:], mix)
+	if err := ethash.Verify(types.NewBlockWithHeader(head)); err != nil {
+		t.Error("unexpected Verify error:", err)
+	}
+}
+
 // Benchmarks the cache generation performance.
 func BenchmarkCacheGeneration(b *testing.B) {
 	for i := 0; i < b.N; i++ {
@@ -758,6 +769,6 @@ func BenchmarkHashimotoFullSmall(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		hashimotoFull(32*65536, dataset, hash, 0)
+		hashimotoFull(dataset, hash, 0)
 	}
 }
