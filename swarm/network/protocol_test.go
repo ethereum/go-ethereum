@@ -59,14 +59,14 @@ func newBzzBaseTester(t *testing.T, n int, addr *peerAddr, ct *protocols.CodeMap
 	}
 
 	return &bzzTester{
-		addr:            addr,
-		ExchangeSession: s,
-		cs:              cs,
+		addr:           addr,
+		ProtocolTester: s,
+		cs:             cs,
 	}
 }
 
 type bzzTester struct {
-	*p2ptest.ExchangeSession
+	*p2ptest.ProtocolTester
 	addr *peerAddr
 	cs   map[string]chan bool
 }

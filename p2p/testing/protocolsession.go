@@ -2,17 +2,17 @@ package testing
 
 import (
 	"fmt"
-	"time"
 	"sync"
-	
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"time"
+
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
 type ProtocolSession struct {
 	TestNodeAdapter
-	Ids  []*adapters.NodeId
+	Ids []*adapters.NodeId
 }
 
 type TestMessenger interface {
@@ -57,11 +57,10 @@ type Disconnect struct {
 	Error error            // disconnect reason
 }
 
-
 func NewProtocolSession(na adapters.NodeAdapter, ids []*adapters.NodeId) *ProtocolSession {
-	ps := &ProtocolSession {
+	ps := &ProtocolSession{
 		TestNodeAdapter: na.(TestNodeAdapter),
-		Ids: ids,
+		Ids:             ids,
 	}
 	return ps
 }
@@ -132,7 +131,6 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	}
 	// fatal upon encountering first exchange error
 }
-
 
 // TestExchange tests a series of exchanges againsts the session
 func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {

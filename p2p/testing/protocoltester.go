@@ -2,21 +2,21 @@ package testing
 
 import (
 	"testing"
-	
-	"github.com/ethereum/go-ethereum/p2p/adapters"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
+
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 )
 
 type ProtocolTester struct {
 	*ProtocolSession
 	network *simulations.Network
-	na adapters.NodeAdapter
+	na      adapters.NodeAdapter
 }
 
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id adapters.NodeAdapter) adapters.ProtoCall) *ProtocolTester {
-	
+
 	simPipe := adapters.NewSimPipe
 	net := simulations.NewNetwork(&simulations.NetworkConfig{})
 	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
@@ -32,21 +32,21 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id ada
 	if err != nil {
 		panic(err.Error())
 	}
-	
+
 	//na := net.GetNode(id).Adapter()
 	na := net.GetNodeAdapter(id)
-	
+
 	ids := adapters.RandomNodeIds(n)
-	
+
 	ps := NewProtocolSession(na, ids)
 	self := &ProtocolTester{
 		ProtocolSession: ps,
-		network: net,
-		na: na,
+		network:         net,
+		na:              na,
 	}
-	
+
 	self.Connect(ids...)
-	
+
 	return self
 }
 
