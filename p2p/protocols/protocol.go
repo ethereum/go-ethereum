@@ -271,7 +271,7 @@ func (self *Peer) Send(msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	glog.V(logger.Detail).Infof("=> %v (%d)", msg, code)
+	glog.V(logger.Detail).Infof("=> msg #%d TO %v : %v", code, self.ID(), msg)
 	err := self.m.SendMsg(uint64(code), msg)
 	if err != nil {
 		err = errorf(ErrWrite, "(msg code: %v): %v", code, err)
@@ -321,7 +321,7 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 	if err := msg.Decode(val.Interface()); err != nil {
 		return nil, errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
-	glog.V(logger.Detail).Infof("<= %v %v (%d)", req, typ, msg.Code)
+	glog.V(logger.Detail).Infof("<= %v FROM %v %v %v", msg, self.ID(), req, typ)
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface

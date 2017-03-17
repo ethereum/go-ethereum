@@ -73,7 +73,8 @@ func NewKadParams() *KadParams {
 		MinProxBinSize: 2,
 		MinBinSize:     2,
 		MaxBinSize:     4,
-		RetryInterval:  42000000000,
+		//RetryInterval:  42000000000,
+		RetryInterval:  420000000,
 		MaxRetries:     42,
 		RetryExponent:  2,
 	}
@@ -136,6 +137,7 @@ func (self *KadPeer) String() string {
 func (self *Kademlia) callable(val pot.PotVal) *KadPeer {
 	kp := val.(*KadPeer)
 	// not callable if peer is live or exceeded maxRetries
+	glog.V(logger.Detail).Infof(">>>>>>>>>>>>>>>>>>>>>>>>>>> in callable: %T", kp.Peer)
 	if kp.Peer != nil || kp.retries > self.MaxRetries {
 		glog.V(logger.Detail).Infof("peer %v not callable", kp.PeerAddr)
 		return nil
@@ -149,6 +151,7 @@ func (self *Kademlia) callable(val pot.PotVal) *KadPeer {
 	}
 	// this is never called concurrently, so safe to increment
 	// peer can be retried again
+	
 	if retries < kp.retries {
 		glog.V(logger.Detail).Infof("log time needed before retry %v, wait only warrants %v", kp.retries, retries)
 		return nil
@@ -313,6 +316,7 @@ func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
 	})
 	if p != nil {
 		glog.V(logger.Detail).Infof("candidate prox peer found: %v (%v), %#v", p, ppo, p)
+		//return p, 0, false
 		return p, 0, false
 	}
 	glog.V(logger.Detail).Infof("no candidate prox peers to connect to (ProxLimit: %v, minProxSize: %v)", proxLimit, self.MinProxBinSize)

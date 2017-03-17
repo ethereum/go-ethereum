@@ -50,8 +50,8 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
-func (self *SimNode) RunProtocol(id *adapters.NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error {
-	return self.NodeAdapter.(adapters.ProtocolRunner).RunProtocol(id, rw, rrw, runc)
+func (self *SimNode) RunProtocol(id *adapters.NodeId, rw, rrw p2p.MsgReadWriter, peer *adapters.Peer) error {
+	return self.NodeAdapter.(adapters.ProtocolRunner).RunProtocol(id, rw, rrw, peer)
 }
 
 // NewSimNode creates adapters for nodes in the simulation.
@@ -59,13 +59,29 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, adapters.NewSimPipe)
 	addr := network.NewPeerAddrFromNodeId(id)
-	to := network.NewKademlia(addr.OverlayAddr(), nil) // overlay topology driver
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = 4
+	kp.MinBinSize = 4
+	to := network.NewKademlia(addr.OverlayAddr(), kp) // overlay topology driver
 	// to := network.NewTestOverlay(addr.OverlayAddr())   // overlay topology driver
-	pp := network.NewHive(network.NewHiveParams(), to) // hive
+	hp := network.NewHiveParams()
+	hp.CallInterval = 5000
+	pp := network.NewHive(hp, to) // hive
 	self.hives = append(self.hives, pp)                // remember hive
 	// bzz protocol Run function. messaging through SimPipe
+	
+	services := func(p network.Peer) error {
+		dp := network.NewDiscovery(p, to)
+		pp.Add(dp)
+		glog.V(logger.Detail).Infof("kademlia on %v", p)
+		p.DisconnectHook(func(err error) {
+			pp.Remove(dp)
+		})
+		return nil
+	}
+	
 	ct := network.BzzCodeMap(network.HiveMsgs...) // bzz protocol code map
-	na.Run = network.Bzz(addr.OverlayAddr(), pp, na, ct, nil).Run
+	na.Run = network.Bzz(addr.OverlayAddr(), na, ct, services, nil, nil).Run
 	connect := func(s string) error {
 		return self.Connect(id, adapters.NewNodeIdFromHex(s))
 	}
@@ -95,7 +111,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 	conf.Backend = true
 	net := NewNetwork(simulations.NewNetwork(conf))
 
-	ids := p2ptest.RandomNodeIds(5)
+	ids := p2ptest.RandomNodeIds(10)
 
 	for i, id := range ids {
 		net.NewNode(&simulations.NodeConfig{Id: id})
@@ -134,7 +150,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 // var server
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	glog.SetV(logger.Info)
+	glog.SetV(logger.Detail)
 	glog.SetToStderr(true)
 
 	c, quitc := simulations.NewSessionController(nethook)

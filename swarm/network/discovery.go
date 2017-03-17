@@ -26,7 +26,8 @@ func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
 		return nil
 	}
 	resp := &peersMsg{
-		Peers: []*peerAddr{p.(*discPeer).Peer.(*bzzPeer).peerAddr},
+		//Peers: []*peerAddr{p.(*discPeer).Peer.(*bzzPeer).peerAddr},
+		Peers: []*peerAddr{&peerAddr{OAddr: p.OverlayAddr(), UAddr: p.UnderlayAddr()}}, // perhaps the PeerAddr interface is unnecessary generalization
 	}
 	return p.Send(resp)
 }
