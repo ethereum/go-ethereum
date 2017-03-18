@@ -257,7 +257,8 @@ func initialize() {
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
 			MaxPeers:       maxPeers,
-			Name:           common.MakeName("whisper-go", "5.0"),
+			Discovery:      true,
+			Name:           common.MakeName("wnode", "5.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     *argIP,
 			NAT:            nat.Any(),
