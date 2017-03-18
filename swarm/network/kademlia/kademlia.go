@@ -116,7 +116,7 @@ func (self *Kademlia) DBCount() int {
 // On is the entry point called when a new nodes is added
 // unsafe in that node is not checked to be already active node (to be called once)
 func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error) {
-	log.Warn(fmt.Sprintf("%v", self))
+	log.Debug(fmt.Sprintf("%v", self))
 	defer self.lock.Unlock()
 	self.lock.Lock()
 
