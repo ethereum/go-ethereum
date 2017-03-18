@@ -14,15 +14,16 @@ import (
 
 type discPeer struct {
 	Peer
-	overlay   Overlay
-	proxLimit uint8
-	peers     map[discover.NodeID]bool
+	overlay   		Overlay
+	proxLimit 		uint8
+	peers     		map[discover.NodeID]bool
+	sentPeers	    bool
 }
 
 // NotifyPeer notifies the receiver remote end of a peer p or PO po.
 // callback for overlay driver
 func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
-	if po < self.proxLimit || self.peers[p.ID()] {
+	if po < self.proxLimit || self.peers[p.ID()] || !self.sentPeers {
 		return nil
 	}
 	resp := &peersMsg{
@@ -104,6 +105,19 @@ func (self SubPeersMsg) String() string {
 
 func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
 	spm := msg.(*SubPeersMsg)
+	if !self.sentPeers {
+		var peers []*peerAddr
+		self.overlay.EachLivePeer(self.OverlayAddr(), 255, func(p Peer, po int) bool {
+			if uint8(po) > self.proxLimit {
+				return false
+			}
+			self.peers[p.ID()] = true
+			peers = append(peers, &peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
+			return true
+		})
+		self.Send(&peersMsg{Peers: peers})
+	}
+	self.sentPeers = true
 	self.proxLimit = spm.ProxLimit
 	return nil
 }

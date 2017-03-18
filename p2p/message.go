@@ -266,7 +266,7 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 			return err
 		}
 		if !bytes.Equal(actualContent, contentEnc) {
-			return fmt.Errorf("message payload mismatch:\ngot:  %x\nwant: %x", actualContent, contentEnc)
+			return fmt.Errorf("message %v payload mismatch:\ngot:  %x\nwant: %x", msg, actualContent, contentEnc)
 		}
 	}
 	return nil

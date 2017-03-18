@@ -7,22 +7,58 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
 type pssTester struct {
 	*p2ptest.ProtocolTester
+	ct *protocols.CodeMap 
 }
 
 func TestPssTwoToSelf(t *testing.T) {
 	addr := RandomAddr()
 	pt := newPssTester(t, addr, 2)
+	
+	subpeermsgcode, found := pt.ct.GetCode(&SubPeersMsg{})
+	if !found {
+		t.Fatalf("peerMsg not defined")
+	}
+
+	/*peermsgcode, found := pt.ct.GetCode(&peersMsg{})
+	if !found {
+		t.Fatalf("peerMsg not defined")
+	}*/
+	
 	hs_pivot := correctBzzHandshake(addr)
+	
 	for _, id := range pt.Ids {
 		hs_sim := correctBzzHandshake(NewPeerAddrFromNodeId(id))
 		glog.V(logger.Detail).Infof("Will handshake %v with %v", hs_pivot, hs_sim)
 		<-pt.GetPeer(id).Connc
 		pt.TestExchanges(bzzHandshakeExchange(hs_pivot, hs_sim, id)...)
+		
+		pt.TestExchanges(
+		p2ptest.Exchange{
+			Expects: []p2ptest.Expect{
+				p2ptest.Expect{
+					Code: subpeermsgcode,
+					Msg:  &SubPeersMsg{},
+					Peer: id,
+				},
+			},
+		},/*
+		p2ptest.Exchange{
+			Expects: []p2ptest.Expect{
+				p2ptest.Expect{
+					Code: peermsgcode,
+					Msg:  &peersMsg{},
+					Peer: id,
+				},
+			},
+		},*/
+		)
+		
 	}
 }
 
@@ -33,7 +69,11 @@ func newPssTester(t *testing.T, addr *peerAddr, n int) *pssTester {
 func newPssBaseTester(t *testing.T, addr *peerAddr, n int) *pssTester {
 	ct := BzzCodeMap()
 	ct.Register(&PssMsg{})
-
+	ct.Register(&peersMsg{})
+	ct.Register(&getPeersMsg{})
+	ct.Register(&SubPeersMsg{}) // why is this official? 
+	
+	
 	simPipe := adapters.NewSimPipe
 	kp := NewKadParams()
 	to := NewKademlia(addr.OverlayAddr(), kp)
@@ -62,6 +102,7 @@ func newPssBaseTester(t *testing.T, addr *peerAddr, n int) *pssTester {
 
 	return &pssTester{
 		ProtocolTester: s,
+		ct: ct,
 	}
 
 }

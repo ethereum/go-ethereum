@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	//p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -111,7 +111,8 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 	conf.Backend = true
 	net := NewNetwork(simulations.NewNetwork(conf))
 
-	ids := p2ptest.RandomNodeIds(10)
+	//ids := p2ptest.RandomNodeIds(10)
+	ids := adapters.RandomNodeIds(10)
 
 	for i, id := range ids {
 		net.NewNode(&simulations.NodeConfig{Id: id})
