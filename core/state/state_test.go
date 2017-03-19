@@ -113,6 +113,7 @@ func (s *StateSuite) TestSnapshot(c *checker.C) {
 	data1 := common.BytesToHash([]byte{42})
 	data2 := common.BytesToHash([]byte{43})
 
+	s.state.createObject(stateobjaddr)
 	// set initial state object value
 	s.state.SetState(stateobjaddr, storageaddr, data1)
 	// get snapshot of current state
@@ -143,6 +144,8 @@ func TestSnapshot2(t *testing.T) {
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))
+	state.createObject(stateobjaddr0)
+	state.createObject(stateobjaddr1)
 	var storageaddr common.Hash
 
 	data0 := common.BytesToHash([]byte{17})

@@ -29,6 +29,7 @@ func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
+	ms.StateDB.createObject(addr)
 	ms.StateDB.SetNonce(addr, 100)
 	ms.accounts[addr] = newAccount(ms.StateDB.getStateObject(addr))
 	return ms, ms.accounts[addr]
@@ -116,6 +117,7 @@ func TestSetNonce(t *testing.T) {
 	}
 
 	addr[0] = 1
+	ms.StateDB.createObject(addr)
 	ms.StateDB.SetNonce(addr, 1)
 
 	if ms.GetNonce(addr) != 1 {
