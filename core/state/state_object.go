@@ -136,9 +136,11 @@ func (self *stateObject) markSuicided() {
 }
 
 func (c *stateObject) touch() {
+	prevDirty := c.onDirty == nil
 	c.db.journal = append(c.db.journal, touchChange{
-		account: &c.address,
-		prev:    c.touched,
+		account:   &c.address,
+		prev:      c.touched,
+		prevDirty: prevDirty,
 	})
 	if c.onDirty != nil {
 		c.onDirty(c.Address())

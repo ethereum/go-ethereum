@@ -366,6 +366,7 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 		account:     &addr,
 		prev:        stateObject.suicided,
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
+		prevObj:     stateObject,
 	})
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)

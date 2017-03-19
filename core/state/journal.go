@@ -40,6 +40,7 @@ type (
 		account     *common.Address
 		prev        bool // whether account had already suicided
 		prevbalance *big.Int
+		prevObj     *stateObject
 	}
 
 	// Changes to individual accounts.
@@ -71,8 +72,9 @@ type (
 		hash common.Hash
 	}
 	touchChange struct {
-		account *common.Address
-		prev    bool
+		account   *common.Address
+		prev      bool
+		prevDirty bool
 	}
 )
 
@@ -86,36 +88,43 @@ func (ch resetObjectChange) undo(s *StateDB) {
 }
 
 func (ch suicideChange) undo(s *StateDB) {
-	obj := s.getStateObject(*ch.account)
-	if obj != nil {
-		obj.suicided = ch.prev
-		obj.setBalance(ch.prevbalance)
+	if !ch.prev {
+		ch.prevObj.suicided = ch.prev
+		ch.prevObj.setBalance(ch.prevbalance)
+		s.setStateObject(ch.prevObj)
 	}
 }
 
 var ripemd = common.HexToAddress("0000000000000000000000000000000000000003")
 
 func (ch touchChange) undo(s *StateDB) {
-	if !ch.prev && *ch.account != ripemd {
-		delete(s.stateObjects, *ch.account)
+	if !ch.prev && !ch.prevDirty && *ch.account != ripemd {
 		delete(s.stateObjectsDirty, *ch.account)
 	}
 }
 
 func (ch balanceChange) undo(s *StateDB) {
-	s.getStateObject(*ch.account).setBalance(ch.prev)
+	if obj := s.getStateObject(*ch.account); obj != nil {
+		obj.setBalance(ch.prev)
+	}
 }
 
 func (ch nonceChange) undo(s *StateDB) {
-	s.getStateObject(*ch.account).setNonce(ch.prev)
+	if obj := s.getStateObject(*ch.account); obj != nil {
+		obj.setNonce(ch.prev)
+	}
 }
 
 func (ch codeChange) undo(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+	if obj := s.getStateObject(*ch.account); obj != nil {
+		obj.setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
+	}
 }
 
 func (ch storageChange) undo(s *StateDB) {
-	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
+	if obj := s.getStateObject(*ch.account); obj != nil {
+		obj.setState(ch.key, ch.prevalue)
+	}
 }
 
 func (ch refundChange) undo(s *StateDB) {
