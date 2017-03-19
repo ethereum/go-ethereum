@@ -397,7 +397,7 @@ func (self *StateDB) deleteStateObject(stateObject *stateObject) {
 func (self *StateDB) getStateObject(addr common.Address) (stateObject *stateObject) {
 	// Prefer 'live' objects.
 	if obj := self.stateObjects[addr]; obj != nil {
-		if obj.deleted {
+		if obj.suicided {
 			return nil
 		}
 		return obj
