@@ -2,6 +2,9 @@ package testing
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 type ProtocolSession struct {
 	TestNodeAdapter
 	Ids []*adapters.NodeId
+	ignore []uint64
 }
 
 type TestMessenger interface {
@@ -21,6 +25,7 @@ type TestMessenger interface {
 }
 
 type TestNodeAdapter interface {
+	p2p.Server
 	GetPeer(id *adapters.NodeId) *adapters.Peer
 }
 
@@ -62,6 +67,10 @@ func NewProtocolSession(na TestNodeAdapter, ids []*adapters.NodeId) *ProtocolSes
 		Ids:             ids,
 	}
 	return ps
+}
+
+func (self *ProtocolSession) SetIgnoreCodes(ignore ...uint64) {
+	self.ignore = ignore
 }
 
 // trigger sends messages from peers
@@ -109,8 +118,39 @@ func (self *ProtocolSession) expect(exp Expect) error {
 
 	errc := make(chan error)
 	go func() {
-		log.Trace(fmt.Sprintf("waiting for msg, %v", exp.Msg))
-		errc <- p2p.ExpectMsg(peer, exp.Code, exp.Msg)
+		var err error
+		ignored := true
+		log.Trace("waiting for msg", "code", exp.Code, "msg", exp.Msg)
+		for ignored {
+			ignored = false
+			err = p2p.ExpectMsg(peer, exp.Code, exp.Msg)
+			// frail, but we can't know what code expectmsg got otherwise
+			// can we do better error reporting in p2p.ExpectMsg()?
+			if err != nil {
+				if strings.Contains(err.Error(), "code") {
+					re, _ := regexp.Compile("got ([0-9]+),")
+					match := re.FindStringSubmatch(err.Error())
+					if len(match) > 1 {
+						for _, codetoignore := range self.ignore {
+							codewegot, err := strconv.ParseUint(match[1], 10, 64)
+							if err == nil {
+								if codetoignore == codewegot {
+									ignored = true
+									log.Trace("ignore msg with wrong code", "received", codewegot, "expected", exp.Code)
+									break
+								}
+							} else {
+								log.Warn("expectmsg errormsg parse error?!")
+							}
+						} 
+					} else {
+						log.Warn("expectmsg errormsg parse error?!")
+						break
+					}
+				}
+			}
+		}
+		errc <- err
 	}()
 
 	t := exp.Timeout

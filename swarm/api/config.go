@@ -47,13 +47,14 @@ type Config struct {
 	*storage.ChunkerParams
 	*network.HiveParams
 	Swap *swap.SwapParams
-	*network.SyncParams
+	//*network.SyncParams
 	Path      string
 	Port      string
 	PublicKey string
 	BzzKey    string
 	EnsRoot   common.Address
 	NetworkId uint64
+	*network.PssParams
 }
 
 // config is agnostic to where private key is coming from
@@ -72,10 +73,11 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 	keyhex := crypto.Keccak256Hash(pubkey).Hex()
 
 	self = &Config{
-		SyncParams:    network.NewSyncParams(dirpath),
-		HiveParams:    network.NewHiveParams(dirpath),
+		//SyncParams:    network.NewSyncParams(dirpath),
+		HiveParams:    network.NewHiveParams(),
 		ChunkerParams: storage.NewChunkerParams(),
 		StoreParams:   storage.NewStoreParams(dirpath),
+		PssParams:	   network.NewPssParams(),
 		Port:          port,
 		Path:          dirpath,
 		Swap:          swap.DefaultSwapParams(contract, prvKey),

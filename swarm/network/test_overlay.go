@@ -28,6 +28,13 @@ func (self *testOverlay) Register(nas ...PeerAddr) error {
 	return self.register(nas...)
 }
 
+func (self *testOverlay) GetAddr() PeerAddr {
+	return &peerAddr{
+		OAddr: self.addr,
+		UAddr: []byte{},
+	}
+}
+
 func (self *testOverlay) register(nas ...PeerAddr) error {
 	for _, na := range nas {
 		tna := &testPeerAddr{PeerAddr: na}
@@ -95,14 +102,14 @@ func (self *testOverlay) off(po []*testPeerAddr) (nas []PeerAddr) {
 	return nas
 }
 
-func (self *testOverlay) EachLivePeer(base []byte, o int, f func(Peer, int) bool) {
+func (self *testOverlay) EachLivePeer(base []byte, o int, f func(Peer, int, bool) bool) {
 	if base == nil {
 		base = self.addr
 	}
 	for i := o; i < len(self.pos); i++ {
 		for _, na := range self.pos[i] {
 			if na.Peer != nil {
-				if !f(na.Peer, o) {
+				if !f(na.Peer, o, false) {
 					return
 				}
 			}

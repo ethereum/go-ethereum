@@ -32,7 +32,6 @@ package protocols
 import (
 	"fmt"
 	"reflect"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -120,6 +119,15 @@ type CodeMap struct {
 	MaxMsgSize int                     // max length of message payload size
 	codes      []reflect.Type          // index of codes to msg types - to create zero values
 	messages   map[reflect.Type]uint64 // index of types to codes, for sending by type
+}
+
+func (self *CodeMap) GetInterface(code uint64) (interface{}, bool) {
+	if int(code) > len(self.codes)-1 {
+		return nil, false
+	}
+	typ := self.codes[code]
+	val := reflect.New(typ)
+	return val.Interface(), true
 }
 
 func (self *CodeMap) GetCode(msg interface{}) (uint64, bool) {
@@ -268,21 +276,8 @@ func (self *Peer) Send(msg interface{}) error {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
 	log.Trace(fmt.Sprintf("=> msg #%d TO %v : %v", code, self.ID(), msg))
-	go func() {
-		self.wErrc <- p2p.Send(self.rw, uint64(code), msg)
-	}()
-	var err error
-	select {
-	case err = <-self.wErrc:
-		if err == nil {
-			return nil
-		}
-	case <-time.NewTimer(3000 * time.Millisecond).C:
-		err = fmt.Errorf("write timeout")
-	}
-	err = errorf(ErrWrite, "(msg code: %v): %v", code, err)
-	self.Drop(err)
-	return err
+	go p2p.Send(self.rw, uint64(code), msg)
+	return nil
 }
 
 func (self *Peer) DisconnectHook(f func(error)) {

@@ -45,12 +45,13 @@ type Overlay interface {
 	On(Peer)
 	Off(Peer)
 
-	EachLivePeer([]byte, int, func(Peer, int) bool)
+	EachLivePeer([]byte, int, func(Peer, int, bool) bool)
 	EachPeer([]byte, int, func(PeerAddr, int) bool)
 
 	SuggestPeer() (PeerAddr, int, bool)
 
 	String() string
+	GetAddr() PeerAddr
 }
 
 // Hive implements the PeerPool interface
@@ -126,7 +127,7 @@ func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time) error {
 
 			want = want && self.Discovery
 			if want {
-				RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				go RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
 			}
 
 			select {

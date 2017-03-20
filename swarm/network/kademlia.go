@@ -196,7 +196,13 @@ func NewKadPeer(na PeerAddr) *KadPeer {
 	}
 }
 
-// Register enters each PeerAddr as kademlia peers into the
+// retrieve the base address
+// which is the overlayaddress used by peers to reach us
+func (self *Kademlia) GetAddr() PeerAddr {
+	return self.addr
+}
+
+// Register(nas) enters each PeerAddr as kademlia peers into the
 // database of known peers
 func (self *Kademlia) Register(nas ...PeerAddr) error {
 	label := fmt.Sprintf("%x", RandomAddr().OverlayAddr())
@@ -288,7 +294,7 @@ type ByteAddr struct {
 // EachLivePeer(base, po, f) is an iterator applying f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used
-func (self *Kademlia) EachLivePeer(base []byte, o int, f func(Peer, int) bool) {
+func (self *Kademlia) EachLivePeer(base []byte, o int, f func(Peer, int, bool) bool) {
 	var p pot.PotVal
 	if base == nil {
 		p = pot.PotVal(self.addr)
@@ -299,7 +305,11 @@ func (self *Kademlia) EachLivePeer(base []byte, o int, f func(Peer, int) bool) {
 		if po > o {
 			return true
 		}
-		return f(val.(*KadPeer).Peer, po)
+		isproxbin := false
+		if l, _ := p.PO(val, 0); l >= self.proxLimit() {
+			isproxbin = true
+		}
+		return f(val.(*KadPeer).Peer, po, isproxbin)
 	})
 }
 

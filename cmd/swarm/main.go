@@ -116,6 +116,9 @@ var (
 	SwarmUploadMimeType = cli.StringFlag{
 		Name:  "mime",
 		Usage: "force mime type",
+	PssEnabledFlag = cli.BoolFlag{
+		Name: "pss",
+		Usage: "Enable pss (message passing over swarm)",
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
@@ -260,6 +263,8 @@ Cleans database of corrupted entries.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
+		// pss flags
+		PssEnabledFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -347,7 +352,8 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	}
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
-
+	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
+	
 	ethapi := ctx.GlobalString(EthAPIFlag.Name)
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 
@@ -361,7 +367,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 		} else {
 			swapEnabled = false
 		}
-		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors)
+		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)

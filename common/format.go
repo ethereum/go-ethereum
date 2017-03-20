@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+const (
+	LabelLength    = 8
+)
+
 // PrettyDuration is a pretty printed version of a time.Duration value that cuts
 // the unnecessary precision off from the formatted textual representation.
 type PrettyDuration time.Duration
@@ -37,4 +41,15 @@ func (d PrettyDuration) String() string {
 		label = strings.Replace(label, match, match[:4], 1)
 	}
 	return label
+}
+
+// useful for segfault safe reduction of log clutter
+func ByteLabel(addr []byte) (b [LabelLength]byte) {
+	//b = make([LabelLength]byte)
+	if len(addr) < LabelLength {
+		copy(b[LabelLength - len(addr) - 1:len(addr)], addr[:])
+	} else {
+		copy(b[:], addr[:LabelLength])
+	}
+	return b
 }
