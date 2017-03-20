@@ -158,7 +158,7 @@ matrix:
 
         # Build the iOS framework and upload it to CocoaPods and Azure
         - gem uninstall cocoapods -a
-        - gem install cocoapods --pre
+        - gem install cocoapods
 
         - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
         - sed -i '.bak' 's/repo.join/!repo.join/g' $(dirname `gem which cocoapods`)/cocoapods/sources_manager.rb
