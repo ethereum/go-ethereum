@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -47,10 +46,8 @@ type Swarm struct {
 	config      *api.Config            // swarm configuration
 	api         *api.Api               // high level api layer (fs/manifest)
 	dns         api.Resolver           // DNS registrar
-	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
 	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
 	dpa         *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
 	cloud       storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
 	hive        *network.Hive          // the logistic manager
 	backend     chequebook.Backend     // simple blockchain Backend
@@ -104,11 +101,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		return
 	}
 
-	// setup local store
-	//glog.V(logger.Debug).Infof("Set up local storage")
-
-	//self.dbAccess = network.NewDbAccess(self.lstore)
-	glog.V(logger.Debug).Infof("Set up local db access (iterator/counter)")
+	log.Debug("Set up local db access (iterator/counter)")
 	
 	kp := network.NewKadParams()
 	
@@ -122,22 +115,15 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		to,
 	)
 	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
-
-	// setup cloud storage backend
-	//cloud := network.NewForwarder(self.hive)
-	//glog.V(logger.Debug).Infof("-> set swarm forwarder as cloud storage backend")
 	
 	// setup cloud storage internal access layer
 	self.storage = storage.NewNetStore(hash, self.lstore, nil, config.StoreParams)
-	glog.V(logger.Debug).Infof("-> swarm net store shared access layer to Swarm Chunk Store")
-
-	// set up Depo (storage handler = cloud storage access layer for incoming remote requests)
-	// self.depo = network.NewDepo(hash, self.lstore, self.storage)
-	// glog.V(logger.Debug).Infof("-> REmote Access to CHunks")
+	log.Debug("-> swarm net store shared access layer to Swarm Chunk Store")
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
+
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
@@ -156,6 +142,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
 	self.api = api.NewApi(self.dpa, self.dns)
+	
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -177,14 +164,6 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(net p2p.Server) error {
-	connectPeer := func(url string) error {
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			return fmt.Errorf("invalid node URL: %v", err)
-		}
-		net.AddPeer(node)
-		return nil
-	}
 	// set chequebook
 	if self.swapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -198,21 +177,25 @@ func (self *Swarm) Start(net p2p.Server) error {
 	}
 
 	log.Warn(fmt.Sprintf("Starting Swarm service"))
-	
-	glog.V(logger.Warn).Infof("Starting Swarm service")
+
 	self.hive.Start(
-		connectPeer,
+		net,
 		func () <-chan time.Time{
 			return time.NewTicker(time.Second).C
 		},
 	)
 
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.Addr()))
+	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.GetAddr()))
 
 	if self.pssEnabled {
 		pssparams := network.NewPssParams()
 		self.pss = network.NewPss(self.hive.Overlay, pssparams)
-		glog.V(logger.Info).Infof("Pss started: %v", self.pss)
+		
+		// for testing purposes, shold be removed in production environment!!
+		pingtopic, _ := network.MakeTopic("pss", 1)
+		self.pss.Register(pingtopic, self.pss.GetPingHandler())
+		
+		log.Debug("Pss started: %v", self.pss)
 	}
 	
 	self.dpa.Start()
@@ -255,7 +238,6 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() []p2p.Protocol {
-	//proto, err := network.Bzz(self.depo, self.backend, self.hive, self.dbAccess, self.config.Swap, self.config.SyncParams, self.config.NetworkId)
 	ct := network.BzzCodeMap()
 	for _, m := range network.DiscoveryMsgs {
 		ct.Register(m)
@@ -266,8 +248,26 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 	
 	srv := func(p network.Peer) error {
 		if self.pssEnabled {
-			//p.Register(&PssMsg{}, self.pssFunc)
-			glog.V(logger.Warn).Infof("pss is enabled, but handler not yet implemented - it won't work yet, sorry")
+			p.Register(&network.PssMsg{}, func(msg interface{}) error {
+				pssmsg := msg.(*network.PssMsg)
+
+				if self.pss.IsSelfRecipient(pssmsg) {
+					log.Trace("pss for us, yay! ... let's process!")
+					env := pssmsg.Payload
+					umsg := env.Payload
+					f := self.pss.GetHandler(env.Topic)
+					if f == nil {
+						return fmt.Errorf("No registered handler for topic '%s'", env.Topic)
+					}
+					nid := adapters.NewNodeId(env.SenderUAddr)
+					p := p2p.NewPeer(nid.NodeID, fmt.Sprintf("%x", common.ByteLabel(nid.Bytes())), []p2p.Cap{})
+					return f(umsg, p, env.SenderOAddr)
+				} else {
+					log.Trace("pss was for someone else :'( ... forwarding")
+					return self.pss.Forward(pssmsg)
+				}
+				return nil
+			})
 		}
 		self.hive.Add(p)
 		p.DisconnectHook(func(err error) {
@@ -291,7 +291,8 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 // implements node.Service
 // Apis returns the RPC Api descriptors the Swarm implementation offers
 func (self *Swarm) APIs() []rpc.API {
-	return []rpc.API{
+
+	apis := []rpc.API{
 		// public APIs
 		{
 			Namespace: "bzz",
@@ -334,6 +335,17 @@ func (self *Swarm) APIs() []rpc.API {
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},
 	}
+
+	if self.pssEnabled {
+		apis = append(apis, rpc.API{
+			Namespace: "eth",
+			Version:	"0.1/pss",
+			Service:	network.NewPssApi(self.pss),
+			Public:		true,
+		})
+	}
+		
+	return apis
 }
 
 func (self *Swarm) Api() *api.Api {
@@ -348,7 +360,6 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 	}
 	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
 	self.config.Save()
-	//self.hive.DropAll()
 	return nil
 }
 

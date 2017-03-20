@@ -15,7 +15,7 @@ import (
 
 type ProtocolSession struct {
 	TestNodeAdapter
-	Ids []*adapters.NodeId
+	Ids    []*adapters.NodeId
 	ignore []uint64
 }
 
@@ -142,7 +142,7 @@ func (self *ProtocolSession) expect(exp Expect) error {
 							} else {
 								log.Warn("expectmsg errormsg parse error?!")
 							}
-						} 
+						}
 					} else {
 						log.Warn("expectmsg errormsg parse error?!")
 						break
