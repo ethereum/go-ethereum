@@ -669,3 +669,40 @@ func TestWatchers(t *testing.T) {
 		t.Fatalf("failed with seed %d: total: got %d, want 1.", seed, total)
 	}
 }
+
+func TestVariableTopics(t *testing.T) {
+	InitSingleTest()
+
+	var match bool
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	f, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
+	}
+
+	for i := 0; i < 4; i++ {
+		arr := make([]byte, i+1, 4)
+		copy(arr, env.Topic[0:i+1])
+
+		f.Topics[4] = arr
+		match = f.MatchEnvelope(env)
+		if !match {
+			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
+		}
+
+		f.Topics[4][i]++
+		match = f.MatchEnvelope(env)
+		if match {
+			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
+		}
+	}
+}

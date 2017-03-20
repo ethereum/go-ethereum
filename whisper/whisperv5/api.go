@@ -233,7 +233,12 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 		AllowP2P: args.AllowP2P,
 	}
 
-	for _, bt := range args.Topics {
+	for i, bt := range args.Topics {
+		if len(bt) == 0 || len(bt) > 4 {
+			info := fmt.Sprintf("Subscribe: topic %d has wrong size: %d", i, len(bt))
+			log.Error(info)
+			return "", errors.New(info)
+		}
 		filter.Topics = append(filter.Topics, bt)
 	}
 
