@@ -19,7 +19,7 @@ package abi
 import (
 	"reflect"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation

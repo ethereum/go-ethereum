@@ -26,9 +26,9 @@ import (
 
 	"sort"
 
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/gizak/termui"
 	"gopkg.in/urfave/cli.v1"
 )

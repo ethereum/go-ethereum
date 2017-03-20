@@ -20,9 +20,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 // Tests that DAO-fork enabled clients can properly filter out fork-commencing

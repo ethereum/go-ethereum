@@ -21,11 +21,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 func TestMipmapUpgrade(t *testing.T) {

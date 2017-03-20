@@ -21,9 +21,9 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // Receipt represents the results of a transaction.

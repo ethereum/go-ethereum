@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/rpc"
 
 	"golang.org/x/net/context"
 )

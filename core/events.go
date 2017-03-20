@@ -19,9 +19,9 @@ package core
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
 
 )
 

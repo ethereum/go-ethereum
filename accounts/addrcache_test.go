@@ -28,7 +28,7 @@ import (
 
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 var (

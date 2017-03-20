@@ -9,9 +9,9 @@ before_install:
   # Set up go-expanse
   - sudo apt-get update -y -qq
   - sudo apt-get install -yqq libgmp3-dev 
-  - git clone --depth=10 https://github.com/expanse-project/go-expanse ${GOPATH}/src/github.com/expanse-project/go-expanse
+  - git clone --depth=10 https://github.com/expanse-org/go-expanse ${GOPATH}/src/github.com/expanse-org/go-expanse
   # use canned dependencies from the go-expanse repository
-  - export GOPATH=$GOPATH:$GOPATH/src/github.com/expanse-project/go-expanse/Godeps/_workspace/
+  - export GOPATH=$GOPATH:$GOPATH/src/github.com/expanse-org/go-expanse/Godeps/_workspace/
   - echo $GOPATH
 
 install:

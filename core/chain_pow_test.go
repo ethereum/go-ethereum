@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 // failPow is a non-validating proof of work implementation, that returns true

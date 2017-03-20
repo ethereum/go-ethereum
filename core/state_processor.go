@@ -19,12 +19,12 @@ package core
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 )
 
 var (

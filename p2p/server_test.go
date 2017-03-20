@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/sha3"
-	"github.com/expanse-project/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/p2p/discover"
 )
 
 func init() {

@@ -19,14 +19,14 @@ package backends
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/accounts/abi/bind"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
 )
 
 // Default chain configuration which sets homestead phase at block 0 (i.e. no frontier)

@@ -25,7 +25,7 @@ ENV GOROOT /goroot
 ENV GOPATH /gopath
 ENV PATH $GOROOT/bin:$GOPATH/bin:$PATH
 
-RUN git clone http://www.github.com/expanse-project/go-expanse.git
+RUN git clone http://www.github.com/expanse-org/go-expanse.git
 RUN cd go-expanse && make gexp
 
 RUN cp build/bin/gexp /usr/bin/gexp

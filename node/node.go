@@ -26,12 +26,12 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/internal/debug"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/internal/debug"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 var (

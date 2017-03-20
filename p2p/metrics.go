@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/expanse-project/go-expanse/metrics"
+	"github.com/expanse-org/go-expanse/metrics"
 )
 
 var (

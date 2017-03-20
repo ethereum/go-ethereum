@@ -25,9 +25,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/params"
-	"github.com/expanse-project/go-expanse/tests"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/tests"
 	"gopkg.in/urfave/cli.v1"
 
 )

@@ -30,7 +30,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 const (

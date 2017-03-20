@@ -23,14 +23,14 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/logger/glog"
 )
 
 var (

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger"
 )
 
 func testErrors() *Errors {

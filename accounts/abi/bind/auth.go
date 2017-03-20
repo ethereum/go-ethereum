@@ -22,10 +22,10 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 // NewTransactor is a utility method to easily create a transaction signer from

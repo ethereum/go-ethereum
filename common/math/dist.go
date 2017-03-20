@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 type Summer interface {

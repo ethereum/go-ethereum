@@ -19,7 +19,7 @@ package number
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 var tt256 = new(big.Int).Lsh(big.NewInt(1), 256)

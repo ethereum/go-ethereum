@@ -23,8 +23,8 @@ import (
 	"os"
 	"runtime/trace"
 
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 )
 
 // StartGoTrace turns on tracing, writing to the given file.

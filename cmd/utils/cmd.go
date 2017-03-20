@@ -25,14 +25,14 @@ import (
 	"regexp"
 	"runtime"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/internal/debug"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/internal/debug"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/rlp"
 
 )
 

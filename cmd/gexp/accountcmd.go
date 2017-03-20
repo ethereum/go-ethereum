@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/console"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/console"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 )
 

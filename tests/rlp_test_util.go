@@ -26,7 +26,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // RLPTest is the JSON structure of a single RLP test.

@@ -16,7 +16,7 @@
 
 package bind
 
-import "github.com/expanse-project/go-expanse/accounts/abi"
+import "github.com/expanse-org/go-expanse/accounts/abi"
 
 // tmplData is the data structure required to fill the binding template.
 type tmplData struct {

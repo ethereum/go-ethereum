@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/expanse-project/go-expanse",
+	"ImportPath": "github.com/expanse-org/go-expanse",
 	"GoVersion": "go1.5.2",
 	"GodepVersion": "v74",
 	"Packages": [

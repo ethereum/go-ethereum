@@ -15,7 +15,7 @@
 // along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains the Whisper protocol Message element. For formal details please see
-// the specs at https://github.com/expanse-project/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
+// the specs at https://github.com/expanse-org/wiki/wiki/Whisper-PoC-1-Protocol-Spec#messages.
 
 package whisper
 
@@ -24,10 +24,10 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 )
 
 // Message represents an end-user data packet to transmit through the Whisper

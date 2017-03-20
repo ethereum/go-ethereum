@@ -21,9 +21,9 @@ package xeth
 import (
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/whisper"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/whisper"
 )
 
 // WhisperMessage is the external API representation of a whisper.Message.

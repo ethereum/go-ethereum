@@ -20,11 +20,11 @@ import (
 	"container/list"
 	"fmt"
 
-	"github.com/expanse-project/go-expanse/core/types"
-	// "github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/core/types"
+	// "github.com/expanse-org/go-expanse/crypto"
 
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
 )
 
 // Implement our EthTest Manager

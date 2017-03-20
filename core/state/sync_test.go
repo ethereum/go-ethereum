@@ -21,10 +21,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/trie"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/trie"
 )
 
 // testAccount is the data associated with an account used by the state tests.

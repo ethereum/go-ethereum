@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 var OutOfGasError = errors.New("Out of gas")

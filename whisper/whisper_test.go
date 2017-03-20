@@ -20,8 +20,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/discover"
 )
 
 func startTestCluster(n int) []*Whisper {

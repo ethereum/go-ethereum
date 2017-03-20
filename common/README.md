@@ -8,7 +8,7 @@ The common package contains the expanse utility library.
 # Installation
 
 As a subdirectory the main go-expanse repository, you get it with
-`go get github.com/expanse-project/go-expanse`.
+`go get github.com/expanse-org/go-expanse`.
 
 # Usage
 

@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/p2p/discover"
-	"github.com/expanse-project/go-expanse/p2p/nat"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p/nat"
 )
 
 const (

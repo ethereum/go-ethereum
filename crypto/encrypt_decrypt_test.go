@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 func TestBox(t *testing.T) {

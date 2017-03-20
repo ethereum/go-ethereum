@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"errors"
 
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 const (

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 var (

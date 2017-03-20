@@ -22,16 +22,16 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/exp/downloader"
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/params"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/exp/downloader"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 type Miner struct {

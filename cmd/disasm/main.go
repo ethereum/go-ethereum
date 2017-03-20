@@ -22,8 +22,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/vm"
 )
 
 func main() {

@@ -21,9 +21,9 @@ import (
 	"hash"
 	"sync"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto/sha3"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 type hasher struct {

@@ -1,4 +1,4 @@
-# adjusted from https://github.com/expanse-project/cpp-expanse/blob/develop/docker/Dockerfile
+# adjusted from https://github.com/expanse-org/cpp-expanse/blob/develop/docker/Dockerfile
 FROM ubuntu:14.04
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -10,7 +10,7 @@ RUN apt-get install -qy build-essential g++-4.8 git cmake libboost-all-dev libcu
 RUN apt-get install -qy automake unzip libgmp-dev libtool libleveldb-dev yasm libminiupnpc-dev libreadline-dev scons
 RUN apt-get install -qy libjsoncpp-dev libargtable2-dev
 
-# NCurses based GUI (not optional though for a succesful compilation, see https://github.com/expanse-project/cpp-expanse/issues/452 )
+# NCurses based GUI (not optional though for a succesful compilation, see https://github.com/expanse-org/cpp-expanse/issues/452 )
 RUN apt-get install -qy libncurses5-dev
 
 # Qt-based GUI
@@ -38,7 +38,7 @@ RUN apt-get install -qy libcryptopp-dev libjson-rpc-cpp-dev
 ADD https://api.github.com/repos/expanse/cpp-expanse/git/refs/heads/develop unused.txt
 
 # Build Expanse (HEADLESS)
-RUN git clone --depth=1 --branch develop https://github.com/expanse-project/cpp-expanse
+RUN git clone --depth=1 --branch develop https://github.com/expanse-org/cpp-expanse
 RUN mkdir -p cpp-expanse/build
 RUN cd cpp-expanse/build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DVMTRACE=1 -DPARANOIA=1 -DEVMJIT=1 && make -j $(cat /proc/cpuinfo | grep processor | wc -l) && make install
 RUN ldconfig

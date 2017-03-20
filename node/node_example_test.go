@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/p2p/discover"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // SampleService is a trivial network service that can be attached to a node for

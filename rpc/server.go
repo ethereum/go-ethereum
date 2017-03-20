@@ -23,8 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 	"golang.org/x/net/context"
 	"gopkg.in/fatih/set.v0"
 )

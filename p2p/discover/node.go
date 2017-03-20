@@ -30,9 +30,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
 )
 
 const nodeIDBits = 512

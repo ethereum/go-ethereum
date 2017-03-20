@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/logger/glog"
 )
 
 var (

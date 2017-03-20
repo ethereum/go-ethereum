@@ -30,11 +30,11 @@ import (
 	"encoding/hex"
 	"errors"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto/ecies"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
-	"github.com/expanse-project/go-expanse/crypto/sha3"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/rlp"
 	"golang.org/x/crypto/ripemd160"
 )
 

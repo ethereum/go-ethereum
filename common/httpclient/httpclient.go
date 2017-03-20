@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 type HTTPClient struct {

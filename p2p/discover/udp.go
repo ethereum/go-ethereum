@@ -25,11 +25,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/p2p/nat"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/p2p/nat"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 const Version = 4

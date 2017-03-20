@@ -22,7 +22,7 @@ import (
 	"os"
 	"unicode"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 type Storage map[common.Hash]common.Hash

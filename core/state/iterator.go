@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/rlp"
-	"github.com/expanse-project/go-expanse/trie"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/trie"
 )
 
 // NodeIterator is an iterator to traverse the entire state trie post-order,

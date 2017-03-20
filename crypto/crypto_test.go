@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
 )
 
 var testAddrHex = "970e8128ab834e8eac17ab8e3812f010678cf791"

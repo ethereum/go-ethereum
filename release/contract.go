@@ -7,10 +7,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/accounts/abi"
-	"github.com/expanse-project/go-expanse/accounts/abi/bind"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/accounts/abi"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
 )
 
 // ReleaseOracleABI is the input ABI used to generate the binding from.

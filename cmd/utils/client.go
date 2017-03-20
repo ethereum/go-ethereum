@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

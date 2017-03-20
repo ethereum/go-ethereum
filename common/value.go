@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // Value can hold values of certain basic types and provides ways to

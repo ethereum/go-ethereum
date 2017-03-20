@@ -21,11 +21,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/accounts/abi/bind"
-	"github.com/expanse-project/go-expanse/accounts/abi/bind/backends"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind/backends"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 // setupReleaseTest creates a blockchain simulator and deploys a version oracle

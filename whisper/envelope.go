@@ -15,7 +15,7 @@
 // along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains the Whisper protocol Envelope element. For formal details please see
-// the specs at https://github.com/expanse-project/wiki/wiki/Whisper-PoC-1-Protocol-Spec#envelopes.
+// the specs at https://github.com/expanse-org/wiki/wiki/Whisper-PoC-1-Protocol-Spec#envelopes.
 
 package whisper
 
@@ -25,10 +25,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/ecies"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // Envelope represents a clear-text data packet to transmit through the Whisper

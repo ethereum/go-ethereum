@@ -28,12 +28,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/eth"
-	"github.com/expanse-project/go-expanse/internal/jsre"
-	"github.com/expanse-project/go-expanse/node"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/eth"
+	"github.com/expanse-org/go-expanse/internal/jsre"
+	"github.com/expanse-org/go-expanse/node"
 )
 
 const (

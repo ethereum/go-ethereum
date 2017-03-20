@@ -27,9 +27,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/internal/jsre"
-	"github.com/expanse-project/go-expanse/internal/web3ext"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/internal/jsre"
+	"github.com/expanse-org/go-expanse/internal/web3ext"
+	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
 	"github.com/robertkrimen/otto"

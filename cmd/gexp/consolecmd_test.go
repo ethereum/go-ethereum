@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // Tests that a node embedded within a console can be started up properly and

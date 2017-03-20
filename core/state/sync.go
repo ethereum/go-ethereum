@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/rlp"
-	"github.com/expanse-project/go-expanse/trie"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/trie"
 )
 
 // StateSync is the main state synchronisation scheduler, which provides yet the

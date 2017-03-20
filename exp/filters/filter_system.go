@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/event"
 )
 
 // FilterType determines the type of filter and is used to put the filter in to

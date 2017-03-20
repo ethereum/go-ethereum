@@ -40,11 +40,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 var (
@@ -369,7 +369,7 @@ func (pow *Full) Search(block pow.Block, stop <-chan struct{}, index int) (nonce
 			ret := C.ethash_full_compute(dag.ptr, hash, C.uint64_t(nonce))
 			result := h256ToHash(ret.result).Big()
 
-			// TODO: disagrees with the spec https://github.com/expanse-project/wiki/wiki/Ethash#mining
+			// TODO: disagrees with the spec https://github.com/expanse-org/wiki/wiki/Ethash#mining
 			if ret.success && result.Cmp(target) <= 0 {
 				mixDigest = C.GoBytes(unsafe.Pointer(&ret.mix_hash), C.int(32))
 				atomic.AddInt32(&pow.hashRate, -previousHashrate)

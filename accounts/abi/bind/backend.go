@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
 )
 
 // ErrNoCode is returned by call and transact operations for which the requested

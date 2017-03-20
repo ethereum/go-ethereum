@@ -42,7 +42,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
 )
 
 var dumpEnc bool

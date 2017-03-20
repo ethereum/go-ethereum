@@ -16,7 +16,7 @@
 
 package core
 
-import "github.com/expanse-project/go-expanse/common"
+import "github.com/expanse-org/go-expanse/common"
 
 // Set of manually tracked bad hashes (usually hard forks)
 var BadHashes = map[common.Hash]bool{

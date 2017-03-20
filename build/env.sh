@@ -10,7 +10,7 @@ fi
 # Create fake Go workspace if it doesn't exist yet.
 workspace="$PWD/build/_workspace"
 root="$PWD"
-ethdir="$workspace/src/github.com/expanse-project"
+ethdir="$workspace/src/github.com/expanse-org"
 if [ ! -L "$ethdir/go-expanse" ]; then
     mkdir -p "$ethdir"
     cd "$ethdir"

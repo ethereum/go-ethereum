@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // whisperFilter is the message cache matching a specific filter, accumulating

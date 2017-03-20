@@ -19,7 +19,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 var bigMaxUint64 = new(big.Int).SetUint64(^uint64(0))

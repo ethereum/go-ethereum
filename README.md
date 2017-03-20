@@ -4,16 +4,16 @@ Expanse Go Client, by Christopher Franko (forked from Jeffrey Wilcke (and some o
 
           | Linux   | OSX | ARM | Windows | Tests
 ----------|---------|-----|-----|---------|------
-develop   | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=ARM%20Go%20develop%20branch)](https://build.ethdev.com/builders/ARM%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Windows%20Go%20develop%20branch)](https://build.ethdev.com/builders/Windows%20Go%20develop%20branch/builds/-1) | [![Buildr+Status](https://travis-ci.org/expanse-project/go-expanse.svg?branch=develop)](https://travis-ci.org/expanse/go-expanse) [![Coverage Status](https://coveralls.io/repos/expanse-project/go-expanse/badge.svg?branch=develop)](https://coveralls.io/r/expanse/go-expanse?branch=develop)
-master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](https://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](https://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=ARM%20Go%20master%20branch)](https://build.ethdev.com/builders/ARM%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Windows%20Go%20master%20branch)](https://build.ethdev.com/builders/Windows%20Go%20master%20branch/builds/-1) | [![Buildr+Status](https://travis-ci.org/expanse-project/go-expanse.svg?branch=master)](https://travis-ci.org/expanse-project/go-expanse) [![Coverage Status](https://coveralls.io/repos/expanse-project/go-expanse/badge.svg?branch=master)](https://coveralls.io/r/expanse-project/go-expanse?branch=master)
+develop   | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/Linux%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20develop%20branch)](https://build.ethdev.com/builders/OSX%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=ARM%20Go%20develop%20branch)](https://build.ethdev.com/builders/ARM%20Go%20develop%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Windows%20Go%20develop%20branch)](https://build.ethdev.com/builders/Windows%20Go%20develop%20branch/builds/-1) | [![Buildr+Status](https://travis-ci.org/expanse-org/go-expanse.svg?branch=develop)](https://travis-ci.org/expanse/go-expanse) [![Coverage Status](https://coveralls.io/repos/expanse-org/go-expanse/badge.svg?branch=develop)](https://coveralls.io/r/expanse/go-expanse?branch=develop)
+master    | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Linux%20Go%20master%20branch)](https://build.ethdev.com/builders/Linux%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=OSX%20Go%20master%20branch)](https://build.ethdev.com/builders/OSX%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=ARM%20Go%20master%20branch)](https://build.ethdev.com/builders/ARM%20Go%20master%20branch/builds/-1) | [![Build+Status](https://build.ethdev.com/buildstatusimage?builder=Windows%20Go%20master%20branch)](https://build.ethdev.com/builders/Windows%20Go%20master%20branch/builds/-1) | [![Buildr+Status](https://travis-ci.org/expanse-org/go-expanse.svg?branch=master)](https://travis-ci.org/expanse-org/go-expanse) [![Coverage Status](https://coveralls.io/repos/expanse-org/go-expanse/badge.svg?branch=master)](https://coveralls.io/r/expanse-org/go-expanse?branch=master)
 
-[![Bugs](https://badge.waffle.io/expanse-project/go-expanse.png?label=bug&title=Bugs)](https://waffle.io/expanse/go-expanse)
-[![Stories in Ready](https://badge.waffle.io/expanse-project/go-expanse.png?label=ready&title=Ready)](https://waffle.io/expanse/go-expanse)
-[![Stories in Progress](https://badge.waffle.io/expanse-project/go-expanse.svg?label=in%20progress&title=In Progress)](http://waffle.io/expanse/go-expanse)
+[![Bugs](https://badge.waffle.io/expanse-org/go-expanse.png?label=bug&title=Bugs)](https://waffle.io/expanse/go-expanse)
+[![Stories in Ready](https://badge.waffle.io/expanse-org/go-expanse.png?label=ready&title=Ready)](https://waffle.io/expanse/go-expanse)
+[![Stories in Progress](https://badge.waffle.io/expanse-org/go-expanse.svg?label=in%20progress&title=In Progress)](http://waffle.io/expanse/go-expanse)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/expanse/go-expanse?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 ## Automated development builds
 
-The following builds are build automatically by our build servers after each push to the [develop](https://github.com/expanse-project/go-expanse/tree/develop) branch.
+The following builds are build automatically by our build servers after each push to the [develop](https://github.com/expanse-org/go-expanse/tree/develop) branch.
 
 * [Docker](https://registry.hub.docker.com/u/expanse/go-expanse/)
 * [OS X](http://build.ethdev.com/builds/OSX%20Go%20develop%20branch/Mist-OSX-latest.dmg)
@@ -26,7 +26,7 @@ The following builds are build automatically by our build servers after each pus
 ## Building the source
 
 For prerequisites and detailed build instructions please read the
-[Installation Instructions](https://github.com/expanse-project/go-expanse/wiki/Building-Expanse)
+[Installation Instructions](https://github.com/expanse-org/go-expanse/wiki/Building-Expanse)
 on the wiki.
 
 Building gexp requires both a Go and a C compiler.
@@ -42,11 +42,11 @@ or, to build the full suite of utilities:
 ## Executables
 
 Go Expanse comes with several wrappers/executables found in
-[the `cmd` directory](https://github.com/expanse-project/go-expanse/tree/develop/cmd):
+[the `cmd` directory](https://github.com/expanse-org/go-expanse/tree/develop/cmd):
 
 * `gexp` Expanse CLI (expanse command line interface client)
 * `bootnode` runs a bootstrap node for the Discovery Protocol
-* `exptest` test tool which runs with the [tests](https://github.com/expanse-project/tests) suite:
+* `exptest` test tool which runs with the [tests](https://github.com/expanse-org/tests) suite:
   `/path/to/test.json > exptest --test BlockTests --stdin`.
 * `evm` is a generic Expanse Virtual Machine: `evm -code 60ff60ff -gas
   10000 -price 0 -dump`. See `-h` for a detailed description.
@@ -56,7 +56,7 @@ Go Expanse comes with several wrappers/executables found in
 ## Running geth
 
 Going through all the possible command line flags is out of scope here (please consult our
-[CLI Wiki page](https://github.com/expanse-project/go-expanse/wiki/Command-Line-Options)), but we've
+[CLI Wiki page](https://github.com/expanse-org/go-expanse/wiki/Command-Line-Options)), but we've
 enumerated a few common parameter combos to get you up to speed quickly on how you can run your
 own  instance.
 
@@ -78,9 +78,9 @@ This command will:
  * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
    sync times especially for HDD users. This flag is optional and you can set it as high or as low as
    you'd like, though we'd recommend the 512MB - 2GB range.
- * Start up 's built-in interactive [JavaScript console](https://github.com/expanse-project/go-expanse/wiki/JavaScript-Console),
+ * Start up 's built-in interactive [JavaScript console](https://github.com/expanse-org/go-expanse/wiki/JavaScript-Console),
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
-   as well as 's own [management APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs).
+   as well as 's own [management APIs](https://github.com/expanse-org/go-expanse/wiki/Management-APIs).
    This too is optional and if you leave it out you can always attach to an already running  instance
    with `geth --attach`.
 
@@ -117,7 +117,7 @@ them.*
 As a developer, sooner rather than later you'll want to start interacting with  and the Ethereum
 network via your own programs and not manually through the console. To aid this,  has built in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
-[ specific APIs](https://github.com/expanse-project/go-expanse/wiki/Management-APIs)). These can be
+[ specific APIs](https://github.com/expanse-org/go-expanse/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platroms, and named pipes on Windows).
 
 The IPC interface is enabled by default and exposes all the APIs supported by , whereas the HTTP
@@ -250,7 +250,7 @@ limit blocks converge to (`--targetgaslimit`) and the price transactions are acc
 
 If you'd like to contribute to go-expanse, please fork, fix, commit and send a pull request
 for the maintainers to review and merge into the main code base. If you wish to submit more
-complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/expanse-project/go-expanse)
+complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/expanse-org/go-expanse)
 to ensure those changes are in line with the general philosophy of the project and/or get some
 early feedback which can make both your efforts much lighter as well as our review and merge
 procedures quick and simple.
@@ -264,7 +264,7 @@ Please make sure your contributions adhere to our coding guidelines:
    * E.g. "exp, rpc: make trace configs optional"
 
 
-Please see the [Developers' Guide](https://github.com/expanse-project/go-expanse/wiki/Developers'-Guide)
+Please see the [Developers' Guide](https://github.com/expanse-org/go-expanse/wiki/Developers'-Guide)
 for more details on configuring your environment, managing project dependencies and testing procedures.
 
 ## License

@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured

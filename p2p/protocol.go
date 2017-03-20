@@ -19,7 +19,7 @@ package p2p
 import (
 	"fmt"
 
-	"github.com/expanse-project/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p/discover"
 )
 
 // Protocol represents a P2P subprotocol implementation.

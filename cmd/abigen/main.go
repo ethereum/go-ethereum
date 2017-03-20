@@ -24,8 +24,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/accounts/abi/bind"
-	"github.com/expanse-project/go-expanse/common/compiler"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind"
+	"github.com/expanse-org/go-expanse/common/compiler"
 )
 
 var (

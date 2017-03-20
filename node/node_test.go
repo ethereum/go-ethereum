@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 var (

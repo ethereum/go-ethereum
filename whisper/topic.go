@@ -15,11 +15,11 @@
 // along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
 
 // Contains the Whisper protocol Topic element. For formal details please see
-// the specs at https://github.com/expanse-project/wiki/wiki/Whisper-PoC-1-Protocol-Spec#topics.
+// the specs at https://github.com/expanse-org/wiki/wiki/Whisper-PoC-1-Protocol-Spec#topics.
 
 package whisper
 
-import "github.com/expanse-project/go-expanse/crypto"
+import "github.com/expanse-org/go-expanse/crypto"
 
 // Topic represents a cryptographically secure, probabilistic partial
 // classifications of a message, determined as the first (left) 4 bytes of the

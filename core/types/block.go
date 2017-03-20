@@ -28,9 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto/sha3"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the

@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/core/vm"
 )
 
 var ChainConfigNotFoundErr = errors.New("ChainConfig not found") // general config not found error

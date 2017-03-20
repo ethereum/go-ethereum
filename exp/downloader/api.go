@@ -21,8 +21,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // PublicDownloaderAPI provides an API which gives information about the current synchronisation status.

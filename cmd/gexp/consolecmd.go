@@ -20,8 +20,8 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/console"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/console"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -33,7 +33,7 @@ var (
 		Description: `
 The Gexp console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
+See https://github.com/expanse-org/go-expanse/wiki/Javascipt-Console
 `,
 	}
 	attachCommand = cli.Command{
@@ -43,7 +43,7 @@ See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
 		Description: `
 The Gexp console is an interactive shell for the JavaScript runtime environment
 which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console.
+See https://github.com/expanse-org/go-expanse/wiki/Javascipt-Console.
 This command allows to open a console on a running geth node.
 	`,
 	}
@@ -53,7 +53,7 @@ This command allows to open a console on a running geth node.
 		Usage:  `executes the given JavaScript files in the Gexp JavaScript VM`,
 		Description: `
 The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://github.com/expanse-project/go-expanse/wiki/Javascipt-Console
+JavaScript API. See https://github.com/expanse-org/go-expanse/wiki/Javascipt-Console
 `,
 	}
 )

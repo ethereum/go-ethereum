@@ -22,13 +22,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // The values in those tests are from the Transaction Tests
-// at github.com/expanse-project/tests.
+// at github.com/expanse-org/tests.
 
 var (
 	emptyTx = NewTransaction(

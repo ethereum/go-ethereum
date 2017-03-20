@@ -35,12 +35,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/ecies"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
-	"github.com/expanse-project/go-expanse/crypto/sha3"
-	"github.com/expanse-project/go-expanse/p2p/discover"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 const (

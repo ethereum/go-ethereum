@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/expanse-project/tests"
+    "url": "https://github.com/expanse-org/tests"
   },
   "keywords": [
     "tests",
@@ -17,9 +17,9 @@
   "author": "",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/expanse-project/tests/issues"
+    "url": "https://github.com/expanse-org/tests/issues"
   },
-  "homepage": "https://github.com/expanse-project/tests",
+  "homepage": "https://github.com/expanse-org/tests",
   "dependencies": {
     "require-all": "^1.0.0"
   }

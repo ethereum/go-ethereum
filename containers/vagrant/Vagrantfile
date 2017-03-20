@@ -8,7 +8,7 @@ Vagrant.configure(2) do |config|
     vb.memory = "2048"
   end
 
-  config.vm.synced_folder "../../", "/home/vagrant/go/src/github.com/expanse-project/go-expanse"
+  config.vm.synced_folder "../../", "/home/vagrant/go/src/github.com/expanse-org/go-expanse"
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
   config.vm.provision "shell", inline: <<-SHELL

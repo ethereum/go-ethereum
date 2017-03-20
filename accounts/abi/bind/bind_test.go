@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 	"golang.org/x/tools/imports"
 )
 

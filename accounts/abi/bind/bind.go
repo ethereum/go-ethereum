@@ -17,7 +17,7 @@
 // Package bind generates Expanse contract Go bindings.
 //
 // Detailed usage document and tutorial available on the go-ethereum Wiki page:
-// https://github.com/expanse-project/go-expanse/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
+// https://github.com/expanse-org/go-expanse/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
 package bind
 
 import (
@@ -28,7 +28,7 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/expanse-project/go-expanse/accounts/abi"
+	"github.com/expanse-org/go-expanse/accounts/abi"
 	"golang.org/x/tools/imports"
 )
 

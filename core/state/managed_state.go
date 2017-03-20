@@ -19,7 +19,7 @@ package state
 import (
 	"sync"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 type account struct {

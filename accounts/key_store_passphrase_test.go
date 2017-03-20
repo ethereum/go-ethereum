@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 const (

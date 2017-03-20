@@ -20,7 +20,7 @@ import (
 	"math/big"
 
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 // RuleSet is an interface that defines the current rule set during the

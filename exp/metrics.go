@@ -17,8 +17,8 @@
 package exp
 
 import (
-	"github.com/expanse-project/go-expanse/metrics"
-	"github.com/expanse-project/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/metrics"
+	"github.com/expanse-org/go-expanse/p2p"
 )
 
 var (

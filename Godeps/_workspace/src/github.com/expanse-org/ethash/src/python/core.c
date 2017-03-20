@@ -172,7 +172,7 @@ mine(PyObject *self, PyObject *args) {
     // TODO: Multi threading?
     do {
         ethash_full(&out, (void *) full_bytes, &params, (const ethash_h256_t *) header, nonce++);
-        // TODO: disagrees with the spec https://github.com/expanse-project/wiki/wiki/Ethash#mining
+        // TODO: disagrees with the spec https://github.com/expanse-org/wiki/wiki/Ethash#mining
     } while (!ethash_check_difficulty(&out.result, (const ethash_h256_t *) difficulty));
 
     return Py_BuildValue("{" PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":" PY_STRING_FORMAT ", " PY_CONST_STRING_FORMAT ":K}",
@@ -233,7 +233,7 @@ static struct PyModuleDef PyethashModule = {
 
 PyMODINIT_FUNC PyInit_pyethash(void) {
     PyObject *module =  PyModule_Create(&PyethashModule);
-    // Following Spec: https://github.com/expanse-project/wiki/wiki/Ethash#definitions
+    // Following Spec: https://github.com/expanse-org/wiki/wiki/Ethash#definitions
     PyModule_AddIntConstant(module, "REVISION", (long) ETHASH_REVISION);
     PyModule_AddIntConstant(module, "DATASET_BYTES_INIT", (long) ETHASH_DATASET_BYTES_INIT);
     PyModule_AddIntConstant(module, "DATASET_BYTES_GROWTH", (long) ETHASH_DATASET_BYTES_GROWTH);
@@ -251,7 +251,7 @@ PyMODINIT_FUNC PyInit_pyethash(void) {
 PyMODINIT_FUNC
 initpyethash(void) {
     PyObject *module = Py_InitModule("pyethash", PyethashMethods);
-    // Following Spec: https://github.com/expanse-project/wiki/wiki/Ethash#definitions
+    // Following Spec: https://github.com/expanse-org/wiki/wiki/Ethash#definitions
     PyModule_AddIntConstant(module, "REVISION", (long) ETHASH_REVISION);
     PyModule_AddIntConstant(module, "DATASET_BYTES_INIT", (long) ETHASH_DATASET_BYTES_INIT);
     PyModule_AddIntConstant(module, "DATASET_BYTES_GROWTH", (long) ETHASH_DATASET_BYTES_GROWTH);

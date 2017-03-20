@@ -23,7 +23,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 const solcVersion = "0.1.1"

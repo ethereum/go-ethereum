@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 // makeTestTrie create a sample test trie to test node-wise reconstruction.

@@ -24,7 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/expanse-project/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )

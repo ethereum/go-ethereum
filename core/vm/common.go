@@ -20,8 +20,8 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 // Type is the VM type accepted by **NewVm**

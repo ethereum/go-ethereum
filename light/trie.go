@@ -17,9 +17,9 @@
 package light
 
 import (
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/trie"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/trie"
 	"golang.org/x/net/context"
 )
 

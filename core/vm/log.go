@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 type Log struct {

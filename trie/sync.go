@@ -20,8 +20,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/ethdb"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

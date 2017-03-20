@@ -22,14 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expanse-project/go-expanse/accounts/abi/bind"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/exp"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
-	"github.com/expanse-project/go-expanse/node"
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/exp"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // Interval to check for new releases
@@ -126,7 +126,7 @@ func (r *ReleaseService) checker() {
 
 				warning := fmt.Sprintf("Client v%d.%d.%d-%x seems older than the latest upstream release v%d.%d.%d-%x",
 					r.config.Major, r.config.Minor, r.config.Patch, r.config.Commit[:4], version.Major, version.Minor, version.Patch, version.Commit[:4])
-				howtofix := fmt.Sprintf("Please check https://github.com/expanse-project/go-expanse/releases for new releases")
+				howtofix := fmt.Sprintf("Please check https://github.com/expanse-org/go-expanse/releases for new releases")
 				separator := strings.Repeat("-", len(warning))
 
 				glog.V(logger.Warn).Info(separator)

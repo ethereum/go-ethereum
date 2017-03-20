@@ -22,8 +22,8 @@ package node
 import (
 	"reflect"
 
-	"github.com/expanse-project/go-expanse/p2p"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // NoopService is a trivial implementation of the Service interface.

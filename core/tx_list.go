@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/expanse-project/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/types"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for

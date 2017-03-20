@@ -22,7 +22,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 func openLogFile(datadir string, filename string) *os.File {

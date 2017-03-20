@@ -21,7 +21,7 @@ package whisper
 import (
 	"crypto/ecdsa"
 
-	"github.com/expanse-project/go-expanse/event/filter"
+	"github.com/expanse-org/go-expanse/event/filter"
 )
 
 // Filter is used to subscribe to specific types of whisper messages.

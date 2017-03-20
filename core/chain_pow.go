@@ -19,8 +19,8 @@ package core
 import (
 	"runtime"
 
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 // nonceCheckResult contains the result of a nonce verification.

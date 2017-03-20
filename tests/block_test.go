@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 func TestBcValidBlockTests(t *testing.T) {

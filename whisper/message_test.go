@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/secp256k1"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
 )
 
 // Tests whether a message can be wrapped without any identity or encryption.

@@ -17,9 +17,9 @@
 package trie
 
 import (
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 )
 
 var secureKeyPrefix = []byte("secure-key-")

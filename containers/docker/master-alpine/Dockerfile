@@ -2,7 +2,7 @@ FROM alpine:3.3
 
 RUN \
   apk add --update go git make gcc musl-dev         && \
-  git clone https://github.com/expanse-project/go-expanse && \
+  git clone https://github.com/expanse-org/go-expanse && \
   (cd go-expanse && make geth)                     && \
   cp go-expanse/build/bin/gexp /gexp               && \
   apk del go git make gcc musl-dev                  && \

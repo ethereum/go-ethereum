@@ -19,7 +19,7 @@
 This key store behaves as KeyStorePlain with the difference that
 the private key is encrypted and on disk uses another JSON encoding.
 
-The crypto is documented at https://github.com/expanse-project/wiki/wiki/Web3-Secret-Storage-Definition
+The crypto is documented at https://github.com/expanse-org/wiki/wiki/Web3-Secret-Storage-Definition
 
 */
 
@@ -34,9 +34,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/crypto/randentropy"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/randentropy"
 	"github.com/pborman/uuid"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"

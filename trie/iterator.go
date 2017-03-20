@@ -16,7 +16,7 @@
 
 package trie
 
-import "github.com/expanse-project/go-expanse/common"
+import "github.com/expanse-org/go-expanse/common"
 
 type Iterator struct {
 	trie   *Trie

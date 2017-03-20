@@ -20,7 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common"
 )
 
 func BenchmarkDaggerSearch(b *testing.B) {

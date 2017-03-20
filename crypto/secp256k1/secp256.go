@@ -42,7 +42,7 @@ import (
 	"math/big"
 	"unsafe"
 
-	"github.com/expanse-project/go-expanse/crypto/randentropy"
+	"github.com/expanse-org/go-expanse/crypto/randentropy"
 )
 
 //#define USE_FIELD_5X64

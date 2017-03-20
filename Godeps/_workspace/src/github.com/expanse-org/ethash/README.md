@@ -4,11 +4,11 @@
 # Ethash
 
 For details on this project, please see the Expanse wiki:
-https://github.com/expanse-project/wiki/wiki/Ethash
+https://github.com/expanse-org/wiki/wiki/Ethash
 
 ### Coding Style for C++ code:
 
-Follow the same exact style as in [cpp-expanse](https://github.com/expanse-project/cpp-expanse/blob/develop/CodingStandards.txt)
+Follow the same exact style as in [cpp-expanse](https://github.com/expanse-org/cpp-expanse/blob/develop/CodingStandards.txt)
 
 ### Coding Style for C code:
 

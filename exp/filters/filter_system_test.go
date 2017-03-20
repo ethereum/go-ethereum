@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/event"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/event"
 )
 
 func TestCallbacks(t *testing.T) {

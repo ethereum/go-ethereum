@@ -27,7 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 // Msg defines the structure of a p2p message.

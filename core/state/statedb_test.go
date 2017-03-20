@@ -28,9 +28,9 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/vm"
-	"github.com/expanse-project/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to

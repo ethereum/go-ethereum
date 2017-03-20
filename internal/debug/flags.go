@@ -22,8 +22,8 @@ import (
 	_ "net/http/pprof"
 	"runtime"
 
-	"github.com/expanse-project/go-expanse/logger"
-	"github.com/expanse-project/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/logger"
+	"github.com/expanse-org/go-expanse/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 )
 

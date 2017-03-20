@@ -28,17 +28,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expanse-project/go-expanse/accounts"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/common/httpclient"
-	"github.com/expanse-project/go-expanse/common/registrar"
-	"github.com/expanse-project/go-expanse/core"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/eth"
-	"github.com/expanse-project/go-expanse/ethdb"
-	"github.com/expanse-project/go-expanse/event"
-	"github.com/expanse-project/go-expanse/node"
-	xe "github.com/expanse-project/go-expanse/xeth"
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/httpclient"
+	"github.com/expanse-org/go-expanse/common/registrar"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/eth"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/node"
+	xe "github.com/expanse-org/go-expanse/xeth"
 )
 
 const (

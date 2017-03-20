@@ -16,7 +16,7 @@
 
 package utils
 
-import "github.com/expanse-project/go-expanse/p2p/discover"
+import "github.com/expanse-org/go-expanse/p2p/discover"
 
 // FrontierBootNodes are the enode URLs of the P2P bootstrap nodes running on
 // the Frontier network.

@@ -24,11 +24,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/common/httpclient"
-	"github.com/expanse-project/go-expanse/common/registrar"
-	"github.com/expanse-project/go-expanse/crypto"
-	"github.com/expanse-project/go-expanse/xeth"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/httpclient"
+	"github.com/expanse-org/go-expanse/common/registrar"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/xeth"
 
 	"github.com/robertkrimen/otto"
 )

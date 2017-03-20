@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/expanse-project/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/rlp"
 )
 
 func TestNonInterfaceSlice(t *testing.T) {

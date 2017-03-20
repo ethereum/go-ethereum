@@ -7,15 +7,15 @@ import (
   "strings"
   "testing"
 
-  "github.com/expanse-project/go-expanse/accounts"
-  "github.com/expanse-project/go-expanse/common"
-  "github.com/expanse-project/go-expanse/common/docserver"
-  "github.com/expanse-project/go-expanse/common/registrar"
-  "github.com/expanse-project/go-expanse/core"
-  "github.com/expanse-project/go-expanse/core/state"
-  "github.com/expanse-project/go-expanse/crypto"
-  "github.com/expanse-project/go-expanse/exp"
-  xe "github.com/expanse-project/go-expanse/xeth"
+  "github.com/expanse-org/go-expanse/accounts"
+  "github.com/expanse-org/go-expanse/common"
+  "github.com/expanse-org/go-expanse/common/docserver"
+  "github.com/expanse-org/go-expanse/common/registrar"
+  "github.com/expanse-org/go-expanse/core"
+  "github.com/expanse-org/go-expanse/core/state"
+  "github.com/expanse-org/go-expanse/crypto"
+  "github.com/expanse-org/go-expanse/exp"
+  xe "github.com/expanse-org/go-expanse/xeth"
 )
 
 const (

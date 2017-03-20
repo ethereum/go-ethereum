@@ -21,8 +21,8 @@ package main
 import (
 	"io"
 
-	"github.com/expanse-project/go-expanse/cmd/utils"
-	"github.com/expanse-project/go-expanse/internal/debug"
+	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/internal/debug"
 	"gopkg.in/urfave/cli.v1"
 )
 

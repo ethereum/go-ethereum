@@ -39,8 +39,8 @@ import (
 	"unsafe"
 
 	"github.com/Gustav-Simonsson/go-opencl/cl"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 /*

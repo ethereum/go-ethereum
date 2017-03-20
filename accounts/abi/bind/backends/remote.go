@@ -23,11 +23,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/expanse-project/go-expanse/accounts/abi/bind"
-	"github.com/expanse-project/go-expanse/common"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/rlp"
-	"github.com/expanse-project/go-expanse/rpc"
+	"github.com/expanse-org/go-expanse/accounts/abi/bind"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/rpc"
 )
 
 // This nil assignment ensures compile time that rpcBackend implements bind.ContractBackend.

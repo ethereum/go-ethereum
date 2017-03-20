@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"math/big"
 
-	"github.com/expanse-project/go-expanse/core/state"
-	"github.com/expanse-project/go-expanse/core/types"
-	"github.com/expanse-project/go-expanse/params"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/params"
 )
 
 // ValidateDAOHeaderExtraData validates the extra-data field of a block header to
