@@ -22,10 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
+	"net/url"
 	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -123,17 +124,34 @@ func (s *Service) loop() {
 
 	// Loop reporting until termination
 	for {
-		// Establish a websocket connection to the server and authenticate the node
-		url := fmt.Sprintf("%s/api", s.host)
-		if !strings.Contains(url, "://") {
-			url = "wss://" + url
+		// Resolve the URL, defaulting to TLS, but falling back to none too
+		path := fmt.Sprintf("%s/api", s.host)
+		urls := []string{path}
+
+		if parsed, err := url.Parse(path); err == nil && !parsed.IsAbs() {
+			urls = []string{"wss://" + path, "ws://" + path}
 		}
-		conn, err := websocket.Dial(url, "", "http://localhost/")
+		// Establish a websocket connection to the server on any supported URL
+		var (
+			conf *websocket.Config
+			conn *websocket.Conn
+			err  error
+		)
+		for _, url := range urls {
+			if conf, err = websocket.NewConfig(url, "http://localhost/"); err != nil {
+				continue
+			}
+			conf.Dialer = &net.Dialer{Timeout: 3 * time.Second}
+			if conn, err = websocket.DialConfig(conf); err == nil {
+				break
+			}
+		}
 		if err != nil {
 			log.Warn("Stats server unreachable", "err", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
+		// Authenticate the client with the server
 		in := json.NewDecoder(conn)
 		out := json.NewEncoder(conn)
 
@@ -244,12 +262,12 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 			// Make sure the request is valid and doesn't crash us
 			request, ok := msg["emit"][1].(map[string]interface{})
 			if !ok {
-				log.Warn("Invalid history request", "msg", msg["emit"][1])
-				return
+				log.Warn("Invalid stats history request", "msg", msg["emit"][1])
+				continue // Ethstats sometime sends invalid history requests, ignore those
 			}
 			list, ok := request["list"].([]interface{})
 			if !ok {
-				log.Warn("Invalid history block list", "list", request["list"])
+				log.Warn("Invalid stats history block list", "list", request["list"])
 				return
 			}
 			// Convert the block number list to an integer list
@@ -257,7 +275,7 @@ func (s *Service) readLoop(conn *websocket.Conn, in *json.Decoder) {
 			for i, num := range list {
 				n, ok := num.(float64)
 				if !ok {
-					log.Warn("Invalid history block number", "number", num)
+					log.Warn("Invalid stats history block number", "number", num)
 					return
 				}
 				numbers[i] = uint64(n)
