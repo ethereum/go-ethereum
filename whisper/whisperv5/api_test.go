@@ -635,3 +635,47 @@ func TestKey(t *testing.T) {
 		t.Fatalf("wrong key")
 	}
 }
+
+func TestSubscribe(t *testing.T) {
+	var err error
+	var s string
+
+	w := New()
+	api := NewPublicWhisperAPI(w)
+	if api == nil {
+		t.Fatalf("failed to create API.")
+	}
+
+	symKeyID, err := api.GenerateSymmetricKey()
+	if err != nil {
+		t.Fatalf("failed to GenerateSymKey: %s.", err)
+	}
+
+	var f WhisperFilterArgs
+	f.Symmetric = true
+	f.Key = symKeyID
+	f.Topics = make([][]byte, 5)
+	f.Topics[0] = []byte{0x21}
+	f.Topics[1] = []byte{0xd2, 0xe3}
+	f.Topics[2] = []byte{0x64, 0x75, 0x76}
+	f.Topics[3] = []byte{0xf8, 0xe9, 0xa0, 0xba}
+	f.Topics[4] = []byte{0xcb, 0x3c, 0xdd, 0xee, 0xff}
+
+	s, err = api.Subscribe(f)
+	if err == nil {
+		t.Fatalf("Subscribe: false positive.")
+	}
+
+	f.Topics[4] = []byte{}
+	if err == nil {
+		t.Fatalf("Subscribe: false positive again.")
+	}
+
+	f.Topics[4] = []byte{0x00}
+	s, err = api.Subscribe(f)
+	if err != nil {
+		t.Fatalf("failed to subscribe: %s.", err)
+	} else {
+		api.Unsubscribe(s)
+	}
+}
