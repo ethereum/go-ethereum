@@ -129,7 +129,6 @@ func (self *ProtocolSession) expect(exp Expect) error {
 		glog.V(logger.Detail).Infof("caught timeout")
 		return fmt.Errorf("timout expecting %v sent to peer %v", exp.Msg, exp.Peer)
 	}
-	// fatal upon encountering first exchange error
 }
 
 // TestExchange tests a series of exchanges againsts the session
@@ -137,7 +136,7 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 	// launch all triggers of this exchanges
 
 	for i, e := range exchanges {
-		errc := make(chan error, 1)
+		errc := make(chan error)
 		wg := &sync.WaitGroup{}
 		for _, trig := range e.Triggers {
 			err := self.trigger(trig)

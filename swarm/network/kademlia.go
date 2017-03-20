@@ -70,7 +70,7 @@ type KadParams struct {
 func NewKadParams() *KadParams {
 	return &KadParams{
 		MaxProxDisplay: 8,
-		MinProxBinSize: 2,
+		MinProxBinSize: 4,
 		MinBinSize:     2,
 		MaxBinSize:     4,
 		//RetryInterval:  42000000000,
@@ -85,6 +85,7 @@ type Kademlia struct {
 	addr         *pot.HashAddress // immutable baseaddress of the table
 	*KadParams                    // Kademlia configuration parameters
 	conns, peers *pot.Pot         // pots container for peers
+	lastProxLimit	 uint8			  // stores the last calculated proxlimit
 }
 
 // NewKademlia(addr, params) creates a Kademlia table for base address addr
@@ -218,10 +219,15 @@ func (self *Kademlia) On(p Peer) {
 		glog.V(logger.Detail).Infof("peer %v nofified", vp)
 		dp := val.(*KadPeer).Peer.(KadDiscovery)
 		dp.NotifyPeer(kp.Peer, uint8(po))
-		dp.NotifyProx(uint8(prox))
+		if uint8(prox) != self.lastProxLimit {
+			self.lastProxLimit = uint8(prox)
+			dp.NotifyProx(uint8(prox))
+		}
 	}
 	self.conns.EachNeighbourAsync(kp, 255, 255, f, false)
 	go vp.NotifyProx(uint8(prox))
+		
+	
 }
 
 // Off removes a peer from among live peers
@@ -375,9 +381,9 @@ func (self *Kademlia) String() string {
 
 	var rows []string
 
-	rows = append(rows, "=========================================================================")
+	rows = append(rows, "============================================================================")
 	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %v", time.Now().UTC().Format(time.UnixDate), self.addr.Address.String()[:6]))
-	rows = append(rows, fmt.Sprintf("population: %d (%d), ProxBinSize: %d, MinBinSize: %d, MaxBinSize: %d", self.conns.Size(), self.peers.Size(), self.MinProxBinSize, self.MinBinSize, self.MaxBinSize))
+	rows = append(rows, fmt.Sprintf("population: %d (%d), MinProxBinSize: %d, MinBinSize: %d, MaxBinSize: %d", self.conns.Size(), self.peers.Size(), self.MinProxBinSize, self.MinBinSize, self.MaxBinSize))
 
 	liverows := make([]string, self.MaxProxDisplay)
 	peersrows := make([]string, self.MaxProxDisplay)

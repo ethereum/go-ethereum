@@ -38,7 +38,8 @@ func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
 // or first empty row)
 // callback for overlay driver
 func (self *discPeer) NotifyProx(po uint8) error {
-	return self.Send(&SubPeersMsg{ProxLimit: po, MinProxBinSize: 8})
+	//return self.Send(&SubPeersMsg{ProxLimit: po, MinProxBinSize: 8})
+	return self.Send(&SubPeersMsg{ProxLimit: po})
 }
 
 // new discovery contructor
@@ -95,7 +96,7 @@ func (self getPeersMsg) String() string {
 
 // subPeers msg is communicating the depth/sharpness/focus  of the overlay table of a peer
 type SubPeersMsg struct {
-	MinProxBinSize uint8
+	//MinProxBinSize uint8
 	ProxLimit      uint8
 }
 
@@ -132,6 +133,11 @@ func (p *discPeer) handlePeersMsg(msg interface{}) error {
 		addr := PeerAddr(na)
 		nas = append(nas, addr)
 		p.peers[NodeId(addr).NodeID] = true
+	}
+	
+	if len(nas) == 0 {
+		glog.V(logger.Debug).Infof("whoops, no peers in incoming peersMsg from %v", p)
+		return nil
 	}
 	return p.overlay.Register(nas...)
 }
