@@ -89,12 +89,12 @@ func (fs *Filters) Get(id string) *Filter {
 }
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
-	var j int
 	var msg *ReceivedMessage
 
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
+	j := -1
 	for _, watcher := range fs.watchers {
 		j++
 		if p2pMessage && !watcher.AllowP2P {
@@ -118,6 +118,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 		}
 
 		if match && msg != nil {
+			log.Trace(fmt.Sprintf("message decrypted [%x]", env.Hash()))
 			watcher.Trigger(msg)
 		}
 	}
@@ -202,10 +203,21 @@ func (f *Filter) MatchTopic(topic TopicType) bool {
 	}
 
 	for _, bt := range f.Topics {
-		for j, b := range bt {
-			if topic[j] != b {
-				return false
-			}
+		if MatchSingleTopic(topic, bt) {
+			return true
+		}
+	}
+	return false
+}
+
+func MatchSingleTopic(topic TopicType, bt []byte) bool {
+	if len(bt) > 4 {
+		bt = bt[0:4]
+	}
+
+	for j, b := range bt {
+		if topic[j] != b {
+			return false
 		}
 	}
 	return true

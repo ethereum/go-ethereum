@@ -17,6 +17,7 @@
 package whisperv5
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
