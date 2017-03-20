@@ -83,6 +83,7 @@ var errInvalidVersionReply = errors.New("invalid version reply")
 
 // ledgerWallet represents a live USB Ledger hardware wallet.
 type ledgerWallet struct {
+	hub *LedgerHub    // USB hub the device originates from (TODO(karalabe): remove if hotplug lands on Windows)
 	url *accounts.URL // Textual URL uniquely identifying this wallet
 
 	info    hid.DeviceInfo // Known USB device infos about the wallet
@@ -575,6 +576,11 @@ func (w *ledgerWallet) SignTx(account accounts.Account, tx *types.Transaction, c
 	// All infos gathered and metadata checks out, request signing
 	<-w.commsLock
 	defer func() { w.commsLock <- struct{}{} }()
+
+	// Ensure the device isn't screwed with while user confirmation is pending
+	// TODO(karalabe): remove if hotplug lands on Windows
+	w.hub.commsLock.RLock()
+	defer w.hub.commsLock.RUnlock()
 
 	return w.ledgerSign(path, account.Address, tx, chainID)
 }
