@@ -59,7 +59,7 @@ func TestStoreCapture(t *testing.T) {
 
 	var index common.Hash
 
-	logger.CaptureState(env, 0, SSTORE, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env, 0, SSTORE, 0, 0, mem, stack, contract, 0, nil)
 	if len(logger.changedValues[contract.Address()]) == 0 {
 		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.changedValues[contract.Address()]))
 	}
@@ -81,13 +81,13 @@ func TestStorageCapture(t *testing.T) {
 		stack    = newstack()
 	)
 
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env, 0, STOP, 0, 0, mem, stack, contract, 0, nil)
 	if ref.calledForEach {
 		t.Error("didn't expect for each to be called")
 	}
 
 	logger = NewStructLogger(&LogConfig{FullStorage: true})
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env, 0, STOP, 0, 0, mem, stack, contract, 0, nil)
 	if !ref.calledForEach {
 		t.Error("expected for each to be called")
 	}
