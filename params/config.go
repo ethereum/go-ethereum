@@ -25,26 +25,28 @@ import (
 
 // MainnetChainConfig is the chain parameters to run a node on the main network.
 var MainnetChainConfig = &ChainConfig{
-	ChainId:        MainNetChainID,
-	HomesteadBlock: MainNetHomesteadBlock,
-	DAOForkBlock:   MainNetDAOForkBlock,
-	DAOForkSupport: true,
-	EIP150Block:    MainNetHomesteadGasRepriceBlock,
-	EIP150Hash:     MainNetHomesteadGasRepriceHash,
-	EIP155Block:    MainNetSpuriousDragon,
-	EIP158Block:    MainNetSpuriousDragon,
+	ChainId:         MainNetChainID,
+	HomesteadBlock:  MainNetHomesteadBlock,
+	DAOForkBlock:    MainNetDAOForkBlock,
+	DAOForkSupport:  true,
+	EIP150Block:     MainNetHomesteadGasRepriceBlock,
+	EIP150Hash:      MainNetHomesteadGasRepriceHash,
+	EIP155Block:     MainNetSpuriousDragon,
+	EIP158Block:     MainNetSpuriousDragon,
+	MetropolisBlock: MainNetMetropolisBlock,
 }
 
 // TestnetChainConfig is the chain parameters to run a node on the test network.
 var TestnetChainConfig = &ChainConfig{
-	ChainId:        big.NewInt(3),
-	HomesteadBlock: big.NewInt(0),
-	DAOForkBlock:   nil,
-	DAOForkSupport: true,
-	EIP150Block:    big.NewInt(0),
-	EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-	EIP155Block:    big.NewInt(10),
-	EIP158Block:    big.NewInt(10),
+	ChainId:         big.NewInt(3),
+	HomesteadBlock:  big.NewInt(0),
+	DAOForkBlock:    nil,
+	DAOForkSupport:  true,
+	EIP150Block:     big.NewInt(0),
+	EIP150Hash:      common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+	EIP155Block:     big.NewInt(10),
+	EIP158Block:     big.NewInt(10),
+	MetropolisBlock: big.NewInt(0),
 }
 
 // AllProtocolChanges contains every protocol change (EIPs)
@@ -55,7 +57,7 @@ var TestnetChainConfig = &ChainConfig{
 // means that all fields must be set at all times. This forces
 // anyone adding flags to the config to also have to set these
 // fields.
-var AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
+var AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0)}
 
 // ChainConfig is the core config which determines the blockchain settings.
 //
@@ -75,11 +77,13 @@ type ChainConfig struct {
 
 	EIP155Block *big.Int `json:"eip155Block"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block"` // EIP158 HF block
+
+	MetropolisBlock *big.Int `json:"metropolisBlock"` // Metropolis switch block (nil = no fork, 0 = alraedy on homestead)
 }
 
 // String implements the Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Metropolis: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -87,11 +91,12 @@ func (c *ChainConfig) String() string {
 		c.EIP150Block,
 		c.EIP155Block,
 		c.EIP158Block,
+		c.MetropolisBlock,
 	)
 }
 
 var (
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int), new(big.Int)}
+	TestChainConfig = &ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int), new(big.Int), new(big.Int)}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -145,6 +150,14 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 
 }
 
+func (c *ChainConfig) IsMetropolis(num *big.Int) bool {
+	if c.MetropolisBlock == nil || num == nil {
+		return false
+	}
+	return num.Cmp(c.MetropolisBlock) >= 0
+
+}
+
 // Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
 // that do not have or require information about the block.
 //
@@ -153,8 +166,9 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 type Rules struct {
 	ChainId                                   *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
+	IsMetropolis                              bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
-	return Rules{ChainId: new(big.Int).Set(c.ChainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num)}
+	return Rules{ChainId: new(big.Int).Set(c.ChainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsMetropolis: c.IsMetropolis(num)}
 }
