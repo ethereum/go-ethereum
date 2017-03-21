@@ -47,6 +47,8 @@ type operation struct {
 	// jumps indicates whether operation made a jump. This prevents the program
 	// counter from further incrementing.
 	jumps bool
+	// writes determines whether this a state modifying operation
+	writes bool
 	// valid is used to check whether the retrieved operation is valid and known
 	valid bool
 }
@@ -357,6 +359,7 @@ func NewJumpTable() [256]operation {
 			gasCost:       gasSStore,
 			validateStack: makeStackFunc(2, 0),
 			valid:         true,
+			writes:        true,
 		},
 		JUMP: {
 			execute:       opJump,
@@ -821,6 +824,7 @@ func NewJumpTable() [256]operation {
 			validateStack: makeStackFunc(3, 1),
 			memorySize:    memoryCreate,
 			valid:         true,
+			writes:        true,
 		},
 		CALL: {
 			execute:       opCall,
@@ -857,6 +861,7 @@ func NewJumpTable() [256]operation {
 			validateStack: makeStackFunc(1, 0),
 			halts:         true,
 			valid:         true,
+			writes:        true,
 		},
 	}
 }

@@ -61,6 +61,8 @@ type Interpreter struct {
 	cfg      Config
 	gasTable params.GasTable
 	intPool  *intPool
+
+	readonly bool
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
@@ -137,6 +139,15 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 
 		// get the operation from the jump table matching the opcode
 		operation := evm.cfg.JumpTable[op]
+		// if the interpreter is operating in readonly mode, make sure no
+		// state-modifying operation is performed.
+		if evm.readonly && evm.env.chainConfig.IsMetropolis(evm.env.BlockNumber) {
+			if operation.writes ||
+				((op == CALL || op == CALLCODE) && stack.Back(3).BitLen() > 0) {
+				return nil, errWriteProtection
+			}
+
+		}
 
 		// if the op is invalid abort the process and return an error
 		if !operation.valid {
