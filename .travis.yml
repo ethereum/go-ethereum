@@ -5,14 +5,6 @@ matrix:
   include:
     - os: linux
       dist: trusty
-      go: 1.5.4
-      env:
-        - GO15VENDOREXPERIMENT=1
-    - os: linux
-      dist: trusty
-      go: 1.6.2
-    - os: linux
-      dist: trusty
       go: 1.7.5
 
     # These are the latest Go versions, only run go vet and misspell on these
