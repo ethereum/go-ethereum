@@ -40,6 +40,15 @@ test: all
 clean:
 	rm -fr build/_workspace/pkg/ $(GOBIN)/*
 
+# The devtools target installs tools required for 'go generate'.
+# You need to put $GOBIN (or $GOPATH/bin) in your PATH to use 'go generate'.
+
+devtools:
+	go get -u golang.org/x/tools/cmd/stringer
+	go get -u github.com/jteeuwen/go-bindata/go-bindata
+	go get -u github.com/fjl/gencodec
+	go install ./cmd/abigen
+
 # Cross Compilation Targets (xgo)
 
 geth-cross: geth-linux geth-darwin geth-windows geth-android geth-ios

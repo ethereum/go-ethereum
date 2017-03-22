@@ -19,8 +19,6 @@ package types
 
 import (
 	"encoding/binary"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -37,12 +35,6 @@ import (
 var (
 	EmptyRootHash  = DeriveSha(Transactions{})
 	EmptyUncleHash = CalcUncleHash(nil)
-)
-
-var (
-	errMissingHeaderMixDigest = errors.New("missing mixHash in JSON block header")
-	errMissingHeaderFields    = errors.New("missing required JSON block header fields")
-	errBadNonceSize           = errors.New("invalid block nonce size, want 8 bytes")
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -72,41 +64,35 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
 
+//go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
+
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash  common.Hash    // Hash to the previous block
-	UncleHash   common.Hash    // Uncles of this block
-	Coinbase    common.Address // The coin base address
-	Root        common.Hash    // Block Trie state
-	TxHash      common.Hash    // Tx sha
-	ReceiptHash common.Hash    // Receipt sha
-	Bloom       Bloom          // Bloom
-	Difficulty  *big.Int       // Difficulty for the current block
-	Number      *big.Int       // The block number
-	GasLimit    *big.Int       // Gas limit
-	GasUsed     *big.Int       // Gas used
-	Time        *big.Int       // Creation time
-	Extra       []byte         // Extra data
-	MixDigest   common.Hash    // for quick difficulty verification
-	Nonce       BlockNonce
+	ParentHash  common.Hash    `json:"parentHash"`
+	UncleHash   common.Hash    `json:"sha3Uncles"`
+	Coinbase    common.Address `json:"miner"`
+	Root        common.Hash    `json:"stateRoot"`
+	TxHash      common.Hash    `json:"transactionsRoot"`
+	ReceiptHash common.Hash    `json:"receiptsRoot"`
+	Bloom       Bloom          `json:"logsBloom"`
+	Difficulty  *big.Int       `json:"difficulty"`
+	Number      *big.Int       `json:"number"`
+	GasLimit    *big.Int       `json:"gasLimit"`
+	GasUsed     *big.Int       `json:"gasUsed"`
+	Time        *big.Int       `json:"timestamp"`
+	Extra       []byte         `json:"extraData"`
+	MixDigest   common.Hash    `json:"mixHash"`
+	Nonce       BlockNonce     `json:"nonce"`
 }
 
-type jsonHeader struct {
-	ParentHash  *common.Hash    `json:"parentHash"`
-	UncleHash   *common.Hash    `json:"sha3Uncles"`
-	Coinbase    *common.Address `json:"miner"`
-	Root        *common.Hash    `json:"stateRoot"`
-	TxHash      *common.Hash    `json:"transactionsRoot"`
-	ReceiptHash *common.Hash    `json:"receiptsRoot"`
-	Bloom       *Bloom          `json:"logsBloom"`
-	Difficulty  *hexutil.Big    `json:"difficulty"`
-	Number      *hexutil.Big    `json:"number"`
-	GasLimit    *hexutil.Big    `json:"gasLimit"`
-	GasUsed     *hexutil.Big    `json:"gasUsed"`
-	Time        *hexutil.Big    `json:"timestamp"`
-	Extra       *hexutil.Bytes  `json:"extraData"`
-	MixDigest   *common.Hash    `json:"mixHash"`
-	Nonce       *BlockNonce     `json:"nonce"`
+// field type overrides for gencodec
+type headerMarshaling struct {
+	Difficulty *hexutil.Big
+	Number     *hexutil.Big
+	GasLimit   *hexutil.Big
+	GasUsed    *hexutil.Big
+	Time       *hexutil.Big
+	Extra      hexutil.Bytes
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -132,65 +118,6 @@ func (h *Header) HashNoNonce() common.Hash {
 		h.Time,
 		h.Extra,
 	})
-}
-
-// MarshalJSON encodes headers into the web3 RPC response block format.
-func (h *Header) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&jsonHeader{
-		ParentHash:  &h.ParentHash,
-		UncleHash:   &h.UncleHash,
-		Coinbase:    &h.Coinbase,
-		Root:        &h.Root,
-		TxHash:      &h.TxHash,
-		ReceiptHash: &h.ReceiptHash,
-		Bloom:       &h.Bloom,
-		Difficulty:  (*hexutil.Big)(h.Difficulty),
-		Number:      (*hexutil.Big)(h.Number),
-		GasLimit:    (*hexutil.Big)(h.GasLimit),
-		GasUsed:     (*hexutil.Big)(h.GasUsed),
-		Time:        (*hexutil.Big)(h.Time),
-		Extra:       (*hexutil.Bytes)(&h.Extra),
-		MixDigest:   &h.MixDigest,
-		Nonce:       &h.Nonce,
-	})
-}
-
-// UnmarshalJSON decodes headers from the web3 RPC response block format.
-func (h *Header) UnmarshalJSON(input []byte) error {
-	var dec jsonHeader
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	// Ensure that all fields are set. MixDigest is checked separately because
-	// it is a recent addition to the spec (as of August 2016) and older RPC server
-	// implementations might not provide it.
-	if dec.MixDigest == nil {
-		return errMissingHeaderMixDigest
-	}
-	if dec.ParentHash == nil || dec.UncleHash == nil || dec.Coinbase == nil ||
-		dec.Root == nil || dec.TxHash == nil || dec.ReceiptHash == nil ||
-		dec.Bloom == nil || dec.Difficulty == nil || dec.Number == nil ||
-		dec.GasLimit == nil || dec.GasUsed == nil || dec.Time == nil ||
-		dec.Extra == nil || dec.Nonce == nil {
-		return errMissingHeaderFields
-	}
-	// Assign all values.
-	h.ParentHash = *dec.ParentHash
-	h.UncleHash = *dec.UncleHash
-	h.Coinbase = *dec.Coinbase
-	h.Root = *dec.Root
-	h.TxHash = *dec.TxHash
-	h.ReceiptHash = *dec.ReceiptHash
-	h.Bloom = *dec.Bloom
-	h.Difficulty = (*big.Int)(dec.Difficulty)
-	h.Number = (*big.Int)(dec.Number)
-	h.GasLimit = (*big.Int)(dec.GasLimit)
-	h.GasUsed = (*big.Int)(dec.GasUsed)
-	h.Time = (*big.Int)(dec.Time)
-	h.Extra = *dec.Extra
-	h.MixDigest = *dec.MixDigest
-	h.Nonce = *dec.Nonce
-	return nil
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
