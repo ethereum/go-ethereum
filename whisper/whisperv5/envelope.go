@@ -21,7 +21,6 @@ package whisperv5
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	gmath "math"
 	"math/big"
@@ -95,6 +94,9 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		e.Expiry += options.WorkTime
 	} else {
 		target = e.powToFirstBit(options.PoW)
+		if target < 1 {
+			target = 1
+		}
 	}
 
 	buf := make([]byte, 64)
@@ -118,7 +120,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	}
 
 	if target > 0 && bestBit < target {
-		return errors.New("Failed to reach the PoW target, insufficient work time")
+		return fmt.Errorf("Failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
 	return nil

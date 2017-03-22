@@ -215,17 +215,6 @@ func (msg *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte,
 }
 
 // Wrap bundles the message into an Envelope to transmit over the network.
-//
-// pow (Proof Of Work) controls how much time to spend on hashing the message,
-// inherently controlling its priority through the network (smaller hash, bigger
-// priority).
-//
-// The user can control the amount of identity, privacy and encryption through
-// the options parameter as follows:
-//   - options.From == nil && options.To == nil: anonymous broadcast
-//   - options.From != nil && options.To == nil: signed broadcast (known sender)
-//   - options.From == nil && options.To != nil: encrypted anonymous message
-//   - options.From != nil && options.To != nil: encrypted signed message
 func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err error) {
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
@@ -235,10 +224,6 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 		if err != nil {
 			return nil, err
 		}
-	}
-	if len(msg.Raw) > MaxMessageLength {
-		log.Error(fmt.Sprintf("Message size must not exceed %d bytes", MaxMessageLength))
-		return nil, errors.New("Oversized message")
 	}
 	var salt, nonce []byte
 	if options.Dst != nil {
@@ -258,7 +243,6 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	if err != nil {
 		return nil, err
 	}
-
 	return envelope, nil
 }
 
@@ -280,7 +264,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []by
 	}
 	if len(nonce) != aesgcm.NonceSize() {
 		info := fmt.Sprintf("Wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
-		log.Error(fmt.Sprintf(info))
+		log.Error(info)
 		return errors.New(info)
 	}
 	decrypted, err := aesgcm.Open(nil, nonce, msg.Raw, nil)

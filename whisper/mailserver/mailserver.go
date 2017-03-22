@@ -31,8 +31,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
-const MailServerKeyName = "958e04ab302fb36ad2616a352cbac79d"
-
 type WMailServer struct {
 	db  *leveldb.DB
 	w   *whisper.Whisper
@@ -75,11 +73,14 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	s.w = shh
 	s.pow = pow
 
-	err = s.w.AddSymKey(MailServerKeyName, []byte(password))
+	MailServerKeyID, err := s.w.AddSymKeyFromPassword(password)
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
 	}
-	s.key = s.w.GetSymKey(MailServerKeyName)
+	s.key, err = s.w.GetSymKey(MailServerKeyID)
+	if err != nil {
+		utils.Fatalf("Failed to save symmetric key for MailServer")
+	}
 }
 
 func (s *WMailServer) Close() {

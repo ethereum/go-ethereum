@@ -18,7 +18,6 @@ package whisperv5
 
 import (
 	"crypto/ecdsa"
-	crand "crypto/rand"
 	"fmt"
 	"sync"
 
@@ -30,9 +29,9 @@ type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
 	KeySym     []byte            // Key associated with the Topic
-	Topics     []TopicType       // Topics to filter messages with
+	Topics     [][]byte          // Topics to filter messages with
 	PoW        float64           // Proof of work as described in the Whisper spec
-	AcceptP2P  bool              // Indicates whether this filter is interested in direct peer-to-peer messages
+	AllowP2P   bool              // Indicates whether this filter is interested in direct peer-to-peer messages
 	SymKeyHash common.Hash       // The Keccak256Hash of the symmetric key, needed for optimization
 
 	Messages map[common.Hash]*ReceivedMessage
@@ -52,47 +51,35 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
-func (fs *Filters) generateRandomID() (id string, err error) {
-	buf := make([]byte, 20)
-	for i := 0; i < 3; i++ {
-		_, err = crand.Read(buf)
-		if err != nil {
-			continue
-		}
-		if !validateSymmetricKey(buf) {
-			err = fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
-			continue
-		}
-		id = common.Bytes2Hex(buf)
-		if fs.watchers[id] != nil {
-			err = fmt.Errorf("error in generateRandomID: generated same ID twice")
-			continue
-		}
-		return id, err
-	}
-
-	return "", err
-}
-
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
 
+	id, err := GenerateRandomID()
+	if err != nil {
+		return "", err
+	}
+
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	id, err := fs.generateRandomID()
-	if err == nil {
-		fs.watchers[id] = watcher
+	if fs.watchers[id] != nil {
+		return "", fmt.Errorf("failed to generate unique ID")
 	}
+
+	fs.watchers[id] = watcher
 	return id, err
 }
 
-func (fs *Filters) Uninstall(id string) {
+func (fs *Filters) Uninstall(id string) bool {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
-	delete(fs.watchers, id)
+	if fs.watchers[id] != nil {
+		delete(fs.watchers, id)
+		return true
+	}
+	return false
 }
 
 func (fs *Filters) Get(id string) *Filter {
@@ -102,11 +89,16 @@ func (fs *Filters) Get(id string) *Filter {
 }
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
-	fs.mutex.RLock()
 	var msg *ReceivedMessage
-	for j, watcher := range fs.watchers {
-		if p2pMessage && !watcher.AcceptP2P {
-			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: p2p messages are not allowed", env.Hash(), j))
+
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+
+	j := -1
+	for _, watcher := range fs.watchers {
+		j++
+		if p2pMessage && !watcher.AllowP2P {
+			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), j))
 			continue
 		}
 
@@ -118,22 +110,32 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					log.Trace(fmt.Sprintf("msg [%x], filter [%s]: failed to open", env.Hash(), j))
+					log.Trace(fmt.Sprintf("msg [%x], filter [%d]: failed to open", env.Hash(), j))
 				}
 			} else {
-				log.Trace(fmt.Sprintf("msg [%x], filter [%s]: does not match", env.Hash(), j))
+				log.Trace(fmt.Sprintf("msg [%x], filter [%d]: does not match", env.Hash(), j))
 			}
 		}
 
 		if match && msg != nil {
+			log.Trace(fmt.Sprintf("message decrypted [%x]", env.Hash()))
 			watcher.Trigger(msg)
 		}
 	}
-	fs.mutex.RUnlock() // we need to unlock before calling addDecryptedMessage
+}
 
-	if msg != nil {
-		fs.whisper.addDecryptedMessage(msg)
+func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
+	if f.MatchEnvelope(env) {
+		msg := env.Open(f)
+		if msg != nil {
+			return msg
+		} else {
+			log.Trace(fmt.Sprintf("processing msg [%x]: failed to open", env.Hash()))
+		}
+	} else {
+		log.Trace(fmt.Sprintf("processing msg [%x]: does not match", env.Hash()))
 	}
+	return nil
 }
 
 func (f *Filter) expectsAsymmetricEncryption() bool {
@@ -200,12 +202,25 @@ func (f *Filter) MatchTopic(topic TopicType) bool {
 		return true
 	}
 
-	for _, t := range f.Topics {
-		if t == topic {
+	for _, bt := range f.Topics {
+		if MatchSingleTopic(topic, bt) {
 			return true
 		}
 	}
 	return false
+}
+
+func MatchSingleTopic(topic TopicType, bt []byte) bool {
+	if len(bt) > 4 {
+		bt = bt[0:4]
+	}
+
+	for j, b := range bt {
+		if topic[j] != b {
+			return false
+		}
+	}
+	return true
 }
 
 func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
