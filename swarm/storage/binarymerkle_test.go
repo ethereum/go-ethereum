@@ -44,7 +44,7 @@ func TestGetHeight2(t *testing.T) {
 func TestBuildBMT(t *testing.T) {
 
 	// Grab some data to make the tree out of, and partition
-	data, err := ioutil.ReadFile("testdata") // assume testdata exists
+	data, err := ioutil.ReadFile("binarymerkle_test.go") // assume testdata exists
 	if err != nil {
 		fmt.Println(err)
 		return
