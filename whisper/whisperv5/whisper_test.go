@@ -18,6 +18,7 @@ package whisperv5
 
 import (
 	"bytes"
+	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -49,7 +50,7 @@ func TestWhisperBasic(t *testing.T) {
 	}
 
 	peerID := make([]byte, 64)
-	randomize(peerID)
+	mrand.Read(peerID)
 	peer, _ := w.getPeer(peerID)
 	if peer != nil {
 		t.Fatal("found peer for random key.")
@@ -212,7 +213,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	// add existing id, nothing should change
 	randomKey := make([]byte, 16)
-	randomize(randomKey)
+	mrand.Read(randomKey)
 	err = w.AddSymKey(id1, randomKey)
 	if err == nil {
 		t.Fatalf("failed AddSymKey with seed %d.", seed)
