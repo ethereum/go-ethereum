@@ -215,10 +215,6 @@ func doInstall(cmdline []string) {
 }
 
 func buildFlags(env build.Environment) (flags []string) {
-	if os.Getenv("GO_OPENCL") != "" {
-		flags = append(flags, "-tags", "opencl")
-	}
-
 	// Set gitCommit constant via link-time assignment.
 	if env.Commit != "" {
 		flags = append(flags, "-ldflags", "-X main.gitCommit="+env.Commit)
