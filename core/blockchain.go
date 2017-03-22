@@ -1313,6 +1313,11 @@ Error: %v
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	start := time.Now()
+	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+		return i, err
+	}
+
 	// Make sure only one thread manipulates the chain at once
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
@@ -1328,7 +1333,7 @@ func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		return err
 	}
 
-	return self.hc.InsertHeaderChain(chain, checkFreq, whFunc)
+	return self.hc.InsertHeaderChain(chain, whFunc, start)
 }
 
 // writeHeader writes a header into the local chain, given that its parent is

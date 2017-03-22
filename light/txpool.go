@@ -276,15 +276,17 @@ func (pool *TxPool) setNewHead(ctx context.Context, newHeader *types.Header) (tx
 	// clear old mined tx entries of old blocks
 	if idx := newHeader.Number.Uint64(); idx > pool.clearIdx+txPermanent {
 		idx2 := idx - txPermanent
-		for i := pool.clearIdx; i < idx2; i++ {
-			hash := core.GetCanonicalHash(pool.chainDb, i)
-			if list, ok := pool.mined[hash]; ok {
-				hashes := make([]common.Hash, len(list))
-				for i, tx := range list {
-					hashes[i] = tx.Hash()
+		if len(pool.mined) > 0 {
+			for i := pool.clearIdx; i < idx2; i++ {
+				hash := core.GetCanonicalHash(pool.chainDb, i)
+				if list, ok := pool.mined[hash]; ok {
+					hashes := make([]common.Hash, len(list))
+					for i, tx := range list {
+						hashes[i] = tx.Hash()
+					}
+					pool.relay.Discard(hashes)
+					delete(pool.mined, hash)
 				}
-				pool.relay.Discard(hashes)
-				delete(pool.mined, hash)
 			}
 		}
 		pool.clearIdx = idx2
@@ -303,15 +305,16 @@ func (pool *TxPool) eventLoop() {
 	for ev := range pool.events.Chan() {
 		switch ev.Data.(type) {
 		case core.ChainHeadEvent:
+			head := pool.chain.CurrentHeader()
 			pool.mu.Lock()
 			ctx, _ := context.WithTimeout(context.Background(), blockCheckTimeout)
-			head := pool.chain.CurrentHeader()
 			txc, _ := pool.setNewHead(ctx, head)
 			m, r := txc.getLists()
 			pool.relay.NewHead(pool.head, m, r)
 			pool.homestead = pool.config.IsHomestead(head.Number)
 			pool.signer = types.MakeSigner(pool.config, head.Number)
 			pool.mu.Unlock()
+			time.Sleep(time.Millisecond) // hack in order to avoid hogging the lock; this part will be replaced by a subsequent PR
 		}
 	}
 }

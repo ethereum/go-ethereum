@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -37,7 +38,10 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-const maxHeadInfoLen = 20
+const (
+	maxHeadInfoLen    = 20
+	maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+)
 
 type peer struct {
 	*p2p.Peer
@@ -53,9 +57,11 @@ type peer struct {
 	lock     sync.RWMutex
 
 	announceChn chan announceData
+	sendQueue   *execQueue
 
-	poolEntry *poolEntry
-	hasBlock  func(common.Hash, uint64) bool
+	poolEntry      *poolEntry
+	hasBlock       func(common.Hash, uint64) bool
+	responseErrors int
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
@@ -74,6 +80,14 @@ func newPeer(version, network int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		id:          fmt.Sprintf("%x", id[:8]),
 		announceChn: make(chan announceData, 20),
 	}
+}
+
+func (p *peer) canQueue() bool {
+	return p.sendQueue.canQueue()
+}
+
+func (p *peer) queueSend(f func()) {
+	p.sendQueue.queue(f)
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
@@ -115,6 +129,11 @@ func (p *peer) Td() *big.Int {
 	defer p.lock.RUnlock()
 
 	return new(big.Int).Set(p.headInfo.Td)
+}
+
+// waitBefore implements distPeer interface
+func (p *peer) waitBefore(maxCost uint64) (time.Duration, float64) {
+	return p.fcServer.CanSend(maxCost)
 }
 
 func sendRequest(w p2p.MsgWriter, msgcode, reqID, cost uint64, data interface{}) error {
@@ -237,11 +256,8 @@ func (p *peer) RequestHeaderProofs(reqID, cost uint64, reqs []*ChtReq) error {
 	return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqs)
 }
 
-func (p *peer) SendTxs(cost uint64, txs types.Transactions) error {
+func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
-	reqID := getNextReqID()
-	p.fcServer.MustAssignRequest(reqID)
-	p.fcServer.SendRequest(reqID, cost)
 	return p2p.Send(p.rw, SendTxMsg, txs)
 }
 
@@ -444,6 +460,7 @@ func (ps *peerSet) Register(p *peer) error {
 		return errAlreadyRegistered
 	}
 	ps.peers[p.id] = p
+	p.sendQueue = newExecQueue(100)
 	return nil
 }
 
@@ -453,8 +470,10 @@ func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	if _, ok := ps.peers[id]; !ok {
+	if p, ok := ps.peers[id]; !ok {
 		return errNotRegistered
+	} else {
+		p.sendQueue.quit()
 	}
 	delete(ps.peers, id)
 	return nil

@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -369,9 +370,17 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	start := time.Now()
+	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+		return i, err
+	}
+
 	// Make sure only one thread manipulates the chain at once
 	self.chainmu.Lock()
-	defer self.chainmu.Unlock()
+	defer func() {
+		self.chainmu.Unlock()
+		time.Sleep(time.Millisecond * 10) // ugly hack; do not hog chain lock in case syncing is CPU-limited by validation
+	}()
 
 	self.wg.Add(1)
 	defer self.wg.Done()
@@ -397,7 +406,7 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		}
 		return err
 	}
-	i, err := self.hc.InsertHeaderChain(chain, checkFreq, whFunc)
+	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
 	go self.postChainEvents(events)
 	return i, err
 }

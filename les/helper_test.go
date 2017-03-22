@@ -352,11 +352,15 @@ func (p *testServerPool) setPeer(peer *peer) {
 	p.peer = peer
 }
 
-func (p *testServerPool) selectPeerWait(uint64, func(*peer) (bool, time.Duration), <-chan struct{}) *peer {
+func (p *testServerPool) getAllPeers() map[distPeer]struct{} {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return p.peer
+	m := make(map[distPeer]struct{})
+	if p.peer != nil {
+		m[p.peer] = struct{}{}
+	}
+	return m
 }
 
 func (p *testServerPool) adjustResponseTime(*poolEntry, time.Duration, bool) {
