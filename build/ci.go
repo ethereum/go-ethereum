@@ -162,9 +162,9 @@ func doInstall(cmdline []string) {
 
 	// Check Go version. People regularly open issues about compilation
 	// failure with outdated Go. This should save them the trouble.
-	if runtime.Version() < "go1.4" && !strings.HasPrefix(runtime.Version(), "devel") {
+	if runtime.Version() < "go1.7" && !strings.HasPrefix(runtime.Version(), "devel") {
 		log.Println("You have Go version", runtime.Version())
-		log.Println("go-ethereum requires at least Go version 1.4 and cannot")
+		log.Println("go-ethereum requires at least Go version 1.7 and cannot")
 		log.Println("be compiled with an earlier version. Please upgrade your Go installation.")
 		os.Exit(1)
 	}
@@ -219,16 +219,9 @@ func buildFlags(env build.Environment) (flags []string) {
 		flags = append(flags, "-tags", "opencl")
 	}
 
-	// Since Go 1.5, the separator char for link time assignments
-	// is '=' and using ' ' prints a warning. However, Go < 1.5 does
-	// not support using '='.
-	sep := " "
-	if runtime.Version() > "go1.5" || strings.Contains(runtime.Version(), "devel") {
-		sep = "="
-	}
 	// Set gitCommit constant via link-time assignment.
 	if env.Commit != "" {
-		flags = append(flags, "-ldflags", "-X main.gitCommit"+sep+env.Commit)
+		flags = append(flags, "-ldflags", "-X main.gitCommit="+env.Commit)
 	}
 	return flags
 }
@@ -249,10 +242,7 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 			cmd.Args = append(cmd.Args, []string{"-ldflags", "-extldflags -Wl,--allow-multiple-definition"}...)
 		}
 	}
-	cmd.Env = []string{
-		"GO15VENDOREXPERIMENT=1",
-		"GOPATH=" + build.GOPATH(),
-	}
+	cmd.Env = []string{"GOPATH=" + build.GOPATH()}
 	if arch == "" || arch == runtime.GOARCH {
 		cmd.Env = append(cmd.Env, "GOBIN="+GOBIN)
 	} else {
