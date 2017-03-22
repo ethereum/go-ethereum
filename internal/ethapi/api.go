@@ -695,8 +695,8 @@ type ExecutionResult struct {
 type StructLogRes struct {
 	Pc      uint64            `json:"pc"`
 	Op      string            `json:"op"`
-	Gas     *big.Int          `json:"gas"`
-	GasCost *big.Int          `json:"gasCost"`
+	Gas     uint64            `json:"gas"`
+	GasCost uint64            `json:"gasCost"`
 	Depth   int               `json:"depth"`
 	Error   error             `json:"error"`
 	Stack   []string          `json:"stack"`

@@ -18,7 +18,6 @@ package vm
 
 import (
 	"fmt"
-	"math/big"
 	"sync/atomic"
 	"time"
 
@@ -117,9 +116,7 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		if err != nil && evm.cfg.Debug {
 			// XXX For debugging
 			//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d ERR = %v\n", pc, op, cost, stack.len(), err)
-			// TODO update the tracer
-			g, c := new(big.Int).SetUint64(contract.Gas), new(big.Int).SetUint64(cost)
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, g, c, mem, stack, contract, evm.env.depth, err)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
 		}
 	}()
 
@@ -177,8 +174,7 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		}
 
 		if evm.cfg.Debug {
-			g, c := new(big.Int).SetUint64(contract.Gas), new(big.Int).SetUint64(cost)
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, g, c, mem, stack, contract, evm.env.depth, err)
+			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
 		}
 		// XXX For debugging
 		//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d\n", pc, op, cost, stack.len())
