@@ -17,6 +17,7 @@
 package light
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/net/context"
 )
 
 // txPermanent is the number of mined blocks after a mined transaction is
@@ -230,13 +230,13 @@ func (pool *TxPool) rollbackTxs(hash common.Hash, txc txStateChanges) {
 	}
 }
 
-// setNewHead sets a new head header, processing (and rolling back if necessary)
+// reorgOnNewHead sets a new head header, processing (and rolling back if necessary)
 // the blocks since the last known head and returns a txStateChanges map containing
 // the recently mined and rolled back transaction hashes. If an error (context
 // timeout) occurs during checking new blocks, it leaves the locally known head
 // at the latest checked block and still returns a valid txStateChanges, making it
 // possible to continue checking the missing blocks at the next chain head event
-func (pool *TxPool) setNewHead(ctx context.Context, newHeader *types.Header) (txStateChanges, error) {
+func (pool *TxPool) reorgOnNewHead(ctx context.Context, newHeader *types.Header) (txStateChanges, error) {
 	txc := make(txStateChanges)
 	oldh := pool.chain.GetHeaderByHash(pool.head)
 	newh := newHeader
@@ -305,18 +305,26 @@ func (pool *TxPool) eventLoop() {
 	for ev := range pool.events.Chan() {
 		switch ev.Data.(type) {
 		case core.ChainHeadEvent:
-			head := pool.chain.CurrentHeader()
-			pool.mu.Lock()
-			ctx, _ := context.WithTimeout(context.Background(), blockCheckTimeout)
-			txc, _ := pool.setNewHead(ctx, head)
-			m, r := txc.getLists()
-			pool.relay.NewHead(pool.head, m, r)
-			pool.homestead = pool.config.IsHomestead(head.Number)
-			pool.signer = types.MakeSigner(pool.config, head.Number)
-			pool.mu.Unlock()
-			time.Sleep(time.Millisecond) // hack in order to avoid hogging the lock; this part will be replaced by a subsequent PR
+			pool.setNewHead(ev.Data.(core.ChainHeadEvent).Block.Header())
+			// hack in order to avoid hogging the lock; this part will
+			// be replaced by a subsequent PR.
+			time.Sleep(time.Millisecond)
 		}
 	}
+}
+
+func (pool *TxPool) setNewHead(head *types.Header) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), blockCheckTimeout)
+	defer cancel()
+
+	txc, _ := pool.reorgOnNewHead(ctx, head)
+	m, r := txc.getLists()
+	pool.relay.NewHead(pool.head, m, r)
+	pool.homestead = pool.config.IsHomestead(head.Number)
+	pool.signer = types.MakeSigner(pool.config, head.Number)
 }
 
 // Stop stops the light transaction pool

@@ -18,6 +18,7 @@ package swarm
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 
@@ -35,7 +36,6 @@ import (
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"golang.org/x/net/context"
 )
 
 // the swarm stack

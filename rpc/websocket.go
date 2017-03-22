@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -24,10 +25,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-
-	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
 )
@@ -149,4 +149,19 @@ func wsDialAddress(location *url.URL) string {
 		}
 	}
 	return location.Host
+}
+
+func dialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{KeepAlive: tcpKeepAliveInterval}
+	return d.DialContext(ctx, network, addr)
+}
+
+func contextDialer(ctx context.Context) *net.Dialer {
+	dialer := &net.Dialer{Cancel: ctx.Done(), KeepAlive: tcpKeepAliveInterval}
+	if deadline, ok := ctx.Deadline(); ok {
+		dialer.Deadline = deadline
+	} else {
+		dialer.Deadline = time.Now().Add(defaultDialTimeout)
+	}
+	return dialer
 }

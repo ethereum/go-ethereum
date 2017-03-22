@@ -17,6 +17,7 @@
 package light
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"runtime"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/hashicorp/golang-lru"
-	"golang.org/x/net/context"
 )
 
 // So we can deterministically seed different blockchains

@@ -17,6 +17,7 @@
 package les
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"sync"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/net/context"
 )
 
 var (

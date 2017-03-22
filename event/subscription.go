@@ -17,11 +17,11 @@
 package event
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"golang.org/x/net/context"
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a

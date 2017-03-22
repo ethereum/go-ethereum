@@ -21,6 +21,7 @@
 package usbwallet
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -38,7 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/karalabe/hid"
-	"golang.org/x/net/context"
 )
 
 // Maximum time between wallet health checks to detect USB unplugs.

@@ -1,6 +1,6 @@
 {
 	"comment": "",
-	"ignore": "test golang.org/x/net/context",
+	"ignore": "test",
 	"package": [
 		{
 			"checksumSHA1": "M30X+Wqn7AnUr1numUOkQRI7ET0=",
@@ -382,6 +382,12 @@
 			"path": "golang.org/x/crypto/scrypt",
 			"revision": "453249f01cfeb54c3d549ddb75ff152ca243f9d8",
 			"revisionTime": "2017-02-08T20:51:15Z"
+		},
+		{
+			"checksumSHA1": "Y+HGqEkYM15ir+J93MEaHdyFy0c=",
+			"path": "golang.org/x/net/context",
+			"revision": "a6577fac2d73be281a500b310739095313165611",
+			"revisionTime": "2017-03-08T20:54:49Z"
 		},
 		{
 			"checksumSHA1": "vqc3a+oTUGX8PmD0TS+qQ7gmN8I=",

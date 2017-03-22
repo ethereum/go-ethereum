@@ -19,11 +19,10 @@
 package rpc
 
 import (
+	"context"
 	"net"
 	"os"
 	"path/filepath"
-
-	"golang.org/x/net/context"
 )
 
 // ipcListen will create a Unix socket on the given endpoint.

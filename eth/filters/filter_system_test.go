@@ -17,12 +17,11 @@
 package filters
 
 import (
+	"context"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"

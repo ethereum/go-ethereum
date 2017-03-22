@@ -17,11 +17,11 @@
 package light
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/net/context"
 )
 
 // LightState is a memory representation of a state.

@@ -19,6 +19,7 @@ package rpc
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,7 +32,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/net/context"
 )
 
 var (
