@@ -493,6 +493,10 @@ func sendMsg(payload []byte) common.Hash {
 	}
 
 	msg := whisper.NewSentMessage(&params)
+	if msg == nil {
+		fmt.Printf("failed to create new message (OS level error)")
+		os.Exit(0)
+	}
 	envelope, err := msg.Wrap(&params)
 	if err != nil {
 		fmt.Printf("failed to seal message: %v \n", err)
@@ -622,6 +626,10 @@ func requestExpiredMessagesLoop() {
 		params.WorkTime = 5
 
 		msg := whisper.NewSentMessage(&params)
+		if msg == nil {
+			fmt.Printf("failed to create new message (OS level error)")
+			os.Exit(0)
+		}
 		env, err := msg.Wrap(&params)
 		if err != nil {
 			utils.Fatalf("Wrap failed: %s", err)

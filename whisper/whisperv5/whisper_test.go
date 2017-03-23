@@ -391,7 +391,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 	}
 
 	randomKey = make([]byte, aesKeyLength+1)
-	randomize(randomKey)
+	mrand.Read(randomKey)
 	id1, err = w.AddSymKeyDirect(randomKey)
 	if err == nil {
 		t.Fatalf("added the key with wrong size, seed %d.", seed)

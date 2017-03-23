@@ -194,15 +194,9 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 
 	// encrypt symmetrically
-<<<<<<< d4e2ecd2e1164b6a5106b20d135742a35656838f
 	i := mrand.Int() % 4
-	fsym.Topics[i] = params.Topic
-	fasym.Topics[i] = params.Topic
-=======
-	i := rand.Int() % 4
 	fsym.Topics[i] = params.Topic[:]
 	fasym.Topics[i] = params.Topic[:]
->>>>>>> whisper: variable topic size allowed for a filter
 	msg = NewSentMessage(params)
 	env, err = msg.Wrap(params)
 	if err != nil {

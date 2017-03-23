@@ -102,14 +102,18 @@ func NewSentMessage(params *MessageParams) *SentMessage {
 	msg := SentMessage{}
 	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimitUpper)
 	msg.Raw[0] = 0 // set all the flags to zero
-	msg.appendPadding(params)
+	err := msg.appendPadding(params)
+	if err != nil {
+		log.Error(fmt.Sprintf("NewSentMessage: %s", err))
+		return nil
+	}
 	msg.Raw = append(msg.Raw, params.Payload...)
 	return &msg
 }
 
 // appendPadding appends the pseudorandom padding bytes and sets the padding flag.
 // The last byte contains the size of padding (thus, its size must not exceed 256).
-func (msg *SentMessage) appendPadding(params *MessageParams) {
+func (msg *SentMessage) appendPadding(params *MessageParams) error {
 	total := len(params.Payload) + 1
 	if params.Src != nil {
 		total += signatureLength
@@ -128,7 +132,10 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		mrand.Read(buf[1:])
+		_, err := mrand.Read(buf[1:])
+		if err != nil {
+			return err
+		}
 		buf[0] = byte(padSize)
 		if params.Padding != nil {
 			copy(buf[1:], params.Padding)
@@ -136,6 +143,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 		msg.Raw = append(msg.Raw, buf...)
 		msg.Raw[0] |= byte(0x1) // number of bytes indicating the padding size
 	}
+	return nil
 }
 
 // sign calculates and sets the cryptographic signature for the message,
