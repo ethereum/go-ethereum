@@ -24,7 +24,7 @@ Usage: go run ci.go <command> <command flags/arguments>
 Available commands are:
 
    install    [ -arch architecture ] [ packages... ]                                           -- builds packages and executables
-   test       [ -coverage ] [ -vet ] [ -misspell ] [ packages... ]                             -- runs the tests
+   test       [ -coverage ] [ -misspell ] [ packages... ]                                      -- runs the tests
    archive    [ -arch architecture ] [ -type zip|tar ] [ -signer key-envvar ] [ -upload dest ] -- archives build artefacts
    importkeys                                                                                  -- imports signing keys from env
    debsrc     [ -signer key-id ] [ -upload dest ]                                              -- creates a debian source package
@@ -262,7 +262,6 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 
 func doTest(cmdline []string) {
 	var (
-		vet      = flag.Bool("vet", false, "Whether to run go vet")
 		misspell = flag.Bool("misspell", false, "Whether to run the spell checker")
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
@@ -275,9 +274,7 @@ func doTest(cmdline []string) {
 	packages = build.ExpandPackagesNoVendor(packages)
 
 	// Run analysis tools before the tests.
-	if *vet {
-		build.MustRun(goTool("vet", packages...))
-	}
+	build.MustRun(goTool("vet", packages...))
 	if *misspell {
 		spellcheck(packages)
 	}
