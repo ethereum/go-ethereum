@@ -53,7 +53,8 @@ type Swarm struct {
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
-	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	lstore      *storage.LocalStore  // local store, needs to store for releasing resources after node stopped
+	sfs          *api.SwarmFS         // need this to cleanup all the active mounts on node exit
 }
 
 type SwarmAPI struct {
@@ -142,6 +143,9 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
+	self.sfs = api.NewSwarmFS(self.api)
+	log.Debug("-> Initializing Fuse file system")
+
 	return self, nil
 }
 
@@ -216,7 +220,7 @@ func (self *Swarm) Stop() error {
 	if self.lstore != nil {
 		self.lstore.DbStore.Close()
 	}
-
+	self.sfs.Stop()
 	return self.config.Save()
 }
 
@@ -240,6 +244,7 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   api.NewStorage(self.api),
 			Public:    true,
 		},
+
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
@@ -262,6 +267,12 @@ func (self *Swarm) APIs() []rpc.API {
 			Namespace: "chequebook",
 			Version:   chequebook.Version,
 			Service:   chequebook.NewApi(self.config.Swap.Chequebook),
+			Public:    false,
+		},
+		{
+			Namespace: "swarmfs",
+			Version:   api.Swarmfs_Version,
+			Service:   self.sfs,
 			Public:    false,
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},
