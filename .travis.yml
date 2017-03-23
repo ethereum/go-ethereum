@@ -12,8 +12,10 @@ matrix:
         - sudo modprobe fuse
         - sudo chmod 666 /dev/fuse
         - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install
+        - go run build/ci.go test -coverage
 
-    # These are the latest Go versions, only run go vet and misspell on these
+    # These are the latest Go versions.
     - os: linux
       dist: trusty
       sudo: required
