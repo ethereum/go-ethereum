@@ -58,7 +58,10 @@ type LedgerHub struct {
 	quit chan chan error
 
 	stateLock sync.RWMutex // Protects the internals of the hub from racey access
-	commsLock sync.RWMutex // Allows wallets to lock enumeration (TODO(karalabe): remove if hotplug lands on Windows)
+
+	// TODO(karalabe): remove if hotplug lands on Windows
+	commsPend int        // Number of operations blocking enumeration
+	commsLock sync.Mutex // Lock protecting the pending counter and enumeration
 }
 
 // NewLedgerHub creates a new hardware wallet manager for Ledger devices.
@@ -109,6 +112,10 @@ func (hub *LedgerHub) refreshWallets() {
 		// be to ditch enumeration in favor of hutplug events, but that don't work yet
 		// on Windows so if we need to hack it anyway, this is more elegant for now.
 		hub.commsLock.Lock()
+		if hub.commsPend > 0 { // A confirmation is pending, don't refresh
+			hub.commsLock.Unlock()
+			return
+		}
 	}
 	for _, info := range hid.Enumerate(0, 0) { // Can't enumerate directly, one valid ID is the 0 wildcard
 		for _, id := range ledgerDeviceIDs {

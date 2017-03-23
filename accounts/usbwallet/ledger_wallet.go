@@ -579,9 +579,15 @@ func (w *ledgerWallet) SignTx(account accounts.Account, tx *types.Transaction, c
 
 	// Ensure the device isn't screwed with while user confirmation is pending
 	// TODO(karalabe): remove if hotplug lands on Windows
-	w.hub.commsLock.RLock()
-	defer w.hub.commsLock.RUnlock()
+	w.hub.commsLock.Lock()
+	w.hub.commsPend++
+	w.hub.commsLock.Unlock()
 
+	defer func() {
+		w.hub.commsLock.Lock()
+		w.hub.commsPend--
+		w.hub.commsLock.Unlock()
+	}()
 	return w.ledgerSign(path, account.Address, tx, chainID)
 }
 
