@@ -18,11 +18,9 @@
 package eth
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -60,15 +58,17 @@ var (
 )
 
 type Config struct {
-	ChainConfig *params.ChainConfig // chain configuration
+	// The genesis block, which is inserted if the database is empty.
+	// If nil, the Ethereum main net block is used.
+	Genesis *core.Genesis
 
-	NetworkId  int    // Network ID to use for selecting peers to connect to
-	Genesis    string // Genesis JSON to seed the chain database with
-	FastSync   bool   // Enables the state download based fast synchronisation algorithm
-	LightMode  bool   // Running in light client mode
-	LightServ  int    // Maximum percentage of time allowed for serving LES requests
-	LightPeers int    // Maximum number of LES client peers
-	MaxPeers   int    // Maximum number of global peers
+	NetworkId int // Network ID to use for selecting peers to connect to
+
+	FastSync   bool // Enables the state download based fast synchronisation algorithm
+	LightMode  bool // Running in light client mode
+	LightServ  int  // Maximum percentage of time allowed for serving LES requests
+	LightPeers int  // Maximum number of LES client peers
+	MaxPeers   int  // Maximum number of global peers
 
 	SkipBcVersionCheck bool // e.g. blockchain export
 	DatabaseCache      int
@@ -100,9 +100,6 @@ type Config struct {
 	GpobaseCorrectionFactor int
 
 	EnablePreimageRecording bool
-
-	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
-	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
 }
 
 type LesServer interface {
@@ -155,11 +152,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 	stopDbUpgrade := upgradeSequentialKeys(chainDb)
-	if err := SetupGenesisBlock(&chainDb, config); err != nil {
-		return nil, err
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+		return nil, genesisErr
 	}
+	log.Info("Initialised chain configuration", "config", chainConfig)
+
 	eth := &Ethereum{
 		chainDb:        chainDb,
+		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
 		pow:            CreatePoW(ctx, config),
@@ -184,33 +185,18 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	}
 
-	// load the genesis block or write a new one if no genesis
-	// block is prenent in the database.
-	genesis := core.GetBlock(chainDb, core.GetCanonicalHash(chainDb, 0), 0)
-	if genesis == nil {
-		genesis, err = core.WriteDefaultGenesisBlock(chainDb)
-		if err != nil {
-			return nil, err
-		}
-		log.Warn("Wrote default Ethereum genesis block")
-	}
-
-	if config.ChainConfig == nil {
-		return nil, errors.New("missing chain config")
-	}
-	core.WriteChainConfig(chainDb, genesis.Hash(), config.ChainConfig)
-
-	eth.chainConfig = config.ChainConfig
-
-	log.Info("Initialised chain configuration", "config", eth.chainConfig)
-
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
+	vmConfig := vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.eventMux, vmConfig)
 	if err != nil {
-		if err == core.ErrNoGenesis {
-			return nil, fmt.Errorf(`No chain found. Please initialise a new chain using the "init" subcommand.`)
-		}
 		return nil, err
 	}
+	// Rewind the chain in case of an incompatible config upgrade.
+	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
+		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
+		eth.blockchain.SetHead(compat.RewindTo)
+		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
+	}
+
 	newPool := core.NewTxPool(eth.chainConfig, eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
@@ -253,29 +239,6 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 		db.Meter("eth/db/chaindata/")
 	}
 	return db, err
-}
-
-// SetupGenesisBlock initializes the genesis block for an Ethereum service
-func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
-	// Load up any custom genesis block if requested
-	if len(config.Genesis) > 0 {
-		block, err := core.WriteGenesisBlock(*chainDb, strings.NewReader(config.Genesis))
-		if err != nil {
-			return err
-		}
-		log.Info("Successfully wrote custom genesis block", "hash", block.Hash())
-	}
-	// Load up a test setup if directly injected
-	if config.TestGenesisState != nil {
-		*chainDb = config.TestGenesisState
-	}
-	if config.TestGenesisBlock != nil {
-		core.WriteTd(*chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.NumberU64(), config.TestGenesisBlock.Difficulty())
-		core.WriteBlock(*chainDb, config.TestGenesisBlock)
-		core.WriteCanonicalHash(*chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.NumberU64())
-		core.WriteHeadBlockHash(*chainDb, config.TestGenesisBlock.Hash())
-	}
-	return nil
 }
 
 // CreatePoW creates the required type of PoW instance for an Ethereum service

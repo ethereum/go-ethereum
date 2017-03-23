@@ -97,12 +97,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, getValid
 
 	hc.genesisHeader = hc.GetHeaderByNumber(0)
 	if hc.genesisHeader == nil {
-		genesisBlock, err := WriteDefaultGenesisBlock(chainDb)
-		if err != nil {
-			return nil, err
-		}
-		log.Warn("Wrote default Ethereum genesis block")
-		hc.genesisHeader = genesisBlock.Header()
+		return nil, ErrNoGenesis
 	}
 
 	hc.currentHeader = hc.genesisHeader

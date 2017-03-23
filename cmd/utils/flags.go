@@ -786,7 +786,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 
 	ethConf := &eth.Config{
 		Etherbase:               MakeEtherbase(ks, ctx),
-		ChainConfig:             MakeChainConfig(ctx, stack),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
 		LightServ:               ctx.GlobalInt(LightServFlag.Name),
@@ -822,7 +821,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 			ethConf.NetworkId = 3
 		}
 		ethConf.Genesis = core.DefaultTestnetGenesisBlock()
-
 	case ctx.GlobalBool(DevModeFlag.Name):
 		ethConf.Genesis = core.DevGenesisBlock()
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
@@ -884,67 +882,6 @@ func SetupNetwork(ctx *cli.Context) {
 	params.TargetGasLimit = new(big.Int).SetUint64(ctx.GlobalUint64(TargetGasLimitFlag.Name))
 }
 
-// MakeChainConfig reads the chain configuration from the database in ctx.Datadir.
-func MakeChainConfig(ctx *cli.Context, stack *node.Node) *params.ChainConfig {
-	db := MakeChainDatabase(ctx, stack)
-	defer db.Close()
-
-	return MakeChainConfigFromDb(ctx, db)
-}
-
-// MakeChainConfigFromDb reads the chain configuration from the given database.
-func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainConfig {
-	// If the chain is already initialized, use any existing chain configs
-	config := new(params.ChainConfig)
-
-	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0)
-	if genesis != nil {
-		storedConfig, err := core.GetChainConfig(db, genesis.Hash())
-		switch err {
-		case nil:
-			config = storedConfig
-		case core.ChainConfigNotFoundErr:
-			// No configs found, use empty, will populate below
-		default:
-			Fatalf("Could not make chain configuration: %v", err)
-		}
-	}
-	// set chain id in case it's zero.
-	if config.ChainId == nil {
-		config.ChainId = new(big.Int)
-	}
-	// Check whether we are allowed to set default config params or not:
-	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `geth init`)
-	//  - If a genesis is already set, ensure we have a configuration for it (mainnet or testnet)
-	defaults := genesis == nil ||
-		(genesis.Hash() == params.MainNetGenesisHash && !ctx.GlobalBool(TestNetFlag.Name)) ||
-		(genesis.Hash() == params.TestNetGenesisHash && ctx.GlobalBool(TestNetFlag.Name))
-
-	if defaults {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config = params.TestnetChainConfig
-		} else if ctx.GlobalBool(DevModeFlag.Name) {
-			config = params.AllProtocolChanges
-		} else {
-			// Homestead fork
-			config.HomesteadBlock = params.MainNetHomesteadBlock
-			// DAO fork
-			config.DAOForkBlock = params.MainNetDAOForkBlock
-			config.DAOForkSupport = true
-
-			// DoS reprice fork
-			config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
-			config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
-
-			// DoS state cleanup fork
-			config.EIP155Block = params.MainNetSpuriousDragon
-			config.EIP158Block = params.MainNetSpuriousDragon
-			config.ChainId = params.MainNetChainID
-		}
-	}
-	return config
-}
-
 func ChainDbName(ctx *cli.Context) string {
 	if ctx.GlobalBool(LightModeFlag.Name) {
 		return "lightchaindata"
@@ -968,26 +905,34 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	return chainDb
 }
 
+func MakeGenesis(ctx *cli.Context) *core.Genesis {
+	var genesis *core.Genesis
+	switch {
+	case ctx.GlobalBool(TestNetFlag.Name):
+		genesis = core.DefaultTestnetGenesisBlock()
+	case ctx.GlobalBool(DevModeFlag.Name):
+		genesis = core.DevGenesisBlock()
+	}
+	return genesis
+}
+
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
-	if ctx.GlobalBool(TestNetFlag.Name) {
-		_, err := core.WriteTestNetGenesisBlock(chainDb)
-		if err != nil {
-			Fatalf("Failed to write testnet genesis: %v", err)
-		}
-	}
-	chainConfig := MakeChainConfigFromDb(ctx, chainDb)
-
 	seal := pow.PoW(pow.FakePow{})
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
 		seal = pow.NewFullEthash("", 1, 0, "", 1, 0)
 	}
-	chain, err = core.NewBlockChain(chainDb, chainConfig, seal, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
+	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
-		Fatalf("Could not start chainmanager: %v", err)
+		Fatalf("%v", err)
+	}
+	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
+	chain, err = core.NewBlockChain(chainDb, config, seal, new(event.TypeMux), vmcfg)
+	if err != nil {
+		Fatalf("Can't create BlockChain: %v", err)
 	}
 	return chain, chainDb
 }

@@ -337,3 +337,38 @@ func TestUnmarshalUint(t *testing.T) {
 		}
 	}
 }
+
+func TestUnmarshalFixedUnprefixedText(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    []byte
+		wantErr error
+	}{
+		{input: "0x2", wantErr: ErrOddLength},
+		{input: "2", wantErr: ErrOddLength},
+		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
+		{input: "4444", wantErr: errors.New("hex string has length 4, want 8 for x")},
+		// check that output is not modified for partially correct input
+		{input: "444444gg", wantErr: ErrSyntax, want: []byte{0, 0, 0, 0}},
+		{input: "0x444444gg", wantErr: ErrSyntax, want: []byte{0, 0, 0, 0}},
+		// valid inputs
+		{input: "44444444", want: []byte{0x44, 0x44, 0x44, 0x44}},
+		{input: "0x44444444", want: []byte{0x44, 0x44, 0x44, 0x44}},
+	}
+
+	for _, test := range tests {
+		out := make([]byte, 4)
+		err := UnmarshalFixedUnprefixedText("x", []byte(test.input), out)
+		switch {
+		case err == nil && test.wantErr != nil:
+			t.Errorf("%q: got no error, expected %q", test.input, test.wantErr)
+		case err != nil && test.wantErr == nil:
+			t.Errorf("%q: unexpected error %q", test.input, err)
+		case err != nil && err.Error() != test.wantErr.Error():
+			t.Errorf("%q: error mismatch: got %q, want %q", test.input, err, test.wantErr)
+		}
+		if test.want != nil && !bytes.Equal(out, test.want) {
+			t.Errorf("%q: output mismatch: got %x, want %x", test.input, out, test.want)
+		}
+	}
+}

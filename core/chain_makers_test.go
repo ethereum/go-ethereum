@@ -30,9 +30,6 @@ import (
 )
 
 func ExampleGenerateChain() {
-	params.MinGasLimit = big.NewInt(125000)      // Minimum the gas limit may ever be.
-	params.GenesisGasLimit = big.NewInt(3141592) // Gas limit of the Genesis block.
-
 	var (
 		key1, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
@@ -41,19 +38,20 @@ func ExampleGenerateChain() {
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
 		addr3   = crypto.PubkeyToAddress(key3.PublicKey)
 		db, _   = ethdb.NewMemDatabase()
-		signer  = types.HomesteadSigner{}
 	)
 
-	chainConfig := &params.ChainConfig{
-		HomesteadBlock: new(big.Int),
-	}
 	// Ensure that key1 has some funds in the genesis block.
-	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr1, big.NewInt(1000000)})
+	gspec := &Genesis{
+		Config: &params.ChainConfig{HomesteadBlock: new(big.Int)},
+		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+	}
+	genesis := gspec.MustCommit(db)
 
 	// This call generates a chain of 5 blocks. The function runs for
 	// each block and adds different features to gen based on the
 	// block index.
-	chain, _ := GenerateChain(chainConfig, genesis, db, 5, func(i int, gen *BlockGen) {
+	signer := types.HomesteadSigner{}
+	chain, _ := GenerateChain(gspec.Config, genesis, db, 5, func(i int, gen *BlockGen) {
 		switch i {
 		case 0:
 			// In block 1, addr1 sends addr2 some ether.
@@ -83,7 +81,7 @@ func ExampleGenerateChain() {
 
 	// Import the chain. This runs all block validation rules.
 	evmux := &event.TypeMux{}
-	blockchain, _ := NewBlockChain(db, chainConfig, pow.FakePow{}, evmux, vm.Config{})
+	blockchain, _ := NewBlockChain(db, gspec.Config, pow.FakePow{}, evmux, vm.Config{})
 	if i, err := blockchain.InsertChain(chain); err != nil {
 		fmt.Printf("insert error (block %d): %v\n", chain[i].NumberU64(), err)
 		return

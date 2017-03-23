@@ -60,7 +60,7 @@ func BenchmarkMipmaps(b *testing.B) {
 	)
 	defer db.Close()
 
-	genesis := core.WriteGenesisBlockForTesting(db, core.GenesisAccount{Address: addr1, Balance: big.NewInt(1000000)})
+	genesis := core.GenesisBlockForTesting(db, addr1, big.NewInt(1000000))
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 100010, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts
 		switch i {
@@ -112,7 +112,7 @@ func BenchmarkMipmaps(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		logs, _ := filter.Find(context.Background())
 		if len(logs) != 4 {
-			b.Fatal("expected 4 log, got", len(logs))
+			b.Fatal("expected 4 logs, got", len(logs))
 		}
 	}
 }
@@ -138,7 +138,7 @@ func TestFilters(t *testing.T) {
 	)
 	defer db.Close()
 
-	genesis := core.WriteGenesisBlockForTesting(db, core.GenesisAccount{Address: addr, Balance: big.NewInt(1000000)})
+	genesis := core.GenesisBlockForTesting(db, addr, big.NewInt(1000000))
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 1000, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts
 		switch i {

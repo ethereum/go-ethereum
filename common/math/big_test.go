@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-func TestParseBig256(t *testing.T) {
+func TestHexOrDecimal256(t *testing.T) {
 	tests := []struct {
 		input string
 		num   *big.Int
@@ -47,13 +47,14 @@ func TestParseBig256(t *testing.T) {
 		{"115792089237316195423570985008687907853269984665640564039457584007913129639936", nil, false},
 	}
 	for _, test := range tests {
-		num, ok := ParseBig256(test.input)
-		if ok != test.ok {
-			t.Errorf("ParseBig(%q) -> ok = %t, want %t", test.input, ok, test.ok)
+		var num HexOrDecimal256
+		err := num.UnmarshalText([]byte(test.input))
+		if (err == nil) != test.ok {
+			t.Errorf("ParseBig(%q) -> (err == nil) == %t, want %t", test.input, err == nil, test.ok)
 			continue
 		}
-		if num != nil && test.num != nil && num.Cmp(test.num) != 0 {
-			t.Errorf("ParseBig(%q) -> %d, want %d", test.input, num, test.num)
+		if test.num != nil && (*big.Int)(&num).Cmp(test.num) != 0 {
+			t.Errorf("ParseBig(%q) -> %d, want %d", test.input, (*big.Int)(&num), test.num)
 		}
 	}
 }

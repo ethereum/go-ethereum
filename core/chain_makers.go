@@ -30,19 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-/*
- * TODO: move this to another package.
- */
-
-// MakeChainConfig returns a new ChainConfig with the ethereum default chain settings.
-func MakeChainConfig() *params.ChainConfig {
-	return &params.ChainConfig{
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-	}
-}
-
 // So we can deterministically seed different blockchains
 var (
 	canonicalSeed = 1
@@ -154,7 +141,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
 		panic("block time out of range")
 	}
-	b.header.Difficulty = CalcDifficulty(MakeChainConfig(), b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
+	b.header.Difficulty = CalcDifficulty(b.config, b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -170,14 +157,13 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
 func GenerateChain(config *params.ChainConfig, parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+	if config == nil {
+		config = params.TestChainConfig
+	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	genblock := func(i int, h *types.Header, statedb *state.StateDB) (*types.Block, types.Receipts) {
 		b := &BlockGen{parent: parent, i: i, chain: blocks, header: h, statedb: statedb, config: config}
-
 		// Mutate the state and block according to any hard-fork specs
-		if config == nil {
-			config = MakeChainConfig()
-		}
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
 			limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
 			if h.Number.Cmp(daoBlock) >= 0 && h.Number.Cmp(limit) < 0 {
@@ -226,7 +212,7 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 		Root:       state.IntermediateRoot(config.IsEIP158(parent.Number())),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: CalcDifficulty(MakeChainConfig(), time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
+		Difficulty: CalcDifficulty(config, time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
@@ -238,14 +224,12 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int, full bool) (ethdb.Database, *BlockChain, error) {
-	// Create the new chain database
-	db, _ := ethdb.NewMemDatabase()
-	evmux := &event.TypeMux{}
-
 	// Initialize a fresh chain with only a genesis block
-	genesis, _ := WriteTestNetGenesisBlock(db)
+	gspec := new(Genesis)
+	db, _ := ethdb.NewMemDatabase()
+	genesis := gspec.MustCommit(db)
 
-	blockchain, _ := NewBlockChain(db, MakeChainConfig(), pow.FakePow{}, evmux, vm.Config{})
+	blockchain, _ := NewBlockChain(db, params.AllProtocolChanges, pow.FakePow{}, new(event.TypeMux), vm.Config{})
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil

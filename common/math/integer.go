@@ -16,7 +16,10 @@
 
 package math
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+)
 
 const (
 	// Integer limit values.
@@ -33,6 +36,24 @@ const (
 	MaxUint32 = 1<<32 - 1
 	MaxUint64 = 1<<64 - 1
 )
+
+// HexOrDecimal64 marshals uint64 as hex or decimal.
+type HexOrDecimal64 uint64
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (i *HexOrDecimal64) UnmarshalText(input []byte) error {
+	int, ok := ParseUint64(string(input))
+	if !ok {
+		return fmt.Errorf("invalid hex or decimal integer %q", input)
+	}
+	*i = HexOrDecimal64(int)
+	return nil
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (i HexOrDecimal64) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf("%#x", uint64(i))), nil
+}
 
 // ParseUint64 parses s as an integer in decimal or hexadecimal syntax.
 // Leading zeros are accepted. The empty string parses as zero.
