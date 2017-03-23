@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/big"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/net/context"
 )
 
 var sha3_nil = crypto.Keccak256Hash(nil)

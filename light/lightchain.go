@@ -17,6 +17,7 @@
 package light
 
 import (
+	"context"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -32,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
-	"golang.org/x/net/context"
 )
 
 var (

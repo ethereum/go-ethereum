@@ -18,6 +18,7 @@ package les
 
 import (
 	"bytes"
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -32,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/net/context"
 )
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte
@@ -181,8 +181,11 @@ func testOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(db, i)
 			b1 := fn(light.NoOdr, db, pm.chainConfig, pm.blockchain.(*core.BlockChain), nil, bhash)
-			ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
 			b2 := fn(ctx, ldb, lpm.chainConfig, nil, lpm.blockchain.(*light.LightChain), bhash)
+
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
 			if exp && !eq {

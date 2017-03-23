@@ -18,13 +18,13 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/net/context"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)

@@ -17,14 +17,13 @@
 package rpc
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"runtime"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/log"
-
-	"golang.org/x/net/context"
 	"gopkg.in/fatih/set.v0"
 )
 

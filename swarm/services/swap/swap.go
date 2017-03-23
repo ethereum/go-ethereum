@@ -17,6 +17,7 @@
 package swap
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
-	"golang.org/x/net/context"
 )
 
 // SwAP       Swarm Accounting Protocol with
