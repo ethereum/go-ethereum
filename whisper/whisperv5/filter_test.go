@@ -108,7 +108,7 @@ func TestInstallFilters(t *testing.T) {
 			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
 		}
 		tst[i].id = j
-		if len(j) != 40 {
+		if len(j) != keyIdSize*2 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
 		}
 	}
@@ -491,7 +491,7 @@ func cloneFilter(orig *Filter) *Filter {
 	clone.KeySym = orig.KeySym
 	clone.Topics = orig.Topics
 	clone.PoW = orig.PoW
-	clone.AcceptP2P = orig.AcceptP2P
+	clone.AllowP2P = orig.AllowP2P
 	clone.SymKeyHash = orig.SymKeyHash
 	return &clone
 }
@@ -655,7 +655,7 @@ func TestWatchers(t *testing.T) {
 	if f == nil {
 		t.Fatalf("failed to get the filter with seed %d.", seed)
 	}
-	f.AcceptP2P = true
+	f.AllowP2P = true
 	total = 0
 	filters.NotifyWatchers(envelopes[0], true)
 
