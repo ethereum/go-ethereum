@@ -28,19 +28,21 @@ func isFUSEUnsupportedError(err error) bool {
 	return err == errNoFUSE
 }
 
-// Dummy struct and functions to satsfy windows build
-type MountInfo struct{}
-
-func (self *SwarmFS) Mount(mhash, mountpoint string) error {
-	return errNoFUSE
+type MountInfo struct {
+	MountPoint   string
+	ManifestHash string
 }
 
-func (self *SwarmFS) Unmount(mountpoint string) error {
-	return errNoFUSE
+func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
+	return nil, errNoFUSE
 }
 
-func (self *SwarmFS) Listmounts() (string, error) {
-	return "", errNoFUSE
+func (self *SwarmFS) Unmount(mountpoint string) (bool, error) {
+	return false, errNoFUSE
+}
+
+func (self *SwarmFS) Listmounts() ([]*MountInfo, error) {
+	return nil, errNoFUSE
 }
 
 func (self *SwarmFS) Stop() error {
