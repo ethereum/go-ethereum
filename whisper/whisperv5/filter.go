@@ -94,11 +94,11 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
 
-	j := -1
+	i := -1 // only used for logging info
 	for _, watcher := range fs.watchers {
-		j++
+		i++
 		if p2pMessage && !watcher.AllowP2P {
-			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), j))
+			log.Trace(fmt.Sprintf("msg [%x], filter [%d]: p2p messages are not allowed", env.Hash(), i))
 			continue
 		}
 
@@ -110,10 +110,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					log.Trace(fmt.Sprintf("msg [%x], filter [%d]: failed to open", env.Hash(), j))
+					log.Trace(fmt.Sprintf("msg [%x], filter [%d]: failed to open", env.Hash(), i))
 				}
 			} else {
-				log.Trace(fmt.Sprintf("msg [%x], filter [%d]: does not match", env.Hash(), j))
+				log.Trace(fmt.Sprintf("msg [%x], filter [%d]: does not match", env.Hash(), i))
 			}
 		}
 
@@ -203,16 +203,16 @@ func (f *Filter) MatchTopic(topic TopicType) bool {
 	}
 
 	for _, bt := range f.Topics {
-		if MatchSingleTopic(topic, bt) {
+		if matchSingleTopic(topic, bt) {
 			return true
 		}
 	}
 	return false
 }
 
-func MatchSingleTopic(topic TopicType, bt []byte) bool {
+func matchSingleTopic(topic TopicType, bt []byte) bool {
 	if len(bt) > 4 {
-		bt = bt[0:4]
+		bt = bt[:4]
 	}
 
 	for j, b := range bt {

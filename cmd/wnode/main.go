@@ -526,7 +526,7 @@ func messageLoop() {
 			messages := f.Retrieve()
 			for _, msg := range messages {
 				if *fileExMode || len(msg.Payload) > 2048 {
-					saveMessageInFile(msg)
+					writeMessageToFile(*argSaveDir, msg)
 				} else {
 					printMessageInfo(msg)
 				}
@@ -553,7 +553,7 @@ func printMessageInfo(msg *whisper.ReceivedMessage) {
 	}
 }
 
-func saveMessageInFile(msg *whisper.ReceivedMessage) {
+func writeMessageToFile(dir string, msg *whisper.ReceivedMessage) {
 	timestamp := fmt.Sprintf("%d", msg.Sent)
 	name := fmt.Sprintf("%x", msg.EnvelopeHash)
 
@@ -565,8 +565,8 @@ func saveMessageInFile(msg *whisper.ReceivedMessage) {
 	if whisper.IsPubKeyEqual(msg.Src, &asymKey.PublicKey) {
 		// message from myself: don't save, only report
 		fmt.Printf("\n%s <%x>: message received: '%s'\n", timestamp, address, name)
-	} else if len(*argSaveDir) > 0 {
-		fullpath := filepath.Join(*argSaveDir, name)
+	} else if len(dir) > 0 {
+		fullpath := filepath.Join(dir, name)
 		err := ioutil.WriteFile(fullpath, msg.Payload, 0644)
 		if err != nil {
 			fmt.Printf("\n%s {%x}: message received but not saved: %s\n", timestamp, address, err)

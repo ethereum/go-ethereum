@@ -26,7 +26,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -132,7 +131,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) error {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		_, err := mrand.Read(buf[1:])
+		_, err := crand.Read(buf[1:])
 		if err != nil {
 			return err
 		}

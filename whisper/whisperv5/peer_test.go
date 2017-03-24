@@ -119,8 +119,10 @@ func initialize(t *testing.T) {
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey}
-		f.Topics = make([][]byte, 1)
-		f.Topics[0] = topics[0][:]
+		f.Topics = [][]byte{topics[0][:]}
+		// todo: delete if pass
+		//f.Topics = make([][]byte, 1)
+		//f.Topics[0] = topics[0][:]
 		node.filerId, err = node.shh.Watch(&f)
 		if err != nil {
 			t.Fatalf("failed to install the filter: %s.", err)
