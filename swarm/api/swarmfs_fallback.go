@@ -14,35 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build windows
+// +build !linux,!darwin,!freebsd
 
 package api
 
 import (
-	"github.com/ethereum/go-ethereum/log"
+	"errors"
 )
 
-// Dummy struct and functions to satsfy windows build
-type MountInfo struct {
+var errNoFUSE = errors.New("FUSE is not supported on this platform")
+
+func isFUSEUnsupportedError(err error) bool {
+	return err == errNoFUSE
 }
 
+// Dummy struct and functions to satsfy windows build
+type MountInfo struct{}
 
 func (self *SwarmFS) Mount(mhash, mountpoint string) error {
-	log.Info("Platform not supported")
-	return nil
+	return errNoFUSE
 }
 
 func (self *SwarmFS) Unmount(mountpoint string) error {
-	log.Info("Platform not supported")
-	return nil
+	return errNoFUSE
 }
 
 func (self *SwarmFS) Listmounts() (string, error) {
-	log.Info("Platform not supported")
-	return "",nil
+	return "", errNoFUSE
 }
 
 func (self *SwarmFS) Stop() error {
-	log.Info("Platform not supported")
 	return nil
 }

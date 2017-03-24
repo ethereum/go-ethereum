@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// +build linux darwin
-
 package api
 
 import (
@@ -35,7 +33,6 @@ func testFuseFileSystem(t *testing.T, f func(*FileSystem)) {
 }
 
 func createTestFiles(t *testing.T, files []string) {
-
 	os.RemoveAll(testUploadDir)
 	os.RemoveAll(testMountDir)
 	defer os.MkdirAll(testMountDir, 0777)
@@ -58,9 +55,7 @@ func createTestFiles(t *testing.T, files []string) {
 }
 
 func compareFiles(t *testing.T, files []string) {
-
 	for f := range files {
-
 		sourceFile := filepath.Join(testUploadDir, files[f])
 		destinationFile := filepath.Join(testMountDir, files[f])
 
@@ -81,12 +76,10 @@ func compareFiles(t *testing.T, files []string) {
 		if dfinfo.Mode().Perm().String() != "-r-x------" {
 			t.Fatalf("Permission is not 0500for file: %v", err)
 		}
-
 	}
 }
 
 func doHashTest(fs *FileSystem, t *testing.T, ensName string, files ...string) {
-
 	createTestFiles(t, files)
 	bzzhash, err := fs.Upload(testUploadDir, "")
 	if err != nil {
@@ -94,29 +87,29 @@ func doHashTest(fs *FileSystem, t *testing.T, ensName string, files ...string) {
 	}
 
 	swarmfs := NewSwarmFS(fs.api)
-	_ ,err1 := swarmfs.Mount(bzzhash, testMountDir)
-	if err1 != nil {
+	defer swarmfs.Stop()
 
-		t.Fatalf("Error mounting hash  %v: %v", bzzhash, err)
+	_, err = swarmfs.Mount(bzzhash, testMountDir)
+	if isFUSEUnsupportedError(err) {
+		t.Skip("FUSE not supported:", err)
+	} else if err != nil {
+		t.Fatalf("Error mounting hash %v: %v", bzzhash, err)
 	}
+
 	compareFiles(t, files)
-	_, err2 := swarmfs.Unmount(testMountDir)
-	if err2 != nil {
-		t.Fatalf("Error unmounting path  %v: %v", testMountDir, err)
-	}
-	swarmfs.Stop()
 
+	if _, err := swarmfs.Unmount(testMountDir); err != nil {
+		t.Fatalf("Error unmounting path %v: %v", testMountDir, err)
+	}
 }
 
 // mounting with manifest Hash
 func TestFuseMountingScenarios(t *testing.T) {
 	testFuseFileSystem(t, func(fs *FileSystem) {
-
 		//doHashTest(fs,t, "test","1.txt")
 		doHashTest(fs, t, "", "1.txt")
 		doHashTest(fs, t, "", "1.txt", "11.txt", "111.txt", "two/2.txt", "two/two/2.txt", "three/3.txt")
 		doHashTest(fs, t, "", "1/2/3/4/5/6/7/8/9/10/11/12/1.txt")
 		doHashTest(fs, t, "", "one/one.txt", "one.txt", "once/one.txt", "one/one/one.txt")
-
 	})
 }

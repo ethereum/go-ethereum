@@ -29,9 +29,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-
-
-
 // Data structures used for Fuse filesystem, serving directories and serving files to Fuse driver
 type FS struct {
 	root *Dir
@@ -54,7 +51,6 @@ type File struct {
 	fileSize uint64
 	reader   storage.LazySectionReader
 }
-
 
 // Functions which satisfy the Fuse File System requests
 func (filesystem *FS) Root() (fs.Node, error) {
@@ -104,13 +100,11 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 }
 
 func (file *File) Attr(ctx context.Context, a *fuse.Attr) error {
-
 	a.Inode = file.inode
 	//TODO: need to get permission as argument
 	a.Mode = 0500
 	a.Uid = uint32(os.Getuid())
 	a.Gid = uint32(os.Getegid())
-
 
 	reader := file.swarmApi.Retrieve(file.key)
 	quitC := make(chan bool)
@@ -135,5 +129,4 @@ func (file *File) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.Re
 	}
 	resp.Data = buf[:n]
 	return err
-
 }
