@@ -52,8 +52,12 @@ func (a *Address) UnmarshalJSON(value []byte) error {
 
 // the string form of the binary representation of an address (only first 8 bits)
 func (a Address) Bin() string {
+	return ToBin(a[:])
+}
+
+func ToBin(a []byte) string {
 	var bs []string
-	for _, b := range a[:] {
+	for _, b := range a {
 		bs = append(bs, fmt.Sprintf("%08b", b))
 	}
 	return strings.Join(bs, "")
@@ -209,7 +213,7 @@ func (a *HashAddress) String() string {
 	return a.Address.Bin()
 }
 
-func NewHashAddress(s string) *HashAddress {
+func NewAddressFromString(s string) []byte {
 	ha := [32]byte{}
 
 	t := s + string(zerosBin)[:len(zerosBin)-len(s)]
@@ -220,8 +224,13 @@ func NewHashAddress(s string) *HashAddress {
 		}
 		binary.BigEndian.PutUint64(ha[i*8:(i+1)*8], uint64(n))
 	}
+	return ha[:]
+}
+
+func NewHashAddress(s string) *HashAddress {
+	ha := NewAddressFromString(s)
 	h := common.Hash{}
-	copy(h[:], ha[:])
+	copy(h[:], ha)
 	return &HashAddress{Address(h)}
 }
 

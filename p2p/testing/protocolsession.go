@@ -118,7 +118,7 @@ func (self *ProtocolSession) expect(exp Expect) error {
 
 	t := exp.Timeout
 	if t == time.Duration(0) {
-		t = 1000 * time.Millisecond
+		t = 2000 * time.Millisecond
 	}
 	alarm := time.NewTimer(t)
 	select {
@@ -126,7 +126,6 @@ func (self *ProtocolSession) expect(exp Expect) error {
 		glog.V(logger.Detail).Infof("expected msg arrives with error %v", err)
 		return err
 	case <-alarm.C:
-		glog.V(logger.Detail).Infof("caught timeout")
 		return fmt.Errorf("timout expecting %v sent to peer %v", exp.Msg, exp.Peer)
 	}
 }
@@ -206,4 +205,13 @@ func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error 
 		}
 	}
 	return nil
+}
+
+func (self *ProtocolSession) Stop() {
+	for _, id := range self.Ids {
+		p := self.GetPeer(id)
+		if p != nil && p.Messenger != nil {
+			p.Close()
+		}
+	}
 }

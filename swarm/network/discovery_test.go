@@ -16,7 +16,7 @@ import (
 func TestDiscovery(t *testing.T) {
 	addr := RandomAddr()
 	to := NewKademlia(addr.OAddr, NewKadParams())
-	ct := BzzCodeMap(HiveMsgs...)
+	ct := BzzCodeMap(DiscoveryMsgs...)
 
 	services := func(p Peer) error {
 		dp := NewDiscovery(p, to)
@@ -29,6 +29,7 @@ func TestDiscovery(t *testing.T) {
 	}
 
 	s := newBzzBaseTester(t, 1, addr, ct, services)
+	defer s.Stop()
 
 	s.runHandshakes()
 	// o := 0
@@ -37,7 +38,7 @@ func TestDiscovery(t *testing.T) {
 		Expects: []p2ptest.Expect{
 			p2ptest.Expect{
 				Code: 3,
-				Msg:  &SubPeersMsg{ProxLimit: 0},
+				Msg:  &subPeersMsg{ProxLimit: 0},
 				Peer: s.ProtocolTester.Ids[0],
 			},
 		},

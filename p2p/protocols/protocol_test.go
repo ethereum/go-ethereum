@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	glog.SetV(logger.Detail)
+	glog.SetV(logger.Error)
 	glog.SetToStderr(true)
 }
 
@@ -69,7 +69,7 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 			// demonstrates use of peerPool, killing another peer connection as a response to a message
 			peer.Register(&kill{}, func(msg interface{}) error {
 				id := msg.(*kill).C
-				// pp.Get(id).Drop(fmt.Errorf("killed"))
+				pp.Get(id).Drop(fmt.Errorf("killed"))
 				glog.V(logger.Detail).Infof("id %v killed", id)
 				return nil
 			})
@@ -342,7 +342,6 @@ func TestMultiplePeersDropSelf(t *testing.T) {
 }
 
 func TestMultiplePeersDropOther(t *testing.T) {
-	t.Skip("??")
 	runMultiplePeers(t, 1,
 		fmt.Errorf("Message handler error: (msg code 3): dropped"),
 		fmt.Errorf("p2p: read or write on closed message pipe"),

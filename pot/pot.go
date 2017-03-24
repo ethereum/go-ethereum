@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	// keylen = 4
 	keylen    = 256
 	maxkeylen = 256
 )
@@ -398,7 +397,6 @@ func union(t0, t1 *pot) (*pot, int) {
 	if t1 == nil || t1.size == 0 {
 		return t0, 0
 	}
-	po, eq := t0.pin.PO(t1.pin, 0)
 	var pin PotVal
 	var bins []*pot
 	var mis []int
@@ -409,6 +407,8 @@ func union(t0, t1 *pot) (*pot, int) {
 	bins1 := t1.bins
 	var i0, i1 int
 	var common int
+
+	po, eq := pin0.PO(pin1, 0)
 
 	for {
 		l0 := len(bins0)
@@ -470,14 +470,17 @@ func union(t0, t1 *pot) (*pot, int) {
 			break
 		}
 
+		i := i0
+		if len(bins0) > i && bins0[i].po == po {
+			i++
+		}
 		var size0 int
-		for _, n := range bins0[i0:] {
+		for _, n := range bins0[i:] {
 			size0 += n.size
 		}
-
 		np := &pot{
 			pin:  pin0,
-			bins: bins0[i0:],
+			bins: bins0[i:],
 			size: size0 + 1,
 			po:   po,
 		}
@@ -488,11 +491,13 @@ func union(t0, t1 *pot) (*pot, int) {
 			po = maxkeylen + 1
 			eq = true
 			common--
+
 		} else {
 			bins2 = append(bins2, n0.bins...)
 			pin0 = pin1
 			pin1 = n0.pin
 			po, eq = pin0.PO(pin1, n0.po)
+
 		}
 		bins0 = bins1
 		bins1 = bins2
@@ -863,6 +868,9 @@ func (t *pot) String() string {
 }
 
 func (t *pot) sstring(indent string) string {
+	if t == nil {
+		return "<nil>"
+	}
 	var s string
 	indent += "  "
 	s += fmt.Sprintf("%v%v (%v) %v \n", indent, t.pin, t.po, t.size)

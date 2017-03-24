@@ -56,21 +56,14 @@ type Overlay interface {
 type Hive struct {
 	*HiveParams // settings
 	Overlay     // the overlay topology driver
-	// disc        Discovery
-
-	lock   sync.Mutex
-	quit   chan bool
-	toggle chan bool
-	more   chan bool
+	lock        sync.Mutex
+	quit        chan bool
+	toggle      chan bool
+	more        chan bool
 }
 
-const (
-	peersBroadcastSetSize = 2
-	maxPeersPerRequest    = 5
-	callInterval          = 1000
-)
-
 type HiveParams struct {
+	Discovery             bool
 	PeersBroadcastSetSize uint8
 	MaxPeersPerRequest    uint8
 	CallInterval          uint
@@ -78,9 +71,10 @@ type HiveParams struct {
 
 func NewHiveParams() *HiveParams {
 	return &HiveParams{
-		PeersBroadcastSetSize: peersBroadcastSetSize,
-		MaxPeersPerRequest:    maxPeersPerRequest,
-		CallInterval:          callInterval,
+		Discovery:             true,
+		PeersBroadcastSetSize: 2,
+		MaxPeersPerRequest:    5,
+		CallInterval:          1000,
 	}
 }
 
@@ -94,13 +88,6 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 	}
 }
 
-// messages that hive handles
-var HiveMsgs = []interface{}{
-	&getPeersMsg{},
-	&peersMsg{},
-	&SubPeersMsg{},
-}
-
 // Start receives network info only at startup
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
@@ -108,7 +95,7 @@ var HiveMsgs = []interface{}{
 func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Time) error {
 
 	self.toggle = make(chan bool)
-	self.more = make(chan bool)
+	self.more = make(chan bool, 1)
 	self.quit = make(chan bool)
 	glog.V(logger.Debug).Infof("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
@@ -133,25 +120,10 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 			} else {
 				glog.V(logger.Detail).Infof("cannot suggest peers")
 			}
+
+			want = want && self.Discovery
 			if want {
-				req := &getPeersMsg{
-					Order: uint8(order),
-					Max:   self.MaxPeersPerRequest,
-				}
-				var i uint8
-				var err error
-				self.EachLivePeer(nil, order, func(n Peer, po int) bool {
-					glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
-					err = n.Send(req)
-					if err == nil {
-						i++
-						if i >= self.PeersBroadcastSetSize {
-							return false
-						}
-					}
-					return true
-				})
-				glog.V(logger.Info).Infof("requesting bees of PO%03d from %v/%v (each max %v)", order, i, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
 			}
 
 			select {
@@ -197,6 +169,41 @@ func (self *Hive) keepAlive(af func() <-chan time.Time) {
 	}
 }
 
+// Add is called at the end of a successful protocol handshake
+// to register a connected (live) peer
+func (self *Hive) Add(p Peer) error {
+	defer self.wake()
+	dp := NewDiscovery(p, self.Overlay)
+	glog.V(logger.Debug).Infof("to add new bee %v", p)
+	self.On(dp)
+	self.String()
+	glog.V(logger.Warn).Infof("%v", self)
+	return nil
+}
+
+// Remove called after peer is disconnected
+func (self *Hive) Remove(p Peer) {
+	defer self.wake()
+	glog.V(logger.Debug).Infof("remove bee %v", p)
+	self.Off(p)
+}
+
+// NodeInfo function is used by the p2p.server RPC interface to display
+// protocol specific node information
+func (self *Hive) NodeInfo() interface{} {
+	return interface{}(self.String())
+}
+
+// PeerInfo function is used by the p2p.server RPC interface to display
+// protocol specific information any connected peer referred to by their NodeID
+func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	addr := NewPeerAddrFromNodeId(adapters.NewNodeId(id[:]))
+	return interface{}(addr)
+}
+
+// Stop terminates the updateloop
 func (self *Hive) Stop() {
 	// closing toggle channel quits the updateloop
 	close(self.quit)
@@ -210,36 +217,6 @@ func (self *Hive) wake() {
 	default:
 		glog.V(logger.Detail).Infof("hive already awake")
 	}
-}
-
-// Add is called at the end of a successful protocol handshake
-// to register a connected (live) peer
-func (self *Hive) Add(p Peer) error {
-	defer self.wake()
-	dp := NewDiscovery(p, self.Overlay)
-	glog.V(logger.Debug).Infof("to add new bee %v", p)
-	self.On(dp)
-	glog.V(logger.Warn).Infof("%v", self)
-	//dp.NotifyProx(0)
-	return nil
-}
-
-// Remove called after peer is disconnected
-func (self *Hive) Remove(p Peer) {
-	defer self.wake()
-	glog.V(logger.Debug).Infof("remove bee %v", p)
-	self.Off(p)
-}
-
-func (self *Hive) NodeInfo() interface{} {
-	return interface{}(self.String())
-}
-
-func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	addr := NewPeerAddrFromNodeId(adapters.NewNodeId(id[:]))
-	return interface{}(addr)
 }
 
 func HexToBytes(s string) []byte {

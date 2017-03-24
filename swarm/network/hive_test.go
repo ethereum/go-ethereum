@@ -5,16 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
-
-func init() {
-	glog.SetV(logger.Detail)
-	glog.SetToStderr(true)
-}
 
 type testConnect struct {
 	mu       sync.Mutex
@@ -35,12 +28,13 @@ func (self *testConnect) connect(na string) error {
 	return nil
 }
 
-func TestOverlayRegistration(t *testing.T) {
+func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 	// setup
 	addr := RandomAddr()                     // tested peers peer address
-	to := NewTestOverlay(addr.OverlayAddr()) // overlay topology driver
-	pp := NewHive(NewHiveParams(), to)       // hive
-	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
+	to := NewTestOverlay(addr.OverlayAddr()) // overlay topology drive
+	pp := NewHive(params, to)                // hive
+
+	ct := BzzCodeMap(DiscoveryMsgs...) // bzz protocol code map
 	services := func(p Peer) error {
 		pp.Add(p)
 		p.DisconnectHook(func(err error) {
@@ -49,40 +43,36 @@ func TestOverlayRegistration(t *testing.T) {
 		return nil
 	}
 
-	s := newBzzBaseTester(t, 1, addr, ct, services)
+	return newBzzBaseTester(t, 1, addr, ct, services), pp
+}
+
+func TestOverlayRegistration(t *testing.T) {
+	params := NewHiveParams()
+	params.Discovery = false
+	s, pp := newHiveTester(t, params)
+	defer s.Stop()
+
 	id := s.Ids[0]
 	raddr := NewPeerAddrFromNodeId(id)
 
 	s.runHandshakes()
 
 	// hive should have called the overlay
-	if to.posMap[string(raddr.OverlayAddr())] == nil {
+	if pp.Overlay.(*testOverlay).posMap[string(raddr.OverlayAddr())] == nil {
 		t.Fatalf("Overlay#On not called on new peer")
 	}
 
 }
 
 func TestRegisterAndConnect(t *testing.T) {
-	// setup
-	addr := RandomAddr()                     // tested peers peer address
-	to := NewTestOverlay(addr.OverlayAddr()) // overlay topology driver
-	pp := NewHive(NewHiveParams(), to)       // hive
-	ct := BzzCodeMap(HiveMsgs...)            // bzz protocol code map
-	services := func(p Peer) error {
-		pp.Add(p)
-		p.DisconnectHook(func(error) {
-			pp.Remove(p)
-		})
-		return nil
-	}
-
-	s := newBzzBaseTester(t, 1, addr, ct, services)
+	params := NewHiveParams()
+	s, pp := newHiveTester(t, params)
+	defer s.Stop()
 
 	id := s.Ids[0]
 	raddr := NewPeerAddrFromNodeId(id)
 
 	pp.Register(raddr)
-	glog.V(5).Infof("%v", pp)
 
 	// start the hive and wait for the connection
 	tc := &testConnect{
@@ -93,16 +83,16 @@ func TestRegisterAndConnect(t *testing.T) {
 		ticker: make(chan time.Time),
 	}
 	pp.Start(tc.connect, tc.ping)
+	defer pp.Stop()
 	tc.ticker <- time.Now()
 
 	s.runHandshakes()
 
-	if to.posMap[string(raddr.OverlayAddr())] == nil {
+	if pp.Overlay.(*testOverlay).posMap[string(raddr.OverlayAddr())] == nil {
 		t.Fatalf("Overlay#On not called on new peer")
 	}
 
 	// retrieve and broadcast
-	glog.V(6).Infof("check peer requests for %v", id)
 	ord := order(raddr.OverlayAddr())
 	o := 0
 	if ord == 0 {
@@ -118,14 +108,4 @@ func TestRegisterAndConnect(t *testing.T) {
 			},
 		},
 	})
-	// s.TestExchanges(p2ptest.Exchange{
-	// 	Label: "SubPeersMsg message outgoing",
-	// 	Expects: []p2ptest.Expect{
-	// 		p2ptest.Expect{
-	// 			Code: 3,
-	// 			Msg:  &SubPeersMsg{ProxLimit: 0, MinProxBinSize: 8},
-	// 			Peer: id,
-	// 		},
-	// 	},
-	// })
 }

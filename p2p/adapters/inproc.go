@@ -109,12 +109,14 @@ func (self *SimNode) setPeer(id *NodeId, m Messenger) *Peer {
 		self.peers = append(self.peers, p)
 		return p
 	}
-	if self.peers[i] != nil && m != nil {
-		panic(fmt.Sprintf("pipe for %v already set", id))
-	}
+	// if self.peers[i] != nil && m != nil {
+	// 	panic(fmt.Sprintf("pipe for %v already set", id))
+	// }
 	// legit reconnect reset disconnection error,
 	p := self.peers[i]
 	p.Messenger = m
+	p.Connc = make(chan bool)
+	p.Readyc = make(chan bool)
 	return p
 }
 
@@ -145,8 +147,6 @@ func (self *SimNode) Connect(rid []byte) error {
 		return fmt.Errorf("node adapter for %v is missing", id)
 	}
 	rw, rrw := p2p.MsgPipe()
-	// runc := make(chan bool)
-	// defer close(runc)
 	// // run protocol on remote node with self as peer
 	peer := self.getPeer(id)
 	if peer != nil && peer.Messenger != nil {

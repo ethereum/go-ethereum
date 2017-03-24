@@ -32,6 +32,7 @@ package protocols
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -196,6 +197,7 @@ type Peer struct {
 	rw        p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers  map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
 	Errc      chan error
+	wErrc     chan error // write error channel
 }
 
 // NewPeer returns a new peer
@@ -208,6 +210,7 @@ func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger) *Peer {
 		m:        m,
 		Peer:     p,
 		Errc:     make(chan error),
+		wErrc:    make(chan error),
 		handlers: make(map[reflect.Type][]func(interface{}) error),
 	}
 }
@@ -272,13 +275,21 @@ func (self *Peer) Send(msg interface{}) error {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
 	glog.V(logger.Detail).Infof("=> msg #%d TO %v : %v", code, self.ID(), msg)
-	err := self.m.SendMsg(uint64(code), msg)
-	if err != nil {
-		err = errorf(ErrWrite, "(msg code: %v): %v", code, err)
-		self.Drop(err)
-		return err
+	go func() {
+		self.wErrc <- self.m.SendMsg(uint64(code), msg)
+	}()
+	var err error
+	select {
+	case err = <-self.wErrc:
+		if err == nil {
+			return nil
+		}
+	case <-time.NewTimer(3000 * time.Millisecond).C:
+		err = fmt.Errorf("write timeout")
 	}
-	return nil
+	err = errorf(ErrWrite, "(msg code: %v): %v", code, err)
+	self.Drop(err)
+	return err
 }
 
 func (self *Peer) DisconnectHook(f func(error)) {

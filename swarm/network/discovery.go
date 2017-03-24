@@ -1,36 +1,61 @@
 package network
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	// "github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // discovery bzz overlay extension doing peer relaying
-// can be switched off
+
+// messages related to peer discovery
+var DiscoveryMsgs = []interface{}{
+	&getPeersMsg{},
+	&peersMsg{},
+	&subPeersMsg{},
+}
 
 type discPeer struct {
 	Peer
-	overlay   		Overlay
-	proxLimit 		uint8
-	peers     		map[discover.NodeID]bool
-	sentPeers	    bool
+	overlay Overlay
+	peers   map[string]bool
+	// peers     map[discover.NodeID]bool
+	proxLimit uint8 // the proximity radius advertised by remote to subscribe to peers
+	sentPeers bool  // set to true  when the peer is first notifed of peers close to them
+}
+
+// discovery peer contructor
+// registers the handlers for discovery messages
+func NewDiscovery(p Peer, o Overlay) *discPeer {
+	self := &discPeer{
+		overlay: o,
+		Peer:    p,
+		peers:   make(map[string]bool),
+	}
+	self.seen(self)
+
+	p.Register(&peersMsg{}, self.handlePeersMsg)
+	p.Register(&getPeersMsg{}, self.handleGetPeersMsg)
+	p.Register(&subPeersMsg{}, self.handleSubPeersMsg)
+
+	return self
 }
 
 // NotifyPeer notifies the receiver remote end of a peer p or PO po.
 // callback for overlay driver
 func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
-	if po < self.proxLimit || self.peers[p.ID()] || !self.sentPeers {
+	glog.V(logger.Warn).Infof("peers %v", self.peers)
+	if po < self.proxLimit || self.seen(p) {
 		return nil
 	}
+	glog.V(logger.Warn).Infof("notification about %x", p.OverlayAddr())
+
 	resp := &peersMsg{
-		//Peers: []*peerAddr{p.(*discPeer).Peer.(*bzzPeer).peerAddr},
 		Peers: []*peerAddr{&peerAddr{OAddr: p.OverlayAddr(), UAddr: p.UnderlayAddr()}}, // perhaps the PeerAddr interface is unnecessary generalization
 	}
-	return p.Send(resp)
+	return self.Send(resp)
 }
 
 // NotifyProx sends a subPeers Msg to the receiver notifying them about
@@ -38,23 +63,7 @@ func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
 // or first empty row)
 // callback for overlay driver
 func (self *discPeer) NotifyProx(po uint8) error {
-	//return self.Send(&SubPeersMsg{ProxLimit: po, MinProxBinSize: 8})
-	return self.Send(&SubPeersMsg{ProxLimit: po})
-}
-
-// new discovery contructor
-func NewDiscovery(p Peer, o Overlay) *discPeer {
-	self := &discPeer{
-		overlay: o,
-		Peer:    p,
-		peers:   make(map[discover.NodeID]bool),
-	}
-
-	p.Register(&peersMsg{}, self.handlePeersMsg)
-	p.Register(&getPeersMsg{}, self.handleGetPeersMsg)
-	p.Register(&SubPeersMsg{}, self.handleSubPeersMsg)
-
-	return self
+	return self.Send(&subPeersMsg{ProxLimit: po})
 }
 
 /*
@@ -95,51 +104,54 @@ func (self getPeersMsg) String() string {
 }
 
 // subPeers msg is communicating the depth/sharpness/focus  of the overlay table of a peer
-type SubPeersMsg struct {
-	//MinProxBinSize uint8
-	ProxLimit      uint8
+type subPeersMsg struct {
+	ProxLimit uint8
 }
 
-func (self SubPeersMsg) String() string {
+func (self subPeersMsg) String() string {
 	return fmt.Sprintf("%T: request peers > PO%02d. ", self, self.ProxLimit)
 }
 
 func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
-	spm := msg.(*SubPeersMsg)
+	spm := msg.(*subPeersMsg)
+	self.proxLimit = spm.ProxLimit
 	if !self.sentPeers {
 		var peers []*peerAddr
 		self.overlay.EachLivePeer(self.OverlayAddr(), 255, func(p Peer, po int) bool {
-			if uint8(po) > self.proxLimit {
+			if uint8(po) < self.proxLimit {
 				return false
 			}
-			self.peers[p.ID()] = true
+			self.seen(p)
 			peers = append(peers, &peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
 			return true
 		})
-		self.Send(&peersMsg{Peers: peers})
+		glog.V(logger.Warn).Infof("found initial %v peers not farther than %v", len(peers), self.proxLimit)
+		if len(peers) > 0 {
+			self.Send(&peersMsg{Peers: peers})
+		}
 	}
 	self.sentPeers = true
-	self.proxLimit = spm.ProxLimit
 	return nil
 }
 
 // handlePeersMsg called by the protocol when receiving peerset (for target address)
 // list of nodes ([]PeerAddr in peersMsg) is added to the overlay db using the
 // Register interface method
-func (p *discPeer) handlePeersMsg(msg interface{}) error {
+func (self *discPeer) handlePeersMsg(msg interface{}) error {
 	// register all addresses
 	var nas []PeerAddr
 	for _, na := range msg.(*peersMsg).Peers {
 		addr := PeerAddr(na)
 		nas = append(nas, addr)
-		p.peers[NodeId(addr).NodeID] = true
+		self.seen(addr)
 	}
-	
+
 	if len(nas) == 0 {
-		glog.V(logger.Debug).Infof("whoops, no peers in incoming peersMsg from %v", p)
+		glog.V(logger.Debug).Infof("whoops, no peers in incoming peersMsg from %v", self)
 		return nil
 	}
-	return p.overlay.Register(nas...)
+	glog.V(logger.Debug).Infof("got peer addresses from %x, %v (%v)", self.OverlayAddr(), nas, len(nas))
+	return self.overlay.Register(nas...)
 }
 
 // handleGetPeersMsg is called by the protocol when receiving a
@@ -147,29 +159,55 @@ func (p *discPeer) handlePeersMsg(msg interface{}) error {
 // peers suggestions are retrieved from the overlay topology driver
 // using the EachLivePeer interface iterator method
 // peers sent are remembered throughout a session and not sent twice
-func (p *discPeer) handleGetPeersMsg(msg interface{}) error {
-	req := msg.(*getPeersMsg)
+func (self *discPeer) handleGetPeersMsg(msg interface{}) error {
 	var peers []*peerAddr
-	alreadySent := p.peers
+	req := msg.(*getPeersMsg)
 	i := 0
-	p.overlay.EachLivePeer(p.OverlayAddr(), int(req.Order), func(n Peer, po int) bool {
+	self.overlay.EachLivePeer(self.OverlayAddr(), int(req.Order), func(n Peer, po int) bool {
 		i++
-		if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 &&
-			// only send peers we have not sent before in this session
-			!alreadySent[n.ID()] {
-			alreadySent[n.ID()] = true
+		// only send peers we have not sent before in this session
+		if self.seen(n) {
 			peers = append(peers, &peerAddr{n.OverlayAddr(), n.UnderlayAddr()})
 		}
-		// return int(req.Order) == po && len(peers) < int(req.Max)
 		return len(peers) < int(req.Max)
 	})
 	if len(peers) == 0 {
-		glog.V(logger.Debug).Infof("no peers found for %v", p)
+		glog.V(logger.Debug).Infof("no peers found for %v", self)
 		return nil
 	}
-	glog.V(logger.Debug).Infof("%v peers sent to %v", len(peers), p)
+	glog.V(logger.Debug).Infof("%v peers sent to %v", len(peers), self)
 	resp := &peersMsg{
 		Peers: peers,
 	}
-	return p.Send(resp)
+	return self.Send(resp)
+}
+
+func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
+	req := &getPeersMsg{
+		Order: uint8(order),
+		Max:   maxPeers,
+	}
+	var i uint8
+	var err error
+	k.EachLivePeer(nil, 255, func(n Peer, po int) bool {
+		glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
+		err = n.Send(req)
+		if err == nil {
+			i++
+			if i >= broadcastSize {
+				return false
+			}
+		}
+		return true
+	})
+	glog.V(logger.Info).Infof("requesting bees of PO%03d from %v/%v (each max %v)", order, i, broadcastSize, maxPeers)
+}
+
+func (self *discPeer) seen(p PeerAddr) bool {
+	k := NodeId(p).NodeID.String()
+	if self.peers[k] {
+		return true
+	}
+	self.peers[k] = true
+	return false
 }

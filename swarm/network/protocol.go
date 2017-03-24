@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/pot"
 )
 
 const (
@@ -54,12 +55,14 @@ func (self *bzzPeer) LastActive() time.Time {
 type PeerAddr interface {
 	OverlayAddr() []byte
 	UnderlayAddr() []byte
+	PO(pot.PotVal, int) (int, bool)
+	String() string
 }
 
 // the Peer interface that peerPool needs
 type Peer interface {
 	PeerAddr
-	String() string                                       // pretty printable the Node
+	// String() string                                       // pretty printable the Node
 	ID() discover.NodeID                                  // the key that uniquely identifies the Node for the peerPool
 	Send(interface{}) error                               // can send messages
 	Drop(error)                                           // disconnect this peer
@@ -137,6 +140,35 @@ func (self *peerAddr) OverlayAddr() []byte {
 
 func (self *peerAddr) UnderlayAddr() []byte {
 	return self.UAddr
+}
+
+func (self *peerAddr) PO(val pot.PotVal, pos int) (int, bool) {
+	kp := val.(PeerAddr)
+	one := kp.OverlayAddr()
+	other := self.OAddr
+	for i := pos / 8; i < len(one); i++ {
+		if one[i] == other[i] {
+			continue
+		}
+		oxo := one[i] ^ other[i]
+		start := 0
+		if i == pos/8 {
+			start = pos % 8
+		}
+		for j := start; j < 8; j++ {
+			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+				return i*8 + j, false
+			}
+		}
+	}
+	return len(one) * 8, true
+	// 	var ha *pot.HashAddress
+	// 	var left, right string
+	// 	if ok {
+	// 		ha = kp.HashAddress
+	// 	} else {
+	// 		ha = val.(*pot.HashAddress)
+	// 	}
 }
 
 func (self *peerAddr) String() string {

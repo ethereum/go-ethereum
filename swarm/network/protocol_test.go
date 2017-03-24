@@ -125,6 +125,8 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
+
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
@@ -137,6 +139,8 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
+
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
@@ -149,6 +153,8 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
+
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
@@ -160,6 +166,7 @@ func TestBzzPeerPoolAdd(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
 
 	id := s.Ids[0]
 	glog.V(logger.Detail).Infof("handshake with %v", id)
@@ -174,6 +181,8 @@ func TestBzzPeerPoolRemove(t *testing.T) {
 	addr := RandomAddr()
 	pp := p2ptest.NewTestPeerPool()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
+
 	s.runHandshakes()
 
 	id := s.Ids[0]
@@ -188,6 +197,8 @@ func TestBzzPeerPoolBothAddRemove(t *testing.T) {
 	addr := RandomAddr()
 	pp := p2ptest.NewTestPeerPool()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
+
 	s.runHandshakes()
 
 	id := s.Ids[0]
@@ -206,6 +217,7 @@ func TestBzzPeerPoolNotAdd(t *testing.T) {
 	addr := RandomAddr()
 	pp := p2ptest.NewTestPeerPool()
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
+	defer s.Stop()
 
 	id := s.Ids[0]
 	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{0, 321, NewPeerAddrFromNodeId(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
