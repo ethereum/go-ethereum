@@ -6,12 +6,20 @@ import (
 	"bytes"
 	_ "crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"hash"
+	"io"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 var hashFunc Hasher = sha3.NewKeccak256 //default hasher
+
+type state struct {
+	btree BTree
+	root  Root
+}
 
 // A merkle tree for a user that stores the entire tree
 // Specifically this tree is left a leaning balanced binary tree
@@ -312,4 +320,65 @@ func checkNode(height int, proof [][]byte, index, count uint64) ([]byte, bool) {
 
 	hash := h.Sum(make([]byte, 0))
 	return hash, ok
+}
+
+// ShakeHash defines the interface to hash functions that
+// support arbitrary-length output.
+type BMTHash interface {
+	// Write absorbs more data into the hash's state. It panics if input is
+	// written to it after output has been read from it.
+	io.Writer
+
+	// Read reads more output from the hash; reading affects the hash's
+	// state. (ShakeHash.Read is thus very different from Hash.Sum)
+	// It never returns an error.
+	io.Reader
+
+	// Clone returns a copy of the ShakeHash in its current state.
+	Clone() BMTHash
+
+	// Reset resets the ShakeHash to its initial state.
+	Reset()
+}
+
+// Reset clears the internal state by zeroing the sponge state and
+func (d *state) Reset() {
+	d.root = Root{Count: 0, Base: nil}
+	d.btree = BTree{count: 0, root: nil, rootHash: nil}
+}
+
+// Write absorbs more data into the hash's state. It produces an error
+// if more data is written to the ShakeHash after writing
+func (d *state) Write(p []byte) (written int, err error) {
+	tree, r, count, err1 := BuildBMT(hashFunc, p, 32)
+	d.btree = *tree
+	d.root = *r
+
+	if err1 != 0 {
+		err = errors.New("bmt write error")
+	}
+
+	return count, err
+}
+
+func (d *state) Get(p []byte) (written int) {
+	return 3
+}
+
+// Sum return the root hash of the BMT
+func (d *state) Sum(in []byte) []byte {
+	return d.root.Base
+}
+
+// BlockSize returns the rate of sponge underlying this hash function.
+func (d *state) BlockSize() int { return 0 }
+
+// Size returns the output size of the hash function in bytes.
+func (d *state) Size() int { return 32 }
+
+// NewBMTSHA3 creates a new BMT hash
+func NewBMTSHA3() hash.Hash {
+	tmpbtree := BTree{count: 0, root: nil, rootHash: nil}
+	troot := Root{Count: 0, Base: nil}
+	return &state{btree: tmpbtree, root: troot}
 }

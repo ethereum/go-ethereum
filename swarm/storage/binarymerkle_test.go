@@ -41,6 +41,35 @@ func TestGetHeight2(t *testing.T) {
 	}
 }
 
+func TestBuildBMT3(t *testing.T) {
+
+	// Grab some data to make the tree out of, and partition
+	data, err := ioutil.ReadFile("binarymerkle_test.go") // assume testdata exists
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var thashFunc = MakeHashFunc("BMTSHA3")
+	var h = thashFunc()
+	h.Reset()
+	h.Write(data)
+	var key = h.Sum(nil)
+
+	fmt.Println(key)
+
+	// for i := 0; i < count; i++ {
+	// 	p := tree.InclusionProof(i)
+	//
+	// 	fmt.Println(p)
+	//
+	// 	ok := r.CheckProof(sha3.NewKeccak256, p, i)
+	// 	if !ok {
+	// 		t.Errorf("proof %d failed", i)
+	// 	}
+	// }
+	// fmt.Println("done")
+}
+
 func TestBuildBMT(t *testing.T) {
 
 	// Grab some data to make the tree out of, and partition
@@ -50,7 +79,7 @@ func TestBuildBMT(t *testing.T) {
 		return
 	}
 
-	tree, r, count, err1 := BuildBMT(sha3.NewKeccak256, data, 32)
+	tree, r, count, err1 := BuildBMT(sha3.NewKeccak256, data, 1)
 
 	switch err1 {
 	case -1:
@@ -61,7 +90,7 @@ func TestBuildBMT(t *testing.T) {
 		t.Errorf("BMT leaf count validation error")
 		return
 	case 0:
-		fmt.Println("Build BMT OK")
+		fmt.Println("Build BMT OK  ", count)
 	}
 
 	fmt.Println(tree.Root())
@@ -76,6 +105,7 @@ func TestBuildBMT(t *testing.T) {
 			t.Errorf("proof %d failed", i)
 		}
 	}
+	fmt.Println("done")
 }
 
 func TestBuildBMT2(t *testing.T) {
@@ -88,7 +118,7 @@ func TestBuildBMT2(t *testing.T) {
 	}
 
 	fmt.Println(len(data))
-	blocks := splitData(data, 32)
+	blocks := splitData(data, 2)
 
 	count := len(blocks)
 
