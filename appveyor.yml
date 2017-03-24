@@ -36,4 +36,4 @@ after_build:
 
 test_script:
   - set CGO_ENABLED=1
-  - go run build\ci.go test -vet -coverage
+  - go run build\ci.go test -coverage

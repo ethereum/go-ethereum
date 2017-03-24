@@ -106,9 +106,14 @@ func CallerFileHandler(h Handler) Handler {
 // the context with key "fn".
 func CallerFuncHandler(h Handler) Handler {
 	return FuncHandler(func(r *Record) error {
-		r.Ctx = append(r.Ctx, "fn", fmt.Sprintf("%+n", r.Call))
+		r.Ctx = append(r.Ctx, "fn", formatCall("%+n", r.Call))
 		return h.Log(r)
 	})
+}
+
+// This function is here to please go vet on Go < 1.8.
+func formatCall(format string, c stack.Call) string {
+	return fmt.Sprintf(format, c)
 }
 
 // CallerStackHandler returns a Handler that adds a stack trace to the context
