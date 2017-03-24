@@ -120,6 +120,33 @@ func (h *Header) HashNoNonce() common.Hash {
 	})
 }
 
+// HashNoPoASig returns the hash which is used as input for the proof-of-authority
+// signing. It is the hash of the entire header apart from the 65 byte signature
+// contained at the end of the extra data.
+//
+// Note, the method requires the extra data to be at least 65 bytes, otherwise it
+// panics. This is done to avoid accidentally using both forms (signature present
+// or not), which could be abused to produce different hashes for the same header.
+func (h *Header) HashNoPoASig() common.Hash {
+	return rlpHash([]interface{}{
+		h.ParentHash,
+		h.UncleHash,
+		h.Coinbase,
+		h.Root,
+		h.TxHash,
+		h.ReceiptHash,
+		h.Bloom,
+		h.Difficulty,
+		h.Number,
+		h.GasLimit,
+		h.GasUsed,
+		h.Time,
+		h.Extra[:len(h.Extra)-65], // Yes, this will panic
+		h.MixDigest,
+		h.Nonce,
+	})
+}
+
 func rlpHash(x interface{}) (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
@@ -348,12 +375,11 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	return rlpHash(uncles)
 }
 
-// WithMiningResult returns a new block with the data from b
-// where nonce and mix digest are set to the provided values.
-func (b *Block) WithMiningResult(nonce BlockNonce, mixDigest common.Hash) *Block {
-	cpy := *b.header
-	cpy.Nonce = nonce
-	cpy.MixDigest = mixDigest
+// WithSeal returns a new block with the data from b but the header replaced with
+// the sealed one.
+func (b *Block) WithSeal(header *Header) *Block {
+	cpy := *header
+
 	return &Block{
 		header:       &cpy,
 		transactions: b.transactions,

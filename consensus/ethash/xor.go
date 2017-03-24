@@ -4,7 +4,7 @@
 
 // Source: https://golang.org/src/crypto/cipher/xor.go
 
-package pow
+package ethash
 
 import (
 	"runtime"

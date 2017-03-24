@@ -18,14 +18,12 @@ package core
 
 import (
 	"bytes"
-	"encoding/json"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -33,58 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
-type diffTest struct {
-	ParentTimestamp    uint64
-	ParentDifficulty   *big.Int
-	CurrentTimestamp   uint64
-	CurrentBlocknumber *big.Int
-	CurrentDifficulty  *big.Int
-}
-
-func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
-	var ext struct {
-		ParentTimestamp    string
-		ParentDifficulty   string
-		CurrentTimestamp   string
-		CurrentBlocknumber string
-		CurrentDifficulty  string
-	}
-	if err := json.Unmarshal(b, &ext); err != nil {
-		return err
-	}
-
-	d.ParentTimestamp = math.MustParseUint64(ext.ParentTimestamp)
-	d.ParentDifficulty = math.MustParseBig256(ext.ParentDifficulty)
-	d.CurrentTimestamp = math.MustParseUint64(ext.CurrentTimestamp)
-	d.CurrentBlocknumber = math.MustParseBig256(ext.CurrentBlocknumber)
-	d.CurrentDifficulty = math.MustParseBig256(ext.CurrentDifficulty)
-
-	return nil
-}
-
-func TestCalcDifficulty(t *testing.T) {
-	file, err := os.Open("../tests/files/BasicTests/difficulty.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-
-	tests := make(map[string]diffTest)
-	err = json.NewDecoder(file).Decode(&tests)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	config := &params.ChainConfig{HomesteadBlock: big.NewInt(1150000)}
-	for name, test := range tests {
-		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
-		diff := CalcDifficulty(config, test.CurrentTimestamp, test.ParentTimestamp, number, test.ParentDifficulty)
-		if diff.Cmp(test.CurrentDifficulty) != 0 {
-			t.Error(name, "failed. Expected", test.CurrentDifficulty, "and calculated", diff)
-		}
-	}
-}
 
 // Tests block header storage and retrieval operations.
 func TestHeaderStorage(t *testing.T) {
@@ -562,7 +508,11 @@ func TestMipmapChain(t *testing.T) {
 	)
 	defer db.Close()
 
-	genesis := testGenesis(addr, big.NewInt(1000000)).MustCommit(db)
+	gspec := &Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
+	}
+	genesis := gspec.MustCommit(db)
 	chain, receipts := GenerateChain(params.TestChainConfig, genesis, db, 1010, func(i int, gen *BlockGen) {
 		var receipts types.Receipts
 		switch i {

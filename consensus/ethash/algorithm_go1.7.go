@@ -16,7 +16,7 @@
 
 // +build !go1.8
 
-package pow
+package ethash
 
 // cacheSize calculates and returns the size of the ethash verification cache that
 // belongs to a certain block number. The cache size grows linearly, however, we

@@ -29,9 +29,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
-
 }
-
 
 const Chequebook_JS = `
 web3._extend({

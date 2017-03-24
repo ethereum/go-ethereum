@@ -17,56 +17,49 @@
 package miner
 
 import (
-	"fmt"
 	"sync"
 
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/pow"
 )
 
 type CpuAgent struct {
 	mu sync.Mutex
 
 	workCh        chan *Work
-	quit          chan struct{}
+	stop          chan struct{}
 	quitCurrentOp chan struct{}
 	returnCh      chan<- *Result
 
-	index int
-	pow   pow.PoW
+	chain  consensus.ChainReader
+	engine consensus.Engine
 
 	isMining int32 // isMining indicates whether the agent is currently mining
 }
 
-func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
+func NewCpuAgent(chain consensus.ChainReader, engine consensus.Engine) *CpuAgent {
 	miner := &CpuAgent{
-		pow:    pow,
-		index:  index,
-		quit:   make(chan struct{}),
+		chain:  chain,
+		engine: engine,
+		stop:   make(chan struct{}, 1),
 		workCh: make(chan *Work, 1),
 	}
-
 	return miner
 }
 
 func (self *CpuAgent) Work() chan<- *Work            { return self.workCh }
-func (self *CpuAgent) Pow() pow.PoW                  { return self.pow }
 func (self *CpuAgent) SetReturnCh(ch chan<- *Result) { self.returnCh = ch }
 
 func (self *CpuAgent) Stop() {
-	close(self.quit)
+	self.stop <- struct{}{}
 }
 
 func (self *CpuAgent) Start() {
-
 	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
 		return // agent already started
 	}
-
 	go self.update()
 }
 
@@ -82,7 +75,7 @@ out:
 			self.quitCurrentOp = make(chan struct{})
 			go self.mine(work, self.quitCurrentOp)
 			self.mu.Unlock()
-		case <-self.quit:
+		case <-self.stop:
 			self.mu.Lock()
 			if self.quitCurrentOp != nil {
 				close(self.quitCurrentOp)
@@ -99,27 +92,27 @@ done:
 		select {
 		case <-self.workCh:
 		default:
-			close(self.workCh)
 			break done
 		}
 	}
-
 	atomic.StoreInt32(&self.isMining, 0)
 }
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
-	log.Debug(fmt.Sprintf("(re)started agent[%d]. mining...\n", self.index))
-
-	// Mine
-	nonce, mixDigest := self.pow.Search(work.Block, stop)
-	if nonce != 0 {
-		block := work.Block.WithMiningResult(types.EncodeNonce(nonce), common.BytesToHash(mixDigest))
-		self.returnCh <- &Result{work, block}
+	if result, err := self.engine.Seal(self.chain, work.Block, stop); result != nil {
+		log.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
+		self.returnCh <- &Result{work, result}
 	} else {
+		if err != nil {
+			log.Warn("Block sealing failed", "err", err)
+		}
 		self.returnCh <- nil
 	}
 }
 
 func (self *CpuAgent) GetHashRate() int64 {
-	return int64(self.pow.Hashrate())
+	if pow, ok := self.engine.(consensus.PoW); ok {
+		return int64(pow.Hashrate())
+	}
+	return 0
 }

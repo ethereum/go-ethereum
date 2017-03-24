@@ -16,7 +16,7 @@
 
 // +build go1.8
 
-package pow
+package ethash
 
 import "math/big"
 

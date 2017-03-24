@@ -24,13 +24,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/hashicorp/golang-lru"
 )
@@ -64,14 +64,13 @@ type LightChain struct {
 	procInterrupt int32 // interrupt signaler for block processing
 	wg            sync.WaitGroup
 
-	pow       pow.PoW
-	validator core.HeaderValidator
+	engine consensus.Engine
 }
 
 // NewLightChain returns a fully initialised light chain using information
 // available in the database. It initialises the default Ethereum header
 // validator.
-func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux) (*LightChain, error) {
+func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, mux *event.TypeMux) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -84,21 +83,17 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 		bodyCache:    bodyCache,
 		bodyRLPCache: bodyRLPCache,
 		blockCache:   blockCache,
-		pow:          pow,
+		engine:       engine,
 	}
-
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.Validator, bc.getProcInterrupt)
-	bc.SetValidator(core.NewHeaderValidator(config, bc.hc, pow))
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
-
 	bc.genesisBlock, _ = bc.GetBlockByNumber(NoOdr, 0)
 	if bc.genesisBlock == nil {
 		return nil, core.ErrNoGenesis
 	}
-
 	if bc.genesisBlock.Hash() == params.MainNetGenesisHash {
 		// add trusted CHT
 		WriteTrustedCht(bc.chainDb, TrustedCht{Number: 805, Root: common.HexToHash("85e4286fe0a730390245c49de8476977afdae0eb5530b277f62a52b12313d50f")})
@@ -145,9 +140,6 @@ func (self *LightChain) loadLastState() error {
 	headerTd := self.GetTd(header.Hash(), header.Number.Uint64())
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd)
 
-	// Try to be smart and issue a pow verification for the head to pre-generate caches
-	go self.pow.Verify(types.NewBlockWithHeader(header))
-
 	return nil
 }
 
@@ -186,20 +178,6 @@ func (self *LightChain) Status() (td *big.Int, currentBlock common.Hash, genesis
 	header := self.hc.CurrentHeader()
 	hash := header.Hash()
 	return self.GetTd(hash, header.Number.Uint64()), hash, self.genesisBlock.Hash()
-}
-
-// SetValidator sets the validator which is used to validate incoming headers.
-func (self *LightChain) SetValidator(validator core.HeaderValidator) {
-	self.procmu.Lock()
-	defer self.procmu.Unlock()
-	self.validator = validator
-}
-
-// Validator returns the current header validator.
-func (self *LightChain) Validator() core.HeaderValidator {
-	self.procmu.RLock()
-	defer self.procmu.RUnlock()
-	return self.validator
 }
 
 // State returns a new mutable state based on the current HEAD block.

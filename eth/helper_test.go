@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -37,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 )
 
 var (
@@ -50,22 +50,22 @@ var (
 // channels for different events.
 func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
 	var (
-		evmux = new(event.TypeMux)
-		pow   = new(pow.FakePow)
-		db, _ = ethdb.NewMemDatabase()
-		gspec = &core.Genesis{
+		evmux  = new(event.TypeMux)
+		engine = ethash.NewFaker()
+		db, _  = ethdb.NewMemDatabase()
+		gspec  = &core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
 		}
 		genesis       = gspec.MustCommit(db)
-		blockchain, _ = core.NewBlockChain(db, gspec.Config, pow, evmux, vm.Config{})
+		blockchain, _ = core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
 	)
 	chain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(gspec.Config, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
+	pm, err := NewProtocolManager(gspec.Config, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, engine, blockchain, db)
 	if err != nil {
 		return nil, err
 	}

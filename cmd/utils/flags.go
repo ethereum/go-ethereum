@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -49,7 +50,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
 	"gopkg.in/urfave/cli.v1"
@@ -149,7 +149,7 @@ var (
 	}
 	TestNetFlag = cli.BoolFlag{
 		Name:  "testnet",
-		Usage: "Ropsten network: pre-configured test network",
+		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
 	DevModeFlag = cli.BoolFlag{
 		Name:  "dev",
@@ -921,16 +921,16 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
-	seal := pow.PoW(pow.FakePow{})
+	engine := ethash.NewFaker()
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
-		seal = pow.NewFullEthash("", 1, 0, "", 1, 0)
+		engine = ethash.New("", 1, 0, "", 1, 0)
 	}
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
-	chain, err = core.NewBlockChain(chainDb, config, seal, new(event.TypeMux), vmcfg)
+	chain, err = core.NewBlockChain(chainDb, config, engine, new(event.TypeMux), vmcfg)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}

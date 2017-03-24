@@ -303,7 +303,15 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("ethereum service not running: %v", err)
 		}
-		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+			type threaded interface {
+				SetThreads(threads int)
+			}
+			if th, ok := ethereum.Engine().(threaded); ok {
+				th.SetThreads(threads)
+			}
+		}
+		if err := ethereum.StartMining(); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
