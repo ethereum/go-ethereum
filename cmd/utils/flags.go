@@ -23,12 +23,12 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -41,8 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -115,6 +114,34 @@ var (
 		Name:  "keystore",
 		Usage: "Directory for the keystore (default = inside the datadir)",
 	}
+	EthashCacheDirFlag = DirectoryFlag{
+		Name:  "ethash.cachedir",
+		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
+	}
+	EthashCachesInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.cachesinmem",
+		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
+		Value: 2,
+	}
+	EthashCachesOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.cachesondisk",
+		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
+		Value: 3,
+	}
+	EthashDatasetDirFlag = DirectoryFlag{
+		Name:  "ethash.dagdir",
+		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
+	}
+	EthashDatasetsInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.dagsinmem",
+		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
+		Value: 1,
+	}
+	EthashDatasetsOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.dagsondisk",
+		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
+		Value: 2,
+	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten)",
@@ -180,24 +207,20 @@ var (
 		Usage: "Number of CPU threads to use for mining",
 		Value: runtime.NumCPU(),
 	}
-	TargetGasLimitFlag = cli.StringFlag{
+	TargetGasLimitFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value: params.GenesisGasLimit.String(),
-	}
-	AutoDAGFlag = cli.BoolFlag{
-		Name:  "autodag",
-		Usage: "Enable automatic DAG pregeneration",
+		Value: params.GenesisGasLimit.Uint64(),
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
 		Usage: "Public address for block mining rewards (default = first account created)",
 		Value: "0",
 	}
-	GasPriceFlag = cli.StringFlag{
+	GasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: new(big.Int).Mul(big.NewInt(20), common.Shannon).String(),
+		Value: big.NewInt(20 * params.Shannon),
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -245,7 +268,10 @@ var (
 		Name:  "fakepow",
 		Usage: "Disables proof-of-work verification",
 	}
-
+	NoCompactionFlag = cli.BoolFlag{
+		Name:  "nocompaction",
+		Usage: "Disables db compaction after import",
+	}
 	// RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
@@ -383,15 +409,15 @@ var (
 	}
 
 	// Gas price oracle settings
-	GpoMinGasPriceFlag = cli.StringFlag{
+	GpoMinGasPriceFlag = BigFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(20), common.Shannon).String(),
+		Value: big.NewInt(20 * params.Shannon),
 	}
-	GpoMaxGasPriceFlag = cli.StringFlag{
+	GpoMaxGasPriceFlag = BigFlag{
 		Name:  "gpomax",
 		Usage: "Maximum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
+		Value: big.NewInt(500 * params.Shannon),
 	}
 	GpoFullBlockRatioFlag = cli.IntFlag{
 		Name:  "gpofull",
@@ -428,6 +454,36 @@ func MakeDataDir(ctx *cli.Context) string {
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
 	return ""
+}
+
+// MakeEthashCacheDir returns the directory to use for storing the ethash cache
+// dumps.
+func MakeEthashCacheDir(ctx *cli.Context) string {
+	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) && ctx.GlobalString(EthashCacheDirFlag.Name) == "" {
+		return ""
+	}
+	if !ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
+		return "ethash"
+	}
+	return ctx.GlobalString(EthashCacheDirFlag.Name)
+}
+
+// MakeEthashDatasetDir returns the directory to use for storing the full ethash
+// dataset dumps.
+func MakeEthashDatasetDir(ctx *cli.Context) string {
+	if !ctx.GlobalIsSet(EthashDatasetDirFlag.Name) {
+		home := os.Getenv("HOME")
+		if home == "" {
+			if user, err := user.Current(); err == nil {
+				home = user.HomeDir
+			}
+		}
+		if runtime.GOOS == "windows" {
+			return filepath.Join(home, "AppData", "Ethash")
+		}
+		return filepath.Join(home, ".ethash")
+	}
+	return ctx.GlobalString(EthashDatasetDirFlag.Name)
 }
 
 // MakeIPCPath creates an IPC path configuration from the set command line flags,
@@ -493,7 +549,7 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -513,7 +569,7 @@ func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -610,7 +666,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func MakeEtherbase(ks *keystore.KeyStore, ctx *cli.Context) common.Address {
 	accounts := ks.Accounts()
 	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
-		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
+		log.Warn("No etherbase set and no accounts found as default")
 		return common.Address{}
 	}
 	etherbase := ctx.GlobalString(EtherbaseFlag.Name)
@@ -730,7 +786,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 
 	ethConf := &eth.Config{
 		Etherbase:               MakeEtherbase(ks, ctx),
-		ChainConfig:             MakeChainConfig(ctx, stack),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
 		LightServ:               ctx.GlobalInt(LightServFlag.Name),
@@ -742,15 +797,20 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
-		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
-		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
-		GpoMaxGasPrice:          common.String2Big(ctx.GlobalString(GpoMaxGasPriceFlag.Name)),
+		GasPrice:                GlobalBig(ctx, GasPriceFlag.Name),
+		GpoMinGasPrice:          GlobalBig(ctx, GpoMinGasPriceFlag.Name),
+		GpoMaxGasPrice:          GlobalBig(ctx, GpoMaxGasPriceFlag.Name),
 		GpoFullBlockRatio:       ctx.GlobalInt(GpoFullBlockRatioFlag.Name),
 		GpobaseStepDown:         ctx.GlobalInt(GpobaseStepDownFlag.Name),
 		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
-		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
+		EthashCacheDir:          MakeEthashCacheDir(ctx),
+		EthashCachesInMem:       ctx.GlobalInt(EthashCachesInMemoryFlag.Name),
+		EthashCachesOnDisk:      ctx.GlobalInt(EthashCachesOnDiskFlag.Name),
+		EthashDatasetDir:        MakeEthashDatasetDir(ctx),
+		EthashDatasetsInMem:     ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name),
+		EthashDatasetsOnDisk:    ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name),
 		EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name),
 	}
 
@@ -761,7 +821,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 			ethConf.NetworkId = 3
 		}
 		ethConf.Genesis = core.DefaultTestnetGenesisBlock()
-
 	case ctx.GlobalBool(DevModeFlag.Name):
 		ethConf.Genesis = core.DevGenesisBlock()
 		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
@@ -820,66 +879,7 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 
 // SetupNetwork configures the system for either the main net or some test network.
 func SetupNetwork(ctx *cli.Context) {
-	params.TargetGasLimit = common.String2Big(ctx.GlobalString(TargetGasLimitFlag.Name))
-}
-
-// MakeChainConfig reads the chain configuration from the database in ctx.Datadir.
-func MakeChainConfig(ctx *cli.Context, stack *node.Node) *params.ChainConfig {
-	db := MakeChainDatabase(ctx, stack)
-	defer db.Close()
-
-	return MakeChainConfigFromDb(ctx, db)
-}
-
-// MakeChainConfigFromDb reads the chain configuration from the given database.
-func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainConfig {
-	// If the chain is already initialized, use any existing chain configs
-	config := new(params.ChainConfig)
-
-	genesis := core.GetBlock(db, core.GetCanonicalHash(db, 0), 0)
-	if genesis != nil {
-		storedConfig, err := core.GetChainConfig(db, genesis.Hash())
-		switch err {
-		case nil:
-			config = storedConfig
-		case core.ChainConfigNotFoundErr:
-			// No configs found, use empty, will populate below
-		default:
-			Fatalf("Could not make chain configuration: %v", err)
-		}
-	}
-	// set chain id in case it's zero.
-	if config.ChainId == nil {
-		config.ChainId = new(big.Int)
-	}
-	// Check whether we are allowed to set default config params or not:
-	//  - If no genesis is set, we're running either mainnet or testnet (private nets use `geth init`)
-	//  - If a genesis is already set, ensure we have a configuration for it (mainnet or testnet)
-	defaults := genesis == nil ||
-		(genesis.Hash() == params.MainNetGenesisHash && !ctx.GlobalBool(TestNetFlag.Name)) ||
-		(genesis.Hash() == params.TestNetGenesisHash && ctx.GlobalBool(TestNetFlag.Name))
-
-	if defaults {
-		if ctx.GlobalBool(TestNetFlag.Name) {
-			config = params.TestnetChainConfig
-		} else {
-			// Homestead fork
-			config.HomesteadBlock = params.MainNetHomesteadBlock
-			// DAO fork
-			config.DAOForkBlock = params.MainNetDAOForkBlock
-			config.DAOForkSupport = true
-
-			// DoS reprice fork
-			config.EIP150Block = params.MainNetHomesteadGasRepriceBlock
-			config.EIP150Hash = params.MainNetHomesteadGasRepriceHash
-
-			// DoS state cleanup fork
-			config.EIP155Block = params.MainNetSpuriousDragon
-			config.EIP158Block = params.MainNetSpuriousDragon
-			config.ChainId = params.MainNetChainID
-		}
-	}
-	return config
+	params.TargetGasLimit = new(big.Int).SetUint64(ctx.GlobalUint64(TargetGasLimitFlag.Name))
 }
 
 func ChainDbName(ctx *cli.Context) string {
@@ -905,27 +905,34 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	return chainDb
 }
 
+func MakeGenesis(ctx *cli.Context) *core.Genesis {
+	var genesis *core.Genesis
+	switch {
+	case ctx.GlobalBool(TestNetFlag.Name):
+		genesis = core.DefaultTestnetGenesisBlock()
+	case ctx.GlobalBool(DevModeFlag.Name):
+		genesis = core.DevGenesisBlock()
+	}
+	return genesis
+}
+
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
 
-	if ctx.GlobalBool(TestNetFlag.Name) {
-		_, err := core.WriteTestNetGenesisBlock(chainDb)
-		if err != nil {
-			glog.Fatalln(err)
-		}
-	}
-
-	chainConfig := MakeChainConfigFromDb(ctx, chainDb)
-
-	pow := pow.PoW(core.FakePow{})
+	seal := pow.PoW(pow.FakePow{})
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
-		pow = ethash.New()
+		seal = pow.NewFullEthash("", 1, 0, "", 1, 0)
 	}
-	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
+	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
-		Fatalf("Could not start chainmanager: %v", err)
+		Fatalf("%v", err)
+	}
+	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
+	chain, err = core.NewBlockChain(chainDb, config, seal, new(event.TypeMux), vmcfg)
+	if err != nil {
+		Fatalf("Can't create BlockChain: %v", err)
 	}
 	return chain, chainDb
 }

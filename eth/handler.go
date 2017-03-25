@@ -33,8 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
@@ -116,7 +115,7 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 	}
 	// Figure out whether to allow fast sync or not
 	if fastSync && blockchain.CurrentBlock().NumberU64() > 0 {
-		glog.V(logger.Info).Infof("blockchain not empty, fast sync disabled")
+		log.Warn("Blockchain not empty, fast sync disabled")
 		fastSync = false
 	}
 	if fastSync {
@@ -179,7 +178,7 @@ func NewProtocolManager(config *params.ChainConfig, fastSync bool, networkId int
 	manager.fetcher = fetcher.New(blockchain.GetBlockByHash, validator, manager.BroadcastBlock, heighter, inserter, manager.removePeer)
 
 	if blockchain.Genesis().Hash().Hex() == defaultGenesisHash && networkId == 1 {
-		glog.V(logger.Debug).Infoln("Bad Block Reporting is enabled")
+		log.Debug("Bad block reporting is enabled")
 		manager.badBlockReportingEnabled = true
 	}
 
@@ -200,12 +199,12 @@ func (pm *ProtocolManager) removePeer(id string) {
 	if peer == nil {
 		return
 	}
-	glog.V(logger.Debug).Infoln("Removing peer", id)
+	log.Debug("Removing Ethereum peer", "peer", id)
 
 	// Unregister the peer from the downloader and Ethereum peer set
 	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
-		glog.V(logger.Error).Infoln("Removal failed:", err)
+		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
 	// Hard disconnect at the networking layer
 	if peer != nil {
@@ -227,7 +226,7 @@ func (pm *ProtocolManager) Start() {
 }
 
 func (pm *ProtocolManager) Stop() {
-	glog.V(logger.Info).Infoln("Stopping ethereum protocol handler...")
+	log.Info("Stopping Ethereum protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -248,7 +247,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for all peer handler goroutines and the loops to come down.
 	pm.wg.Wait()
 
-	glog.V(logger.Info).Infoln("Ethereum protocol handler stopped")
+	log.Info("Ethereum protocol stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -261,22 +260,20 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	if pm.peers.Len() >= pm.maxPeers {
 		return p2p.DiscTooManyPeers
 	}
-
-	glog.V(logger.Debug).Infof("%v: peer connected [%s]", p, p.Name())
+	p.Log().Debug("Ethereum peer connected", "name", p.Name())
 
 	// Execute the Ethereum handshake
 	td, head, genesis := pm.blockchain.Status()
 	if err := p.Handshake(pm.networkId, td, head, genesis); err != nil {
-		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
+		p.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
 	}
 	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 		rw.Init(p.version)
 	}
 	// Register the peer locally
-	glog.V(logger.Detail).Infof("%v: adding peer", p)
 	if err := pm.peers.Register(p); err != nil {
-		glog.V(logger.Error).Infof("%v: addition failed: %v", p, err)
+		p.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
 	defer pm.removePeer(p.id)
@@ -297,7 +294,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 		// Start a timer to disconnect if the peer doesn't reply in time
 		p.forkDrop = time.AfterFunc(daoChallengeTimeout, func() {
-			glog.V(logger.Debug).Infof("%v: timed out DAO fork-check, dropping", p)
+			p.Log().Debug("Timed out DAO fork-check, dropping")
 			pm.removePeer(p.id)
 		})
 		// Make sure it's cleaned up if the peer dies off
@@ -311,7 +308,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
-			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
+			p.Log().Debug("Ethereum message handling failed", "err", err)
 			return err
 		}
 	}
@@ -387,7 +384,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				)
 				if next <= current {
 					infos, _ := json.MarshalIndent(p.Peer.Info(), "", "  ")
-					glog.V(logger.Warn).Infof("%v: GetBlockHeaders skip overflow attack (current %v, skip %v, next %v)\nMalicious peer infos: %s", p, current, query.Skip, next, infos)
+					p.Log().Warn("GetBlockHeaders skip overflow attack", "current", current, "skip", query.Skip, "next", next, "attacker", infos)
 					unknown = true
 				} else {
 					if header := pm.blockchain.GetHeaderByNumber(next); header != nil {
@@ -435,7 +432,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// If we're seemingly on the same chain, disable the drop timer
 			if verifyDAO {
-				glog.V(logger.Debug).Infof("%v: seems to be on the same side of the DAO fork", p)
+				p.Log().Debug("Seems to be on the same side of the DAO fork")
 				p.forkDrop.Stop()
 				p.forkDrop = nil
 				return nil
@@ -452,10 +449,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 				// Validate the header and either drop the peer or continue
 				if err := core.ValidateDAOHeaderExtraData(pm.chainconfig, headers[0]); err != nil {
-					glog.V(logger.Debug).Infof("%v: verified to be on the other side of the DAO fork, dropping", p)
+					p.Log().Debug("Verified to be on the other side of the DAO fork, dropping")
 					return err
 				}
-				glog.V(logger.Debug).Infof("%v: verified to be on the same side of the DAO fork", p)
+				p.Log().Debug("Verified to be on the same side of the DAO fork")
 				return nil
 			}
 			// Irrelevant of the fork checks, send the header to the fetcher just in case
@@ -464,7 +461,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if len(headers) > 0 || !filter {
 			err := pm.downloader.DeliverHeaders(p.id, headers)
 			if err != nil {
-				glog.V(logger.Debug).Infoln(err)
+				log.Debug("Failed to deliver headers", "err", err)
 			}
 		}
 
@@ -517,7 +514,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if len(trasactions) > 0 || len(uncles) > 0 || !filter {
 			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
 			if err != nil {
-				glog.V(logger.Debug).Infoln(err)
+				log.Debug("Failed to deliver bodies", "err", err)
 			}
 		}
 
@@ -556,7 +553,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverNodeData(p.id, data); err != nil {
-			glog.V(logger.Debug).Infof("failed to deliver node state data: %v", err)
+			log.Debug("Failed to deliver node state data", "err", err)
 		}
 
 	case p.version >= eth63 && msg.Code == GetReceiptsMsg:
@@ -587,7 +584,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// If known, encode and queue for response packet
 			if encoded, err := rlp.EncodeToBytes(results); err != nil {
-				glog.V(logger.Error).Infof("failed to encode receipt: %v", err)
+				log.Error("Failed to encode receipt", "err", err)
 			} else {
 				receipts = append(receipts, encoded)
 				bytes += len(encoded)
@@ -603,7 +600,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverReceipts(p.id, receipts); err != nil {
-			glog.V(logger.Debug).Infof("failed to deliver receipts: %v", err)
+			log.Debug("Failed to deliver receipts", "err", err)
 		}
 
 	case msg.Code == NewBlockHashesMsg:
@@ -696,7 +693,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		if parent := pm.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
 			td = new(big.Int).Add(block.Difficulty(), pm.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1))
 		} else {
-			glog.V(logger.Error).Infof("propagating dangling block #%d [%x]", block.NumberU64(), hash[:4])
+			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
 		// Send the block to a subset of our peers
@@ -704,14 +701,14 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range transfer {
 			peer.SendNewBlock(block, td)
 		}
-		glog.V(logger.Detail).Infof("propagated block %x to %d peers in %v", hash[:4], len(transfer), time.Since(block.ReceivedAt))
+		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
 	if pm.blockchain.HasBlock(hash) {
 		for _, peer := range peers {
 			peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
 		}
-		glog.V(logger.Detail).Infof("announced block %x to %d peers in %v", hash[:4], len(peers), time.Since(block.ReceivedAt))
+		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 
@@ -724,7 +721,7 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 	for _, peer := range peers {
 		peer.SendTransactions(types.Transactions{tx})
 	}
-	glog.V(logger.Detail).Infoln("broadcast tx to", len(peers), "peers")
+	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
 }
 
 // Mined broadcast loop

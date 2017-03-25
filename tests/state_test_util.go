@@ -26,11 +26,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -108,8 +109,8 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 	}
 
 	for name, test := range tests {
-		if skipTest[name] {
-			glog.Infoln("Skipping state test", name)
+		if skipTest[name] /*|| name != "JUMPDEST_Attack"*/ {
+			log.Info(fmt.Sprint("Skipping state test", name))
 			continue
 		}
 
@@ -118,7 +119,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
-		//glog.Infoln("State test passed: ", name)
+		//log.Info(fmt.Sprint("State test passed: ", name))
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil
@@ -165,25 +166,25 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 
 	// check post state
 	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
+		address := common.HexToAddress(addr)
+		if !statedb.Exist(address) {
 			return fmt.Errorf("did not find expected post-state account: %s", addr)
 		}
 
-		if obj.Balance().Cmp(common.Big(account.Balance)) != 0 {
-			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], common.String2Big(account.Balance), obj.Balance())
+		if balance := statedb.GetBalance(address); balance.Cmp(math.MustParseBig256(account.Balance)) != 0 {
+			return fmt.Errorf("(%x) balance failed. Expected: %v have: %v\n", address[:4], math.MustParseBig256(account.Balance), balance)
 		}
 
-		if obj.Nonce() != common.String2Big(account.Nonce).Uint64() {
-			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", obj.Address().Bytes()[:4], account.Nonce, obj.Nonce())
+		if nonce := statedb.GetNonce(address); nonce != math.MustParseUint64(account.Nonce) {
+			return fmt.Errorf("(%x) nonce failed. Expected: %v have: %v\n", address[:4], account.Nonce, nonce)
 		}
 
 		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
+			v := statedb.GetState(address, common.HexToHash(addr))
 			vexp := common.HexToHash(value)
 
 			if v != vexp {
-				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", obj.Address().Bytes(), addr, vexp, v, vexp.Big(), v.Big())
+				return fmt.Errorf("storage failed:\n%x: %s:\nexpected: %x\nhave:     %x\n(%v %v)\n", address[:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}
@@ -205,7 +206,7 @@ func runStateTest(chainConfig *params.ChainConfig, test VmTest) error {
 
 func RunState(chainConfig *params.ChainConfig, statedb *state.StateDB, env, tx map[string]string) ([]byte, []*types.Log, *big.Int, error) {
 	environment, msg := NewEVMEnvironment(false, chainConfig, statedb, env, tx)
-	gaspool := new(core.GasPool).AddGas(common.Big(env["currentGasLimit"]))
+	gaspool := new(core.GasPool).AddGas(math.MustParseBig256(env["currentGasLimit"]))
 
 	root, _ := statedb.Commit(false)
 	statedb.Reset(root)

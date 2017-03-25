@@ -3,7 +3,7 @@ package vm
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 func memorySha3(stack *Stack) *big.Int {
@@ -42,20 +42,20 @@ func memoryCall(stack *Stack) *big.Int {
 	x := calcMemSize(stack.Back(5), stack.Back(6))
 	y := calcMemSize(stack.Back(3), stack.Back(4))
 
-	return common.BigMax(x, y)
+	return math.BigMax(x, y)
 }
 
 func memoryCallCode(stack *Stack) *big.Int {
 	x := calcMemSize(stack.Back(5), stack.Back(6))
 	y := calcMemSize(stack.Back(3), stack.Back(4))
 
-	return common.BigMax(x, y)
+	return math.BigMax(x, y)
 }
 func memoryDelegateCall(stack *Stack) *big.Int {
 	x := calcMemSize(stack.Back(4), stack.Back(5))
 	y := calcMemSize(stack.Back(2), stack.Back(3))
 
-	return common.BigMax(x, y)
+	return math.BigMax(x, y)
 }
 
 func memoryReturn(stack *Stack) *big.Int {

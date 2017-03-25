@@ -19,6 +19,7 @@ package eth
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
@@ -37,13 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
 )
 
 const defaultTraceTimeout = 5 * time.Second
@@ -104,17 +100,17 @@ func (s *PublicMinerAPI) SubmitWork(nonce types.BlockNonce, solution, digest com
 // result[0], 32 bytes hex encoded current block header pow-hash
 // result[1], 32 bytes hex encoded seed hash used for DAG
 // result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
-func (s *PublicMinerAPI) GetWork() (work [3]string, err error) {
+func (s *PublicMinerAPI) GetWork() ([3]string, error) {
 	if !s.e.IsMining() {
 		if err := s.e.StartMining(0); err != nil {
-			return work, err
+			return [3]string{}, err
 		}
 	}
-	if work, err = s.agent.GetWork(); err == nil {
-		return
+	work, err := s.agent.GetWork()
+	if err != nil {
+		return work, fmt.Errorf("mining not ready: %v", err)
 	}
-	glog.V(logger.Debug).Infof("%v", err)
-	return work, fmt.Errorf("mining not ready")
+	return work, nil
 }
 
 // SubmitHashrate can be used for remote miners to submit their hash rate. This enables the node to report the combined
@@ -139,7 +135,6 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 // Start the miner with the given number of threads. If threads is nil the number of
 // workers started is equal to the number of logical CPU's that are usable by this process.
 func (s *PrivateMinerAPI) Start(threads *int) (bool, error) {
-	s.e.StartAutoDAG()
 	var err error
 	if threads == nil {
 		err = s.e.StartMining(runtime.NumCPU())
@@ -175,25 +170,9 @@ func (s *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
 	return true
 }
 
-// StartAutoDAG starts auto DAG generation. This will prevent the DAG generating on epoch change
-// which will cause the node to stop mining during the generation process.
-func (s *PrivateMinerAPI) StartAutoDAG() bool {
-	s.e.StartAutoDAG()
-	return true
-}
-
-// StopAutoDAG stops auto DAG generation
-func (s *PrivateMinerAPI) StopAutoDAG() bool {
-	s.e.StopAutoDAG()
-	return true
-}
-
-// MakeDAG creates the new DAG for the given block number
-func (s *PrivateMinerAPI) MakeDAG(blockNr rpc.BlockNumber) (bool, error) {
-	if err := ethash.MakeDAG(uint64(blockNr.Int64()), ""); err != nil {
-		return false, err
-	}
-	return true, nil
+// GetHashrate returns the current hashrate of the miner.
+func (s *PrivateMinerAPI) GetHashrate() uint64 {
+	return uint64(s.e.miner.HashRate())
 }
 
 // PrivateAdminAPI is the collection of Etheruem full node-related APIs
@@ -565,4 +544,10 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
 	db := core.PreimageTable(api.eth.ChainDb())
 	return db.Get(hash.Bytes())
+}
+
+// GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
+// and returns them as a JSON list of block-hashes
+func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]core.BadBlockArgs, error) {
+	return api.eth.BlockChain().BadBlocks()
 }

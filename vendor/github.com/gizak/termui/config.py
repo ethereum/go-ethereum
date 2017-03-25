@@ -1,35 +1,10 @@
 #!/usr/bin/env python3
 
-# use v6;
-#
-# my $copyright = '// Copyright 2016 Zack Guo <gizak@icloud.com>. All rights reserved.
-# // Use of this source code is governed by a MIT license that can
-# // be found in the LICENSE file.
-#
-# ';
-#
-# sub MAIN('update-docstr', Str $srcp) {
-#     if $srcp.IO.f {
-#         $_ = $srcp.IO.slurp;
-#         if m/^ \/\/\s Copyright .+? \n\n/ {
-#             unless ~$/ eq $copyright {
-#                 s/^ \/\/\s Copyright .+? \n\n /$copyright/;
-#                 spurt $srcp, $_;
-#                 say "[updated] doc string for:"~$srcp;
-#             }
-#         } else {
-#             say "[added] doc string for "~$srcp~" (no match found)";
-#             $_ = $copyright ~ $_;
-#             spurt $srcp, $_;
-#         }
-#     }
-# }
-
 import re
 import os
 import io
 
-copyright = """// Copyright 2016 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
+copyright = """// Copyright 2017 Zack Guo <zack.y.guo@gmail.com>. All rights reserved.
 // Use of this source code is governed by a MIT license that can
 // be found in the LICENSE file.
 

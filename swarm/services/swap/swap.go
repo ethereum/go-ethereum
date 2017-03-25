@@ -17,6 +17,7 @@
 package swap
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
@@ -31,10 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
-	"golang.org/x/net/context"
 )
 
 // SwAP       Swarm Accounting Protocol with
@@ -132,19 +131,19 @@ func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend,
 	// TODO: monitoring a chequebooks events
 	ok, err = chequebook.ValidateCode(ctx, backend, remote.Contract)
 	if !ok {
-		glog.V(logger.Info).Infof("invalid contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err)
+		log.Info(fmt.Sprintf("invalid contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err))
 	} else {
 		// remote contract valid, create inbox
 		in, err = chequebook.NewInbox(local.privateKey, remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), backend)
 		if err != nil {
-			glog.V(logger.Warn).Infof("unable to set up inbox for chequebook contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err)
+			log.Warn(fmt.Sprintf("unable to set up inbox for chequebook contract %v for peer %v: %v)", remote.Contract.Hex()[:8], proto, err))
 		}
 	}
 
 	// check if local chequebook contract is valid
 	ok, err = chequebook.ValidateCode(ctx, backend, local.Contract)
 	if !ok {
-		glog.V(logger.Warn).Infof("unable to set up outbox for peer %v:  chequebook contract (owner: %v): %v)", proto, local.owner.Hex(), err)
+		log.Warn(fmt.Sprintf("unable to set up outbox for peer %v:  chequebook contract (owner: %v): %v)", proto, local.owner.Hex(), err))
 	} else {
 		out = chequebook.NewOutbox(local.Chequebook(), remote.Beneficiary)
 	}
@@ -172,7 +171,7 @@ func NewSwap(local *SwapParams, remote *SwapProfile, backend chequebook.Backend,
 	} else {
 		sell = "selling to peer disabled"
 	}
-	glog.V(logger.Warn).Infof("SWAP arrangement with <%v>: %v; %v)", proto, buy, sell)
+	log.Warn(fmt.Sprintf("SWAP arrangement with <%v>: %v; %v)", proto, buy, sell))
 
 	return
 }
@@ -217,13 +216,13 @@ func (self *SwapParams) deployChequebook(ctx context.Context, backend chequebook
 	opts.Value = self.AutoDepositBuffer
 	opts.Context = ctx
 
-	glog.V(logger.Info).Infof("Deploying new chequebook (owner: %v)", opts.From.Hex())
+	log.Info(fmt.Sprintf("Deploying new chequebook (owner: %v)", opts.From.Hex()))
 	contract, err := deployChequebookLoop(opts, backend)
 	if err != nil {
-		glog.V(logger.Error).Infof("unable to deploy new chequebook: %v", err)
+		log.Error(fmt.Sprintf("unable to deploy new chequebook: %v", err))
 		return err
 	}
-	glog.V(logger.Info).Infof("new chequebook deployed at %v (owner: %v)", contract.Hex(), opts.From.Hex())
+	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", contract.Hex(), opts.From.Hex()))
 
 	// need to save config at this point
 	self.lock.Lock()
@@ -231,7 +230,7 @@ func (self *SwapParams) deployChequebook(ctx context.Context, backend chequebook
 	err = self.newChequebookFromContract(path, backend)
 	self.lock.Unlock()
 	if err != nil {
-		glog.V(logger.Warn).Infof("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err)
+		log.Warn(fmt.Sprintf("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err))
 	}
 	return err
 }
@@ -244,11 +243,11 @@ func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (
 			time.Sleep(chequebookDeployDelay)
 		}
 		if _, tx, _, err = contract.DeployChequebook(opts, backend); err != nil {
-			glog.V(logger.Warn).Infof("can't send chequebook deploy tx (try %d): %v", try, err)
+			log.Warn(fmt.Sprintf("can't send chequebook deploy tx (try %d): %v", try, err))
 			continue
 		}
 		if addr, err = bind.WaitDeployed(opts.Context, backend, tx); err != nil {
-			glog.V(logger.Warn).Infof("chequebook deploy error (try %d): %v", try, err)
+			log.Warn(fmt.Sprintf("chequebook deploy error (try %d): %v", try, err))
 			continue
 		}
 		return addr, nil
@@ -271,13 +270,13 @@ func (self *SwapParams) newChequebookFromContract(path string, backend chequeboo
 	if err != nil {
 		self.chbook, err = chequebook.NewChequebook(chbookpath, self.Contract, self.privateKey, backend)
 		if err != nil {
-			glog.V(logger.Warn).Infof("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err)
+			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err))
 			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", self.owner.Hex(), err)
 		}
 	}
 
 	self.chbook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
-	glog.V(logger.Info).Infof("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(self.publicKey)).Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(self.publicKey)).Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer))
 
 	return nil
 }

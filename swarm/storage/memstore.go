@@ -19,10 +19,10 @@
 package storage
 
 import (
+	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -287,11 +287,11 @@ func (s *MemStore) removeOldest() {
 	}
 
 	if node.entry.dbStored != nil {
-		glog.V(logger.Detail).Infof("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log())
+		log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
 		<-node.entry.dbStored
-		glog.V(logger.Detail).Infof("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log())
+		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
 	} else {
-		glog.V(logger.Detail).Infof("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log())
+		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log()))
 	}
 
 	if node.entry.SData != nil {

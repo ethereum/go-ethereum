@@ -6,13 +6,13 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func makeStackFunc(pop, diff int) stackValidationFunc {
+func makeStackFunc(pop, push int) stackValidationFunc {
 	return func(stack *Stack) error {
 		if err := stack.require(pop); err != nil {
 			return err
 		}
 
-		if int64(stack.len()+diff) > params.StackLimit.Int64() {
+		if stack.len()+push-pop > int(params.StackLimit) {
 			return fmt.Errorf("stack limit reached %d (%d)", stack.len(), params.StackLimit)
 		}
 		return nil
@@ -20,9 +20,9 @@ func makeStackFunc(pop, diff int) stackValidationFunc {
 }
 
 func makeDupStackFunc(n int) stackValidationFunc {
-	return makeStackFunc(n, 1)
+	return makeStackFunc(n, n+1)
 }
 
 func makeSwapStackFunc(n int) stackValidationFunc {
-	return makeStackFunc(n, 0)
+	return makeStackFunc(n, n)
 }

@@ -16,9 +16,43 @@
 
 package pow
 
-type PoW interface {
-	Search(block Block, stop <-chan struct{}, index int) (uint64, []byte)
-	Verify(block Block) bool
-	GetHashrate() int64
-	Turbo(bool)
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+type Block interface {
+	Difficulty() *big.Int
+	HashNoNonce() common.Hash
+	Nonce() uint64
+	MixDigest() common.Hash
+	NumberU64() uint64
 }
+
+type ChainManager interface {
+	GetBlockByNumber(uint64) *types.Block
+	CurrentBlock() *types.Block
+}
+
+type PoW interface {
+	Verify(block Block) error
+	Search(block Block, stop <-chan struct{}) (uint64, []byte)
+	Hashrate() float64
+}
+
+// FakePow is a non-validating proof of work implementation.
+// It returns true from Verify for any block.
+type FakePow struct{}
+
+// Verify implements PoW, returning a success for an input.
+func (pow FakePow) Verify(block Block) error { return nil }
+
+// Search implements PoW, returning the nonce 0 for any call.
+func (pow FakePow) Search(block Block, stop <-chan struct{}) (uint64, []byte) {
+	return 0, nil
+}
+
+// Hashrate implements PoW, returning 0.
+func (pow FakePow) Hashrate() float64 { return 0 }

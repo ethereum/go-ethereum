@@ -63,12 +63,16 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours two struct tags, "tail" and
-// "nil". For an explanation of "tail", see the example.
-// The "nil" tag applies to pointer-typed fields and changes the
-// decoding rules for the field such that input values of size zero
-// decode as a nil pointer. This tag can be useful when decoding
-// recursive types.
+// The decoding of struct fields honours certain struct tags, "tail",
+// "nil" and "-".
+//
+// The "-" tag ignores fields.
+//
+// For an explanation of "tail", see the example.
+//
+// The "nil" tag applies to pointer-typed fields and changes the decoding
+// rules for the field such that input values of size zero decode as a nil
+// pointer. This tag can be useful when decoding recursive types.
 //
 //     type StructWithEmptyOK struct {
 //         Foo *[20]byte `rlp:"nil"`

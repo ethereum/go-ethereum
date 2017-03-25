@@ -18,7 +18,7 @@ package whisperv5
 
 import (
 	"math/big"
-	"math/rand"
+	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -33,17 +33,17 @@ var seed int64
 // reproduciblity independent of their sequence.
 func InitSingleTest() {
 	seed = time.Now().Unix()
-	rand.Seed(seed)
+	mrand.Seed(seed)
 }
 
 func InitDebugTest(i int64) {
 	seed = i
-	rand.Seed(seed)
+	mrand.Seed(seed)
 }
 
 type FilterTestCase struct {
 	f      *Filter
-	id     uint32
+	id     string
 	alive  bool
 	msgCnt int
 }
@@ -55,7 +55,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	const topicNum = 8
 	f.Topics = make([]TopicType, topicNum)
 	for i := 0; i < topicNum; i++ {
-		randomize(f.Topics[i][:])
+		mrand.Read(f.Topics[i][:])
 		f.Topics[i][0] = 0x01
 	}
 
@@ -68,7 +68,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 
 	if symmetric {
 		f.KeySym = make([]byte, 12)
-		randomize(f.KeySym)
+		mrand.Read(f.KeySym)
 		f.SymKeyHash = crypto.Keccak256Hash(f.KeySym)
 	} else {
 		f.KeyAsym, err = crypto.GenerateKey()
@@ -87,7 +87,7 @@ func generateTestCases(t *testing.T, SizeTestFilters int) []FilterTestCase {
 	for i := 0; i < SizeTestFilters; i++ {
 		f, _ := generateFilter(t, true)
 		cases[i].f = f
-		cases[i].alive = (rand.Int()&int(1) == 0)
+		cases[i].alive = (mrand.Int()&int(1) == 0)
 	}
 	return cases
 }
@@ -96,18 +96,21 @@ func TestInstallFilters(t *testing.T) {
 	InitSingleTest()
 
 	const SizeTestFilters = 256
-	w := NewWhisper(nil)
+	w := New()
 	filters := NewFilters(w)
 	tst := generateTestCases(t, SizeTestFilters)
 
-	var j uint32
+	var err error
+	var j string
 	for i := 0; i < SizeTestFilters; i++ {
-		j = filters.Install(tst[i].f)
+		j, err = filters.Install(tst[i].f)
+		if err != nil {
+			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
+		}
 		tst[i].id = j
-	}
-
-	if j < SizeTestFilters-1 {
-		t.Fatalf("seed %d: wrong index %d", seed, j)
+		if len(j) != 40 {
+			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
+		}
 	}
 
 	for _, testCase := range tst {
@@ -144,7 +147,7 @@ func TestComparePubKey(t *testing.T) {
 	}
 
 	// generate key3 == key1
-	rand.Seed(seed)
+	mrand.Seed(seed)
 	key3, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to generate third key with seed %d: %s.", seed, err)
@@ -190,7 +193,7 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 
 	// encrypt symmetrically
-	i := rand.Int() % 4
+	i := mrand.Int() % 4
 	fsym.Topics[i] = params.Topic
 	fasym.Topics[i] = params.Topic
 	msg = NewSentMessage(params)
@@ -519,21 +522,29 @@ func TestWatchers(t *testing.T) {
 	var i int
 	var j uint32
 	var e *Envelope
+	var x, firstID string
+	var err error
 
-	w := NewWhisper(nil)
+	w := New()
 	filters := NewFilters(w)
 	tst := generateTestCases(t, NumFilters)
 	for i = 0; i < NumFilters; i++ {
 		tst[i].f.Src = nil
-		j = filters.Install(tst[i].f)
-		tst[i].id = j
+		x, err = filters.Install(tst[i].f)
+		if err != nil {
+			t.Fatalf("failed to install filter with seed %d: %s.", seed, err)
+		}
+		tst[i].id = x
+		if len(firstID) == 0 {
+			firstID = x
+		}
 	}
 
-	last := j
+	lastID := x
 
 	var envelopes [NumMessages]*Envelope
 	for i = 0; i < NumMessages; i++ {
-		j = rand.Uint32() % NumFilters
+		j = mrand.Uint32() % NumFilters
 		e = generateCompatibeEnvelope(t, tst[j].f)
 		envelopes[i] = e
 		tst[j].msgCnt++
@@ -571,9 +582,9 @@ func TestWatchers(t *testing.T) {
 	// another round with a cloned filter
 
 	clone := cloneFilter(tst[0].f)
-	filters.Uninstall(last)
+	filters.Uninstall(lastID)
 	total = 0
-	last = NumFilters - 1
+	last := NumFilters - 1
 	tst[last].f = clone
 	filters.Install(clone)
 	for i = 0; i < NumFilters; i++ {
@@ -586,7 +597,7 @@ func TestWatchers(t *testing.T) {
 	envelopes[0] = e
 	tst[0].msgCnt++
 	for i = 1; i < NumMessages; i++ {
-		j = rand.Uint32() % NumFilters
+		j = mrand.Uint32() % NumFilters
 		e = generateCompatibeEnvelope(t, tst[j].f)
 		envelopes[i] = e
 		tst[j].msgCnt++
@@ -640,7 +651,7 @@ func TestWatchers(t *testing.T) {
 		t.Fatalf("failed with seed %d: total: got %d, want 0.", seed, total)
 	}
 
-	f := filters.Get(1)
+	f := filters.Get(firstID)
 	if f == nil {
 		t.Fatalf("failed to get the filter with seed %d.", seed)
 	}

@@ -19,6 +19,7 @@
 package filters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -29,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
 )
 
 // Type determines the kind of filter and is used to put the filter in to
@@ -372,7 +372,8 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []*types.Log {
 	if bloomFilter(header.Bloom, addresses, topics) {
 		// Get the logs of the block
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
 		receipts, err := es.backend.GetReceipts(ctx, header.Hash())
 		if err != nil {
 			return nil

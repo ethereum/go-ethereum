@@ -131,6 +131,7 @@ Click image to see the corresponding demo codes.
 [<img src="./_example/barchart.png" alt="barchart" type="image/png" width="45%">](https://github.com/gizak/termui/blob/master/_example/barchart.go)
 [<img src="./_example/mbarchart.png" alt="barchart" type="image/png" width="45%">](https://github.com/gizak/termui/blob/master/_example/mbarchart.go)
 [<img src="./_example/sparklines.png" alt="sparklines" type="image/png" width="45%">](https://github.com/gizak/termui/blob/master/_example/sparklines.go)
+[<img src="./_example/table.png" alt="table" type="image/png" width="45%">](https://github.com/gizak/termui/blob/master/_example/table.go)
 
 ## GoDoc
 

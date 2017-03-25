@@ -17,6 +17,7 @@
 package gasprice
 
 import (
+	"context"
 	"math/big"
 	"sort"
 	"sync"
@@ -24,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
 )
 
 const (

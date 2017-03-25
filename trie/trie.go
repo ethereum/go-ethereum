@@ -23,8 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -135,8 +134,8 @@ func (t *Trie) Iterator() *Iterator {
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
-	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }
@@ -198,8 +197,8 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryUpdate(key, value); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -300,8 +299,8 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 

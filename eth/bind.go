@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
 )
 
 // ContractBackend implements bind.ContractBackend with direct calls to Ethereum
@@ -69,7 +69,7 @@ func (b *ContractBackend) PendingCodeAt(ctx context.Context, contract common.Add
 // against the pending block, not the stable head of the chain.
 func (b *ContractBackend) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNum *big.Int) ([]byte, error) {
 	out, err := b.bcapi.Call(ctx, toCallArgs(msg), toBlockNumber(blockNum))
-	return common.FromHex(out), err
+	return out, err
 }
 
 // ContractCall implements bind.ContractCaller executing an Ethereum contract
@@ -77,7 +77,7 @@ func (b *ContractBackend) CallContract(ctx context.Context, msg ethereum.CallMsg
 // against the pending block, not the stable head of the chain.
 func (b *ContractBackend) PendingCallContract(ctx context.Context, msg ethereum.CallMsg) ([]byte, error) {
 	out, err := b.bcapi.Call(ctx, toCallArgs(msg), rpc.PendingBlockNumber)
-	return common.FromHex(out), err
+	return out, err
 }
 
 func toCallArgs(msg ethereum.CallMsg) ethapi.CallArgs {

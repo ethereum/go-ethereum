@@ -18,6 +18,7 @@
 package ethapi
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -30,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
 )
 
 // Backend interface provides the common API services (that are provided by
@@ -51,7 +51,7 @@ type Backend interface {
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetTd(blockHash common.Hash) *big.Int
-	GetVMEnv(ctx context.Context, msg core.Message, state State, header *types.Header) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg core.Message, state State, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error)
 	// TxPool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	RemoveTx(txHash common.Hash)
@@ -73,8 +73,7 @@ type State interface {
 }
 
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
-	compiler := makeCompilerAPIs(solcPath)
-	all := []rpc.API{
+	return []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -116,5 +115,4 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Public:    false,
 		},
 	}
-	return append(compiler, all...)
 }
