@@ -2,10 +2,10 @@
     "randomStatetest" : {
         "env" : {
             "currentCoinbase" : "945304eb96065b2a98b57a48a06ae28d285a71b5",
-            "currentDifficulty" : "5623894562375",
-            "currentGasLimit" : "115792089237316195423570985008687907853269984665640564039457584007913129639935",
-            "currentNumber" : "0",
-            "currentTimestamp" : "1",
+            "currentDifficulty" : "0x051d6a3cd647",
+            "currentGasLimit" : "0x7fffffffffffffff",
+            "currentNumber" : "0x00",
+            "currentTimestamp" : "0x01",
             "previousHash" : "5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
         },
         "logs" : [
@@ -13,24 +13,24 @@
         "out" : "0x",
         "post" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "457480517",
+                "balance" : "0x1b449945",
                 "code" : "0x437fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff427f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff427fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe81090360005155",
-                "nonce" : "0",
+                "nonce" : "0x00",
                 "storage" : {
-                    "0x" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    "0x00" : "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                 }
             },
             "945304eb96065b2a98b57a48a06ae28d285a71b5" : {
-                "balance" : "51182",
+                "balance" : "0xc7ee",
                 "code" : "0x6000355415600957005b60203560003555",
-                "nonce" : "0",
+                "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "999999999542468347",
+                "balance" : "0x0de0b6b38c1e9efb",
                 "code" : "0x",
-                "nonce" : "1",
+                "nonce" : "0x01",
                 "storage" : {
                 }
             }
@@ -38,23 +38,23 @@
         "postStateRoot" : "febf3fa4bfd6ab1ec17e35f05d75d9d7b3266b2aa871b993aba8b570261a8e79",
         "pre" : {
             "095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
-                "balance" : "0",
+                "balance" : "0x00",
                 "code" : "0x437fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff427f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff427fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe81090360005155",
-                "nonce" : "0",
+                "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "945304eb96065b2a98b57a48a06ae28d285a71b5" : {
-                "balance" : "46",
+                "balance" : "0x2e",
                 "code" : "0x6000355415600957005b60203560003555",
-                "nonce" : "0",
+                "nonce" : "0x00",
                 "storage" : {
                 }
             },
             "a94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
-                "balance" : "1000000000000000000",
+                "balance" : "0x0de0b6b3a7640000",
                 "code" : "0x",
-                "nonce" : "0",
+                "nonce" : "0x00",
                 "storage" : {
                 }
             }
@@ -62,11 +62,11 @@
         "transaction" : {
             "data" : "0x437fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff427f000000000000000000000000ffffffffffffffffffffffffffffffffffffffff427fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe810903",
             "gasLimit" : "0x3cc91dd8",
-            "gasPrice" : "1",
-            "nonce" : "0",
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
             "secretKey" : "45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
             "to" : "095e7baea6a6c7c4c2dfeb977efac326af552d87",
-            "value" : "457480517"
+            "value" : "0x1b449945"
         }
     }
 }

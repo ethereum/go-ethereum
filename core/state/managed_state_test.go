@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -27,13 +27,11 @@ var addr = common.BytesToAddress([]byte("test"))
 
 func create() (*ManagedState, *account) {
 	db, _ := ethdb.NewMemDatabase()
-	statedb := New(common.Hash{}, db)
+	statedb, _ := New(common.Hash{}, db)
 	ms := ManageState(statedb)
-	so := &StateObject{address: addr, nonce: 100}
-	ms.StateDB.stateObjects[addr.Str()] = so
-	ms.accounts[addr.Str()] = newAccount(so)
-
-	return ms, ms.accounts[addr.Str()]
+	ms.StateDB.SetNonce(addr, 100)
+	ms.accounts[addr] = newAccount(ms.StateDB.getStateObject(addr))
+	return ms, ms.accounts[addr]
 }
 
 func TestNewNonce(t *testing.T) {
@@ -54,7 +52,7 @@ func TestRemove(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -70,7 +68,7 @@ func TestReuse(t *testing.T) {
 	ms, account := create()
 
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
@@ -86,24 +84,24 @@ func TestReuse(t *testing.T) {
 func TestRemoteNonceChange(t *testing.T) {
 	ms, account := create()
 	nn := make([]bool, 10)
-	for i, _ := range nn {
+	for i := range nn {
 		nn[i] = true
 	}
 	account.nonces = append(account.nonces, nn...)
-	nonce := ms.NewNonce(addr)
+	ms.NewNonce(addr)
 
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
-	nonce = ms.NewNonce(addr)
+	ms.StateDB.stateObjects[addr].data.Nonce = 200
+	nonce := ms.NewNonce(addr)
 	if nonce != 200 {
-		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+		t.Error("expected nonce after remote update to be", 200, "got", nonce)
 	}
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
 	ms.NewNonce(addr)
-	ms.StateDB.stateObjects[addr.Str()].nonce = 200
+	ms.StateDB.stateObjects[addr].data.Nonce = 200
 	nonce = ms.NewNonce(addr)
 	if nonce != 204 {
-		t.Error("expected nonce after remote update to be", 201, "got", nonce)
+		t.Error("expected nonce after remote update to be", 204, "got", nonce)
 	}
 }
 

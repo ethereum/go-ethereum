@@ -1,36 +1,54 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
 import (
 	"bytes"
-	"errors"
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
-func checkLogs(tlog []Log, logs state.Logs) error {
+var (
+	ForceJit  bool
+	EnableJit bool
+)
+
+func init() {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlCrit, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	if os.Getenv("JITVM") == "true" {
+		ForceJit = true
+		EnableJit = true
+	}
+}
+
+func checkLogs(tlog []Log, logs []*types.Log) error {
 
 	if len(tlog) != len(logs) {
 		return fmt.Errorf("log length mismatch. Expected %d, got %d", len(tlog), len(logs))
@@ -53,7 +71,7 @@ func checkLogs(tlog []Log, logs state.Logs) error {
 					}
 				}
 			}
-			genBloom := common.LeftPadBytes(types.LogsBloom(state.Logs{logs[i]}).Bytes(), 256)
+			genBloom := math.PaddedBigBytes(types.LogsBloom([]*types.Log{logs[i]}), 256)
 
 			if !bytes.Equal(genBloom, common.Hex2Bytes(log.BloomF)) {
 				return fmt.Errorf("bloom mismatch")
@@ -88,17 +106,25 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db common.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.HexToAddress(addr), db)
-	obj.SetBalance(common.Big(account.Balance))
+func makePreState(db ethdb.Database, accounts map[string]Account) *state.StateDB {
+	statedb, _ := state.New(common.Hash{}, db)
+	for addr, account := range accounts {
+		insertAccount(statedb, addr, account)
+	}
+	return statedb
+}
 
+func insertAccount(state *state.StateDB, saddr string, account Account) {
 	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.SetCode(common.Hex2Bytes(account.Code))
-	obj.SetNonce(common.Big(account.Nonce).Uint64())
-
-	return obj
+	addr := common.HexToAddress(saddr)
+	state.SetCode(addr, common.Hex2Bytes(account.Code))
+	state.SetNonce(addr, math.MustParseUint64(account.Nonce))
+	state.SetBalance(addr, math.MustParseBig256(account.Balance))
+	for a, v := range account.Storage {
+		state.SetState(addr, common.HexToHash(a), common.HexToHash(v))
+	}
 }
 
 type VmEnv struct {
@@ -124,153 +150,63 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-type Env struct {
-	depth        int
-	state        *state.StateDB
-	skipTransfer bool
-	initial      bool
-	Gas          *big.Int
+func NewEVMEnvironment(vmTest bool, chainConfig *params.ChainConfig, statedb *state.StateDB, envValues map[string]string, tx map[string]string) (*vm.EVM, core.Message) {
+	var (
+		data  = common.FromHex(tx["data"])
+		gas   = math.MustParseBig256(tx["gasLimit"])
+		price = math.MustParseBig256(tx["gasPrice"])
+		value = math.MustParseBig256(tx["value"])
+		nonce = math.MustParseUint64(tx["nonce"])
+	)
 
-	origin common.Address
-	//parent   common.Hash
-	coinbase common.Address
-
-	number     *big.Int
-	time       uint64
-	difficulty *big.Int
-	gasLimit   *big.Int
-
-	logs []vm.StructLog
-
-	vmTest bool
-}
-
-func NewEnv(state *state.StateDB) *Env {
-	return &Env{
-		state: state,
+	origin := common.HexToAddress(tx["caller"])
+	if len(tx["secretKey"]) > 0 {
+		key, _ := hex.DecodeString(tx["secretKey"])
+		origin = crypto.PubkeyToAddress(crypto.ToECDSA(key).PublicKey)
 	}
-}
 
-func (self *Env) StructLogs() []vm.StructLog {
-	return self.logs
-}
+	var to *common.Address
+	if len(tx["to"]) > 2 {
+		t := common.HexToAddress(tx["to"])
+		to = &t
+	}
 
-func (self *Env) AddStructLog(log vm.StructLog) {
-	self.logs = append(self.logs, log)
-}
+	msg := types.NewMessage(origin, to, nonce, value, gas, price, data, true)
 
-func NewEnvFromMap(state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
-	env := NewEnv(state)
-
-	env.origin = common.HexToAddress(exeValues["caller"])
-	//env.parent = common.Hex2Bytes(envValues["previousHash"])
-	env.coinbase = common.HexToAddress(envValues["currentCoinbase"])
-	env.number = common.Big(envValues["currentNumber"])
-	env.time = common.Big(envValues["currentTimestamp"]).Uint64()
-	env.difficulty = common.Big(envValues["currentDifficulty"])
-	env.gasLimit = common.Big(envValues["currentGasLimit"])
-	env.Gas = new(big.Int)
-
-	return env
-}
-
-func (self *Env) Origin() common.Address { return self.origin }
-func (self *Env) BlockNumber() *big.Int  { return self.number }
-
-//func (self *Env) PrevHash() []byte      { return self.parent }
-func (self *Env) Coinbase() common.Address { return self.coinbase }
-func (self *Env) Time() uint64             { return self.time }
-func (self *Env) Difficulty() *big.Int     { return self.difficulty }
-func (self *Env) State() *state.StateDB    { return self.state }
-func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
-func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
-func (self *Env) GetHash(n uint64) common.Hash {
-	return common.BytesToHash(crypto.Sha3([]byte(big.NewInt(int64(n)).String())))
-}
-func (self *Env) AddLog(log *state.Log) {
-	self.state.AddLog(log)
-}
-func (self *Env) Depth() int     { return self.depth }
-func (self *Env) SetDepth(i int) { self.depth = i }
-func (self *Env) Transfer(from, to vm.Account, amount *big.Int) error {
-	if self.skipTransfer {
-		// ugly hack
-		if self.initial {
-			self.initial = false
-			return nil
+	initialCall := true
+	canTransfer := func(db vm.StateDB, address common.Address, amount *big.Int) bool {
+		if vmTest {
+			if initialCall {
+				initialCall = false
+				return true
+			}
 		}
-
-		if from.Balance().Cmp(amount) < 0 {
-			return errors.New("Insufficient balance in account")
+		return core.CanTransfer(db, address, amount)
+	}
+	transfer := func(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
+		if vmTest {
+			return
 		}
-
-		return nil
-	}
-	return vm.Transfer(from, to, amount)
-}
-
-func (self *Env) vm(addr *common.Address, data []byte, gas, price, value *big.Int) *core.Execution {
-	exec := core.NewExecution(self, addr, data, gas, price, value)
-
-	return exec
-}
-
-func (self *Env) Call(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas, price)
-
-		return nil, nil
-	}
-	exe := self.vm(&addr, data, gas, price, value)
-	ret, err := exe.Call(addr, caller)
-	self.Gas = exe.Gas
-
-	return ret, err
-
-}
-func (self *Env) CallCode(caller vm.ContextRef, addr common.Address, data []byte, gas, price, value *big.Int) ([]byte, error) {
-	if self.vmTest && self.depth > 0 {
-		caller.ReturnGas(gas, price)
-
-		return nil, nil
+		core.Transfer(db, sender, recipient, amount)
 	}
 
-	caddr := caller.Address()
-	exe := self.vm(&caddr, data, gas, price, value)
-	return exe.Call(addr, caller)
-}
+	context := vm.Context{
+		CanTransfer: canTransfer,
+		Transfer:    transfer,
+		GetHash: func(n uint64) common.Hash {
+			return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
+		},
 
-func (self *Env) Create(caller vm.ContextRef, data []byte, gas, price, value *big.Int) ([]byte, error, vm.ContextRef) {
-	exe := self.vm(nil, data, gas, price, value)
-	if self.vmTest {
-		caller.ReturnGas(gas, price)
-
-		nonce := self.state.GetNonce(caller.Address())
-		obj := self.state.GetOrNewStateObject(crypto.CreateAddress(caller.Address(), nonce))
-
-		return nil, nil, obj
-	} else {
-		return exe.Create(caller)
+		Origin:      origin,
+		Coinbase:    common.HexToAddress(envValues["currentCoinbase"]),
+		BlockNumber: math.MustParseBig256(envValues["currentNumber"]),
+		Time:        math.MustParseBig256(envValues["currentTimestamp"]),
+		GasLimit:    math.MustParseBig256(envValues["currentGasLimit"]),
+		Difficulty:  math.MustParseBig256(envValues["currentDifficulty"]),
+		GasPrice:    price,
 	}
+	if context.GasPrice == nil {
+		context.GasPrice = new(big.Int)
+	}
+	return vm.NewEVM(context, statedb, chainConfig, vm.Config{NoRecursion: vmTest}), msg
 }
-
-type Message struct {
-	from              common.Address
-	to                *common.Address
-	value, gas, price *big.Int
-	data              []byte
-	nonce             uint64
-}
-
-func NewMessage(from common.Address, to *common.Address, data []byte, value, gas, price *big.Int, nonce uint64) Message {
-	return Message{from, to, value, gas, price, data, nonce}
-}
-
-func (self Message) Hash() []byte                  { return nil }
-func (self Message) From() (common.Address, error) { return self.from, nil }
-func (self Message) To() *common.Address           { return self.to }
-func (self Message) GasPrice() *big.Int            { return self.price }
-func (self Message) Gas() *big.Int                 { return self.gas }
-func (self Message) Value() *big.Int               { return self.value }
-func (self Message) Nonce() uint64                 { return self.nonce }
-func (self Message) Data() []byte                  { return self.data }

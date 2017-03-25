@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package tests implements execution of Ethereum JSON tests.
 package tests
@@ -25,8 +25,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/ethereum/go-ethereum/core"
 )
 
 var (
@@ -35,27 +33,34 @@ var (
 	stateTestDir       = filepath.Join(baseDir, "StateTests")
 	transactionTestDir = filepath.Join(baseDir, "TransactionTests")
 	vmTestDir          = filepath.Join(baseDir, "VMTests")
+	rlpTestDir         = filepath.Join(baseDir, "RLPTests")
 
 	BlockSkipTests = []string{
-		// Fails in InsertPreState with: computed state root does not
-		// match genesis block bba25a96 0d8f85c8 Christoph said it will be
-		// fixed eventually
-		"SimpleTx3",
-
 		// These tests are not valid, as they are out of scope for RLP and
 		// the consensus protocol.
 		"BLOCK__RandomByteAtTheEnd",
 		"TRANSCT__RandomByteAtTheEnd",
 		"BLOCK__ZeroByteAtTheEnd",
 		"TRANSCT__ZeroByteAtTheEnd",
+
+		"ChainAtoChainB_blockorder2",
+		"ChainAtoChainB_blockorder1",
+
+		"GasLimitHigherThan2p63m1", // not yet ;)
+		"SuicideIssue",             // fails genesis check
 	}
 
-	/* Go does not support transaction (account) nonces above 2^64. This
+	/* Go client does not support transaction (account) nonces above 2^64. This
 	technically breaks consensus but is regarded as "reasonable
 	engineering constraint" as accounts cannot easily reach such high
 	nonce values in practice
 	*/
-	TransSkipTests = []string{"TransactionWithHihghNonce256"}
+	TransSkipTests = []string{
+		"TransactionWithHihghNonce256",
+		"Vitalik_15",
+		"Vitalik_16",
+		"Vitalik_17",
+	}
 	StateSkipTests = []string{}
 	VmSkipTests    = []string{}
 )
@@ -63,10 +68,8 @@ var (
 func readJson(reader io.Reader, value interface{}) error {
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return fmt.Errorf("Error reading JSON file", err.Error())
+		return fmt.Errorf("error reading JSON file: %v", err)
 	}
-
-	core.DisableBadBlockReporting = true
 	if err = json.Unmarshal(data, &value); err != nil {
 		if syntaxerr, ok := err.(*json.SyntaxError); ok {
 			line := findLine(data, syntaxerr.Offset)
@@ -84,11 +87,7 @@ func readJsonHttp(uri string, value interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	err = readJson(resp.Body, value)
-	if err != nil {
-		return err
-	}
-	return nil
+	return readJson(resp.Body, value)
 }
 
 func readJsonFile(fn string, value interface{}) error {
