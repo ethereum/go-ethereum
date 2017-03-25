@@ -25,7 +25,6 @@
   "foo": {
     "in": {
       "foo": "bar",
-      "food": "bat",
       "food": "bass"
     },
     "root": "0x17beaa1648bafa633cda809c90c04af50fc8aed3cb40d16efbddee6fdf63c4c3"

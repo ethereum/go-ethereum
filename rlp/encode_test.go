@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rlp
 
 import (
@@ -7,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/big"
+	"sync"
 	"testing"
 )
 
@@ -55,6 +72,10 @@ type encTest struct {
 }
 
 var encTests = []encTest{
+	// booleans
+	{val: true, output: "01"},
+	{val: false, output: "80"},
+
 	// integers
 	{val: uint32(0), output: "80"},
 	{val: uint32(127), output: "7F"},
@@ -103,12 +124,18 @@ var encTests = []encTest{
 
 	// byte slices, strings
 	{val: []byte{}, output: "80"},
+	{val: []byte{0x7E}, output: "7E"},
+	{val: []byte{0x7F}, output: "7F"},
+	{val: []byte{0x80}, output: "8180"},
 	{val: []byte{1, 2, 3}, output: "83010203"},
 
 	{val: []namedByteType{1, 2, 3}, output: "83010203"},
 	{val: [...]namedByteType{1, 2, 3}, output: "83010203"},
 
 	{val: "", output: "80"},
+	{val: "\x7E", output: "7E"},
+	{val: "\x7F", output: "7F"},
+	{val: "\x80", output: "8180"},
 	{val: "dog", output: "83646F67"},
 	{
 		val:    "Lorem ipsum dolor sit amet, consectetur adipisicing eli",
@@ -177,26 +204,30 @@ var encTests = []encTest{
 		output: "F90200CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376CF84617364668471776572847A786376",
 	},
 
+	// RawValue
+	{val: RawValue(unhex("01")), output: "01"},
+	{val: RawValue(unhex("82FFFF")), output: "82FFFF"},
+	{val: []RawValue{unhex("01"), unhex("02")}, output: "C20102"},
+
 	// structs
 	{val: simplestruct{}, output: "C28080"},
 	{val: simplestruct{A: 3, B: "foo"}, output: "C50383666F6F"},
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
-
-	// flat
-	{val: Flat(uint(1)), error: "rlp.Flat: uint did not encode as list"},
-	{val: Flat(simplestruct{A: 3, B: "foo"}), output: "0383666F6F"},
-	{
-		// value generates more list headers after the Flat
-		val:    []interface{}{"foo", []uint{1, 2}, Flat([]uint{3, 4}), []uint{5, 6}, "bar"},
-		output: "D083666F6FC201020304C2050683626172",
-	},
+	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}}, output: "C3010203"},
+	{val: &tailRaw{A: 1, Tail: []RawValue{unhex("02")}}, output: "C20102"},
+	{val: &tailRaw{A: 1, Tail: []RawValue{}}, output: "C101"},
+	{val: &tailRaw{A: 1, Tail: nil}, output: "C101"},
+	{val: &hasIgnoredField{A: 1, B: 2, C: 3}, output: "C20103"},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},
 	{val: (*string)(nil), output: "80"},
 	{val: (*[]byte)(nil), output: "80"},
+	{val: (*[10]byte)(nil), output: "80"},
+	{val: (*big.Int)(nil), output: "80"},
 	{val: (*[]string)(nil), output: "C0"},
+	{val: (*[10]string)(nil), output: "C0"},
 	{val: (*[]interface{})(nil), output: "C0"},
 	{val: (*[]struct{ uint })(nil), output: "C0"},
 	{val: (*interface{})(nil), output: "C0"},
@@ -285,4 +316,26 @@ func TestEncodeToReaderPiecewise(t *testing.T) {
 		}
 		return output, nil
 	})
+}
+
+// This is a regression test verifying that encReader
+// returns its encbuf to the pool only once.
+func TestEncodeToReaderReturnToPool(t *testing.T) {
+	buf := make([]byte, 50)
+	wg := new(sync.WaitGroup)
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			for i := 0; i < 1000; i++ {
+				_, r, _ := EncodeToReader("foo")
+				ioutil.ReadAll(r)
+				r.Read(buf)
+				r.Read(buf)
+				r.Read(buf)
+				r.Read(buf)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

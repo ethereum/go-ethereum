@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package rle
 
 import (
@@ -51,8 +67,8 @@ func (s *CompressionRleSuite) TestDecompressSimple(c *checker.C) {
 // 	}
 
 // 	var exp []byte
-// 	exp = append(exp, crypto.Sha3([]byte(""))...)
-// 	exp = append(exp, crypto.Sha3([]byte{0x80})...)
+// 	exp = append(exp, crypto.Keccak256([]byte(""))...)
+// 	exp = append(exp, crypto.Keccak256([]byte{0x80})...)
 // 	exp = append(exp, make([]byte, 10)...)
 
 // 	if bytes.Compare(res, res) != 0 {
@@ -66,12 +82,12 @@ func (s *CompressionRleSuite) TestDecompressSimple(c *checker.C) {
 // 		t.Error("5 * zero", res)
 // 	}
 
-// 	res = Compress(crypto.Sha3([]byte("")))
+// 	res = Compress(crypto.Keccak256([]byte("")))
 // 	if bytes.Compare(res, []byte{token, emptyShaToken}) != 0 {
 // 		t.Error("empty sha", res)
 // 	}
 
-// 	res = Compress(crypto.Sha3([]byte{0x80}))
+// 	res = Compress(crypto.Keccak256([]byte{0x80}))
 // 	if bytes.Compare(res, []byte{token, emptyListShaToken}) != 0 {
 // 		t.Error("empty list sha", res)
 // 	}
@@ -84,8 +100,8 @@ func (s *CompressionRleSuite) TestDecompressSimple(c *checker.C) {
 
 // func TestCompressMulti(t *testing.T) {
 // 	in := []byte{0, 0, 0, 0, 0}
-// 	in = append(in, crypto.Sha3([]byte(""))...)
-// 	in = append(in, crypto.Sha3([]byte{0x80})...)
+// 	in = append(in, crypto.Keccak256([]byte(""))...)
+// 	in = append(in, crypto.Keccak256([]byte{0x80})...)
 // 	in = append(in, token)
 // 	res := Compress(in)
 
@@ -100,8 +116,8 @@ func (s *CompressionRleSuite) TestDecompressSimple(c *checker.C) {
 
 // 	for i := 0; i < 20; i++ {
 // 		in = append(in, []byte{0, 0, 0, 0, 0}...)
-// 		in = append(in, crypto.Sha3([]byte(""))...)
-// 		in = append(in, crypto.Sha3([]byte{0x80})...)
+// 		in = append(in, crypto.Keccak256([]byte(""))...)
+// 		in = append(in, crypto.Keccak256([]byte{0x80})...)
 // 		in = append(in, []byte{123, 2, 19, 89, 245, 254, 255, token, 98, 233}...)
 // 		in = append(in, token)
 // 	}

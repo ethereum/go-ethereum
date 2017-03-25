@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package event
 
 import (
@@ -8,6 +24,14 @@ import (
 )
 
 type testEvent int
+
+func TestSubCloseUnsub(t *testing.T) {
+	// the point of this test is **not** to panic
+	var mux TypeMux
+	mux.Stop()
+	sub := mux.Subscribe(int(0))
+	sub.Unsubscribe()
+}
 
 func TestSub(t *testing.T) {
 	mux := new(TypeMux)
@@ -21,7 +45,7 @@ func TestSub(t *testing.T) {
 	}()
 	ev := <-sub.Chan()
 
-	if ev.(testEvent) != testEvent(5) {
+	if ev.Data.(testEvent) != testEvent(5) {
 		t.Errorf("Got %v (%T), expected event %v (%T)",
 			ev, ev, testEvent(5), testEvent(5))
 	}
@@ -120,21 +144,39 @@ func TestMuxConcurrent(t *testing.T) {
 func emptySubscriber(mux *TypeMux, types ...interface{}) {
 	s := mux.Subscribe(testEvent(0))
 	go func() {
-		for _ = range s.Chan() {
+		for range s.Chan() {
 		}
 	}()
 }
 
-func BenchmarkPost3(b *testing.B) {
-	var mux = new(TypeMux)
-	defer mux.Stop()
-	emptySubscriber(mux, testEvent(0))
-	emptySubscriber(mux, testEvent(0))
-	emptySubscriber(mux, testEvent(0))
+func BenchmarkPost1000(b *testing.B) {
+	var (
+		mux              = new(TypeMux)
+		subscribed, done sync.WaitGroup
+		nsubs            = 1000
+	)
+	subscribed.Add(nsubs)
+	done.Add(nsubs)
+	for i := 0; i < nsubs; i++ {
+		go func() {
+			s := mux.Subscribe(testEvent(0))
+			subscribed.Done()
+			for range s.Chan() {
+			}
+			done.Done()
+		}()
+	}
+	subscribed.Wait()
 
+	// The actual benchmark.
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		mux.Post(testEvent(0))
 	}
+
+	b.StopTimer()
+	mux.Stop()
+	done.Wait()
 }
 
 func BenchmarkPostConcurrent(b *testing.B) {
@@ -163,7 +205,7 @@ func BenchmarkChanSend(b *testing.B) {
 	c := make(chan interface{})
 	closed := make(chan struct{})
 	go func() {
-		for _ = range c {
+		for range c {
 		}
 	}()
 
