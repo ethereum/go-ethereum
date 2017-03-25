@@ -41,13 +41,12 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"hash"
+
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
-// The default curve for this package is the NIST P256 curve, which
-// provides security equivalent to AES-128.
-var DefaultCurve = elliptic.P256()
-
 var (
+	DefaultCurve                  = ethcrypto.S256()
 	ErrUnsupportedECDHAlgorithm   = fmt.Errorf("ecies: unsupported ECDH algorithm")
 	ErrUnsupportedECIESParameters = fmt.Errorf("ecies: unsupported ECIES parameters")
 )
@@ -101,9 +100,10 @@ var (
 )
 
 var paramsFromCurve = map[elliptic.Curve]*ECIESParams{
-	elliptic.P256(): ECIES_AES128_SHA256,
-	elliptic.P384(): ECIES_AES256_SHA384,
-	elliptic.P521(): ECIES_AES256_SHA512,
+	ethcrypto.S256(): ECIES_AES128_SHA256,
+	elliptic.P256():  ECIES_AES128_SHA256,
+	elliptic.P384():  ECIES_AES256_SHA384,
+	elliptic.P521():  ECIES_AES256_SHA512,
 }
 
 func AddParamsForCurve(curve elliptic.Curve, params *ECIESParams) {

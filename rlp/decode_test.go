@@ -1,28 +1,30 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rlp
 
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -113,12 +115,19 @@ func TestStreamErrors(t *testing.T) {
 		{"00", calls{"Uint"}, nil, ErrCanonInt},
 		{"820002", calls{"Uint"}, nil, ErrCanonInt},
 		{"8133", calls{"Uint"}, nil, ErrCanonSize},
-		{"8156", calls{"Uint"}, nil, nil},
+		{"817F", calls{"Uint"}, nil, ErrCanonSize},
+		{"8180", calls{"Uint"}, nil, nil},
+
+		// Non-valid boolean
+		{"02", calls{"Bool"}, nil, errors.New("rlp: invalid boolean value: 2")},
 
 		// Size tags must use the smallest possible encoding.
 		// Leading zero bytes in the size tag are also rejected.
 		{"8100", calls{"Uint"}, nil, ErrCanonSize},
 		{"8100", calls{"Bytes"}, nil, ErrCanonSize},
+		{"8101", calls{"Bytes"}, nil, ErrCanonSize},
+		{"817F", calls{"Bytes"}, nil, ErrCanonSize},
+		{"8180", calls{"Bytes"}, nil, nil},
 		{"B800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
 		{"B90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
 		{"B90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
@@ -132,11 +141,11 @@ func TestStreamErrors(t *testing.T) {
 		{"", calls{"Kind"}, nil, io.EOF},
 		{"", calls{"Uint"}, nil, io.EOF},
 		{"", calls{"List"}, nil, io.EOF},
-		{"8158", calls{"Uint", "Uint"}, nil, io.EOF},
+		{"8180", calls{"Uint", "Uint"}, nil, io.EOF},
 		{"C0", calls{"List", "ListEnd", "List"}, nil, io.EOF},
 
 		{"", calls{"List"}, withoutInputLimit, io.EOF},
-		{"8158", calls{"Uint", "Uint"}, withoutInputLimit, io.EOF},
+		{"8180", calls{"Uint", "Uint"}, withoutInputLimit, io.EOF},
 		{"C0", calls{"List", "ListEnd", "List"}, withoutInputLimit, io.EOF},
 
 		// Input limit errors.
@@ -153,11 +162,11 @@ func TestStreamErrors(t *testing.T) {
 		// down toward zero in Stream.remaining, reading too far can overflow
 		// remaining to a large value, effectively disabling the limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withCustomInputLimit(5), io.EOF},
-		{"C4010203048158", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
+		{"C4010203048180", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
 
 		// Check that the same calls are fine without a limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withoutInputLimit, nil},
-		{"C4010203048158", calls{"Raw", "Uint"}, withoutInputLimit, nil},
+		{"C4010203048180", calls{"Raw", "Uint"}, withoutInputLimit, nil},
 
 		// Unexpected EOF. This only happens when there is
 		// no input limit, so the reader needs to be 'dumbed down'.
@@ -303,6 +312,26 @@ type recstruct struct {
 	Child *recstruct `rlp:"nil"`
 }
 
+type invalidTail1 struct {
+	A uint `rlp:"tail"`
+	B string
+}
+
+type invalidTail2 struct {
+	A uint
+	B string `rlp:"tail"`
+}
+
+type tailRaw struct {
+	A    uint
+	Tail []RawValue `rlp:"tail"`
+}
+
+type tailUint struct {
+	A    uint
+	Tail []uint `rlp:"tail"`
+}
+
 var (
 	veryBigInt = big.NewInt(0).Add(
 		big.NewInt(0).Lsh(big.NewInt(0xFFFFFFFFFFFFFF), 16),
@@ -310,7 +339,18 @@ var (
 	)
 )
 
+type hasIgnoredField struct {
+	A uint
+	B uint `rlp:"-"`
+	C uint
+}
+
 var decodeTests = []decodeTest{
+	// booleans
+	{input: "01", ptr: new(bool), value: true},
+	{input: "80", ptr: new(bool), value: false},
+	{input: "02", ptr: new(bool), error: "rlp: invalid boolean value: 2"},
+
 	// integers
 	{input: "05", ptr: new(uint32), value: uint32(5)},
 	{input: "80", ptr: new(uint32), value: uint32(0)},
@@ -349,6 +389,7 @@ var decodeTests = []decodeTest{
 
 	// byte arrays
 	{input: "02", ptr: new([1]byte), value: [1]byte{2}},
+	{input: "8180", ptr: new([1]byte), value: [1]byte{128}},
 	{input: "850102030405", ptr: new([5]byte), value: [5]byte{1, 2, 3, 4, 5}},
 
 	// byte array errors
@@ -359,6 +400,7 @@ var decodeTests = []decodeTest{
 	{input: "C3010203", ptr: new([5]byte), error: "rlp: expected input string or byte for [5]uint8"},
 	{input: "86010203040506", ptr: new([5]byte), error: "rlp: input string too long for [5]uint8"},
 	{input: "8105", ptr: new([1]byte), error: "rlp: non-canonical size information for [1]uint8"},
+	{input: "817F", ptr: new([1]byte), error: "rlp: non-canonical size information for [1]uint8"},
 
 	// zero sized byte arrays
 	{input: "80", ptr: new([0]byte), value: [0]byte{}},
@@ -421,13 +463,58 @@ var decodeTests = []decodeTest{
 		ptr:   new(recstruct),
 		error: "rlp: expected input string or byte for uint, decoding into (rlp.recstruct).Child.I",
 	},
+	{
+		input: "C0",
+		ptr:   new(invalidTail1),
+		error: "rlp: invalid struct tag \"tail\" for rlp.invalidTail1.A (must be on last field)",
+	},
+	{
+		input: "C0",
+		ptr:   new(invalidTail2),
+		error: "rlp: invalid struct tag \"tail\" for rlp.invalidTail2.B (field type is not slice)",
+	},
+	{
+		input: "C50102C20102",
+		ptr:   new(tailUint),
+		error: "rlp: expected input string or byte for uint, decoding into (rlp.tailUint).Tail[1]",
+	},
+
+	// struct tag "tail"
+	{
+		input: "C3010203",
+		ptr:   new(tailRaw),
+		value: tailRaw{A: 1, Tail: []RawValue{unhex("02"), unhex("03")}},
+	},
+	{
+		input: "C20102",
+		ptr:   new(tailRaw),
+		value: tailRaw{A: 1, Tail: []RawValue{unhex("02")}},
+	},
+	{
+		input: "C101",
+		ptr:   new(tailRaw),
+		value: tailRaw{A: 1, Tail: []RawValue{}},
+	},
+
+	// struct tag "-"
+	{
+		input: "C20102",
+		ptr:   new(hasIgnoredField),
+		value: hasIgnoredField{A: 1, C: 2},
+	},
+
+	// RawValue
+	{input: "01", ptr: new(RawValue), value: RawValue(unhex("01"))},
+	{input: "82FFFF", ptr: new(RawValue), value: RawValue(unhex("82FFFF"))},
+	{input: "C20102", ptr: new([]RawValue), value: []RawValue{unhex("01"), unhex("02")}},
 
 	// pointers
 	{input: "00", ptr: new(*[]byte), value: &[]byte{0}},
 	{input: "80", ptr: new(*uint), value: uintp(0)},
 	{input: "C0", ptr: new(*uint), error: "rlp: expected input string or byte for uint"},
 	{input: "07", ptr: new(*uint), value: uintp(7)},
-	{input: "8158", ptr: new(*uint), value: uintp(0x58)},
+	{input: "817F", ptr: new(*uint), error: "rlp: non-canonical size information for uint"},
+	{input: "8180", ptr: new(*uint), value: uintp(0x80)},
 	{input: "C109", ptr: new(*[]uint), value: &[]uint{9}},
 	{input: "C58403030303", ptr: new(*[][]byte), value: &[][]byte{{3, 3, 3, 3}}},
 
@@ -709,7 +796,7 @@ func encodeTestSlice(n uint) []byte {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(str)
+	b, err := hex.DecodeString(strings.Replace(str, " ", "", -1))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}

@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	// "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 )
@@ -32,9 +32,9 @@ type TestManager struct {
 	// stateManager *StateManager
 	eventMux *event.TypeMux
 
-	db         common.Database
+	db         ethdb.Database
 	txPool     *TxPool
-	blockChain *ChainManager
+	blockChain *BlockChain
 	Blocks     []*types.Block
 }
 
@@ -54,7 +54,7 @@ func (s *TestManager) Peers() *list.List {
 	return list.New()
 }
 
-func (s *TestManager) ChainManager() *ChainManager {
+func (s *TestManager) BlockChain() *BlockChain {
 	return s.blockChain
 }
 
@@ -74,7 +74,7 @@ func (tm *TestManager) EventMux() *event.TypeMux {
 // 	return nil
 // }
 
-func (tm *TestManager) Db() common.Database {
+func (tm *TestManager) Db() ethdb.Database {
 	return tm.db
 }
 
@@ -89,7 +89,7 @@ func NewTestManager() *TestManager {
 	testManager.eventMux = new(event.TypeMux)
 	testManager.db = db
 	// testManager.txPool = NewTxPool(testManager)
-	// testManager.blockChain = NewChainManager(testManager)
+	// testManager.blockChain = NewBlockChain(testManager)
 	// testManager.stateManager = NewStateManager(testManager)
 
 	return testManager

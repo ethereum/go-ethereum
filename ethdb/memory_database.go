@@ -1,23 +1,24 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethdb
 
 import (
-	"fmt"
+	"errors"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -26,27 +27,50 @@ import (
  * This is a test memory database. Do not use for any production it does not get persisted
  */
 type MemDatabase struct {
-	db map[string][]byte
+	db   map[string][]byte
+	lock sync.RWMutex
 }
 
 func NewMemDatabase() (*MemDatabase, error) {
-	db := &MemDatabase{db: make(map[string][]byte)}
-
-	return db, nil
+	return &MemDatabase{
+		db: make(map[string][]byte),
+	}, nil
 }
 
 func (db *MemDatabase) Put(key []byte, value []byte) error {
-	db.db[string(key)] = value
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
+	db.db[string(key)] = common.CopyBytes(value)
 	return nil
 }
 
 func (db *MemDatabase) Set(key []byte, value []byte) {
+	db.lock.Lock()
+	defer db.lock.Unlock()
+
 	db.Put(key, value)
 }
 
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
-	return db.db[string(key)], nil
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	if entry, ok := db.db[string(key)]; ok {
+		return entry, nil
+	}
+	return nil, errors.New("not found")
+}
+
+func (db *MemDatabase) Keys() [][]byte {
+	db.lock.RLock()
+	defer db.lock.RUnlock()
+
+	keys := [][]byte{}
+	for key := range db.db {
+		keys = append(keys, []byte(key))
+	}
+	return keys
 }
 
 /*
@@ -58,32 +82,44 @@ func (db *MemDatabase) GetKeys() []*common.Key {
 */
 
 func (db *MemDatabase) Delete(key []byte) error {
-	delete(db.db, string(key))
+	db.lock.Lock()
+	defer db.lock.Unlock()
 
+	delete(db.db, string(key))
 	return nil
 }
 
-func (db *MemDatabase) Print() {
-	for key, val := range db.db {
-		fmt.Printf("%x(%d): ", key, len(key))
-		node := common.NewValueFromBytes(val)
-		fmt.Printf("%q\n", node.Val)
+func (db *MemDatabase) Close() {}
+
+func (db *MemDatabase) NewBatch() Batch {
+	return &memBatch{db: db}
+}
+
+type kv struct{ k, v []byte }
+
+type memBatch struct {
+	db     *MemDatabase
+	writes []kv
+	lock   sync.RWMutex
+}
+
+func (b *memBatch) Put(key, value []byte) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
+	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value)})
+	return nil
+}
+
+func (b *memBatch) Write() error {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	b.db.lock.Lock()
+	defer b.db.lock.Unlock()
+
+	for _, kv := range b.writes {
+		b.db.db[string(kv.k)] = kv.v
 	}
-}
-
-func (db *MemDatabase) Close() {
-}
-
-func (db *MemDatabase) LastKnownTD() []byte {
-	data, _ := db.Get([]byte("LastKnownTotalDifficulty"))
-
-	if len(data) == 0 || data == nil {
-		data = []byte{0x0}
-	}
-
-	return data
-}
-
-func (db *MemDatabase) Flush() error {
 	return nil
 }

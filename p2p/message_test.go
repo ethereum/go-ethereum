@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
@@ -58,7 +58,7 @@ loop:
 			if err := SendItems(rw1, 1); err == nil {
 				t.Error("EncodeMsg returned nil error")
 			} else if err != ErrPipeClosed {
-				t.Error("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
+				t.Errorf("EncodeMsg returned wrong error: got %v, want %v", err, ErrPipeClosed)
 			}
 			close(done)
 		}()
@@ -143,7 +143,8 @@ func TestEOFSignal(t *testing.T) {
 }
 
 func unhex(str string) []byte {
-	b, err := hex.DecodeString(strings.Replace(str, "\n", "", -1))
+	r := strings.NewReplacer("\t", "", " ", "", "\n", "")
+	b, err := hex.DecodeString(r.Replace(str))
 	if err != nil {
 		panic(fmt.Sprintf("invalid hex string: %q", str))
 	}

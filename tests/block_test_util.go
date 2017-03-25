@@ -1,18 +1,18 @@
 // Copyright 2015 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
@@ -22,21 +22,20 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -44,8 +43,10 @@ import (
 type BlockTest struct {
 	Genesis *types.Block
 
-	Json        *btJSON
-	preAccounts map[string]btAccount
+	Json          *btJSON
+	preAccounts   map[string]btAccount
+	postAccounts  map[string]btAccount
+	lastblockhash string
 }
 
 type btJSON struct {
@@ -53,6 +54,7 @@ type btJSON struct {
 	GenesisBlockHeader btHeader
 	Pre                map[string]btAccount
 	PostState          map[string]btAccount
+	Lastblockhash      string
 }
 
 type btBlock struct {
@@ -76,6 +78,7 @@ type btHeader struct {
 	MixHash          string
 	Nonce            string
 	Number           string
+	Hash             string
 	ParentHash       string
 	ReceiptTrie      string
 	SeedHash         string
@@ -102,7 +105,7 @@ type btTransaction struct {
 	Value    string
 }
 
-func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
+func RunBlockTestWithReader(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, r io.Reader, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJson(r, &btjs); err != nil {
 		return err
@@ -113,13 +116,13 @@ func RunBlockTestWithReader(r io.Reader, skipTests []string) error {
 		return err
 	}
 
-	if err := runBlockTests(bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func RunBlockTest(file string, skipTests []string) error {
+func RunBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, file string, skipTests []string) error {
 	btjs := make(map[string]*btJSON)
 	if err := readJsonFile(file, &btjs); err != nil {
 		return err
@@ -129,114 +132,112 @@ func RunBlockTest(file string, skipTests []string) error {
 	if err != nil {
 		return err
 	}
-	if err := runBlockTests(bt, skipTests); err != nil {
+	if err := runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork, bt, skipTests); err != nil {
 		return err
 	}
 	return nil
 }
 
-func runBlockTests(bt map[string]*BlockTest, skipTests []string) error {
+func runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, bt map[string]*BlockTest, skipTests []string) error {
 	skipTest := make(map[string]bool, len(skipTests))
 	for _, name := range skipTests {
 		skipTest[name] = true
 	}
 
 	for name, test := range bt {
-		// if the test should be skipped, return
-		if skipTest[name] {
-			glog.Infoln("Skipping block test", name)
+		if skipTest[name] /*|| name != "CallingCanonicalContractFromFork_CALLCODE"*/ {
+			log.Info(fmt.Sprint("Skipping block test", name))
 			continue
 		}
-
 		// test the block
-		if err := runBlockTest(test); err != nil {
-			return err
+		if err := runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork, test); err != nil {
+			return fmt.Errorf("%s: %v", name, err)
 		}
-		glog.Infoln("Block test passed: ", name)
+		log.Info(fmt.Sprint("Block test passed: ", name))
 
 	}
 	return nil
-
 }
-func runBlockTest(test *BlockTest) error {
-	cfg := test.makeEthConfig()
-	ethereum, err := eth.New(cfg)
-	if err != nil {
-		return err
-	}
 
-	err = ethereum.Start()
-	if err != nil {
-		return err
-	}
-
-	// import the genesis block
-	ethereum.ResetWithGenesisBlock(test.Genesis)
-
-	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
-	if err != nil {
+func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *BlockTest) error {
+	// import pre accounts & construct test genesis block & state root
+	db, _ := ethdb.NewMemDatabase()
+	if _, err := test.InsertPreState(db); err != nil {
 		return fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	err = test.TryBlocksInsert(ethereum.ChainManager())
+	core.WriteTd(db, test.Genesis.Hash(), 0, test.Genesis.Difficulty())
+	core.WriteBlock(db, test.Genesis)
+	core.WriteCanonicalHash(db, test.Genesis.Hash(), test.Genesis.NumberU64())
+	core.WriteHeadBlockHash(db, test.Genesis.Hash())
+	evmux := new(event.TypeMux)
+	config := &params.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true, EIP150Block: gasPriceFork}
+	chain, err := core.NewBlockChain(db, config, pow.NewSharedEthash(), evmux, vm.Config{})
+	if err != nil {
+		return err
+	}
+	defer chain.Stop()
+
+	//vm.Debug = true
+	validBlocks, err := test.TryBlocksInsert(chain)
 	if err != nil {
 		return err
 	}
 
-	if err = test.ValidatePostState(statedb); err != nil {
+	lastblockhash := common.HexToHash(test.lastblockhash)
+	cmlast := chain.LastBlockHash()
+	if lastblockhash != cmlast {
+		return fmt.Errorf("lastblockhash validation mismatch: want: %x, have: %x", lastblockhash, cmlast)
+	}
+
+	newDB, err := chain.State()
+	if err != nil {
+		return err
+	}
+	if err = test.ValidatePostState(newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
-	return nil
-}
 
-func (test *BlockTest) makeEthConfig() *eth.Config {
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(common.DefaultDataDir(), "keystore"))
-
-	return &eth.Config{
-		DataDir:        common.DefaultDataDir(),
-		Verbosity:      5,
-		Etherbase:      common.Address{},
-		AccountManager: accounts.NewManager(ks),
-		NewDB:          func(path string) (common.Database, error) { return ethdb.NewMemDatabase() },
-	}
+	return test.ValidateImportedHeaders(chain, validBlocks)
 }
 
 // InsertPreState populates the given database with the genesis
 // accounts defined by the test.
-func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, error) {
-	db := ethereum.StateDb()
-	statedb := state.New(common.Hash{}, db)
+func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
+	statedb, err := state.New(common.Hash{}, db)
+	if err != nil {
+		return nil, err
+	}
 	for addrString, acct := range t.preAccounts {
-		addr, _ := hex.DecodeString(addrString)
-		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
-		balance, _ := new(big.Int).SetString(acct.Balance, 0)
-		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
-
-		if acct.PrivateKey != "" {
-			privkey, err := hex.DecodeString(strings.TrimPrefix(acct.PrivateKey, "0x"))
-			err = crypto.ImportBlockTestKey(privkey)
-			err = ethereum.AccountManager().TimedUnlock(common.BytesToAddress(addr), "", 999999*time.Second)
-			if err != nil {
-				return nil, err
-			}
+		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
+		if err != nil {
+			return nil, err
+		}
+		balance, ok := new(big.Int).SetString(acct.Balance, 0)
+		if !ok {
+			return nil, err
+		}
+		nonce, err := strconv.ParseUint(prepInt(16, acct.Nonce), 16, 64)
+		if err != nil {
+			return nil, err
 		}
 
-		obj := statedb.CreateAccount(common.HexToAddress(addrString))
-		obj.SetCode(code)
-		obj.SetBalance(balance)
-		obj.SetNonce(nonce)
+		addr := common.HexToAddress(addrString)
+		statedb.CreateAccount(addr)
+		statedb.SetCode(addr, code)
+		statedb.SetBalance(addr, balance)
+		statedb.SetNonce(addr, nonce)
 		for k, v := range acct.Storage {
 			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.HexToHash(v))
 		}
 	}
-	// sync objects to trie
-	statedb.SyncObjects()
-	// sync trie to disk
-	statedb.Sync()
 
-	if !bytes.Equal(t.Genesis.Root().Bytes(), statedb.Root().Bytes()) {
-		return nil, fmt.Errorf("computed state root does not match genesis block %x %x", t.Genesis.Root().Bytes()[:4], statedb.Root().Bytes()[:4])
+	root, err := statedb.Commit(false)
+	if err != nil {
+		return nil, fmt.Errorf("error writing state: %v", err)
+	}
+	if t.Genesis.Root() != root {
+		return nil, fmt.Errorf("computed state root does not match genesis block: genesis=%x computed=%x", t.Genesis.Root().Bytes()[:4], root.Bytes()[:4])
 	}
 	return statedb, nil
 }
@@ -253,7 +254,8 @@ func (t *BlockTest) InsertPreState(ethereum *eth.Ethereum) (*state.StateDB, erro
    expected we are expected to ignore it and continue processing and then validate the
    post state.
 */
-func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
+func (t *BlockTest) TryBlocksInsert(blockchain *core.BlockChain) ([]btBlock, error) {
+	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
 	for _, b := range t.Json.Blocks {
 		cb, err := mustConvertBlock(b)
@@ -261,127 +263,164 @@ func (t *BlockTest) TryBlocksInsert(chainManager *core.ChainManager) error {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return fmt.Errorf("Block RLP decoding failed when expected to succeed: %v", err)
+				return nil, fmt.Errorf("Block RLP decoding failed when expected to succeed: %v", err)
 			}
 		}
 		// RLP decoding worked, try to insert into chain:
-		_, err = chainManager.InsertChain(types.Blocks{cb})
+		blocks := types.Blocks{cb}
+		i, err := blockchain.InsertChain(blocks)
 		if err != nil {
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
-				return fmt.Errorf("Block insertion into chain failed: %v", err)
+				return nil, fmt.Errorf("Block #%v insertion into chain failed: %v", blocks[i].Number(), err)
 			}
 		}
 		if b.BlockHeader == nil {
-			return fmt.Errorf("Block insertion should have failed")
+			return nil, fmt.Errorf("Block insertion should have failed")
 		}
-		err = t.validateBlockHeader(b.BlockHeader, cb.Header())
-		if err != nil {
-			return fmt.Errorf("Block header validation failed: %v", err)
+
+		// validate RLP decoding by checking all values against test file JSON
+		if err = validateHeader(b.BlockHeader, cb.Header()); err != nil {
+			return nil, fmt.Errorf("Deserialised block header validation failed: %v", err)
 		}
+		validBlocks = append(validBlocks, b)
 	}
-	return nil
+	return validBlocks, nil
 }
 
-func (s *BlockTest) validateBlockHeader(h *btHeader, h2 *types.Header) error {
+func validateHeader(h *btHeader, h2 *types.Header) error {
 	expectedBloom := mustConvertBytes(h.Bloom)
 	if !bytes.Equal(expectedBloom, h2.Bloom.Bytes()) {
-		return fmt.Errorf("Bloom: expected: %v, decoded: %v", expectedBloom, h2.Bloom.Bytes())
+		return fmt.Errorf("Bloom: want: %x have: %x", expectedBloom, h2.Bloom.Bytes())
 	}
 
 	expectedCoinbase := mustConvertBytes(h.Coinbase)
 	if !bytes.Equal(expectedCoinbase, h2.Coinbase.Bytes()) {
-		return fmt.Errorf("Coinbase: expected: %v, decoded: %v", expectedCoinbase, h2.Coinbase.Bytes())
+		return fmt.Errorf("Coinbase: want: %x have: %x", expectedCoinbase, h2.Coinbase.Bytes())
 	}
 
 	expectedMixHashBytes := mustConvertBytes(h.MixHash)
 	if !bytes.Equal(expectedMixHashBytes, h2.MixDigest.Bytes()) {
-		return fmt.Errorf("MixHash: expected: %v, decoded: %v", expectedMixHashBytes, h2.MixDigest.Bytes())
+		return fmt.Errorf("MixHash: want: %x have: %x", expectedMixHashBytes, h2.MixDigest.Bytes())
 	}
 
 	expectedNonce := mustConvertBytes(h.Nonce)
 	if !bytes.Equal(expectedNonce, h2.Nonce[:]) {
-		return fmt.Errorf("Nonce: expected: %v, decoded: %v", expectedNonce, h2.Nonce)
+		return fmt.Errorf("Nonce: want: %x have: %x", expectedNonce, h2.Nonce)
 	}
 
 	expectedNumber := mustConvertBigInt(h.Number, 16)
 	if expectedNumber.Cmp(h2.Number) != 0 {
-		return fmt.Errorf("Number: expected: %v, decoded: %v", expectedNumber, h2.Number)
+		return fmt.Errorf("Number: want: %v have: %v", expectedNumber, h2.Number)
 	}
 
 	expectedParentHash := mustConvertBytes(h.ParentHash)
 	if !bytes.Equal(expectedParentHash, h2.ParentHash.Bytes()) {
-		return fmt.Errorf("Parent hash: expected: %v, decoded: %v", expectedParentHash, h2.ParentHash.Bytes())
+		return fmt.Errorf("Parent hash: want: %x have: %x", expectedParentHash, h2.ParentHash.Bytes())
 	}
 
 	expectedReceiptHash := mustConvertBytes(h.ReceiptTrie)
 	if !bytes.Equal(expectedReceiptHash, h2.ReceiptHash.Bytes()) {
-		return fmt.Errorf("Receipt hash: expected: %v, decoded: %v", expectedReceiptHash, h2.ReceiptHash.Bytes())
+		return fmt.Errorf("Receipt hash: want: %x have: %x", expectedReceiptHash, h2.ReceiptHash.Bytes())
 	}
 
 	expectedTxHash := mustConvertBytes(h.TransactionsTrie)
 	if !bytes.Equal(expectedTxHash, h2.TxHash.Bytes()) {
-		return fmt.Errorf("Tx hash: expected: %v, decoded: %v", expectedTxHash, h2.TxHash.Bytes())
+		return fmt.Errorf("Tx hash: want: %x have: %x", expectedTxHash, h2.TxHash.Bytes())
 	}
 
 	expectedStateHash := mustConvertBytes(h.StateRoot)
 	if !bytes.Equal(expectedStateHash, h2.Root.Bytes()) {
-		return fmt.Errorf("State hash: expected: %v, decoded: %v", expectedStateHash, h2.Root.Bytes())
+		return fmt.Errorf("State hash: want: %x have: %x", expectedStateHash, h2.Root.Bytes())
 	}
 
 	expectedUncleHash := mustConvertBytes(h.UncleHash)
 	if !bytes.Equal(expectedUncleHash, h2.UncleHash.Bytes()) {
-		return fmt.Errorf("Uncle hash: expected: %v, decoded: %v", expectedUncleHash, h2.UncleHash.Bytes())
+		return fmt.Errorf("Uncle hash: want: %x have: %x", expectedUncleHash, h2.UncleHash.Bytes())
 	}
 
 	expectedExtraData := mustConvertBytes(h.ExtraData)
 	if !bytes.Equal(expectedExtraData, h2.Extra) {
-		return fmt.Errorf("Extra data: expected: %v, decoded: %v", expectedExtraData, h2.Extra)
+		return fmt.Errorf("Extra data: want: %x have: %x", expectedExtraData, h2.Extra)
 	}
 
 	expectedDifficulty := mustConvertBigInt(h.Difficulty, 16)
 	if expectedDifficulty.Cmp(h2.Difficulty) != 0 {
-		return fmt.Errorf("Difficulty: expected: %v, decoded: %v", expectedDifficulty, h2.Difficulty)
+		return fmt.Errorf("Difficulty: want: %v have: %v", expectedDifficulty, h2.Difficulty)
 	}
 
 	expectedGasLimit := mustConvertBigInt(h.GasLimit, 16)
 	if expectedGasLimit.Cmp(h2.GasLimit) != 0 {
-		return fmt.Errorf("GasLimit: expected: %v, decoded: %v", expectedGasLimit, h2.GasLimit)
+		return fmt.Errorf("GasLimit: want: %v have: %v", expectedGasLimit, h2.GasLimit)
 	}
 	expectedGasUsed := mustConvertBigInt(h.GasUsed, 16)
 	if expectedGasUsed.Cmp(h2.GasUsed) != 0 {
-		return fmt.Errorf("GasUsed: expected: %v, decoded: %v", expectedGasUsed, h2.GasUsed)
+		return fmt.Errorf("GasUsed: want: %v have: %v", expectedGasUsed, h2.GasUsed)
 	}
 
-	expectedTimestamp := mustConvertUint(h.Timestamp, 16)
-	if expectedTimestamp != h2.Time {
-		return fmt.Errorf("Timestamp: expected: %v, decoded: %v", expectedTimestamp, h2.Time)
+	expectedTimestamp := mustConvertBigInt(h.Timestamp, 16)
+	if expectedTimestamp.Cmp(h2.Time) != 0 {
+		return fmt.Errorf("Timestamp: want: %v have: %v", expectedTimestamp, h2.Time)
 	}
 
 	return nil
 }
 
 func (t *BlockTest) ValidatePostState(statedb *state.StateDB) error {
-	for addrString, acct := range t.preAccounts {
+	// validate post state accounts in test file against what we have in state db
+	for addrString, acct := range t.postAccounts {
 		// XXX: is is worth it checking for errors here?
-		addr, _ := hex.DecodeString(addrString)
-		code, _ := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
-		balance, _ := new(big.Int).SetString(acct.Balance, 0)
-		nonce, _ := strconv.ParseUint(acct.Nonce, 16, 64)
+		addr, err := hex.DecodeString(addrString)
+		if err != nil {
+			return err
+		}
+		code, err := hex.DecodeString(strings.TrimPrefix(acct.Code, "0x"))
+		if err != nil {
+			return err
+		}
+		balance, ok := new(big.Int).SetString(acct.Balance, 0)
+		if !ok {
+			return err
+		}
+		nonce, err := strconv.ParseUint(prepInt(16, acct.Nonce), 16, 64)
+		if err != nil {
+			return err
+		}
 
 		// address is indirectly verified by the other fields, as it's the db key
 		code2 := statedb.GetCode(common.BytesToAddress(addr))
 		balance2 := statedb.GetBalance(common.BytesToAddress(addr))
 		nonce2 := statedb.GetNonce(common.BytesToAddress(addr))
 		if !bytes.Equal(code2, code) {
-			return fmt.Errorf("account code mismatch, addr, found, expected: ", addrString, hex.EncodeToString(code2), hex.EncodeToString(code))
+			return fmt.Errorf("account code mismatch for addr: %s want: %s have: %s", addrString, hex.EncodeToString(code), hex.EncodeToString(code2))
 		}
 		if balance2.Cmp(balance) != 0 {
-			return fmt.Errorf("account balance mismatch, addr, found, expected: ", addrString, balance2, balance)
+			return fmt.Errorf("account balance mismatch for addr: %s, want: %d, have: %d", addrString, balance, balance2)
 		}
 		if nonce2 != nonce {
-			return fmt.Errorf("account nonce mismatch, addr, found, expected: ", addrString, nonce2, nonce)
+			return fmt.Errorf("account nonce mismatch for addr: %s want: %d have: %d", addrString, nonce, nonce2)
+		}
+	}
+	return nil
+}
+
+func (test *BlockTest) ValidateImportedHeaders(cm *core.BlockChain, validBlocks []btBlock) error {
+	// to get constant lookup when verifying block headers by hash (some tests have many blocks)
+	bmap := make(map[string]btBlock, len(test.Json.Blocks))
+	for _, b := range validBlocks {
+		bmap[b.BlockHeader.Hash] = b
+	}
+
+	// iterate over blocks backwards from HEAD and validate imported
+	// headers vs test file. some tests have reorgs, and we import
+	// block-by-block, so we can only validate imported headers after
+	// all blocks have been processed by ChainManager, as they may not
+	// be part of the longest chain until last block is imported.
+	for b := cm.CurrentBlock(); b != nil && b.NumberU64() != 0; b = cm.GetBlockByHash(b.Header().ParentHash) {
+		bHash := common.Bytes2Hex(b.Hash().Bytes()) // hex without 0x prefix
+		if err := validateHeader(bmap[bHash].BlockHeader, b.Header()); err != nil {
+			return fmt.Errorf("Imported block header validation failed: %v", err)
 		}
 	}
 	return nil
@@ -409,7 +448,7 @@ func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 			err = fmt.Errorf("%v\n%s", recovered, buf)
 		}
 	}()
-	out = &BlockTest{preAccounts: in.Pre, Json: in}
+	out = &BlockTest{preAccounts: in.Pre, postAccounts: in.PostState, Json: in, lastblockhash: in.Lastblockhash}
 	out.Genesis = mustConvertGenesis(in.GenesisBlockHeader)
 	return out, err
 }
@@ -417,9 +456,8 @@ func convertBlockTest(in *btJSON) (out *BlockTest, err error) {
 func mustConvertGenesis(testGenesis btHeader) *types.Block {
 	hdr := mustConvertHeader(testGenesis)
 	hdr.Number = big.NewInt(0)
-	b := types.NewBlockWithHeader(hdr)
-	b.Td = new(big.Int)
-	return b
+
+	return types.NewBlockWithHeader(hdr)
 }
 
 func mustConvertHeader(in btHeader) *types.Header {
@@ -438,7 +476,7 @@ func mustConvertHeader(in btHeader) *types.Header {
 		GasUsed:     mustConvertBigInt(in.GasUsed, 16),
 		GasLimit:    mustConvertBigInt(in.GasLimit, 16),
 		Difficulty:  mustConvertBigInt(in.Difficulty, 16),
-		Time:        mustConvertUint(in.Timestamp, 16),
+		Time:        mustConvertBigInt(in.Timestamp, 16),
 		Nonce:       types.EncodeNonce(mustConvertUint(in.Nonce, 16)),
 	}
 	return header
@@ -458,7 +496,7 @@ func mustConvertBytes(in string) []byte {
 	h := unfuckFuckedHex(strings.TrimPrefix(in, "0x"))
 	out, err := hex.DecodeString(h)
 	if err != nil {
-		panic(fmt.Errorf("invalid hex: %q: ", h, err))
+		panic(fmt.Errorf("invalid hex: %q", h))
 	}
 	return out
 }
@@ -517,9 +555,7 @@ func LoadBlockTests(file string) (map[string]*BlockTest, error) {
 // Nothing to see here, please move along...
 func prepInt(base int, s string) string {
 	if base == 16 {
-		if strings.HasPrefix(s, "0x") {
-			s = s[2:]
-		}
+		s = strings.TrimPrefix(s, "0x")
 		if len(s) == 0 {
 			s = "00"
 		}
