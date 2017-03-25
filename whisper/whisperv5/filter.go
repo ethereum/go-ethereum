@@ -18,11 +18,12 @@ package whisperv5
 
 import (
 	"crypto/ecdsa"
+	crand "crypto/rand"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type Filter struct {
@@ -39,20 +40,41 @@ type Filter struct {
 }
 
 type Filters struct {
-	id       uint32 // can contain any value except zero
-	watchers map[uint32]*Filter
+	watchers map[string]*Filter
 	whisper  *Whisper
 	mutex    sync.RWMutex
 }
 
 func NewFilters(w *Whisper) *Filters {
 	return &Filters{
-		watchers: make(map[uint32]*Filter),
+		watchers: make(map[string]*Filter),
 		whisper:  w,
 	}
 }
 
-func (fs *Filters) Install(watcher *Filter) uint32 {
+func (fs *Filters) generateRandomID() (id string, err error) {
+	buf := make([]byte, 20)
+	for i := 0; i < 3; i++ {
+		_, err = crand.Read(buf)
+		if err != nil {
+			continue
+		}
+		if !validateSymmetricKey(buf) {
+			err = fmt.Errorf("error in generateRandomID: crypto/rand failed to generate random data")
+			continue
+		}
+		id = common.Bytes2Hex(buf)
+		if fs.watchers[id] != nil {
+			err = fmt.Errorf("error in generateRandomID: generated same ID twice")
+			continue
+		}
+		return id, err
+	}
+
+	return "", err
+}
+
+func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
 	}
@@ -60,21 +82,23 @@ func (fs *Filters) Install(watcher *Filter) uint32 {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 
-	fs.id++
-	fs.watchers[fs.id] = watcher
-	return fs.id
+	id, err := fs.generateRandomID()
+	if err == nil {
+		fs.watchers[id] = watcher
+	}
+	return id, err
 }
 
-func (fs *Filters) Uninstall(id uint32) {
+func (fs *Filters) Uninstall(id string) {
 	fs.mutex.Lock()
 	defer fs.mutex.Unlock()
 	delete(fs.watchers, id)
 }
 
-func (fs *Filters) Get(i uint32) *Filter {
+func (fs *Filters) Get(id string) *Filter {
 	fs.mutex.RLock()
 	defer fs.mutex.RUnlock()
-	return fs.watchers[i]
+	return fs.watchers[id]
 }
 
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
@@ -82,7 +106,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
 	for j, watcher := range fs.watchers {
 		if p2pMessage && !watcher.AcceptP2P {
-			glog.V(logger.Detail).Infof("msg [%x], filter [%d]: p2p messages are not allowed \n", env.Hash(), j)
+			log.Trace(fmt.Sprintf("msg [%x], filter [%s]: p2p messages are not allowed", env.Hash(), j))
 			continue
 		}
 
@@ -94,10 +118,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					glog.V(logger.Detail).Infof("msg [%x], filter [%d]: failed to open \n", env.Hash(), j)
+					log.Trace(fmt.Sprintf("msg [%x], filter [%s]: failed to open", env.Hash(), j))
 				}
 			} else {
-				glog.V(logger.Detail).Infof("msg [%x], filter [%d]: does not match \n", env.Hash(), j)
+				log.Trace(fmt.Sprintf("msg [%x], filter [%s]: does not match", env.Hash(), j))
 			}
 		}
 

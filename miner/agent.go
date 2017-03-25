@@ -17,14 +17,14 @@
 package miner
 
 import (
+	"fmt"
 	"sync"
 
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
@@ -108,10 +108,10 @@ done:
 }
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
-	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
+	log.Debug(fmt.Sprintf("(re)started agent[%d]. mining...\n", self.index))
 
 	// Mine
-	nonce, mixDigest := self.pow.Search(work.Block, stop, self.index)
+	nonce, mixDigest := self.pow.Search(work.Block, stop)
 	if nonce != 0 {
 		block := work.Block.WithMiningResult(types.EncodeNonce(nonce), common.BytesToHash(mixDigest))
 		self.returnCh <- &Result{work, block}
@@ -121,5 +121,5 @@ func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 }
 
 func (self *CpuAgent) GetHashRate() int64 {
-	return self.pow.GetHashrate()
+	return int64(self.pow.Hashrate())
 }

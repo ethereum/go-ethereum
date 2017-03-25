@@ -22,9 +22,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/fatih/set.v0"
@@ -169,7 +170,7 @@ func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
 			for h := range ancestors {
 				branch += fmt.Sprintf("  O - %x\n  |\n", h)
 			}
-			glog.Infoln(branch)
+			log.Warn(branch)
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 
@@ -204,12 +205,12 @@ func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow b
 //
 // See YP section 4.3.4. "Block Header Validity"
 func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
-	if big.NewInt(int64(len(header.Extra))).Cmp(params.MaximumExtraDataSize) == 1 {
+	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
 	}
 
 	if uncle {
-		if header.Time.Cmp(common.MaxBig) == 1 {
+		if header.Time.Cmp(math.MaxBig256) == 1 {
 			return BlockTSTooBigErr
 		}
 	} else {
@@ -243,7 +244,7 @@ func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Heade
 
 	if checkPow {
 		// Verify the nonce of the header. Return an error if it's not valid
-		if !pow.Verify(types.NewBlockWithHeader(header)) {
+		if err := pow.Verify(types.NewBlockWithHeader(header)); err != nil {
 			return &BlockNonceErr{header.Number, header.Hash(), header.Nonce.Uint64()}
 		}
 	}
@@ -344,7 +345,7 @@ func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *b
 		expDiff := periodCount.Sub(periodCount, common.Big2)
 		expDiff.Exp(common.Big2, expDiff, nil)
 		diff.Add(diff, expDiff)
-		diff = common.BigMax(diff, params.MinimumDifficulty)
+		diff = math.BigMax(diff, params.MinimumDifficulty)
 	}
 
 	return diff
@@ -372,13 +373,13 @@ func CalcGasLimit(parent *types.Block) *big.Int {
 	*/
 	gl := new(big.Int).Sub(parent.GasLimit(), decay)
 	gl = gl.Add(gl, contrib)
-	gl.Set(common.BigMax(gl, params.MinGasLimit))
+	gl.Set(math.BigMax(gl, params.MinGasLimit))
 
 	// however, if we're now below the target (TargetGasLimit) we increase the
 	// limit as much as we can (parentGasLimit / 1024 -1)
 	if gl.Cmp(params.TargetGasLimit) < 0 {
 		gl.Add(parent.GasLimit(), decay)
-		gl.Set(common.BigMin(gl, params.TargetGasLimit))
+		gl.Set(math.BigMin(gl, params.TargetGasLimit))
 	}
 	return gl
 }

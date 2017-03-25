@@ -70,7 +70,7 @@ func digitValue(chr rune) int {
 }
 
 func builtinGlobal_parseInt(call FunctionCall) Value {
-	input := strings.TrimSpace(call.Argument(0).string())
+	input := strings.Trim(call.Argument(0).string(), builtinString_trim_whitespace)
 	if len(input) == 0 {
 		return NaNValue()
 	}
@@ -153,7 +153,8 @@ var parseFloat_matchValid = regexp.MustCompile(`[0-9eE\+\-\.]|Infinity`)
 
 func builtinGlobal_parseFloat(call FunctionCall) Value {
 	// Caveat emptor: This implementation does NOT match the specification
-	input := strings.TrimSpace(call.Argument(0).string())
+	input := strings.Trim(call.Argument(0).string(), builtinString_trim_whitespace)
+
 	if parseFloat_matchBadSpecial.MatchString(input) {
 		return NaNValue()
 	}

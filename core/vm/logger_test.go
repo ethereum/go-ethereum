@@ -46,24 +46,20 @@ type dummyStateDB struct {
 	ref *dummyContractRef
 }
 
-func (d dummyStateDB) GetAccount(common.Address) Account {
-	return d.ref
-}
-
 func TestStoreCapture(t *testing.T) {
 	var (
 		env      = NewEVM(Context{}, nil, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
-		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), new(big.Int))
+		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
 	)
 	stack.push(big.NewInt(1))
 	stack.push(big.NewInt(0))
 
 	var index common.Hash
 
-	logger.CaptureState(env, 0, SSTORE, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env, 0, SSTORE, 0, 0, mem, stack, contract, 0, nil)
 	if len(logger.changedValues[contract.Address()]) == 0 {
 		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.changedValues[contract.Address()]))
 	}
@@ -78,20 +74,20 @@ func TestStorageCapture(t *testing.T) {
 	t.Skip("implementing this function is difficult. it requires all sort of interfaces to be implemented which isn't trivial. The value (the actual test) isn't worth it")
 	var (
 		ref      = &dummyContractRef{}
-		contract = NewContract(ref, ref, new(big.Int), new(big.Int))
+		contract = NewContract(ref, ref, new(big.Int), 0)
 		env      = NewEVM(Context{}, dummyStateDB{ref: ref}, params.TestChainConfig, Config{EnableJit: false, ForceJit: false})
 		logger   = NewStructLogger(nil)
 		mem      = NewMemory()
 		stack    = newstack()
 	)
 
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env, 0, STOP, 0, 0, mem, stack, contract, 0, nil)
 	if ref.calledForEach {
 		t.Error("didn't expect for each to be called")
 	}
 
 	logger = NewStructLogger(&LogConfig{FullStorage: true})
-	logger.CaptureState(env, 0, STOP, new(big.Int), new(big.Int), mem, stack, contract, 0, nil)
+	logger.CaptureState(env, 0, STOP, 0, 0, mem, stack, contract, 0, nil)
 	if !ref.calledForEach {
 		t.Error("expected for each to be called")
 	}

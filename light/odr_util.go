@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/big"
 
@@ -26,10 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
-	"golang.org/x/net/context"
 )
 
 var sha3_nil = crypto.Keccak256Hash(nil)
@@ -149,7 +147,6 @@ func GetBody(ctx context.Context, odr OdrBackend, hash common.Hash, number uint6
 	}
 	body := new(types.Body)
 	if err := rlp.Decode(bytes.NewReader(data), body); err != nil {
-		glog.V(logger.Error).Infof("invalid block body RLP for hash %x: %v", hash, err)
 		return nil, err
 	}
 	return body, nil
@@ -181,7 +178,6 @@ func GetBlockReceipts(ctx context.Context, odr OdrBackend, hash common.Hash, num
 	r := &ReceiptsRequest{Hash: hash, Number: number}
 	if err := odr.Retrieve(ctx, r); err != nil {
 		return nil, err
-	} else {
-		return r.Receipts, nil
 	}
+	return r.Receipts, nil
 }

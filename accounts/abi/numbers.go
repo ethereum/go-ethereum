@@ -21,6 +21,7 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 var (
@@ -58,7 +59,7 @@ var (
 
 // U256 converts a big Int into a 256bit EVM number.
 func U256(n *big.Int) []byte {
-	return common.LeftPadBytes(common.U256(n).Bytes(), 32)
+	return math.PaddedBigBytes(math.U256(n), 32)
 }
 
 // packNum packs the given number (using the reflect value) and will cast it to appropriate number representation

@@ -18,7 +18,7 @@ package whisperv5
 
 import (
 	"bytes"
-	"math/rand"
+	mrand "math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -34,13 +34,13 @@ func generateMessageParams() (*MessageParams, error) {
 	// set all the parameters except p.Dst
 
 	buf := make([]byte, 1024)
-	randomize(buf)
-	sz := rand.Intn(400)
+	mrand.Read(buf)
+	sz := mrand.Intn(400)
 
 	var p MessageParams
 	p.PoW = 0.01
 	p.WorkTime = 1
-	p.TTL = uint32(rand.Intn(1024))
+	p.TTL = uint32(mrand.Intn(1024))
 	p.Payload = make([]byte, sz)
 	p.Padding = make([]byte, padSizeLimitUpper)
 	p.KeySym = make([]byte, aesKeyLength)
@@ -132,7 +132,7 @@ func TestMessageEncryption(t *testing.T) {
 
 func TestMessageWrap(t *testing.T) {
 	seed = int64(1777444222)
-	rand.Seed(seed)
+	mrand.Seed(seed)
 	target := 128.0
 
 	params, err := generateMessageParams()
@@ -168,7 +168,7 @@ func TestMessageWrap(t *testing.T) {
 func TestMessageSeal(t *testing.T) {
 	// this test depends on deterministic choice of seed (1976726903)
 	seed = int64(1976726903)
-	rand.Seed(seed)
+	mrand.Seed(seed)
 
 	params, err := generateMessageParams()
 	if err != nil {
@@ -179,8 +179,8 @@ func TestMessageSeal(t *testing.T) {
 	params.TTL = 1
 	aesnonce := make([]byte, 12)
 	salt := make([]byte, 12)
-	randomize(aesnonce)
-	randomize(salt)
+	mrand.Read(aesnonce)
+	mrand.Read(salt)
 
 	env := NewEnvelope(params.TTL, params.Topic, salt, aesnonce, msg)
 	if err != nil {

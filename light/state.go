@@ -17,13 +17,11 @@
 package light
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"golang.org/x/net/context"
 )
 
 // LightState is a memory representation of a state.
@@ -239,10 +237,6 @@ func (self *LightState) GetOrNewStateObject(ctx context.Context, addr common.Add
 
 // newStateObject creates a state object whether it exists in the state or not
 func (self *LightState) newStateObject(addr common.Address) *StateObject {
-	if glog.V(logger.Core) {
-		glog.Infof("(+) %x\n", addr)
-	}
-
 	stateObject := NewStateObject(addr, self.odr)
 	self.stateObjects[addr.Str()] = stateObject
 
@@ -266,6 +260,26 @@ func (self *LightState) CreateStateObject(ctx context.Context, addr common.Addre
 	}
 
 	return newSo, nil
+}
+
+// ForEachStorage calls a callback function for every key/value pair found
+// in the local storage cache. Note that unlike core/state.StateObject,
+// light.StateObject only returns cached values and doesn't download the
+// entire storage tree.
+func (self *LightState) ForEachStorage(ctx context.Context, addr common.Address, cb func(key, value common.Hash) bool) error {
+	so, err := self.GetStateObject(ctx, addr)
+	if err != nil {
+		return err
+	}
+
+	if so == nil {
+		return nil
+	}
+
+	for h, v := range so.storage {
+		cb(h, v)
+	}
+	return nil
 }
 
 //

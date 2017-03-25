@@ -46,6 +46,13 @@ func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (et
 	return ethdb.NewLDBDatabase(ctx.config.resolvePath(name), cache, handles)
 }
 
+// ResolvePath resolves a user path into the data directory if that was relative
+// and if the user actually uses persistent storage. It will return an empty string
+// for emphemeral storage and the user's own input for absolute paths.
+func (ctx *ServiceContext) ResolvePath(path string) string {
+	return ctx.config.resolvePath(path)
+}
+
 // Service retrieves a currently running service registered of a specific type.
 func (ctx *ServiceContext) Service(service interface{}) error {
 	element := reflect.ValueOf(service).Elem()

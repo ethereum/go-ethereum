@@ -78,14 +78,16 @@ func TestMailServer(t *testing.T) {
 	const password = "password_for_this_test"
 	const dbPath = "whisper-server-test"
 
-	_, err := ioutil.TempDir("", dbPath)
+	dir, err := ioutil.TempDir("", dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var server WMailServer
-	shh = whisper.NewWhisper(&server)
-	server.Init(shh, dbPath, password, powRequirement)
+	shh = whisper.New()
+	shh.RegisterServer(&server)
+
+	server.Init(shh, dir, password, powRequirement)
 	defer server.Close()
 
 	err = shh.AddSymKey(keyName, []byte(password))

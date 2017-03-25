@@ -17,6 +17,7 @@
 package bind
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/big"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/net/context"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -35,7 +35,8 @@ type SignerFn func(types.Signer, common.Address, *types.Transaction) (*types.Tra
 
 // CallOpts is the collection of options to fine tune a contract call request.
 type CallOpts struct {
-	Pending bool // Whether to operate on the pending state or the last known one
+	Pending bool           // Whether to operate on the pending state or the last known one
+	From    common.Address // Optional the sender address, otherwise the first account is used
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 }
@@ -108,7 +109,7 @@ func (c *BoundContract) Call(opts *CallOpts, result interface{}, method string, 
 		return err
 	}
 	var (
-		msg    = ethereum.CallMsg{To: &c.address, Data: input}
+		msg    = ethereum.CallMsg{From: opts.From, To: &c.address, Data: input}
 		ctx    = ensureContext(opts.Context)
 		code   []byte
 		output []byte

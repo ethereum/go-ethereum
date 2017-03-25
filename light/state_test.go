@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"math/big"
 	"testing"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"golang.org/x/net/context"
 )
 
 func makeTestState() (common.Hash, ethdb.Database) {

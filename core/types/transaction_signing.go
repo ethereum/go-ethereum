@@ -112,6 +112,9 @@ type EIP155Signer struct {
 }
 
 func NewEIP155Signer(chainId *big.Int) EIP155Signer {
+	if chainId == nil {
+		chainId = new(big.Int)
+	}
 	return EIP155Signer{
 		chainId:    chainId,
 		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
@@ -167,7 +170,7 @@ func (s EIP155Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, 
 	cpy.data.R = new(big.Int).SetBytes(sig[:32])
 	cpy.data.S = new(big.Int).SetBytes(sig[32:64])
 	cpy.data.V = new(big.Int).SetBytes([]byte{sig[64]})
-	if s.chainId.BitLen() > 0 {
+	if s.chainId.Sign() != 0 {
 		cpy.data.V = big.NewInt(int64(sig[64] + 35))
 		cpy.data.V.Add(cpy.data.V, s.chainIdMul)
 	}

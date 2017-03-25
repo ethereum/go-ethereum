@@ -19,10 +19,10 @@
 package rpc
 
 import (
+	"context"
 	"net"
 	"time"
 
-	"golang.org/x/net/context"
 	"gopkg.in/natefinch/npipe.v2"
 )
 
