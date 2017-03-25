@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rlp
 
@@ -63,11 +63,16 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours one particular struct tag,
-// "nil". This tag applies to pointer-typed fields and changes the
-// decoding rules for the field such that input values of size zero
-// decode as a nil pointer. This tag can be useful when decoding recursive
-// types.
+// The decoding of struct fields honours certain struct tags, "tail",
+// "nil" and "-".
+//
+// The "-" tag ignores fields.
+//
+// For an explanation of "tail", see the example.
+//
+// The "nil" tag applies to pointer-typed fields and changes the decoding
+// rules for the field such that input values of size zero decode as a nil
+// pointer. This tag can be useful when decoding recursive types.
 //
 //     type StructWithEmptyOK struct {
 //         Foo *[20]byte `rlp:"nil"`
@@ -110,9 +115,17 @@ func Decode(r io.Reader, val interface{}) error {
 
 // DecodeBytes parses RLP data from b into val.
 // Please see the documentation of Decode for the decoding rules.
+// The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
 	// TODO: this could use a Stream from a pool.
-	return NewStream(bytes.NewReader(b), uint64(len(b))).Decode(val)
+	r := bytes.NewReader(b)
+	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
+		return err
+	}
+	if r.Len() > 0 {
+		return ErrMoreThanOneValue
+	}
+	return nil
 }
 
 type decodeError struct {
@@ -165,6 +178,8 @@ var (
 func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	kind := typ.Kind()
 	switch {
+	case typ == rawValueType:
+		return decodeRawValue, nil
 	case typ.Implements(decoderInterface):
 		return decodeDecoder, nil
 	case kind != reflect.Ptr && reflect.PtrTo(typ).Implements(decoderInterface):
@@ -175,10 +190,12 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return decodeBigIntNoPtr, nil
 	case isUint(kind):
 		return decodeUint, nil
+	case kind == reflect.Bool:
+		return decodeBool, nil
 	case kind == reflect.String:
 		return decodeString, nil
 	case kind == reflect.Slice || kind == reflect.Array:
-		return makeListDecoder(typ)
+		return makeListDecoder(typ, tags)
 	case kind == reflect.Struct:
 		return makeStructDecoder(typ)
 	case kind == reflect.Ptr:
@@ -193,6 +210,15 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 	}
 }
 
+func decodeRawValue(s *Stream, val reflect.Value) error {
+	r, err := s.Raw()
+	if err != nil {
+		return err
+	}
+	val.SetBytes(r)
+	return nil
+}
+
 func decodeUint(s *Stream, val reflect.Value) error {
 	typ := val.Type()
 	num, err := s.uint(typ.Bits())
@@ -200,6 +226,15 @@ func decodeUint(s *Stream, val reflect.Value) error {
 		return wrapStreamError(err, val.Type())
 	}
 	val.SetUint(num)
+	return nil
+}
+
+func decodeBool(s *Stream, val reflect.Value) error {
+	b, err := s.Bool()
+	if err != nil {
+		return wrapStreamError(err, val.Type())
+	}
+	val.SetBool(b)
 	return nil
 }
 
@@ -234,7 +269,7 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	return nil
 }
 
-func makeListDecoder(typ reflect.Type) (decoder, error) {
+func makeListDecoder(typ reflect.Type, tag tags) (decoder, error) {
 	etype := typ.Elem()
 	if etype.Kind() == reflect.Uint8 && !reflect.PtrTo(etype).Implements(decoderInterface) {
 		if typ.Kind() == reflect.Array {
@@ -247,15 +282,26 @@ func makeListDecoder(typ reflect.Type) (decoder, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	isArray := typ.Kind() == reflect.Array
-	return func(s *Stream, val reflect.Value) error {
-		if isArray {
+	var dec decoder
+	switch {
+	case typ.Kind() == reflect.Array:
+		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListArray(s, val, etypeinfo.decoder)
-		} else {
+		}
+	case tag.tail:
+		// A slice with "tail" tag can occur as the last field
+		// of a struct and is upposed to swallow all remaining
+		// list elements. The struct decoder already called s.List,
+		// proceed directly to decoding the elements.
+		dec = func(s *Stream, val reflect.Value) error {
+			return decodeSliceElems(s, val, etypeinfo.decoder)
+		}
+	default:
+		dec = func(s *Stream, val reflect.Value) error {
 			return decodeListSlice(s, val, etypeinfo.decoder)
 		}
-	}, nil
+	}
+	return dec, nil
 }
 
 func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
@@ -267,7 +313,13 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 		val.Set(reflect.MakeSlice(val.Type(), 0, 0))
 		return s.ListEnd()
 	}
+	if err := decodeSliceElems(s, val, elemdec); err != nil {
+		return err
+	}
+	return s.ListEnd()
+}
 
+func decodeSliceElems(s *Stream, val reflect.Value, elemdec decoder) error {
 	i := 0
 	for ; ; i++ {
 		// grow slice if necessary
@@ -293,12 +345,11 @@ func decodeListSlice(s *Stream, val reflect.Value, elemdec decoder) error {
 	if i < val.Len() {
 		val.SetLen(i)
 	}
-	return s.ListEnd()
+	return nil
 }
 
 func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
-	_, err := s.List()
-	if err != nil {
+	if _, err := s.List(); err != nil {
 		return wrapStreamError(err, val.Type())
 	}
 	vlen := val.Len()
@@ -353,7 +404,7 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 			return err
 		}
 		// Reject cases where single byte encoding should have been used.
-		if size == 1 && slice[0] < 56 {
+		if size == 1 && slice[0] < 128 {
 			return wrapStreamError(ErrCanonSize, val.Type())
 		}
 	case List:
@@ -368,11 +419,11 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		return nil, err
 	}
 	dec := func(s *Stream, val reflect.Value) (err error) {
-		if _, err = s.List(); err != nil {
+		if _, err := s.List(); err != nil {
 			return wrapStreamError(err, typ)
 		}
 		for _, f := range fields {
-			err = f.info.decoder(s, val.Field(f.index))
+			err := f.info.decoder(s, val.Field(f.index))
 			if err == EOL {
 				return &decodeError{msg: "too few elements", typ: typ}
 			} else if err != nil {
@@ -517,6 +568,10 @@ var (
 	ErrElemTooLarge   = errors.New("rlp: element is larger than containing list")
 	ErrValueTooLarge  = errors.New("rlp: value size exceeds available input length")
 
+	// This error is reported by DecodeBytes if the slice contains
+	// additional data after the first RLP value.
+	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+
 	// internal errors
 	errNotInList    = errors.New("rlp: call of ListEnd outside of any list")
 	errNotAtEOL     = errors.New("rlp: call of ListEnd not positioned at EOL")
@@ -611,7 +666,7 @@ func (s *Stream) Bytes() ([]byte, error) {
 		if err = s.readFull(b); err != nil {
 			return nil, err
 		}
-		if size == 1 && b[0] < 56 {
+		if size == 1 && b[0] < 128 {
 			return nil, ErrCanonSize
 		}
 		return b, nil
@@ -675,13 +730,31 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 			return 0, ErrCanonInt
 		case err != nil:
 			return 0, err
-		case size > 0 && v < 56:
+		case size > 0 && v < 128:
 			return 0, ErrCanonSize
 		default:
 			return v, nil
 		}
 	default:
 		return 0, ErrExpectedString
+	}
+}
+
+// Bool reads an RLP string of up to 1 byte and returns its contents
+// as an boolean. If the input does not contain an RLP string, the
+// returned error will be ErrExpectedString.
+func (s *Stream) Bool() (bool, error) {
+	num, err := s.uint(8)
+	if err != nil {
+		return false, err
+	}
+	switch num {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("rlp: invalid boolean value: %d", num)
 	}
 }
 
