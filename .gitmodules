@@ -1,3 +1,0 @@
-[submodule "ethereal/assets/samplecoin"]
-	path = ethereal/assets/samplecoin
-	url = git@github.com:obscuren/SampleCoin.git

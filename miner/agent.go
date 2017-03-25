@@ -1,73 +1,125 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package miner
 
 import (
+	"fmt"
+	"sync"
+
+	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pow"
 )
 
-type CpuMiner struct {
-	c             chan *types.Block
+type CpuAgent struct {
+	mu sync.Mutex
+
+	workCh        chan *Work
 	quit          chan struct{}
 	quitCurrentOp chan struct{}
-	returnCh      chan<- Work
+	returnCh      chan<- *Result
 
 	index int
 	pow   pow.PoW
+
+	isMining int32 // isMining indicates whether the agent is currently mining
 }
 
-func NewCpuMiner(index int, pow pow.PoW) *CpuMiner {
-	miner := &CpuMiner{
-		c:             make(chan *types.Block, 1),
-		quit:          make(chan struct{}),
-		quitCurrentOp: make(chan struct{}, 1),
-		pow:           pow,
-		index:         index,
+func NewCpuAgent(index int, pow pow.PoW) *CpuAgent {
+	miner := &CpuAgent{
+		pow:    pow,
+		index:  index,
+		quit:   make(chan struct{}),
+		workCh: make(chan *Work, 1),
 	}
-	go miner.update()
 
 	return miner
 }
 
-func (self *CpuMiner) Work() chan<- *types.Block { return self.c }
-func (self *CpuMiner) Pow() pow.PoW              { return self.pow }
-func (self *CpuMiner) SetNonceCh(ch chan<- Work) { self.returnCh = ch }
+func (self *CpuAgent) Work() chan<- *Work            { return self.workCh }
+func (self *CpuAgent) Pow() pow.PoW                  { return self.pow }
+func (self *CpuAgent) SetReturnCh(ch chan<- *Result) { self.returnCh = ch }
 
-func (self *CpuMiner) Stop() {
+func (self *CpuAgent) Stop() {
 	close(self.quit)
-	close(self.quitCurrentOp)
 }
 
-func (self *CpuMiner) update() {
+func (self *CpuAgent) Start() {
+
+	if !atomic.CompareAndSwapInt32(&self.isMining, 0, 1) {
+		return // agent already started
+	}
+
+	go self.update()
+}
+
+func (self *CpuAgent) update() {
 out:
 	for {
 		select {
-		case block := <-self.c:
-			// make sure it's open
-			self.quitCurrentOp <- struct{}{}
-
-			go self.mine(block)
+		case work := <-self.workCh:
+			self.mu.Lock()
+			if self.quitCurrentOp != nil {
+				close(self.quitCurrentOp)
+			}
+			self.quitCurrentOp = make(chan struct{})
+			go self.mine(work, self.quitCurrentOp)
+			self.mu.Unlock()
 		case <-self.quit:
+			self.mu.Lock()
+			if self.quitCurrentOp != nil {
+				close(self.quitCurrentOp)
+				self.quitCurrentOp = nil
+			}
+			self.mu.Unlock()
 			break out
 		}
 	}
 
 done:
-	// Empty channel
+	// Empty work channel
 	for {
 		select {
-		case <-self.c:
+		case <-self.workCh:
 		default:
-			close(self.c)
-
+			close(self.workCh)
 			break done
 		}
 	}
+
+	atomic.StoreInt32(&self.isMining, 0)
 }
 
-func (self *CpuMiner) mine(block *types.Block) {
-	minerlogger.Infof("(re)started agent[%d]. mining...\n", self.index)
-	nonce := self.pow.Search(block, self.quitCurrentOp)
-	if nonce != nil {
-		self.returnCh <- Work{block.Number().Uint64(), nonce}
+func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
+	log.Debug(fmt.Sprintf("(re)started agent[%d]. mining...\n", self.index))
+
+	// Mine
+	nonce, mixDigest := self.pow.Search(work.Block, stop)
+	if nonce != 0 {
+		block := work.Block.WithMiningResult(types.EncodeNonce(nonce), common.BytesToHash(mixDigest))
+		self.returnCh <- &Result{work, block}
+	} else {
+		self.returnCh <- nil
 	}
+}
+
+func (self *CpuAgent) GetHashRate() int64 {
+	return int64(self.pow.Hashrate())
 }

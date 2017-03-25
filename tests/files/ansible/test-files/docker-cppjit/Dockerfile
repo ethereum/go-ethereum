@@ -10,7 +10,7 @@ RUN apt-get install -qy build-essential g++-4.8 git cmake libboost-all-dev libcu
 RUN apt-get install -qy automake unzip libgmp-dev libtool libleveldb-dev yasm libminiupnpc-dev libreadline-dev scons
 RUN apt-get install -qy libjsoncpp-dev libargtable2-dev
 
-# NCurses based GUI (not optional though for a succesful compilation, see https://github.com/ethereum/cpp-ethereum/issues/452 )
+# NCurses based GUI (not optional though for a successful compilation, see https://github.com/ethereum/cpp-ethereum/issues/452 )
 RUN apt-get install -qy libncurses5-dev
 
 # Qt-based GUI
@@ -34,11 +34,13 @@ RUN add-apt-repository ppa:ethereum/ethereum
 RUN apt-get update
 RUN apt-get install -qy libcryptopp-dev libjson-rpc-cpp-dev
 
+# this is a workaround, to make sure that docker's cache is invalidated whenever the git repo changes
+ADD https://api.github.com/repos/ethereum/cpp-ethereum/git/refs/heads/develop unused.txt 
+
 # Build Ethereum (HEADLESS)
 RUN git clone --depth=1 --branch develop https://github.com/ethereum/cpp-ethereum
 RUN mkdir -p cpp-ethereum/build
-RUN cd cpp-ethereum/build && cmake .. -DCMAKE_BUILD_TYPE=Release -DHEADLESS=1 -DEVMJIT=1 && make -j $(cat /proc/cpuinfo | grep processor | wc -l) && make install
+RUN cd cpp-ethereum/build && cmake .. -DCMAKE_BUILD_TYPE=Debug -DVMTRACE=1 -DPARANOIA=1 -DEVMJIT=1 && make -j $(cat /proc/cpuinfo | grep processor | wc -l) && make install
 RUN ldconfig
 
-ENTRYPOINT ["/cpp-ethereum/build/test/checkRandomTest"]
-
+ENTRYPOINT ["/cpp-ethereum/build/test/checkRandomStateTest"]
