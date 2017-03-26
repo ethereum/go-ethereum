@@ -142,7 +142,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
 		panic("block time out of range")
 	}
-	b.header.Difficulty = ethash.CalcDifficulty(b.config, b.header.Time.Uint64(), b.parent)
+	b.header.Difficulty = ethash.CalcDifficulty(b.config, b.header.Time.Uint64(), b.parent.Header())
 }
 
 // GenerateChain creates a chain of n blocks. The first block's

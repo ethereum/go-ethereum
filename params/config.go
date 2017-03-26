@@ -34,7 +34,7 @@ var (
 		EIP150Hash:      MainNetHomesteadGasRepriceHash,
 		EIP155Block:     MainNetSpuriousDragon,
 		EIP158Block:     MainNetSpuriousDragon,
-		MetropolisBlock: MainNetMetropolis,
+		MetropolisBlock: MainNetMetropolisBlock,
 	}
 
 	// TestnetChainConfig is the chain parameters to run a node on the test network.
@@ -47,7 +47,7 @@ var (
 		EIP150Hash:      common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:     big.NewInt(10),
 		EIP158Block:     big.NewInt(10),
-		MetropolisBlock: TestNetMetropolis,
+		MetropolisBlock: TestNetMetropolisBlock,
 	}
 
 	// AllProtocolChanges contains every protocol change (EIPs)
