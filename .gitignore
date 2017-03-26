@@ -21,6 +21,7 @@ build/_vendor/pkg
 *~
 .project
 .settings
+.idea/
 
 # used by the Makefile
 /build/_workspace/
