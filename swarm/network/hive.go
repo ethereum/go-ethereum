@@ -22,22 +22,12 @@ import (
 	"path/filepath"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	"github.com/expanse-org/go-expanse/p2p/netutil"
-	"github.com/expanse-org/go-expanse/swarm/network/kademlia"
-	"github.com/expanse-org/go-expanse/swarm/storage"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/p2p/netutil"
 	"github.com/expanse-org/go-expanse/swarm/network/kademlia"
 	"github.com/expanse-org/go-expanse/swarm/storage"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // Hive is the logistic manager of the swarm

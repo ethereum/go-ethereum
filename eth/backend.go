@@ -24,28 +24,7 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/ethereum/ethash"
-	"github.com/expanse-org/go-expanse/accounts"
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/core/vm"
-	"github.com/expanse-org/go-expanse/eth/downloader"
-	"github.com/expanse-org/go-expanse/eth/filters"
-	"github.com/expanse-org/go-expanse/eth/gasprice"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/internal/ethapi"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/miner"
-	"github.com/expanse-org/go-expanse/node"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
-	"github.com/expanse-org/go-expanse/rpc"
-=======
+
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
@@ -64,7 +43,6 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rpc"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -208,32 +186,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	}
 
-<<<<<<< HEAD
-	// load the genesis block or write a new one if no genesis
-	// block is prenent in the database.
-	genesis := core.GetBlock(chainDb, core.GetCanonicalHash(chainDb, 0), 0)
-	if genesis == nil {
-		genesis, err = core.WriteDefaultGenesisBlock(chainDb)
-		if err != nil {
-			return nil, err
-		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default expanse genesis block")
-	}
-
-	if config.ChainConfig == nil {
-		return nil, errors.New("missing chain config")
-	}
-	core.WriteChainConfig(chainDb, genesis.Hash(), config.ChainConfig)
-
-	eth.chainConfig = config.ChainConfig
-
-	glog.V(logger.Info).Infoln("Chain config:", eth.chainConfig)
-
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
-=======
 	vmConfig := vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.eventMux, vmConfig)
->>>>>>> refs/remotes/ethereum/master
 	if err != nil {
 		return nil, err
 	}

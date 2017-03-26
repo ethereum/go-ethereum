@@ -20,17 +20,9 @@ import (
 	"context"
 	"math/big"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/core/vm"
-	"github.com/expanse-org/go-expanse/crypto"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/crypto"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // VMState is a wrapper for the light state that holds the actual context and

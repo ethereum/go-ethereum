@@ -23,17 +23,6 @@ import (
 	"math/big"
 	"os"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/state"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/core/vm"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/params"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core"

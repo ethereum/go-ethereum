@@ -26,18 +26,6 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/accounts/abi/bind"
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/contracts/chequebook"
-	"github.com/expanse-org/go-expanse/contracts/chequebook/contract"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/swarm/services/swap/swap"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/accounts/abi/bind"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/contracts/chequebook"
@@ -46,7 +34,6 @@ import (
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/swarm/services/swap/swap"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // SwAP       Swarm Accounting Protocol with

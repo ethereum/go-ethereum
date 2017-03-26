@@ -16,14 +16,10 @@
 
 package trie
 
-<<<<<<< HEAD
-import "github.com/expanse-org/go-expanse/common"
-=======
 import (
 	"bytes"
 	"github.com/expanse-org/go-expanse/common"
 )
->>>>>>> refs/remotes/ethereum/master
 
 // Iterator is a key-value trie iterator that traverses a Trie.
 type Iterator struct {

@@ -23,16 +23,6 @@ import (
 	"testing"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/core/vm"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/params"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -41,7 +31,6 @@ import (
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
->>>>>>> refs/remotes/ethereum/master
 )
 
 type testTxRelay struct {

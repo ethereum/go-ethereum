@@ -27,13 +27,7 @@ import (
 	"strings"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
 )

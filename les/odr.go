@@ -23,19 +23,10 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common/mclock"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/light"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/common/mclock"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/light"
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 var (

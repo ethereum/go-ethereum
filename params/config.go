@@ -23,37 +23,12 @@ import (
 	"github.com/expanse-org/go-expanse/common"
 )
 
-<<<<<<< HEAD
-// MainnetChainConfig is the chain parameters to run a node on the main network.
-var MainnetChainConfig = &ChainConfig{
-	ChainId:        MainNetChainID,
-	HomesteadBlock: MainNetHomesteadBlock,
-	DAOForkBlock:   nil,
-	DAOForkSupport: false,
-	EIP150Block:    MainNetHomesteadGasRepriceBlock,
-	EIP150Hash:     MainNetHomesteadGasRepriceHash,
-	EIP155Block:    MainNetSpuriousDragon,
-	EIP158Block:    MainNetSpuriousDragon,
-}
-
-// TestnetChainConfig is the chain parameters to run a node on the test network.
-var TestnetChainConfig = &ChainConfig{
-	ChainId:        big.NewInt(3),
-	HomesteadBlock: big.NewInt(0),
-	DAOForkBlock:   nil,
-	DAOForkSupport: false,
-	EIP150Block:    big.NewInt(0),
-	EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-	EIP155Block:    big.NewInt(10),
-	EIP158Block:    big.NewInt(10),
-}
-=======
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
 		ChainId:        MainNetChainID,
 		HomesteadBlock: MainNetHomesteadBlock,
-		DAOForkBlock:   MainNetDAOForkBlock,
+		DAOForkBlock:   nil,
 		DAOForkSupport: true,
 		EIP150Block:    MainNetHomesteadGasRepriceBlock,
 		EIP150Hash:     MainNetHomesteadGasRepriceHash,
@@ -85,7 +60,6 @@ var (
 	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
 	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
 )
->>>>>>> refs/remotes/ethereum/master
 
 // ChainConfig is the core config which determines the blockchain settings.
 //

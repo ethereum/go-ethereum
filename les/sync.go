@@ -20,16 +20,9 @@ import (
 	"context"
 	"time"
 
-<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/eth/downloader"
 	"github.com/expanse-org/go-expanse/light"
-	"golang.org/x/net/context"
-=======
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/eth/downloader"
-	"github.com/expanse-org/go-expanse/light"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (

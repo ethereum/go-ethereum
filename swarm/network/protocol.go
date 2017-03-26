@@ -37,17 +37,6 @@ import (
 	"strconv"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/contracts/chequebook"
-	"github.com/expanse-org/go-expanse/errs"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	bzzswap "github.com/expanse-org/go-expanse/swarm/services/swap"
-	"github.com/expanse-org/go-expanse/swarm/services/swap/swap"
-	"github.com/expanse-org/go-expanse/swarm/storage"
-=======
 	"github.com/expanse-org/go-expanse/contracts/chequebook"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p"
@@ -55,7 +44,6 @@ import (
 	bzzswap "github.com/expanse-org/go-expanse/swarm/services/swap"
 	"github.com/expanse-org/go-expanse/swarm/services/swap/swap"
 	"github.com/expanse-org/go-expanse/swarm/storage"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (

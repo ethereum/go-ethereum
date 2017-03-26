@@ -31,13 +31,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 func TestClientRequest(t *testing.T) {

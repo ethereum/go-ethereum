@@ -25,14 +25,6 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	"github.com/expanse-org/go-expanse/p2p/discv5"
-	"github.com/expanse-org/go-expanse/p2p/nat"
-	"github.com/expanse-org/go-expanse/p2p/netutil"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/mclock"
 	"github.com/expanse-org/go-expanse/log"
@@ -40,7 +32,6 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/p2p/netutil"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (

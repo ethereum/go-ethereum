@@ -23,18 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
-	"github.com/expanse-org/go-expanse/rlp"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -44,7 +32,6 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -109,15 +96,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, pow pow.PoW, mux 
 
 	bc.genesisBlock, _ = bc.GetBlockByNumber(NoOdr, 0)
 	if bc.genesisBlock == nil {
-<<<<<<< HEAD
-		bc.genesisBlock, err = core.WriteDefaultGenesisBlock(odr.Database())
-		if err != nil {
-			return nil, err
-		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default expanse genesis block")
-=======
 		return nil, core.ErrNoGenesis
->>>>>>> refs/remotes/ethereum/master
 	}
 
 	if bc.genesisBlock.Hash() == params.MainNetGenesisHash {

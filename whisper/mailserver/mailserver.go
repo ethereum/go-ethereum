@@ -21,22 +21,12 @@ import (
 	"encoding/binary"
 	"fmt"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/cmd/utils"
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/rlp"
-	whisper "github.com/expanse-org/go-expanse/whisper/whisperv5"
-=======
 	"github.com/expanse-org/go-expanse/cmd/utils"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/rlp"
 	whisper "github.com/expanse-org/go-expanse/whisper/whisperv5"
->>>>>>> refs/remotes/ethereum/master
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )

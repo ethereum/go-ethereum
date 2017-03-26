@@ -21,15 +21,10 @@ import (
 	"sync"
 )
 
-<<<<<<< HEAD:pow/block.go
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core/types"
-=======
 const (
 	Swarmfs_Version = "0.1"
 	mountTimeout   = time.Second * 5
 	maxFuseMounts  = 5
->>>>>>> refs/remotes/ethereum/master:swarm/api/swarmfs.go
 )
 
 

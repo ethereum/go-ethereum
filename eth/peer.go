@@ -23,19 +23,10 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/rlp"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 	"gopkg.in/fatih/set.v0"
 )
 

@@ -22,18 +22,9 @@ import (
 	"fmt"
 	"math/big"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/rlp"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)

@@ -23,20 +23,12 @@ import (
 	"io"
 	"runtime"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/rlp"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // Transaction Test JSON Format

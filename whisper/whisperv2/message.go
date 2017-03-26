@@ -26,18 +26,10 @@ import (
 	"math/rand"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/crypto/ecies"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/ecies"
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // Message represents an end-user data packet to transmit through the Whisper

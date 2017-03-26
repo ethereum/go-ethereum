@@ -24,14 +24,9 @@ import (
 	"os"
 	"runtime"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/log/term"
 	colorable "github.com/mattn/go-colorable"
->>>>>>> refs/remotes/ethereum/master
 	"gopkg.in/urfave/cli.v1"
 )
 

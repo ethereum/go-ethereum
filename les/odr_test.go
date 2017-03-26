@@ -23,18 +23,6 @@ import (
 	"testing"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/state"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/core/vm"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/light"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/rlp"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core"
@@ -45,7 +33,6 @@ import (
 	"github.com/expanse-org/go-expanse/light"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 )
 
 type odrTestFn func(ctx context.Context, db ethdb.Database, config *params.ChainConfig, bc *core.BlockChain, lc *light.LightChain, bhash common.Hash) []byte

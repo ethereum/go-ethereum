@@ -21,13 +21,7 @@ import (
 	"fmt"
 	"net"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on

@@ -20,16 +20,8 @@ import (
 	"context"
 	"math/big"
 
-<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"golang.org/x/net/context"
-=======
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/crypto"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // LightState is a memory representation of a state.

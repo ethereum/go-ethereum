@@ -22,16 +22,9 @@ import (
 	"fmt"
 	"sync"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/swarm/storage"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/swarm/storage"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (

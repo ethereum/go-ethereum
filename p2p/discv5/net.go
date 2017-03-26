@@ -24,17 +24,6 @@ import (
 	"net"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/common/mclock"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/crypto/sha3"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p/nat"
-	"github.com/expanse-org/go-expanse/p2p/netutil"
-	"github.com/expanse-org/go-expanse/rlp"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/mclock"
 	"github.com/expanse-org/go-expanse/crypto"
@@ -43,7 +32,6 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/p2p/netutil"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 )
 
 var (

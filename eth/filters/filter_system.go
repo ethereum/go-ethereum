@@ -25,20 +25,11 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/rpc"
-	"golang.org/x/net/context"
-=======
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/rpc"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // Type determines the kind of filter and is used to put the filter in to

@@ -26,25 +26,6 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/state"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/eth"
-	"github.com/expanse-org/go-expanse/eth/downloader"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	"github.com/expanse-org/go-expanse/p2p/discv5"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
-	"github.com/expanse-org/go-expanse/rlp"
-	"github.com/expanse-org/go-expanse/trie"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
@@ -61,7 +42,6 @@ import (
 	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -310,11 +290,7 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 func (pm *ProtocolManager) Stop() {
 	// Showing a log message. During download / process this could actually
 	// take between 5 to 10 seconds and therefor feedback is required.
-<<<<<<< HEAD
-	glog.V(logger.Info).Infoln("Stopping light expanse protocol handler...")
-=======
-	log.Info("Stopping light Ethereum protocol")
->>>>>>> refs/remotes/ethereum/master
+	log.Info("Stopping light Expanse protocol")
 
 	// Quit the sync loop.
 	// After this send has completed, no new peers will be accepted.
@@ -331,11 +307,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for any process action
 	pm.wg.Wait()
 
-<<<<<<< HEAD
-	glog.V(logger.Info).Infoln("Light expanse protocol handler stopped")
-=======
-	log.Info("Light Ethereum protocol stopped")
->>>>>>> refs/remotes/ethereum/master
+	log.Info("Light Expanse protocol stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {

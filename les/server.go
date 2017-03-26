@@ -23,20 +23,6 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/eth"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/les/flowcontrol"
-	"github.com/expanse-org/go-expanse/light"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/rlp"
-	"github.com/expanse-org/go-expanse/trie"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -48,7 +34,6 @@ import (
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
->>>>>>> refs/remotes/ethereum/master
 )
 
 type LesServer struct {

@@ -17,16 +17,10 @@
 package trie
 
 import (
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"fmt"
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 var secureKeyPrefix = []byte("secure-key-")

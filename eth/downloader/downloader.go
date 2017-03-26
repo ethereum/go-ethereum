@@ -27,17 +27,6 @@ import (
 	"sync/atomic"
 	"time"
 
-<<<<<<< HEAD
-	ethereum "github.com/expanse-org/go-expanse"
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/trie"
-=======
 	ethereum "github.com/expanse-org/go-expanse"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -46,7 +35,6 @@ import (
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/trie"
->>>>>>> refs/remotes/ethereum/master
 	"github.com/rcrowley/go-metrics"
 )
 

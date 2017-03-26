@@ -22,22 +22,12 @@ import (
 	"math/big"
 	"time"
 
-<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/rpc"
-	"golang.org/x/net/context"
-=======
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/rpc"
->>>>>>> refs/remotes/ethereum/master
 )
 
 type Backend interface {

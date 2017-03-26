@@ -24,12 +24,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/crypto/randentropy"
-=======
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/crypto/randentropy"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const TestCount = 1000

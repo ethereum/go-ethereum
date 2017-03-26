@@ -23,9 +23,6 @@ import (
 	"os"
 	"testing"
 
-<<<<<<< HEAD
-	"golang.org/x/net/context"
-
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -33,15 +30,6 @@ import (
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
-=======
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/params"
->>>>>>> refs/remotes/ethereum/master
 )
 
 func makeReceipt(addr common.Address) *types.Receipt {

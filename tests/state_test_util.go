@@ -25,15 +25,6 @@ import (
 	"strings"
 	"testing"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/state"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/params"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core"
@@ -42,7 +33,6 @@ import (
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
->>>>>>> refs/remotes/ethereum/master
 )
 
 func RunStateTestWithReader(chainConfig *params.ChainConfig, r io.Reader, skipTests []string) error {

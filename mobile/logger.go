@@ -17,13 +17,9 @@
 package gexp
 
 import (
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"os"
 
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // SetVerbosity sets the global verbosity level (between 0 and 6 - see logger/verbosity.go).

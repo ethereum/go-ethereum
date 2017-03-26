@@ -25,17 +25,6 @@ import (
 	"math/big"
 	"path/filepath"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/eth"
-	"github.com/expanse-org/go-expanse/ethclient"
-	"github.com/expanse-org/go-expanse/ethstats"
-	"github.com/expanse-org/go-expanse/les"
-	"github.com/expanse-org/go-expanse/node"
-	"github.com/expanse-org/go-expanse/p2p/nat"
-	"github.com/expanse-org/go-expanse/params"
-	whisper "github.com/expanse-org/go-expanse/whisper/whisperv2"
-=======
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/eth"
 	"github.com/expanse-org/go-expanse/ethclient"
@@ -45,7 +34,6 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/params"
 	whisper "github.com/expanse-org/go-expanse/whisper/whisperv2"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Gexp
@@ -106,9 +94,6 @@ func NewNodeConfig() *NodeConfig {
 	return &config
 }
 
-<<<<<<< HEAD
-// Node represents a Gexp Ethereum node instance.
-=======
 // SetMainnet sets up the node for use on the Ethereum mainnet.
 func (cfg *NodeConfig) SetMainnet() {
 	cfg.EthereumGenesis = ""
@@ -122,7 +107,6 @@ func (cfg *NodeConfig) SetTestnet() {
 }
 
 // Node represents a Geth Ethereum node instance.
->>>>>>> refs/remotes/ethereum/master
 type Node struct {
 	node *node.Node
 }

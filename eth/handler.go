@@ -26,22 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/eth/downloader"
-	"github.com/expanse-org/go-expanse/eth/fetcher"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
-	"github.com/expanse-org/go-expanse/rlp"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -55,7 +39,6 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -243,11 +226,7 @@ func (pm *ProtocolManager) Start() {
 }
 
 func (pm *ProtocolManager) Stop() {
-<<<<<<< HEAD
-	glog.V(logger.Info).Infoln("Stopping expanse protocol handler...")
-=======
-	log.Info("Stopping Ethereum protocol")
->>>>>>> refs/remotes/ethereum/master
+	log.Info("Stopping Expanse protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -268,11 +247,7 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for all peer handler goroutines and the loops to come down.
 	pm.wg.Wait()
 
-<<<<<<< HEAD
-	glog.V(logger.Info).Infoln("Expanse protocol handler stopped")
-=======
-	log.Info("Ethereum protocol stopped")
->>>>>>> refs/remotes/ethereum/master
+	log.Info("Expanse protocol stopped")
 }
 
 func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {

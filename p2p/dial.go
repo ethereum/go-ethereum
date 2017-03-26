@@ -24,16 +24,9 @@ import (
 	"net"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	"github.com/expanse-org/go-expanse/p2p/netutil"
-=======
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/p2p/netutil"
->>>>>>> refs/remotes/ethereum/master
 )
 
 const (

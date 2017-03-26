@@ -19,17 +19,11 @@
 package gexp
 
 import (
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/p2p/discv5"
-	"github.com/expanse-org/go-expanse/params"
-=======
 	"encoding/json"
 
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/params"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // MainnetChainConfig returns the chain configurations for the main Ethereum network.

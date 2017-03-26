@@ -22,8 +22,6 @@ import (
 	"math/big"
 	"testing"
 
-<<<<<<< HEAD
-	"github.com/ethereum/ethash"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -31,17 +29,6 @@ import (
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
-	"github.com/hashicorp/golang-lru"
-	"golang.org/x/net/context"
-=======
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // So we can deterministically seed different blockchains

@@ -20,22 +20,6 @@ import (
 	"context"
 	"math/big"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/accounts"
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/state"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/core/vm"
-	"github.com/expanse-org/go-expanse/eth/downloader"
-	"github.com/expanse-org/go-expanse/eth/gasprice"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/internal/ethapi"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/rpc"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/math"
@@ -50,7 +34,6 @@ import (
 	"github.com/expanse-org/go-expanse/internal/ethapi"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rpc"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // EthApiBackend implements ethapi.Backend for full nodes

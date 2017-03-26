@@ -23,12 +23,7 @@ import (
 	"os"
 	"runtime/trace"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // StartGoTrace turns on tracing, writing to the given file.

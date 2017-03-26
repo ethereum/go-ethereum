@@ -29,19 +29,6 @@ import (
 	"strconv"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/core"
-	"github.com/expanse-org/go-expanse/core/types"
-	"github.com/expanse-org/go-expanse/eth"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/les"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/node"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/rpc"
-=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -52,7 +39,6 @@ import (
 	"github.com/expanse-org/go-expanse/node"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rpc"
->>>>>>> refs/remotes/ethereum/master
 	"golang.org/x/net/websocket"
 )
 

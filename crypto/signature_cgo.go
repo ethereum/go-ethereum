@@ -23,13 +23,8 @@ import (
 	"crypto/elliptic"
 	"fmt"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/crypto/secp256k1"
-=======
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/crypto/secp256k1"
->>>>>>> refs/remotes/ethereum/master
 )
 
 func Ecrecover(hash, sig []byte) ([]byte, error) {

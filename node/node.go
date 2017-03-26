@@ -27,16 +27,6 @@ import (
 	"sync"
 	"syscall"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/accounts"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/internal/debug"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/rpc"
-=======
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
@@ -44,7 +34,6 @@ import (
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rpc"
->>>>>>> refs/remotes/ethereum/master
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 

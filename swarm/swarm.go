@@ -22,24 +22,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/accounts/abi/bind"
-	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/contracts/chequebook"
-	"github.com/expanse-org/go-expanse/contracts/ens"
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"github.com/expanse-org/go-expanse/node"
-	"github.com/expanse-org/go-expanse/p2p"
-	"github.com/expanse-org/go-expanse/p2p/discover"
-	"github.com/expanse-org/go-expanse/rpc"
-	"github.com/expanse-org/go-expanse/swarm/api"
-	httpapi "github.com/expanse-org/go-expanse/swarm/api/http"
-	"github.com/expanse-org/go-expanse/swarm/network"
-	"github.com/expanse-org/go-expanse/swarm/storage"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/accounts/abi/bind"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/contracts/chequebook"
@@ -54,7 +36,6 @@ import (
 	httpapi "github.com/expanse-org/go-expanse/swarm/api/http"
 	"github.com/expanse-org/go-expanse/swarm/network"
 	"github.com/expanse-org/go-expanse/swarm/storage"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // the swarm stack

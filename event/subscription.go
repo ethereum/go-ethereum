@@ -21,12 +21,7 @@ import (
 	"sync"
 	"time"
 
-<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common/mclock"
-	"golang.org/x/net/context"
-=======
-	"github.com/expanse-org/go-expanse/common/mclock"
->>>>>>> refs/remotes/ethereum/master
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a
