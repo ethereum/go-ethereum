@@ -33,7 +33,6 @@ import (
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
->>>>>>> refs/remotes/ethereum/master
 )
 
 var (
