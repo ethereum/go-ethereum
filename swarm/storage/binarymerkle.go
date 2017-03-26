@@ -345,8 +345,7 @@ func (d *state) Reset() {
 	d.btree = BTree{count: 0, root: nil, rootHash: nil}
 }
 
-// Write absorbs more data into the hash's state. It produces an error
-// if more data is written to the ShakeHash after writing
+// Write absorbs more data into the hash's state.
 func (d *state) Write(p []byte) (written int, err error) {
 	tree, r, count, err1 := BuildBMT(hashFunc, p, 32)
 	d.btree = *tree
@@ -357,10 +356,6 @@ func (d *state) Write(p []byte) (written int, err error) {
 	}
 
 	return count, err
-}
-
-func (d *state) Get(p []byte) (written int) {
-	return 3
 }
 
 // Sum return the root hash of the BMT
