@@ -58,9 +58,9 @@ func (t BTree) Root() []byte {
 // if incorrectly built or modified.
 // Checks the rep invariants
 func (t BTree) Validate() error {
-	count, height, error := t.root.validate()
-	if error != nil {
-		return error
+	count, height, err := t.root.validate()
+	if err != nil {
+		return err
 	}
 	if count != t.count {
 		return fmt.Errorf("Incorrect count. Was %d, should be %d", t.count, count)
@@ -122,7 +122,7 @@ func rootHash(count uint64, data []byte) []byte {
 	h.Reset()
 	h.Write(data)
 	binary.Write(h, binary.LittleEndian, count)
-	return h.Sum(make([]byte, 0))
+	return h.Sum(nil)
 }
 
 func makeHash(left, right *node) []byte {
@@ -156,21 +156,21 @@ func GetHeight(count uint64) int {
 // BMT - The BMT Representation of the data
 // ROOT - BMT Root
 // Count - Numers of leafs at the BMT
-// error - if exist validation(-1) count(-2) ok(0)
-func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, count int, errorcode int) {
+// error -
+func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, count int, err error) {
 	blocks := splitData(data, segmentsize)
 	hashFunc = h
 	leafcount := len(blocks)
 	tree := Build(blocks)
-	err := tree.Validate()
+	err = tree.Validate()
 	if err != nil {
-		return nil, nil, 0, -1
+		return nil, nil, 0, errors.New("Validation error")
 	}
 	if tree.Count() != uint64(leafcount) {
-		return nil, nil, 0, -2
+		return nil, nil, 0, errors.New("Validation count error")
 	}
 
-	return tree, &Root{uint64(leafcount), tree.Root()}, leafcount, 0
+	return tree, &Root{uint64(leafcount), tree.Root()}, leafcount, nil
 	//r := Root{uint64(count), tree.Root()}
 
 }
@@ -260,30 +260,29 @@ type Root struct {
 }
 
 // Proves the inclusion of an element at the given index with the value thats the first entry in proof
-func (r *Root) CheckProof(h Hasher, proof [][]byte, index int) bool {
+func (r *Root) CheckProof(h Hasher, proof [][]byte, index int) (bool, error) {
 	hashFunc = h
-	t_height := GetHeight(r.Count)
-	root, ok := checkNode(t_height, proof, uint64(index), r.Count)
+	theight := GetHeight(r.Count)
+	var root, ok, err = checkNode(theight, proof, uint64(index), r.Count)
 	base := rootHash(r.Count, root)
-	return ok && bytes.Equal(r.Base, base)
+	return ok && bytes.Equal(r.Base, base), err
 }
 
-func checkNode(height int, proof [][]byte, index, count uint64) ([]byte, bool) {
+func checkNode(height int, proof [][]byte, index uint64, count uint64) (hash []byte, ok bool, err error) {
 	if len(proof) == 0 {
-		fmt.Println("Empty")
-		return nil, false
+		return nil, false, errors.New("checkNode : proof is empty")
 	}
 	if count <= index {
 		fmt.Println("bad count", count, index)
-		return nil, false
+		return nil, false, fmt.Errorf("bad count %d at index %d", count, index)
 	}
 
 	if height == 1 {
 		if index != 0 || len(proof) != 1 {
 			fmt.Println("BAD", index, proof)
-			return nil, false
+			return nil, false, fmt.Errorf("BAD %d %d", index, proof)
 		}
-		return proof[0], true
+		return proof[0], true, nil
 	}
 
 	childIndex := index >> uint(height-2)
@@ -291,7 +290,7 @@ func checkNode(height int, proof [][]byte, index, count uint64) ([]byte, bool) {
 	nextIndex := index & mask
 
 	var data []byte
-	var ok bool
+	//var ok bool
 
 	h := hashFunc()
 	h.Reset()
@@ -301,7 +300,7 @@ func checkNode(height int, proof [][]byte, index, count uint64) ([]byte, bool) {
 	if childIndex == 1 {
 		nextCount = count & mask
 		h.Write(proof[last])
-		data, ok = checkNode(height-1, proof[:last], nextIndex, nextCount)
+		data, ok, err = checkNode(height-1, proof[:last], nextIndex, nextCount)
 		h.Write(data)
 	} else {
 		nextCount = count
@@ -309,39 +308,38 @@ func checkNode(height int, proof [][]byte, index, count uint64) ([]byte, bool) {
 			nextCount = ^mask
 		}
 		if count == nextCount {
-			data, ok = checkNode(height-1, proof, nextIndex, nextCount)
+			data, ok, err = checkNode(height-1, proof, nextIndex, nextCount)
 			h.Write(data)
 		} else {
-			data, ok = checkNode(height-1, proof[:last], nextIndex, nextCount)
+			data, ok, err = checkNode(height-1, proof[:last], nextIndex, nextCount)
 			h.Write(data)
 			h.Write(proof[last])
 		}
 	}
 
-	hash := h.Sum(make([]byte, 0))
-	return hash, ok
+	hash = h.Sum(make([]byte, 0))
+	return hash, ok, nil
 }
 
-// ShakeHash defines the interface to hash functions that
-// support arbitrary-length output.
+// BMTHash defines the interface to hash functions that
 type BMTHash interface {
 	// Write absorbs more data into the hash's state. It panics if input is
 	// written to it after output has been read from it.
 	io.Writer
 
 	// Read reads more output from the hash; reading affects the hash's
-	// state. (ShakeHash.Read is thus very different from Hash.Sum)
+	// state.
 	// It never returns an error.
 	io.Reader
 
-	// Clone returns a copy of the ShakeHash in its current state.
+	// Clone returns a copy of the BMTHash in its current state.
 	Clone() BMTHash
 
-	// Reset resets the ShakeHash to its initial state.
+	// Reset resets the BMTHash to its initial state.
 	Reset()
 }
 
-// Reset clears the internal state by zeroing the sponge state and
+// Reset clears the internal state
 func (d *state) Reset() {
 	d.root = Root{Count: 0, Base: nil}
 	d.btree = BTree{count: 0, root: nil, rootHash: nil}
@@ -354,7 +352,7 @@ func (d *state) Write(p []byte) (written int, err error) {
 	d.btree = *tree
 	d.root = *r
 
-	if err1 != 0 {
+	if err1 != nil {
 		err = errors.New("bmt write error")
 	}
 
