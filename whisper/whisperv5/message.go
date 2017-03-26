@@ -28,11 +28,18 @@ import (
 	"fmt"
 	mrand "math/rand"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/ecies"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 	"golang.org/x/crypto/pbkdf2"
 )
 
@@ -129,7 +136,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		randomize(buf[1:])
+		mrand.Read(buf[1:])
 		buf[0] = byte(padSize)
 		if params.Padding != nil {
 			copy(buf[1:], params.Padding)
@@ -144,7 +151,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 	if isMessageSigned(msg.Raw[0]) {
 		// this should not happen, but no reason to panic
-		glog.V(logger.Error).Infof("Trying to sign a message which was already signed")
+		log.Error(fmt.Sprintf("Trying to sign a message which was already signed"))
 		return nil
 	}
 
@@ -238,7 +245,7 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 		}
 	}
 	if len(msg.Raw) > MaxMessageLength {
-		glog.V(logger.Error).Infof("Message size must not exceed %d bytes", MaxMessageLength)
+		log.Error(fmt.Sprintf("Message size must not exceed %d bytes", MaxMessageLength))
 		return nil, errors.New("Oversized message")
 	}
 	var salt, nonce []byte
@@ -281,7 +288,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []by
 	}
 	if len(nonce) != aesgcm.NonceSize() {
 		info := fmt.Sprintf("Wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
-		glog.V(logger.Error).Infof(info)
+		log.Error(fmt.Sprintf(info))
 		return errors.New(info)
 	}
 	decrypted, err := aesgcm.Open(nil, nonce, msg.Raw, nil)
@@ -352,7 +359,7 @@ func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 
 	pub, err := crypto.SigToPub(msg.hash(), msg.Signature)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get public key from signature: %v", err)
+		log.Error(fmt.Sprintf("Could not get public key from signature: %v", err))
 		return nil
 	}
 	return pub
@@ -365,20 +372,4 @@ func (msg *ReceivedMessage) hash() []byte {
 		return crypto.Keccak256(msg.Raw[:sz])
 	}
 	return crypto.Keccak256(msg.Raw)
-}
-
-// rand.Rand provides a Read method in Go 1.7 and later,
-// but we can't use it yet.
-func randomize(b []byte) {
-	cnt := 0
-	val := mrand.Int63()
-	for n := 0; n < len(b); n++ {
-		b[n] = byte(val)
-		val >>= 8
-		cnt++
-		if cnt >= 7 {
-			cnt = 0
-			val = mrand.Int63()
-		}
-	}
 }

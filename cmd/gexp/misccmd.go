@@ -25,10 +25,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/ethash"
 	"github.com/expanse-org/go-expanse/cmd/utils"
 	"github.com/expanse-org/go-expanse/eth"
 	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -87,7 +87,7 @@ func makedag(ctx *cli.Context) error {
 				utils.Fatalf("Can't find dir")
 			}
 			fmt.Println("making DAG, this could take awhile...")
-			ethash.MakeDAG(blockNum, dir)
+			pow.MakeDataset(blockNum, dir)
 		}
 	default:
 		wrongArgs()

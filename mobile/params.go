@@ -19,9 +19,17 @@
 package gexp
 
 import (
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/params"
+=======
+	"encoding/json"
+
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/p2p/discv5"
+	"github.com/expanse-org/go-expanse/params"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // MainnetChainConfig returns the chain configurations for the main Ethereum network.
@@ -60,7 +68,11 @@ func TestnetChainConfig() *ChainConfig {
 
 // TestnetGenesis returns the JSON spec to use for the Ethereum test network.
 func TestnetGenesis() string {
-	return core.DefaultTestnetGenesisBlock()
+	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
 }
 
 // ChainConfig is the core config which determines the blockchain settings.

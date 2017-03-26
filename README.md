@@ -16,7 +16,7 @@ For prerequisites and detailed build instructions please read the
 [Installation Instructions](https://github.com/expanse-org/go-expanse/wiki/Building-Expanse)
 on the wiki.
 
-Building gexp requires both a Go and a C compiler.
+Building gexp requires both a Go (version 1.7 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
 
@@ -112,13 +112,14 @@ docker run -d --name expanse-node -v /Users/alice/expanse:/root \
 
 This will start gexp in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
 
-### Programatically interfacing Gexp nodes
+### Pragmatically interfacing Gexp nodes
 
 As a developer, sooner rather than later you'll want to start interacting with Gexp and the Expanse
 network via your own programs and not manually through the console. To aid this, Gexp has built in
 support for a JSON-RPC based APIs ([standard APIs](https://github.com/expanse-org/wiki/wiki/JSON-RPC) and
 [Gexp specific APIs](https://github.com/expanse-org/go-expanse/wiki/Management-APIs)). These can be
 exposed via HTTP, WebSockets and IPC (unix sockets on unix based platroms, and named pipes on Windows).
+
 
 The IPC interface is enabled by default and exposes all the APIs supported by Gexp, whereas the HTTP
 and WS interfaces need to manually be enabled and only expose a subset of APIs due to security reasons.

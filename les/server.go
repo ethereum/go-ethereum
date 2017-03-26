@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -35,6 +36,19 @@ import (
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/eth"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/les/flowcontrol"
+	"github.com/expanse-org/go-expanse/light"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/trie"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 type LesServer struct {
@@ -46,7 +60,7 @@ type LesServer struct {
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	pm, err := NewProtocolManager(config.ChainConfig, false, config.NetworkId, eth.EventMux(), eth.Pow(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
+	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Pow(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +306,7 @@ func (pm *ProtocolManager) blockLoop() {
 						lastHead = header
 						lastBroadcastTd = td
 
-						glog.V(logger.Debug).Infoln("===> ", number, hash, td, reorg)
+						log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 
 						announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
 						for _, p := range peers {
@@ -396,7 +410,7 @@ func makeCht(db ethdb.Database) bool {
 	} else {
 		lastChtNum++
 
-		glog.V(logger.Detail).Infof("cht: %d %064x", lastChtNum, root)
+		log.Trace("Generated CHT", "number", lastChtNum, "root", root.Hex())
 
 		storeChtRoot(db, lastChtNum, root)
 		var data [8]byte

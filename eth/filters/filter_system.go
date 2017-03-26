@@ -19,17 +19,26 @@
 package filters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // Type determines the kind of filter and is used to put the filter in to
@@ -372,7 +381,8 @@ func (es *EventSystem) lightFilterNewHead(newHeader *types.Header, callBack func
 func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.Address, topics [][]common.Hash, remove bool) []*types.Log {
 	if bloomFilter(header.Bloom, addresses, topics) {
 		// Get the logs of the block
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
 		receipts, err := es.backend.GetReceipts(ctx, header.Hash())
 		if err != nil {
 			return nil

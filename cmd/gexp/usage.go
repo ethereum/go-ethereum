@@ -78,6 +78,17 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "ETHASH",
+		Flags: []cli.Flag{
+			utils.EthashCacheDirFlag,
+			utils.EthashCachesInMemoryFlag,
+			utils.EthashCachesOnDiskFlag,
+			utils.EthashDatasetDirFlag,
+			utils.EthashDatasetsInMemoryFlag,
+			utils.EthashDatasetsOnDiskFlag,
+		},
+	},
+	{
 		Name: "PERFORMANCE TUNING",
 		Flags: []cli.Flag{
 			utils.CacheFlag,
@@ -131,7 +142,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.AutoDAGFlag,
 			utils.EtherbaseFlag,
 			utils.TargetGasLimitFlag,
 			utils.GasPriceFlag,

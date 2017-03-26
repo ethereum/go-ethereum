@@ -21,10 +21,16 @@ import (
 	"bytes"
 	"fmt"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto/sha3"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 	"github.com/rcrowley/go-metrics"
 )
 
@@ -135,8 +141,8 @@ func (t *Trie) Iterator() *Iterator {
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
-	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }
@@ -198,8 +204,8 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryUpdate(key, value); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -300,8 +306,8 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 

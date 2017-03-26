@@ -23,12 +23,21 @@ import (
 	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/ecies"
 	"github.com/expanse-org/go-expanse/rlp"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/rlp"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // Envelope represents a clear-text data packet to transmit through the Whisper
@@ -66,7 +75,8 @@ func (self *Envelope) Seal(pow time.Duration) {
 		for i := 0; i < 1024; i++ {
 			binary.BigEndian.PutUint32(d[60:], nonce)
 
-			firstBit := common.FirstBitSet(common.BigD(crypto.Keccak256(d)))
+			d := new(big.Int).SetBytes(crypto.Keccak256(d))
+			firstBit := math.FirstBitSet(d)
 			if firstBit > bestBit {
 				self.Nonce, bestBit = nonce, firstBit
 			}

@@ -17,6 +17,7 @@
 package core
 
 import (
+	"errors"
 	"math/big"
 	"runtime"
 	"testing"
@@ -35,12 +36,16 @@ type failPow struct {
 	failing uint64
 }
 
-func (pow failPow) Search(pow.Block, <-chan struct{}, int) (uint64, []byte) {
+func (pow failPow) Search(pow.Block, <-chan struct{}) (uint64, []byte) {
 	return 0, nil
 }
-func (pow failPow) Verify(block pow.Block) bool { return block.NumberU64() != pow.failing }
-func (pow failPow) GetHashrate() int64          { return 0 }
-func (pow failPow) Turbo(bool)                  {}
+func (pow failPow) Verify(block pow.Block) error {
+	if block.NumberU64() == pow.failing {
+		return errors.New("failed")
+	}
+	return nil
+}
+func (pow failPow) Hashrate() float64 { return 0 }
 
 // delayedPow is a non-validating proof of work implementation, that returns true
 // from Verify for all blocks, but delays them the configured amount of time.
@@ -48,12 +53,11 @@ type delayedPow struct {
 	delay time.Duration
 }
 
-func (pow delayedPow) Search(pow.Block, <-chan struct{}, int) (uint64, []byte) {
+func (pow delayedPow) Search(pow.Block, <-chan struct{}) (uint64, []byte) {
 	return 0, nil
 }
-func (pow delayedPow) Verify(block pow.Block) bool { time.Sleep(pow.delay); return true }
-func (pow delayedPow) GetHashrate() int64          { return 0 }
-func (pow delayedPow) Turbo(bool)                  {}
+func (pow delayedPow) Verify(block pow.Block) error { time.Sleep(pow.delay); return nil }
+func (pow delayedPow) Hashrate() float64            { return 0 }
 
 // Tests that simple POW verification works, for both good and bad blocks.
 func TestPowVerification(t *testing.T) {
@@ -75,11 +79,11 @@ func TestPowVerification(t *testing.T) {
 
 				switch {
 				case full && valid:
-					_, results = verifyNoncesFromBlocks(FakePow{}, []*types.Block{blocks[i]})
+					_, results = verifyNoncesFromBlocks(pow.FakePow{}, []*types.Block{blocks[i]})
 				case full && !valid:
 					_, results = verifyNoncesFromBlocks(failPow{blocks[i].NumberU64()}, []*types.Block{blocks[i]})
 				case !full && valid:
-					_, results = verifyNoncesFromHeaders(FakePow{}, []*types.Header{headers[i]})
+					_, results = verifyNoncesFromHeaders(pow.FakePow{}, []*types.Header{headers[i]})
 				case !full && !valid:
 					_, results = verifyNoncesFromHeaders(failPow{headers[i].Number.Uint64()}, []*types.Header{headers[i]})
 				}
@@ -134,11 +138,11 @@ func testPowConcurrentVerification(t *testing.T, threads int) {
 
 			switch {
 			case full && valid:
-				_, results = verifyNoncesFromBlocks(FakePow{}, blocks)
+				_, results = verifyNoncesFromBlocks(pow.FakePow{}, blocks)
 			case full && !valid:
 				_, results = verifyNoncesFromBlocks(failPow{uint64(len(blocks) - 1)}, blocks)
 			case !full && valid:
-				_, results = verifyNoncesFromHeaders(FakePow{}, headers)
+				_, results = verifyNoncesFromHeaders(pow.FakePow{}, headers)
 			case !full && !valid:
 				_, results = verifyNoncesFromHeaders(failPow{uint64(len(headers) - 1)}, headers)
 			}

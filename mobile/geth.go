@@ -20,10 +20,12 @@
 package gexp
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"path/filepath"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/eth"
 	"github.com/expanse-org/go-expanse/ethclient"
@@ -33,6 +35,17 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/params"
 	whisper "github.com/expanse-org/go-expanse/whisper/whisperv2"
+=======
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/eth"
+	"github.com/expanse-org/go-expanse/ethclient"
+	"github.com/expanse-org/go-expanse/ethstats"
+	"github.com/expanse-org/go-expanse/les"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/p2p/nat"
+	"github.com/expanse-org/go-expanse/params"
+	whisper "github.com/expanse-org/go-expanse/whisper/whisperv2"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Gexp
@@ -93,7 +106,23 @@ func NewNodeConfig() *NodeConfig {
 	return &config
 }
 
+<<<<<<< HEAD
 // Node represents a Gexp Ethereum node instance.
+=======
+// SetMainnet sets up the node for use on the Ethereum mainnet.
+func (cfg *NodeConfig) SetMainnet() {
+	cfg.EthereumGenesis = ""
+	cfg.EthereumChainConfig = MainnetChainConfig()
+}
+
+// SetTestnet sets up the node for use on the Ethereum testnet.
+func (cfg *NodeConfig) SetTestnet() {
+	cfg.EthereumGenesis = TestnetGenesis()
+	cfg.EthereumChainConfig = TestnetChainConfig()
+}
+
+// Node represents a Geth Ethereum node instance.
+>>>>>>> refs/remotes/ethereum/master
 type Node struct {
 	node *node.Node
 }
@@ -128,30 +157,47 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var genesis *core.Genesis
+	if config.EthereumGenesis != "" {
+		genesis = new(core.Genesis)
+		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
+			return nil, fmt.Errorf("invalid EthereumGenesis: %v", err)
+		}
+	}
+	if config.EthereumChainConfig != nil {
+		if genesis == nil {
+			genesis = core.DefaultGenesisBlock()
+		}
+		genesis.Config = &params.ChainConfig{
+			ChainId:        big.NewInt(config.EthereumChainConfig.ChainID),
+			HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
+			DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
+			DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
+			EIP150Block:    big.NewInt(config.EthereumChainConfig.EIP150Block),
+			EIP150Hash:     config.EthereumChainConfig.EIP150Hash.hash,
+			EIP155Block:    big.NewInt(config.EthereumChainConfig.EIP155Block),
+			EIP158Block:    big.NewInt(config.EthereumChainConfig.EIP158Block),
+		}
+	}
+
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
 		ethConf := &eth.Config{
-			ChainConfig: &params.ChainConfig{
-				ChainId:        big.NewInt(config.EthereumChainConfig.ChainID),
-				HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
-				DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
-				DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
-				EIP150Block:    big.NewInt(config.EthereumChainConfig.EIP150Block),
-				EIP150Hash:     config.EthereumChainConfig.EIP150Hash.hash,
-				EIP155Block:    big.NewInt(config.EthereumChainConfig.EIP155Block),
-				EIP158Block:    big.NewInt(config.EthereumChainConfig.EIP158Block),
-			},
-			Genesis:                 config.EthereumGenesis,
+			Genesis:                 genesis,
 			LightMode:               true,
 			DatabaseCache:           config.EthereumDatabaseCache,
 			NetworkId:               config.EthereumNetworkID,
-			GasPrice:                new(big.Int).Mul(big.NewInt(20), common.Shannon),
-			GpoMinGasPrice:          new(big.Int).Mul(big.NewInt(20), common.Shannon),
-			GpoMaxGasPrice:          new(big.Int).Mul(big.NewInt(500), common.Shannon),
+			GasPrice:                new(big.Int).SetUint64(20 * params.Shannon),
+			GpoMinGasPrice:          new(big.Int).SetUint64(50 * params.Shannon),
+			GpoMaxGasPrice:          new(big.Int).SetUint64(500 * params.Shannon),
 			GpoFullBlockRatio:       80,
 			GpobaseStepDown:         10,
 			GpobaseStepUp:           100,
 			GpobaseCorrectionFactor: 110,
+			EthashCacheDir:          "ethash",
+			EthashCachesInMem:       2,
+			EthashCachesOnDisk:      3,
 		}
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)

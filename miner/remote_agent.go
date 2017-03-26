@@ -18,17 +18,25 @@ package miner
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/ethereum/ethash"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/pow"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/pow"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 type hashrate struct {
@@ -115,7 +123,7 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 		block := a.currentWork.Block
 
 		res[0] = block.HashNoNonce().Hex()
-		seedHash, _ := ethash.GetSeedHash(block.NumberU64())
+		seedHash := pow.EthashSeedHash(block.NumberU64())
 		res[1] = common.BytesToHash(seedHash).Hex()
 		// Calculate the "target" to be returned to the external miner
 		n := big.NewInt(1)
@@ -140,13 +148,13 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 	// Make sure the work submitted is present
 	work := a.work[hash]
 	if work == nil {
-		glog.V(logger.Info).Infof("Work was submitted for %x but no pending work found", hash)
+		log.Info(fmt.Sprintf("Work was submitted for %x but no pending work found", hash))
 		return false
 	}
 	// Make sure the PoW solutions is indeed valid
 	block := work.Block.WithMiningResult(nonce, mixDigest)
-	if !a.pow.Verify(block) {
-		glog.V(logger.Warn).Infof("Invalid PoW submitted for %x", hash)
+	if err := a.pow.Verify(block); err != nil {
+		log.Warn(fmt.Sprintf("Invalid PoW submitted for %x: %v", hash, err))
 		return false
 	}
 	// Solutions seems to be valid, return to the miner and notify acceptance

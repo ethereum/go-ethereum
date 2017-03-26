@@ -17,8 +17,10 @@
 package eth
 
 import (
+	"context"
 	"math/big"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
@@ -33,6 +35,22 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/eth/gasprice"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/internal/ethapi"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // EthApiBackend implements ethapi.Backend for full nodes
@@ -50,6 +68,7 @@ func (b *EthApiBackend) CurrentBlock() *types.Block {
 }
 
 func (b *EthApiBackend) SetHead(number uint64) {
+	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }
 
@@ -109,7 +128,7 @@ func (b *EthApiBackend) GetTd(blockHash common.Hash) *big.Int {
 func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state ethapi.State, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error) {
 	statedb := state.(EthApiState).state
 	from := statedb.GetOrNewStateObject(msg.From())
-	from.SetBalance(common.MaxBig)
+	from.SetBalance(math.MaxBig256)
 	vmError := func() error { return nil }
 
 	context := core.NewEVMContext(msg, header, b.eth.BlockChain())

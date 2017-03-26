@@ -22,8 +22,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/robertkrimen/otto"
 )
@@ -306,7 +305,7 @@ func setError(resp *otto.Object, code int, msg string) {
 func throwJSException(msg interface{}) otto.Value {
 	val, err := otto.ToValue(msg)
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to serialize JavaScript exception %v: %v", msg, err)
+		log.Error("Failed to serialize JavaScript exception", "exception", msg, "err", err)
 	}
 	panic(val)
 }

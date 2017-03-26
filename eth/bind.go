@@ -17,8 +17,10 @@
 package eth
 
 import (
+	"context"
 	"math/big"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/hexutil"
@@ -27,6 +29,15 @@ import (
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/hexutil"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/internal/ethapi"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // ContractBackend implements bind.ContractBackend with direct calls to Ethereum

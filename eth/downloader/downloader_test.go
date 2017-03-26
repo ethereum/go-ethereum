@@ -982,7 +982,7 @@ func testCancel(t *testing.T, protocol int, mode SyncMode) {
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
 
 	// Make sure canceling works with a pristine downloader
-	tester.downloader.cancel()
+	tester.downloader.Cancel()
 	if !tester.downloader.queue.Idle() {
 		t.Errorf("download queue not idle")
 	}
@@ -990,7 +990,7 @@ func testCancel(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("peer", nil, mode); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
-	tester.downloader.cancel()
+	tester.downloader.Cancel()
 	if !tester.downloader.queue.Idle() {
 		t.Errorf("download queue not idle")
 	}

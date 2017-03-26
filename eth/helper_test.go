@@ -27,6 +27,7 @@ import (
 	"sync"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -37,14 +38,24 @@ import (
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/params"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var (
 	testBankKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	testBank       = core.GenesisAccount{
-		Address: crypto.PubkeyToAddress(testBankKey.PublicKey),
-		Balance: big.NewInt(1000000),
-	}
+	testBank       = crypto.PubkeyToAddress(testBankKey.PublicKey)
 )
 
 // newTestProtocolManager creates a new protocol manager for testing purposes,
@@ -52,19 +63,22 @@ var (
 // channels for different events.
 func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, error) {
 	var (
-		evmux         = new(event.TypeMux)
-		pow           = new(core.FakePow)
-		db, _         = ethdb.NewMemDatabase()
-		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
-		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
+		evmux = new(event.TypeMux)
+		pow   = new(pow.FakePow)
+		db, _ = ethdb.NewMemDatabase()
+		gspec = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
+		}
+		genesis       = gspec.MustCommit(db)
+		blockchain, _ = core.NewBlockChain(db, gspec.Config, pow, evmux, vm.Config{})
 	)
-	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
+	chain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(chainConfig, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
+	pm, err := NewProtocolManager(gspec.Config, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
 	if err != nil {
 		return nil, err
 	}

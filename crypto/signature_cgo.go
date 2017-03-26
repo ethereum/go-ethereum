@@ -23,8 +23,13 @@ import (
 	"crypto/elliptic"
 	"fmt"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto/secp256k1"
+=======
+	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/crypto/secp256k1"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 func Ecrecover(hash, sig []byte) ([]byte, error) {
@@ -53,7 +58,7 @@ func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
 	if len(hash) != 32 {
 		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
-	seckey := common.LeftPadBytes(prv.D.Bytes(), prv.Params().BitSize/8)
+	seckey := math.PaddedBigBytes(prv.D, prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
 	return secp256k1.Sign(hash, seckey)
 }

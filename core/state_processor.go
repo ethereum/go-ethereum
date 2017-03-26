@@ -23,8 +23,6 @@ import (
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/core/vm"
 	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/params"
 )
 
@@ -121,8 +119,6 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-
-	glog.V(logger.Debug).Infoln(receipt)
 
 	return receipt, gas, err
 }

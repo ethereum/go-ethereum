@@ -17,12 +17,17 @@
 package rpc_test
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // In this example, our client whishes to track the latest 'block number'

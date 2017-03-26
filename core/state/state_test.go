@@ -152,7 +152,7 @@ func TestSnapshot2(t *testing.T) {
 	state.SetState(stateobjaddr1, storageaddr, data1)
 
 	// db, trie are already non-empty values
-	so0 := state.GetStateObject(stateobjaddr0)
+	so0 := state.getStateObject(stateobjaddr0)
 	so0.SetBalance(big.NewInt(42))
 	so0.SetNonce(43)
 	so0.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e'}), []byte{'c', 'a', 'f', 'e'})
@@ -164,7 +164,7 @@ func TestSnapshot2(t *testing.T) {
 	state.Reset(root)
 
 	// and one with deleted == true
-	so1 := state.GetStateObject(stateobjaddr1)
+	so1 := state.getStateObject(stateobjaddr1)
 	so1.SetBalance(big.NewInt(52))
 	so1.SetNonce(53)
 	so1.SetCode(crypto.Keccak256Hash([]byte{'c', 'a', 'f', 'e', '2'}), []byte{'c', 'a', 'f', 'e', '2'})
@@ -172,7 +172,7 @@ func TestSnapshot2(t *testing.T) {
 	so1.deleted = true
 	state.setStateObject(so1)
 
-	so1 = state.GetStateObject(stateobjaddr1)
+	so1 = state.getStateObject(stateobjaddr1)
 	if so1 != nil {
 		t.Fatalf("deleted object not nil when getting")
 	}
@@ -180,7 +180,7 @@ func TestSnapshot2(t *testing.T) {
 	snapshot := state.Snapshot()
 	state.RevertToSnapshot(snapshot)
 
-	so0Restored := state.GetStateObject(stateobjaddr0)
+	so0Restored := state.getStateObject(stateobjaddr0)
 	// Update lazily-loaded values before comparing.
 	so0Restored.GetState(db, storageaddr)
 	so0Restored.Code(db)
@@ -188,13 +188,13 @@ func TestSnapshot2(t *testing.T) {
 	compareStateObjects(so0Restored, so0, t)
 
 	// deleted should be nil, both before and after restore of state copy
-	so1Restored := state.GetStateObject(stateobjaddr1)
+	so1Restored := state.getStateObject(stateobjaddr1)
 	if so1Restored != nil {
 		t.Fatalf("deleted object not nil after restoring snapshot: %+v", so1Restored)
 	}
 }
 
-func compareStateObjects(so0, so1 *StateObject, t *testing.T) {
+func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}

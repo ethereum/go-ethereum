@@ -30,7 +30,7 @@ import (
 func TestMipmapUpgrade(t *testing.T) {
 	db, _ := ethdb.NewMemDatabase()
 	addr := common.BytesToAddress([]byte("jeff"))
-	genesis := core.WriteGenesisBlockForTesting(db)
+	genesis := new(core.Genesis).MustCommit(db)
 
 	chain, receipts := core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {
 		var receipts types.Receipts

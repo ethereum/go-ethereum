@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"sync/atomic"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
@@ -34,6 +35,19 @@ import (
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
+=======
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // Backend wraps all methods required for mining.
@@ -87,7 +101,7 @@ out:
 			if self.Mining() {
 				self.Stop()
 				atomic.StoreInt32(&self.shouldStart, 1)
-				glog.V(logger.Info).Infoln("Mining operation aborted due to sync operation")
+				log.Info(fmt.Sprint("Mining operation aborted due to sync operation"))
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
@@ -124,7 +138,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 	self.threads = threads
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
-		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
+		log.Info(fmt.Sprint("Can not start mining operation due to network sync (starts when finished)"))
 		return
 	}
 	atomic.StoreInt32(&self.mining, 1)
@@ -133,7 +147,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 		self.worker.register(NewCpuAgent(i, self.pow))
 	}
 
-	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+	log.Info(fmt.Sprintf("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents)))
 	self.worker.start()
 	self.worker.commitNewWork()
 }
@@ -160,12 +174,14 @@ func (self *Miner) Mining() bool {
 }
 
 func (self *Miner) HashRate() (tot int64) {
-	tot += self.pow.GetHashrate()
+	tot += int64(self.pow.Hashrate())
 	// do we care this might race? is it worth we're rewriting some
 	// aspects of the worker/locking up agents so we can get an accurate
 	// hashrate?
 	for agent := range self.worker.agents {
-		tot += agent.GetHashRate()
+		if _, ok := agent.(*CpuAgent); !ok {
+			tot += agent.GetHashRate()
+		}
 	}
 	return
 }

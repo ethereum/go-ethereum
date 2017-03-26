@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/accounts/keystore"
 	"github.com/expanse-org/go-expanse/accounts/usbwallet"
@@ -37,6 +38,18 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/p2p/netutil"
+=======
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/accounts/keystore"
+	"github.com/expanse-org/go-expanse/accounts/usbwallet"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p/discv5"
+	"github.com/expanse-org/go-expanse/p2p/nat"
+	"github.com/expanse-org/go-expanse/p2p/netutil"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var (
@@ -334,7 +347,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if c.DataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
-			glog.Fatalf("Failed to generate ephemeral node key: %v", err)
+			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
 		}
 		return key
 	}
@@ -346,16 +359,16 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	// No persistent key found, generate and store a new one.
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		glog.Fatalf("Failed to generate node key: %v", err)
+		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
 	instanceDir := filepath.Join(c.DataDir, c.name())
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
-		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
 	}
 	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
-		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
 	return key
 }
@@ -383,7 +396,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	// Load the nodes from the config file.
 	var nodelist []string
 	if err := common.LoadJSON(path, &nodelist); err != nil {
-		glog.V(logger.Error).Infof("Can't load node file %s: %v", path, err)
+		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
@@ -394,7 +407,7 @@ func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 		}
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Node URL %s: %v\n", url, err)
+			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
 		}
 		nodes = append(nodes, node)
@@ -442,7 +455,7 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		keystore.NewKeyStore(keydir, scryptN, scryptP),
 	}
 	if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
-		glog.V(logger.Warn).Infof("Failed to start Ledger hub, disabling: %v", err)
+		log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
 	} else {
 		backends = append(backends, ledgerhub)
 	}

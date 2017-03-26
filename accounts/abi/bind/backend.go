@@ -17,13 +17,13 @@
 package bind
 
 import (
+	"context"
 	"errors"
 	"math/big"
 
 	"github.com/expanse-org/go-expanse"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
-	"golang.org/x/net/context"
 )
 
 var (

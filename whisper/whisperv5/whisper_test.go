@@ -18,6 +18,7 @@ package whisperv5
 
 import (
 	"bytes"
+	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -44,12 +45,12 @@ func TestWhisperBasic(t *testing.T) {
 	if uint64(w.Version()) != ProtocolVersion {
 		t.Fatalf("failed whisper Version: %v.", shh.Version)
 	}
-	if w.GetFilter(0) != nil {
+	if w.GetFilter("non-existent") != nil {
 		t.Fatalf("failed GetFilter.")
 	}
 
 	peerID := make([]byte, 64)
-	randomize(peerID)
+	mrand.Read(peerID)
 	peer, _ := w.getPeer(peerID)
 	if peer != nil {
 		t.Fatal("found peer for random key.")
@@ -69,7 +70,7 @@ func TestWhisperBasic(t *testing.T) {
 	if len(mail) != 0 {
 		t.Fatalf("failed w.Envelopes().")
 	}
-	m := w.Messages(0)
+	m := w.Messages("non-existent")
 	if len(m) != 0 {
 		t.Fatalf("failed w.Messages.")
 	}
@@ -212,7 +213,7 @@ func TestWhisperSymKeyManagement(t *testing.T) {
 
 	// add existing id, nothing should change
 	randomKey := make([]byte, 16)
-	randomize(randomKey)
+	mrand.Read(randomKey)
 	err = w.AddSymKey(id1, randomKey)
 	if err == nil {
 		t.Fatalf("failed AddSymKey with seed %d.", seed)

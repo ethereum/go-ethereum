@@ -18,11 +18,13 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/big"
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
@@ -35,6 +37,21 @@ import (
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/rlp"
+	"github.com/expanse-org/go-expanse/trie"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var (
@@ -169,14 +186,14 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 			statedb, err := state.New(header.Root, db)
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)
-				from.SetBalance(common.MaxBig)
+				from.SetBalance(math.MaxBig256)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 
 				context := core.NewEVMContext(msg, header, bc)
 				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
 
-				gp := new(core.GasPool).AddGas(common.MaxBig)
+				gp := new(core.GasPool).AddGas(math.MaxBig256)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				res = append(res, ret...)
 			}
@@ -186,12 +203,12 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 			vmstate := NewVMState(ctx, state)
 			from, err := state.GetOrNewStateObject(ctx, testBankAddress)
 			if err == nil {
-				from.SetBalance(common.MaxBig)
+				from.SetBalance(math.MaxBig256)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 				context := core.NewEVMContext(msg, header, lc)
 				vmenv := vm.NewEVM(context, vmstate, config, vm.Config{})
-				gp := new(core.GasPool).AddGas(common.MaxBig)
+				gp := new(core.GasPool).AddGas(math.MaxBig256)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)
 				if vmstate.Error() == nil {
 					res = append(res, ret...)
@@ -246,12 +263,13 @@ func testChainGen(i int, block *core.BlockGen) {
 func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	var (
 		evmux   = new(event.TypeMux)
-		pow     = new(core.FakePow)
+		pow     = new(pow.FakePow)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
-		genesis = core.WriteGenesisBlockForTesting(sdb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
+		genesis = gspec.MustCommit(sdb)
 	)
-	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+	gspec.MustCommit(ldb)
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
 	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
@@ -275,8 +293,11 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(sdb, i)
 			b1 := fn(NoOdr, sdb, blockchain, nil, bhash)
-			ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
 			b2 := fn(ctx, ldb, nil, lightchain, bhash)
+
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
 			if exp && !eq {

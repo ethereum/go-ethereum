@@ -18,16 +18,13 @@
 package eth
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
-	"os"
-	"path/filepath"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/ethereum/ethash"
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
@@ -48,6 +45,26 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rpc"
+=======
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/eth/filters"
+	"github.com/expanse-org/go-expanse/eth/gasprice"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/internal/ethapi"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/miner"
+	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -64,26 +81,34 @@ var (
 )
 
 type Config struct {
-	ChainConfig *params.ChainConfig // chain configuration
+	// The genesis block, which is inserted if the database is empty.
+	// If nil, the Ethereum main net block is used.
+	Genesis *core.Genesis
 
-	NetworkId  int    // Network ID to use for selecting peers to connect to
-	Genesis    string // Genesis JSON to seed the chain database with
-	FastSync   bool   // Enables the state download based fast synchronisation algorithm
-	LightMode  bool   // Running in light client mode
-	LightServ  int    // Maximum percentage of time allowed for serving LES requests
-	LightPeers int    // Maximum number of LES client peers
-	MaxPeers   int    // Maximum number of global peers
+	NetworkId int // Network ID to use for selecting peers to connect to
+
+	FastSync   bool // Enables the state download based fast synchronisation algorithm
+	LightMode  bool // Running in light client mode
+	LightServ  int  // Maximum percentage of time allowed for serving LES requests
+	LightPeers int  // Maximum number of LES client peers
+	MaxPeers   int  // Maximum number of global peers
 
 	SkipBcVersionCheck bool // e.g. blockchain export
 	DatabaseCache      int
 	DatabaseHandles    int
 
 	DocRoot   string
-	AutoDAG   bool
 	PowFake   bool
 	PowTest   bool
 	PowShared bool
 	ExtraData []byte
+
+	EthashCacheDir       string
+	EthashCachesInMem    int
+	EthashCachesOnDisk   int
+	EthashDatasetDir     string
+	EthashDatasetsInMem  int
+	EthashDatasetsOnDisk int
 
 	Etherbase    common.Address
 	GasPrice     *big.Int
@@ -98,9 +123,6 @@ type Config struct {
 	GpobaseCorrectionFactor int
 
 	EnablePreimageRecording bool
-
-	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
-	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
 }
 
 type LesServer interface {
@@ -133,8 +155,6 @@ type Ethereum struct {
 	miner        *miner.Miner
 	Mining       bool
 	MinerThreads int
-	AutoDAG      bool
-	autodagquit  chan bool
 	etherbase    common.Address
 	solcPath     string
 
@@ -155,36 +175,30 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 	stopDbUpgrade := upgradeSequentialKeys(chainDb)
-	if err := SetupGenesisBlock(&chainDb, config); err != nil {
-		return nil, err
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
+		return nil, genesisErr
 	}
-	pow, err := CreatePoW(config)
-	if err != nil {
-		return nil, err
-	}
+	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
 		chainDb:        chainDb,
+		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		pow:            pow,
+		pow:            CreatePoW(ctx, config),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		netVersionId:   config.NetworkId,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
-		AutoDAG:        config.AutoDAG,
 		solcPath:       config.SolcPath,
 	}
 
-	if err := upgradeChainDatabase(chainDb); err != nil {
-		return nil, err
-	}
 	if err := addMipmapBloomBins(chainDb); err != nil {
 		return nil, err
 	}
-
-	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
+	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
 		bcVersion := core.GetBlockChainVersion(chainDb)
@@ -194,6 +208,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	}
 
+<<<<<<< HEAD
 	// load the genesis block or write a new one if no genesis
 	// block is prenent in the database.
 	genesis := core.GetBlock(chainDb, core.GetCanonicalHash(chainDb, 0), 0)
@@ -215,12 +230,20 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	glog.V(logger.Info).Infoln("Chain config:", eth.chainConfig)
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
+=======
+	vmConfig := vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.eventMux, vmConfig)
+>>>>>>> refs/remotes/ethereum/master
 	if err != nil {
-		if err == core.ErrNoGenesis {
-			return nil, fmt.Errorf(`No chain found. Please initialise a new chain using the "init" subcommand.`)
-		}
 		return nil, err
 	}
+	// Rewind the chain in case of an incompatible config upgrade.
+	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
+		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
+		eth.blockchain.SetHead(compat.RewindTo)
+		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
+	}
+
 	newPool := core.NewTxPool(eth.chainConfig, eth.EventMux(), eth.blockchain.State, eth.blockchain.GasLimit)
 	eth.txPool = newPool
 
@@ -265,43 +288,21 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 	return db, err
 }
 
-// SetupGenesisBlock initializes the genesis block for an Ethereum service
-func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
-	// Load up any custom genesis block if requested
-	if len(config.Genesis) > 0 {
-		block, err := core.WriteGenesisBlock(*chainDb, strings.NewReader(config.Genesis))
-		if err != nil {
-			return err
-		}
-		glog.V(logger.Info).Infof("Successfully wrote custom genesis block: %x", block.Hash())
-	}
-	// Load up a test setup if directly injected
-	if config.TestGenesisState != nil {
-		*chainDb = config.TestGenesisState
-	}
-	if config.TestGenesisBlock != nil {
-		core.WriteTd(*chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.NumberU64(), config.TestGenesisBlock.Difficulty())
-		core.WriteBlock(*chainDb, config.TestGenesisBlock)
-		core.WriteCanonicalHash(*chainDb, config.TestGenesisBlock.Hash(), config.TestGenesisBlock.NumberU64())
-		core.WriteHeadBlockHash(*chainDb, config.TestGenesisBlock.Hash())
-	}
-	return nil
-}
-
 // CreatePoW creates the required type of PoW instance for an Ethereum service
-func CreatePoW(config *Config) (pow.PoW, error) {
+func CreatePoW(ctx *node.ServiceContext, config *Config) pow.PoW {
 	switch {
 	case config.PowFake:
-		glog.V(logger.Info).Infof("ethash used in fake mode")
-		return pow.PoW(core.FakePow{}), nil
+		log.Warn("Ethash used in fake mode")
+		return pow.FakePow{}
 	case config.PowTest:
-		glog.V(logger.Info).Infof("ethash used in test mode")
-		return ethash.NewForTesting()
+		log.Warn("Ethash used in test mode")
+		return pow.NewTestEthash()
 	case config.PowShared:
-		glog.V(logger.Info).Infof("ethash used in shared mode")
-		return ethash.NewShared(), nil
+		log.Warn("Ethash used in shared mode")
+		return pow.NewSharedEthash()
 	default:
-		return ethash.New(), nil
+		return pow.NewFullEthash(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
+			config.EthashDatasetDir, config.EthashDatasetsInMem, config.EthashDatasetsOnDisk)
 	}
 }
 
@@ -401,9 +402,8 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 func (s *Ethereum) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
-		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
-		glog.V(logger.Error).Infoln(err)
-		return err
+		log.Error("Cannot start mining without etherbase", "err", err)
+		return fmt.Errorf("etherbase missing: %v", err)
 	}
 	go s.miner.Start(eb, threads)
 	return nil
@@ -438,9 +438,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 // Ethereum protocol implementation.
 func (s *Ethereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
-	if s.AutoDAG {
-		s.StartAutoDAG()
-	}
+
 	s.protocolManager.Start()
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
@@ -463,8 +461,6 @@ func (s *Ethereum) Stop() error {
 	s.miner.Stop()
 	s.eventMux.Stop()
 
-	s.StopAutoDAG()
-
 	s.chainDb.Close()
 	close(s.shutdownChan)
 
@@ -474,75 +470,4 @@ func (s *Ethereum) Stop() error {
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
 	<-s.shutdownChan
-}
-
-// StartAutoDAG() spawns a go routine that checks the DAG every autoDAGcheckInterval
-// by default that is 10 times per epoch
-// in epoch n, if we past autoDAGepochHeight within-epoch blocks,
-// it calls ethash.MakeDAG  to pregenerate the DAG for the next epoch n+1
-// if it does not exist yet as well as remove the DAG for epoch n-1
-// the loop quits if autodagquit channel is closed, it can safely restart and
-// stop any number of times.
-// For any more sophisticated pattern of DAG generation, use CLI subcommand
-// makedag
-func (self *Ethereum) StartAutoDAG() {
-	if self.autodagquit != nil {
-		return // already started
-	}
-	go func() {
-		glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG ON (ethash dir: %s)", ethash.DefaultDir)
-		var nextEpoch uint64
-		timer := time.After(0)
-		self.autodagquit = make(chan bool)
-		for {
-			select {
-			case <-timer:
-				glog.V(logger.Info).Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
-				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
-				thisEpoch := currentBlock / epochLength
-				if nextEpoch <= thisEpoch {
-					if currentBlock%epochLength > autoDAGepochHeight {
-						if thisEpoch > 0 {
-							previousDag, previousDagFull := dagFiles(thisEpoch - 1)
-							os.Remove(filepath.Join(ethash.DefaultDir, previousDag))
-							os.Remove(filepath.Join(ethash.DefaultDir, previousDagFull))
-							glog.V(logger.Info).Infof("removed DAG for epoch %d (%s)", thisEpoch-1, previousDag)
-						}
-						nextEpoch = thisEpoch + 1
-						dag, _ := dagFiles(nextEpoch)
-						if _, err := os.Stat(dag); os.IsNotExist(err) {
-							glog.V(logger.Info).Infof("Pregenerating DAG for epoch %d (%s)", nextEpoch, dag)
-							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
-							if err != nil {
-								glog.V(logger.Error).Infof("Error generating DAG for epoch %d (%s)", nextEpoch, dag)
-								return
-							}
-						} else {
-							glog.V(logger.Error).Infof("DAG for epoch %d (%s)", nextEpoch, dag)
-						}
-					}
-				}
-				timer = time.After(autoDAGcheckInterval)
-			case <-self.autodagquit:
-				return
-			}
-		}
-	}()
-}
-
-// stopAutoDAG stops automatic DAG pregeneration by quitting the loop
-func (self *Ethereum) StopAutoDAG() {
-	if self.autodagquit != nil {
-		close(self.autodagquit)
-		self.autodagquit = nil
-	}
-	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
-}
-
-// dagFiles(epoch) returns the two alternative DAG filenames (not a path)
-// 1) <revision>-<hex(seedhash[8])> 2) full-R<revision>-<hex(seedhash[8])>
-func dagFiles(epoch uint64) (string, string) {
-	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
-	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
-	return dag, "full-R" + dag
 }

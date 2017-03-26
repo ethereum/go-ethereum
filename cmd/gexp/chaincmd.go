@@ -17,9 +17,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync/atomic"
@@ -32,8 +32,7 @@ import (
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/trie"
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
@@ -56,10 +55,13 @@ participating.
 		Action:    importChain,
 		Name:      "import",
 		Usage:     "Import a blockchain file",
-		ArgsUsage: "<filename>",
+		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
-TODO: Please write this
+The import command imports blocks from an RLP-encoded form. The form can be one file 
+with several RLP-encoded blocks, or several files can be used. 
+If only one file is used, import error will result in failure. If several files are used, 
+processing will proceed even if an individual RLP-file import failure occurs.   
 `,
 	}
 	exportCommand = cli.Command{
@@ -73,16 +75,6 @@ Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.
-`,
-	}
-	upgradedbCommand = cli.Command{
-		Action:    upgradeDB,
-		Name:      "upgradedb",
-		Usage:     "Upgrade chainblock database",
-		ArgsUsage: " ",
-		Category:  "BLOCKCHAIN COMMANDS",
-		Description: `
-TODO: Please write this
 `,
 	}
 	removedbCommand = cli.Command{
@@ -119,22 +111,27 @@ func initGenesis(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
 	chaindb := utils.MakeChainDatabase(ctx, stack)
 
-	genesisFile, err := os.Open(genesisPath)
+	file, err := os.Open(genesisPath)
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
-	defer genesisFile.Close()
+	defer file.Close()
 
-	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		utils.Fatalf("invalid genesis file: %v", err)
+	}
+
+	_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
-	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	log.Info("Successfully wrote genesis state", "hash", hash)
 	return nil
 }
 
 func importChain(ctx *cli.Context) error {
-	if len(ctx.Args()) != 1 {
+	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
@@ -158,9 +155,19 @@ func importChain(ctx *cli.Context) error {
 	}()
 	// Import the chain
 	start := time.Now()
-	if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
-		utils.Fatalf("Import error: %v", err)
+
+	if len(ctx.Args()) == 1 {
+		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
+			utils.Fatalf("Import error: %v", err)
+		}
+	} else {
+		for _, arg := range ctx.Args() {
+			if err := utils.ImportChain(chain, arg); err != nil {
+				log.Error("Import error", "file", arg, "err", err)
+			}
+		}
 	}
+
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing
@@ -182,6 +189,10 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("System memory: %.3f MB current, %.3f MB peak\n", float64(mem.Sys)/1024/1024, float64(atomic.LoadUint64(&peakMemSys))/1024/1024)
 	fmt.Printf("Allocations:   %.3f million\n", float64(mem.Mallocs)/1000000)
 	fmt.Printf("GC pause:      %v\n\n", time.Duration(mem.PauseTotalNs))
+
+	if ctx.GlobalIsSet(utils.NoCompactionFlag.Name) {
+		return nil
+	}
 
 	// Compact the entire database to more accurately measure disk io and print the stats
 	start = time.Now()
@@ -256,49 +267,6 @@ func removeDB(ctx *cli.Context) error {
 	return nil
 }
 
-func upgradeDB(ctx *cli.Context) error {
-	glog.Infoln("Upgrading blockchain database")
-
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	chain, chainDb := utils.MakeChain(ctx, stack)
-	bcVersion := core.GetBlockChainVersion(chainDb)
-	if bcVersion == 0 {
-		bcVersion = core.BlockChainVersion
-	}
-
-	// Export the current chain.
-	filename := fmt.Sprintf("blockchain_%d_%s.chain", bcVersion, time.Now().Format("20060102_150405"))
-	exportFile := filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), filename)
-	if err := utils.ExportChain(chain, exportFile); err != nil {
-		utils.Fatalf("Unable to export chain for reimport %s", err)
-	}
-	chainDb.Close()
-	if dir := dbDirectory(chainDb); dir != "" {
-		os.RemoveAll(dir)
-	}
-
-	// Import the chain file.
-	chain, chainDb = utils.MakeChain(ctx, stack)
-	core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
-	err := utils.ImportChain(chain, exportFile)
-	chainDb.Close()
-	if err != nil {
-		utils.Fatalf("Import error %v (a backup is made in %s, use the import command to import it)", err, exportFile)
-	} else {
-		os.Remove(exportFile)
-		glog.Infoln("Import finished")
-	}
-	return nil
-}
-
-func dbDirectory(db ethdb.Database) string {
-	ldb, ok := db.(*ethdb.LDBDatabase)
-	if !ok {
-		return ""
-	}
-	return ldb.Path()
-}
-
 func dump(ctx *cli.Context) error {
 	stack := makeFullNode(ctx)
 	chain, chainDb := utils.MakeChain(ctx, stack)
@@ -329,10 +297,4 @@ func dump(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
-}
-
-func closeAll(dbs ...ethdb.Database) {
-	for _, db := range dbs {
-		db.Close()
-	}
 }

@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+<<<<<<< HEAD
 	"github.com/ethereum/ethash"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
@@ -38,6 +39,19 @@ import (
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rlp"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+	"github.com/expanse-org/go-expanse/rlp"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // Block Test JSON Format
@@ -147,14 +161,14 @@ func runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, bt map[s
 
 	for name, test := range bt {
 		if skipTest[name] /*|| name != "CallingCanonicalContractFromFork_CALLCODE"*/ {
-			glog.Infoln("Skipping block test", name)
+			log.Info(fmt.Sprint("Skipping block test", name))
 			continue
 		}
 		// test the block
 		if err := runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
-		glog.Infoln("Block test passed: ", name)
+		log.Info(fmt.Sprint("Block test passed: ", name))
 
 	}
 	return nil
@@ -173,7 +187,7 @@ func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *Blo
 	core.WriteHeadBlockHash(db, test.Genesis.Hash())
 	evmux := new(event.TypeMux)
 	config := &params.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true, EIP150Block: gasPriceFork}
-	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux, vm.Config{})
+	chain, err := core.NewBlockChain(db, config, pow.NewSharedEthash(), evmux, vm.Config{})
 	if err != nil {
 		return err
 	}
@@ -222,10 +236,12 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 		if err != nil {
 			return nil, err
 		}
-		obj := statedb.CreateAccount(common.HexToAddress(addrString))
-		obj.SetCode(crypto.Keccak256Hash(code), code)
-		obj.SetBalance(balance)
-		obj.SetNonce(nonce)
+
+		addr := common.HexToAddress(addrString)
+		statedb.CreateAccount(addr)
+		statedb.SetCode(addr, code)
+		statedb.SetBalance(addr, balance)
+		statedb.SetNonce(addr, nonce)
 		for k, v := range acct.Storage {
 			statedb.SetState(common.HexToAddress(addrString), common.HexToHash(k), common.HexToHash(v))
 		}

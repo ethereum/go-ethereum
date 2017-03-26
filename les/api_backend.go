@@ -17,8 +17,10 @@
 package les
 
 import (
+	"context"
 	"math/big"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
@@ -33,6 +35,22 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/eth/gasprice"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/internal/ethapi"
+	"github.com/expanse-org/go-expanse/light"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 type LesApiBackend struct {
@@ -49,6 +67,7 @@ func (b *LesApiBackend) CurrentBlock() *types.Block {
 }
 
 func (b *LesApiBackend) SetHead(number uint64) {
+	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }
 
@@ -95,7 +114,7 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state etha
 	if err != nil {
 		return nil, nil, err
 	}
-	from.SetBalance(common.MaxBig)
+	from.SetBalance(math.MaxBig256)
 
 	vmstate := light.NewVMState(ctx, stateDb)
 	context := core.NewEVMContext(msg, header, b.eth.blockchain)

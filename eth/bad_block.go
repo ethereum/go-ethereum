@@ -23,11 +23,18 @@ import (
 	"net/http"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/rlp"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/rlp"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -66,9 +73,9 @@ func sendBadBlockReport(block *types.Block, err error) {
 	client := http.Client{Timeout: 8 * time.Second}
 	resp, err := client.Post(badBlocksURL, "application/json", bytes.NewReader(jsonStr))
 	if err != nil {
-		glog.V(logger.Debug).Infoln(err)
+		log.Debug("Failed to report bad block", "err", err)
 		return
 	}
-	glog.V(logger.Debug).Infof("Bad Block Report posted (%d)", resp.StatusCode)
+	log.Debug("Bad block report posted", "status", resp.StatusCode)
 	resp.Body.Close()
 }

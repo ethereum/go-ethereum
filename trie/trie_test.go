@@ -377,7 +377,7 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 		if len(allKeys) < 2 || r.Intn(100) < 10 {
 			// new key
 			key := make([]byte, r.Intn(50))
-			randRead(r, key)
+			r.Read(key)
 			allKeys = append(allKeys, key)
 			return key
 		}
@@ -399,22 +399,6 @@ func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
 		steps = append(steps, step)
 	}
 	return reflect.ValueOf(steps)
-}
-
-// rand.Rand provides a Read method in Go 1.7 and later, but
-// we can't use it yet.
-func randRead(r *rand.Rand, b []byte) {
-	pos := 0
-	val := 0
-	for n := 0; n < len(b); n++ {
-		if pos == 0 {
-			val = r.Int()
-			pos = 7
-		}
-		b[n] = byte(val)
-		val >>= 8
-		pos--
-	}
 }
 
 func runRandTest(rt randTest) bool {

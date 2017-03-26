@@ -22,14 +22,22 @@ package whisperv2
 import (
 	"crypto/ecdsa"
 	crand "crypto/rand"
+	"fmt"
 	"math/rand"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/ecies"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // Message represents an end-user data packet to transmit through the Whisper
@@ -125,7 +133,7 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 	// Otherwise try and recover the signature
 	pub, err := crypto.SigToPub(self.hash(), self.Signature)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get public key from signature: %v", err)
+		log.Error(fmt.Sprintf("Could not get public key from signature: %v", err))
 		return nil
 	}
 	return pub

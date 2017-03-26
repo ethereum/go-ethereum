@@ -79,7 +79,7 @@ type TestNode struct {
 	shh     *Whisper
 	id      *ecdsa.PrivateKey
 	server  *p2p.Server
-	filerId uint32
+	filerId string
 }
 
 var result TestData
@@ -107,9 +107,6 @@ func TestSimulation(t *testing.T) {
 }
 
 func initialize(t *testing.T) {
-	//glog.SetV(6)
-	//glog.SetToStderr(true)
-
 	var err error
 	ip := net.IPv4(127, 0, 0, 1)
 	port0 := 42786
@@ -122,7 +119,10 @@ func initialize(t *testing.T) {
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey, Topics: topics}
-		node.filerId = node.shh.Watch(&f)
+		node.filerId, err = node.shh.Watch(&f)
+		if err != nil {
+			t.Fatalf("failed to install the filter: %s.", err)
+		}
 		node.id, err = crypto.HexToECDSA(keys[i])
 		if err != nil {
 			t.Fatalf("failed convert the key: %s.", keys[i])
@@ -187,7 +187,7 @@ func checkPropagation(t *testing.T) {
 		for i := 0; i < NumNodes; i++ {
 			f := nodes[i].shh.GetFilter(nodes[i].filerId)
 			if f == nil {
-				t.Fatalf("failed to get filterId %d from node %d.", nodes[i].filerId, i)
+				t.Fatalf("failed to get filterId %s from node %d.", nodes[i].filerId, i)
 			}
 
 			mail := f.Retrieve()

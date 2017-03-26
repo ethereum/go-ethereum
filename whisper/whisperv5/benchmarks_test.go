@@ -34,7 +34,6 @@ func BenchmarkDeriveOneTimeKey(b *testing.B) {
 	}
 }
 
-//func TestEncryptionSym(b *testing.T) {
 func BenchmarkEncryptionSym(b *testing.B) {
 	InitSingleTest()
 
@@ -178,6 +177,36 @@ func BenchmarkDecryptionAsymInvalid(b *testing.B) {
 		msg := env.Open(&f)
 		if msg != nil {
 			b.Fatalf("opened envelope with invalid key, seed: %d.", seed)
+		}
+	}
+}
+
+func increment(x []byte) {
+	for i := 0; i < len(x); i++ {
+		x[i]++
+		if x[i] != 0 {
+			break
+		}
+	}
+}
+
+func BenchmarkPoW(b *testing.B) {
+	InitSingleTest()
+
+	params, err := generateMessageParams()
+	if err != nil {
+		b.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	params.Payload = make([]byte, 32)
+	params.PoW = 10.0
+	params.TTL = 1
+
+	for i := 0; i < b.N; i++ {
+		increment(params.Payload)
+		msg := NewSentMessage(params)
+		_, err := msg.Wrap(params)
+		if err != nil {
+			b.Fatalf("failed Wrap with seed %d: %s.", seed, err)
 		}
 	}
 }

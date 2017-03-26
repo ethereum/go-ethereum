@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -31,6 +32,16 @@ import (
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/params"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/params"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 func RunVmTestWithReader(r io.Reader, skipTests []string) error {
@@ -130,7 +141,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 	for name, test := range tests {
 		if skipTest[name] /*|| name != "exp0"*/ {
-			glog.Infoln("Skipping VM test", name)
+			log.Info(fmt.Sprint("Skipping VM test", name))
 			continue
 		}
 
@@ -138,7 +149,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 			return fmt.Errorf("%s %s", name, err.Error())
 		}
 
-		glog.Infoln("VM test passed: ", name)
+		log.Info(fmt.Sprint("VM test passed: ", name))
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil
@@ -180,23 +191,23 @@ func runVmTest(test VmTest) error {
 	if len(test.Gas) == 0 && err == nil {
 		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successful")
 	} else {
-		gexp := common.Big(test.Gas)
+		gexp := math.MustParseBig256(test.Gas)
 		if gexp.Cmp(gas) != 0 {
 			return fmt.Errorf("gas failed. Expected %v, got %v\n", gexp, gas)
 		}
 	}
 
 	// check post state
-	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
+	for address, account := range test.Post {
+		accountAddr := common.HexToAddress(address)
+		if !statedb.Exist(accountAddr) {
 			continue
 		}
 		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
+			v := statedb.GetState(accountAddr, common.HexToHash(addr))
 			vexp := common.HexToHash(value)
 			if v != vexp {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
+				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", addr[:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}
@@ -222,8 +233,8 @@ func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, []*type
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
 		data  = common.FromHex(exec["data"])
-		gas   = common.Big(exec["gas"])
-		value = common.Big(exec["value"])
+		gas   = math.MustParseBig256(exec["gas"])
+		value = math.MustParseBig256(exec["value"])
 	)
 	caller := statedb.GetOrNewStateObject(from)
 	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)

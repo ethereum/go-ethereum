@@ -19,16 +19,20 @@
 package gexp
 
 import (
+	"os"
 	"runtime"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 func init() {
 	// Initialize the logger
-	glog.SetV(logger.Info)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	// Initialize the goroutine count
 	runtime.GOMAXPROCS(runtime.NumCPU())

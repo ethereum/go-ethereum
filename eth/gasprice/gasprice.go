@@ -21,12 +21,20 @@ import (
 	"math/rand"
 	"sync"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -176,7 +184,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 	self.lastBase = newBase
 	self.lastBaseMutex.Unlock()
 
-	glog.V(logger.Detail).Infof("Processed block #%v, base price is %v\n", i, newBase.Int64())
+	log.Trace("Processed block, base price updated", "number", i, "base", newBase)
 }
 
 // returns the lowers possible price with which a tx was or could have been included

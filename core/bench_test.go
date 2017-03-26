@@ -24,12 +24,14 @@ import (
 	"testing"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/core/vm"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
 )
 
 func BenchmarkInsertChain_empty_memdb(b *testing.B) {
@@ -73,7 +75,7 @@ var (
 	// This is the content of the genesis block used by the benchmarks.
 	benchRootKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	benchRootAddr   = crypto.PubkeyToAddress(benchRootKey.PublicKey)
-	benchRootFunds  = common.BigPow(2, 100)
+	benchRootFunds  = math.BigPow(2, 100)
 )
 
 // genValueTx returns a block generator that includes a single
@@ -164,13 +166,17 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 
 	// Generate a chain of b.N blocks using the supplied block
 	// generator function.
-	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{benchRootAddr, benchRootFunds})
-	chain, _ := GenerateChain(params.TestChainConfig, genesis, db, b.N, gen)
+	gspec := Genesis{
+		Config: params.TestChainConfig,
+		Alloc:  GenesisAlloc{benchRootAddr: {Balance: benchRootFunds}},
+	}
+	genesis := gspec.MustCommit(db)
+	chain, _ := GenerateChain(gspec.Config, genesis, db, b.N, gen)
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewBlockChain(db, &params.ChainConfig{HomesteadBlock: new(big.Int)}, FakePow{}, evmux, vm.Config{})
+	chainman, _ := NewBlockChain(db, gspec.Config, pow.FakePow{}, evmux, vm.Config{})
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -280,7 +286,7 @@ func benchReadChain(b *testing.B, full bool, count uint64) {
 		if err != nil {
 			b.Fatalf("error opening database at %v: %v", dir, err)
 		}
-		chain, err := NewBlockChain(db, testChainConfig(), FakePow{}, new(event.TypeMux), vm.Config{})
+		chain, err := NewBlockChain(db, params.TestChainConfig, pow.FakePow{}, new(event.TypeMux), vm.Config{})
 		if err != nil {
 			b.Fatalf("error creating chain: %v", err)
 		}

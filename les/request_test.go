@@ -17,15 +17,24 @@
 package les
 
 import (
+	"context"
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/light"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/light"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var testBankSecureTrieKey = secAddr(testBankAddress)
@@ -72,8 +81,11 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 	lpm, ldb, odr := newTestProtocolManagerMust(t, true, 0, nil)
 	_, err1, lpeer, err2 := newTestPeerPair("peer", protocol, pm, lpm)
 	pool := &testServerPool{}
+	lpm.reqDist = newRequestDistributor(pool.getAllPeers, lpm.quitSync)
+	odr.reqDist = lpm.reqDist
 	pool.setPeer(lpeer)
 	odr.serverPool = pool
+	lpeer.hasBlock = func(common.Hash, uint64) bool { return true }
 	select {
 	case <-time.After(time.Millisecond * 100):
 	case err := <-err1:
@@ -88,7 +100,9 @@ func testAccess(t *testing.T, protocol int, fn accessTestFn) {
 		for i := uint64(0); i <= pm.blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(db, i)
 			if req := fn(ldb, bhash, i); req != nil {
-				ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+				defer cancel()
+
 				err := odr.Retrieve(ctx, req)
 				got := err == nil
 				exp := i < expFail

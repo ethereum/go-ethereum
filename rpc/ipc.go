@@ -17,11 +17,17 @@
 package rpc
 
 import (
+	"context"
+	"fmt"
 	"net"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on
@@ -37,7 +43,7 @@ func (srv *Server) ServeListener(l net.Listener) error {
 		if err != nil {
 			return err
 		}
-		glog.V(logger.Detail).Infoln("accepted conn", conn.RemoteAddr())
+		log.Trace(fmt.Sprint("accepted conn", conn.RemoteAddr()))
 		go srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 	}
 }

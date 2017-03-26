@@ -27,6 +27,19 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/les/flowcontrol"
+	"github.com/expanse-org/go-expanse/light"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/params"
+=======
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -39,6 +52,8 @@ import (
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var (
@@ -133,28 +148,31 @@ func testRCL() RequestCostList {
 // channels for different events.
 func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr, error) {
 	var (
-		evmux       = new(event.TypeMux)
-		pow         = new(core.FakePow)
-		db, _       = ethdb.NewMemDatabase()
-		genesis     = core.WriteGenesisBlockForTesting(db, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
-		chainConfig = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		odr         *LesOdr
-		chain       BlockChain
+		evmux = new(event.TypeMux)
+		pow   = new(pow.FakePow)
+		db, _ = ethdb.NewMemDatabase()
+		gspec = core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+		}
+		genesis = gspec.MustCommit(db)
+		odr     *LesOdr
+		chain   BlockChain
 	)
 
 	if lightSync {
 		odr = NewLesOdr(db)
-		chain, _ = light.NewLightChain(odr, chainConfig, pow, evmux)
+		chain, _ = light.NewLightChain(odr, gspec.Config, pow, evmux)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
-		gchain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
+		blockchain, _ := core.NewBlockChain(db, gspec.Config, pow, evmux, vm.Config{})
+		gchain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
 		}
 		chain = blockchain
 	}
 
-	pm, err := NewProtocolManager(chainConfig, lightSync, NetworkId, evmux, pow, chain, nil, db, odr, nil)
+	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, pow, chain, nil, db, odr, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -351,11 +369,15 @@ func (p *testServerPool) setPeer(peer *peer) {
 	p.peer = peer
 }
 
-func (p *testServerPool) selectPeerWait(uint64, func(*peer) (bool, time.Duration), <-chan struct{}) *peer {
+func (p *testServerPool) getAllPeers() map[distPeer]struct{} {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	return p.peer
+	m := make(map[distPeer]struct{})
+	if p.peer != nil {
+		m[p.peer] = struct{}{}
+	}
+	return m
 }
 
 func (p *testServerPool) adjustResponseTime(*poolEntry, time.Duration, bool) {

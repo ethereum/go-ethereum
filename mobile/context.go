@@ -20,9 +20,8 @@
 package gexp
 
 import (
+	"context"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // Context carries a deadline, a cancelation signal, and other values across API

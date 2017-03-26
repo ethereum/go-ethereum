@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -24,10 +25,15 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
 )
@@ -76,14 +82,14 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 		}
 	}
 
-	glog.V(logger.Debug).Infof("Allowed origin(s) for WS RPC interface %v\n", origins.List())
+	log.Debug(fmt.Sprintf("Allowed origin(s) for WS RPC interface %v\n", origins.List()))
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Has(origin) {
 			return nil
 		}
-		glog.V(logger.Debug).Infof("origin '%s' not allowed on WS-RPC interface\n", origin)
+		log.Debug(fmt.Sprintf("origin '%s' not allowed on WS-RPC interface\n", origin))
 		return fmt.Errorf("origin %s not allowed", origin)
 	}
 
@@ -149,4 +155,19 @@ func wsDialAddress(location *url.URL) string {
 		}
 	}
 	return location.Host
+}
+
+func dialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	d := &net.Dialer{KeepAlive: tcpKeepAliveInterval}
+	return d.DialContext(ctx, network, addr)
+}
+
+func contextDialer(ctx context.Context) *net.Dialer {
+	dialer := &net.Dialer{Cancel: ctx.Done(), KeepAlive: tcpKeepAliveInterval}
+	if deadline, ok := ctx.Deadline(); ok {
+		dialer.Deadline = deadline
+	} else {
+		dialer.Deadline = time.Now().Add(defaultDialTimeout)
+	}
+	return dialer
 }

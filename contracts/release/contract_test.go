@@ -35,11 +35,11 @@ func setupReleaseTest(t *testing.T, prefund ...*ecdsa.PrivateKey) (*ecdsa.Privat
 	key, _ := crypto.GenerateKey()
 	auth := bind.NewKeyedTransactor(key)
 
-	accounts := []core.GenesisAccount{{Address: auth.From, Balance: big.NewInt(10000000000)}}
+	alloc := core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}}
 	for _, key := range prefund {
-		accounts = append(accounts, core.GenesisAccount{Address: crypto.PubkeyToAddress(key.PublicKey), Balance: big.NewInt(10000000000)})
+		alloc[crypto.PubkeyToAddress(key.PublicKey)] = core.GenesisAccount{Balance: big.NewInt(10000000000)}
 	}
-	sim := backends.NewSimulatedBackend(accounts...)
+	sim := backends.NewSimulatedBackend(alloc)
 
 	// Deploy a version oracle contract, commit and return
 	_, _, oracle, err := DeployReleaseOracle(auth, sim, []common.Address{auth.From})

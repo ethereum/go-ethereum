@@ -17,11 +17,13 @@
 package filters
 
 import (
+	"context"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"golang.org/x/net/context"
 
 	"github.com/expanse-org/go-expanse/common"
@@ -31,6 +33,15 @@ import (
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rpc"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 type testBackend struct {
@@ -73,12 +84,11 @@ func TestBlockSubscription(t *testing.T) {
 	t.Parallel()
 
 	var (
-		mux     = new(event.TypeMux)
-		db, _   = ethdb.NewMemDatabase()
-		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
-
-		genesis     = core.WriteGenesisBlockForTesting(db)
+		mux         = new(event.TypeMux)
+		db, _       = ethdb.NewMemDatabase()
+		backend     = &testBackend{mux, db}
+		api         = NewPublicFilterAPI(backend, false)
+		genesis     = new(core.Genesis).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
 	)

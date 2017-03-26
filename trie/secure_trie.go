@@ -17,9 +17,16 @@
 package trie
 
 import (
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"fmt"
+
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var secureKeyPrefix = []byte("secure-key-")
@@ -70,8 +77,8 @@ func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, e
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
-	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }
@@ -90,8 +97,8 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *SecureTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryUpdate(key, value); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -115,8 +122,8 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 
 // Delete removes any existing value for key from the trie.
 func (t *SecureTrie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -159,7 +166,7 @@ func (t *SecureTrie) Iterator() *Iterator {
 	return t.trie.Iterator()
 }
 
-func (t *SecureTrie) NodeIterator() *NodeIterator {
+func (t *SecureTrie) NodeIterator() NodeIterator {
 	return NewNodeIterator(&t.trie)
 }
 

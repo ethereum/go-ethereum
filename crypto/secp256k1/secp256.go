@@ -38,7 +38,6 @@ import "C"
 
 import (
 	"errors"
-	"math/big"
 	"unsafe"
 )
 
@@ -128,17 +127,4 @@ func checkSignature(sig []byte) error {
 		return ErrInvalidRecoveryID
 	}
 	return nil
-}
-
-// reads num into buf as big-endian bytes.
-func readBits(buf []byte, num *big.Int) {
-	const wordLen = int(unsafe.Sizeof(big.Word(0)))
-	i := len(buf)
-	for _, d := range num.Bits() {
-		for j := 0; j < wordLen && i > 0; j++ {
-			i--
-			buf[i] = byte(d)
-			d >>= 8
-		}
-	}
 }

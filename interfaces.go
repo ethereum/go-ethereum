@@ -18,12 +18,12 @@
 package ethereum
 
 import (
+	"context"
 	"errors"
 	"math/big"
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
-	"golang.org/x/net/context"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.

@@ -17,11 +17,13 @@
 package light
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -30,6 +32,16 @@ import (
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 type testTxRelay struct {
@@ -82,12 +94,13 @@ func TestTxPool(t *testing.T) {
 
 	var (
 		evmux   = new(event.TypeMux)
-		pow     = new(core.FakePow)
+		pow     = new(pow.FakePow)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
-		genesis = core.WriteGenesisBlockForTesting(sdb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
+		genesis = gspec.MustCommit(sdb)
 	)
-	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+	gspec.MustCommit(ldb)
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
 	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
@@ -106,10 +119,11 @@ func TestTxPool(t *testing.T) {
 	lightchain.SetValidator(bproc{})
 	txPermanent = 50
 	pool := NewTxPool(testChainConfig(), evmux, lightchain, relay)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	for ii, block := range gchain {
 		i := ii + 1
-		ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		s := sentTx(i - 1)
 		e := sentTx(i)
 		for i := s; i < e; i++ {

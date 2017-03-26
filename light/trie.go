@@ -17,9 +17,16 @@
 package light
 
 import (
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/trie"
 	"golang.org/x/net/context"
+=======
+	"context"
+
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/trie"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // LightTrie is an ODR-capable wrapper around trie.SecureTrie

@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/sha3"
@@ -53,11 +54,11 @@ func (d *diffTest) UnmarshalJSON(b []byte) (err error) {
 		return err
 	}
 
-	d.ParentTimestamp = common.String2Big(ext.ParentTimestamp).Uint64()
-	d.ParentDifficulty = common.String2Big(ext.ParentDifficulty)
-	d.CurrentTimestamp = common.String2Big(ext.CurrentTimestamp).Uint64()
-	d.CurrentBlocknumber = common.String2Big(ext.CurrentBlocknumber)
-	d.CurrentDifficulty = common.String2Big(ext.CurrentDifficulty)
+	d.ParentTimestamp = math.MustParseUint64(ext.ParentTimestamp)
+	d.ParentDifficulty = math.MustParseBig256(ext.ParentDifficulty)
+	d.CurrentTimestamp = math.MustParseUint64(ext.CurrentTimestamp)
+	d.CurrentBlocknumber = math.MustParseBig256(ext.CurrentBlocknumber)
+	d.CurrentDifficulty = math.MustParseBig256(ext.CurrentDifficulty)
 
 	return nil
 }
@@ -561,7 +562,7 @@ func TestMipmapChain(t *testing.T) {
 	)
 	defer db.Close()
 
-	genesis := WriteGenesisBlockForTesting(db, GenesisAccount{addr, big.NewInt(1000000)})
+	genesis := testGenesis(addr, big.NewInt(1000000)).MustCommit(db)
 	chain, receipts := GenerateChain(params.TestChainConfig, genesis, db, 1010, func(i int, gen *BlockGen) {
 		var receipts types.Receipts
 		switch i {

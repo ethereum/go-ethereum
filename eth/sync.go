@@ -21,12 +21,20 @@ import (
 	"sync/atomic"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/eth/downloader"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/p2p/discover"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/p2p/discover"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -87,7 +95,7 @@ func (pm *ProtocolManager) txsyncLoop() {
 			delete(pending, s.p.ID())
 		}
 		// Send the pack in the background.
-		glog.V(logger.Detail).Infof("%v: sending %d transactions (%v)", s.p.Peer, len(pack.txs), size)
+		s.p.Log().Trace("Sending batch of transactions", "count", len(pack.txs), "bytes", size)
 		sending = true
 		go func() { done <- pack.p.SendTransactions(pack.txs) }()
 	}
@@ -117,7 +125,7 @@ func (pm *ProtocolManager) txsyncLoop() {
 			sending = false
 			// Stop tracking peers that cause send failures.
 			if err != nil {
-				glog.V(logger.Debug).Infof("%v: tx send failed: %v", pack.p.Peer, err)
+				pack.p.Log().Debug("Transaction send failed", "err", err)
 				delete(pending, pack.p.ID())
 			}
 			// Schedule the next send.
@@ -176,6 +184,14 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	// Otherwise try to sync with the downloader
 	mode := downloader.FullSync
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
+		// Fast sync was explicitly requested, and explicitly granted
+		mode = downloader.FastSync
+	} else if currentBlock.NumberU64() == 0 && pm.blockchain.CurrentFastBlock().NumberU64() > 0 {
+		// The database seems empty as the current block is the genesis. Yet the fast
+		// block is ahead, so fast sync was enabled for this node at a certain point.
+		// The only scenario where this can happen is if the user manually (or via a
+		// bad block) rolled back a fast sync node below the sync point. In this case
+		// however it's safe to reenable fast sync.
 		mode = downloader.FastSync
 	}
 	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {
@@ -187,7 +203,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 	if atomic.LoadUint32(&pm.fastSync) == 1 {
 		// Disable fast sync if we indeed have something in our chain
 		if pm.blockchain.CurrentBlock().NumberU64() > 0 {
-			glog.V(logger.Info).Infof("fast sync complete, auto disabling")
+			log.Info("Fast sync complete, auto disabling")
 			atomic.StoreUint32(&pm.fastSync, 0)
 		}
 	}

@@ -18,8 +18,10 @@
 package ethapi
 
 import (
+	"context"
 	"math/big"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
@@ -31,6 +33,18 @@ import (
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // Backend interface provides the common API services (that are provided by
@@ -73,8 +87,7 @@ type State interface {
 }
 
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
-	compiler := makeCompilerAPIs(solcPath)
-	all := []rpc.API{
+	return []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -116,5 +129,4 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Public:    false,
 		},
 	}
-	return append(compiler, all...)
 }

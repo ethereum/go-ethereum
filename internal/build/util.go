@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 )
@@ -52,19 +53,10 @@ func MustRunCommand(cmd string, args ...string) {
 // GOPATH returns the value that the GOPATH environment
 // variable should be set to.
 func GOPATH() string {
-	path := filepath.SplitList(os.Getenv("GOPATH"))
-	if len(path) == 0 {
+	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH is not set")
 	}
-	// Ensure that our internal vendor folder is on GOPATH
-	vendor, _ := filepath.Abs(filepath.Join("build", "_vendor"))
-	for _, dir := range path {
-		if dir == vendor {
-			return strings.Join(path, string(filepath.ListSeparator))
-		}
-	}
-	newpath := append(path[:1], append([]string{vendor}, path[1:]...)...)
-	return strings.Join(newpath, string(filepath.ListSeparator))
+	return os.Getenv("GOPATH")
 }
 
 // VERSION returns the content of the VERSION file.
@@ -144,4 +136,31 @@ func CopyFile(dst, src string, mode os.FileMode) {
 	if _, err := io.Copy(destFile, srcFile); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
+// vendored packages.
+func ExpandPackagesNoVendor(patterns []string) []string {
+	expand := false
+	for _, pkg := range patterns {
+		if strings.Contains(pkg, "...") {
+			expand = true
+		}
+	}
+	if expand {
+		args := append([]string{"list"}, patterns...)
+		cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("package listing failed: %v\n%s", err, string(out))
+		}
+		var packages []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "/vendor/") {
+				packages = append(packages, strings.TrimSpace(line))
+			}
+		}
+		return packages
+	}
+	return patterns
 }

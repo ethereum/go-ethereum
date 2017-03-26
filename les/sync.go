@@ -17,12 +17,19 @@
 package les
 
 import (
+	"context"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/eth/downloader"
 	"github.com/expanse-org/go-expanse/light"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/light"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 const (
@@ -77,8 +84,8 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		return
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
 	pm.blockchain.(*light.LightChain).SyncCht(ctx)
-
 	pm.downloader.Synchronise(peer.id, peer.Head(), peer.Td(), downloader.LightSync)
 }

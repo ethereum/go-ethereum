@@ -18,9 +18,11 @@ package whisperv2
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/crypto/ecies"
@@ -29,6 +31,15 @@ import (
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rpc"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/ecies"
+	"github.com/expanse-org/go-expanse/event/filter"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 
 	"gopkg.in/fatih/set.v0"
 )
@@ -173,7 +184,7 @@ func (self *Whisper) Send(envelope *Envelope) error {
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
 func (self *Whisper) Start(*p2p.Server) error {
-	glog.V(logger.Info).Infoln("Whisper started")
+	log.Info(fmt.Sprint("Whisper started"))
 	go self.update()
 	return nil
 }
@@ -182,7 +193,7 @@ func (self *Whisper) Start(*p2p.Server) error {
 // of the Whisper protocol.
 func (self *Whisper) Stop() error {
 	close(self.quit)
-	glog.V(logger.Info).Infoln("Whisper stopped")
+	log.Info(fmt.Sprint("Whisper stopped"))
 	return nil
 }
 
@@ -233,14 +244,14 @@ func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 		}
 		var envelopes []*Envelope
 		if err := packet.Decode(&envelopes); err != nil {
-			glog.V(logger.Info).Infof("%v: failed to decode envelope: %v", peer, err)
+			log.Info(fmt.Sprintf("%v: failed to decode envelope: %v", peer, err))
 			continue
 		}
 		// Inject all envelopes into the internal pool
 		for _, envelope := range envelopes {
 			if err := self.add(envelope); err != nil {
 				// TODO Punish peer here. Invalid envelope.
-				glog.V(logger.Debug).Infof("%v: failed to pool envelope: %v", peer, err)
+				log.Debug(fmt.Sprintf("%v: failed to pool envelope: %v", peer, err))
 			}
 			whisperPeer.mark(envelope)
 		}
@@ -262,7 +273,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 	// Insert the message into the tracked pool
 	hash := envelope.Hash()
 	if _, ok := self.messages[hash]; ok {
-		glog.V(logger.Detail).Infof("whisper envelope already cached: %x\n", envelope)
+		log.Trace(fmt.Sprintf("whisper envelope already cached: %x\n", envelope))
 		return nil
 	}
 	self.messages[hash] = envelope
@@ -277,7 +288,7 @@ func (self *Whisper) add(envelope *Envelope) error {
 		// Notify the local node of a message arrival
 		go self.postEvent(envelope)
 	}
-	glog.V(logger.Detail).Infof("cached whisper envelope %x\n", envelope)
+	log.Trace(fmt.Sprintf("cached whisper envelope %x\n", envelope))
 	return nil
 }
 

@@ -17,14 +17,20 @@
 package api
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"testing"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/swarm/storage"
+=======
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/swarm/storage"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 func testApi(t *testing.T, f func(*Api)) {
@@ -76,7 +82,7 @@ func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
 
 // func expResponse(content []byte, mimeType string, status int) *Response {
 func expResponse(content string, mimeType string, status int) *Response {
-	glog.V(logger.Detail).Infof("expected content (%v): %v ", len(content), content)
+	log.Trace(fmt.Sprintf("expected content (%v): %v ", len(content), content))
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
@@ -91,7 +97,7 @@ func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	glog.V(logger.Detail).Infof("reader size: %v ", size)
+	log.Trace(fmt.Sprintf("reader size: %v ", size))
 	s := make([]byte, size)
 	_, err = reader.Read(s)
 	if err != io.EOF {

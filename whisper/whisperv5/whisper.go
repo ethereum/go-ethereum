@@ -26,15 +26,29 @@ import (
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/rpc"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 	"golang.org/x/crypto/pbkdf2"
 	set "gopkg.in/fatih/set.v0"
 )
+
+type Statistics struct {
+	messagesCleared int
+	memoryCleared   int
+	totalMemoryUsed int
+}
 
 // Whisper represents a dark communication interface through the Ethereum
 // network, using its very own P2P communication layer.
@@ -59,6 +73,8 @@ type Whisper struct {
 	messageQueue chan *Envelope
 	p2pMsgQueue  chan *Envelope
 	quit         chan struct{}
+
+	stats Statistics
 
 	overflow bool
 	test     bool
@@ -272,29 +288,30 @@ func (w *Whisper) GetSymKey(name string) []byte {
 
 // Watch installs a new message handler to run in case a matching packet arrives
 // from the whisper network.
-func (w *Whisper) Watch(f *Filter) uint32 {
+func (w *Whisper) Watch(f *Filter) (string, error) {
 	return w.filters.Install(f)
 }
 
-func (w *Whisper) GetFilter(id uint32) *Filter {
+func (w *Whisper) GetFilter(id string) *Filter {
 	return w.filters.Get(id)
 }
 
 // Unwatch removes an installed message handler.
-func (w *Whisper) Unwatch(id uint32) {
+func (w *Whisper) Unwatch(id string) {
 	w.filters.Uninstall(id)
 }
 
 // Send injects a message into the whisper send queue, to be distributed in the
 // network in the coming cycles.
 func (w *Whisper) Send(envelope *Envelope) error {
-	return w.add(envelope)
+	_, err := w.add(envelope)
+	return err
 }
 
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
 func (w *Whisper) Start(*p2p.Server) error {
-	glog.V(logger.Info).Infoln("Whisper started")
+	log.Info(fmt.Sprint("Whisper started"))
 	go w.update()
 
 	numCPU := runtime.NumCPU()
@@ -309,7 +326,7 @@ func (w *Whisper) Start(*p2p.Server) error {
 // of the Whisper protocol.
 func (w *Whisper) Stop() error {
 	close(w.quit)
-	glog.V(logger.Info).Infoln("Whisper stopped")
+	log.Info(fmt.Sprint("Whisper stopped"))
 	return nil
 }
 
@@ -351,21 +368,24 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		switch packet.Code {
 		case statusCode:
 			// this should not happen, but no need to panic; just ignore this message.
-			glog.V(logger.Warn).Infof("%v: unxepected status message received", p.peer)
+			log.Warn(fmt.Sprintf("%v: unxepected status message received", p.peer))
 		case messagesCode:
 			// decode the contained envelopes
 			var envelopes []*Envelope
 			if err := packet.Decode(&envelopes); err != nil {
-				glog.V(logger.Warn).Infof("%v: failed to decode envelope: [%v], peer will be disconnected", p.peer, err)
+				log.Warn(fmt.Sprintf("%v: failed to decode envelope: [%v], peer will be disconnected", p.peer, err))
 				return fmt.Errorf("garbage received")
 			}
 			// inject all envelopes into the internal pool
 			for _, envelope := range envelopes {
-				if err := wh.add(envelope); err != nil {
-					glog.V(logger.Warn).Infof("%v: bad envelope received: [%v], peer will be disconnected", p.peer, err)
+				cached, err := wh.add(envelope)
+				if err != nil {
+					log.Warn(fmt.Sprintf("%v: bad envelope received: [%v], peer will be disconnected", p.peer, err))
 					return fmt.Errorf("invalid envelope")
 				}
-				p.mark(envelope)
+				if cached {
+					p.mark(envelope)
+				}
 			}
 		case p2pCode:
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
@@ -375,7 +395,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if p.trusted {
 				var envelope Envelope
 				if err := packet.Decode(&envelope); err != nil {
-					glog.V(logger.Warn).Infof("%v: failed to decode direct message: [%v], peer will be disconnected", p.peer, err)
+					log.Warn(fmt.Sprintf("%v: failed to decode direct message: [%v], peer will be disconnected", p.peer, err))
 					return fmt.Errorf("garbage received (directMessage)")
 				}
 				wh.postEvent(&envelope, true)
@@ -385,7 +405,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if wh.mailServer != nil {
 				var request Envelope
 				if err := packet.Decode(&request); err != nil {
-					glog.V(logger.Warn).Infof("%v: failed to decode p2p request message: [%v], peer will be disconnected", p.peer, err)
+					log.Warn(fmt.Sprintf("%v: failed to decode p2p request message: [%v], peer will be disconnected", p.peer, err))
 					return fmt.Errorf("garbage received (p2p request)")
 				}
 				wh.mailServer.DeliverMail(p, &request)
@@ -402,13 +422,13 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // add inserts a new envelope into the message pool to be distributed within the
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
-func (wh *Whisper) add(envelope *Envelope) error {
+func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
 	if sent > now {
 		if sent-SynchAllowance > now {
-			return fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
+			return false, fmt.Errorf("envelope created in the future [%x]", envelope.Hash())
 		} else {
 			// recalculate PoW, adjusted for the time difference, plus one second for latency
 			envelope.calculatePoW(sent - now + 1)
@@ -417,34 +437,34 @@ func (wh *Whisper) add(envelope *Envelope) error {
 
 	if envelope.Expiry < now {
 		if envelope.Expiry+SynchAllowance*2 < now {
-			return fmt.Errorf("very old message")
+			return false, fmt.Errorf("very old message")
 		} else {
-			glog.V(logger.Debug).Infof("expired envelope dropped [%x]", envelope.Hash())
-			return nil // drop envelope without error
+			log.Debug(fmt.Sprintf("expired envelope dropped [%x]", envelope.Hash()))
+			return false, nil // drop envelope without error
 		}
 	}
 
 	if len(envelope.Data) > MaxMessageLength {
-		return fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
+		return false, fmt.Errorf("huge messages are not allowed [%x]", envelope.Hash())
 	}
 
 	if len(envelope.Version) > 4 {
-		return fmt.Errorf("oversized version [%x]", envelope.Hash())
+		return false, fmt.Errorf("oversized version [%x]", envelope.Hash())
 	}
 
 	if len(envelope.AESNonce) > AESNonceMaxLength {
 		// the standard AES GSM nonce size is 12,
 		// but const gcmStandardNonceSize cannot be accessed directly
-		return fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
+		return false, fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
 	}
 
 	if len(envelope.Salt) > saltLength {
-		return fmt.Errorf("oversized salt [%x]", envelope.Hash())
+		return false, fmt.Errorf("oversized salt [%x]", envelope.Hash())
 	}
 
 	if envelope.PoW() < MinimumPoW && !wh.test {
-		glog.V(logger.Debug).Infof("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash())
-		return nil // drop envelope without error
+		log.Debug(fmt.Sprintf("envelope with low PoW dropped: %f [%x]", envelope.PoW(), envelope.Hash()))
+		return false, nil // drop envelope without error
 	}
 
 	hash := envelope.Hash()
@@ -463,15 +483,16 @@ func (wh *Whisper) add(envelope *Envelope) error {
 	wh.poolMu.Unlock()
 
 	if alreadyCached {
-		glog.V(logger.Detail).Infof("whisper envelope already cached [%x]\n", envelope.Hash())
+		log.Trace(fmt.Sprintf("whisper envelope already cached [%x]\n", envelope.Hash()))
 	} else {
-		glog.V(logger.Detail).Infof("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope)
+		log.Trace(fmt.Sprintf("cached whisper envelope [%x]: %v\n", envelope.Hash(), envelope))
+		wh.stats.totalMemoryUsed += envelope.size()
 		wh.postEvent(envelope, false) // notify the local node about the new message
 		if wh.mailServer != nil {
 			wh.mailServer.Archive(envelope)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // postEvent queues the message for further processing.
@@ -496,7 +517,7 @@ func (w *Whisper) checkOverflow() {
 	if queueSize == messageQueueLimit {
 		if !w.overflow {
 			w.overflow = true
-			glog.V(logger.Warn).Infoln("message queue overflow")
+			log.Warn(fmt.Sprint("message queue overflow"))
 		}
 	} else if queueSize <= messageQueueLimit/2 {
 		if w.overflow {
@@ -546,20 +567,30 @@ func (w *Whisper) expire() {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
+	w.stats.clear()
 	now := uint32(time.Now().Unix())
-	for then, hashSet := range w.expirations {
-		// Short circuit if a future time
-		if then > now {
-			continue
+	for expiry, hashSet := range w.expirations {
+		if expiry < now {
+			w.stats.messagesCleared++
+
+			// Dump all expired messages and remove timestamp
+			hashSet.Each(func(v interface{}) bool {
+				sz := w.envelopes[v.(common.Hash)].size()
+				w.stats.memoryCleared += sz
+				w.stats.totalMemoryUsed -= sz
+				delete(w.envelopes, v.(common.Hash))
+				delete(w.messages, v.(common.Hash))
+				return true
+			})
+			w.expirations[expiry].Clear()
+			delete(w.expirations, expiry)
 		}
-		// Dump all expired messages and remove timestamp
-		hashSet.Each(func(v interface{}) bool {
-			delete(w.envelopes, v.(common.Hash))
-			delete(w.messages, v.(common.Hash))
-			return true
-		})
-		w.expirations[then].Clear()
 	}
+}
+
+func (w *Whisper) Stats() string {
+	return fmt.Sprintf("Latest expiry cycle cleared %d messages (%d bytes). Memory usage: %d bytes.",
+		w.stats.messagesCleared, w.stats.memoryCleared, w.stats.totalMemoryUsed)
 }
 
 // envelopes retrieves all the messages currently pooled by the node.
@@ -575,7 +606,7 @@ func (w *Whisper) Envelopes() []*Envelope {
 }
 
 // Messages retrieves all the decrypted messages matching a filter id.
-func (w *Whisper) Messages(id uint32) []*ReceivedMessage {
+func (w *Whisper) Messages(id string) []*ReceivedMessage {
 	result := make([]*ReceivedMessage, 0)
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()
@@ -590,11 +621,24 @@ func (w *Whisper) Messages(id uint32) []*ReceivedMessage {
 	return result
 }
 
+func (w *Whisper) isEnvelopeCached(hash common.Hash) bool {
+	w.poolMu.Lock()
+	defer w.poolMu.Unlock()
+
+	_, exist := w.envelopes[hash]
+	return exist
+}
+
 func (w *Whisper) addDecryptedMessage(msg *ReceivedMessage) {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
 	w.messages[msg.EnvelopeHash] = msg
+}
+
+func (s *Statistics) clear() {
+	s.memoryCleared = 0
+	s.messagesCleared = 0
 }
 
 func ValidatePublicKey(k *ecdsa.PublicKey) bool {

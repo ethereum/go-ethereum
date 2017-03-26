@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
@@ -34,6 +35,20 @@ import (
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/params"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/core"
+	"github.com/expanse-org/go-expanse/core/state"
+	"github.com/expanse-org/go-expanse/core/types"
+	"github.com/expanse-org/go-expanse/core/vm"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/eth/downloader"
+	"github.com/expanse-org/go-expanse/ethdb"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/pow"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var bigTxGas = new(big.Int).SetUint64(params.TxGas)
@@ -314,12 +329,12 @@ func testGetNodeData(t *testing.T, protocol int) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
 			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
@@ -371,7 +386,7 @@ func testGetNodeData(t *testing.T, protocol int) {
 	for i := 0; i < len(data); i++ {
 		statedb.Put(hashes[i].Bytes(), data[i])
 	}
-	accounts := []common.Address{testBank.Address, acc1Addr, acc2Addr}
+	accounts := []common.Address{testBank, acc1Addr, acc2Addr}
 	for i := uint64(0); i <= pm.blockchain.CurrentBlock().NumberU64(); i++ {
 		trie, _ := state.New(pm.blockchain.GetBlockByNumber(i).Root(), statedb)
 
@@ -406,12 +421,12 @@ func testGetReceipt(t *testing.T, protocol int) {
 		switch i {
 		case 0:
 			// In block 1, the test bank sends account #1 some ether.
-			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), bigTxGas, nil, nil), signer, testBankKey)
 			block.AddTx(tx)
 		case 1:
 			// In block 2, the test bank sends some more ether to account #1.
 			// acc1Addr passes it on to account #2.
-			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank.Address), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, testBankKey)
 			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), bigTxGas, nil, nil), signer, acc1Key)
 			block.AddTx(tx1)
 			block.AddTx(tx2)
@@ -468,10 +483,11 @@ func testDAOChallenge(t *testing.T, localForked, remoteForked bool, timeout bool
 	// Create a DAO aware protocol manager
 	var (
 		evmux         = new(event.TypeMux)
-		pow           = new(core.FakePow)
+		pow           = new(pow.FakePow)
 		db, _         = ethdb.NewMemDatabase()
-		genesis       = core.WriteGenesisBlockForTesting(db)
 		config        = &params.ChainConfig{DAOForkBlock: big.NewInt(1), DAOForkSupport: localForked}
+		gspec         = &core.Genesis{Config: config}
+		genesis       = gspec.MustCommit(db)
 		blockchain, _ = core.NewBlockChain(db, config, pow, evmux, vm.Config{})
 	)
 	pm, err := NewProtocolManager(config, false, NetworkId, 1000, evmux, new(testTxPool), pow, blockchain, db)

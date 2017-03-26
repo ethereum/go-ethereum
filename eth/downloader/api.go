@@ -17,12 +17,19 @@
 package downloader
 
 import (
+	"context"
 	"sync"
 
+<<<<<<< HEAD
 	ethereum "github.com/expanse-org/go-expanse"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/rpc"
 	"golang.org/x/net/context"
+=======
+	ethereum "github.com/expanse-org/go-expanse"
+	"github.com/expanse-org/go-expanse/event"
+	"github.com/expanse-org/go-expanse/rpc"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 // PublicDownloaderAPI provides an API which gives information about the current synchronisation status.

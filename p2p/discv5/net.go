@@ -24,6 +24,7 @@ import (
 	"net"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/mclock"
 	"github.com/expanse-org/go-expanse/crypto"
@@ -33,6 +34,16 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/p2p/netutil"
 	"github.com/expanse-org/go-expanse/rlp"
+=======
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/mclock"
+	"github.com/expanse-org/go-expanse/crypto"
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/expanse-org/go-expanse/p2p/nat"
+	"github.com/expanse-org/go-expanse/p2p/netutil"
+	"github.com/expanse-org/go-expanse/rlp"
+>>>>>>> refs/remotes/ethereum/master
 )
 
 var (
@@ -437,10 +448,10 @@ loop:
 			if err := net.handle(n, pkt.ev, &pkt); err != nil {
 				status = err.Error()
 			}
-			if glog.V(logger.Detail) {
-				glog.Infof("<<< (%d) %v from %x@%v: %v -> %v (%v)",
+			log.Trace("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("<<< (%d) %v from %x@%v: %v -> %v (%v)",
 					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
-			}
+			}})
 			// TODO: persist state if n.state goes >= known, delete if it goes <= known
 
 		// State transition timeouts.
@@ -456,10 +467,10 @@ loop:
 			if err := net.handle(timeout.node, timeout.ev, nil); err != nil {
 				status = err.Error()
 			}
-			if glog.V(logger.Detail) {
-				glog.Infof("--- (%d) %v for %x@%v: %v -> %v (%v)",
+			log.Trace("", "msg", log.Lazy{Fn: func() string {
+				return fmt.Sprintf("--- (%d) %v for %x@%v: %v -> %v (%v)",
 					net.tab.count, timeout.ev, timeout.node.ID[:8], timeout.node.addr(), prestate, timeout.node.state, status)
-			}
+			}})
 
 		// Querying.
 		case q := <-net.queryReq:
@@ -655,7 +666,7 @@ loop:
 	}
 	debugLog("loop stopped")
 
-	glog.V(logger.Debug).Infof("shutting down")
+	log.Debug(fmt.Sprintf("shutting down"))
 	if net.conn != nil {
 		net.conn.Close()
 	}
@@ -685,20 +696,20 @@ func (net *Network) refresh(done chan<- struct{}) {
 		seeds = net.nursery
 	}
 	if len(seeds) == 0 {
-		glog.V(logger.Detail).Info("no seed nodes found")
+		log.Trace(fmt.Sprint("no seed nodes found"))
 		close(done)
 		return
 	}
 	for _, n := range seeds {
-		if glog.V(logger.Debug) {
+		log.Debug("", "msg", log.Lazy{Fn: func() string {
 			var age string
 			if net.db != nil {
 				age = time.Since(net.db.lastPong(n.ID)).String()
 			} else {
 				age = "unknown"
 			}
-			glog.Infof("seed node (age %s): %v", age, n)
-		}
+			return fmt.Sprintf("seed node (age %s): %v", age, n)
+		}})
 		n = net.internNodeFromDB(n)
 		if n.state == unknown {
 			net.transition(n, verifyinit)
@@ -1254,7 +1265,7 @@ func (net *Network) handleNeighboursPacket(n *Node, pkt *ingressPacket) error {
 	for i, rn := range req.Nodes {
 		nn, err := net.internNodeFromNeighbours(pkt.remoteAddr, rn)
 		if err != nil {
-			glog.V(logger.Debug).Infof("invalid neighbour (%v) from %x@%v: %v", rn.IP, n.ID[:8], pkt.remoteAddr, err)
+			log.Debug(fmt.Sprintf("invalid neighbour (%v) from %x@%v: %v", rn.IP, n.ID[:8], pkt.remoteAddr, err))
 			continue
 		}
 		nodes[i] = nn
