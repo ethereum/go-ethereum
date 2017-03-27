@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
@@ -20,6 +21,11 @@ type state struct {
 	btree BTree
 	root  Root
 }
+
+const (
+	// max number of leafs on 4096 chunk len in 32 bytes segments
+	mprocessors = 128
+)
 
 // A merkle tree for a user that stores the entire tree
 // Specifically this tree is left a leaning balanced binary tree
@@ -43,6 +49,20 @@ type node struct {
 	//      label is hash of (children[0].label + children[1].label)
 	// if leaf: label is arbitrary data
 	// else if children[1] is nil, label=hash(children[0].label)
+}
+
+type jobparam struct {
+	data   [][]byte
+	height int
+	n0     *node
+	n1     *node
+	id     int
+}
+
+type jobresult struct {
+	n    *node
+	data [][]byte
+	id   int
 }
 
 func (t BTree) Count() uint64 {
@@ -158,10 +178,12 @@ func GetHeight(count uint64) int {
 // Count - Numers of leafs at the BMT
 // error -
 func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, count int, err error) {
-	blocks := splitData(data, segmentsize)
 	hashFunc = h
-	leafcount := len(blocks)
-	tree := Build(blocks)
+	leafcount := len(data) / segmentsize
+	if len(data)%segmentsize != 0 {
+		leafcount++
+	}
+	tree := BuildParralel(data, segmentsize)
 	err = tree.Validate()
 	if err != nil {
 		return nil, nil, 0, errors.New("Validation error")
@@ -171,7 +193,28 @@ func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, c
 	}
 
 	return tree, &Root{uint64(leafcount), tree.Root()}, leafcount, nil
-	//r := Root{uint64(count), tree.Root()}
+
+}
+
+func processor(pend *sync.WaitGroup, id int, tasks <-chan jobparam, results chan<- jobresult) {
+
+	defer pend.Done()
+	for task := range tasks {
+
+		var res jobresult
+
+		switch task.height {
+		case 0:
+			res = jobresult{nil, task.data, task.id}
+		case 1:
+			res = jobresult{&node{label: task.data[0]}, nil, task.id}
+		default:
+			hash := makeHash(task.n0, task.n1)
+			res = jobresult{&node{label: hash, children: [2]*node{task.n0, task.n1}}, task.data, task.id}
+		}
+		results <- res
+		pend.Done()
+	}
 
 }
 
@@ -179,6 +222,7 @@ func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, c
 func Build(data [][]byte) *BTree {
 	count := uint64(len(data))
 	height := GetHeight(count)
+
 	node, leftOverData := buildNode(data, height)
 	if len(leftOverData) != 0 {
 		panic("Build failed to consume all data")
@@ -189,6 +233,96 @@ func Build(data [][]byte) *BTree {
 	}
 	hash := rootHash(count, rootLabel)
 	t := BTree{count, node, hash}
+	return &t
+}
+
+// Build a tree parralel computation
+// We build it level by level ..starting from the depper one and get up..
+func BuildParralel(data []byte, segmentsize int) *BTree {
+	count := len(data) / segmentsize
+	var height int
+
+	if len(data)%segmentsize != 0 {
+		height = GetHeight(uint64(count + 1))
+
+	} else {
+		height = GetHeight(uint64(count))
+	}
+
+	jobs := make(chan jobparam, mprocessors)
+	results := make(chan jobresult, mprocessors)
+
+	pend := new(sync.WaitGroup)
+
+	for w := 1; w <= mprocessors; w++ {
+		pend.Add(1)
+		go processor(pend, 2, jobs, results)
+	}
+	/*build leafs*/
+	var leaflevelcount = 1 << uint(height-1)
+	for k := 0; k < leaflevelcount; k++ {
+		datasegment := make([][]byte, 0, 1)
+		pend.Add(1)
+		if k*segmentsize+segmentsize > len(data) {
+			if (k*segmentsize + len(data)%segmentsize) > len(data) {
+				jobs <- jobparam{data: nil, height: 0, n0: nil, n1: nil, id: k}
+			} else {
+				datasegment = append(datasegment, data[k*segmentsize:k*segmentsize+len(data)%segmentsize])
+				jobs <- jobparam{data: datasegment, height: 1, n0: nil, n1: nil, id: k}
+			}
+		} else {
+			datasegment = append(datasegment, data[k*segmentsize:(k+1)*segmentsize])
+			jobs <- jobparam{data: datasegment, height: 1, n0: nil, n1: nil, id: k}
+		}
+	}
+	fmt.Println("1")
+	close(jobs)
+	pend.Wait()
+
+	if len(data)%segmentsize != 0 {
+		count++
+	}
+	restmp := make([]jobresult, leaflevelcount)
+	fmt.Println("2", leaflevelcount)
+	//Get computation results
+	for i := 0; i < leaflevelcount; i++ {
+		tres := <-results
+		restmp[tres.id] = tres
+	}
+	fmt.Println("3", height)
+	for i := 1; i < height; i++ {
+		jobs := make(chan jobparam, mprocessors)
+		for w := 1; w <= mprocessors; w++ {
+			pend.Add(1)
+			go processor(pend, 2, jobs, results)
+		}
+		var indexres = 0
+		for j := 0; j < (1<<uint(height-1))>>uint(i); j++ {
+			pend.Add(1)
+			jobs <- jobparam{n0: restmp[indexres].n, n1: restmp[indexres+1].n, data: restmp[indexres+1].data, height: 2, id: j}
+			indexres += 2
+		}
+		close(jobs)
+		pend.Wait()
+		if i < height-1 {
+			for l := 0; l < (1<<uint(height-1))>>uint(i); l++ {
+				tmpres := <-results
+				restmp[tmpres.id] = tmpres
+			}
+		}
+	}
+	rootLabel := make([]byte, 0)
+	var res jobresult
+	if leaflevelcount == 1 {
+		res = restmp[0]
+	} else {
+		res = <-results
+	}
+	if height > 0 {
+		rootLabel = res.n.label
+	}
+	hash := rootHash(uint64(count), rootLabel)
+	t := BTree{uint64(count), res.n, hash}
 	return &t
 }
 
@@ -222,7 +356,7 @@ func splitData(data []byte, size int) [][]byte {
 	return blocks
 }
 
-// Return a [][]byte needed to prove the inclusion of the item at the passed index
+// Return a [][]byte needed to prove the gkf of the item at the passed index
 // The payload of the item at index is the first value in the proof
 func (t *BTree) InclusionProof(index int) [][]byte {
 	if uint64(index) >= t.count {
@@ -259,7 +393,7 @@ type Root struct {
 	Base  []byte
 }
 
-// Proves the inclusion of an element at the given index with the value thats the first entry in proof
+// Proves theof an element at the given index with the value thats the first entry in proof
 func (r *Root) CheckProof(h Hasher, proof [][]byte, index int) (bool, error) {
 	hashFunc = h
 	theight := GetHeight(r.Count)

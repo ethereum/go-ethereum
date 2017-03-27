@@ -2,12 +2,15 @@ package storage
 
 import (
 	"fmt"
+	"log"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
-func TestBuildBMT3(t *testing.T) {
+//will test the hash (hash.Hash) interface
+func TestBuildBMT2(t *testing.T) {
 
 	// Grab some data to make the tree out of, and partition
 	data := make([]byte, 4096)
@@ -34,22 +37,39 @@ func TestBuildBMT3(t *testing.T) {
 	// fmt.Println("done")
 }
 
+func TestBuildBMTStress(t *testing.T) {
+
+	for i := 1; i < 4096; i++ {
+		BuildBMTwithGivenDataLen(i, t)
+	}
+}
+
 func TestBuildBMT(t *testing.T) {
+	BuildBMTwithGivenDataLen(4096, t)
+}
+
+func BuildBMTwithGivenDataLen(datalen int, t *testing.T) {
 
 	// Grab some data to make the tree out of, and partition
-	data := make([]byte, 4096)
-	tdata := testDataReader(4096)
+	fmt.Println("dl", datalen)
+	data := make([]byte, datalen)
+	tdata := testDataReader(datalen)
 	tdata.Read(data)
-	tree, r, count, err1 := BuildBMT(sha3.NewKeccak256, data, 1)
+	fmt.Println(data)
+
+	start := time.Now()
+
+	tree, r, count, err1 := BuildBMT(sha3.NewKeccak256, data, 32)
+
+	elapsed := time.Since(start)
+	log.Printf("Binomial took %s", elapsed)
 
 	if err1 != nil {
 		fmt.Println(err1)
 		return
 	}
 
-	fmt.Println(tree.Root())
-
-	//var ok bool
+	fmt.Println(tree.Root(), count)
 
 	for i := 0; i < count; i++ {
 		p := tree.InclusionProof(i)
@@ -63,45 +83,4 @@ func TestBuildBMT(t *testing.T) {
 		}
 	}
 	fmt.Println("done")
-}
-
-func TestBuildBMT2(t *testing.T) {
-
-	data := make([]byte, 4096)
-	tdata := testDataReader(4096)
-	tdata.Read(data)
-
-	fmt.Println(len(data))
-	blocks := splitData(data, 2)
-
-	count := len(blocks)
-
-	//	t.Errorf("GetCount() != %d (was )", count)
-
-	tree := Build(blocks)
-	err1 := tree.Validate()
-	if err1 != nil {
-		t.Errorf("%s", err1)
-	}
-	if tree.Count() != uint64(count) {
-		t.Errorf("GetCount() != %d (was %d)", count, tree.Count())
-	}
-
-	r := Root{uint64(count), tree.Root()}
-
-	fmt.Println(tree.Root())
-
-	for i := 0; i < count; i++ {
-		p := tree.InclusionProof(i)
-
-		fmt.Println(p)
-
-		ok, err := r.CheckProof(sha3.NewKeccak256, p, i)
-		if !ok || (err != nil) {
-			t.Errorf("proof %d failed", i)
-		}
-	}
-	//t.Errorf("proof ok")
-	// TODO: check wrong proofs fail
-
 }
