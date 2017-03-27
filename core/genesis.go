@@ -58,10 +58,10 @@ type GenesisAlloc map[common.Address]GenesisAccount
 
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
-	Code    []byte                      `json:"code" optional:"true"`
-	Storage map[common.Hash]common.Hash `json:"storage" optional:"true"`
+	Code    []byte                      `json:"code,omitempty" optional:"true"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty" optional:"true"`
 	Balance *big.Int                    `json:"balance"`
-	Nonce   uint64                      `json:"nonce" optional:"true"`
+	Nonce   uint64                      `json:"nonce,omitempty" optional:"true"`
 }
 
 // field type overrides for gencodec
