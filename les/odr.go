@@ -22,16 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/log"
 	"golang.org/x/net/context"
-)
-
-var (
-	softRequestTimeout = time.Millisecond * 500
-	hardRequestTimeout = time.Second * 10
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.
@@ -73,10 +67,8 @@ type validatorFunc func(ethdb.Database, *Msg) error
 
 // sentReq is a request waiting for an answer that satisfies its valFunc
 type sentReq struct {
-	valFunc  validatorFunc
-	sentTo   map[*peer]chan struct{}
-	lock     sync.RWMutex  // protects acces to sentTo
-	answered chan struct{} // closed and set to nil when any peer answers it
+	valFunc validatorFunc
+	req     *distReq
 }
 
 const (
@@ -96,14 +88,11 @@ type Msg struct {
 
 // Deliver is called by the LES protocol manager to deliver ODR reply messages to waiting requests
 func (self *LesOdr) Deliver(peer *peer, msg *Msg) error {
-	var delivered chan struct{}
 	self.mlock.Lock()
 	req, ok := self.sentReqs[msg.ReqID]
 	self.mlock.Unlock()
 	if ok {
-		req.lock.Lock()
-		delivered, ok = req.sentTo[peer]
-		req.lock.Unlock()
+		ok = req.req.expectResponseFrom(peer)
 	}
 
 	if !ok {
@@ -112,70 +101,22 @@ func (self *LesOdr) Deliver(peer *peer, msg *Msg) error {
 
 	if err := req.valFunc(self.db, msg); err != nil {
 		peer.Log().Warn("Invalid odr response", "err", err)
+		req.req.delivered(peer, false)
 		return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
 	}
-	close(delivered)
-	req.lock.Lock()
-	delete(req.sentTo, peer)
-	if req.answered != nil {
-		close(req.answered)
-		req.answered = nil
-	}
-	req.lock.Unlock()
+	req.req.delivered(peer, true)
 	return nil
 }
 
-func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout chan struct{}, reqWg *sync.WaitGroup) {
-	stime := mclock.Now()
-	defer func() {
-		req.lock.Lock()
-		delete(req.sentTo, peer)
-		req.lock.Unlock()
-		reqWg.Done()
-	}()
-
-	select {
-	case <-delivered:
-		if self.serverPool != nil {
-			self.serverPool.adjustResponseTime(peer.poolEntry, time.Duration(mclock.Now()-stime), false)
-		}
-		return
-	case <-time.After(softRequestTimeout):
-		close(timeout)
-	case <-self.stop:
-		return
-	}
-
-	select {
-	case <-delivered:
-	case <-time.After(hardRequestTimeout):
-		peer.Log().Debug("Request timed out hard")
-		go self.removePeer(peer.id)
-	case <-self.stop:
-		return
-	}
-	if self.serverPool != nil {
-		self.serverPool.adjustResponseTime(peer.poolEntry, time.Duration(mclock.Now()-stime), true)
-	}
-}
-
-// networkRequest sends a request to known peers until an answer is received
-// or the context is cancelled
-func (self *LesOdr) networkRequest(ctx context.Context, lreq LesOdrRequest) error {
-	answered := make(chan struct{})
-	req := &sentReq{
-		valFunc:  lreq.Validate,
-		sentTo:   make(map[*peer]chan struct{}),
-		answered: answered, // reply delivered by any peer
-	}
-
-	exclude := make(map[*peer]struct{})
+// Retrieve tries to fetch an object from the LES network.
+// If the network retrieval was successful, it stores the object in local db.
+func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
+	lreq := LesRequest(req)
 
 	reqWg := new(sync.WaitGroup)
 	reqWg.Add(1)
 	defer reqWg.Done()
 
-	var timeout chan struct{}
 	reqID := getNextReqID()
 	rq := &distReq{
 		getCost: func(dp distPeer) uint64 {
@@ -183,27 +124,24 @@ func (self *LesOdr) networkRequest(ctx context.Context, lreq LesOdrRequest) erro
 		},
 		canSend: func(dp distPeer) bool {
 			p := dp.(*peer)
-			_, ok := exclude[p]
-			return !ok && lreq.CanSend(p)
+			return lreq.CanSend(p)
 		},
 		request: func(dp distPeer) func() {
 			p := dp.(*peer)
-			exclude[p] = struct{}{}
-			delivered := make(chan struct{})
-			timeout = make(chan struct{})
-			req.lock.Lock()
-			req.sentTo[p] = delivered
-			req.lock.Unlock()
 			reqWg.Add(1)
 			cost := lreq.GetCost(p)
 			p.fcServer.QueueRequest(reqID, cost)
-			go self.requestPeer(req, p, delivered, timeout, reqWg)
 			return func() { lreq.Request(reqID, p) }
 		},
 	}
 
+	sreq := &sentReq{
+		valFunc: lreq.Validate,
+		req:     rq,
+	}
+
 	self.mlock.Lock()
-	self.sentReqs[reqID] = req
+	self.sentReqs[reqID] = sreq
 	self.mlock.Unlock()
 
 	go func() {
@@ -213,37 +151,25 @@ func (self *LesOdr) networkRequest(ctx context.Context, lreq LesOdrRequest) erro
 		self.mlock.Unlock()
 	}()
 
-	for {
-		peerChn := self.reqDist.queue(rq)
-		select {
-		case <-ctx.Done():
-			self.reqDist.cancel(rq)
-			return ctx.Err()
-		case <-answered:
-			self.reqDist.cancel(rq)
-			return nil
-		case _, ok := <-peerChn:
-			if !ok {
-				return ErrNoPeers
-			}
+	stopChn := self.reqDist.retrieve(rq, func(p distPeer, respTime time.Duration, srto, hrto bool) {
+		reqWg.Done()
+		pp := p.(*peer)
+		if self.serverPool != nil {
+			self.serverPool.adjustResponseTime(pp.poolEntry, respTime, srto)
 		}
+		if hrto {
+			pp.Log().Debug("Request timed out hard")
+			self.removePeer(pp.id)
+		}
+	})
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-answered:
-			return nil
-		case <-timeout:
-		}
+	select {
+	case <-stopChn:
+	case <-ctx.Done():
+		rq.stop(ctx.Err())
 	}
-}
 
-// Retrieve tries to fetch an object from the LES network.
-// If the network retrieval was successful, it stores the object in local db.
-func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err error) {
-	lreq := LesRequest(req)
-	err = self.networkRequest(ctx, lreq)
-	if err == nil {
+	if err = rq.getError(); err == nil {
 		// retrieved from network, store in db
 		req.StoreResult(self.db)
 	} else {

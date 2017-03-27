@@ -23,6 +23,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common/mclock"
 )
 
 // ErrNoPeers is returned if no peers capable of serving a queued request are available
@@ -52,6 +54,16 @@ type distPeer interface {
 	queueSend(f func())
 }
 
+var (
+	retryQueue         = time.Millisecond * 100
+	softRequestTimeout = time.Millisecond * 500
+	hardRequestTimeout = time.Second * 10
+)
+
+// reqPeerCallback is called after a request sent to a certain peer has either been
+// answered or timed out hard
+type reqPeerCallback func(p distPeer, respTime time.Duration, srto, hrto bool)
+
 // distReq is the request abstraction used by the distributor. It is based on
 // three callback functions:
 // - getCost returns the upper estimate of the cost of sending the request to a given peer
@@ -60,6 +72,9 @@ type distPeer interface {
 // does the actual sending. Request order should be preserved but the callback itself should not
 // block until it is sent because other peers might still be able to receive requests while
 // one of them is blocking. Instead, the returned function is put in the peer's send queue.
+//
+// Requests can either be queued manually or by the retrieval management mechanism which
+// takes care of timeouts, resends and not sending to the same peer again.
 type distReq struct {
 	getCost func(distPeer) uint64
 	canSend func(distPeer) bool
@@ -68,6 +83,16 @@ type distReq struct {
 	reqOrder uint64
 	sentChn  chan distPeer
 	element  *list.Element
+
+	// retrieval management fields (optional)
+	dist                    *requestDistributor
+	peerCallback            reqPeerCallback
+	lock                    sync.RWMutex
+	stopChn                 chan struct{}
+	stopped                 bool
+	err                     error
+	sentTo                  map[distPeer]chan struct{} // channel signaling a reply from the given peer
+	sentCnt, softTimeoutCnt int
 }
 
 // newRequestDistributor creates a new request distributor
@@ -112,6 +137,13 @@ func (d *requestDistributor) loop() {
 					if send != nil {
 						peer.queueSend(send)
 					}
+					req.lock.Lock()
+					if req.sentTo != nil {
+						// if the retrieval manager is used, create deliver channel
+						req.sentTo[peer] = make(chan struct{})
+						req.sentCnt++
+					}
+					req.lock.Unlock()
 					chn <- peer
 					close(chn)
 				} else {
@@ -165,8 +197,10 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 	for (len(peers) > 0 || elem == d.reqQueue.Front()) && elem != nil {
 		req := elem.Value.(*distReq)
 		canSend := false
+		req.lock.RLock()
 		for peer, _ := range peers {
-			if peer.canQueue() && req.canSend(peer) {
+			// if retrieve manager is not used and sentTo is nil, ok is always false
+			if _, ok := req.sentTo[peer]; !ok && peer.canQueue() && req.canSend(peer) {
 				canSend = true
 				cost := req.getCost(peer)
 				wait, bufRemain := peer.waitBefore(cost)
@@ -185,6 +219,7 @@ func (d *requestDistributor) nextRequest() (distPeer, *distReq, time.Duration) {
 				delete(peers, peer)
 			}
 		}
+		req.lock.RUnlock()
 		next := elem.Next()
 		if !canSend && elem == d.reqQueue.Front() {
 			close(req.sentChn)
@@ -256,4 +291,157 @@ func (d *requestDistributor) remove(r *distReq) {
 		d.reqQueue.Remove(r.element)
 		r.element = nil
 	}
+}
+
+// retrieve starts a process that keeps trying to retrieve a valid answer for a
+// request from any suitable peers until stopped or succeeded.
+func (d *requestDistributor) retrieve(r *distReq, cb reqPeerCallback) chan struct{} {
+	r.dist = d
+	r.sentTo = make(map[distPeer]chan struct{})
+	r.stopChn = make(chan struct{})
+	r.peerCallback = cb
+
+	go r.retrieve()
+	return r.stopChn
+}
+
+// retrieve starts a retrieval process for a single peer. If no request has been
+// sent yet and no suitable peer found, it sets an ErrNoPeers error code and returns.
+// Otherwise it keeps trying until it sends the request to a peer, then waits for an
+// answer or a timeout.
+func (r *distReq) retrieve() {
+	for {
+		sent := r.dist.queue(r)
+		var p distPeer
+		select {
+		case p = <-sent:
+		case <-r.stopChn:
+			if r.dist.cancel(r) {
+				p = nil
+			} else {
+				p = <-sent
+			}
+		}
+		if p == nil {
+			if r.waiting() {
+				time.Sleep(retryQueue)
+				if r.waiting() {
+					continue
+				}
+			} else {
+				r.stop(ErrNoPeers) // no effect if already stopped for another reason
+			}
+		} else {
+			respTime, srto, hrto := r.runTimer(p)
+			r.peerCallback(p, respTime, srto, hrto)
+		}
+		break
+	}
+}
+
+// getError returns any retrieval error (either internally generated or set by the
+// stop function) after stopChn has been closed
+func (r *distReq) getError() error {
+	return r.err
+}
+
+// expectResponseFrom tells if we are expecting a response from a given peer.
+// A response to a sent request is expected even after another peer have delivered
+// a valid response. If a hard timeout occurs, no response is expected any more.
+func (r *distReq) expectResponseFrom(peer distPeer) bool {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	return r.sentTo[peer] != nil
+}
+
+// delivered notifies the retrieval mechanism that a reply (either valid
+// or invalid) has been received from a certain peer
+func (r *distReq) delivered(peer distPeer, valid bool) bool {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	delivered, ok := r.sentTo[peer]
+	if ok {
+		close(delivered)
+		delete(r.sentTo, peer)
+		if valid && !r.stopped {
+			r.stopped = true
+			close(r.stopChn)
+		}
+		if !r.stopped && r.sentCnt == 0 {
+			go r.retrieve()
+		}
+
+	}
+	return ok
+}
+
+// stop stops the retrieval process and sets an error code that will be returned
+// by getError
+func (r *distReq) stop(err error) {
+	r.lock.Lock()
+	if !r.stopped {
+		r.stopped = true
+		r.err = err
+		close(r.stopChn)
+	}
+	r.lock.Unlock()
+}
+
+// waiting returns true if the retrieval mechanism is waiting for an answer from
+// any peer
+func (r *distReq) waiting() bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	return !r.stopped && r.sentCnt+r.softTimeoutCnt != 0
+}
+
+// runTimer starts a request timeout for a single peer. If a certain (short) period
+// of time passes with no reply received, it switches from "sent" to "soft timeout"
+// state and the retrieval mechanism will start trying to send another request to a
+// new peer. If another (longer) timeout period passes, it switches to "hard timeout"
+// state, after which a reply is no longer expected and the peer should be dropped.
+func (r *distReq) runTimer(peer distPeer) (respTime time.Duration, srto, hrto bool) {
+	start := mclock.Now()
+
+	r.lock.RLock()
+	delivered := r.sentTo[peer]
+	r.lock.RUnlock()
+	if delivered == nil {
+		panic(nil)
+	}
+
+	select {
+	case <-delivered:
+		r.lock.Lock()
+		r.sentCnt--
+		r.lock.Unlock()
+		return time.Duration(mclock.Now() - start), false, false
+	case <-time.After(softRequestTimeout):
+		r.lock.Lock()
+		r.sentCnt--
+		resend := !r.stopped && r.sentCnt == 0
+		r.softTimeoutCnt++
+		r.lock.Unlock()
+		if resend {
+			go r.retrieve()
+		}
+	}
+
+	hrto = false
+	select {
+	case <-delivered:
+	case <-time.After(hardRequestTimeout):
+		hrto = true
+	}
+
+	r.lock.Lock()
+	r.softTimeoutCnt--
+	// do not delete sentTo entry, nil means that we are not expecting an answer
+	// but we also do not want to send to that peer again
+	r.sentTo[peer] = nil
+	r.lock.Unlock()
+	return time.Duration(mclock.Now() - start), true, hrto
 }
