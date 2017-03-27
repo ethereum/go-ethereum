@@ -102,7 +102,9 @@ type ProtocolManager struct {
 	odr         *LesOdr
 	server      *LesServer
 	serverPool  *serverPool
+	lesTopic    discv5.Topic
 	reqDist     *requestDistributor
+	retriever   *retrieveManager
 
 	downloader *downloader.Downloader
 	fetcher    *lightFetcher
@@ -202,29 +204,25 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, blockchain.HasHeader, nil, blockchain.GetHeaderByHash,
 			nil, blockchain.CurrentHeader, nil, nil, nil, blockchain.GetTdByHash,
 			blockchain.InsertHeaderChain, nil, nil, blockchain.Rollback, removePeer)
-	}
 
-	manager.reqDist = newRequestDistributor(func() map[distPeer]struct{} {
-		m := make(map[distPeer]struct{})
-		peers := manager.peers.AllPeers()
-		for _, peer := range peers {
-			m[peer] = struct{}{}
+		manager.reqDist = newRequestDistributor(func() map[distPeer]struct{} {
+			m := make(map[distPeer]struct{})
+			peers := manager.peers.AllPeers()
+			for _, peer := range peers {
+				m[peer] = struct{}{}
+			}
+			return m
+		}, manager.quitSync)
+
+		manager.lesTopic = discv5.Topic("LES@" + common.Bytes2Hex(manager.blockchain.Genesis().Hash().Bytes()[0:8]))
+		manager.serverPool = newServerPool(manager.chainDb, []byte("serverPool/"), manager.lesTopic, manager.quitSync, &manager.wg)
+		manager.retriever = newRetrieveManager(manager.reqDist, manager.serverPool, removePeer)
+		if odr != nil {
+			odr.retriever = manager.retriever
 		}
-		return m
-	}, manager.quitSync)
-	if odr != nil {
-		odr.removePeer = removePeer
-		odr.reqDist = manager.reqDist
+		manager.fetcher = newLightFetcher(manager)
 	}
 
-	/*validator := func(block *types.Block, parent *types.Block) error {
-		return core.ValidateHeader(pow, block.Header(), parent.Header(), true, false)
-	}
-	heighter := func() uint64 {
-		return chainman.LastBlockNumberU64()
-	}
-	manager.fetcher = fetcher.New(chainman.GetBlockNoOdr, validator, nil, heighter, chainman.InsertChain, manager.removePeer)
-	*/
 	return manager, nil
 }
 
@@ -261,23 +259,20 @@ func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	if srvr != nil {
 		topicDisc = srvr.DiscV5
 	}
-	lesTopic := discv5.Topic("LES@" + common.Bytes2Hex(pm.blockchain.Genesis().Hash().Bytes()[0:8]))
 	if pm.lightSync {
 		// start sync handler
 		if srvr != nil { // srvr is nil during testing
-			pm.serverPool = newServerPool(pm.chainDb, []byte("serverPool/"), srvr, lesTopic, pm.quitSync, &pm.wg)
-			pm.odr.serverPool = pm.serverPool
-			pm.fetcher = newLightFetcher(pm)
+			pm.serverPool.setServer(srvr)
 		}
 		go pm.syncer()
 	} else {
 		if topicDisc != nil {
 			go func() {
-				logger := log.New("topic", lesTopic)
+				logger := log.New("topic", pm.lesTopic)
 				logger.Info("Starting topic registration")
 				defer logger.Info("Terminated topic registration")
 
-				topicDisc.RegisterTopic(lesTopic, pm.quitSync)
+				topicDisc.RegisterTopic(pm.lesTopic, pm.quitSync)
 			}()
 		}
 		go func() {
@@ -926,7 +921,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 
 	if deliverMsg != nil {
-		err := pm.odr.Deliver(p, deliverMsg)
+		err := pm.retriever.deliver(p, deliverMsg)
 		if err != nil {
 			p.responseErrors++
 			if p.responseErrors > maxResponseErrors {
