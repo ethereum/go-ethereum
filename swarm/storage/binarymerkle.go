@@ -178,6 +178,9 @@ func GetHeight(count uint64) int {
 // Count - Numers of leafs at the BMT
 // error -
 func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, count int, err error) {
+	if len(data) == 0 {
+		return nil, nil, 0, errors.New("data length is 0 ")
+	}
 	hashFunc = h
 	leafcount := len(data) / segmentsize
 	if len(data)%segmentsize != 0 {
