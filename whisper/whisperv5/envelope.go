@@ -120,7 +120,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	}
 
 	if target > 0 && bestBit < target {
-		return fmt.Errorf("Failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
+		return fmt.Errorf("failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
 	return nil

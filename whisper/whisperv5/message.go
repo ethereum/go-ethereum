@@ -168,7 +168,7 @@ func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 // encryptAsymmetric encrypts a message with a public key.
 func (msg *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 	if !ValidatePublicKey(key) {
-		return fmt.Errorf("Invalid public key provided for asymmetric encryption")
+		return fmt.Errorf("invalid public key provided for asymmetric encryption")
 	}
 	encrypted, err := ecies.Encrypt(crand.Reader, ecies.ImportECDSAPublic(key), msg.Raw, nil, nil)
 	if err == nil {
@@ -238,7 +238,7 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	} else if options.KeySym != nil {
 		salt, nonce, err = msg.encryptSymmetric(options.KeySym)
 	} else {
-		err = errors.New("Unable to encrypt the message: neither Dst nor Key")
+		err = errors.New("unable to encrypt the message: neither symmetric nor assymmmetric key provided")
 	}
 
 	if err != nil {
@@ -270,7 +270,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []by
 		return err
 	}
 	if len(nonce) != aesgcm.NonceSize() {
-		info := fmt.Sprintf("Wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
+		info := fmt.Sprintf("wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
 		log.Error(info)
 		return errors.New(info)
 	}
@@ -342,7 +342,7 @@ func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 
 	pub, err := crypto.SigToPub(msg.hash(), msg.Signature)
 	if err != nil {
-		log.Error(fmt.Sprintf("Could not get public key from signature: %v", err))
+		log.Error(fmt.Sprintf("could not get public key from signature: %v", err))
 		return nil
 	}
 	return pub

@@ -138,18 +138,6 @@ func (api *PublicWhisperAPI) GetPublicKey(id string) (hexutil.Bytes, error) {
 	return crypto.FromECDSAPub(&key.PublicKey), nil
 }
 
-// todo: delete is tests pass
-//func (api *PublicWhisperAPI) GetPublicKey(id string) (string, error) {
-//	if api.whisper == nil {
-//		return "", whisperOffLineErr
-//	}
-//	key, err := api.whisper.GetPrivateKey(id)
-//	if err != nil {
-//		return "", err
-//	}
-//	return common.ToHex(crypto.FromECDSAPub(&key.PublicKey)), nil
-//}
-
 // GetPrivateKey returns the private key for identity id
 func (api *PublicWhisperAPI) GetPrivateKey(id string) (string, error) {
 	if api.whisper == nil {
@@ -208,20 +196,6 @@ func (api *PublicWhisperAPI) GetSymmetricKey(name string) (hexutil.Bytes, error)
 	}
 	return b, nil
 }
-
-// todo: delete if tests pass
-//func (api *PublicWhisperAPI) GetSymmetricKey(name string) (string, error) {
-//	if api.whisper == nil {
-//		return "", whisperOffLineErr
-//	}
-//
-//	b, err := api.whisper.GetSymKey(name)
-//	if err != nil {
-//		return "", err
-//	}
-//	//return fmt.Sprintf("%x", b), nil // todo: delete if tests pass
-//	return common.ToHex(b), nil
-//}
 
 // DeleteSymmetricKey deletes the key associated with the name string if it exists.
 func (api *PublicWhisperAPI) DeleteSymmetricKey(name string) (bool, error) {

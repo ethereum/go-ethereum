@@ -132,7 +132,7 @@ func (w *Whisper) Version() uint {
 // SetMaxMessageLength sets the maximal message length allowed by this node
 func (w *Whisper) SetMaxMessageLength(val int) error {
 	if val <= 0 {
-		return fmt.Errorf("Invalid message length: %d", val)
+		return fmt.Errorf("invalid message length: %d", val)
 	}
 	w.maxMsgLength = val
 	return nil
@@ -141,7 +141,7 @@ func (w *Whisper) SetMaxMessageLength(val int) error {
 // SetMinimumPoW sets the minimal PoW required by this node
 func (w *Whisper) SetMinimumPoW(val float64) error {
 	if val <= 0.0 {
-		return fmt.Errorf("Invalid PoW: %f", val)
+		return fmt.Errorf("invalid PoW: %f", val)
 	}
 	w.minPoW = val
 	return nil
@@ -190,7 +190,6 @@ func (w *Whisper) SendP2PMessage(peerID []byte, envelope *Envelope) error {
 	if err != nil {
 		return err
 	}
-	//return p2p.Send(p.ws, p2pCode, envelope) // todo: delete if tests pass
 	return w.SendP2PDirect(p, envelope)
 }
 
@@ -210,19 +209,19 @@ func (w *Whisper) NewKeyPair() (string, error) {
 		return "", err
 	}
 	if !validatePrivateKey(key) {
-		return "", fmt.Errorf("Failed to generate valid key")
+		return "", fmt.Errorf("failed to generate valid key")
 	}
 
 	id, err := GenerateRandomID()
 	if err != nil {
-		return "", fmt.Errorf("Failed to generate ID: %s", err)
+		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
 
 	if w.privateKeys[id] != nil {
-		return "", fmt.Errorf("Failed to generate unique ID")
+		return "", fmt.Errorf("failed to generate unique ID")
 	}
 	w.privateKeys[id] = key
 	return id, nil
@@ -254,7 +253,7 @@ func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	defer w.keyMu.RUnlock()
 	key := w.privateKeys[id]
 	if key == nil {
-		return nil, fmt.Errorf("GetPrivateKey: invalid id")
+		return nil, fmt.Errorf("invalid id")
 	}
 	return key, nil
 }
@@ -282,14 +281,14 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 
 	id, err := GenerateRandomID()
 	if err != nil {
-		return "", fmt.Errorf("Failed to generate ID: %s", err)
+		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
 
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("Failed to generate unique ID")
+		return "", fmt.Errorf("failed to generate unique ID")
 	}
 	w.symKeys[id] = derived
 	return id, nil
@@ -298,19 +297,19 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 // AddSymKeyDirect stores the key, and returns its id.
 func (w *Whisper) AddSymKeyDirect(key []byte) (string, error) {
 	if len(key) != aesKeyLength {
-		return "", fmt.Errorf("Wrong key size: %d", len(key))
+		return "", fmt.Errorf("wrong key size: %d", len(key))
 	}
 
 	id, err := GenerateRandomID()
 	if err != nil {
-		return "", fmt.Errorf("Failed to generate ID: %s", err)
+		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
 
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("Failed to generate unique ID")
+		return "", fmt.Errorf("failed to generate unique ID")
 	}
 	w.symKeys[id] = key
 	return id, nil
@@ -320,10 +319,10 @@ func (w *Whisper) AddSymKeyDirect(key []byte) (string, error) {
 func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 	id, err := GenerateRandomID()
 	if err != nil {
-		return "", fmt.Errorf("Failed to generate ID: %s", err)
+		return "", fmt.Errorf("failed to generate ID: %s", err)
 	}
 	if w.HasSymKey(id) {
-		return "", fmt.Errorf("Failed to generate unique ID")
+		return "", fmt.Errorf("failed to generate unique ID")
 	}
 
 	derived, err := deriveKeyMaterial([]byte(password), EnvelopeVersion)
@@ -336,7 +335,7 @@ func (w *Whisper) AddSymKeyFromPassword(password string) (string, error) {
 
 	// double check is necessary, because deriveKeyMaterial() is very slow
 	if w.symKeys[id] != nil {
-		return "", fmt.Errorf("Severe error: failed to generate unique ID")
+		return "", fmt.Errorf("critical error: failed to generate unique ID")
 	}
 	w.symKeys[id] = derived
 	return id, nil
@@ -749,7 +748,7 @@ func (s *Statistics) reset() {
 func ValidateKeyID(id string) error {
 	const target = keyIdSize * 2
 	if len(id) != target {
-		return fmt.Errorf("Wrong size of key ID (expected %d bytes, got %d)", target, len(id))
+		return fmt.Errorf("wrong size of key ID (expected %d bytes, got %d)", target, len(id))
 	}
 	return nil
 }
