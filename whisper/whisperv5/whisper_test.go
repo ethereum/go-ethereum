@@ -92,8 +92,8 @@ func TestWhisperBasic(t *testing.T) {
 	}
 
 	buf := []byte{0xFF, 0xE5, 0x80, 0x2, 0}
-	le := bytesToIntLittleEndian(buf)
-	be := BytesToIntBigEndian(buf)
+	le := bytesToUintLittleEndian(buf)
+	be := BytesToUintBigEndian(buf)
 	if le != uint64(0x280e5ff) {
 		t.Fatalf("failed bytesToIntLittleEndian: %d.", le)
 	}
@@ -565,7 +565,7 @@ func TestCustomization(t *testing.T) {
 	}
 
 	// check w.messages()
-	id, err := w.Watch(f)
+	id, err := w.Subscribe(f)
 	time.Sleep(5 * time.Millisecond)
 	mail := f.Retrieve()
 	if len(mail) > 0 {

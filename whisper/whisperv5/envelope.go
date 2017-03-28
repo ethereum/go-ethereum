@@ -82,7 +82,7 @@ func (e *Envelope) isAsymmetric() bool {
 }
 
 func (e *Envelope) Ver() uint64 {
-	return bytesToIntLittleEndian(e.Version)
+	return bytesToUintLittleEndian(e.Version)
 }
 
 // Seal closes the envelope by spending the requested amount of time as a proof

@@ -261,7 +261,7 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 		}
 	}
 
-	return api.whisper.Watch(&filter)
+	return api.whisper.Subscribe(&filter)
 }
 
 // Unsubscribe disables and removes an existing filter.
@@ -380,25 +380,25 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 }
 
 type PostArgs struct {
-	Type       string        `json:"type"`
-	TTL        uint32        `json:"ttl"`
-	SignWith   string        `json:"signWith"`
-	Key        string        `json:"key"`
-	Topic      hexutil.Bytes `json:"topic"`
-	Padding    hexutil.Bytes `json:"padding"`
-	Payload    hexutil.Bytes `json:"payload"`
-	PowTime    uint32        `json:"powTime"`
-	PowTarget  float64       `json:"powTarget"`
-	TargetPeer string        `json:"targetPeer"`
+	Type       string        `json:"type"`       // "sym"/"asym" (symmetric or asymmetric)
+	TTL        uint32        `json:"ttl"`        // time-to-live in seconds
+	SignWith   string        `json:"signWith"`   // id of the signing key
+	Key        string        `json:"key"`        // id of encryption key
+	Topic      hexutil.Bytes `json:"topic"`      // topic (4 bytes)
+	Padding    hexutil.Bytes `json:"padding"`    // optional padding bytes
+	Payload    hexutil.Bytes `json:"payload"`    // payload to be encrypted
+	PowTime    uint32        `json:"powTime"`    // maximal time in seconds to be spent on PoW
+	PowTarget  float64       `json:"powTarget"`  // minimal PoW required for this message
+	TargetPeer string        `json:"targetPeer"` // peer id (for p2p message only)
 }
 
 type WhisperFilterArgs struct {
-	Symmetric  bool
-	Key        string
-	SignedWith string
-	MinPoW     float64
-	Topics     [][]byte
-	AllowP2P   bool
+	Symmetric  bool     // encryption type
+	Key        string   // id of the key to be used for decryption
+	SignedWith string   // public key of the sender to be verified
+	MinPoW     float64  // minimal PoW requirement
+	Topics     [][]byte // list of topics (up to 4 bytes each) to match
+	AllowP2P   bool     // indicates wheather direct p2p messages are allowed for this filter
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface, invoked to convert a

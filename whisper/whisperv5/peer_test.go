@@ -120,7 +120,7 @@ func initialize(t *testing.T) {
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey}
 		f.Topics = [][]byte{topics[0][:]}
-		node.filerId, err = node.shh.Watch(&f)
+		node.filerId, err = node.shh.Subscribe(&f)
 		if err != nil {
 			t.Fatalf("failed to install the filter: %s.", err)
 		}

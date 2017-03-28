@@ -358,7 +358,7 @@ func configureNode() {
 		Topics:   [][]byte{topic},
 		AllowP2P: p2pAccept,
 	}
-	filterID, err = shh.Watch(&filter)
+	filterID, err = shh.Subscribe(&filter)
 	if err != nil {
 		utils.Fatalf("Failed to install filter: %s", err)
 	}

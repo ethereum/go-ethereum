@@ -74,7 +74,6 @@ type Whisper struct {
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
-// Param s should be passed if you want to implement mail server, otherwise nil.
 func New() *Whisper {
 	whisper := &Whisper{
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
@@ -147,6 +146,7 @@ func (w *Whisper) SetMinimumPoW(val float64) error {
 	return nil
 }
 
+// getPeer retrieves peer by ID
 func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
 	w.peerMu.Lock()
 	defer w.peerMu.Unlock()
@@ -159,8 +159,8 @@ func (w *Whisper) getPeer(peerID []byte) (*Peer, error) {
 	return nil, fmt.Errorf("Could not find peer with ID: %x", peerID)
 }
 
-// MarkPeerTrusted marks specific peer trusted, which will allow it
-// to send historic (expired) messages.
+// AllowP2PMessagesFromPeer marks specific peer trusted,
+// which will allow it to send historic (expired) messages.
 func (w *Whisper) AllowP2PMessagesFromPeer(peerID []byte) error {
 	p, err := w.getPeer(peerID)
 	if err != nil {
@@ -198,7 +198,7 @@ func (w *Whisper) SendP2PDirect(peer *Peer, envelope *Envelope) error {
 	return p2p.Send(peer.ws, p2pCode, envelope)
 }
 
-// NewIdentity generates a new cryptographic identity for the client, and injects
+// NewKeyPair generates a new cryptographic identity for the client, and injects
 // it into the known identities for message decryption. Returns ID of the new key pair.
 func (w *Whisper) NewKeyPair() (string, error) {
 	key, err := crypto.GenerateKey()
@@ -227,7 +227,7 @@ func (w *Whisper) NewKeyPair() (string, error) {
 	return id, nil
 }
 
-// DeleteIdentity deletes the specified key if it exists.
+// DeleteKeyPair deletes the specified key if it exists.
 func (w *Whisper) DeleteKeyPair(key string) bool {
 	w.keyMu.Lock()
 	defer w.keyMu.Unlock()
@@ -239,7 +239,7 @@ func (w *Whisper) DeleteKeyPair(key string) bool {
 	return false
 }
 
-// HasIdentity checks if the the whisper node is configured with the private key
+// HasKeyPair checks if the the whisper node is configured with the private key
 // of the specified public pair.
 func (w *Whisper) HasKeyPair(id string) bool {
 	w.keyMu.RLock()
@@ -247,7 +247,7 @@ func (w *Whisper) HasKeyPair(id string) bool {
 	return w.privateKeys[id] != nil
 }
 
-// GetIdentity retrieves the private key of the specified identity.
+// GetPrivateKey retrieves the private key of the specified identity.
 func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 	w.keyMu.RLock()
 	defer w.keyMu.RUnlock()
@@ -370,9 +370,9 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 	return nil, fmt.Errorf("non-existent key ID")
 }
 
-// Watch installs a new message handler used for filtering, decrypting
+// Subscribe installs a new message handler used for filtering, decrypting
 // and subsequent storing of incoming messages.
-func (w *Whisper) Watch(f *Filter) (string, error) {
+func (w *Whisper) Subscribe(f *Filter) (string, error) {
 	return w.filters.Install(f)
 }
 
@@ -422,7 +422,7 @@ func (w *Whisper) Stop() error {
 	return nil
 }
 
-// handlePeer is called by the underlying P2P layer when the whisper sub-protocol
+// HandlePeer is called by the underlying P2P layer when the whisper sub-protocol
 // connection is negotiated.
 func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	// Create the new peer and start tracking it
@@ -696,7 +696,7 @@ func (w *Whisper) Stats() string {
 	return result
 }
 
-// envelopes retrieves all the messages currently pooled by the node.
+// Envelopes retrieves all the messages currently pooled by the node.
 func (w *Whisper) Envelopes() []*Envelope {
 	w.poolMu.RLock()
 	defer w.poolMu.RUnlock()
@@ -781,8 +781,8 @@ func containsOnlyZeros(data []byte) bool {
 	return true
 }
 
-// bytesToIntLittleEndian converts the slice to 64-bit unsigned integer.
-func bytesToIntLittleEndian(b []byte) (res uint64) {
+// bytesToUintLittleEndian converts the slice to 64-bit unsigned integer.
+func bytesToUintLittleEndian(b []byte) (res uint64) {
 	mul := uint64(1)
 	for i := 0; i < len(b); i++ {
 		res += uint64(b[i]) * mul
@@ -791,8 +791,8 @@ func bytesToIntLittleEndian(b []byte) (res uint64) {
 	return res
 }
 
-// BytesToIntBigEndian converts the slice to 64-bit unsigned integer.
-func BytesToIntBigEndian(b []byte) (res uint64) {
+// BytesToUintBigEndian converts the slice to 64-bit unsigned integer.
+func BytesToUintBigEndian(b []byte) (res uint64) {
 	for i := 0; i < len(b); i++ {
 		res *= 256
 		res += uint64(b[i])
@@ -800,7 +800,7 @@ func BytesToIntBigEndian(b []byte) (res uint64) {
 	return res
 }
 
-// DeriveSymmetricKey derives symmetric key material from the key or password.
+// deriveKeyMaterial derives symmetric key material from the key or password.
 // pbkdf2 is used for security, in case people use password instead of randomly generated keys.
 func deriveKeyMaterial(key []byte, version uint64) (derivedKey []byte, err error) {
 	if version == 0 {

@@ -327,7 +327,7 @@ func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
 	paddingSize := 0
 	sz := int(msg.Raw[0] & paddingMask) // number of bytes containing the entire size of padding, could be zero
 	if sz != 0 {
-		paddingSize = int(bytesToIntLittleEndian(msg.Raw[1 : 1+sz]))
+		paddingSize = int(bytesToUintLittleEndian(msg.Raw[1 : 1+sz]))
 		if paddingSize < sz || paddingSize+1 > end {
 			return 0, false
 		}
