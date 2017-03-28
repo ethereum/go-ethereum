@@ -691,7 +691,7 @@ func TestVariableTopics(t *testing.T) {
 
 	for i := 0; i < 4; i++ {
 		arr := make([]byte, i+1, 4)
-		copy(arr, env.Topic[0:i+1])
+		copy(arr, env.Topic[:i+1])
 
 		f.Topics[4] = arr
 		match = f.MatchEnvelope(env)

@@ -148,7 +148,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("failed GetSymKey(id2): %s.", err)
 	}
 
-	if k1 != k2 {
+	if !bytes.Equal(k1, k2) {
 		t.Fatalf("installed keys are not equal")
 	}
 
@@ -347,7 +347,7 @@ func TestIntegrationAsym(t *testing.T) {
 	var f WhisperFilterArgs
 	f.Symmetric = false
 	f.Key = key
-	f.SignedWith = sigPubKey
+	f.SignedWith = sigPubKey.String()
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
@@ -363,7 +363,7 @@ func TestIntegrationAsym(t *testing.T) {
 	p.Type = "asym"
 	p.TTL = 2
 	p.SignWith = sig
-	p.Key = dstPubKey
+	p.Key = dstPubKey.String()
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
 	p.PowTarget = DefaultMinimumPoW
@@ -449,7 +449,7 @@ func TestIntegrationSym(t *testing.T) {
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
 	f.MinPoW = 0.324
-	f.SignedWith = sigPubKey
+	f.SignedWith = sigPubKey.String()
 	f.AllowP2P = false
 
 	id, err := api.Subscribe(f)
@@ -547,7 +547,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
 	f.MinPoW = 0.324
-	f.SignedWith = sigPubKey
+	f.SignedWith = sigPubKey.String()
 	f.AllowP2P = false
 
 	id, err := api.Subscribe(f)
@@ -616,8 +616,7 @@ func TestKey(t *testing.T) {
 		t.Fatalf("failed to get sym key: %s.", err)
 	}
 
-	b := common.FromHex(s)
-	k2, err := api.AddSymmetricKeyDirect(b)
+	k2, err := api.AddSymmetricKeyDirect(s)
 	if err != nil {
 		t.Fatalf("failed to add sym key: %s.", err)
 	}
@@ -627,11 +626,11 @@ func TestKey(t *testing.T) {
 		t.Fatalf("failed to get sym key: %s.", err)
 	}
 
-	if s != "448652d595bd6ec00b2a9ea220ad6c26592d9bf4cf79023d3c1b30cb681e6e07" {
-		t.Fatalf("wrong key from password")
+	if s.String() != "0x448652d595bd6ec00b2a9ea220ad6c26592d9bf4cf79023d3c1b30cb681e6e07" {
+		t.Fatalf("wrong key from password: %s", s.String())
 	}
 
-	if s != s2 {
+	if !bytes.Equal(s, s2) {
 		t.Fatalf("wrong key")
 	}
 }
