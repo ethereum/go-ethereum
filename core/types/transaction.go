@@ -40,7 +40,7 @@ var (
 // deriveSigner makes a *best* guess about which signer to use.
 func deriveSigner(V *big.Int) Signer {
 	if V.Sign() != 0 && isProtectedV(V) {
-		return EIP155Signer{chainId: deriveChainId(V)}
+		return NewEIP155Signer(deriveChainId(V))
 	} else {
 		return HomesteadSigner{}
 	}
