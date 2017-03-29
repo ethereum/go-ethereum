@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
@@ -43,7 +43,7 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
+func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan error) {
 	fd1, fd2 := net.Pipe()
 	c1 := &conn{fd: fd1, transport: newTestTransport(randomID(), fd1)}
 	c2 := &conn{fd: fd2, transport: newTestTransport(randomID(), fd2)}
@@ -53,15 +53,17 @@ func testPeer(protos []Protocol) (func(), *conn, *Peer, <-chan DiscReason) {
 	}
 
 	peer := newPeer(c1, protos)
-	errc := make(chan DiscReason, 1)
-	go func() { errc <- peer.run() }()
+	errc := make(chan error, 1)
+	go func() {
+		_, err := peer.run()
+		errc <- err
+	}()
 
 	closer := func() { c2.close(errors.New("close func called")) }
 	return closer, c2, peer, errc
 }
 
 func TestPeerProtoReadMsg(t *testing.T) {
-	done := make(chan struct{})
 	proto := Protocol{
 		Name:   "a",
 		Length: 5,
@@ -75,7 +77,6 @@ func TestPeerProtoReadMsg(t *testing.T) {
 			if err := ExpectMsg(rw, 4, []uint{3}); err != nil {
 				t.Error(err)
 			}
-			close(done)
 			return nil
 		},
 	}
@@ -88,9 +89,10 @@ func TestPeerProtoReadMsg(t *testing.T) {
 	Send(rw, baseProtocolLength+4, []uint{3})
 
 	select {
-	case <-done:
 	case err := <-errc:
-		t.Errorf("peer returned: %v", err)
+		if err != errProtocolReturned {
+			t.Errorf("peer returned error: %v", err)
+		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("receive timeout")
 	}
@@ -137,8 +139,8 @@ func TestPeerDisconnect(t *testing.T) {
 	}
 	select {
 	case reason := <-disc:
-		if reason != DiscRequested {
-			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscRequested)
+		if reason != DiscQuitting {
+			t.Errorf("run returned wrong reason: got %v, want %v", reason, DiscQuitting)
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Error("peer did not return")
@@ -299,7 +301,7 @@ func TestMatchProtocols(t *testing.T) {
 			}
 		}
 		// Make sure no protocols missed negotiation
-		for name, _ := range tt.Match {
+		for name := range tt.Match {
 			if _, ok := result[name]; !ok {
 				t.Errorf("test %d, proto '%s': not negotiated, should have", i, name)
 				continue

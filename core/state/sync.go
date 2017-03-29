@@ -21,7 +21,6 @@ import (
 	"math/big"
 
 	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
 )
@@ -32,7 +31,7 @@ import (
 type StateSync trie.TrieSync
 
 // NewStateSync create a new state trie download scheduler.
-func NewStateSync(root common.Hash, database ethdb.Database) *StateSync {
+func NewStateSync(root common.Hash, database trie.DatabaseReader) *StateSync {
 	var syncer *trie.TrieSync
 
 	callback := func(leaf []byte, parent common.Hash) error {
@@ -59,9 +58,11 @@ func (s *StateSync) Missing(max int) []common.Hash {
 	return (*trie.TrieSync)(s).Missing(max)
 }
 
-// Process injects a batch of retrieved trie nodes data.
-func (s *StateSync) Process(list []trie.SyncResult) (int, error) {
-	return (*trie.TrieSync)(s).Process(list)
+// Process injects a batch of retrieved trie nodes data, returning if something
+// was committed to the database and also the index of an entry if processing of
+// it failed.
+func (s *StateSync) Process(list []trie.SyncResult, dbw trie.DatabaseWriter) (bool, int, error) {
+	return (*trie.TrieSync)(s).Process(list, dbw)
 }
 
 // Pending returns the number of state entries currently pending for download.

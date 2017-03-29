@@ -1,20 +1,20 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package rle implements the run-length encoding used for Expanse data.
+// Package rle implements the run-length encoding used for Ethereum data.
 package rle
 
 import (
@@ -76,9 +76,9 @@ func compressChunk(dat []byte) (ret []byte, n int) {
 		}
 		return []byte{token, byte(j + 2)}, j
 	case len(dat) >= 32:
-		if dat[0] == empty[0] && bytes.Compare(dat[:32], empty) == 0 {
+		if dat[0] == empty[0] && bytes.Equal(dat[:32], empty) {
 			return []byte{token, emptyShaToken}, 32
-		} else if dat[0] == emptyList[0] && bytes.Compare(dat[:32], emptyList) == 0 {
+		} else if dat[0] == emptyList[0] && bytes.Equal(dat[:32], emptyList) {
 			return []byte{token, emptyListShaToken}, 32
 		}
 		fallthrough

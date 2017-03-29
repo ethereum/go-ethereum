@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rpc"
 )
 
@@ -37,7 +38,7 @@ func TestConsoleWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
 	// Start a gexp console, make sure it's cleaned up and terminate the console
-	gexp := runGexp(t,
+	gexp := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--shh",
 		"console")
@@ -45,7 +46,7 @@ func TestConsoleWelcome(t *testing.T) {
 	// Gather all the infos the welcome message needs to contain
 	gexp.setTemplateFunc("goos", func() string { return runtime.GOOS })
 	gexp.setTemplateFunc("gover", runtime.Version)
-	gexp.setTemplateFunc("gexpver", func() string { return verString })
+	gexp.setTemplateFunc("gethver", func() string { return params.Version })
 	gexp.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	gexp.setTemplateFunc("apis", func() []string {
 		apis := append(strings.Split(rpc.DefaultIPCApis, ","), rpc.MetadataApi)
@@ -57,7 +58,7 @@ func TestConsoleWelcome(t *testing.T) {
 	gexp.expect(`
 Welcome to the Gexp JavaScript console!
 
-instance: Gexp/v{{gexpver}}/{{goos}}/{{gover}}
+instance: Gexp/v{{gethver}}/{{goos}}/{{gover}}
 coinbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
@@ -82,7 +83,7 @@ func TestIPCAttachWelcome(t *testing.T) {
 	}
 	// Note: we need --shh because testAttachWelcome checks for default
 	// list of ipc modules and shh is included there.
-	gexp := runGexp(t,
+	gexp := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--shh", "--ipcpath", ipc)
 
@@ -95,9 +96,8 @@ func TestIPCAttachWelcome(t *testing.T) {
 
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
-
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
-	gexp := runGexp(t,
+	gexp := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
@@ -112,7 +112,7 @@ func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
-	gexp := runGexp(t,
+	gexp := runGeth(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ws", "--wsport", port)
 
@@ -123,16 +123,16 @@ func TestWSAttachWelcome(t *testing.T) {
 	gexp.expectExit()
 }
 
-func testAttachWelcome(t *testing.T, gexp *testgexp, endpoint string) {
+func testAttachWelcome(t *testing.T, gexp *testgeth, endpoint string) {
 	// Attach to a running gexp note and terminate immediately
-	attach := runGexp(t, "attach", endpoint)
+	attach := runGeth(t, "attach", endpoint)
 	defer attach.expectExit()
 	attach.stdin.Close()
 
 	// Gather all the infos the welcome message needs to contain
 	attach.setTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.setTemplateFunc("gover", runtime.Version)
-	attach.setTemplateFunc("gexpver", func() string { return verString })
+	attach.setTemplateFunc("gethver", func() string { return params.Version })
 	attach.setTemplateFunc("etherbase", func() string { return gexp.Etherbase })
 	attach.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	attach.setTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
@@ -152,7 +152,7 @@ func testAttachWelcome(t *testing.T, gexp *testgexp, endpoint string) {
 	attach.expect(`
 Welcome to the Gexp JavaScript console!
 
-instance: Gexp/v{{gexpver}}/{{goos}}/{{gover}}
+instance: Gexp/v{{gethver}}/{{goos}}/{{gover}}
 coinbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}

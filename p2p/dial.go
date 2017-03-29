@@ -1,31 +1,32 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
 import (
 	"container/heap"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net"
 	"time"
 
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p/netutil"
 )
 
 const (
@@ -48,6 +49,7 @@ const (
 type dialstate struct {
 	maxDynDials int
 	ntab        discoverTable
+	netrestrict *netutil.Netlist
 
 	lookupRunning bool
 	dialing       map[discover.NodeID]connFlag
@@ -100,10 +102,11 @@ type waitExpireTask struct {
 	time.Duration
 }
 
-func newDialState(static []*discover.Node, ntab discoverTable, maxdyn int) *dialstate {
+func newDialState(static []*discover.Node, ntab discoverTable, maxdyn int, netrestrict *netutil.Netlist) *dialstate {
 	s := &dialstate{
 		maxDynDials: maxdyn,
 		ntab:        ntab,
+		netrestrict: netrestrict,
 		static:      make(map[discover.NodeID]*dialTask),
 		dialing:     make(map[discover.NodeID]connFlag),
 		randomNodes: make([]*discover.Node, maxdyn/2),
@@ -121,14 +124,16 @@ func (s *dialstate) addStatic(n *discover.Node) {
 	s.static[n.ID] = &dialTask{flags: staticDialedConn, dest: n}
 }
 
+func (s *dialstate) removeStatic(n *discover.Node) {
+	// This removes a task so future attempts to connect will not be made.
+	delete(s.static, n.ID)
+}
+
 func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now time.Time) []task {
 	var newtasks []task
-	isDialing := func(id discover.NodeID) bool {
-		_, found := s.dialing[id]
-		return found || peers[id] != nil || s.hist.contains(id)
-	}
 	addDial := func(flag connFlag, n *discover.Node) bool {
-		if isDialing(n.ID) {
+		if err := s.checkDial(n, peers); err != nil {
+			log.Trace("Skipping dial candidate", "id", n.ID, "addr", &net.TCPAddr{IP: n.IP, Port: int(n.TCP)}, "err", err)
 			return false
 		}
 		s.dialing[n.ID] = flag
@@ -154,7 +159,12 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 
 	// Create dials for static nodes if they are not connected.
 	for id, t := range s.static {
-		if !isDialing(id) {
+		err := s.checkDial(t.dest, peers)
+		switch err {
+		case errNotWhitelisted, errSelf:
+			log.Warn("Removing static dial candidate", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP, Port: int(t.dest.TCP)}, "err", err)
+			delete(s.static, t.dest.ID)
+		case nil:
 			s.dialing[id] = t.flags
 			newtasks = append(newtasks, t)
 		}
@@ -197,6 +207,31 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 	return newtasks
 }
 
+var (
+	errSelf             = errors.New("is self")
+	errAlreadyDialing   = errors.New("already dialing")
+	errAlreadyConnected = errors.New("already connected")
+	errRecentlyDialed   = errors.New("recently dialed")
+	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
+)
+
+func (s *dialstate) checkDial(n *discover.Node, peers map[discover.NodeID]*Peer) error {
+	_, dialing := s.dialing[n.ID]
+	switch {
+	case dialing:
+		return errAlreadyDialing
+	case peers[n.ID] != nil:
+		return errAlreadyConnected
+	case s.ntab != nil && n.ID == s.ntab.Self().ID:
+		return errSelf
+	case s.netrestrict != nil && !s.netrestrict.Contains(n.IP):
+		return errNotWhitelisted
+	case s.hist.contains(n.ID):
+		return errRecentlyDialed
+	}
+	return nil
+}
+
 func (s *dialstate) taskDone(t task, now time.Time) {
 	switch t := t.(type) {
 	case *dialTask:
@@ -231,7 +266,7 @@ func (t *dialTask) Do(srv *Server) {
 // The backoff delay resets when the node is found.
 func (t *dialTask) resolve(srv *Server) bool {
 	if srv.ntab == nil {
-		glog.V(logger.Debug).Infof("can't resolve node %x: discovery is disabled", t.dest.ID[:6])
+		log.Debug("Can't resolve node", "id", t.dest.ID, "err", "discovery is disabled")
 		return false
 	}
 	if t.resolveDelay == 0 {
@@ -247,23 +282,22 @@ func (t *dialTask) resolve(srv *Server) bool {
 		if t.resolveDelay > maxResolveDelay {
 			t.resolveDelay = maxResolveDelay
 		}
-		glog.V(logger.Debug).Infof("resolving node %x failed (new delay: %v)", t.dest.ID[:6], t.resolveDelay)
+		log.Debug("Resolving node failed", "id", t.dest.ID, "newdelay", t.resolveDelay)
 		return false
 	}
 	// The node was found.
 	t.resolveDelay = initialResolveDelay
 	t.dest = resolved
-	glog.V(logger.Debug).Infof("resolved node %x: %v:%d", t.dest.ID[:6], t.dest.IP, t.dest.TCP)
+	log.Debug("Resolved node", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP, Port: int(t.dest.TCP)})
 	return true
 }
 
 // dial performs the actual connection attempt.
 func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
 	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
-	glog.V(logger.Debug).Infof("dial tcp %v (%x)\n", addr, dest.ID[:6])
 	fd, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
-		glog.V(logger.Detail).Infof("%v", err)
+		log.Trace("Dial error", "task", t, "err", err)
 		return false
 	}
 	mfd := newMeteredConn(fd, false)

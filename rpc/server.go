@@ -17,26 +17,29 @@
 package rpc
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"runtime"
+	"sync"
 	"sync/atomic"
-	"time"
 
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
 	"golang.org/x/net/context"
+=======
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> rebase-1.5.9
 	"gopkg.in/fatih/set.v0"
 )
 
 const (
-	stopPendingRequestTimeout = 3 * time.Second // give pending requests stopPendingRequestTimeout the time to finish when the server is stopped
-
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
 	MetadataApi     = "rpc"
-	DefaultIPCApis  = "admin,debug,exp,eth,miner,net,personal,shh,txpool,web3"
-	DefaultHTTPApis = "exp,eth,net,web3"
+	DefaultIPCApis  = "admin,debug,eth,exp,miner,net,personal,shh,txpool,web3"
+	DefaultHTTPApis = "eth,exp,net,web3"
 )
 
 // CodecOption specifies which type of messages this codec supports
@@ -82,7 +85,7 @@ func (s *RPCService) Modules() map[string]string {
 	return modules
 }
 
-// RegisterName will create an service for the given rcvr type under the given name. When no methods on the given rcvr
+// RegisterName will create a service for the given rcvr type under the given name. When no methods on the given rcvr
 // match the criteria to be either a RPC method or a subscription an error is returned. Otherwise a new service is
 // created and added to the service collection this server instance serves.
 func (s *Server) RegisterName(name string, rcvr interface{}) error {
@@ -147,14 +150,15 @@ func hasOption(option CodecOption, options []CodecOption) bool {
 // requests until the codec returns an error when reading a request (in most cases
 // an EOF). It executes requests in parallel when singleShot is false.
 func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecOption) error {
+	var pend sync.WaitGroup
+
 	defer func() {
 		if err := recover(); err != nil {
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			glog.Errorln(string(buf))
+			log.Error(fmt.Sprint(string(buf)))
 		}
-
 		s.codecsMu.Lock()
 		s.codecs.Remove(codec)
 		s.codecsMu.Unlock()
@@ -169,7 +173,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 	// to send notification to clients. It is thight to the codec/connection. If the
 	// connection is closed the notifier will stop and cancels all active subscriptions.
 	if options&OptionSubscriptions == OptionSubscriptions {
-		ctx = context.WithValue(ctx, notifierKey{}, newBufferedNotifier(codec, notificationBufferSize))
+		ctx = context.WithValue(ctx, notifierKey{}, newNotifier(codec))
 	}
 	s.codecsMu.Lock()
 	if atomic.LoadInt32(&s.run) != 1 { // server stopped
@@ -183,8 +187,13 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 	for atomic.LoadInt32(&s.run) == 1 {
 		reqs, batch, err := s.readRequest(codec)
 		if err != nil {
-			glog.V(logger.Debug).Infof("%v\n", err)
-			codec.Write(codec.CreateErrorResponse(nil, err))
+			// If a parsing error occurred, send an error
+			if err.Error() != "EOF" {
+				log.Debug(fmt.Sprintf("read error %v\n", err))
+				codec.Write(codec.CreateErrorResponse(nil, err))
+			}
+			// Error or end of stream, wait for requests and tear down
+			pend.Wait()
 			return nil
 		}
 
@@ -203,20 +212,27 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 			}
 			return nil
 		}
-
-		if singleShot && batch {
-			s.execBatch(ctx, codec, reqs)
+		// If a single shot request is executing, run and return immediately
+		if singleShot {
+			if batch {
+				s.execBatch(ctx, codec, reqs)
+			} else {
+				s.exec(ctx, codec, reqs[0])
+			}
 			return nil
-		} else if singleShot && !batch {
-			s.exec(ctx, codec, reqs[0])
-			return nil
-		} else if !singleShot && batch {
-			go s.execBatch(ctx, codec, reqs)
-		} else {
-			go s.exec(ctx, codec, reqs[0])
 		}
-	}
+		// For multi-shot connections, start a goroutine to serve and loop back
+		pend.Add(1)
 
+		go func(reqs []*serverRequest, batch bool) {
+			defer pend.Done()
+			if batch {
+				s.execBatch(ctx, codec, reqs)
+			} else {
+				s.exec(ctx, codec, reqs[0])
+			}
+		}(reqs, batch)
+	}
 	return nil
 }
 
@@ -236,23 +252,21 @@ func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
 }
 
 // Stop will stop reading new requests, wait for stopPendingRequestTimeout to allow pending requests to finish,
-// close all codecs which will cancels pending requests/subscriptions.
+// close all codecs which will cancel pending requests/subscriptions.
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
-		glog.V(logger.Debug).Infoln("RPC Server shutdown initiatied")
-		time.AfterFunc(stopPendingRequestTimeout, func() {
-			s.codecsMu.Lock()
-			defer s.codecsMu.Unlock()
-			s.codecs.Each(func(c interface{}) bool {
-				c.(ServerCodec).Close()
-				return true
-			})
+		log.Debug(fmt.Sprint("RPC Server shutdown initiatied"))
+		s.codecsMu.Lock()
+		defer s.codecsMu.Unlock()
+		s.codecs.Each(func(c interface{}) bool {
+			c.(ServerCodec).Close()
+			return true
 		})
 	}
 }
 
 // createSubscription will call the subscription callback and returns the subscription id or error.
-func (s *Server) createSubscription(ctx context.Context, c ServerCodec, req *serverRequest) (string, error) {
+func (s *Server) createSubscription(ctx context.Context, c ServerCodec, req *serverRequest) (ID, error) {
 	// subscription have as first argument the context following optional arguments
 	args := []reflect.Value{req.callb.rcvr, reflect.ValueOf(ctx)}
 	args = append(args, req.args...)
@@ -262,7 +276,7 @@ func (s *Server) createSubscription(ctx context.Context, c ServerCodec, req *ser
 		return "", reply[1].Interface().(error)
 	}
 
-	return reply[0].Interface().(Subscription).ID(), nil
+	return reply[0].Interface().(*Subscription).ID, nil
 }
 
 // handle executes a request and returns the response from the callback.
@@ -278,8 +292,8 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 				return codec.CreateErrorResponse(&req.id, &callbackError{ErrNotificationsUnsupported.Error()}), nil
 			}
 
-			subid := req.args[0].String()
-			if err := notifier.Unsubscribe(subid); err != nil {
+			subid := ID(req.args[0].String())
+			if err := notifier.unsubscribe(subid); err != nil {
 				return codec.CreateErrorResponse(&req.id, &callbackError{err.Error()}), nil
 			}
 
@@ -294,10 +308,10 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 			return codec.CreateErrorResponse(&req.id, &callbackError{err.Error()}), nil
 		}
 
-		// active the subscription after the sub id was successful sent to the client
+		// active the subscription after the sub id was successfully sent to the client
 		activateSub := func() {
 			notifier, _ := NotifierFromContext(ctx)
-			notifier.(*bufferedNotifier).activate(subid)
+			notifier.activate(subid)
 		}
 
 		return codec.CreateResponse(req.id, subid), activateSub
@@ -346,7 +360,7 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 	}
 
 	if err := codec.Write(response); err != nil {
-		glog.V(logger.Error).Infof("%v\n", err)
+		log.Error(fmt.Sprintf("%v\n", err))
 		codec.Close()
 	}
 
@@ -373,7 +387,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 	}
 
 	if err := codec.Write(responses); err != nil {
-		glog.V(logger.Error).Infof("%v\n", err)
+		log.Error(fmt.Sprintf("%v\n", err))
 		codec.Close()
 	}
 
@@ -386,7 +400,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 // readRequest requests the next (batch) request from the codec. It will return the collection
 // of requests, an indication if the request was a batch, the invalid request identifier and an
 // error when the request could not be read/parsed.
-func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCError) {
+func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, Error) {
 	reqs, batch, err := codec.ReadRequestHeaders()
 	if err != nil {
 		return nil, batch, err
@@ -398,6 +412,11 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, RPCErro
 	for i, r := range reqs {
 		var ok bool
 		var svc *service
+
+		if r.err != nil {
+			requests[i] = &serverRequest{id: r.id, err: r.err}
+			continue
+		}
 
 		if r.isPubSub && r.method == unsubscribeMethod {
 			requests[i] = &serverRequest{id: r.id, isUnsubscribe: true}

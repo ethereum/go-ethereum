@@ -62,7 +62,7 @@ type serverRequest struct {
 	callb         *callback
 	args          []reflect.Value
 	isUnsubscribe bool
-	err           RPCError
+	err           Error
 }
 
 type serviceRegistry map[string]*service       // collection of services
@@ -88,14 +88,13 @@ type rpcRequest struct {
 	id       interface{}
 	isPubSub bool
 	params   interface{}
+	err      Error // invalid batch element
 }
 
-// RPCError implements RPC error, is add support for error codec over regular go errors
-type RPCError interface {
-	// RPC error code
-	Code() int
-	// Error message
-	Error() string
+// Error wraps RPC errors, which contain an error code in addition to the message.
+type Error interface {
+	Error() string  // returns the message
+	ErrorCode() int // returns the code
 }
 
 // ServerCodec implements reading, parsing and writing RPC messages for the server side of
@@ -103,15 +102,15 @@ type RPCError interface {
 // multiple go-routines concurrently.
 type ServerCodec interface {
 	// Read next request
-	ReadRequestHeaders() ([]rpcRequest, bool, RPCError)
+	ReadRequestHeaders() ([]rpcRequest, bool, Error)
 	// Parse request argument to the given types
-	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, RPCError)
+	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, Error)
 	// Assemble success response, expects response id and payload
 	CreateResponse(interface{}, interface{}) interface{}
 	// Assemble error response, expects response id and error
-	CreateErrorResponse(interface{}, RPCError) interface{}
+	CreateErrorResponse(interface{}, Error) interface{}
 	// Assemble error response with extra information about the error through info
-	CreateErrorResponseWithInfo(id interface{}, err RPCError, info interface{}) interface{}
+	CreateErrorResponseWithInfo(id interface{}, err Error, info interface{}) interface{}
 	// Create notification response
 	CreateNotification(string, interface{}) interface{}
 	// Write msg to client.
@@ -120,91 +119,6 @@ type ServerCodec interface {
 	Close()
 	// Closed when underlying connection is closed
 	Closed() <-chan interface{}
-}
-
-// HexNumber serializes a number to hex format using the "%#x" format
-type HexNumber big.Int
-
-// NewHexNumber creates a new hex number instance which will serialize the given val with `%#x` on marshal.
-func NewHexNumber(val interface{}) *HexNumber {
-	if val == nil {
-		return nil // note, this doesn't catch nil pointers, only passing nil directly!
-	}
-
-	if v, ok := val.(*big.Int); ok {
-		if v != nil {
-			return (*HexNumber)(new(big.Int).Set(v))
-		}
-		return nil
-	}
-
-	rval := reflect.ValueOf(val)
-
-	var unsigned uint64
-	utype := reflect.TypeOf(unsigned)
-	if t := rval.Type(); t.ConvertibleTo(utype) {
-		hn := new(big.Int).SetUint64(rval.Convert(utype).Uint())
-		return (*HexNumber)(hn)
-	}
-
-	var signed int64
-	stype := reflect.TypeOf(signed)
-	if t := rval.Type(); t.ConvertibleTo(stype) {
-		hn := new(big.Int).SetInt64(rval.Convert(stype).Int())
-		return (*HexNumber)(hn)
-	}
-
-	return nil
-}
-
-func (h *HexNumber) UnmarshalJSON(input []byte) error {
-	length := len(input)
-	if length >= 2 && input[0] == '"' && input[length-1] == '"' {
-		input = input[1 : length-1]
-	}
-
-	hn := (*big.Int)(h)
-	if _, ok := hn.SetString(string(input), 0); ok {
-		return nil
-	}
-
-	return fmt.Errorf("Unable to parse number")
-}
-
-// MarshalJSON serialize the hex number instance to a hex representation.
-func (h *HexNumber) MarshalJSON() ([]byte, error) {
-	if h != nil {
-		hn := (*big.Int)(h)
-		if hn.BitLen() == 0 {
-			return []byte(`"0x0"`), nil
-		}
-		return []byte(fmt.Sprintf(`"0x%x"`, hn)), nil
-	}
-	return nil, nil
-}
-
-func (h *HexNumber) Int() int {
-	hn := (*big.Int)(h)
-	return int(hn.Int64())
-}
-
-func (h *HexNumber) Int64() int64 {
-	hn := (*big.Int)(h)
-	return hn.Int64()
-}
-
-func (h *HexNumber) Uint() uint {
-	hn := (*big.Int)(h)
-	return uint(hn.Uint64())
-}
-
-func (h *HexNumber) Uint64() uint64 {
-	hn := (*big.Int)(h)
-	return hn.Uint64()
-}
-
-func (h *HexNumber) BigInt() *big.Int {
-	return (*big.Int)(h)
 }
 
 var (
@@ -221,7 +135,7 @@ const (
 	LatestBlockNumber  = BlockNumber(-1)
 )
 
-// UnmarshalJSON parses the given JSON fragement into a BlockNumber. It supports:
+// UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
 // - "latest", "earliest" or "pending" as string arguments
 // - the block number
 // Returned errors:
@@ -270,17 +184,6 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("blocknumber not in range [%d, %d]", earliestBlockNumber, maxBlockNumber)
 }
 
-func (bn *BlockNumber) Int64() int64 {
-	return (int64)(*bn)
-}
-
-// Client defines the interface for go client that wants to connect to a gexp RPC endpoint
-type Client interface {
-	// SupportedModules returns the collection of API's the server offers
-	SupportedModules() (map[string]string, error)
-
-	Send(req interface{}) error
-	Recv(msg interface{}) error
-
-	Close()
+func (bn BlockNumber) Int64() int64 {
+	return (int64)(bn)
 }

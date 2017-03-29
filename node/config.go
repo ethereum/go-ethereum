@@ -18,7 +18,6 @@ package node
 
 import (
 	"crypto/ecdsa"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -27,31 +26,61 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/expanse-org/go-expanse/accounts"
+	"github.com/expanse-org/go-expanse/accounts/keystore"
+	"github.com/expanse-org/go-expanse/accounts/usbwallet"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/p2p/nat"
+	"github.com/expanse-org/go-expanse/p2p/netutil"
 )
 
 var (
-	datadirPrivateKey   = "nodekey"            // Path within the datadir to the node's private key
-	datadirStaticNodes  = "static-nodes.json"  // Path within the datadir to the static node list
-	datadirTrustedNodes = "trusted-nodes.json" // Path within the datadir to the trusted node list
-	datadirNodeDatabase = "nodes"              // Path within the datadir to store the node infos
+	datadirPrivateKey      = "nodekey"            // Path within the datadir to the node's private key
+	datadirDefaultKeyStore = "keystore"           // Path within the datadir to the keystore
+	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
+	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
+	datadirNodeDatabase    = "nodes"              // Path within the datadir to store the node infos
 )
 
 // Config represents a small collection of configuration values to fine tune the
 // P2P network layer of a protocol stack. These values can be further extended by
 // all registered services.
 type Config struct {
+	// Name sets the instance name of the node. It must not contain the / character and is
+	// used in the devp2p node identifier. The instance name of gexp is "gexp". If no
+	// value is specified, the basename of the current executable is used.
+	Name string
+
+	// UserIdent, if set, is used as an additional component in the devp2p node identifier.
+	UserIdent string
+
+	// Version should be set to the version number of the program. It is used
+	// in the devp2p node identifier.
+	Version string
+
 	// DataDir is the file system folder the node should use for any data storage
 	// requirements. The configured data directory will not be directly shared with
 	// registered services, instead those can use utility methods to create/access
 	// databases or flat files. This enables ephemeral nodes which can fully reside
 	// in memory.
 	DataDir string
+
+	// KeyStoreDir is the file system folder that contains private keys. The directory can
+	// be specified as a relative path, in which case it is resolved relative to the
+	// current directory.
+	//
+	// If KeyStoreDir is empty, the default location is the "keystore" subdirectory of
+	// DataDir. If DataDir is unspecified and KeyStoreDir is empty, an ephemeral directory
+	// is created by New and destroyed when the node is stopped.
+	KeyStoreDir string
+
+	// UseLightweightKDF lowers the memory and CPU requirements of the key store
+	// scrypt KDF at the expense of security.
+	UseLightweightKDF bool
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
@@ -65,16 +94,27 @@ type Config struct {
 	// needed.
 	PrivateKey *ecdsa.PrivateKey
 
-	// Name sets the node name of this server. Use common.MakeName to create a name
-	// that follows existing conventions.
-	Name string
-
 	// NoDiscovery specifies whether the peer discovery mechanism should be started
 	// or not. Disabling is usually useful for protocol debugging (manual topology).
 	NoDiscovery bool
 
-	// Bootstrap nodes used to establish connectivity with the rest of the network.
+	// DiscoveryV5 specifies whether the the new topic-discovery based V5 discovery
+	// protocol should be started or not.
+	DiscoveryV5 bool
+
+	// Listener address for the V5 discovery protocol UDP traffic.
+	DiscoveryV5Addr string
+
+	// Restrict communication to white listed IP networks.
+	// The whitelist only applies when non-nil.
+	NetRestrict *netutil.Netlist
+
+	// BootstrapNodes used to establish connectivity with the rest of the network.
 	BootstrapNodes []*discover.Node
+
+	// BootstrapNodesV5 used to establish connectivity with the rest of the network
+	// using the V5 discovery protocol.
+	BootstrapNodesV5 []*discv5.Node
 
 	// Network interface address on which the node should listen for inbound peers.
 	ListenAddr string
@@ -163,9 +203,23 @@ func (c *Config) IPCEndpoint() string {
 	return c.IPCPath
 }
 
+// NodeDB returns the path to the discovery node database.
+func (c *Config) NodeDB() string {
+	if c.DataDir == "" {
+		return "" // ephemeral
+	}
+	return c.resolvePath("nodes")
+}
+
 // DefaultIPCEndpoint returns the IPC path used by default.
-func DefaultIPCEndpoint() string {
-	config := &Config{DataDir: common.DefaultDataDir(), IPCPath: common.DefaultIPCSocket}
+func DefaultIPCEndpoint(clientIdentifier string) string {
+	if clientIdentifier == "" {
+		clientIdentifier = strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
+		if clientIdentifier == "" {
+			panic("empty executable name")
+		}
+	}
+	config := &Config{DataDir: DefaultDataDir(), IPCPath: clientIdentifier + ".ipc"}
 	return config.IPCEndpoint()
 }
 
@@ -180,7 +234,7 @@ func (c *Config) HTTPEndpoint() string {
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
-	config := &Config{HTTPHost: common.DefaultHTTPHost, HTTPPort: common.DefaultHTTPPort}
+	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort}
 	return config.HTTPEndpoint()
 }
 
@@ -195,72 +249,140 @@ func (c *Config) WSEndpoint() string {
 
 // DefaultWSEndpoint returns the websocket endpoint used by default.
 func DefaultWSEndpoint() string {
-	config := &Config{WSHost: common.DefaultWSHost, WSPort: common.DefaultWSPort}
+	config := &Config{WSHost: DefaultWSHost, WSPort: DefaultWSPort}
 	return config.WSEndpoint()
+}
+
+// NodeName returns the devp2p node identifier.
+func (c *Config) NodeName() string {
+	name := c.name()
+	// Backwards compatibility: previous versions used title-cased "Gexp", keep that.
+	if name == "gexp" || name == "gexp-testnet" {
+		name = "Gexp"
+	}
+	if c.UserIdent != "" {
+		name += "/" + c.UserIdent
+	}
+	if c.Version != "" {
+		name += "/v" + c.Version
+	}
+	name += "/" + runtime.GOOS
+	name += "/" + runtime.Version()
+	return name
+}
+
+func (c *Config) name() string {
+	if c.Name == "" {
+		progname := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
+		if progname == "" {
+			panic("empty executable name, set Config.Name")
+		}
+		return progname
+	}
+	return c.Name
+}
+
+// These resources are resolved differently for "gexp" instances.
+var isOldGethResource = map[string]bool{
+	"chaindata":          true,
+	"nodes":              true,
+	"nodekey":            true,
+	"static-nodes.json":  true,
+	"trusted-nodes.json": true,
+}
+
+// resolvePath resolves path in the instance directory.
+func (c *Config) resolvePath(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	if c.DataDir == "" {
+		return ""
+	}
+	// Backwards-compatibility: ensure that data directory files created
+	// by gexp 1.4 are used if they exist.
+	if c.name() == "gexp" && isOldGethResource[path] {
+		oldpath := ""
+		if c.Name == "gexp" {
+			oldpath = filepath.Join(c.DataDir, path)
+		}
+		if oldpath != "" && common.FileExist(oldpath) {
+			// TODO: print warning
+			return oldpath
+		}
+	}
+	return filepath.Join(c.instanceDir(), path)
+}
+
+func (c *Config) instanceDir() string {
+	if c.DataDir == "" {
+		return ""
+	}
+	return filepath.Join(c.DataDir, c.name())
 }
 
 // NodeKey retrieves the currently configured private key of the node, checking
 // first any manually set key, falling back to the one found in the configured
 // data folder. If no key can be found, a new one is generated.
 func (c *Config) NodeKey() *ecdsa.PrivateKey {
-	// Use any specifically configured key
+	// Use any specifically configured key.
 	if c.PrivateKey != nil {
 		return c.PrivateKey
 	}
-	// Generate ephemeral key if no datadir is being used
+	// Generate ephemeral key if no datadir is being used.
 	if c.DataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
-			glog.Fatalf("Failed to generate ephemeral node key: %v", err)
+			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))
 		}
 		return key
 	}
-	// Fall back to persistent key from the data directory
-	keyfile := filepath.Join(c.DataDir, datadirPrivateKey)
+
+	keyfile := c.resolvePath(datadirPrivateKey)
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
 		return key
 	}
-	// No persistent key found, generate and store a new one
+	// No persistent key found, generate and store a new one.
 	key, err := crypto.GenerateKey()
 	if err != nil {
-		glog.Fatalf("Failed to generate node key: %v", err)
+		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
+	instanceDir := filepath.Join(c.DataDir, c.name())
+	if err := os.MkdirAll(instanceDir, 0700); err != nil {
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+		return key
+	}
+	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
-		glog.V(logger.Error).Infof("Failed to persist node key: %v", err)
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}
 	return key
 }
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
 func (c *Config) StaticNodes() []*discover.Node {
-	return c.parsePersistentNodes(datadirStaticNodes)
+	return c.parsePersistentNodes(c.resolvePath(datadirStaticNodes))
 }
 
 // TrusterNodes returns a list of node enode URLs configured as trusted nodes.
 func (c *Config) TrusterNodes() []*discover.Node {
-	return c.parsePersistentNodes(datadirTrustedNodes)
+	return c.parsePersistentNodes(c.resolvePath(datadirTrustedNodes))
 }
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
-func (c *Config) parsePersistentNodes(file string) []*discover.Node {
+func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return nil
 	}
-	path := filepath.Join(c.DataDir, file)
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	// Load the nodes from the config file
-	blob, err := ioutil.ReadFile(path)
-	if err != nil {
-		glog.V(logger.Error).Infof("Failed to access nodes: %v", err)
-		return nil
-	}
-	nodelist := []string{}
-	if err := json.Unmarshal(blob, &nodelist); err != nil {
-		glog.V(logger.Error).Infof("Failed to load nodes: %v", err)
+	// Load the nodes from the config file.
+	var nodelist []string
+	if err := common.LoadJSON(path, &nodelist); err != nil {
+		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
@@ -271,10 +393,57 @@ func (c *Config) parsePersistentNodes(file string) []*discover.Node {
 		}
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Node URL %s: %v\n", url, err)
+			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
 		}
 		nodes = append(nodes, node)
 	}
 	return nodes
+}
+
+func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if conf.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
+
+	var (
+		keydir    string
+		ephemeral string
+		err       error
+	)
+	switch {
+	case filepath.IsAbs(conf.KeyStoreDir):
+		keydir = conf.KeyStoreDir
+	case conf.DataDir != "":
+		if conf.KeyStoreDir == "" {
+			keydir = filepath.Join(conf.DataDir, datadirDefaultKeyStore)
+		} else {
+			keydir, err = filepath.Abs(conf.KeyStoreDir)
+		}
+	case conf.KeyStoreDir != "":
+		keydir, err = filepath.Abs(conf.KeyStoreDir)
+	default:
+		// There is no datadir.
+		keydir, err = ioutil.TempDir("", "go-expanse-keystore")
+		ephemeral = keydir
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	if err := os.MkdirAll(keydir, 0700); err != nil {
+		return nil, "", err
+	}
+	// Assemble the account manager and supported backends
+	backends := []accounts.Backend{
+		keystore.NewKeyStore(keydir, scryptN, scryptP),
+	}
+	if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+		log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+	} else {
+		backends = append(backends, ledgerhub)
+	}
+	return accounts.NewManager(backends...), ephemeral, nil
 }

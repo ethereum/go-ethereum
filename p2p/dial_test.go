@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
@@ -25,6 +25,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/expanse-org/go-expanse/p2p/discover"
+	"github.com/expanse-org/go-expanse/p2p/netutil"
 )
 
 func init() {
@@ -86,7 +87,7 @@ func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int { return copy(buf, 
 // This test checks that dynamic dials are launched from discovery results.
 func TestDialStateDynDial(t *testing.T) {
 	runDialTest(t, dialtest{
-		init: newDialState(nil, fakeTable{}, 5),
+		init: newDialState(nil, fakeTable{}, 5, nil),
 		rounds: []round{
 			// A discovery query is launched.
 			{
@@ -233,7 +234,7 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 	}
 
 	runDialTest(t, dialtest{
-		init: newDialState(nil, table, 10),
+		init: newDialState(nil, table, 10, nil),
 		rounds: []round{
 			// 5 out of 8 of the nodes returned by ReadRandomNodes are dialed.
 			{
@@ -313,6 +314,36 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 	})
 }
 
+// This test checks that candidates that do not match the netrestrict list are not dialed.
+func TestDialStateNetRestrict(t *testing.T) {
+	// This table always returns the same random nodes
+	// in the order given below.
+	table := fakeTable{
+		{ID: uintID(1), IP: net.ParseIP("127.0.0.1")},
+		{ID: uintID(2), IP: net.ParseIP("127.0.0.2")},
+		{ID: uintID(3), IP: net.ParseIP("127.0.0.3")},
+		{ID: uintID(4), IP: net.ParseIP("127.0.0.4")},
+		{ID: uintID(5), IP: net.ParseIP("127.0.2.5")},
+		{ID: uintID(6), IP: net.ParseIP("127.0.2.6")},
+		{ID: uintID(7), IP: net.ParseIP("127.0.2.7")},
+		{ID: uintID(8), IP: net.ParseIP("127.0.2.8")},
+	}
+	restrict := new(netutil.Netlist)
+	restrict.Add("127.0.2.0/24")
+
+	runDialTest(t, dialtest{
+		init: newDialState(nil, table, 10, restrict),
+		rounds: []round{
+			{
+				new: []task{
+					&dialTask{flags: dynDialedConn, dest: table[4]},
+					&discoverTask{},
+				},
+			},
+		},
+	})
+}
+
 // This test checks that static dials are launched.
 func TestDialStateStaticDial(t *testing.T) {
 	wantStatic := []*discover.Node{
@@ -324,7 +355,7 @@ func TestDialStateStaticDial(t *testing.T) {
 	}
 
 	runDialTest(t, dialtest{
-		init: newDialState(wantStatic, fakeTable{}, 0),
+		init: newDialState(wantStatic, fakeTable{}, 0, nil),
 		rounds: []round{
 			// Static dials are launched for the nodes that
 			// aren't yet connected.
@@ -405,7 +436,7 @@ func TestDialStateCache(t *testing.T) {
 	}
 
 	runDialTest(t, dialtest{
-		init: newDialState(wantStatic, fakeTable{}, 0),
+		init: newDialState(wantStatic, fakeTable{}, 0, nil),
 		rounds: []round{
 			// Static dials are launched for the nodes that
 			// aren't yet connected.
@@ -467,7 +498,7 @@ func TestDialStateCache(t *testing.T) {
 func TestDialResolve(t *testing.T) {
 	resolved := discover.NewNode(uintID(1), net.IP{127, 0, 55, 234}, 3333, 4444)
 	table := &resolveMock{answer: resolved}
-	state := newDialState(nil, table, 0)
+	state := newDialState(nil, table, 0, nil)
 
 	// Check that the task is generated with an incomplete ID.
 	dest := discover.NewNode(uintID(1), nil, 0, 0)

@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 )
@@ -51,20 +53,10 @@ func MustRunCommand(cmd string, args ...string) {
 // GOPATH returns the value that the GOPATH environment
 // variable should be set to.
 func GOPATH() string {
-	path := filepath.SplitList(os.Getenv("GOPATH"))
-	if len(path) == 0 {
+	if os.Getenv("GOPATH") == "" {
 		log.Fatal("GOPATH is not set")
 	}
-	// Ensure Godeps workspace is present in the path.
-	godeps, _ := filepath.Abs(filepath.Join("Godeps", "_workspace"))
-	for _, dir := range path {
-		if dir == godeps {
-			return strings.Join(path, string(filepath.ListSeparator))
-		}
-	}
-	newpath := append(path[:1], godeps)
-	newpath = append(newpath, path[1:]...)
-	return strings.Join(newpath, string(filepath.ListSeparator))
+	return os.Getenv("GOPATH")
 }
 
 // VERSION returns the content of the VERSION file.
@@ -76,6 +68,8 @@ func VERSION() string {
 	return string(bytes.TrimSpace(version))
 }
 
+var warnedAboutGit bool
+
 // RunGit runs a git subcommand and returns its output.
 // The command must complete successfully.
 func RunGit(args ...string) string {
@@ -83,7 +77,10 @@ func RunGit(args ...string) string {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err == exec.ErrNotFound {
-		log.Println("no git in PATH")
+		if !warnedAboutGit {
+			log.Println("Warning: can't find 'git' in PATH")
+			warnedAboutGit = true
+		}
 		return ""
 	} else if err != nil {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
@@ -117,4 +114,53 @@ func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x
 	if err := out.Close(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// CopyFile copies a file.
+func CopyFile(dst, src string, mode os.FileMode) {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		log.Fatal(err)
+	}
+	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer destFile.Close()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer srcFile.Close()
+
+	if _, err := io.Copy(destFile, srcFile); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
+// vendored packages.
+func ExpandPackagesNoVendor(patterns []string) []string {
+	expand := false
+	for _, pkg := range patterns {
+		if strings.Contains(pkg, "...") {
+			expand = true
+		}
+	}
+	if expand {
+		args := append([]string{"list"}, patterns...)
+		cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("package listing failed: %v\n%s", err, string(out))
+		}
+		var packages []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "/vendor/") {
+				packages = append(packages, strings.TrimSpace(line))
+			}
+		}
+		return packages
+	}
+	return patterns
 }

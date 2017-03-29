@@ -18,16 +18,52 @@
 package web3ext
 
 var Modules = map[string]string{
-	"admin":    Admin_JS,
-	"debug":    Debug_JS,
-	"exp":      Eth_JS,
-	"miner":    Miner_JS,
-	"net":      Net_JS,
-	"personal": Personal_JS,
-	"rpc":      RPC_JS,
-	"shh":      Shh_JS,
-	"txpool":   TxPool_JS,
+	"admin":      Admin_JS,
+	"chequebook": Chequebook_JS,
+	"debug":      Debug_JS,
+	"eth":        Eth_JS,
+	"miner":      Miner_JS,
+	"net":        Net_JS,
+	"personal":   Personal_JS,
+	"rpc":        RPC_JS,
+	"shh":        Shh_JS,
+	"swarmfs":    SWARMFS_JS,
+	"txpool":     TxPool_JS,
+
 }
+
+
+const Chequebook_JS = `
+web3._extend({
+  property: 'chequebook',
+  methods:
+  [
+    new web3._extend.Method({
+      name: 'deposit',
+      call: 'chequebook_deposit',
+      params: 1,
+      inputFormatter: [null]
+    }),
+    new web3._extend.Property({
+			name: 'balance',
+			getter: 'chequebook_balance',
+				outputFormatter: web3._extend.utils.toDecimal
+		}),
+    new web3._extend.Method({
+      name: 'cash',
+      call: 'chequebook_cash',
+      params: 1,
+      inputFormatter: [null]
+    }),
+    new web3._extend.Method({
+      name: 'issue',
+      call: 'chequebook_issue',
+      params: 2,
+      inputFormatter: [null, null]
+    }),
+  ]
+});
+`
 
 const Admin_JS = `
 web3._extend({
@@ -37,6 +73,11 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'addPeer',
 			call: 'admin_addPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removePeer',
+			call: 'admin_removePeer',
 			params: 1
 		}),
 		new web3._extend.Method({
@@ -79,56 +120,6 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopWS',
 			call: 'admin_stopWS'
-		}),
-		new web3._extend.Method({
-			name: 'setGlobalRegistrar',
-			call: 'admin_setGlobalRegistrar',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setHashReg',
-			call: 'admin_setHashReg',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setUrlHint',
-			call: 'admin_setUrlHint',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'saveInfo',
-			call: 'admin_saveInfo',
-			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'register',
-			call: 'admin_register',
-			params: 3
-		}),
-		new web3._extend.Method({
-			name: 'registerUrl',
-			call: 'admin_registerUrl',
-			params: 3
-		}),
-		new web3._extend.Method({
-			name: 'startNatSpec',
-			call: 'admin_startNatSpec',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'stopNatSpec',
-			call: 'admin_stopNatSpec',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'getContractInfo',
-			call: 'admin_getContractInfo',
-			params: 1
-		}),
-		new web3._extend.Method({
-			name: 'httpGet',
-			call: 'admin_httpGet',
-			params: 2
 		})
 	],
 	properties:
@@ -204,6 +195,10 @@ web3._extend({
 			call: 'debug_chaindbProperty',
 			params: 1,
 			outputFormatter: console.log
+		}),
+		new web3._extend.Method({
+			name: 'chaindbCompact',
+			call: 'debug_chaindbCompact',
 		}),
 		new web3._extend.Method({
 			name: 'metrics',
@@ -294,8 +289,20 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'traceTransaction',
 			call: 'debug_traceTransaction',
-			params: 1
-		})
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'preimage',
+			call: 'debug_preimage',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getBadBlocks',
+			call: 'debug_getBadBlocks',
+			params: 0,
+		}),
 	],
 	properties: []
 });
@@ -303,7 +310,7 @@ web3._extend({
 
 const Eth_JS = `
 web3._extend({
-	property: 'exp',
+	property: 'eth',
 	methods:
 	[
 		new web3._extend.Method({
@@ -319,12 +326,6 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
 		}),
 		new web3._extend.Method({
-			name: 'getNatSpec',
-			call: 'eth_getNatSpec',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
-		}),
-		new web3._extend.Method({
 			name: 'signTransaction',
 			call: 'eth_signTransaction',
 			params: 1,
@@ -335,6 +336,19 @@ web3._extend({
 			call: 'eth_submitTransaction',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getRawTransaction',
+			call: 'eth_getRawTransactionByHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getRawTransactionFromBlock',
+			call: function(args) {
+				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getRawTransactionByBlockHashAndIndex' : 'eth_getRawTransactionByBlockNumberAndIndex';
+			},
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		})
 	],
 	properties:
@@ -388,20 +402,8 @@ web3._extend({
 			inputFormatter: [web3._extend.utils.fromDecimal]
 		}),
 		new web3._extend.Method({
-			name: 'startAutoDAG',
-			call: 'miner_startAutoDAG',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'stopAutoDAG',
-			call: 'miner_stopAutoDAG',
-			params: 0
-		}),
-		new web3._extend.Method({
-			name: 'makeDAG',
-			call: 'miner_makeDAG',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputDefaultBlockNumberFormatter]
+			name: 'getHashrate',
+			call: 'miner_getHashrate'
 		})
 	],
 	properties: []
@@ -433,13 +435,30 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
-			name: 'signAndSendTransaction',
-			call: 'personal_signAndSendTransaction',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
+			name: 'sign',
+			call: 'personal_sign',
+			params: 3,
+			inputFormatter: [null, web3._extend.formatters.inputAddressFormatter, null]
+		}),
+		new web3._extend.Method({
+			name: 'ecRecover',
+			call: 'personal_ecRecover',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'deriveAccount',
+			call: 'personal_deriveAccount',
+			params: 3
+		})
+	],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'listWallets',
+			getter: 'personal_listWallets'
 		})
 	]
-});
+})
 `
 
 const RPC_JS = `
@@ -468,6 +487,32 @@ web3._extend({
 			outputFormatter: web3._extend.utils.toDecimal
 		})
 	]
+});
+`
+const SWARMFS_JS = `
+web3._extend({
+  property: 'swarmfs',
+  methods:
+  [
+    new web3._extend.Method({
+      name: 'mount',
+      call: 'swarmfs_mount',
+      params: 2,
+      inputFormatter: [null,null]
+    }),
+    new web3._extend.Method({
+      name: 'unmount',
+      call: 'swarmfs_unmount',
+      params: 1,
+      inputFormatter: [null]
+    }),
+    new web3._extend.Method({
+      name: 'listmounts',
+      call: 'swarmfs_listmounts',
+      params: 0,
+      inputFormatter: []
+    })
+  ]
 });
 `
 

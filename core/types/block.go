@@ -1,26 +1,24 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package types contains data types related to Expanse consensus.
+// Package types contains data types related to Ethereum consensus.
 package types
 
 import (
-	"bytes"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -29,8 +27,14 @@ import (
 	"time"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/hexutil"
 	"github.com/expanse-org/go-expanse/crypto/sha3"
 	"github.com/expanse-org/go-expanse/rlp"
+)
+
+var (
+	EmptyRootHash  = DeriveSha(Transactions{})
+	EmptyUncleHash = CalcUncleHash(nil)
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -38,42 +42,66 @@ import (
 // out on a block.
 type BlockNonce [8]byte
 
+// EncodeNonce converts the given integer to a block nonce.
 func EncodeNonce(i uint64) BlockNonce {
 	var n BlockNonce
 	binary.BigEndian.PutUint64(n[:], i)
 	return n
 }
 
+// Uint64 returns the integer value of a block nonce.
 func (n BlockNonce) Uint64() uint64 {
 	return binary.BigEndian.Uint64(n[:])
 }
 
-func (n BlockNonce) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"0x%x"`, n)), nil
+// MarshalText encodes n as a hex string with 0x prefix.
+func (n BlockNonce) MarshalText() ([]byte, error) {
+	return hexutil.Bytes(n[:]).MarshalText()
 }
 
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (n *BlockNonce) UnmarshalText(input []byte) error {
+	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
+}
+
+//go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
+
+// Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash  common.Hash    // Hash to the previous block
-	UncleHash   common.Hash    // Uncles of this block
-	Coinbase    common.Address // The coin base address
-	Root        common.Hash    // Block Trie state
-	TxHash      common.Hash    // Tx sha
-	ReceiptHash common.Hash    // Receipt sha
-	Bloom       Bloom          // Bloom
-	Difficulty  *big.Int       // Difficulty for the current block
-	Number      *big.Int       // The block number
-	GasLimit    *big.Int       // Gas limit
-	GasUsed     *big.Int       // Gas used
-	Time        *big.Int       // Creation time
-	Extra       []byte         // Extra data
-	MixDigest   common.Hash    // for quick difficulty verification
-	Nonce       BlockNonce
+	ParentHash  common.Hash    `json:"parentHash"`
+	UncleHash   common.Hash    `json:"sha3Uncles"`
+	Coinbase    common.Address `json:"miner"`
+	Root        common.Hash    `json:"stateRoot"`
+	TxHash      common.Hash    `json:"transactionsRoot"`
+	ReceiptHash common.Hash    `json:"receiptsRoot"`
+	Bloom       Bloom          `json:"logsBloom"`
+	Difficulty  *big.Int       `json:"difficulty"`
+	Number      *big.Int       `json:"number"`
+	GasLimit    *big.Int       `json:"gasLimit"`
+	GasUsed     *big.Int       `json:"gasUsed"`
+	Time        *big.Int       `json:"timestamp"`
+	Extra       []byte         `json:"extraData"`
+	MixDigest   common.Hash    `json:"mixHash"`
+	Nonce       BlockNonce     `json:"nonce"`
 }
 
+// field type overrides for gencodec
+type headerMarshaling struct {
+	Difficulty *hexutil.Big
+	Number     *hexutil.Big
+	GasLimit   *hexutil.Big
+	GasUsed    *hexutil.Big
+	Time       *hexutil.Big
+	Extra      hexutil.Bytes
+}
+
+// Hash returns the block hash of the header, which is simply the keccak256 hash of its
+// RLP encoding.
 func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+// HashNoNonce returns the hash which is used as input for the proof-of-work search.
 func (h *Header) HashNoNonce() common.Hash {
 	return rlpHash([]interface{}{
 		h.ParentHash,
@@ -92,28 +120,6 @@ func (h *Header) HashNoNonce() common.Hash {
 	})
 }
 
-func (h *Header) UnmarshalJSON(data []byte) error {
-	var ext struct {
-		ParentHash string
-		Coinbase   string
-		Difficulty string
-		GasLimit   string
-		Time       *big.Int
-		Extra      string
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&ext); err != nil {
-		return err
-	}
-
-	h.ParentHash = common.HexToHash(ext.ParentHash)
-	h.Coinbase = common.HexToAddress(ext.Coinbase)
-	h.Difficulty = common.String2Big(ext.Difficulty)
-	h.Time = ext.Time
-	h.Extra = []byte(ext.Extra)
-	return nil
-}
-
 func rlpHash(x interface{}) (h common.Hash) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
@@ -122,12 +128,13 @@ func rlpHash(x interface{}) (h common.Hash) {
 }
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
-// a block's data contents (transactions and uncles) togexper.
+// a block's data contents (transactions and uncles) together.
 type Body struct {
 	Transactions []*Transaction
 	Uncles       []*Header
 }
 
+// Block represents an entire block in the Ethereum blockchain.
 type Block struct {
 	header       *Header
 	uncles       []*Header
@@ -160,7 +167,7 @@ func (b *Block) DeprecatedTd() *big.Int {
 // would otherwise need to be recomputed.
 type StorageBlock Block
 
-// "external" block encoding. used for exp protocol, etc.
+// "external" block encoding. used for eth protocol, etc.
 type extblock struct {
 	Header *Header
 	Txs    []*Transaction
@@ -175,11 +182,6 @@ type storageblock struct {
 	Uncles []*Header
 	TD     *big.Int
 }
-
-var (
-	EmptyRootHash  = DeriveSha(Transactions{})
-	EmptyUncleHash = CalcUncleHash(nil)
-)
 
 // NewBlock creates a new block. The input data is copied,
 // changes to header and to the field values will not affect the
@@ -253,23 +255,7 @@ func CopyHeader(h *Header) *Header {
 	return &cpy
 }
 
-func (b *Block) ValidateFields() error {
-	if b.header == nil {
-		return fmt.Errorf("header is nil")
-	}
-	for i, transaction := range b.transactions {
-		if transaction == nil {
-			return fmt.Errorf("transaction %d is nil", i)
-		}
-	}
-	for i, uncle := range b.uncles {
-		if uncle == nil {
-			return fmt.Errorf("uncle %d is nil", i)
-		}
-	}
-	return nil
-}
-
+// DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	var eb extblock
 	_, size, _ := s.Kind()
@@ -281,6 +267,7 @@ func (b *Block) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
+// EncodeRLP serializes b into the Ethereum RLP block format.
 func (b *Block) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, extblock{
 		Header: b.header,
@@ -300,6 +287,7 @@ func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 }
 
 // TODO: copies
+
 func (b *Block) Uncles() []*Header          { return b.uncles }
 func (b *Block) Transactions() Transactions { return b.transactions }
 
@@ -362,9 +350,9 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 
 // WithMiningResult returns a new block with the data from b
 // where nonce and mix digest are set to the provided values.
-func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
+func (b *Block) WithMiningResult(nonce BlockNonce, mixDigest common.Hash) *Block {
 	cpy := *b.header
-	binary.BigEndian.PutUint64(cpy.Nonce[:], nonce)
+	cpy.Nonce = nonce
 	cpy.MixDigest = mixDigest
 	return &Block{
 		header:       &cpy,
@@ -387,8 +375,8 @@ func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
 	return block
 }
 
-// Implement pow.Block
-
+// Hash returns the keccak256 hash of b's header.
+// The hash is computed on the first call and cached thereafter.
 func (b *Block) Hash() common.Hash {
 	if hash := b.hash.Load(); hash != nil {
 		return hash.(common.Hash)

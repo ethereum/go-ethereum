@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package trie implements Merkle Patricia Tries.
 package trie
@@ -22,23 +22,55 @@ import (
 	"fmt"
 
 	"github.com/expanse-org/go-expanse/common"
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"github.com/expanse-org/go-expanse/crypto/sha3"
+	"github.com/expanse-org/go-expanse/log"
+	"github.com/rcrowley/go-metrics"
+>>>>>>> rebase-1.5.9
 )
 
 var (
 	// This is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-
 	// This is the known hash of an empty state trie entry.
-	emptyState = crypto.Keccak256Hash(nil)
+	emptyState common.Hash
 )
+
+var (
+	cacheMissCounter   = metrics.NewRegisteredCounter("trie/cachemiss", nil)
+	cacheUnloadCounter = metrics.NewRegisteredCounter("trie/cacheunload", nil)
+)
+
+// CacheMisses retrieves a global counter measuring the number of cache misses
+// the trie did since process startup. This isn't useful for anything apart from
+// trie debugging purposes.
+func CacheMisses() int64 {
+	return cacheMissCounter.Count()
+}
+
+// CacheUnloads retrieves a global counter measuring the number of cache unloads
+// the trie did since process startup. This isn't useful for anything apart from
+// trie debugging purposes.
+func CacheUnloads() int64 {
+	return cacheUnloadCounter.Count()
+}
+
+func init() {
+	sha3.NewKeccak256().Sum(emptyState[:0])
+}
 
 // Database must be implemented by backing stores for the trie.
 type Database interface {
+	DatabaseReader
 	DatabaseWriter
-	// Get returns the value for key from the database.
+}
+
+// DatabaseReader wraps the Get method of a backing store for the trie.
+type DatabaseReader interface {
 	Get(key []byte) (value []byte, err error)
 }
 
@@ -59,6 +91,23 @@ type Trie struct {
 	root         node
 	db           Database
 	originalRoot common.Hash
+
+	// Cache generation values.
+	// cachegen increase by one with each commit operation.
+	// new nodes are tagged with the current generation and unloaded
+	// when their generation is older than than cachegen-cachelimit.
+	cachegen, cachelimit uint16
+}
+
+// SetCacheLimit sets the number of 'cache generations' to keep.
+// A cache generations is created by a call to Commit.
+func (t *Trie) SetCacheLimit(l uint16) {
+	t.cachelimit = l
+}
+
+// newFlag returns the cache flag value for a newly created node.
+func (t *Trie) newFlag() nodeFlag {
+	return nodeFlag{dirty: true, gen: t.cachegen}
 }
 
 // New creates a trie with an existing root node from db.
@@ -73,13 +122,11 @@ func New(root common.Hash, db Database) (*Trie, error) {
 		if db == nil {
 			panic("trie.New: cannot use existing root without a database")
 		}
-		if v, _ := trie.db.Get(root[:]); len(v) == 0 {
-			return nil, &MissingNodeError{
-				RootHash: root,
-				NodeHash: root,
-			}
+		rootnode, err := trie.resolveHash(root[:], nil, nil)
+		if err != nil {
+			return nil, err
 		}
-		trie.root = hashNode(root.Bytes())
+		trie.root = rootnode
 	}
 	return trie, nil
 }
@@ -93,8 +140,8 @@ func (t *Trie) Iterator() *Iterator {
 // The value bytes must not be modified by the caller.
 func (t *Trie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
-	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }
@@ -117,27 +164,26 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 		return nil, nil, false, nil
 	case valueNode:
 		return n, n, false, nil
-	case shortNode:
+	case *shortNode:
 		if len(key)-pos < len(n.Key) || !bytes.Equal(n.Key, key[pos:pos+len(n.Key)]) {
 			// key not found in trie
 			return nil, n, false, nil
 		}
 		value, newnode, didResolve, err = t.tryGet(n.Val, key, pos+len(n.Key))
 		if err == nil && didResolve {
+			n = n.copy()
 			n.Val = newnode
-			return value, n, didResolve, err
-		} else {
-			return value, origNode, didResolve, err
+			n.flags.gen = t.cachegen
 		}
-	case fullNode:
-		child := n.Children[key[pos]]
-		value, newnode, didResolve, err = t.tryGet(child, key, pos+1)
+		return value, n, didResolve, err
+	case *fullNode:
+		value, newnode, didResolve, err = t.tryGet(n.Children[key[pos]], key, pos+1)
 		if err == nil && didResolve {
+			n = n.copy()
+			n.flags.gen = t.cachegen
 			n.Children[key[pos]] = newnode
-			return value, n, didResolve, err
-		} else {
-			return value, origNode, didResolve, err
 		}
+		return value, n, didResolve, err
 	case hashNode:
 		child, err := t.resolveHash(n, key[:pos], key[pos:])
 		if err != nil {
@@ -157,8 +203,8 @@ func (t *Trie) tryGet(origNode node, key []byte, pos int) (value []byte, newnode
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *Trie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryUpdate(key, value); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -196,22 +242,19 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 		return true, value, nil
 	}
 	switch n := n.(type) {
-	case shortNode:
+	case *shortNode:
 		matchlen := prefixLen(key, n.Key)
 		// If the whole key matches, keep this short node as is
 		// and only update the value.
 		if matchlen == len(n.Key) {
 			dirty, nn, err := t.insert(n.Val, append(prefix, key[:matchlen]...), key[matchlen:], value)
-			if err != nil {
-				return false, nil, err
+			if !dirty || err != nil {
+				return false, n, err
 			}
-			if !dirty {
-				return false, n, nil
-			}
-			return true, shortNode{n.Key, nn, nil, true}, nil
+			return true, &shortNode{n.Key, nn, t.newFlag()}, nil
 		}
 		// Otherwise branch out at the index where they differ.
-		branch := fullNode{dirty: true}
+		branch := &fullNode{flags: t.newFlag()}
 		var err error
 		_, branch.Children[n.Key[matchlen]], err = t.insert(nil, append(prefix, n.Key[:matchlen+1]...), n.Key[matchlen+1:], n.Val)
 		if err != nil {
@@ -226,21 +269,20 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return true, branch, nil
 		}
 		// Otherwise, replace it with a short node leading up to the branch.
-		return true, shortNode{key[:matchlen], branch, nil, true}, nil
+		return true, &shortNode{key[:matchlen], branch, t.newFlag()}, nil
 
-	case fullNode:
+	case *fullNode:
 		dirty, nn, err := t.insert(n.Children[key[0]], append(prefix, key[0]), key[1:], value)
-		if err != nil {
-			return false, nil, err
+		if !dirty || err != nil {
+			return false, n, err
 		}
-		if !dirty {
-			return false, n, nil
-		}
-		n.Children[key[0]], n.hash, n.dirty = nn, nil, true
+		n = n.copy()
+		n.flags = t.newFlag()
+		n.Children[key[0]] = nn
 		return true, n, nil
 
 	case nil:
-		return true, shortNode{key, value, nil, true}, nil
+		return true, &shortNode{key, value, t.newFlag()}, nil
 
 	case hashNode:
 		// We've hit a part of the trie that isn't loaded yet. Load
@@ -251,11 +293,8 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 			return false, nil, err
 		}
 		dirty, nn, err := t.insert(rn, prefix, key, value)
-		if err != nil {
-			return false, nil, err
-		}
-		if !dirty {
-			return false, rn, nil
+		if !dirty || err != nil {
+			return false, rn, err
 		}
 		return true, nn, nil
 
@@ -266,8 +305,8 @@ func (t *Trie) insert(n node, prefix, key []byte, value node) (bool, node, error
 
 // Delete removes any existing value for key from the trie.
 func (t *Trie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -288,7 +327,7 @@ func (t *Trie) TryDelete(key []byte) error {
 // nodes on the way up after deleting recursively.
 func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 	switch n := n.(type) {
-	case shortNode:
+	case *shortNode:
 		matchlen := prefixLen(key, n.Key)
 		if matchlen < len(n.Key) {
 			return false, n, nil // don't replace n on mismatch
@@ -301,34 +340,30 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 		// subtrie must contain at least two other values with keys
 		// longer than n.Key.
 		dirty, child, err := t.delete(n.Val, append(prefix, key[:len(n.Key)]...), key[len(n.Key):])
-		if err != nil {
-			return false, nil, err
-		}
-		if !dirty {
-			return false, n, nil
+		if !dirty || err != nil {
+			return false, n, err
 		}
 		switch child := child.(type) {
-		case shortNode:
+		case *shortNode:
 			// Deleting from the subtrie reduced it to another
 			// short node. Merge the nodes to avoid creating a
 			// shortNode{..., shortNode{...}}. Use concat (which
 			// always creates a new slice) instead of append to
 			// avoid modifying n.Key since it might be shared with
 			// other nodes.
-			return true, shortNode{concat(n.Key, child.Key...), child.Val, nil, true}, nil
+			return true, &shortNode{concat(n.Key, child.Key...), child.Val, t.newFlag()}, nil
 		default:
-			return true, shortNode{n.Key, child, nil, true}, nil
+			return true, &shortNode{n.Key, child, t.newFlag()}, nil
 		}
 
-	case fullNode:
+	case *fullNode:
 		dirty, nn, err := t.delete(n.Children[key[0]], append(prefix, key[0]), key[1:])
-		if err != nil {
-			return false, nil, err
+		if !dirty || err != nil {
+			return false, n, err
 		}
-		if !dirty {
-			return false, n, nil
-		}
-		n.Children[key[0]], n.hash, n.dirty = nn, nil, true
+		n = n.copy()
+		n.flags = t.newFlag()
+		n.Children[key[0]] = nn
 
 		// Check how many non-nil entries are left after deleting and
 		// reduce the full node to a short node if only one entry is
@@ -362,14 +397,14 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 				if err != nil {
 					return false, nil, err
 				}
-				if cnode, ok := cnode.(shortNode); ok {
+				if cnode, ok := cnode.(*shortNode); ok {
 					k := append([]byte{byte(pos)}, cnode.Key...)
-					return true, shortNode{k, cnode.Val, nil, true}, nil
+					return true, &shortNode{k, cnode.Val, t.newFlag()}, nil
 				}
 			}
 			// Otherwise, n is replaced by a one-nibble short node
 			// containing the child.
-			return true, shortNode{[]byte{byte(pos)}, n.Children[pos], nil, true}, nil
+			return true, &shortNode{[]byte{byte(pos)}, n.Children[pos], t.newFlag()}, nil
 		}
 		// n still contains at least two values and cannot be reduced.
 		return true, n, nil
@@ -389,11 +424,8 @@ func (t *Trie) delete(n node, prefix, key []byte) (bool, node, error) {
 			return false, nil, err
 		}
 		dirty, nn, err := t.delete(rn, prefix, key)
-		if err != nil {
-			return false, nil, err
-		}
-		if !dirty {
-			return false, rn, nil
+		if !dirty || err != nil {
+			return false, rn, err
 		}
 		return true, nn, nil
 
@@ -417,6 +449,8 @@ func (t *Trie) resolve(n node, prefix, suffix []byte) (node, error) {
 }
 
 func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
+	cacheMissCounter.Inc(1)
+
 	enc, err := t.db.Get(n)
 	if err != nil || enc == nil {
 		return nil, &MissingNodeError{
@@ -427,7 +461,7 @@ func (t *Trie) resolveHash(n hashNode, prefix, suffix []byte) (node, error) {
 			SuffixLen: len(suffix),
 		}
 	}
-	dec := mustDecodeNode(n, enc)
+	dec := mustDecodeNode(n, enc, t.cachegen)
 	return dec, nil
 }
 
@@ -468,6 +502,7 @@ func (t *Trie) CommitTo(db DatabaseWriter) (root common.Hash, err error) {
 		return (common.Hash{}), err
 	}
 	t.root = cached
+	t.cachegen++
 	return common.BytesToHash(hash.(hashNode)), nil
 }
 
@@ -475,7 +510,7 @@ func (t *Trie) hashRoot(db DatabaseWriter) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	h := newHasher()
+	h := newHasher(t.cachegen, t.cachelimit)
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
 }

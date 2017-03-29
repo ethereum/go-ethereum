@@ -17,9 +17,9 @@
 package node
 
 import (
-	"path/filepath"
 	"reflect"
 
+	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/p2p"
@@ -30,19 +30,27 @@ import (
 // the protocol stack, that is passed to all constructors to be optionally used;
 // as well as utility methods to operate on the service environment.
 type ServiceContext struct {
-	datadir  string                   // Data directory for protocol persistence
-	services map[reflect.Type]Service // Index of the already constructed services
-	EventMux *event.TypeMux           // Event multiplexer used for decoupled notifications
+	config         *Config
+	services       map[reflect.Type]Service // Index of the already constructed services
+	EventMux       *event.TypeMux           // Event multiplexer used for decoupled notifications
+	AccountManager *accounts.Manager        // Account manager created by the node.
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one
 // if no previous can be found) from within the node's data directory. If the
 // node is an ephemeral one, a memory database is returned.
 func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (ethdb.Database, error) {
-	if ctx.datadir == "" {
+	if ctx.config.DataDir == "" {
 		return ethdb.NewMemDatabase()
 	}
-	return ethdb.NewLDBDatabase(filepath.Join(ctx.datadir, name), cache, handles)
+	return ethdb.NewLDBDatabase(ctx.config.resolvePath(name), cache, handles)
+}
+
+// ResolvePath resolves a user path into the data directory if that was relative
+// and if the user actually uses persistent storage. It will return an empty string
+// for emphemeral storage and the user's own input for absolute paths.
+func (ctx *ServiceContext) ResolvePath(path string) string {
+	return ctx.config.resolvePath(path)
 }
 
 // Service retrieves a currently running service registered of a specific type.
@@ -62,11 +70,13 @@ type ServiceConstructor func(ctx *ServiceContext) (Service, error)
 // Service is an individual protocol that can be registered into a node.
 //
 // Notes:
-//  - Service life-cycle management is delegated to the node. The service is
-//    allowed to initialize itself upon creation, but no goroutines should be
-//    spun up outside of the Start method.
-//  - Restart logic is not required as the node will create a fresh instance
-//    every time a service is started.
+//
+// • Service life-cycle management is delegated to the node. The service is allowed to
+// initialize itself upon creation, but no goroutines should be spun up outside of the
+// Start method.
+//
+// • Restart logic is not required as the node will create a fresh instance
+// every time a service is started.
 type Service interface {
 	// Protocols retrieves the P2P protocols the service wishes to start.
 	Protocols() []p2p.Protocol

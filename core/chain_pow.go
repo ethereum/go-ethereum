@@ -65,7 +65,7 @@ func verifyNonces(checker pow.PoW, items []pow.Block) (chan<- struct{}, <-chan n
 	for i := 0; i < workers; i++ {
 		go func() {
 			for index := range tasks {
-				results <- nonceCheckResult{index: index, valid: checker.Verify(items[index])}
+				results <- nonceCheckResult{index: index, valid: checker.Verify(items[index]) == nil}
 			}
 		}()
 	}

@@ -166,7 +166,7 @@ func TestServiceLifeCycle(t *testing.T) {
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start protocol stack: %v", err)
 	}
-	for id, _ := range services {
+	for id := range services {
 		if !started[id] {
 			t.Fatalf("service %s: freshly started service not running", id)
 		}
@@ -178,7 +178,7 @@ func TestServiceLifeCycle(t *testing.T) {
 	if err := stack.Stop(); err != nil {
 		t.Fatalf("failed to stop protocol stack: %v", err)
 	}
-	for id, _ := range services {
+	for id := range services {
 		if !stopped[id] {
 			t.Fatalf("service %s: freshly terminated service still running", id)
 		}
@@ -218,7 +218,7 @@ func TestServiceRestarts(t *testing.T) {
 	}
 	defer stack.Stop()
 
-	if running != true || started != 1 {
+	if !running || started != 1 {
 		t.Fatalf("running/started mismatch: have %v/%d, want true/1", running, started)
 	}
 	// Restart the stack a few times and check successful service restarts
@@ -227,7 +227,7 @@ func TestServiceRestarts(t *testing.T) {
 			t.Fatalf("iter %d: failed to restart stack: %v", i, err)
 		}
 	}
-	if running != true || started != 4 {
+	if !running || started != 4 {
 		t.Fatalf("running/started mismatch: have %v/%d, want true/4", running, started)
 	}
 }
@@ -270,7 +270,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 		if err := stack.Start(); err != failure {
 			t.Fatalf("iter %d: stack startup failure mismatch: have %v, want %v", i, err, failure)
 		}
-		for id, _ := range services {
+		for id := range services {
 			if started[id] {
 				t.Fatalf("service %s: started should not have", id)
 			}
@@ -322,7 +322,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 		if err := stack.Start(); err != failure {
 			t.Fatalf("iter %d: stack startup failure mismatch: have %v, want %v", i, err, failure)
 		}
-		for id, _ := range services {
+		for id := range services {
 			if started[id] && !stopped[id] {
 				t.Fatalf("service %s: started but not stopped", id)
 			}
@@ -376,7 +376,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 		if err := stack.Start(); err != nil {
 			t.Fatalf("iter %d: failed to start protocol stack: %v", i, err)
 		}
-		for id, _ := range services {
+		for id := range services {
 			if !started[id] {
 				t.Fatalf("iter %d, service %s: service not running", i, id)
 			}
@@ -397,7 +397,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 				t.Fatalf("iter %d: failure count mismatch: have %d, want %d", i, len(err.Services), 1)
 			}
 		}
-		for id, _ := range services {
+		for id := range services {
 			if !stopped[id] {
 				t.Fatalf("iter %d, service %s: service not terminated", i, id)
 			}
@@ -507,41 +507,27 @@ func TestAPIGather(t *testing.T) {
 	}
 	// Register a batch of services with some configured APIs
 	calls := make(chan string, 1)
-
+	makeAPI := func(result string) *OneMethodApi {
+		return &OneMethodApi{fun: func() { calls <- result }}
+	}
 	services := map[string]struct {
 		APIs  []rpc.API
 		Maker InstrumentingWrapper
 	}{
-		"Zero APIs": {[]rpc.API{}, InstrumentedServiceMakerA},
-		"Single API": {[]rpc.API{
-			{
-				Namespace: "single",
-				Version:   "1",
-				Service:   &OneMethodApi{fun: func() { calls <- "single.v1" }},
-				Public:    true,
-			},
-		}, InstrumentedServiceMakerB},
-		"Many APIs": {[]rpc.API{
-			{
-				Namespace: "multi",
-				Version:   "1",
-				Service:   &OneMethodApi{fun: func() { calls <- "multi.v1" }},
-				Public:    true,
-			},
-			{
-				Namespace: "multi.v2",
-				Version:   "2",
-				Service:   &OneMethodApi{fun: func() { calls <- "multi.v2" }},
-				Public:    true,
-			},
-			{
-				Namespace: "multi.v2.nested",
-				Version:   "2",
-				Service:   &OneMethodApi{fun: func() { calls <- "multi.v2.nested" }},
-				Public:    true,
-			},
-		}, InstrumentedServiceMakerC},
+		"Zero APIs": {
+			[]rpc.API{}, InstrumentedServiceMakerA},
+		"Single API": {
+			[]rpc.API{
+				{Namespace: "single", Version: "1", Service: makeAPI("single.v1"), Public: true},
+			}, InstrumentedServiceMakerB},
+		"Many APIs": {
+			[]rpc.API{
+				{Namespace: "multi", Version: "1", Service: makeAPI("multi.v1"), Public: true},
+				{Namespace: "multi.v2", Version: "2", Service: makeAPI("multi.v2"), Public: true},
+				{Namespace: "multi.v2.nested", Version: "2", Service: makeAPI("multi.v2.nested"), Public: true},
+			}, InstrumentedServiceMakerC},
 	}
+
 	for id, config := range services {
 		config := config
 		constructor := func(*ServiceContext) (Service, error) {
@@ -574,12 +560,8 @@ func TestAPIGather(t *testing.T) {
 		{"multi.v2.nested_theOneMethod", "multi.v2.nested"},
 	}
 	for i, test := range tests {
-		if err := client.Send(rpc.JSONRequest{Id: []byte("1"), Version: "2.0", Method: test.Method}); err != nil {
-			t.Fatalf("test %d: failed to send API request: %v", i, err)
-		}
-		reply := new(rpc.JSONSuccessResponse)
-		if err := client.Recv(reply); err != nil {
-			t.Fatalf("test %d: failed to read API reply: %v", i, err)
+		if err := client.Call(nil, test.Method); err != nil {
+			t.Errorf("test %d: API request failed: %v", i, err)
 		}
 		select {
 		case result := <-calls:

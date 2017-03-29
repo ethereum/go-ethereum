@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // +build none
 //sed -e 's/_N_/Hash/g' -e 's/_S_/32/g' -e '1d' types_template.go | gofmt -w hash.go
@@ -37,7 +37,7 @@ func HexTo_N_(s string) _N_    { return BytesTo_N_(FromHex(s)) }
 // Get the string representation of the underlying hash
 func (h _N_) Str() string   { return string(h[:]) }
 func (h _N_) Bytes() []byte { return h[:] }
-func (h _N_) Big() *big.Int { return Bytes2Big(h[:]) }
+func (h _N_) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 func (h _N_) Hex() string   { return "0x" + Bytes2Hex(h[:]) }
 
 // Sets the hash to the value of b. If b is larger than len(h) it will panic

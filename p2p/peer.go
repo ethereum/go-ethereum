@@ -1,23 +1,22 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package p2p
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -25,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/common/mclock"
+	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/rlp"
 )
@@ -65,6 +64,8 @@ type protoHandshake struct {
 type Peer struct {
 	rw      *conn
 	running map[string]*protoRW
+	log     log.Logger
+	created mclock.AbsTime
 
 	wg       sync.WaitGroup
 	protoErr chan error
@@ -126,20 +127,25 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 	p := &Peer{
 		rw:       conn,
 		running:  protomap,
+		created:  mclock.Now(),
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
+		log:      log.New("id", conn.id, "conn", conn.flags),
 	}
 	return p
 }
 
-func (p *Peer) run() DiscReason {
+func (p *Peer) Log() log.Logger {
+	return p.log
+}
+
+func (p *Peer) run() (remoteRequested bool, err error) {
 	var (
 		writeStart = make(chan struct{}, 1)
 		writeErr   = make(chan error, 1)
 		readErr    = make(chan error, 1)
-		reason     DiscReason
-		requested  bool
+		reason     DiscReason // sent to the peer
 	)
 	p.wg.Add(2)
 	go p.readLoop(readErr)
@@ -153,31 +159,26 @@ func (p *Peer) run() DiscReason {
 loop:
 	for {
 		select {
-		case err := <-writeErr:
+		case err = <-writeErr:
 			// A write finished. Allow the next write to start if
 			// there was no error.
 			if err != nil {
-				glog.V(logger.Detail).Infof("%v: write error: %v\n", p, err)
 				reason = DiscNetworkError
 				break loop
 			}
 			writeStart <- struct{}{}
-		case err := <-readErr:
+		case err = <-readErr:
 			if r, ok := err.(DiscReason); ok {
-				glog.V(logger.Debug).Infof("%v: remote requested disconnect: %v\n", p, r)
-				requested = true
+				remoteRequested = true
 				reason = r
 			} else {
-				glog.V(logger.Detail).Infof("%v: read error: %v\n", p, err)
 				reason = DiscNetworkError
 			}
 			break loop
-		case err := <-p.protoErr:
+		case err = <-p.protoErr:
 			reason = discReasonForError(err)
-			glog.V(logger.Debug).Infof("%v: protocol error: %v (%v)\n", p, err, reason)
 			break loop
-		case reason = <-p.disc:
-			glog.V(logger.Debug).Infof("%v: locally requested disconnect: %v\n", p, reason)
+		case err = <-p.disc:
 			break loop
 		}
 	}
@@ -185,10 +186,7 @@ loop:
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
-	if requested {
-		reason = DiscRequested
-	}
-	return reason
+	return remoteRequested, err
 }
 
 func (p *Peer) pingLoop() {
@@ -298,14 +296,14 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
-		glog.V(logger.Detail).Infof("%v: Starting protocol %s/%d\n", p, proto.Name, proto.Version)
+		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {
 			err := proto.Run(p, proto)
 			if err == nil {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d returned\n", p, proto.Name, proto.Version)
-				err = errors.New("protocol returned")
+				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
+				err = errProtocolReturned
 			} else if err != io.EOF {
-				glog.V(logger.Detail).Infof("%v: Protocol %s/%d error: %v\n", p, proto.Name, proto.Version, err)
+				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err
 			p.wg.Done()

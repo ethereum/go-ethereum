@@ -1,25 +1,32 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package trie
 
 import (
+<<<<<<< HEAD
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/logger"
 	"github.com/expanse-org/go-expanse/logger/glog"
+=======
+	"fmt"
+
+	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/log"
+>>>>>>> rebase-1.5.9
 )
 
 var secureKeyPrefix = []byte("secure-key-")
@@ -49,8 +56,12 @@ type SecureTrie struct {
 // If root is the zero hash or the sha3 hash of an empty string, the
 // trie is initially empty. Otherwise, New will panic if db is nil
 // and returns MissingNodeError if the root node cannot be found.
+//
 // Accessing the trie loads nodes from db on demand.
-func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
+// Loaded nodes are kept around until their 'cache generation' expires.
+// A new cache generation is created by each call to Commit.
+// cachelimit sets the number of past cache generations to keep.
+func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, error) {
 	if db == nil {
 		panic("NewSecure called with nil database")
 	}
@@ -58,17 +69,16 @@ func NewSecure(root common.Hash, db Database) (*SecureTrie, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SecureTrie{
-		trie: *trie,
-	}, nil
+	trie.SetCacheLimit(cachelimit)
+	return &SecureTrie{trie: *trie}, nil
 }
 
 // Get returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
-	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 	return res
 }
@@ -87,8 +97,8 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *SecureTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryUpdate(key, value); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -112,8 +122,8 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 
 // Delete removes any existing value for key from the trie.
 func (t *SecureTrie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryDelete(key); err != nil {
+		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
 }
 
@@ -156,7 +166,7 @@ func (t *SecureTrie) Iterator() *Iterator {
 	return t.trie.Iterator()
 }
 
-func (t *SecureTrie) NodeIterator() *NodeIterator {
+func (t *SecureTrie) NodeIterator() NodeIterator {
 	return NewNodeIterator(&t.trie)
 }
 
@@ -191,7 +201,7 @@ func (t *SecureTrie) secKey(key []byte) []byte {
 // The caller must not hold onto the return value because it will become
 // invalid on the next call to hashKey or secKey.
 func (t *SecureTrie) hashKey(key []byte) []byte {
-	h := newHasher()
+	h := newHasher(0, 0)
 	h.sha.Reset()
 	h.sha.Write(key)
 	buf := h.sha.Sum(t.hashKeyBuf[:0])

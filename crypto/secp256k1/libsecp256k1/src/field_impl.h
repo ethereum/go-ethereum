@@ -21,6 +21,13 @@
 #error "Please select field implementation"
 #endif
 
+SECP256K1_INLINE static int secp256k1_fe_equal(const secp256k1_fe *a, const secp256k1_fe *b) {
+    secp256k1_fe na;
+    secp256k1_fe_negate(&na, a, 1);
+    secp256k1_fe_add(&na, b);
+    return secp256k1_fe_normalizes_to_zero(&na);
+}
+
 SECP256K1_INLINE static int secp256k1_fe_equal_var(const secp256k1_fe *a, const secp256k1_fe *b) {
     secp256k1_fe na;
     secp256k1_fe_negate(&na, a, 1);
@@ -28,7 +35,16 @@ SECP256K1_INLINE static int secp256k1_fe_equal_var(const secp256k1_fe *a, const 
     return secp256k1_fe_normalizes_to_zero_var(&na);
 }
 
-static int secp256k1_fe_sqrt_var(secp256k1_fe *r, const secp256k1_fe *a) {
+static int secp256k1_fe_sqrt(secp256k1_fe *r, const secp256k1_fe *a) {
+    /** Given that p is congruent to 3 mod 4, we can compute the square root of
+     *  a mod p as the (p+1)/4'th power of a.
+     *
+     *  As (p+1)/4 is an even number, it will have the same result for a and for
+     *  (-a). Only one of these two numbers actually has a square root however,
+     *  so we test at the end by squaring and comparing to the input.
+     *  Also because (p+1)/4 is an even number, the computed square root is
+     *  itself always a square (a ** ((p+1)/4) is the square of a ** ((p+1)/8)).
+     */
     secp256k1_fe x2, x3, x6, x9, x11, x22, x44, x88, x176, x220, x223, t1;
     int j;
 
@@ -114,7 +130,7 @@ static int secp256k1_fe_sqrt_var(secp256k1_fe *r, const secp256k1_fe *a) {
     /* Check that a square root was actually calculated */
 
     secp256k1_fe_sqr(&t1, r);
-    return secp256k1_fe_equal_var(&t1, a);
+    return secp256k1_fe_equal(&t1, a);
 }
 
 static void secp256k1_fe_inv(secp256k1_fe *r, const secp256k1_fe *a) {
@@ -224,6 +240,7 @@ static void secp256k1_fe_inv_var(secp256k1_fe *r, const secp256k1_fe *a) {
         0xFF,0xFF,0xFF,0xFE,0xFF,0xFF,0xFC,0x2F
     };
     unsigned char b[32];
+    int res;
     secp256k1_fe c = *a;
     secp256k1_fe_normalize_var(&c);
     secp256k1_fe_get_b32(b, &c);
@@ -231,7 +248,9 @@ static void secp256k1_fe_inv_var(secp256k1_fe *r, const secp256k1_fe *a) {
     secp256k1_num_set_bin(&m, prime, 32);
     secp256k1_num_mod_inverse(&n, &n, &m);
     secp256k1_num_get_bin(b, 32, &n);
-    VERIFY_CHECK(secp256k1_fe_set_b32(r, b));
+    res = secp256k1_fe_set_b32(r, b);
+    (void)res;
+    VERIFY_CHECK(res);
     /* Verify the result is the (unique) valid inverse using non-GMP code. */
     secp256k1_fe_mul(&c, &c, r);
     secp256k1_fe_add(&c, &negone);
@@ -241,7 +260,7 @@ static void secp256k1_fe_inv_var(secp256k1_fe *r, const secp256k1_fe *a) {
 #endif
 }
 
-static void secp256k1_fe_inv_all_var(size_t len, secp256k1_fe *r, const secp256k1_fe *a) {
+static void secp256k1_fe_inv_all_var(secp256k1_fe *r, const secp256k1_fe *a, size_t len) {
     secp256k1_fe u;
     size_t i;
     if (len < 1) {
@@ -266,6 +285,31 @@ static void secp256k1_fe_inv_all_var(size_t len, secp256k1_fe *r, const secp256k
     }
 
     r[0] = u;
+}
+
+static int secp256k1_fe_is_quad_var(const secp256k1_fe *a) {
+#ifndef USE_NUM_NONE
+    unsigned char b[32];
+    secp256k1_num n;
+    secp256k1_num m;
+    /* secp256k1 field prime, value p defined in "Standards for Efficient Cryptography" (SEC2) 2.7.1. */
+    static const unsigned char prime[32] = {
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+        0xFF,0xFF,0xFF,0xFE,0xFF,0xFF,0xFC,0x2F
+    };
+
+    secp256k1_fe c = *a;
+    secp256k1_fe_normalize_var(&c);
+    secp256k1_fe_get_b32(b, &c);
+    secp256k1_num_set_bin(&n, b, 32);
+    secp256k1_num_set_bin(&m, prime, 32);
+    return secp256k1_num_jacobi(&n, &m) >= 0;
+#else
+    secp256k1_fe r;
+    return secp256k1_fe_sqrt(&r, a);
+#endif
 }
 
 #endif

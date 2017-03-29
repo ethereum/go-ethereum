@@ -60,7 +60,7 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 		state.updateStateObject(obj)
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit()
+	root, _ := state.Commit(false)
 
 	// Return the generated state
 	return db, root, accounts
@@ -84,7 +84,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 		if nonce := state.GetNonce(acc.address); nonce != acc.nonce {
 			t.Errorf("account %d: nonce mismatch: have %v, want %v", i, nonce, acc.nonce)
 		}
-		if code := state.GetCode(acc.address); bytes.Compare(code, acc.code) != 0 {
+		if code := state.GetCode(acc.address); !bytes.Equal(code, acc.code) {
 			t.Errorf("account %d: code mismatch: have %x, want %x", i, code, acc.code)
 		}
 	}
@@ -138,7 +138,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[:0], sched.Missing(batch)...)
@@ -168,7 +168,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[len(results):], sched.Missing(0)...)
@@ -198,7 +198,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 	for len(queue) > 0 {
 		// Fetch all the queued nodes in a random order
 		results := make([]trie.SyncResult, 0, len(queue))
-		for hash, _ := range queue {
+		for hash := range queue {
 			data, err := srcDb.Get(hash.Bytes())
 			if err != nil {
 				t.Fatalf("failed to retrieve node data for %x: %v", hash, err)
@@ -206,7 +206,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = make(map[common.Hash]struct{})
@@ -235,7 +235,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	for len(queue) > 0 {
 		// Sync only half of the scheduled nodes, even those in random order
 		results := make([]trie.SyncResult, 0, len(queue)/2+1)
-		for hash, _ := range queue {
+		for hash := range queue {
 			delete(queue, hash)
 
 			data, err := srcDb.Get(hash.Bytes())
@@ -249,7 +249,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, hash := range sched.Missing(0) {
@@ -283,7 +283,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
 		// Process each of the state nodes
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results, dstDb); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, result := range results {
@@ -294,7 +294,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			// Skim through the accounts and make sure the root hash is not a code node
 			codeHash := false
 			for _, acc := range srcAccounts {
-				if bytes.Compare(root.Bytes(), crypto.Sha3(acc.code)) == 0 {
+				if root == crypto.Keccak256Hash(acc.code) {
 					codeHash = true
 					break
 				}

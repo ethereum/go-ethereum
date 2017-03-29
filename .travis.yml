@@ -1,25 +1,30 @@
 language: go
-go:
-  - 1.4.2
-  - 1.5.4
-  - 1.6.2
-install:
-  # - go get code.google.com/p/go.tools/cmd/goimports
-  # - go get github.com/golang/lint/golint
-  # - go get golang.org/x/tools/cmd/vet
-  - go get golang.org/x/tools/cmd/cover
-before_script:
-  # - gofmt -l -w .
-  # - goimports -l -w .
-  # - golint .
-  # - go vet ./...
-  # - go test -race ./...
-script:
-  - make gexp
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
-env:
-  global:
-    - secure: "U2U1AmkU4NJBgKR/uUAebQY87cNL0+1JHjnLOmmXwxYYyj5ralWb1aSuSH3qSXiT93qLBmtaUkuv9fberHVqrbAeVlztVdUsKAq7JMQH+M99iFkC9UiRMqHmtjWJ0ok4COD1sRYixxi21wb/JrMe3M1iL4QJVS61iltjHhVdM64="
+go_import_path: github.com/expanse-org/go-expanse
 sudo: false
-notifications:
+matrix:
+  include:
+
+    - os: linux
+      dist: trusty
+      sudo: required
+      go: 1.8
+      script:
+        - sudo -E apt-get -yq --no-install-suggests --no-install-recommends --force-yes install fuse
+        - sudo modprobe fuse
+        - sudo chmod 666 /dev/fuse
+        - sudo chown root:$USER /etc/fuse.conf
+        - go run build/ci.go install
+
+    - os: osx
+      go: 1.8
+      sudo: required
+      script:
+        - brew update
+        - brew install caskroom/cask/brew-cask
+        - brew cask install osxfuse
+        - go run build/ci.go install
+
+install:
+  - go get golang.org/x/tools/cmd/cover
+script:
+  - go run build/ci.go install

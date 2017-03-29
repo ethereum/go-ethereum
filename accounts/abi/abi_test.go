@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -67,10 +67,10 @@ func TestTypeCheck(t *testing.T) {
 		{"uint16[3]", [4]uint16{1, 2, 3}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
 		{"uint16[3]", []uint16{1, 2, 3}, ""},
 		{"uint16[3]", []uint16{1, 2, 3, 4}, "abi: cannot use [4]uint16 as type [3]uint16 as argument"},
-		{"address[]", []common.Address{common.Address{1}}, ""},
-		{"address[1]", []common.Address{common.Address{1}}, ""},
-		{"address[1]", [1]common.Address{common.Address{1}}, ""},
-		{"address[2]", [1]common.Address{common.Address{1}}, "abi: cannot use [1]array as type [2]array as argument"},
+		{"address[]", []common.Address{{1}}, ""},
+		{"address[1]", []common.Address{{1}}, ""},
+		{"address[1]", [1]common.Address{{1}}, ""},
+		{"address[2]", [1]common.Address{{1}}, "abi: cannot use [1]array as type [2]array as argument"},
 		{"bytes32", [32]byte{}, ""},
 		{"bytes32", [33]byte{}, "abi: cannot use [33]uint8 as type [32]uint8 as argument"},
 		{"bytes32", common.Hash{1}, ""},
@@ -80,7 +80,8 @@ func TestTypeCheck(t *testing.T) {
 		{"bytes", [2]byte{0, 1}, ""},
 		{"bytes", common.Hash{1}, ""},
 		{"string", "hello world", ""},
-		{"bytes32[]", [][32]byte{[32]byte{}}, ""},
+		{"bytes32[]", [][32]byte{{}}, ""},
+		{"function", [24]byte{}, ""},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
@@ -197,6 +198,13 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			"interface",
 			"",
 		},
+		{
+			`[ { "type": "function" } ]`,
+			pad([]byte{1}, 32, false),
+			[24]byte{1},
+			"function",
+			"",
+		},
 	} {
 		abiDefinition := fmt.Sprintf(`[{ "name" : "method", "outputs": %s}]`, test.def)
 		abi, err := JSON(strings.NewReader(abiDefinition))
@@ -253,6 +261,10 @@ func TestSimpleMethodUnpack(t *testing.T) {
 			outvar = v
 		case "hash":
 			var v common.Hash
+			err = abi.Unpack(&v, "method", test.marshalledOutput)
+			outvar = v
+		case "function":
+			var v [24]byte
 			err = abi.Unpack(&v, "method", test.marshalledOutput)
 			outvar = v
 		case "interface":
@@ -320,6 +332,30 @@ func TestUnpackSetInterfaceSlice(t *testing.T) {
 	}
 }
 
+func TestUnpackSetInterfaceArrayOutput(t *testing.T) {
+	var (
+		var1 = new([1]uint32)
+		var2 = new([1]uint32)
+	)
+	out := []interface{}{var1, var2}
+	abi, err := JSON(strings.NewReader(`[{"type":"function", "name":"ints", "outputs":[{"type":"uint32[1]"}, {"type":"uint32[1]"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marshalledReturn := append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...)
+	err = abi.Unpack(&out, "ints", marshalledReturn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if *var1 != [1]uint32{1} {
+		t.Error("expected var1 to be [1], got", *var1)
+	}
+	if *var2 != [1]uint32{2} {
+		t.Error("expected var2 to be [2], got", *var2)
+	}
+}
+
 func TestPack(t *testing.T) {
 	for i, test := range []struct {
 		typ string
@@ -331,8 +367,9 @@ func TestPack(t *testing.T) {
 		{"uint16[]", []uint16{1, 2}, formatSliceOutput([]byte{1}, []byte{2})},
 		{"bytes20", [20]byte{1}, pad([]byte{1}, 32, false)},
 		{"uint256[]", []*big.Int{big.NewInt(1), big.NewInt(2)}, formatSliceOutput([]byte{1}, []byte{2})},
-		{"address[]", []common.Address{common.Address{1}, common.Address{2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
-		{"bytes32[]", []common.Hash{common.Hash{1}, common.Hash{2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
+		{"address[]", []common.Address{{1}, {2}}, formatSliceOutput(pad([]byte{1}, 20, false), pad([]byte{2}, 20, false))},
+		{"bytes32[]", []common.Hash{{1}, {2}}, formatSliceOutput(pad([]byte{1}, 32, false), pad([]byte{2}, 32, false))},
+		{"function", [24]byte{1}, pad([]byte{1}, 32, false)},
 	} {
 		typ, err := NewType(test.typ)
 		if err != nil {
@@ -357,8 +394,6 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	sig := abi.Methods["slice"].Id()
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
@@ -406,8 +441,6 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	sig = abi.Methods["slice256"].Id()
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
@@ -449,12 +482,12 @@ func TestReader(t *testing.T) {
 	Uint256, _ := NewType("uint256")
 	exp := ABI{
 		Methods: map[string]Method{
-			"balance": Method{
+			"balance": {
 				"balance", true, nil, nil,
 			},
-			"send": Method{
+			"send": {
 				"send", false, []Argument{
-					Argument{"amount", Uint256, false},
+					{"amount", Uint256, false},
 				}, nil,
 			},
 		},
@@ -553,7 +586,7 @@ func TestTestSlice(t *testing.T) {
 
 func TestMethodSignature(t *testing.T) {
 	String, _ := NewType("string")
-	m := Method{"foo", false, []Argument{Argument{"bar", String, false}, Argument{"baz", String, false}}, nil}
+	m := Method{"foo", false, []Argument{{"bar", String, false}, {"baz", String, false}}, nil}
 	exp := "foo(string,string)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -565,7 +598,7 @@ func TestMethodSignature(t *testing.T) {
 	}
 
 	uintt, _ := NewType("uint")
-	m = Method{"foo", false, []Argument{Argument{"bar", uintt, false}}, nil}
+	m = Method{"foo", false, []Argument{{"bar", uintt, false}}, nil}
 	exp = "foo(uint256)"
 	if m.Sig() != exp {
 		t.Error("signature mismatch", exp, "!=", m.Sig())
@@ -756,23 +789,58 @@ func TestDefaultFunctionParsing(t *testing.T) {
 func TestBareEvents(t *testing.T) {
 	const definition = `[
 	{ "type" : "event", "name" : "balance" },
-	{ "type" : "event", "name" : "name" }]`
+	{ "type" : "event", "name" : "anon", "anonymous" : true},
+	{ "type" : "event", "name" : "args", "inputs" : [{ "indexed":false, "name":"arg0", "type":"uint256" }, { "indexed":true, "name":"arg1", "type":"address" }] }
+	]`
+
+	arg0, _ := NewType("uint256")
+	arg1, _ := NewType("address")
+
+	expectedEvents := map[string]struct {
+		Anonymous bool
+		Args      []Argument
+	}{
+		"balance": {false, nil},
+		"anon":    {true, nil},
+		"args": {false, []Argument{
+			{Name: "arg0", Type: arg0, Indexed: false},
+			{Name: "arg1", Type: arg1, Indexed: true},
+		}},
+	}
 
 	abi, err := JSON(strings.NewReader(definition))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(abi.Events) != 2 {
-		t.Error("expected 2 events")
+	if len(abi.Events) != len(expectedEvents) {
+		t.Fatalf("invalid number of events after parsing, want %d, got %d", len(expectedEvents), len(abi.Events))
 	}
 
-	if _, ok := abi.Events["balance"]; !ok {
-		t.Error("expected 'balance' event to be present")
-	}
-
-	if _, ok := abi.Events["name"]; !ok {
-		t.Error("expected 'name' event to be present")
+	for name, exp := range expectedEvents {
+		got, ok := abi.Events[name]
+		if !ok {
+			t.Errorf("could not found event %s", name)
+			continue
+		}
+		if got.Anonymous != exp.Anonymous {
+			t.Errorf("invalid anonymous indication for event %s, want %v, got %v", name, exp.Anonymous, got.Anonymous)
+		}
+		if len(got.Inputs) != len(exp.Args) {
+			t.Errorf("invalid number of args, want %d, got %d", len(exp.Args), len(got.Inputs))
+			continue
+		}
+		for i, arg := range exp.Args {
+			if arg.Name != got.Inputs[i].Name {
+				t.Errorf("events[%s].Input[%d] has an invalid name, want %s, got %s", name, i, arg.Name, got.Inputs[i].Name)
+			}
+			if arg.Indexed != got.Inputs[i].Indexed {
+				t.Errorf("events[%s].Input[%d] has an invalid indexed indication, want %v, got %v", name, i, arg.Indexed, got.Inputs[i].Indexed)
+			}
+			if arg.Type.T != got.Inputs[i].Type.T {
+				t.Errorf("events[%s].Input[%d] has an invalid type, want %x, got %x", name, i, arg.Type.T, got.Inputs[i].Type.T)
+			}
+		}
 	}
 }
 
@@ -931,6 +999,7 @@ func TestUnmarshal(t *testing.T) {
 	{ "name" : "bytes", "constant" : false, "outputs": [ { "type": "bytes" } ] },
 	{ "name" : "fixed", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
 	{ "name" : "multi", "constant" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
+	{ "name" : "intArraySingle", "constant" : false, "outputs": [ { "type": "uint256[3]" } ] },
 	{ "name" : "addressSliceSingle", "constant" : false, "outputs": [ { "type": "address[]" } ] },
 	{ "name" : "addressSliceDouble", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
 	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
@@ -1083,6 +1152,26 @@ func TestUnmarshal(t *testing.T) {
 		t.Errorf("expected %x, got %x", fixed, out[1])
 	}
 
+	buff.Reset()
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000003"))
+	// marshal int array
+	var intArray [3]*big.Int
+	err = abi.Unpack(&intArray, "intArraySingle", buff.Bytes())
+	if err != nil {
+		t.Error(err)
+	}
+	var testAgainstIntArray [3]*big.Int
+	testAgainstIntArray[0] = big.NewInt(1)
+	testAgainstIntArray[1] = big.NewInt(2)
+	testAgainstIntArray[2] = big.NewInt(3)
+
+	for i, Int := range intArray {
+		if Int.Cmp(testAgainstIntArray[i]) != 0 {
+			t.Errorf("expected %v, got %v", testAgainstIntArray[i], Int)
+		}
+	}
 	// marshal address slice
 	buff.Reset()
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020")) // offset

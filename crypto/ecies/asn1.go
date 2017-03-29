@@ -42,7 +42,7 @@ import (
 	"hash"
 	"math/big"
 
-	"github.com/expanse-org/go-expanse/crypto/secp256k1"
+	ethcrypto "github.com/expanse-org/go-expanse/crypto"
 )
 
 var (
@@ -109,7 +109,7 @@ func (curve secgNamedCurve) Equal(curve2 secgNamedCurve) bool {
 	if len(curve) != len(curve2) {
 		return false
 	}
-	for i, _ := range curve {
+	for i := range curve {
 		if curve[i] != curve2[i] {
 			return false
 		}
@@ -120,7 +120,7 @@ func (curve secgNamedCurve) Equal(curve2 secgNamedCurve) bool {
 func namedCurveFromOID(curve secgNamedCurve) elliptic.Curve {
 	switch {
 	case curve.Equal(secgNamedCurveS256):
-		return secp256k1.S256()
+		return ethcrypto.S256()
 	case curve.Equal(secgNamedCurveP256):
 		return elliptic.P256()
 	case curve.Equal(secgNamedCurveP384):
@@ -139,7 +139,7 @@ func oidFromNamedCurve(curve elliptic.Curve) (secgNamedCurve, bool) {
 		return secgNamedCurveP384, true
 	case elliptic.P521():
 		return secgNamedCurveP521, true
-	case secp256k1.S256():
+	case ethcrypto.S256():
 		return secgNamedCurveS256, true
 	}
 
@@ -157,7 +157,7 @@ func (a asnAlgorithmIdentifier) Cmp(b asnAlgorithmIdentifier) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -306,7 +306,7 @@ func (a asnECDHAlgorithm) Cmp(b asnECDHAlgorithm) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -325,7 +325,7 @@ func (a asnKeyDerivationFunction) Cmp(b asnKeyDerivationFunction) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -360,7 +360,7 @@ func (a asnSymmetricEncryption) Cmp(b asnSymmetricEncryption) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}
@@ -380,7 +380,7 @@ func (a asnMessageAuthenticationCode) Cmp(b asnMessageAuthenticationCode) bool {
 	if len(a.Algorithm) != len(b.Algorithm) {
 		return false
 	}
-	for i, _ := range a.Algorithm {
+	for i := range a.Algorithm {
 		if a.Algorithm[i] != b.Algorithm[i] {
 			return false
 		}

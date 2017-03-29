@@ -78,10 +78,6 @@ func set(dst, src reflect.Value, output Argument) error {
 	case dstType.AssignableTo(src.Type()):
 		dst.Set(src)
 	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
-		if !dstType.Elem().AssignableTo(r_byte) {
-			return fmt.Errorf("abi: cannot unmarshal %v in to array of elem %v", src.Type(), dstType.Elem())
-		}
-
 		if dst.Len() < output.Type.SliceSize {
 			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
 		}

@@ -13,8 +13,8 @@ Vagrant.configure(2) do |config|
 
   config.vm.provision "shell", inline: <<-SHELL
     sudo apt-get install software-properties-common
-    sudo add-apt-repository -y ppa:ethereum/ethereum
-    sudo add-apt-repository -y ppa:ethereum/ethereum-dev
+    sudo add-apt-repository -y ppa:expanse/expanse
+    sudo add-apt-repository -y ppa:expanse/expanse-dev
     sudo apt-get update
 
     sudo apt-get install -y build-essential golang git-all

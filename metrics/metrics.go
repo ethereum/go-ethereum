@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package metrics provides general system and process level metrics collection.
 package metrics
@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/log"
 	"github.com/rcrowley/go-metrics"
+	"github.com/rcrowley/go-metrics/exp"
 )
 
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
@@ -40,10 +40,20 @@ var Enabled = false
 func init() {
 	for _, arg := range os.Args {
 		if strings.TrimLeft(arg, "-") == MetricsEnabledFlag {
-			glog.V(logger.Info).Infof("Enabling metrics collection")
+			log.Info("Enabling metrics collection")
 			Enabled = true
 		}
 	}
+	exp.Exp(metrics.DefaultRegistry)
+}
+
+// NewCounter create a new metrics Counter, either a real one of a NOP stub depending
+// on the metrics flag.
+func NewCounter(name string) metrics.Counter {
+	if !Enabled {
+		return new(metrics.NilCounter)
+	}
+	return metrics.GetOrRegisterCounter(name, metrics.DefaultRegistry)
 }
 
 // NewMeter create a new metrics Meter, either a real one of a NOP stub depending
@@ -91,7 +101,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWrites = metrics.GetOrRegisterMeter("system/disk/writecount", metrics.DefaultRegistry)
 		diskWriteBytes = metrics.GetOrRegisterMeter("system/disk/writedata", metrics.DefaultRegistry)
 	} else {
-		glog.V(logger.Debug).Infof("failed to read disk metrics: %v", err)
+		log.Debug("Failed to read disk metrics", "err", err)
 	}
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {

@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/common/math"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation
@@ -45,16 +46,16 @@ func packElement(t Type, reflectValue reflect.Value) []byte {
 		return common.LeftPadBytes(reflectValue.Bytes(), 32)
 	case BoolTy:
 		if reflectValue.Bool() {
-			return common.LeftPadBytes(common.Big1.Bytes(), 32)
+			return math.PaddedBigBytes(common.Big1, 32)
 		} else {
-			return common.LeftPadBytes(common.Big0.Bytes(), 32)
+			return math.PaddedBigBytes(common.Big0, 32)
 		}
 	case BytesTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}
 		return packBytesSlice(reflectValue.Bytes(), reflectValue.Len())
-	case FixedBytesTy:
+	case FixedBytesTy, FunctionTy:
 		if reflectValue.Kind() == reflect.Array {
 			reflectValue = mustArrayToByteSlice(reflectValue)
 		}

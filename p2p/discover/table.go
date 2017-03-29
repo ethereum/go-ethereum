@@ -1,18 +1,18 @@
-// Copyright 2015 The go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package discover implements the Node Discovery Protocol.
 //
@@ -34,8 +34,7 @@ import (
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
+	"github.com/expanse-org/go-expanse/log"
 )
 
 const (
@@ -278,10 +277,10 @@ func (tab *Table) lookup(targetID NodeID, refreshIfEmpty bool) []*Node {
 						// Bump the failure counter to detect and evacuate non-bonded entries
 						fails := tab.db.findFails(n.ID) + 1
 						tab.db.updateFindFails(n.ID, fails)
-						glog.V(logger.Detail).Infof("Bumping failures for %x: %d", n.ID[:8], fails)
+						log.Trace("Bumping findnode failure counter", "id", n.ID, "failcount", fails)
 
 						if fails >= maxFindnodeFailures {
-							glog.V(logger.Detail).Infof("Evacuating node %x: %d findnode failures", n.ID[:8], fails)
+							log.Trace("Too many findnode failures, dropping", "id", n.ID, "failcount", fails)
 							tab.delete(n)
 						}
 					}
@@ -384,14 +383,13 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// (hopefully) still alive.
 	seeds := tab.db.querySeeds(seedCount, seedMaxAge)
 	seeds = tab.bondall(append(seeds, tab.nursery...))
-	if glog.V(logger.Debug) {
-		if len(seeds) == 0 {
-			glog.Infof("no seed nodes found")
-		}
-		for _, n := range seeds {
-			age := time.Since(tab.db.lastPong(n.ID))
-			glog.Infof("seed node (age %v): %v", age, n)
-		}
+
+	if len(seeds) == 0 {
+		log.Debug("No discv4 seed nodes found")
+	}
+	for _, n := range seeds {
+		age := log.Lazy{Fn: func() time.Duration { return time.Since(tab.db.lastPong(n.ID)) }}
+		log.Trace("Found seed node in database", "id", n.ID, "addr", n.addr(), "age", age)
 	}
 	tab.mutex.Lock()
 	tab.stuff(seeds)
@@ -433,7 +431,7 @@ func (tab *Table) bondall(nodes []*Node) (result []*Node) {
 			rc <- nn
 		}(nodes[i])
 	}
-	for _ = range nodes {
+	for range nodes {
 		if n := <-rc; n != nil {
 			result = append(result, n)
 		}
@@ -470,7 +468,7 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 	var result error
 	age := time.Since(tab.db.lastPong(id))
 	if node == nil || fails > 0 || age > nodeDBNodeExpiration {
-		glog.V(logger.Detail).Infof("Bonding %x: known=%t, fails=%d age=%v", id[:8], node != nil, fails, age)
+		log.Trace("Starting bonding ping/pong", "id", id, "known", node != nil, "failcount", fails, "age", age)
 
 		tab.bondmu.Lock()
 		w := tab.bonding[id]

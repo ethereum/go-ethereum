@@ -1,18 +1,18 @@
-// Copyright 2014 The go-ethereum Authors && Copyright 2015 go-expanse Authors
-// This file is part of the go-expanse library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-expanse library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-expanse library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-expanse library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rlp
 
@@ -37,11 +37,12 @@ type typeinfo struct {
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool
-
 	// rlp:"tail" controls whether this field swallows additional list
 	// elements. It can only be set for the last field, which must be
 	// of slice type.
 	tail bool
+	// rlp:"-" ignores fields.
+	ignored bool
 }
 
 type typekey struct {
@@ -101,6 +102,9 @@ func structFields(typ reflect.Type) (fields []field, err error) {
 			if err != nil {
 				return nil, err
 			}
+			if tags.ignored {
+				continue
+			}
 			info, err := cachedTypeInfo1(f.Type, tags)
 			if err != nil {
 				return nil, err
@@ -117,6 +121,8 @@ func parseStructTag(typ reflect.Type, fi int) (tags, error) {
 	for _, t := range strings.Split(f.Tag.Get("rlp"), ",") {
 		switch t = strings.TrimSpace(t); t {
 		case "":
+		case "-":
+			ts.ignored = true
 		case "nil":
 			ts.nilOK = true
 		case "tail":
