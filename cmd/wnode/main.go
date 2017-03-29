@@ -627,8 +627,7 @@ func requestExpiredMessagesLoop() {
 
 		msg := whisper.NewSentMessage(&params)
 		if msg == nil {
-			fmt.Printf("failed to create new message (OS level error)")
-			os.Exit(0)
+			utils.Fatalf("failed to create new message (OS level error)")
 		}
 		env, err := msg.Wrap(&params)
 		if err != nil {
@@ -648,7 +647,6 @@ func extractIdFromEnode(s string) []byte {
 	n, err := discover.ParseNode(s)
 	if err != nil {
 		utils.Fatalf("Failed to parse enode: %s", err)
-		return nil
 	}
 	return n.ID[:]
 }

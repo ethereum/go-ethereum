@@ -110,15 +110,15 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					log.Trace(fmt.Sprintf("msg [%x], filter [%d]: failed to open", env.Hash(), i))
+					log.Trace("processing message: failed to open", "message", env.Hash().Hex(), "filter", i)
 				}
 			} else {
-				log.Trace(fmt.Sprintf("msg [%x], filter [%d]: does not match", env.Hash(), i))
+				log.Trace("processing message: does not match", "message", env.Hash().Hex(), "filter", i)
 			}
 		}
 
 		if match && msg != nil {
-			log.Trace(fmt.Sprintf("message decrypted [%x]", env.Hash()))
+			log.Trace("processing message: decrypted", "hash", env.Hash().Hex())
 			watcher.Trigger(msg)
 		}
 	}
@@ -130,10 +130,10 @@ func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
 		if msg != nil {
 			return msg
 		} else {
-			log.Trace(fmt.Sprintf("processing msg [%x]: failed to open", env.Hash()))
+			log.Trace("processing envelope: failed to open", "hash", env.Hash().Hex())
 		}
 	} else {
-		log.Trace(fmt.Sprintf("processing msg [%x]: does not match", env.Hash()))
+		log.Trace("processing envelope: does not match", "hash", env.Hash().Hex())
 	}
 	return nil
 }
@@ -229,6 +229,6 @@ func IsPubKeyEqual(a, b *ecdsa.PublicKey) bool {
 	} else if !ValidatePublicKey(b) {
 		return false
 	}
-	// the Curve is always the same, just compare the points
+	// the curve is always the same, just compare the points
 	return a.X.Cmp(b.X) == 0 && a.Y.Cmp(b.Y) == 0
 }
