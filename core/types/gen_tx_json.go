@@ -15,7 +15,7 @@ func (t txdata) MarshalJSON() ([]byte, error) {
 	type txdataJSON struct {
 		AccountNonce hexutil.Uint64  `json:"nonce"`
 		Price        *hexutil.Big    `json:"gasPrice"`
-		GasLimit     *hexutil.Big    `json:"gasLimit"`
+		GasLimit     *hexutil.Big    `json:"gas"`
 		Recipient    *common.Address `json:"to" optional:"yes" rlp:"nil"`
 		Amount       *hexutil.Big    `json:"value"`
 		Payload      hexutil.Bytes   `json:"input"`
@@ -42,7 +42,7 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 	type txdataJSON struct {
 		AccountNonce *hexutil.Uint64 `json:"nonce"`
 		Price        *hexutil.Big    `json:"gasPrice"`
-		GasLimit     *hexutil.Big    `json:"gasLimit"`
+		GasLimit     *hexutil.Big    `json:"gas"`
 		Recipient    *common.Address `json:"to" optional:"yes" rlp:"nil"`
 		Amount       *hexutil.Big    `json:"value"`
 		Payload      hexutil.Bytes   `json:"input"`
@@ -65,7 +65,7 @@ func (t *txdata) UnmarshalJSON(input []byte) error {
 	}
 	x.Price = (*big.Int)(dec.Price)
 	if dec.GasLimit == nil {
-		return errors.New("missing required field 'gasLimit' for txdata")
+		return errors.New("missing required field 'gas' for txdata")
 	}
 	x.GasLimit = (*big.Int)(dec.GasLimit)
 	if dec.Recipient != nil {
