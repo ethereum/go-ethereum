@@ -24,22 +24,15 @@ import (
 	"os"
 
 	"github.com/expanse-org/go-expanse/common"
-<<<<<<< HEAD
-=======
 	"github.com/expanse-org/go-expanse/common/math"
->>>>>>> rebase-1.5.9
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/core/vm"
 	"github.com/expanse-org/go-expanse/crypto"
 	"github.com/expanse-org/go-expanse/ethdb"
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
->>>>>>> rebase-1.5.9
 )
 
 var (

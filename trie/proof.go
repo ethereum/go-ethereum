@@ -23,12 +23,7 @@ import (
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/crypto/sha3"
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> rebase-1.5.9
 	"github.com/expanse-org/go-expanse/rlp"
 )
 

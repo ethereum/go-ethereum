@@ -17,7 +17,7 @@ RUN apt-get install -y git mercurial build-essential software-properties-common 
 ## Install Qt5.4 dependencies from PPA
 RUN add-apt-repository ppa:beineri/opt-qt54-trusty -y
 RUN apt-get update -y
-RUN apt-get install -y qt54quickcontrols qt54webengine 
+RUN apt-get install -y qt54quickcontrols qt54webengine
 
 ## Build and install latest Go
 RUN git clone https://go.googlesource.com/go golang
@@ -42,10 +42,6 @@ RUN git pull
 
 
 RUN ETH_DEPS=$(go list -f '{{.Imports}} {{.TestImports}} {{.XTestImports}}' github.com/expanse-org/go-expanse/... | sed -e 's/\[//g' | sed -e 's/\]//g' | sed -e 's/C //g'); if [ "$ETH_DEPS" ]; then go get $ETH_DEPS; fi
-<<<<<<< HEAD
-RUN go install -v ./cmd/exptest
-=======
 RUN go install -v ./cmd/ethtest
->>>>>>> rebase-1.5.9
 
 ENTRYPOINT ["ethtest"]

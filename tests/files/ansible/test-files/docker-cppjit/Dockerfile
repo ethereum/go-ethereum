@@ -10,11 +10,7 @@ RUN apt-get install -qy build-essential g++-4.8 git cmake libboost-all-dev libcu
 RUN apt-get install -qy automake unzip libgmp-dev libtool libleveldb-dev yasm libminiupnpc-dev libreadline-dev scons
 RUN apt-get install -qy libjsoncpp-dev libargtable2-dev
 
-<<<<<<< HEAD
-# NCurses based GUI (not optional though for a succesful compilation, see https://github.com/expanse-org/cpp-expanse/issues/452 )
-=======
 # NCurses based GUI (not optional though for a successful compilation, see https://github.com/expanse-org/cpp-expanse/issues/452 )
->>>>>>> rebase-1.5.9
 RUN apt-get install -qy libncurses5-dev
 
 # Qt-based GUI

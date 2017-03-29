@@ -26,27 +26,16 @@ import (
 	"strconv"
 	"strings"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/ethash"
-=======
->>>>>>> rebase-1.5.9
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/ethdb"
-	"github.com/expanse-org/go-expanse/event"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/core/vm"
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/pow"
->>>>>>> rebase-1.5.9
 	"github.com/expanse-org/go-expanse/rlp"
 )
 
@@ -253,11 +242,7 @@ func (t *BlockTest) InsertPreState(db ethdb.Database) (*state.StateDB, error) {
 	return statedb, nil
 }
 
-<<<<<<< HEAD
-/* See https://github.com/expanse-org/tests/wiki/Blockchain-Tests-II
-=======
 /* See https://github.com/ethereum/tests/wiki/Blockchain-Tests-II
->>>>>>> rebase-1.5.9
 
    Whether a block is valid or not is a bit subtle, it's defined by presence of
    blockHeader, transactions and uncleHeaders fields. If they are missing, the block is

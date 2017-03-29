@@ -21,10 +21,7 @@ import (
 	"fmt"
 
 	"github.com/expanse-org/go-expanse/common"
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/ethdb"
-=======
->>>>>>> rebase-1.5.9
+
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

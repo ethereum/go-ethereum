@@ -24,13 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-	"golang.org/x/net/context"
-=======
 	"github.com/expanse-org/go-expanse/log"
->>>>>>> rebase-1.5.9
 	"gopkg.in/fatih/set.v0"
 )
 

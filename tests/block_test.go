@@ -20,11 +20,6 @@ import (
 	"math/big"
 	"path/filepath"
 	"testing"
-<<<<<<< HEAD
-
-	"github.com/expanse-org/go-expanse/params"
-=======
->>>>>>> rebase-1.5.9
 )
 
 func TestBcValidBlockTests(t *testing.T) {

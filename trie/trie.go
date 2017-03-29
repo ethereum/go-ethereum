@@ -22,15 +22,9 @@ import (
 	"fmt"
 
 	"github.com/expanse-org/go-expanse/common"
-<<<<<<< HEAD
-	"github.com/expanse-org/go-expanse/crypto"
-	"github.com/expanse-org/go-expanse/logger"
-	"github.com/expanse-org/go-expanse/logger/glog"
-=======
 	"github.com/expanse-org/go-expanse/crypto/sha3"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/rcrowley/go-metrics"
->>>>>>> rebase-1.5.9
 )
 
 var (
