@@ -48,13 +48,24 @@ type GasPriceOracle struct {
 
 // NewGasPriceOracle returns a new oracle.
 func NewGasPriceOracle(backend ethapi.Backend, params GpoParams) *GasPriceOracle {
+	blocks := params.GpoBlocks
+	if blocks < 1 {
+		blocks = 1
+	}
+	percent := params.GpoPercentile
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
 	return &GasPriceOracle{
 		backend:     backend,
 		lastPrice:   params.GpoDefault,
-		checkBlocks: params.GpoBlocks,
-		minBlocks:   (params.GpoBlocks + 1) / 2,
-		maxBlocks:   params.GpoBlocks * 5,
-		percentile:  params.GpoPercentile,
+		checkBlocks: blocks,
+		minBlocks:   (blocks + 1) / 2,
+		maxBlocks:   blocks * 5,
+		percentile:  percent,
 	}
 }
 
