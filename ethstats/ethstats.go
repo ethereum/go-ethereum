@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"net/url"
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -128,7 +128,7 @@ func (s *Service) loop() {
 		path := fmt.Sprintf("%s/api", s.host)
 		urls := []string{path}
 
-		if parsed, err := url.Parse(path); err == nil && !parsed.IsAbs() {
+		if !strings.Contains(path, "://") { // url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
 			urls = []string{"wss://" + path, "ws://" + path}
 		}
 		// Establish a websocket connection to the server on any supported URL
