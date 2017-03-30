@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/expanse-org/go-expanse/common"
-
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 

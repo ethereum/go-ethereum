@@ -25,7 +25,7 @@ int   evmjit_run(void* _jit, void* _data, void* _env);
 void  evmjit_destroy(void* _jit);
 
 // Shared library evmjit (e.g. libevmjit.so) is expected to be installed in /usr/local/lib
-// More: https://github.com/expanse-org/evmjit
+// More: https://github.com/ethereum/evmjit
 #cgo LDFLAGS: -levmjit
 */
 import "C"

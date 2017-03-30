@@ -29,3 +29,4 @@ RUN cd cpp-expanse/build && cmake .. -DCMAKE_BUILD_TYPE=Release -DHEADLESS=1 && 
 RUN ldconfig
 
 ENTRYPOINT ["/cpp-expanse/build/test/createRandomTest"]
+

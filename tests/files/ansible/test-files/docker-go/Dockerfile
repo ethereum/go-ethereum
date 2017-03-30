@@ -17,7 +17,7 @@ RUN apt-get install -y git mercurial build-essential software-properties-common 
 ## Install Qt5.4 dependencies from PPA
 RUN add-apt-repository ppa:beineri/opt-qt54-trusty -y
 RUN apt-get update -y
-RUN apt-get install -y qt54quickcontrols qt54webengine
+RUN apt-get install -y qt54quickcontrols qt54webengine 
 
 ## Build and install latest Go
 RUN git clone https://go.googlesource.com/go golang

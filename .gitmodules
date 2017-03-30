@@ -1,3 +1,0 @@
-[submodule "cmd/mist/assets/ext/expanse.js"]
-	path = cmd/mist/assets/ext/expanse.js
-	url = https://github.com/expanse-org/web3.js

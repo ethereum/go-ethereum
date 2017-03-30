@@ -27,7 +27,7 @@ import (
 	"github.com/expanse-org/go-expanse/common/math"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/log"
-\	"github.com/expanse-org/go-expanse/params"
+	"github.com/expanse-org/go-expanse/params"
 	"github.com/expanse-org/go-expanse/rlp"
 )
 

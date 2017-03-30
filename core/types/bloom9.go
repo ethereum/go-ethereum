@@ -19,7 +19,7 @@ package types
 import (
 	"fmt"
 	"math/big"
-	
+
 	"github.com/expanse-org/go-expanse/common/hexutil"
 	"github.com/expanse-org/go-expanse/crypto"
 )

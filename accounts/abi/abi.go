@@ -26,7 +26,6 @@ import (
 	"strings"
 
 	"github.com/expanse-org/go-expanse/common"
-
 )
 
 // The ABI holds information about a contract's context and available

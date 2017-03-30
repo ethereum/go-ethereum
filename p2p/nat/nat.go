@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/jackpal/go-nat-pmp"
 )
