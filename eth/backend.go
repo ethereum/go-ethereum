@@ -92,12 +92,8 @@ type Config struct {
 	MinerThreads int
 	SolcPath     string
 
-	GpoMinGasPrice          *big.Int
-	GpoMaxGasPrice          *big.Int
-	GpoFullBlockRatio       int
-	GpobaseStepDown         int
-	GpobaseStepUp           int
-	GpobaseCorrectionFactor int
+	GpoBlocks     int
+	GpoPercentile int
 
 	EnablePreimageRecording bool
 }
@@ -218,16 +214,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
-	gpoParams := &gasprice.GpoParams{
-		GpoMinGasPrice:          config.GpoMinGasPrice,
-		GpoMaxGasPrice:          config.GpoMaxGasPrice,
-		GpoFullBlockRatio:       config.GpoFullBlockRatio,
-		GpobaseStepDown:         config.GpobaseStepDown,
-		GpobaseStepUp:           config.GpobaseStepUp,
-		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
+	eth.ApiBackend = &EthApiBackend{eth, nil}
+	gpoParams := gasprice.GpoParams{
+		GpoBlocks:     config.GpoBlocks,
+		GpoPercentile: config.GpoPercentile,
+		GpoDefault:    config.GasPrice,
 	}
-	gpo := gasprice.NewGasPriceOracle(eth.blockchain, chainDb, eth.eventMux, gpoParams)
-	eth.ApiBackend = &EthApiBackend{eth, gpo}
+	eth.ApiBackend.gpo = gasprice.NewGasPriceOracle(eth.ApiBackend, gpoParams)
 
 	return eth, nil
 }

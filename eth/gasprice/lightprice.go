@@ -27,34 +27,39 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const (
-	LpoAvgCount     = 5
-	LpoMinCount     = 3
-	LpoMaxBlocks    = 20
-	LpoSelect       = 50
-	LpoDefaultPrice = 20000000000
-)
+type GpoParams struct {
+	GpoBlocks     int
+	GpoPercentile int
+	GpoDefault    *big.Int
+}
 
-// LightPriceOracle recommends gas prices based on the content of recent
+// GasPriceOracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
-type LightPriceOracle struct {
+type GasPriceOracle struct {
 	backend   ethapi.Backend
 	lastHead  common.Hash
 	lastPrice *big.Int
 	cacheLock sync.RWMutex
 	fetchLock sync.Mutex
+
+	checkBlocks, minBlocks, maxBlocks int
+	percentile                        int
 }
 
-// NewLightPriceOracle returns a new oracle.
-func NewLightPriceOracle(backend ethapi.Backend) *LightPriceOracle {
-	return &LightPriceOracle{
-		backend:   backend,
-		lastPrice: big.NewInt(LpoDefaultPrice),
+// NewGasPriceOracle returns a new oracle.
+func NewGasPriceOracle(backend ethapi.Backend, params GpoParams) *GasPriceOracle {
+	return &GasPriceOracle{
+		backend:     backend,
+		lastPrice:   params.GpoDefault,
+		checkBlocks: params.GpoBlocks,
+		minBlocks:   (params.GpoBlocks + 1) / 2,
+		maxBlocks:   params.GpoBlocks * 5,
+		percentile:  params.GpoPercentile,
 	}
 }
 
 // SuggestPrice returns the recommended gas price.
-func (self *LightPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
+func (self *GasPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	self.cacheLock.RLock()
 	lastHead := self.lastHead
 	lastPrice := self.lastPrice
@@ -79,31 +84,31 @@ func (self *LightPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error
 	}
 
 	blockNum := head.Number.Uint64()
-	chn := make(chan lpResult, LpoMaxBlocks)
+	chn := make(chan lpResult, self.checkBlocks)
 	sent := 0
 	exp := 0
 	var lps bigIntArray
-	for sent < LpoAvgCount && blockNum > 0 {
-		go self.getLowestPrice(ctx, blockNum, chn)
+	for sent < self.checkBlocks && blockNum > 0 {
+		go self.getBlockPrices(ctx, blockNum, chn)
 		sent++
 		exp++
 		blockNum--
 	}
-	maxEmpty := LpoAvgCount - LpoMinCount
+	maxEmpty := self.checkBlocks - self.minBlocks
 	for exp > 0 {
 		res := <-chn
 		if res.err != nil {
-			return nil, res.err
+			return lastPrice, res.err
 		}
 		exp--
-		if res.price != nil {
-			lps = append(lps, res.price)
+		if len(res.prices) > 0 {
+			lps = append(lps, res.prices...)
 		} else {
 			if maxEmpty > 0 {
 				maxEmpty--
 			} else {
-				if blockNum > 0 && sent < LpoMaxBlocks {
-					go self.getLowestPrice(ctx, blockNum, chn)
+				if blockNum > 0 && sent < self.maxBlocks {
+					go self.getBlockPrices(ctx, blockNum, chn)
 					sent++
 					exp++
 					blockNum--
@@ -114,7 +119,7 @@ func (self *LightPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error
 	price := lastPrice
 	if len(lps) > 0 {
 		sort.Sort(lps)
-		price = lps[(len(lps)-1)*LpoSelect/100]
+		price = lps[(len(lps)-1)*self.percentile/100]
 	}
 
 	self.cacheLock.Lock()
@@ -125,32 +130,24 @@ func (self *LightPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error
 }
 
 type lpResult struct {
-	price *big.Int
-	err   error
+	prices []*big.Int
+	err    error
 }
 
 // getLowestPrice calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty, price is nil.
-func (self *LightPriceOracle) getLowestPrice(ctx context.Context, blockNum uint64, chn chan lpResult) {
+func (self *GasPriceOracle) getBlockPrices(ctx context.Context, blockNum uint64, chn chan lpResult) {
 	block, err := self.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 	if block == nil {
 		chn <- lpResult{nil, err}
 		return
 	}
 	txs := block.Transactions()
-	if len(txs) == 0 {
-		chn <- lpResult{nil, nil}
-		return
+	prices := make(bigIntArray, len(txs))
+	for i, tx := range txs {
+		prices[i] = tx.GasPrice()
 	}
-	// find smallest gasPrice
-	minPrice := txs[0].GasPrice()
-	for i := 1; i < len(txs); i++ {
-		price := txs[i].GasPrice()
-		if price.Cmp(minPrice) < 0 {
-			minPrice = price
-		}
-	}
-	chn <- lpResult{minPrice, nil}
+	chn <- lpResult{prices, nil}
 }
 
 type bigIntArray []*big.Int

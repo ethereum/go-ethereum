@@ -186,7 +186,7 @@ func (b *EthApiBackend) ProtocolVersion() int {
 }
 
 func (b *EthApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(), nil
+	return b.gpo.SuggestPrice(ctx)
 }
 
 func (b *EthApiBackend) ChainDb() ethdb.Database {

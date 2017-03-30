@@ -409,35 +409,15 @@ var (
 	}
 
 	// Gas price oracle settings
-	GpoMinGasPriceFlag = BigFlag{
-		Name:  "gpomin",
-		Usage: "Minimum suggested gas price",
-		Value: big.NewInt(20 * params.Shannon),
+	GpoBlocksFlag = cli.IntFlag{
+		Name:  "gpoblocks",
+		Usage: "Number of recent blocks to check for gas prices",
+		Value: 5,
 	}
-	GpoMaxGasPriceFlag = BigFlag{
-		Name:  "gpomax",
-		Usage: "Maximum suggested gas price",
-		Value: big.NewInt(500 * params.Shannon),
-	}
-	GpoFullBlockRatioFlag = cli.IntFlag{
-		Name:  "gpofull",
-		Usage: "Full block threshold for gas price calculation (%)",
-		Value: 80,
-	}
-	GpobaseStepDownFlag = cli.IntFlag{
-		Name:  "gpobasedown",
-		Usage: "Suggested gas price base step down ratio (1/1000)",
-		Value: 10,
-	}
-	GpobaseStepUpFlag = cli.IntFlag{
-		Name:  "gpobaseup",
-		Usage: "Suggested gas price base step up ratio (1/1000)",
-		Value: 100,
-	}
-	GpobaseCorrectionFactorFlag = cli.IntFlag{
-		Name:  "gpobasecf",
-		Usage: "Suggested gas price base correction factor (%)",
-		Value: 110,
+	GpoPercentileFlag = cli.IntFlag{
+		Name:  "gpopercent",
+		Usage: "Percentile of recent transaction gas prices",
+		Value: 50,
 	}
 )
 
@@ -798,12 +778,8 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		ExtraData:               MakeMinerExtra(extra, ctx),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
 		GasPrice:                GlobalBig(ctx, GasPriceFlag.Name),
-		GpoMinGasPrice:          GlobalBig(ctx, GpoMinGasPriceFlag.Name),
-		GpoMaxGasPrice:          GlobalBig(ctx, GpoMaxGasPriceFlag.Name),
-		GpoFullBlockRatio:       ctx.GlobalInt(GpoFullBlockRatioFlag.Name),
-		GpobaseStepDown:         ctx.GlobalInt(GpobaseStepDownFlag.Name),
-		GpobaseStepUp:           ctx.GlobalInt(GpobaseStepUpFlag.Name),
-		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
+		GpoBlocks:               ctx.GlobalInt(GpoBlocksFlag.Name),
+		GpoPercentile:           ctx.GlobalInt(GpoPercentileFlag.Name),
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		EthashCacheDir:          MakeEthashCacheDir(ctx),
 		EthashCachesInMem:       ctx.GlobalInt(EthashCachesInMemoryFlag.Name),
