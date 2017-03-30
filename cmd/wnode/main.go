@@ -74,15 +74,15 @@ var (
 
 // cmd arguments
 var (
-	echoMode       = flag.Bool("e", false, "echo mode: prints some arguments for diagnostics")
-	bootstrapMode  = flag.Bool("b", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
-	forwarderMode  = flag.Bool("f", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
-	mailServerMode = flag.Bool("s", false, "mail server mode: delivers expired messages on demand")
-	requestMail    = flag.Bool("r", false, "request expired messages from the bootstrap server")
-	asymmetricMode = flag.Bool("a", false, "use asymmetric encryption")
-	testMode       = flag.Bool("t", false, "use of predefined parameters for diagnostics")
-	generateKey    = flag.Bool("k", false, "generate and show the private key")
-	fileExMode     = flag.Bool("x", false, "file exchange mode")
+	bootstrapMode  = flag.Bool("standalone", false, "boostrap node: don't actively connect to peers, wait for incoming connections")
+	forwarderMode  = flag.Bool("forwarder", false, "forwarder mode: only forward messages, neither send nor decrypt messages")
+	mailServerMode = flag.Bool("mailserver", false, "mail server mode: delivers expired messages on demand")
+	requestMail    = flag.Bool("mailclient", false, "request expired messages from the bootstrap server")
+	asymmetricMode = flag.Bool("asym", false, "use asymmetric encryption")
+	generateKey    = flag.Bool("generatekey", false, "generate and show the private key")
+	fileExMode     = flag.Bool("fileexchange", false, "file exchange mode")
+	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics")
+	echoMode       = flag.Bool("echo", false, "echo mode: prints some arguments for diagnostics")
 
 	argVerbosity = flag.Int("verbosity", int(log.LvlWarn), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
