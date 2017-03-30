@@ -74,35 +74,40 @@ var (
 		executablePath("bootnode"),
 		executablePath("evm"),
 		executablePath("geth"),
-		executablePath("swarm"),
+		executablePath("puppeth"),
 		executablePath("rlpdump"),
+		executablePath("swarm"),
 	}
 
 	// A debian package is created for all executables listed here.
 	debExecutables = []debExecutable{
 		{
-			Name:        "geth",
-			Description: "Ethereum CLI client.",
+			Name:        "abigen",
+			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
 		},
 		{
 			Name:        "bootnode",
 			Description: "Ethereum bootnode.",
 		},
 		{
-			Name:        "rlpdump",
-			Description: "Developer utility tool that prints RLP structures.",
-		},
-		{
 			Name:        "evm",
 			Description: "Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode.",
 		},
 		{
-			Name:        "swarm",
-			Description: "Ethereum Swarm daemon and tools",
+			Name:        "geth",
+			Description: "Ethereum CLI client.",
 		},
 		{
-			Name:        "abigen",
-			Description: "Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages.",
+			Name:        "puppeth",
+			Description: "Ethereum private network manager.",
+		},
+		{
+			Name:        "rlpdump",
+			Description: "Developer utility tool that prints RLP structures.",
+		},
+		{
+			Name:        "swarm",
+			Description: "Ethereum Swarm daemon and tools",
 		},
 	}
 
