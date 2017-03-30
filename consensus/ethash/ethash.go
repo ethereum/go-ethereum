@@ -333,6 +333,7 @@ type Ethash struct {
 	fdataset *dataset            // Pre-generated dataset for the estimated future epoch
 
 	// Mining related fields
+	rand     *rand.Rand    // Properly seeded random source for nonces
 	threads  int           // Number of threads to mine on if mining
 	update   chan struct{} // Notification channel to update mining parameters
 	hashrate metrics.Meter // Meter tracking the average hashrate
@@ -409,7 +410,7 @@ func NewFakeDelayer(delay time.Duration) *Ethash {
 }
 
 // NewFullFaker creates a ethash consensus engine with a full fake scheme that
-// accepts all blocks as valid, without checking any consenss rules whatsoever.
+// accepts all blocks as valid, without checking any consensus rules whatsoever.
 func NewFullFaker() *Ethash {
 	return &Ethash{fakeMode: true, fakeFull: true}
 }
@@ -544,7 +545,7 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 }
 
 // Threads returns the number of mining threads currently enabled. This doesn't
-// necesarilly mean that mining is running!
+// necessarily mean that mining is running!
 func (ethash *Ethash) Threads() int {
 	ethash.lock.Lock()
 	defer ethash.lock.Unlock()

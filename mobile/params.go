@@ -37,7 +37,6 @@ func MainnetChainConfig() *ChainConfig {
 		EIP150Hash:     Hash{params.MainNetHomesteadGasRepriceHash},
 		EIP155Block:    params.MainNetSpuriousDragon.Int64(),
 		EIP158Block:    params.MainNetSpuriousDragon.Int64(),
-		PoWConfig:      new(PoWConfig),
 	}
 }
 
@@ -58,7 +57,6 @@ func TestnetChainConfig() *ChainConfig {
 		EIP150Hash:     Hash{params.TestNetHomesteadGasRepriceHash},
 		EIP155Block:    params.TestNetSpuriousDragon.Int64(),
 		EIP158Block:    params.TestNetSpuriousDragon.Int64(),
-		PoWConfig:      new(PoWConfig),
 	}
 }
 
@@ -73,25 +71,14 @@ func TestnetGenesis() string {
 
 // ChainConfig is the core config which determines the blockchain settings.
 type ChainConfig struct {
-	ChainID        int64      // Chain ID for replay protection
-	HomesteadBlock int64      // Homestead switch block
-	DAOForkBlock   int64      // TheDAO hard-fork switch block
-	DAOForkSupport bool       // Whether the nodes supports or opposes the DAO hard-fork
-	EIP150Block    int64      // Homestead gas reprice switch block
-	EIP150Hash     Hash       // Homestead gas reprice switch block hash
-	EIP155Block    int64      // Replay protection switch block
-	EIP158Block    int64      // Empty account pruning switch block
-	PoWConfig      *PoWConfig // Consensus rules for the proof-of-work engine
-	PoAConfig      *PoAConfig // Consensus rules for the proof-of-authority engine
-}
-
-// PoWConfig is the consensus engine configs for proof-of-work based sealing.
-type PoWConfig struct{}
-
-// PoAConfig is the consensus engine configs for proof-of-authorization based
-// sealing.
-type PoAConfig struct {
-	Signers Addresses
+	ChainID        int64 // Chain ID for replay protection
+	HomesteadBlock int64 // Homestead switch block
+	DAOForkBlock   int64 // TheDAO hard-fork switch block
+	DAOForkSupport bool  // Whether the nodes supports or opposes the DAO hard-fork
+	EIP150Block    int64 // Homestead gas reprice switch block
+	EIP150Hash     Hash  // Homestead gas reprice switch block hash
+	EIP155Block    int64 // Replay protection switch block
+	EIP158Block    int64 // Empty account pruning switch block
 }
 
 // NewChainConfig creates a new chain configuration that transitions immediately

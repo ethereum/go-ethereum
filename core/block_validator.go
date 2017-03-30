@@ -51,7 +51,7 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engin
 // header's transaction and uncle roots. The headers are assumed to be already
 // validated at this point.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
-	// Check whether the blokc's known, and if not, that it's linkable
+	// Check whether the block's known, and if not, that it's linkable
 	if v.bc.HasBlock(block.Hash()) {
 		if _, err := state.New(block.Root(), v.bc.chainDb); err == nil {
 			return &KnownBlockError{block.Number(), block.Hash()}
@@ -70,7 +70,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 		return err
 	}
 	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
-		return fmt.Errorf("uncle root hsh mismatch: have %x, want %x", hash, header.UncleHash)
+		return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash)
 	}
 	if hash := types.DeriveSha(block.Transactions()); hash != header.TxHash {
 		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash)

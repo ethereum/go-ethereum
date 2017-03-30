@@ -133,7 +133,7 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 }
 
 // Start the miner with the given number of threads. If threads is nil the number
-// of workers started is equal to the number of logical CPU'api that are usable by
+// of workers started is equal to the number of logical CPUs that are usable by
 // this process. If mining is already running, this method adjust the number of
 // threads allowed to use.
 func (api *PrivateMinerAPI) Start(threads *int) error {

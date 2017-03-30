@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +41,7 @@ var (
 )
 
 var (
+	ErrInvalidChain        = errors.New("invalid header chain")
 	ErrParentUnknown       = errors.New("parent not known locally")
 	ErrFutureBlock         = errors.New("block in the future")
 	ErrLargeBlockTimestamp = errors.New("timestamp too big")
@@ -100,9 +102,15 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 	inputs := make(chan int, workers)
 	outputs := make(chan result, len(headers))
 
+	var badblock uint64
 	for i := 0; i < workers; i++ {
 		go func() {
 			for index := range inputs {
+				// If we've found a bad block already before this, stop validating
+				if bad := atomic.LoadUint64(&badblock); bad != 0 && bad <= headers[index].Number.Uint64() {
+					outputs <- result{index: index, err: ErrInvalidChain}
+					continue
+				}
 				// We need to look up the first parent
 				var parent *types.Header
 				if index == 0 {
@@ -111,13 +119,29 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 					parent = headers[index-1]
 				}
 				// Ensure the validation is useful and execute it
+				var failure error
 				switch {
 				case chain.GetHeader(headers[index].Hash(), headers[index].Number.Uint64()-1) != nil:
 					outputs <- result{index: index, err: nil}
 				case parent == nil:
-					outputs <- result{index: index, err: ErrParentUnknown}
+					failure = ErrParentUnknown
+					outputs <- result{index: index, err: failure}
 				default:
-					outputs <- result{index: index, err: ethash.verifyHeader(chain, headers[index], parent, false, seals[index])}
+					failure = ethash.verifyHeader(chain, headers[index], parent, false, seals[index])
+					outputs <- result{index: index, err: failure}
+				}
+				// If a validation failure occurred, mark subsequent blocks invalid
+				if failure != nil {
+					number := headers[index].Number.Uint64()
+					if prev := atomic.LoadUint64(&badblock); prev == 0 || prev > number {
+						// This two step atomic op isn't thread-safe in that `badblock` might end
+						// up slightly higher than the block number of the first failure (if many
+						// workers try to write at the same time), but it's fine as we're mostly
+						// interested to avoid large useless work, we don't care about 1-2 extra
+						// runs. Doing "full thread safety" would involve mutexes, which would be
+						// a noticeable sync overhead on the fast spinning worker routines.
+						atomic.StoreUint64(&badblock, number)
+					}
 				}
 			}
 		}()

@@ -101,7 +101,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 	defer runtime.GOMAXPROCS(old)
 
 	// Run the header checker for the entire block chain at once both for a valid and
-	// also an invalid chain (enough if one is invalid, last but one (arbitrary)).
+	// also an invalid chain (enough if one arbitrary block is invalid).
 	for i, valid := range []bool{true, false} {
 		var results <-chan error
 
@@ -125,9 +125,15 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		}
 		// Check nonce check validity
 		for j := 0; j < len(blocks); j++ {
-			want := valid || (j != len(blocks)-2) // We chose the last but one nonce in the chain to fail
+			want := valid || (j < len(blocks)-2) // We chose the last-but-one nonce in the chain to fail
 			if (checks[j] == nil) != want {
 				t.Errorf("test %d.%d: validity mismatch: have %v, want %v", i, j, checks[j], want)
+			}
+			if !want {
+				// A few blocks after the first error may pass verification due to concurrent
+				// workers. We don't care about those in this test, just that the correct block
+				// errors out.
+				break
 			}
 		}
 		// Make sure no more data is returned

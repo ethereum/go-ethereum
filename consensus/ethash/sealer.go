@@ -17,6 +17,8 @@
 package ethash
 
 import (
+	crand "crypto/rand"
+	"math"
 	"math/big"
 	"math/rand"
 	"runtime"
@@ -47,6 +49,14 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 
 	ethash.lock.Lock()
 	threads := ethash.threads
+	if ethash.rand == nil {
+		seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
+		if err != nil {
+			ethash.lock.Unlock()
+			return nil, err
+		}
+		ethash.rand = rand.New(rand.NewSource(seed.Int64()))
+	}
 	ethash.lock.Unlock()
 	if threads == 0 {
 		threads = runtime.NumCPU()
@@ -54,10 +64,10 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 	var pend sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		pend.Add(1)
-		go func(id int) {
+		go func(id int, nonce uint64) {
 			defer pend.Done()
-			ethash.mine(block, id, uint64(rand.Int63()), abort, found)
-		}(i)
+			ethash.mine(block, id, nonce, abort, found)
+		}(i, uint64(ethash.rand.Int63()))
 	}
 	// Wait until sealing is terminated or a nonce is found
 	var result *types.Block
@@ -80,7 +90,7 @@ func (ethash *Ethash) Seal(chain consensus.ChainReader, block *types.Block, stop
 }
 
 // mine is the actual proof-of-work miner that searches for a nonce starting from
-// seed that results in corrent final block difficulty.
+// seed that results in correct final block difficulty.
 func (ethash *Ethash) mine(block *types.Block, id int, seed uint64, abort chan struct{}, found chan *types.Block) {
 	// Extract some data from the header
 	var (

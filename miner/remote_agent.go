@@ -131,8 +131,8 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 	return res, errors.New("No work available yet, don't panic.")
 }
 
-// SubmitWork tries to inject a pow solution tinto the remote agent, returning
-// whether the solution was acceted or not (not can be both a bad pow as well as
+// SubmitWork tries to inject a pow solution into the remote agent, returning
+// whether the solution was accepted or not (not can be both a bad pow as well as
 // any other error, like no work pending).
 func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.Hash) bool {
 	a.mu.Lock()
