@@ -537,10 +537,16 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 	// Gather the batch of blocks to report
 	history := make([]*blockStats, len(indexes))
 	for i, number := range indexes {
+		var block *types.Block
 		if s.eth != nil {
-			history[len(history)-1-i] = s.assembleBlockStats(s.eth.BlockChain().GetBlockByNumber(number))
+			block = s.eth.BlockChain().GetBlockByNumber(number)
 		} else {
-			history[len(history)-1-i] = s.assembleBlockStats(types.NewBlockWithHeader(s.les.BlockChain().GetHeaderByNumber(number)))
+			if header := s.les.BlockChain().GetHeaderByNumber(number); header != nil {
+				block = types.NewBlockWithHeader(header)
+			}
+		}
+		if block != nil {
+			history[len(history)-1-i] = s.assembleBlockStats(block)
 		}
 	}
 	// Assemble the history report and send it to the server
