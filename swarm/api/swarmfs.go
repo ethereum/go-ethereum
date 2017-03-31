@@ -17,24 +17,21 @@
 package api
 
 import (
-	"time"
 	"sync"
+	"time"
 )
 
 const (
 	Swarmfs_Version = "0.1"
-	mountTimeout   = time.Second * 5
-	maxFuseMounts  = 5
+	mountTimeout    = time.Second * 5
+	maxFuseMounts   = 5
 )
-
 
 type SwarmFS struct {
 	swarmApi     *Api
 	activeMounts map[string]*MountInfo
 	activeLock   *sync.RWMutex
 }
-
-
 
 func NewSwarmFS(api *Api) *SwarmFS {
 	swarmfs := &SwarmFS{
@@ -44,5 +41,3 @@ func NewSwarmFS(api *Api) *SwarmFS {
 	}
 	return swarmfs
 }
-
-
