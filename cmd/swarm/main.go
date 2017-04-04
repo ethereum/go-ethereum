@@ -358,6 +358,8 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 			if err != nil {
 				utils.Fatalf("Can't connect: %v", err)
 			}
+		} else {
+			swapEnabled = false
 		}
 		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors)
 	}
