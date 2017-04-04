@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -41,7 +42,7 @@ func add(ctx *cli.Context) {
 
 		ctype        string
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
-		mroot        manifest
+		mroot        swarm.Manifest
 	)
 
 	if len(args) > 3 {
@@ -75,7 +76,7 @@ func update(ctx *cli.Context) {
 
 		ctype        string
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
-		mroot        manifest
+		mroot        swarm.Manifest
 	)
 	if len(args) > 3 {
 		ctype = args[3]
@@ -105,7 +106,7 @@ func remove(ctx *cli.Context) {
 		path  = args[1]
 
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
-		mroot        manifest
+		mroot        swarm.Manifest
 	)
 
 	newManifest := removeEntryFromManifest(ctx, mhash, path)
@@ -123,21 +124,21 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 
 	var (
 		bzzapi           = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client           = &client{api: bzzapi}
-		longestPathEntry = manifestEntry{
+		client           = swarm.NewClient(bzzapi)
+		longestPathEntry = swarm.ManifestEntry{
 			Path:        "",
 			Hash:        "",
 			ContentType: "",
 		}
 	)
 
-	mroot, err := client.downloadManifest(mhash)
+	mroot, err := client.DownloadManifest(mhash)
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
 
 	//TODO: check if the "hash" to add is valid and present in swarm
-	_, err = client.downloadManifest(hash)
+	_, err = client.DownloadManifest(hash)
 	if err != nil {
 		utils.Fatalf("Hash to add is not present: %v", err)
 	}
@@ -162,7 +163,7 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 		newHash := addEntryToManifest(ctx, longestPathEntry.Hash, newPath, hash, ctype)
 
 		// Replace the hash for parent Manifests
-		newMRoot := manifest{}
+		newMRoot := swarm.Manifest{}
 		for _, entry := range mroot.Entries {
 			if longestPathEntry.Path == entry.Path {
 				entry.Hash = newHash
@@ -172,7 +173,7 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 		mroot = newMRoot
 	} else {
 		// Add the entry in the leaf Manifest
-		newEntry := manifestEntry{
+		newEntry := swarm.ManifestEntry{
 			Path:        path,
 			Hash:        hash,
 			ContentType: ctype,
@@ -180,7 +181,7 @@ func addEntryToManifest(ctx *cli.Context, mhash, path, hash, ctype string) strin
 		mroot.Entries = append(mroot.Entries, newEntry)
 	}
 
-	newManifestHash, err := client.uploadManifest(mroot)
+	newManifestHash, err := client.UploadManifest(mroot)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -192,20 +193,20 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 
 	var (
 		bzzapi   = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client   = &client{api: bzzapi}
-		newEntry = manifestEntry{
+		client   = swarm.NewClient(bzzapi)
+		newEntry = swarm.ManifestEntry{
 			Path:        "",
 			Hash:        "",
 			ContentType: "",
 		}
-		longestPathEntry = manifestEntry{
+		longestPathEntry = swarm.ManifestEntry{
 			Path:        "",
 			Hash:        "",
 			ContentType: "",
 		}
 	)
 
-	mroot, err := client.downloadManifest(mhash)
+	mroot, err := client.DownloadManifest(mhash)
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
@@ -236,7 +237,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 		newHash := updateEntryInManifest(ctx, longestPathEntry.Hash, newPath, hash, ctype)
 
 		// Replace the hash for parent Manifests
-		newMRoot := manifest{}
+		newMRoot := swarm.Manifest{}
 		for _, entry := range mroot.Entries {
 			if longestPathEntry.Path == entry.Path {
 				entry.Hash = newHash
@@ -249,10 +250,10 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 
 	if newEntry.Path != "" {
 		// Replace the hash for leaf Manifest
-		newMRoot := manifest{}
+		newMRoot := swarm.Manifest{}
 		for _, entry := range mroot.Entries {
 			if newEntry.Path == entry.Path {
-				myEntry := manifestEntry{
+				myEntry := swarm.ManifestEntry{
 					Path:        entry.Path,
 					Hash:        hash,
 					ContentType: ctype,
@@ -265,7 +266,7 @@ func updateEntryInManifest(ctx *cli.Context, mhash, path, hash, ctype string) st
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.uploadManifest(mroot)
+	newManifestHash, err := client.UploadManifest(mroot)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -276,20 +277,20 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 
 	var (
 		bzzapi        = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client        = &client{api: bzzapi}
-		entryToRemove = manifestEntry{
+		client        = swarm.NewClient(bzzapi)
+		entryToRemove = swarm.ManifestEntry{
 			Path:        "",
 			Hash:        "",
 			ContentType: "",
 		}
-		longestPathEntry = manifestEntry{
+		longestPathEntry = swarm.ManifestEntry{
 			Path:        "",
 			Hash:        "",
 			ContentType: "",
 		}
 	)
 
-	mroot, err := client.downloadManifest(mhash)
+	mroot, err := client.DownloadManifest(mhash)
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
@@ -318,7 +319,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 		newHash := removeEntryFromManifest(ctx, longestPathEntry.Hash, newPath)
 
 		// Replace the hash for parent Manifests
-		newMRoot := manifest{}
+		newMRoot := swarm.Manifest{}
 		for _, entry := range mroot.Entries {
 			if longestPathEntry.Path == entry.Path {
 				entry.Hash = newHash
@@ -330,7 +331,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 
 	if entryToRemove.Path != "" {
 		// remove the entry in this Manifest
-		newMRoot := manifest{}
+		newMRoot := swarm.Manifest{}
 		for _, entry := range mroot.Entries {
 			if entryToRemove.Path != entry.Path {
 				newMRoot.Entries = append(newMRoot.Entries, entry)
@@ -339,7 +340,7 @@ func removeEntryFromManifest(ctx *cli.Context, mhash, path string) string {
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.uploadManifest(mroot)
+	newManifestHash, err := client.UploadManifest(mroot)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}

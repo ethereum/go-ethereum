@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package http
+package http_test
 
 import (
 	"bytes"
@@ -22,18 +22,15 @@ import (
 	"net/http"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 func TestBzzrGetPath(t *testing.T) {
 
 	var err error
-
-	maxproxyattempts := 3
 
 	testmanifest := []string{
 		`{"entries":[{"path":"a/","hash":"674af7073604ebfc0282a4ab21e5ef1a3c22913866879ebc0816f8a89896b2ed","contentType":"application/bzz-manifest+json","status":0}]}`,
@@ -54,61 +51,30 @@ func TestBzzrGetPath(t *testing.T) {
 
 	key := [3]storage.Key{}
 
-	dir, _ := ioutil.TempDir("", "bzz-storage-test")
-
-	storeparams := &storage.StoreParams{
-		ChunkDbPath:   dir,
-		DbCapacity:    5000000,
-		CacheCapacity: 5000,
-		Radius:        0,
-	}
-
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
-	dpa := &storage.DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
-	}
-	dpa.Start()
-	defer dpa.Stop()
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
 
 	wg := &sync.WaitGroup{}
 
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
-		key[i], err = dpa.Store(reader[i], int64(len(mf)), wg, nil)
+		key[i], err = srv.Dpa.Store(reader[i], int64(len(mf)), wg, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		wg.Wait()
 	}
 
-	a := api.NewApi(dpa, nil)
-
-	/// \todo iterate port numbers up if fail
-	StartHttpServer(a, &Server{Addr: "127.0.0.1:8504", CorsString: ""})
-	// how to wait for ListenAndServe to have initialized? This is pretty cruuuude
-	// if we fix it we don't need maxproxyattempts anymore either
-	time.Sleep(1000 * time.Millisecond)
-	for i := 0; i <= maxproxyattempts; i++ {
-		_, err := http.Get("http://127.0.0.1:8504/bzzr:/" + common.ToHex(key[0])[2:] + "/a")
-		if i == maxproxyattempts {
-			t.Fatalf("Failed to connect to proxy after %v attempts: %v", i, err)
-		} else if err != nil {
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		break
+	_, err = http.Get(srv.URL + "/bzzr:/" + common.ToHex(key[0])[2:] + "/a")
+	if err != nil {
+		t.Fatalf("Failed to connect to proxy: %v", err)
 	}
 
 	for k, v := range testrequests {
 		var resp *http.Response
 		var respbody []byte
 
-		url := "http://127.0.0.1:8504/bzzr:/"
+		url := srv.URL + "/bzzr:/"
 		if k[:] != "" {
 			url += common.ToHex(key[0])[2:] + "/" + k[1:] + "?content_type=text/plain"
 		}

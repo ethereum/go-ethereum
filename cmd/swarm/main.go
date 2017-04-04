@@ -148,6 +148,15 @@ The output of this command is supposed to be machine-readable.
 `,
 		},
 		{
+			Action:    list,
+			Name:      "ls",
+			Usage:     "list files and directories contained in a manifest",
+			ArgsUsage: " <manifest> [<prefix>]",
+			Description: `
+Lists files and directories contained in a manifest.
+`,
+		},
+		{
 			Action:    hash,
 			Name:      "hash",
 			Usage:     "print the swarm hash of a file or directory",
