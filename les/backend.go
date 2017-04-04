@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -39,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -59,7 +59,7 @@ type LightEthereum struct {
 	ApiBackend *LesApiBackend
 
 	eventMux       *event.TypeMux
-	pow            pow.PoW
+	engine         consensus.Engine
 	accountManager *accounts.Manager
 	solcPath       string
 	solc           *compiler.Solidity
@@ -88,14 +88,12 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		pow:            eth.CreatePoW(ctx, config),
+		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		netVersionId:   config.NetworkId,
 		solcPath:       config.SolcPath,
 	}
-
-	eth.blockchain, err = light.NewLightChain(odr, eth.chainConfig, eth.pow, eth.eventMux)
-	if err != nil {
+	if eth.blockchain, err = light.NewLightChain(odr, eth.chainConfig, eth.engine, eth.eventMux); err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
@@ -106,7 +104,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 
 	eth.txPool = light.NewTxPool(eth.chainConfig, eth.eventMux, eth.blockchain, eth.relay)
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.LightMode, config.NetworkId, eth.eventMux, eth.pow, eth.blockchain, nil, chainDb, odr, relay); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.LightMode, config.NetworkId, eth.eventMux, eth.engine, eth.blockchain, nil, chainDb, odr, relay); err != nil {
 		return nil, err
 	}
 	relay.ps = eth.protocolManager.peers

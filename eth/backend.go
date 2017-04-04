@@ -22,10 +22,11 @@ import (
 	"math/big"
 	"regexp"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -40,16 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
-)
-
-const (
-	epochLength    = 30000
-	ethashRevision = 23
-
-	autoDAGcheckInterval = 10 * time.Hour
-	autoDAGepochHeight   = epochLength / 2
 )
 
 var (
@@ -124,7 +116,7 @@ type Ethereum struct {
 	chainDb ethdb.Database // Block chain database
 
 	eventMux       *event.TypeMux
-	pow            pow.PoW
+	engine         consensus.Engine
 	accountManager *accounts.Manager
 
 	ApiBackend *EthApiBackend
@@ -163,7 +155,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		pow:            CreatePoW(ctx, config),
+		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		netVersionId:   config.NetworkId,
@@ -186,7 +178,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	vmConfig := vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.eventMux, vmConfig)
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.engine, eth.eventMux, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -211,10 +203,11 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 	}
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.pow, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.pow)
+
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
 
@@ -241,20 +234,20 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 	return db, err
 }
 
-// CreatePoW creates the required type of PoW instance for an Ethereum service
-func CreatePoW(ctx *node.ServiceContext, config *Config) pow.PoW {
+// CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
+func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	switch {
 	case config.PowFake:
 		log.Warn("Ethash used in fake mode")
-		return pow.FakePow{}
+		return ethash.NewFaker()
 	case config.PowTest:
 		log.Warn("Ethash used in test mode")
-		return pow.NewTestEthash()
+		return ethash.NewTester()
 	case config.PowShared:
 		log.Warn("Ethash used in shared mode")
-		return pow.NewSharedEthash()
+		return ethash.NewShared()
 	default:
-		return pow.NewFullEthash(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
+		return ethash.New(ctx.ResolvePath(config.EthashCacheDir), config.EthashCachesInMem, config.EthashCachesOnDisk,
 			config.EthashDatasetDir, config.EthashDatasetsInMem, config.EthashDatasetsOnDisk)
 	}
 }
@@ -262,7 +255,13 @@ func CreatePoW(ctx *node.ServiceContext, config *Config) pow.PoW {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend, s.solcPath), []rpc.API{
+	apis := ethapi.GetAPIs(s.ApiBackend, s.solcPath)
+
+	// Append any APIs exposed explicitly by the consensus engine
+	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+	// Append all the local APIs and return
+	return append(apis, []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -332,13 +331,13 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 	self.miner.SetEtherbase(etherbase)
 }
 
-func (s *Ethereum) StartMining(threads int) error {
+func (s *Ethereum) StartMining() error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		log.Error("Cannot start mining without etherbase", "err", err)
 		return fmt.Errorf("etherbase missing: %v", err)
 	}
-	go s.miner.Start(eb, threads)
+	go s.miner.Start(eb)
 	return nil
 }
 
@@ -350,7 +349,7 @@ func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager
 func (s *Ethereum) BlockChain() *core.BlockChain       { return s.blockchain }
 func (s *Ethereum) TxPool() *core.TxPool               { return s.txPool }
 func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *Ethereum) Pow() pow.PoW                       { return s.pow }
+func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }

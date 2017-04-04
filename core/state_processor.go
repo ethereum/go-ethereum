@@ -19,6 +19,8 @@ package core
 import (
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -26,25 +28,22 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var (
-	big8  = big.NewInt(8)
-	big32 = big.NewInt(32)
-)
-
 // StateProcessor is a basic Processor, which takes care of transitioning
 // state from one point to another.
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	config *params.ChainConfig
-	bc     *BlockChain
+	config *params.ChainConfig // Chain configuration options
+	bc     *BlockChain         // Canonical block chain
+	engine consensus.Engine    // Consensus engine used for block rewards
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consensus.Engine) *StateProcessor {
 	return &StateProcessor{
 		config: config,
 		bc:     bc,
+		engine: engine,
 	}
 }
 
@@ -59,18 +58,16 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	var (
 		receipts     types.Receipts
 		totalUsedGas = big.NewInt(0)
-		err          error
 		header       = block.Header()
 		allLogs      []*types.Log
 		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		ApplyDAOHardFork(statedb)
+		misc.ApplyDAOHardFork(statedb)
 	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
-		//fmt.Println("tx:", i)
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
 		receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		if err != nil {
@@ -79,9 +76,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
-	AccumulateRewards(statedb, header, block.Uncles())
+	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 
-	return receipts, allLogs, totalUsedGas, err
+	return receipts, allLogs, totalUsedGas, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database
@@ -121,24 +119,4 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	return receipt, gas, err
-}
-
-// AccumulateRewards credits the coinbase of the given block with the
-// mining reward. The total reward consists of the static block reward
-// and rewards for included uncles. The coinbase of each uncle block is
-// also rewarded.
-func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*types.Header) {
-	reward := new(big.Int).Set(BlockReward)
-	r := new(big.Int)
-	for _, uncle := range uncles {
-		r.Add(uncle.Number, big8)
-		r.Sub(r, header.Number)
-		r.Mul(r, BlockReward)
-		r.Div(r, big8)
-		statedb.AddBalance(uncle.Coinbase, r)
-
-		r.Div(BlockReward, big32)
-		reward.Add(reward, r)
-	}
-	statedb.AddBalance(header.Coinbase, reward)
 }

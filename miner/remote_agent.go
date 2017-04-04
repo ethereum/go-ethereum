@@ -18,16 +18,16 @@ package miner
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/pow"
 )
 
 type hashrate struct {
@@ -42,7 +42,8 @@ type RemoteAgent struct {
 	workCh   chan *Work
 	returnCh chan<- *Result
 
-	pow         pow.PoW
+	chain       consensus.ChainReader
+	engine      consensus.Engine
 	currentWork *Work
 	work        map[common.Hash]*Work
 
@@ -52,9 +53,10 @@ type RemoteAgent struct {
 	running int32 // running indicates whether the agent is active. Call atomically
 }
 
-func NewRemoteAgent(pow pow.PoW) *RemoteAgent {
+func NewRemoteAgent(chain consensus.ChainReader, engine consensus.Engine) *RemoteAgent {
 	return &RemoteAgent{
-		pow:      pow,
+		chain:    chain,
+		engine:   engine,
 		work:     make(map[common.Hash]*Work),
 		hashrate: make(map[common.Hash]hashrate),
 	}
@@ -114,7 +116,7 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 		block := a.currentWork.Block
 
 		res[0] = block.HashNoNonce().Hex()
-		seedHash := pow.EthashSeedHash(block.NumberU64())
+		seedHash := ethash.SeedHash(block.NumberU64())
 		res[1] = common.BytesToHash(seedHash).Hex()
 		// Calculate the "target" to be returned to the external miner
 		n := big.NewInt(1)
@@ -129,8 +131,8 @@ func (a *RemoteAgent) GetWork() ([3]string, error) {
 	return res, errors.New("No work available yet, don't panic.")
 }
 
-// SubmitWork tries to inject a PoW solution tinto the remote agent, returning
-// whether the solution was acceted or not (not can be both a bad PoW as well as
+// SubmitWork tries to inject a pow solution into the remote agent, returning
+// whether the solution was accepted or not (not can be both a bad pow as well as
 // any other error, like no work pending).
 func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.Hash) bool {
 	a.mu.Lock()
@@ -139,15 +141,20 @@ func (a *RemoteAgent) SubmitWork(nonce types.BlockNonce, mixDigest, hash common.
 	// Make sure the work submitted is present
 	work := a.work[hash]
 	if work == nil {
-		log.Info(fmt.Sprintf("Work was submitted for %x but no pending work found", hash))
+		log.Info("Work submitted but none pending", "hash", hash)
 		return false
 	}
-	// Make sure the PoW solutions is indeed valid
-	block := work.Block.WithMiningResult(nonce, mixDigest)
-	if err := a.pow.Verify(block); err != nil {
-		log.Warn(fmt.Sprintf("Invalid PoW submitted for %x: %v", hash, err))
+	// Make sure the Engine solutions is indeed valid
+	result := work.Block.Header()
+	result.Nonce = nonce
+	result.MixDigest = mixDigest
+
+	if err := a.engine.VerifySeal(a.chain, result); err != nil {
+		log.Warn("Invalid proof-of-work submitted", "hash", hash, "err", err)
 		return false
 	}
+	block := work.Block.WithSeal(result)
+
 	// Solutions seems to be valid, return to the miner and notify acceptance
 	a.returnCh <- &Result{work, block}
 	delete(a.work, hash)

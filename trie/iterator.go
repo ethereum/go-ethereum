@@ -18,6 +18,7 @@ package trie
 
 import (
 	"bytes"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package pow
+// Package ethash implements the ethash proof-of-work consensus engine.
+package ethash
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -32,24 +32,20 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	metrics "github.com/rcrowley/go-metrics"
 )
 
-var (
-	ErrInvalidDumpMagic  = errors.New("invalid dump magic")
-	ErrNonceOutOfRange   = errors.New("nonce out of range")
-	ErrInvalidDifficulty = errors.New("non-positive difficulty")
-	ErrInvalidMixDigest  = errors.New("invalid mix digest")
-	ErrInvalidPoW        = errors.New("pow difficulty invalid")
-)
+var ErrInvalidDumpMagic = errors.New("invalid dump magic")
 
 var (
 	// maxUint256 is a big integer representing 2^256-1
 	maxUint256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), big.NewInt(0))
 
 	// sharedEthash is a full instance that can be shared between multiple users.
-	sharedEthash = NewFullEthash("", 3, 0, "", 1, 0)
+	sharedEthash = New("", 3, 0, "", 1, 0)
 
 	// algorithmRevision is the data structure version used for file naming.
 	algorithmRevision = 23
@@ -321,7 +317,8 @@ func MakeDataset(block uint64, dir string) {
 	d.release()
 }
 
-// Ethash is a PoW data struture implementing the ethash algorithm.
+// Ethash is a consensus engine based on proot-of-work implementing the ethash
+// algorithm.
 type Ethash struct {
 	cachedir     string // Data directory to store the verification caches
 	cachesinmem  int    // Number of caches to keep in memory
@@ -334,15 +331,26 @@ type Ethash struct {
 	fcache   *cache              // Pre-generated cache for the estimated future epoch
 	datasets map[uint64]*dataset // In memory datasets to avoid regenerating too often
 	fdataset *dataset            // Pre-generated dataset for the estimated future epoch
-	lock     sync.Mutex          // Ensures thread safety for the in-memory caches
 
+	// Mining related fields
+	rand     *rand.Rand    // Properly seeded random source for nonces
+	threads  int           // Number of threads to mine on if mining
+	update   chan struct{} // Notification channel to update mining parameters
 	hashrate metrics.Meter // Meter tracking the average hashrate
 
-	tester bool // Flag whether to use a smaller test dataset
+	// The fields below are hooks for testing
+	tester    bool          // Flag whether to use a smaller test dataset
+	shared    *Ethash       // Shared PoW verifier to avoid cache regeneration
+	fakeMode  bool          // Flag whether to disable PoW checking
+	fakeFull  bool          // Flag whether to disable all consensus rules
+	fakeFail  uint64        // Block number which fails PoW check even in fake mode
+	fakeDelay time.Duration // Time delay to sleep for before returning from verify
+
+	lock sync.Mutex // Ensures thread safety for the in-memory caches and mining fields
 }
 
-// NewFullEthash creates a full sized ethash PoW scheme.
-func NewFullEthash(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsinmem, dagsondisk int) PoW {
+// New creates a full sized ethash PoW scheme.
+func New(cachedir string, cachesinmem, cachesondisk int, dagdir string, dagsinmem, dagsondisk int) *Ethash {
 	if cachesinmem <= 0 {
 		log.Warn("One ethash cache must alwast be in memory", "requested", cachesinmem)
 		cachesinmem = 1
@@ -362,58 +370,55 @@ func NewFullEthash(cachedir string, cachesinmem, cachesondisk int, dagdir string
 		dagsondisk:   dagsondisk,
 		caches:       make(map[uint64]*cache),
 		datasets:     make(map[uint64]*dataset),
+		update:       make(chan struct{}),
 		hashrate:     metrics.NewMeter(),
 	}
 }
 
-// NewTestEthash creates a small sized ethash PoW scheme useful only for testing
+// NewTester creates a small sized ethash PoW scheme useful only for testing
 // purposes.
-func NewTestEthash() PoW {
+func NewTester() *Ethash {
 	return &Ethash{
 		cachesinmem: 1,
 		caches:      make(map[uint64]*cache),
 		datasets:    make(map[uint64]*dataset),
 		tester:      true,
+		update:      make(chan struct{}),
 		hashrate:    metrics.NewMeter(),
 	}
 }
 
-// NewSharedEthash creates a full sized ethash PoW shared between all requesters
-// running in the same process.
-func NewSharedEthash() PoW {
-	return sharedEthash
+// NewFaker creates a ethash consensus engine with a fake PoW scheme that accepts
+// all blocks' seal as valid, though they still have to conform to the Ethereum
+// consensus rules.
+func NewFaker() *Ethash {
+	return &Ethash{fakeMode: true}
 }
 
-// Verify implements PoW, checking whether the given block satisfies the PoW
-// difficulty requirements.
-func (ethash *Ethash) Verify(block Block) error {
-	// Sanity check that the block number is below the lookup table size (60M blocks)
-	number := block.NumberU64()
-	if number/epochLength >= uint64(len(cacheSizes)) {
-		// Go < 1.7 cannot calculate new cache/dataset sizes (no fast prime check)
-		return ErrNonceOutOfRange
-	}
-	// Ensure that we have a valid difficulty for the block
-	difficulty := block.Difficulty()
-	if difficulty.Sign() <= 0 {
-		return ErrInvalidDifficulty
-	}
-	// Recompute the digest and PoW value and verify against the block
-	cache := ethash.cache(number)
+// NewFakeFailer creates a ethash consensus engine with a fake PoW scheme that
+// accepts all blocks as valid apart from the single one specified, though they
+// still have to conform to the Ethereum consensus rules.
+func NewFakeFailer(fail uint64) *Ethash {
+	return &Ethash{fakeMode: true, fakeFail: fail}
+}
 
-	size := datasetSize(number)
-	if ethash.tester {
-		size = 32 * 1024
-	}
-	digest, result := hashimotoLight(size, cache, block.HashNoNonce().Bytes(), block.Nonce())
-	if !bytes.Equal(block.MixDigest().Bytes(), digest) {
-		return ErrInvalidMixDigest
-	}
-	target := new(big.Int).Div(maxUint256, difficulty)
-	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
-		return ErrInvalidPoW
-	}
-	return nil
+// NewFakeDelayer creates a ethash consensus engine with a fake PoW scheme that
+// accepts all blocks as valid, but delays verifications by some time, though
+// they still have to conform to the Ethereum consensus rules.
+func NewFakeDelayer(delay time.Duration) *Ethash {
+	return &Ethash{fakeMode: true, fakeDelay: delay}
+}
+
+// NewFullFaker creates a ethash consensus engine with a full fake scheme that
+// accepts all blocks as valid, without checking any consensus rules whatsoever.
+func NewFullFaker() *Ethash {
+	return &Ethash{fakeMode: true, fakeFull: true}
+}
+
+// NewShared creates a full sized ethash PoW shared between all requesters running
+// in the same process.
+func NewShared() *Ethash {
+	return &Ethash{shared: sharedEthash}
 }
 
 // cache tries to retrieve a verification cache for the specified block number
@@ -475,43 +480,6 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 		go future.generate(ethash.cachedir, ethash.cachesondisk, ethash.tester)
 	}
 	return current.cache
-}
-
-// Search implements PoW, attempting to find a nonce that satisfies the block's
-// difficulty requirements.
-func (ethash *Ethash) Search(block Block, stop <-chan struct{}) (uint64, []byte) {
-	var (
-		hash     = block.HashNoNonce().Bytes()
-		diff     = block.Difficulty()
-		target   = new(big.Int).Div(maxUint256, diff)
-		dataset  = ethash.dataset(block.NumberU64())
-		rand     = rand.New(rand.NewSource(time.Now().UnixNano()))
-		nonce    = uint64(rand.Int63())
-		attempts int64
-	)
-	// Start generating random nonces until we abort or find a good one
-	for {
-		select {
-		case <-stop:
-			// Mining terminated, update stats and abort
-			ethash.hashrate.Mark(attempts)
-			return 0, nil
-
-		default:
-			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
-			attempts++
-			if (attempts % (1 << 15)) == 0 {
-				ethash.hashrate.Mark(attempts)
-				attempts = 0
-			}
-			// Compute the PoW value of this nonce
-			digest, result := hashimotoFull(dataset, hash, nonce)
-			if new(big.Int).SetBytes(result).Cmp(target) <= 0 {
-				return nonce, digest
-			}
-			nonce++
-		}
-	}
 }
 
 // dataset tries to retrieve a mining dataset for the specified block number
@@ -576,14 +544,44 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 	return current.dataset
 }
 
+// Threads returns the number of mining threads currently enabled. This doesn't
+// necessarily mean that mining is running!
+func (ethash *Ethash) Threads() int {
+	ethash.lock.Lock()
+	defer ethash.lock.Unlock()
+
+	return ethash.threads
+}
+
+// SetThreads updates the number of mining threads currently enabled. Calling
+// this method does not start mining, only sets the thread count. If zero is
+// specified, the miner will use all cores of the machine.
+func (ethash *Ethash) SetThreads(threads int) {
+	ethash.lock.Lock()
+	defer ethash.lock.Unlock()
+
+	// Update the threads and ping any running seal to pull in any changes
+	ethash.threads = threads
+	select {
+	case ethash.update <- struct{}{}:
+	default:
+	}
+}
+
 // Hashrate implements PoW, returning the measured rate of the search invocations
 // per second over the last minute.
 func (ethash *Ethash) Hashrate() float64 {
 	return ethash.hashrate.Rate1()
 }
 
-// EthashSeedHash is the seed to use for generating a vrification cache and the
-// mining dataset.
-func EthashSeedHash(block uint64) []byte {
+// APIs implements consensus.Engine, returning the user facing RPC APIs. Currently
+// that is empty.
+func (ethash *Ethash) APIs(chain consensus.ChainReader) []rpc.API {
+	return nil
+}
+
+// SeedHash is the seed to use for generating a verification cache and the mining
+// dataset.
+func SeedHash(block uint64) []byte {
 	return seedHash(block)
 }

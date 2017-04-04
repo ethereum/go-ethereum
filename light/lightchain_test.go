@@ -23,12 +23,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 )
 
 // So we can deterministically seed different blockchains
@@ -49,18 +49,15 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 	return headers
 }
 
-func testChainConfig() *params.ChainConfig {
-	return &params.ChainConfig{HomesteadBlock: big.NewInt(0)}
-}
-
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	db, _ := ethdb.NewMemDatabase()
-	gspec := core.Genesis{Config: testChainConfig()}
+	gspec := core.Genesis{Config: params.TestChainConfig}
 	genesis := gspec.MustCommit(db)
-	blockchain, _ := NewLightChain(&dummyOdr{db: db}, gspec.Config, pow.FakePow{}, new(event.TypeMux))
+	blockchain, _ := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFaker(), new(event.TypeMux))
+
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil
@@ -76,14 +73,13 @@ func newTestLightChain() *LightChain {
 	db, _ := ethdb.NewMemDatabase()
 	gspec := &core.Genesis{
 		Difficulty: big.NewInt(1),
-		Config:     testChainConfig(),
+		Config:     params.TestChainConfig,
 	}
 	gspec.MustCommit(db)
-	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, pow.NewTestEthash(), new(event.TypeMux))
+	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFullFaker(), new(event.TypeMux))
 	if err != nil {
 		panic(err)
 	}
-	lc.SetValidator(bproc{})
 	return lc
 }
 
@@ -130,17 +126,17 @@ func printChain(bc *LightChain) {
 
 // testHeaderChainImport tries to process a chain of header, writing them into
 // the database if successful.
-func testHeaderChainImport(chain []*types.Header, LightChain *LightChain) error {
+func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := LightChain.Validator().ValidateHeader(header, LightChain.GetHeaderByHash(header.ParentHash), false); err != nil {
+		if err := lightchain.engine.VerifyHeader(lightchain.hc, header, true); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
-		LightChain.mu.Lock()
-		core.WriteTd(LightChain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, LightChain.GetTdByHash(header.ParentHash)))
-		core.WriteHeader(LightChain.chainDb, header)
-		LightChain.mu.Unlock()
+		lightchain.mu.Lock()
+		core.WriteTd(lightchain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, lightchain.GetTdByHash(header.ParentHash)))
+		core.WriteHeader(lightchain.chainDb, header)
+		lightchain.mu.Unlock()
 	}
 	return nil
 }
@@ -257,10 +253,6 @@ func TestBrokenHeaderChain(t *testing.T) {
 	}
 }
 
-type bproc struct{}
-
-func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return nil }
-
 func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
 	var chain []*types.Header
 	for i, difficulty := range d {
@@ -359,7 +351,7 @@ func TestReorgBadHeaderHashes(t *testing.T) {
 	defer func() { delete(core.BadHashes, headers[3].Hash()) }()
 
 	// Create a new LightChain and check that it rolled back the state.
-	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, testChainConfig(), pow.FakePow{}, new(event.TypeMux))
+	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, params.TestChainConfig, ethash.NewFaker(), new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}

@@ -348,12 +348,11 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	return rlpHash(uncles)
 }
 
-// WithMiningResult returns a new block with the data from b
-// where nonce and mix digest are set to the provided values.
-func (b *Block) WithMiningResult(nonce BlockNonce, mixDigest common.Hash) *Block {
-	cpy := *b.header
-	cpy.Nonce = nonce
-	cpy.MixDigest = mixDigest
+// WithSeal returns a new block with the data from b but the header replaced with
+// the sealed one.
+func (b *Block) WithSeal(header *Header) *Block {
+	cpy := *header
+
 	return &Block{
 		header:       &cpy,
 		transactions: b.transactions,

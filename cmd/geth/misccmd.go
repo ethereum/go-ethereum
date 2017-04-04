@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -87,7 +87,7 @@ func makedag(ctx *cli.Context) error {
 				utils.Fatalf("Can't find dir")
 			}
 			fmt.Println("making DAG, this could take awhile...")
-			pow.MakeDataset(blockNum, dir)
+			ethash.MakeDataset(blockNum, dir)
 		}
 	default:
 		wrongArgs()

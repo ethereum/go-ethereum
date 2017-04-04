@@ -19,22 +19,12 @@ package core
 import (
 	"fmt"
 	"math/big"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
-	"gopkg.in/fatih/set.v0"
-)
-
-var (
-	ExpDiffPeriod = big.NewInt(100000)
-	big10         = big.NewInt(10)
-	bigMinus99    = big.NewInt(-99)
 )
 
 // BlockValidator is responsible for validating block headers, uncles and
@@ -44,30 +34,24 @@ var (
 type BlockValidator struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
-	Pow    pow.PoW             // Proof of work used for validating
+	engine consensus.Engine    // Consensus engine used for validating
 }
 
 // NewBlockValidator returns a new block validator which is safe for re-use
-func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, pow pow.PoW) *BlockValidator {
+func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain, engine consensus.Engine) *BlockValidator {
 	validator := &BlockValidator{
 		config: config,
-		Pow:    pow,
+		engine: engine,
 		bc:     blockchain,
 	}
 	return validator
 }
 
-// ValidateBlock validates the given block's header and uncles and verifies the
-// the block header's transaction and uncle roots.
-//
-// ValidateBlock does not validate the header's pow. The pow work validated
-// separately so we can process them in parallel.
-//
-// ValidateBlock also validates and makes sure that any previous state (or present)
-// state that might or might not be present is checked to make sure that fast
-// sync has done it's job proper. This prevents the block validator from accepting
-// false positives where a header is present but the state is not.
-func (v *BlockValidator) ValidateBlock(block *types.Block) error {
+// ValidateBody validates the given block's uncles and verifies the the block
+// header's transaction and uncle roots. The headers are assumed to be already
+// validated at this point.
+func (v *BlockValidator) ValidateBody(block *types.Block) error {
+	// Check whether the block's known, and if not, that it's linkable
 	if v.bc.HasBlock(block.Hash()) {
 		if _, err := state.New(block.Root(), v.bc.chainDb); err == nil {
 			return &KnownBlockError{block.Number(), block.Hash()}
@@ -80,30 +64,17 @@ func (v *BlockValidator) ValidateBlock(block *types.Block) error {
 	if _, err := state.New(parent.Root(), v.bc.chainDb); err != nil {
 		return ParentError(block.ParentHash())
 	}
-
+	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
-	// validate the block header
-	if err := ValidateHeader(v.config, v.Pow, header, parent.Header(), false, false); err != nil {
+	if err := v.engine.VerifyUncles(v.bc, block); err != nil {
 		return err
 	}
-	// verify the uncles are correctly rewarded
-	if err := v.VerifyUncles(block, parent); err != nil {
-		return err
+	if hash := types.CalcUncleHash(block.Uncles()); hash != header.UncleHash {
+		return fmt.Errorf("uncle root hash mismatch: have %x, want %x", hash, header.UncleHash)
 	}
-
-	// Verify UncleHash before running other uncle validations
-	unclesSha := types.CalcUncleHash(block.Uncles())
-	if unclesSha != header.UncleHash {
-		return fmt.Errorf("invalid uncles root hash (remote: %x local: %x)", header.UncleHash, unclesSha)
+	if hash := types.DeriveSha(block.Transactions()); hash != header.TxHash {
+		return fmt.Errorf("transaction root hash mismatch: have %x, want %x", hash, header.TxHash)
 	}
-
-	// The transactions Trie's root (R = (Tr [[i, RLP(T1)], [i, RLP(T2)], ... [n, RLP(Tn)]]))
-	// can be used by light clients to make sure they've received the correct Txs
-	txSha := types.DeriveSha(block.Transactions())
-	if txSha != header.TxHash {
-		return fmt.Errorf("invalid transaction root hash (remote: %x local: %x)", header.TxHash, txSha)
-	}
-
 	return nil
 }
 
@@ -133,222 +104,6 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
 	}
 	return nil
-}
-
-// VerifyUncles verifies the given block's uncles and applies the Ethereum
-// consensus rules to the various block headers included; it will return an
-// error if any of the included uncle headers were invalid. It returns an error
-// if the validation failed.
-func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
-	// validate that there are at most 2 uncles included in this block
-	if len(block.Uncles()) > 2 {
-		return ValidationError("Block can only contain maximum 2 uncles (contained %v)", len(block.Uncles()))
-	}
-
-	uncles := set.New()
-	ancestors := make(map[common.Hash]*types.Block)
-	for _, ancestor := range v.bc.GetBlocksFromHash(block.ParentHash(), 7) {
-		ancestors[ancestor.Hash()] = ancestor
-		// Include ancestors uncles in the uncle set. Uncles must be unique.
-		for _, uncle := range ancestor.Uncles() {
-			uncles.Add(uncle.Hash())
-		}
-	}
-	ancestors[block.Hash()] = block
-	uncles.Add(block.Hash())
-
-	for i, uncle := range block.Uncles() {
-		hash := uncle.Hash()
-		if uncles.Has(hash) {
-			// Error not unique
-			return UncleError("uncle[%d](%x) not unique", i, hash[:4])
-		}
-		uncles.Add(hash)
-
-		if ancestors[hash] != nil {
-			branch := fmt.Sprintf("  O - %x\n  |\n", block.Hash())
-			for h := range ancestors {
-				branch += fmt.Sprintf("  O - %x\n  |\n", h)
-			}
-			log.Warn(branch)
-			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
-		}
-
-		if ancestors[uncle.ParentHash] == nil || uncle.ParentHash == parent.Hash() {
-			return UncleError("uncle[%d](%x)'s parent is not ancestor (%x)", i, hash[:4], uncle.ParentHash[0:4])
-		}
-
-		if err := ValidateHeader(v.config, v.Pow, uncle, ancestors[uncle.ParentHash].Header(), true, true); err != nil {
-			return ValidationError(fmt.Sprintf("uncle[%d](%x) header invalid: %v", i, hash[:4], err))
-		}
-	}
-
-	return nil
-}
-
-// ValidateHeader validates the given header and, depending on the pow arg,
-// checks the proof of work of the given header. Returns an error if the
-// validation failed.
-func (v *BlockValidator) ValidateHeader(header, parent *types.Header, checkPow bool) error {
-	// Short circuit if the parent is missing.
-	if parent == nil {
-		return ParentError(header.ParentHash)
-	}
-	// Short circuit if the header's already known or its parent is missing
-	if v.bc.HasHeader(header.Hash()) {
-		return nil
-	}
-	return ValidateHeader(v.config, v.Pow, header, parent, checkPow, false)
-}
-
-// Validates a header. Returns an error if the header is invalid.
-//
-// See YP section 4.3.4. "Block Header Validity"
-func ValidateHeader(config *params.ChainConfig, pow pow.PoW, header *types.Header, parent *types.Header, checkPow, uncle bool) error {
-	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
-		return fmt.Errorf("Header extra data too long (%d)", len(header.Extra))
-	}
-
-	if uncle {
-		if header.Time.Cmp(math.MaxBig256) == 1 {
-			return BlockTSTooBigErr
-		}
-	} else {
-		if header.Time.Cmp(big.NewInt(time.Now().Unix())) == 1 {
-			return BlockFutureErr
-		}
-	}
-	if header.Time.Cmp(parent.Time) != 1 {
-		return BlockEqualTSErr
-	}
-
-	expd := CalcDifficulty(config, header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
-	if expd.Cmp(header.Difficulty) != 0 {
-		return fmt.Errorf("Difficulty check failed for header (remote: %v local: %v)", header.Difficulty, expd)
-	}
-
-	a := new(big.Int).Set(parent.GasLimit)
-	a = a.Sub(a, header.GasLimit)
-	a.Abs(a)
-	b := new(big.Int).Set(parent.GasLimit)
-	b = b.Div(b, params.GasLimitBoundDivisor)
-	if !(a.Cmp(b) < 0) || (header.GasLimit.Cmp(params.MinGasLimit) == -1) {
-		return fmt.Errorf("GasLimit check failed for header (remote: %v local_max: %v)", header.GasLimit, b)
-	}
-
-	num := new(big.Int).Set(parent.Number)
-	num.Sub(header.Number, num)
-	if num.Cmp(big.NewInt(1)) != 0 {
-		return BlockNumberErr
-	}
-
-	if checkPow {
-		// Verify the nonce of the header. Return an error if it's not valid
-		if err := pow.Verify(types.NewBlockWithHeader(header)); err != nil {
-			return &BlockNonceErr{header.Number, header.Hash(), header.Nonce.Uint64()}
-		}
-	}
-	// If all checks passed, validate the extra-data field for hard forks
-	if err := ValidateDAOHeaderExtraData(config, header); err != nil {
-		return err
-	}
-	if !uncle && config.EIP150Block != nil && config.EIP150Block.Cmp(header.Number) == 0 {
-		if config.EIP150Hash != (common.Hash{}) && config.EIP150Hash != header.Hash() {
-			return ValidationError("Homestead gas reprice fork hash mismatch: have 0x%x, want 0x%x", header.Hash(), config.EIP150Hash)
-		}
-	}
-	return nil
-}
-
-// CalcDifficulty is the difficulty adjustment algorithm. It returns
-// the difficulty that a new block should have when created at time
-// given the parent block's time and difficulty.
-func CalcDifficulty(config *params.ChainConfig, time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	if config.IsHomestead(new(big.Int).Add(parentNumber, common.Big1)) {
-		return calcDifficultyHomestead(time, parentTime, parentNumber, parentDiff)
-	} else {
-		return calcDifficultyFrontier(time, parentTime, parentNumber, parentDiff)
-	}
-}
-
-func calcDifficultyHomestead(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2.mediawiki
-	// algorithm:
-	// diff = (parent_diff +
-	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	//        ) + 2^(periodCount - 2)
-
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).SetUint64(parentTime)
-
-	// holds intermediate values to make the algo easier to read & audit
-	x := new(big.Int)
-	y := new(big.Int)
-
-	// 1 - (block_timestamp -parent_timestamp) // 10
-	x.Sub(bigTime, bigParentTime)
-	x.Div(x, big10)
-	x.Sub(common.Big1, x)
-
-	// max(1 - (block_timestamp - parent_timestamp) // 10, -99)))
-	if x.Cmp(bigMinus99) < 0 {
-		x.Set(bigMinus99)
-	}
-
-	// (parent_diff + parent_diff // 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
-	y.Div(parentDiff, params.DifficultyBoundDivisor)
-	x.Mul(y, x)
-	x.Add(parentDiff, x)
-
-	// minimum difficulty can ever be (before exponential factor)
-	if x.Cmp(params.MinimumDifficulty) < 0 {
-		x.Set(params.MinimumDifficulty)
-	}
-
-	// for the exponential factor
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-
-	// the exponential factor, commonly referred to as "the bomb"
-	// diff = diff + 2^(periodCount - 2)
-	if periodCount.Cmp(common.Big1) > 0 {
-		y.Sub(periodCount, common.Big2)
-		y.Exp(common.Big2, y, nil)
-		x.Add(x, y)
-	}
-
-	return x
-}
-
-func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *big.Int) *big.Int {
-	diff := new(big.Int)
-	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
-	bigTime := new(big.Int)
-	bigParentTime := new(big.Int)
-
-	bigTime.SetUint64(time)
-	bigParentTime.SetUint64(parentTime)
-
-	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
-		diff.Add(parentDiff, adjust)
-	} else {
-		diff.Sub(parentDiff, adjust)
-	}
-	if diff.Cmp(params.MinimumDifficulty) < 0 {
-		diff.Set(params.MinimumDifficulty)
-	}
-
-	periodCount := new(big.Int).Add(parentNumber, common.Big1)
-	periodCount.Div(periodCount, ExpDiffPeriod)
-	if periodCount.Cmp(common.Big1) > 0 {
-		// diff = diff + 2^(periodCount - 2)
-		expDiff := periodCount.Sub(periodCount, common.Big2)
-		expDiff.Exp(common.Big2, expDiff, nil)
-		diff.Add(diff, expDiff)
-		diff = math.BigMax(diff, params.MinimumDifficulty)
-	}
-
-	return diff
 }
 
 // CalcGasLimit computes the gas limit of the next block after parent.

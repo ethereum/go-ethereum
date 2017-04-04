@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package pow
+package ethash
 
 import (
 	"bytes"
@@ -704,24 +704,13 @@ func TestConcurrentDiskCacheGeneration(t *testing.T) {
 		go func(idx int) {
 			defer pend.Done()
 
-			ethash := NewFullEthash(cachedir, 0, 1, "", 0, 0)
-			if err := ethash.Verify(block); err != nil {
+			ethash := New(cachedir, 0, 1, "", 0, 0)
+			if err := ethash.VerifySeal(nil, block.Header()); err != nil {
 				t.Errorf("proc %d: block verification failed: %v", idx, err)
 			}
 		}(i)
 	}
 	pend.Wait()
-}
-
-func TestTestMode(t *testing.T) {
-	head := &types.Header{Difficulty: big.NewInt(100)}
-	ethash := NewTestEthash()
-	nonce, mix := ethash.Search(types.NewBlockWithHeader(head), nil)
-	head.Nonce = types.EncodeNonce(nonce)
-	copy(head.MixDigest[:], mix)
-	if err := ethash.Verify(types.NewBlockWithHeader(head)); err != nil {
-		t.Error("unexpected Verify error:", err)
-	}
 }
 
 // Benchmarks the cache generation performance.
