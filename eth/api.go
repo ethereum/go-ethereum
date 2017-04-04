@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const defaultTraceTimeout = 5 * time.Second
@@ -281,10 +282,21 @@ func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
 }
 
 // DumpBlock retrieves the entire state of the database at a given block.
-func (api *PublicDebugAPI) DumpBlock(number uint64) (state.Dump, error) {
-	block := api.eth.BlockChain().GetBlockByNumber(number)
+func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
+
+	var block *types.Block
+
+	switch blockNr {
+	case rpc.PendingBlockNumber:
+		// Pending block is only known by the miner
+		block = api.eth.miner.PendingBlock()
+	case rpc.LatestBlockNumber:
+		block = api.eth.blockchain.CurrentBlock()
+	default:
+		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
+	}
 	if block == nil {
-		return state.Dump{}, fmt.Errorf("block #%d not found", number)
+		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
 	stateDb, err := api.eth.BlockChain().StateAt(block.Root())
 	if err != nil {
@@ -349,11 +361,22 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config *vm.LogConfig
 }
 
 // TraceBlockByNumber processes the block by canonical block number.
-func (api *PrivateDebugAPI) TraceBlockByNumber(number uint64, config *vm.LogConfig) BlockTraceResult {
+func (api *PrivateDebugAPI) TraceBlockByNumber(blockNr rpc.BlockNumber, config *vm.LogConfig) BlockTraceResult {
+
+	var block *types.Block
 	// Fetch the block that we aim to reprocess
-	block := api.eth.BlockChain().GetBlockByNumber(number)
+	switch blockNr {
+	case rpc.PendingBlockNumber:
+		// Pending block is only known by the miner
+		block = api.eth.miner.PendingBlock()
+	case rpc.LatestBlockNumber:
+		block = api.eth.blockchain.CurrentBlock()
+	default:
+		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
+	}
+
 	if block == nil {
-		return BlockTraceResult{Error: fmt.Sprintf("block #%d not found", number)}
+		return BlockTraceResult{Error: fmt.Sprintf("block #%d not found", blockNr)}
 	}
 
 	validated, logs, err := api.traceBlock(block, config)
