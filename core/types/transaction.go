@@ -55,20 +55,20 @@ type Transaction struct {
 }
 
 type txdata struct {
-	AccountNonce uint64          `json:"nonce"`
-	Price        *big.Int        `json:"gasPrice"`
-	GasLimit     *big.Int        `json:"gas"`
-	Recipient    *common.Address `json:"to" optional:"yes" rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"`
-	Payload      []byte          `json:"input"`
+	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
+	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
+	GasLimit     *big.Int        `json:"gas"      gencodec:"required"`
+	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
+	Amount       *big.Int        `json:"value"    gencodec:"required"`
+	Payload      []byte          `json:"input"    gencodec:"required"`
 
 	// Signature values
-	V *big.Int `json:"v"`
-	R *big.Int `json:"r"`
-	S *big.Int `json:"s"`
+	V *big.Int `json:"v" gencodec:"required"`
+	R *big.Int `json:"r" gencodec:"required"`
+	S *big.Int `json:"s" gencodec:"required"`
 
 	// This is only used when marshaling to JSON.
-	Hash *common.Hash `json:"hash" optional:"yes" rlp:"-"`
+	Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
 type txdataMarshaling struct {

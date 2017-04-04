@@ -31,15 +31,15 @@ import (
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields
-	PostState         []byte   `json:"root"`
-	CumulativeGasUsed *big.Int `json:"cumulativeGasUsed"`
-	Bloom             Bloom    `json:"logsBloom"`
-	Logs              []*Log   `json:"logs"`
+	PostState         []byte   `json:"root"              gencodec:"required"`
+	CumulativeGasUsed *big.Int `json:"cumulativeGasUsed" gencodec:"required"`
+	Bloom             Bloom    `json:"logsBloom"         gencodec:"required"`
+	Logs              []*Log   `json:"logs"              gencodec:"required"`
 
 	// Implementation fields (don't reorder!)
-	TxHash          common.Hash    `json:"transactionHash"`
-	ContractAddress common.Address `json:"contractAddress" optional:"true"`
-	GasUsed         *big.Int       `json:"gasUsed"`
+	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
+	ContractAddress common.Address `json:"contractAddress"`
+	GasUsed         *big.Int       `json:"gasUsed" gencodec:"required"`
 }
 
 type receiptMarshaling struct {

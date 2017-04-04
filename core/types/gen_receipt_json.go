@@ -12,16 +12,16 @@ import (
 )
 
 func (r Receipt) MarshalJSON() ([]byte, error) {
-	type ReceiptJSON struct {
-		PostState         hexutil.Bytes  `json:"root"`
-		CumulativeGasUsed *hexutil.Big   `json:"cumulativeGasUsed"`
-		Bloom             Bloom          `json:"logsBloom"`
-		Logs              []*Log         `json:"logs"`
-		TxHash            common.Hash    `json:"transactionHash"`
-		ContractAddress   common.Address `json:"contractAddress" optional:"true"`
-		GasUsed           *hexutil.Big   `json:"gasUsed"`
+	type Receipt struct {
+		PostState         hexutil.Bytes  `json:"root"              gencodec:"required"`
+		CumulativeGasUsed *hexutil.Big   `json:"cumulativeGasUsed" gencodec:"required"`
+		Bloom             Bloom          `json:"logsBloom"         gencodec:"required"`
+		Logs              []*Log         `json:"logs"              gencodec:"required"`
+		TxHash            common.Hash    `json:"transactionHash" gencodec:"required"`
+		ContractAddress   common.Address `json:"contractAddress"`
+		GasUsed           *hexutil.Big   `json:"gasUsed" gencodec:"required"`
 	}
-	var enc ReceiptJSON
+	var enc Receipt
 	enc.PostState = r.PostState
 	enc.CumulativeGasUsed = (*hexutil.Big)(r.CumulativeGasUsed)
 	enc.Bloom = r.Bloom
@@ -33,47 +33,45 @@ func (r Receipt) MarshalJSON() ([]byte, error) {
 }
 
 func (r *Receipt) UnmarshalJSON(input []byte) error {
-	type ReceiptJSON struct {
-		PostState         hexutil.Bytes   `json:"root"`
-		CumulativeGasUsed *hexutil.Big    `json:"cumulativeGasUsed"`
-		Bloom             *Bloom          `json:"logsBloom"`
-		Logs              []*Log          `json:"logs"`
-		TxHash            *common.Hash    `json:"transactionHash"`
-		ContractAddress   *common.Address `json:"contractAddress" optional:"true"`
-		GasUsed           *hexutil.Big    `json:"gasUsed"`
+	type Receipt struct {
+		PostState         hexutil.Bytes   `json:"root"              gencodec:"required"`
+		CumulativeGasUsed *hexutil.Big    `json:"cumulativeGasUsed" gencodec:"required"`
+		Bloom             *Bloom          `json:"logsBloom"         gencodec:"required"`
+		Logs              []*Log          `json:"logs"              gencodec:"required"`
+		TxHash            *common.Hash    `json:"transactionHash" gencodec:"required"`
+		ContractAddress   *common.Address `json:"contractAddress"`
+		GasUsed           *hexutil.Big    `json:"gasUsed" gencodec:"required"`
 	}
-	var dec ReceiptJSON
+	var dec Receipt
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	var x Receipt
 	if dec.PostState == nil {
 		return errors.New("missing required field 'root' for Receipt")
 	}
-	x.PostState = dec.PostState
+	r.PostState = dec.PostState
 	if dec.CumulativeGasUsed == nil {
 		return errors.New("missing required field 'cumulativeGasUsed' for Receipt")
 	}
-	x.CumulativeGasUsed = (*big.Int)(dec.CumulativeGasUsed)
+	r.CumulativeGasUsed = (*big.Int)(dec.CumulativeGasUsed)
 	if dec.Bloom == nil {
 		return errors.New("missing required field 'logsBloom' for Receipt")
 	}
-	x.Bloom = *dec.Bloom
+	r.Bloom = *dec.Bloom
 	if dec.Logs == nil {
 		return errors.New("missing required field 'logs' for Receipt")
 	}
-	x.Logs = dec.Logs
+	r.Logs = dec.Logs
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionHash' for Receipt")
 	}
-	x.TxHash = *dec.TxHash
+	r.TxHash = *dec.TxHash
 	if dec.ContractAddress != nil {
-		x.ContractAddress = *dec.ContractAddress
+		r.ContractAddress = *dec.ContractAddress
 	}
 	if dec.GasUsed == nil {
 		return errors.New("missing required field 'gasUsed' for Receipt")
 	}
-	x.GasUsed = (*big.Int)(dec.GasUsed)
-	*r = x
+	r.GasUsed = (*big.Int)(dec.GasUsed)
 	return nil
 }
