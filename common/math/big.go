@@ -51,6 +51,9 @@ func (i *HexOrDecimal256) UnmarshalText(input []byte) error {
 
 // MarshalText implements encoding.TextMarshaler.
 func (i *HexOrDecimal256) MarshalText() ([]byte, error) {
+	if i == nil {
+		return []byte("0x0"), nil
+	}
 	return []byte(fmt.Sprintf("%#x", (*big.Int)(i))), nil
 }
 
