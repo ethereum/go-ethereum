@@ -16,7 +16,9 @@
 
 package params
 
-import "fmt"
+import (
+	"fmt"
+)
 
 const (
 	VersionMajor = 1          // Major version component of the current release
@@ -33,3 +35,11 @@ var Version = func() string {
 	}
 	return v
 }()
+
+func VersionWithCommit(gitCommit string) string {
+	vsn := Version
+	if len(gitCommit) >= 8 {
+		vsn += "-" + gitCommit[:8]
+	}
+	return vsn
+}

@@ -84,27 +84,24 @@ var daoGenesisForkBlock = big.NewInt(314)
 // set in the database after various initialization procedures and invocations.
 func TestDAOForkBlockNewChain(t *testing.T) {
 	for i, arg := range []struct {
-		testnet     bool
 		genesis     string
 		expectBlock *big.Int
 		expectVote  bool
 	}{
 		// Test DAO Default Mainnet
-		{false, "", params.MainNetDAOForkBlock, true},
-		// test DAO Default Testnet
-		{true, "", params.TestNetDAOForkBlock, true},
+		{"", params.MainNetDAOForkBlock, true},
 		// test DAO Init Old Privnet
-		{false, daoOldGenesis, nil, false},
+		{daoOldGenesis, nil, false},
 		// test DAO Default No Fork Privnet
-		{false, daoNoForkGenesis, daoGenesisForkBlock, false},
+		{daoNoForkGenesis, daoGenesisForkBlock, false},
 		// test DAO Default Pro Fork Privnet
-		{false, daoProForkGenesis, daoGenesisForkBlock, true},
+		{daoProForkGenesis, daoGenesisForkBlock, true},
 	} {
-		testDAOForkBlockNewChain(t, i, arg.testnet, arg.genesis, arg.expectBlock, arg.expectVote)
+		testDAOForkBlockNewChain(t, i, arg.genesis, arg.expectBlock, arg.expectVote)
 	}
 }
 
-func testDAOForkBlockNewChain(t *testing.T, test int, testnet bool, genesis string, expectBlock *big.Int, expectVote bool) {
+func testDAOForkBlockNewChain(t *testing.T, test int, genesis string, expectBlock *big.Int, expectVote bool) {
 	// Create a temporary data directory to use and inspect later
 	datadir := tmpdir(t)
 	defer os.RemoveAll(datadir)
@@ -119,17 +116,11 @@ func testDAOForkBlockNewChain(t *testing.T, test int, testnet bool, genesis stri
 	} else {
 		// Force chain initialization
 		args := []string{"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none", "--ipcdisable", "--datadir", datadir}
-		if testnet {
-			args = append(args, "--testnet")
-		}
 		geth := runGeth(t, append(args, []string{"--exec", "2+2", "console"}...)...)
 		geth.cmd.Wait()
 	}
 	// Retrieve the DAO config flag from the database
 	path := filepath.Join(datadir, "geth", "chaindata")
-	if testnet && genesis == "" {
-		path = filepath.Join(datadir, "testnet", "geth", "chaindata")
-	}
 	db, err := ethdb.NewLDBDatabase(path, 0, 0)
 	if err != nil {
 		t.Fatalf("test %d: failed to open test database: %v", test, err)
@@ -137,9 +128,6 @@ func testDAOForkBlockNewChain(t *testing.T, test int, testnet bool, genesis stri
 	defer db.Close()
 
 	genesisHash := common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3")
-	if testnet {
-		genesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
-	}
 	if genesis != "" {
 		genesisHash = daoGenesisHash
 	}

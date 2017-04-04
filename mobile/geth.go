@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
@@ -108,17 +109,19 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Create the empty networking stack
 	nodeConf := &node.Config{
-		Name:             clientIdentifier,
-		Version:          params.Version,
-		DataDir:          datadir,
-		KeyStoreDir:      filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
-		NoDiscovery:      true,
-		DiscoveryV5:      true,
-		DiscoveryV5Addr:  ":0",
-		BootstrapNodesV5: config.BootstrapNodes.nodes,
-		ListenAddr:       ":0",
-		NAT:              nat.Any(),
-		MaxPeers:         config.MaxPeers,
+		Name:        clientIdentifier,
+		Version:     params.Version,
+		DataDir:     datadir,
+		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
+		P2P: p2p.Config{
+			Discovery:        true,
+			DiscoveryV5:      true,
+			DiscoveryV5Addr:  ":0",
+			BootstrapNodesV5: config.BootstrapNodes.nodes,
+			ListenAddr:       ":0",
+			NAT:              nat.Any(),
+			MaxPeers:         config.MaxPeers,
+		},
 	}
 	rawStack, err := node.New(nodeConf)
 	if err != nil {

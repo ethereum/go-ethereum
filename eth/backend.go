@@ -19,13 +19,13 @@ package eth
 
 import (
 	"fmt"
-	"math/big"
-	"regexp"
+	"runtime"
 	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -43,54 +43,9 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 )
-
-var (
-	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
-	portInUseErrRE     = regexp.MustCompile("address already in use")
-)
-
-type Config struct {
-	// The genesis block, which is inserted if the database is empty.
-	// If nil, the Ethereum main net block is used.
-	Genesis *core.Genesis
-
-	NetworkId int // Network ID to use for selecting peers to connect to
-
-	FastSync   bool // Enables the state download based fast synchronisation algorithm
-	LightMode  bool // Running in light client mode
-	LightServ  int  // Maximum percentage of time allowed for serving LES requests
-	LightPeers int  // Maximum number of LES client peers
-	MaxPeers   int  // Maximum number of global peers
-
-	SkipBcVersionCheck bool // e.g. blockchain export
-	DatabaseCache      int
-	DatabaseHandles    int
-
-	DocRoot   string
-	PowFake   bool
-	PowTest   bool
-	PowShared bool
-	ExtraData []byte
-
-	EthashCacheDir       string
-	EthashCachesInMem    int
-	EthashCachesOnDisk   int
-	EthashDatasetDir     string
-	EthashDatasetsInMem  int
-	EthashDatasetsOnDisk int
-
-	Etherbase    common.Address
-	GasPrice     *big.Int
-	MinerThreads int
-	SolcPath     string
-
-	GpoBlocks     int
-	GpoPercentile int
-
-	EnablePreimageRecording bool
-}
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
@@ -207,7 +162,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	eth.miner.SetGasPrice(config.GasPrice)
-	eth.miner.SetExtra(config.ExtraData)
+	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	eth.ApiBackend = &EthApiBackend{eth, nil}
 	gpoParams := gasprice.Config{
@@ -218,6 +173,23 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
 	return eth, nil
+}
+
+func makeExtraData(extra []byte) []byte {
+	if len(extra) == 0 {
+		// create default extradata
+		extra, _ = rlp.EncodeToBytes([]interface{}{
+			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
+			"geth",
+			runtime.Version(),
+			runtime.GOOS,
+		})
+	}
+	if uint64(len(extra)) > params.MaximumExtraDataSize {
+		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
+		extra = nil
+	}
+	return extra
 }
 
 // CreateDB creates the chain database.
@@ -414,9 +386,4 @@ func (s *Ethereum) Stop() error {
 	close(s.shutdownChan)
 
 	return nil
-}
-
-// This function will wait for a shutdown and resumes main thread execution
-func (s *Ethereum) WaitForShutdown() {
-	<-s.shutdownChan
 }
