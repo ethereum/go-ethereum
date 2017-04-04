@@ -537,15 +537,29 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 	// Gather the batch of blocks to report
 	history := make([]*blockStats, len(indexes))
 	for i, number := range indexes {
+		// Retrieve the next block if it's known to us
+		var block *types.Block
 		if s.eth != nil {
-			history[len(history)-1-i] = s.assembleBlockStats(s.eth.BlockChain().GetBlockByNumber(number))
+			block = s.eth.BlockChain().GetBlockByNumber(number)
 		} else {
-			history[len(history)-1-i] = s.assembleBlockStats(types.NewBlockWithHeader(s.les.BlockChain().GetHeaderByNumber(number)))
+			if header := s.les.BlockChain().GetHeaderByNumber(number); header != nil {
+				block = types.NewBlockWithHeader(header)
+			}
 		}
+		// If we do have the block, add to the history and continue
+		if block != nil {
+			history[len(history)-1-i] = s.assembleBlockStats(block)
+			continue
+		}
+		// Ran out of blocks, cut the report short and send
+		history = history[len(history)-i:]
 	}
 	// Assemble the history report and send it to the server
-	log.Trace("Sending historical blocks to ethstats", "first", history[0].Number, "last", history[len(history)-1].Number)
-
+	if len(history) > 0 {
+		log.Trace("Sending historical blocks to ethstats", "first", history[0].Number, "last", history[len(history)-1].Number)
+	} else {
+		log.Trace("No history to send to stats server")
+	}
 	stats := map[string]interface{}{
 		"id":      s.node,
 		"history": history,
