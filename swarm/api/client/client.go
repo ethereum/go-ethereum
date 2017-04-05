@@ -94,13 +94,13 @@ func (c *Client) UploadFile(file string, fi os.FileInfo, mimetype_hint string) (
 	hash, err := c.uploadFileContent(file, fi)
 	if mimetype_hint != "" {
 		mimetype = mimetype_hint
-		log.Info("Mime type set by override", "mime", mimetype)	
+		log.Info("Mime type set by override", "mime", mimetype)
 	} else {
 		ext := filepath.Ext(file)
-		log.Info("Ext" , "ext", ext, "file", file)	
-		if  ext != "" {
+		log.Info("Ext", "ext", ext, "file", file)
+		if ext != "" {
 			mimetype = mime.TypeByExtension(filepath.Ext(fi.Name()))
-			log.Info("Mime type set by fileextension", "mime", mimetype, "ext", filepath.Ext(file))	
+			log.Info("Mime type set by fileextension", "mime", mimetype, "ext", filepath.Ext(file))
 		} else {
 			f, err := os.Open(file)
 			if err == nil {
@@ -108,12 +108,12 @@ func (c *Client) UploadFile(file string, fi os.FileInfo, mimetype_hint string) (
 				fread, _ := f.ReadAt(first512, 0)
 				if fread > 0 {
 					mimetype = http.DetectContentType(first512[:fread])
-					log.Info("Mime type set by autodetection", "mime", mimetype)	
+					log.Info("Mime type set by autodetection", "mime", mimetype)
 				}
 			}
 			f.Close()
 		}
-		
+
 	}
 	m := ManifestEntry{
 		Hash:        hash,
