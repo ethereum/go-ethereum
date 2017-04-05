@@ -27,7 +27,9 @@
 package simulations
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"reflect"
 	"sync"
 
@@ -56,6 +58,61 @@ type NetworkControl interface {
 // event types related to connectivity, i.e., nodes coming on dropping off
 // and connections established and dropped
 var ConnectivityEvents = []interface{}{&NodeEvent{}, &ConnEvent{}, &MsgEvent{}}
+
+type NetworkController struct {
+	*ResourceController
+
+	events *event.TypeMux
+}
+
+// ServeStream subscribes to network events and sends them to the client as a
+// stream of Server-Sent-Events, with each event being a JSON encoded CyUpdate
+// object
+func (n *NetworkController) ServeStream(w http.ResponseWriter, req *http.Request) {
+	sub := n.events.Subscribe(ConnectivityEvents...)
+	defer sub.Unsubscribe()
+
+	// stop the stream if the client goes away
+	var clientGone <-chan bool
+	if cn, ok := w.(http.CloseNotifier); ok {
+		clientGone = cn.CloseNotify()
+	}
+
+	// write writes the given event and data to the stream like:
+	//
+	// event: <event>
+	// data: <data>
+	//
+	write := func(event, data string) {
+		fmt.Fprintf(w, "event: %s\n", event)
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		if fw, ok := w.(http.Flusher); ok {
+			fw.Flush()
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	ch := sub.Chan()
+	for {
+		select {
+		case event := <-ch:
+			// convert the event to a CyUpdate
+			update, err := NewCyUpdate(event)
+			if err != nil {
+				write("error", err.Error())
+				return
+			}
+			data, err := json.Marshal(update)
+			if err != nil {
+				write("error", err.Error())
+				return
+			}
+			write("cyupdate", string(data))
+		case <-clientGone:
+			return
+		}
+	}
+}
 
 // NewNetworkController creates a ResourceController responding to GET and DELETE methods
 // it embeds a mockers controller, a journal player, node and connection contollers.
@@ -108,7 +165,7 @@ func NewNetworkController(net NetworkControl, nodesController *ResourceControlle
 	self.SetResource("mockevents", NewMockersController(eventer, conf.DefaultMockerConfig))
 	self.SetResource("journals", NewJournalPlayersController(eventer))
 
-	return Controller(self)
+	return &NetworkController{ResourceController: self, events: net.Events()}
 }
 
 func NewNodesController(net *Network) *ResourceController {
