@@ -93,6 +93,7 @@ type headerMarshaling struct {
 	GasUsed    *hexutil.Big
 	Time       *hexutil.Big
 	Extra      hexutil.Bytes
+	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
