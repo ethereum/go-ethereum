@@ -283,16 +283,17 @@ func NewPublicDebugAPI(eth *Ethereum) *PublicDebugAPI {
 
 // DumpBlock retrieves the entire state of the database at a given block.
 func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
-
+	if blockNr == rpc.PendingBlockNumber {
+		// If we're dumping the pending state, we need to request
+		// both the pending block as well as the pending state from
+		// the miner and operate on those
+		_, stateDb := api.eth.miner.Pending()
+		return stateDb.RawDump(), nil
+	}
 	var block *types.Block
-
-	switch blockNr {
-	case rpc.PendingBlockNumber:
-		// Pending block is only known by the miner
-		block = api.eth.miner.PendingBlock()
-	case rpc.LatestBlockNumber:
+	if blockNr == rpc.LatestBlockNumber {
 		block = api.eth.blockchain.CurrentBlock()
-	default:
+	} else {
 		block = api.eth.blockchain.GetBlockByNumber(uint64(blockNr))
 	}
 	if block == nil {
@@ -362,9 +363,8 @@ func (api *PrivateDebugAPI) TraceBlockFromFile(file string, config *vm.LogConfig
 
 // TraceBlockByNumber processes the block by canonical block number.
 func (api *PrivateDebugAPI) TraceBlockByNumber(blockNr rpc.BlockNumber, config *vm.LogConfig) BlockTraceResult {
-
-	var block *types.Block
 	// Fetch the block that we aim to reprocess
+	var block *types.Block
 	switch blockNr {
 	case rpc.PendingBlockNumber:
 		// Pending block is only known by the miner
