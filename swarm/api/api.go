@@ -99,7 +99,23 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 		return storage.Key(common.Hex2Bytes(uri.Addr)), nil
 	}
 	if err != nil {
+<<<<<<< HEAD
 		return nil, fmt.Errorf("'%s' does not resolve: %v but is not a content hash", uri.Addr, err)
+=======
+		return nil, fmt.Errorf("'%s' does not resolve: %v but is not a content hash", hostPort, err)
+	}
+	return nil, fmt.Errorf("'%s' is not a content hash", hostPort)
+}
+
+func Parse(uri string) (hostPort, path string) {
+	if uri == "" {
+		return
+	}
+	parts := slashes.Split(uri, 3)
+	var i int
+	if len(parts) == 0 {
+		return
+>>>>>>> swarm/api: Println had %s but no substitution
 	}
 	return nil, fmt.Errorf("'%s' is not a content hash", uri.Addr)
 }
