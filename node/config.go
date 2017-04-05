@@ -266,7 +266,7 @@ func (c *Config) NodeName() string {
 	if c.Version != "" {
 		name += "/v" + c.Version
 	}
-	name += "/" + runtime.GOOS
+	name += "/" + runtime.GOOS + "-" + runtime.GOARCH
 	name += "/" + runtime.Version()
 	return name
 }
