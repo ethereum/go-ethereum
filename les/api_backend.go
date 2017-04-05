@@ -38,7 +38,7 @@ import (
 
 type LesApiBackend struct {
 	eth *LightEthereum
-	gpo *gasprice.GasPriceOracle
+	gpo *gasprice.Oracle
 }
 
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {

@@ -27,15 +27,15 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-type GpoParams struct {
-	GpoBlocks     int
-	GpoPercentile int
-	GpoDefault    *big.Int
+type Config struct {
+	Blocks     int
+	Percentile int
+	Default    *big.Int
 }
 
-// GasPriceOracle recommends gas prices based on the content of recent
+// Oracle recommends gas prices based on the content of recent
 // blocks. Suitable for both light and full clients.
-type GasPriceOracle struct {
+type Oracle struct {
 	backend   ethapi.Backend
 	lastHead  common.Hash
 	lastPrice *big.Int
@@ -46,22 +46,22 @@ type GasPriceOracle struct {
 	percentile                        int
 }
 
-// NewGasPriceOracle returns a new oracle.
-func NewGasPriceOracle(backend ethapi.Backend, params GpoParams) *GasPriceOracle {
-	blocks := params.GpoBlocks
+// NewOracle returns a new oracle.
+func NewOracle(backend ethapi.Backend, params Config) *Oracle {
+	blocks := params.Blocks
 	if blocks < 1 {
 		blocks = 1
 	}
-	percent := params.GpoPercentile
+	percent := params.Percentile
 	if percent < 0 {
 		percent = 0
 	}
 	if percent > 100 {
 		percent = 100
 	}
-	return &GasPriceOracle{
+	return &Oracle{
 		backend:     backend,
-		lastPrice:   params.GpoDefault,
+		lastPrice:   params.Default,
 		checkBlocks: blocks,
 		minBlocks:   (blocks + 1) / 2,
 		maxBlocks:   blocks * 5,
@@ -70,95 +70,95 @@ func NewGasPriceOracle(backend ethapi.Backend, params GpoParams) *GasPriceOracle
 }
 
 // SuggestPrice returns the recommended gas price.
-func (self *GasPriceOracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	self.cacheLock.RLock()
-	lastHead := self.lastHead
-	lastPrice := self.lastPrice
-	self.cacheLock.RUnlock()
+func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	gpo.cacheLock.RLock()
+	lastHead := gpo.lastHead
+	lastPrice := gpo.lastPrice
+	gpo.cacheLock.RUnlock()
 
-	head, _ := self.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	head, _ := gpo.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	headHash := head.Hash()
 	if headHash == lastHead {
 		return lastPrice, nil
 	}
 
-	self.fetchLock.Lock()
-	defer self.fetchLock.Unlock()
+	gpo.fetchLock.Lock()
+	defer gpo.fetchLock.Unlock()
 
 	// try checking the cache again, maybe the last fetch fetched what we need
-	self.cacheLock.RLock()
-	lastHead = self.lastHead
-	lastPrice = self.lastPrice
-	self.cacheLock.RUnlock()
+	gpo.cacheLock.RLock()
+	lastHead = gpo.lastHead
+	lastPrice = gpo.lastPrice
+	gpo.cacheLock.RUnlock()
 	if headHash == lastHead {
 		return lastPrice, nil
 	}
 
 	blockNum := head.Number.Uint64()
-	chn := make(chan lpResult, self.checkBlocks)
+	ch := make(chan getBlockPricesResult, gpo.checkBlocks)
 	sent := 0
 	exp := 0
-	var lps bigIntArray
-	for sent < self.checkBlocks && blockNum > 0 {
-		go self.getBlockPrices(ctx, blockNum, chn)
+	var txPrices []*big.Int
+	for sent < gpo.checkBlocks && blockNum > 0 {
+		go gpo.getBlockPrices(ctx, blockNum, ch)
 		sent++
 		exp++
 		blockNum--
 	}
-	maxEmpty := self.checkBlocks - self.minBlocks
+	maxEmpty := gpo.checkBlocks - gpo.minBlocks
 	for exp > 0 {
-		res := <-chn
+		res := <-ch
 		if res.err != nil {
 			return lastPrice, res.err
 		}
 		exp--
 		if len(res.prices) > 0 {
-			lps = append(lps, res.prices...)
-		} else {
-			if maxEmpty > 0 {
-				maxEmpty--
-			} else {
-				if blockNum > 0 && sent < self.maxBlocks {
-					go self.getBlockPrices(ctx, blockNum, chn)
-					sent++
-					exp++
-					blockNum--
-				}
-			}
+			txPrices = append(txPrices, res.prices...)
+			continue
+		}
+		if maxEmpty > 0 {
+			maxEmpty--
+			continue
+		}
+		if blockNum > 0 && sent < gpo.maxBlocks {
+			go gpo.getBlockPrices(ctx, blockNum, ch)
+			sent++
+			exp++
+			blockNum--
 		}
 	}
 	price := lastPrice
-	if len(lps) > 0 {
-		sort.Sort(lps)
-		price = lps[(len(lps)-1)*self.percentile/100]
+	if len(txPrices) > 0 {
+		sort.Sort(bigIntArray(txPrices))
+		price = txPrices[(len(txPrices)-1)*gpo.percentile/100]
 	}
 
-	self.cacheLock.Lock()
-	self.lastHead = headHash
-	self.lastPrice = price
-	self.cacheLock.Unlock()
+	gpo.cacheLock.Lock()
+	gpo.lastHead = headHash
+	gpo.lastPrice = price
+	gpo.cacheLock.Unlock()
 	return price, nil
 }
 
-type lpResult struct {
+type getBlockPricesResult struct {
 	prices []*big.Int
 	err    error
 }
 
 // getLowestPrice calculates the lowest transaction gas price in a given block
 // and sends it to the result channel. If the block is empty, price is nil.
-func (self *GasPriceOracle) getBlockPrices(ctx context.Context, blockNum uint64, chn chan lpResult) {
-	block, err := self.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
+func (gpo *Oracle) getBlockPrices(ctx context.Context, blockNum uint64, ch chan getBlockPricesResult) {
+	block, err := gpo.backend.BlockByNumber(ctx, rpc.BlockNumber(blockNum))
 	if block == nil {
-		chn <- lpResult{nil, err}
+		ch <- getBlockPricesResult{nil, err}
 		return
 	}
 	txs := block.Transactions()
-	prices := make(bigIntArray, len(txs))
+	prices := make([]*big.Int, len(txs))
 	for i, tx := range txs {
 		prices[i] = tx.GasPrice()
 	}
-	chn <- lpResult{prices, nil}
+	ch <- getBlockPricesResult{prices, nil}
 }
 
 type bigIntArray []*big.Int

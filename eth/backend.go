@@ -215,12 +215,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner.SetExtra(config.ExtraData)
 
 	eth.ApiBackend = &EthApiBackend{eth, nil}
-	gpoParams := gasprice.GpoParams{
-		GpoBlocks:     config.GpoBlocks,
-		GpoPercentile: config.GpoPercentile,
-		GpoDefault:    config.GasPrice,
+	gpoParams := gasprice.Config{
+		Blocks:     config.GpoBlocks,
+		Percentile: config.GpoPercentile,
+		Default:    config.GasPrice,
 	}
-	eth.ApiBackend.gpo = gasprice.NewGasPriceOracle(eth.ApiBackend, gpoParams)
+	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
 	return eth, nil
 }

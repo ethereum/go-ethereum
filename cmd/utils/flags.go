@@ -415,8 +415,8 @@ var (
 		Value: 5,
 	}
 	GpoPercentileFlag = cli.IntFlag{
-		Name:  "gpopercent",
-		Usage: "Percentile of recent transaction gas prices",
+		Name:  "gpopercentile",
+		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
 		Value: 50,
 	}
 )
