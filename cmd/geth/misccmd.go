@@ -101,10 +101,11 @@ func version(ctx *cli.Context) error {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
+	fmt.Println("Architecture:", runtime.GOARCH)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
-	fmt.Println("OS:", runtime.GOOS)
+	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
 	return nil

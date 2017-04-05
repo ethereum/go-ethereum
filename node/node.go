@@ -173,7 +173,7 @@ func (n *Node) Start() error {
 		MaxPendingPeers:  n.config.MaxPendingPeers,
 	}
 	running := &p2p.Server{Config: n.serverConfig}
-	log.Info(fmt.Sprint("instance:", n.serverConfig.Name))
+	log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
