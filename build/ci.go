@@ -430,6 +430,10 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping because this is a PR build")
 		os.Exit(0)
 	}
+	if env.IsCronJob {
+		log.Printf("skipping because this is a cron job")
+		os.Exit(0)
+	}
 	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") {
 		log.Printf("skipping because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
 		os.Exit(0)
@@ -965,9 +969,10 @@ func doPurge(cmdline []string) {
 	)
 	flag.CommandLine.Parse(cmdline)
 
-	env := build.Env()
-	maybeSkipArchive(env)
-
+	if env := build.Env(); !env.IsCronJob {
+		log.Printf("skipping because not a cron job")
+		os.Exit(0)
+	}
 	// Create the azure authentication and list the current archives
 	auth := build.AzureBlobstoreConfig{
 		Account:   strings.Split(*store, "/")[0],
