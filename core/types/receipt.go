@@ -17,8 +17,6 @@
 package types
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -28,33 +26,26 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-var (
-	errMissingReceiptPostState = errors.New("missing post state root in JSON receipt")
-	errMissingReceiptFields    = errors.New("missing required JSON receipt fields")
-)
+//go:generate gencodec -type Receipt -field-override receiptMarshaling -out gen_receipt_json.go
 
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	// Consensus fields
-	PostState         []byte
-	CumulativeGasUsed *big.Int
-	Bloom             Bloom
-	Logs              []*Log
+	PostState         []byte   `json:"root"`
+	CumulativeGasUsed *big.Int `json:"cumulativeGasUsed"`
+	Bloom             Bloom    `json:"logsBloom"`
+	Logs              []*Log   `json:"logs"`
 
 	// Implementation fields (don't reorder!)
-	TxHash          common.Hash
-	ContractAddress common.Address
-	GasUsed         *big.Int
+	TxHash          common.Hash    `json:"transactionHash"`
+	ContractAddress common.Address `json:"contractAddress" optional:"true"`
+	GasUsed         *big.Int       `json:"gasUsed"`
 }
 
-type jsonReceipt struct {
-	PostState         *common.Hash    `json:"root"`
-	CumulativeGasUsed *hexutil.Big    `json:"cumulativeGasUsed"`
-	Bloom             *Bloom          `json:"logsBloom"`
-	Logs              []*Log          `json:"logs"`
-	TxHash            *common.Hash    `json:"transactionHash"`
-	ContractAddress   *common.Address `json:"contractAddress"`
-	GasUsed           *hexutil.Big    `json:"gasUsed"`
+type receiptMarshaling struct {
+	PostState         hexutil.Bytes
+	CumulativeGasUsed *hexutil.Big
+	GasUsed           *hexutil.Big
 }
 
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
@@ -81,51 +72,6 @@ func (r *Receipt) DecodeRLP(s *rlp.Stream) error {
 		return err
 	}
 	r.PostState, r.CumulativeGasUsed, r.Bloom, r.Logs = receipt.PostState, receipt.CumulativeGasUsed, receipt.Bloom, receipt.Logs
-	return nil
-}
-
-// MarshalJSON encodes receipts into the web3 RPC response block format.
-func (r *Receipt) MarshalJSON() ([]byte, error) {
-	root := common.BytesToHash(r.PostState)
-
-	return json.Marshal(&jsonReceipt{
-		PostState:         &root,
-		CumulativeGasUsed: (*hexutil.Big)(r.CumulativeGasUsed),
-		Bloom:             &r.Bloom,
-		Logs:              r.Logs,
-		TxHash:            &r.TxHash,
-		ContractAddress:   &r.ContractAddress,
-		GasUsed:           (*hexutil.Big)(r.GasUsed),
-	})
-}
-
-// UnmarshalJSON decodes the web3 RPC receipt format.
-func (r *Receipt) UnmarshalJSON(input []byte) error {
-	var dec jsonReceipt
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-	// Ensure that all fields are set. PostState is checked separately because it is a
-	// recent addition to the RPC spec (as of August 2016) and older implementations might
-	// not provide it. Note that ContractAddress is not checked because it can be null.
-	if dec.PostState == nil {
-		return errMissingReceiptPostState
-	}
-	if dec.CumulativeGasUsed == nil || dec.Bloom == nil ||
-		dec.Logs == nil || dec.TxHash == nil || dec.GasUsed == nil {
-		return errMissingReceiptFields
-	}
-	*r = Receipt{
-		PostState:         (*dec.PostState)[:],
-		CumulativeGasUsed: (*big.Int)(dec.CumulativeGasUsed),
-		Bloom:             *dec.Bloom,
-		Logs:              dec.Logs,
-		TxHash:            *dec.TxHash,
-		GasUsed:           (*big.Int)(dec.GasUsed),
-	}
-	if dec.ContractAddress != nil {
-		r.ContractAddress = *dec.ContractAddress
-	}
 	return nil
 }
 

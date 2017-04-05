@@ -17,12 +17,12 @@
 package light
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/net/context"
 )
 
 // VMState is a wrapper for the light state that holds the actual context and

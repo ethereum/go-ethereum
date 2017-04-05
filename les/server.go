@@ -19,7 +19,6 @@ package les
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -46,7 +45,7 @@ type LesServer struct {
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
-	pm, err := NewProtocolManager(config.ChainConfig, false, config.NetworkId, eth.EventMux(), eth.Pow(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
+	pm, err := NewProtocolManager(eth.BlockChain().Config(), false, config.NetworkId, eth.EventMux(), eth.Engine(), eth.BlockChain(), eth.TxPool(), eth.ChainDb(), nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +291,7 @@ func (pm *ProtocolManager) blockLoop() {
 						lastHead = header
 						lastBroadcastTd = td
 
-						log.Debug(fmt.Sprint("===> ", number, hash, td, reorg))
+						log.Debug("Announcing block to peers", "number", number, "hash", hash, "td", td, "reorg", reorg)
 
 						announce := announceData{Hash: hash, Number: number, Td: td, ReorgDepth: reorg}
 						for _, p := range peers {
@@ -396,7 +395,7 @@ func makeCht(db ethdb.Database) bool {
 	} else {
 		lastChtNum++
 
-		log.Trace(fmt.Sprintf("cht: %d %064x", lastChtNum, root))
+		log.Trace("Generated CHT", "number", lastChtNum, "root", root.Hex())
 
 		storeChtRoot(db, lastChtNum, root)
 		var data [8]byte

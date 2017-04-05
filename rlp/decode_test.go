@@ -339,6 +339,12 @@ var (
 	)
 )
 
+type hasIgnoredField struct {
+	A uint
+	B uint `rlp:"-"`
+	C uint
+}
+
 var decodeTests = []decodeTest{
 	// booleans
 	{input: "01", ptr: new(bool), value: true},
@@ -488,6 +494,13 @@ var decodeTests = []decodeTest{
 		input: "C101",
 		ptr:   new(tailRaw),
 		value: tailRaw{A: 1, Tail: []RawValue{}},
+	},
+
+	// struct tag "-"
+	{
+		input: "C20102",
+		ptr:   new(hasIgnoredField),
+		value: hasIgnoredField{A: 1, C: 2},
 	},
 
 	// RawValue

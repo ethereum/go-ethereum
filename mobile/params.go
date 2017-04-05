@@ -19,6 +19,8 @@
 package geth
 
 import (
+	"encoding/json"
+
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
@@ -60,7 +62,11 @@ func TestnetChainConfig() *ChainConfig {
 
 // TestnetGenesis returns the JSON spec to use for the Ethereum test network.
 func TestnetGenesis() string {
-	return core.DefaultTestnetGenesisBlock()
+	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())
+	if err != nil {
+		panic(err)
+	}
+	return string(enc)
 }
 
 // ChainConfig is the core config which determines the blockchain settings.

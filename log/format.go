@@ -23,7 +23,6 @@ const (
 // locationTrims are trimmed for display to avoid unwieldy log lines.
 var locationTrims = []string{
 	"github.com/ethereum/go-ethereum/",
-	"github.com/ethereum/ethash/",
 }
 
 // PrintOrigins sets or unsets log location (file:line) printing for terminal
@@ -134,10 +133,10 @@ func TerminalFormat(usecolor bool) Format {
 			}
 		}
 		// try to justify the log output for short messages
-		if len(r.Ctx) > 0 && len(r.Msg) < termMsgJust {
-			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-len(r.Msg)))
+		length := utf8.RuneCountInString(r.Msg)
+		if len(r.Ctx) > 0 && length < termMsgJust {
+			b.Write(bytes.Repeat([]byte{' '}, termMsgJust-length))
 		}
-
 		// print the keys logfmt style
 		logfmt(b, r.Ctx, color, true)
 		return b.Bytes()

@@ -18,7 +18,6 @@
 package les
 
 import (
-	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -136,35 +135,38 @@ func (f *lightFetcher) syncLoop() {
 			f.lock.Lock()
 			s := requesting
 			requesting = false
+			var (
+				rq    *distReq
+				reqID uint64
+			)
 			if !f.syncing && !(newAnnounce && s) {
-				reqID := getNextReqID()
-				if peer, node, amount, retry := f.nextRequest(reqID); node != nil {
-					requesting = true
-					if reqID, ok := f.request(peer, reqID, node, amount); ok {
-						go func() {
-							time.Sleep(softRequestTimeout)
-							f.reqMu.Lock()
-							req, ok := f.requested[reqID]
-							if ok {
-								req.timeout = true
-								f.requested[reqID] = req
-							}
-							f.reqMu.Unlock()
-							// keep starting new requests while possible
-							f.requestChn <- false
-						}()
-					}
-				} else {
-					if retry {
-						requesting = true
-						go func() {
-							time.Sleep(time.Millisecond * 100)
-							f.requestChn <- false
-						}()
-					}
+				rq, reqID = f.nextRequest()
+			}
+			syncing := f.syncing
+			f.lock.Unlock()
+
+			if rq != nil {
+				requesting = true
+				_, ok := <-f.pm.reqDist.queue(rq)
+				if !ok {
+					f.requestChn <- false
+				}
+
+				if !syncing {
+					go func() {
+						time.Sleep(softRequestTimeout)
+						f.reqMu.Lock()
+						req, ok := f.requested[reqID]
+						if ok {
+							req.timeout = true
+							f.requested[reqID] = req
+						}
+						f.reqMu.Unlock()
+						// keep starting new requests while possible
+						f.requestChn <- false
+					}()
 				}
 			}
-			f.lock.Unlock()
 		case reqID := <-f.timeoutChn:
 			f.reqMu.Lock()
 			req, ok := f.requested[reqID]
@@ -174,7 +176,7 @@ func (f *lightFetcher) syncLoop() {
 			f.reqMu.Unlock()
 			if ok {
 				f.pm.serverPool.adjustResponseTime(req.peer.poolEntry, time.Duration(mclock.Now()-req.sent), true)
-				log.Debug(fmt.Sprintf("hard timeout by peer %v", req.peer.id))
+				req.peer.Log().Debug("Fetching data timed out hard")
 				go f.pm.removePeer(req.peer.id)
 			}
 		case resp := <-f.deliverChn:
@@ -192,13 +194,13 @@ func (f *lightFetcher) syncLoop() {
 			}
 			f.lock.Lock()
 			if !ok || !(f.syncing || f.processResponse(req, resp)) {
-				log.Debug(fmt.Sprintf("failed processing response by peer %v", resp.peer.id))
+				resp.peer.Log().Debug("Failed processing response")
 				go f.pm.removePeer(resp.peer.id)
 			}
 			f.lock.Unlock()
 		case p := <-f.syncDone:
 			f.lock.Lock()
-			log.Debug(fmt.Sprintf("done synchronising with peer %v", p.id))
+			p.Log().Debug("Done synchronising with peer")
 			f.checkSyncedHeaders(p)
 			f.syncing = false
 			f.lock.Unlock()
@@ -239,17 +241,17 @@ func (f *lightFetcher) removePeer(p *peer) {
 func (f *lightFetcher) announce(p *peer, head *announceData) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	log.Debug(fmt.Sprintf("received announce from peer %v  #%d  %016x  reorg: %d", p.id, head.Number, head.Hash[:8], head.ReorgDepth))
+	p.Log().Debug("Received new announcement", "number", head.Number, "hash", head.Hash, "reorg", head.ReorgDepth)
 
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("announce: unknown peer"))
+		p.Log().Debug("Announcement from unknown peer")
 		return
 	}
 
 	if fp.lastAnnounced != nil && head.Td.Cmp(fp.lastAnnounced.td) <= 0 {
 		// announced tds should be strictly monotonic
-		log.Debug(fmt.Sprintf("non-monotonic Td from peer %v", p.id))
+		p.Log().Debug("Received non-monotonic td", "current", head.Td, "previous", fp.lastAnnounced.td)
 		go f.pm.removePeer(p.id)
 		return
 	}
@@ -335,6 +337,12 @@ func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bo
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
+	if f.syncing {
+		// always return true when syncing
+		// false positives are acceptable, a more sophisticated condition can be implemented later
+		return true
+	}
+
 	fp := f.peers[p]
 	if fp == nil || fp.root == nil {
 		return false
@@ -347,41 +355,11 @@ func (f *lightFetcher) peerHasBlock(p *peer, hash common.Hash, number uint64) bo
 	f.chain.LockChain()
 	defer f.chain.UnlockChain()
 	// if it's older than the peer's block tree root but it's in the same canonical chain
-	// than the root, we can still be sure the peer knows it
+	// as the root, we can still be sure the peer knows it
+	//
+	// when syncing, just check if it is part of the known chain, there is nothing better we
+	// can do since we do not know the most recent block hash yet
 	return core.GetCanonicalHash(f.pm.chainDb, fp.root.number) == fp.root.hash && core.GetCanonicalHash(f.pm.chainDb, number) == hash
-}
-
-// request initiates a header download request from a certain peer
-func (f *lightFetcher) request(p *peer, reqID uint64, n *fetcherTreeNode, amount uint64) (uint64, bool) {
-	fp := f.peers[p]
-	if fp == nil {
-		log.Debug(fmt.Sprintf("request: unknown peer"))
-		p.fcServer.DeassignRequest(reqID)
-		return 0, false
-	}
-	if fp.bestConfirmed == nil || fp.root == nil || !f.checkKnownNode(p, fp.root) {
-		f.syncing = true
-		go func() {
-			log.Debug(fmt.Sprintf("synchronising with peer %v", p.id))
-			f.pm.synchronise(p)
-			f.syncDone <- p
-		}()
-		p.fcServer.DeassignRequest(reqID)
-		return 0, false
-	}
-
-	n.requested = true
-	cost := p.GetRequestCost(GetBlockHeadersMsg, int(amount))
-	p.fcServer.SendRequest(reqID, cost)
-	f.reqMu.Lock()
-	f.requested[reqID] = fetchRequest{hash: n.hash, amount: amount, peer: p, sent: mclock.Now()}
-	f.reqMu.Unlock()
-	go p.RequestHeadersByHash(reqID, cost, n.hash, int(amount), 0, true)
-	go func() {
-		time.Sleep(hardRequestTimeout)
-		f.timeoutChn <- reqID
-	}()
-	return reqID, true
 }
 
 // requestAmount calculates the amount of headers to be downloaded starting
@@ -409,12 +387,13 @@ func (f *lightFetcher) requestedID(reqID uint64) bool {
 
 // nextRequest selects the peer and announced head to be requested next, amount
 // to be downloaded starting from the head backwards is also returned
-func (f *lightFetcher) nextRequest(reqID uint64) (*peer, *fetcherTreeNode, uint64, bool) {
+func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 	var (
 		bestHash   common.Hash
 		bestAmount uint64
 	)
 	bestTd := f.maxConfirmedTd
+	bestSyncing := false
 
 	for p, fp := range f.peers {
 		for hash, n := range fp.nodeByHash {
@@ -424,29 +403,83 @@ func (f *lightFetcher) nextRequest(reqID uint64) (*peer, *fetcherTreeNode, uint6
 					bestHash = hash
 					bestAmount = amount
 					bestTd = n.td
+					bestSyncing = fp.bestConfirmed == nil || fp.root == nil || !f.checkKnownNode(p, fp.root)
 				}
 			}
 		}
 	}
 	if bestTd == f.maxConfirmedTd {
-		return nil, nil, 0, false
+		return nil, 0
 	}
 
-	peer, _, locked := f.pm.serverPool.selectPeer(reqID, func(p *peer) (bool, time.Duration) {
-		fp := f.peers[p]
-		if fp == nil || fp.nodeByHash[bestHash] == nil {
-			return false, 0
+	f.syncing = bestSyncing
+
+	var rq *distReq
+	reqID := getNextReqID()
+	if f.syncing {
+		rq = &distReq{
+			getCost: func(dp distPeer) uint64 {
+				return 0
+			},
+			canSend: func(dp distPeer) bool {
+				p := dp.(*peer)
+				fp := f.peers[p]
+				return fp != nil && fp.nodeByHash[bestHash] != nil
+			},
+			request: func(dp distPeer) func() {
+				go func() {
+					p := dp.(*peer)
+					p.Log().Debug("Synchronisation started")
+					f.pm.synchronise(p)
+					f.syncDone <- p
+				}()
+				return nil
+			},
 		}
-		return true, p.fcServer.CanSend(p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount)))
-	})
-	if !locked {
-		return nil, nil, 0, true
+	} else {
+		rq = &distReq{
+			getCost: func(dp distPeer) uint64 {
+				p := dp.(*peer)
+				return p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount))
+			},
+			canSend: func(dp distPeer) bool {
+				p := dp.(*peer)
+				f.lock.Lock()
+				defer f.lock.Unlock()
+
+				fp := f.peers[p]
+				if fp == nil {
+					return false
+				}
+				n := fp.nodeByHash[bestHash]
+				return n != nil && !n.requested
+			},
+			request: func(dp distPeer) func() {
+				p := dp.(*peer)
+				f.lock.Lock()
+				fp := f.peers[p]
+				if fp != nil {
+					n := fp.nodeByHash[bestHash]
+					if n != nil {
+						n.requested = true
+					}
+				}
+				f.lock.Unlock()
+
+				cost := p.GetRequestCost(GetBlockHeadersMsg, int(bestAmount))
+				p.fcServer.QueueRequest(reqID, cost)
+				f.reqMu.Lock()
+				f.requested[reqID] = fetchRequest{hash: bestHash, amount: bestAmount, peer: p, sent: mclock.Now()}
+				f.reqMu.Unlock()
+				go func() {
+					time.Sleep(hardRequestTimeout)
+					f.timeoutChn <- reqID
+				}()
+				return func() { p.RequestHeadersByHash(reqID, cost, bestHash, int(bestAmount), 0, true) }
+			},
+		}
 	}
-	var node *fetcherTreeNode
-	if peer != nil {
-		node = f.peers[peer].nodeByHash[bestHash]
-	}
-	return peer, node, bestAmount, false
+	return rq, reqID
 }
 
 // deliverHeaders delivers header download request responses for processing
@@ -457,7 +490,7 @@ func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types
 // processResponse processes header download request responses, returns true if successful
 func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) bool {
 	if uint64(len(resp.headers)) != req.amount || resp.headers[0].Hash() != req.hash {
-		log.Debug(fmt.Sprintf("response mismatch %v %016x != %v %016x", len(resp.headers), resp.headers[0].Hash().Bytes()[:8], req.amount, req.hash[:8]))
+		req.peer.Log().Debug("Response content mismatch", "requested", len(resp.headers), "reqfrom", resp.headers[0], "delivered", req.amount, "delfrom", req.hash)
 		return false
 	}
 	headers := make([]*types.Header, req.amount)
@@ -468,14 +501,14 @@ func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) boo
 		if err == core.BlockFutureErr {
 			return true
 		}
-		log.Debug(fmt.Sprintf("InsertHeaderChain error: %v", err))
+		log.Debug("Failed to insert header chain", "err", err)
 		return false
 	}
 	tds := make([]*big.Int, len(headers))
 	for i, header := range headers {
 		td := f.chain.GetTd(header.Hash(), header.Number.Uint64())
 		if td == nil {
-			log.Debug(fmt.Sprintf("TD not found for header %v of %v", i+1, len(headers)))
+			log.Debug("Total difficulty not found for header", "index", i+1, "number", header.Number, "hash", header.Hash())
 			return false
 		}
 		tds[i] = td
@@ -490,7 +523,7 @@ func (f *lightFetcher) newHeaders(headers []*types.Header, tds []*big.Int) {
 	var maxTd *big.Int
 	for p, fp := range f.peers {
 		if !f.checkAnnouncedHeaders(fp, headers, tds) {
-			log.Debug(fmt.Sprintf("announce inconsistency by peer %v", p.id))
+			p.Log().Debug("Inconsistent announcement")
 			go f.pm.removePeer(p.id)
 		}
 		if fp.confirmedTd != nil && (maxTd == nil || maxTd.Cmp(fp.confirmedTd) > 0) {
@@ -576,7 +609,7 @@ func (f *lightFetcher) checkAnnouncedHeaders(fp *fetcherPeerInfo, headers []*typ
 func (f *lightFetcher) checkSyncedHeaders(p *peer) {
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("checkSyncedHeaders: unknown peer"))
+		p.Log().Debug("Unknown peer to check sync headers")
 		return
 	}
 	n := fp.lastAnnounced
@@ -589,7 +622,7 @@ func (f *lightFetcher) checkSyncedHeaders(p *peer) {
 	}
 	// now n is the latest downloaded header after syncing
 	if n == nil {
-		log.Debug(fmt.Sprintf("synchronisation failed with peer %v", p.id))
+		p.Log().Debug("Synchronisation failed")
 		go f.pm.removePeer(p.id)
 	} else {
 		header := f.chain.GetHeader(n.hash, n.number)
@@ -610,12 +643,12 @@ func (f *lightFetcher) checkKnownNode(p *peer, n *fetcherTreeNode) bool {
 
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("checkKnownNode: unknown peer"))
+		p.Log().Debug("Unknown peer to check known nodes")
 		return false
 	}
 	header := f.chain.GetHeader(n.hash, n.number)
 	if !f.checkAnnouncedHeaders(fp, []*types.Header{header}, []*big.Int{td}) {
-		log.Debug(fmt.Sprintf("announce inconsistency by peer %v", p.id))
+		p.Log().Debug("Inconsistent announcement")
 		go f.pm.removePeer(p.id)
 	}
 	if fp.confirmedTd != nil {
@@ -700,7 +733,7 @@ func (f *lightFetcher) checkUpdateStats(p *peer, newEntry *updateStatsEntry) {
 	now := mclock.Now()
 	fp := f.peers[p]
 	if fp == nil {
-		log.Debug(fmt.Sprintf("checkUpdateStats: unknown peer"))
+		p.Log().Debug("Unknown peer to check update stats")
 		return
 	}
 	if newEntry != nil && fp.firstUpdateStats == nil {

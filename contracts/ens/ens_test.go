@@ -34,7 +34,7 @@ var (
 )
 
 func TestENS(t *testing.T) {
-	contractBackend := backends.NewSimulatedBackend(core.GenesisAccount{Address: addr, Balance: big.NewInt(1000000000)})
+	contractBackend := backends.NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(1000000000)}})
 	transactOpts := bind.NewKeyedTransactor(key)
 	// Workaround for bug estimating gas in the call to Register
 	transactOpts.GasLimit = big.NewInt(1000000)

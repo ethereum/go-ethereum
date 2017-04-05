@@ -18,6 +18,7 @@ package swarm
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 
@@ -35,7 +36,6 @@ import (
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"golang.org/x/net/context"
 )
 
 // the swarm stack
@@ -53,7 +53,8 @@ type Swarm struct {
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
-	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	lstore      *storage.LocalStore  // local store, needs to store for releasing resources after node stopped
+	sfs          *api.SwarmFS         // need this to cleanup all the active mounts on node exit
 }
 
 type SwarmAPI struct {
@@ -142,6 +143,9 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
+	self.sfs = api.NewSwarmFS(self.api)
+	log.Debug("-> Initializing Fuse file system")
+
 	return self, nil
 }
 
@@ -191,7 +195,10 @@ func (self *Swarm) Start(net *p2p.Server) error {
 	// start swarm http proxy server
 	if self.config.Port != "" {
 		addr := ":" + self.config.Port
-		go httpapi.StartHttpServer(self.api, &httpapi.Server{Addr: addr, CorsString: self.corsString})
+		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
+			Addr:       addr,
+			CorsString: self.corsString,
+		})
 	}
 
 	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
@@ -216,7 +223,7 @@ func (self *Swarm) Stop() error {
 	if self.lstore != nil {
 		self.lstore.DbStore.Close()
 	}
-
+	self.sfs.Stop()
 	return self.config.Save()
 }
 
@@ -240,6 +247,7 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   api.NewStorage(self.api),
 			Public:    true,
 		},
+
 		{
 			Namespace: "bzz",
 			Version:   "0.1",
@@ -262,6 +270,12 @@ func (self *Swarm) APIs() []rpc.API {
 			Namespace: "chequebook",
 			Version:   chequebook.Version,
 			Service:   chequebook.NewApi(self.config.Swap.Chequebook),
+			Public:    false,
+		},
+		{
+			Namespace: "swarmfs",
+			Version:   api.Swarmfs_Version,
+			Service:   self.sfs,
 			Public:    false,
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},

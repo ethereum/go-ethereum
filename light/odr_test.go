@@ -18,6 +18,7 @@ package light
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"math/big"
 	"testing"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -247,23 +248,21 @@ func testChainGen(i int, block *core.BlockGen) {
 func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	var (
 		evmux   = new(event.TypeMux)
-		pow     = new(core.FakePow)
 		sdb, _  = ethdb.NewMemDatabase()
 		ldb, _  = ethdb.NewMemDatabase()
-		genesis = core.WriteGenesisBlockForTesting(sdb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+		gspec   = core.Genesis{Alloc: core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}}
+		genesis = gspec.MustCommit(sdb)
 	)
-	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
+	gspec.MustCommit(ldb)
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
-	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
-	gchain, _ := core.GenerateChain(chainConfig, genesis, sdb, 4, testChainGen)
+	blockchain, _ := core.NewBlockChain(sdb, params.TestChainConfig, ethash.NewFullFaker(), evmux, vm.Config{})
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}
 
 	odr := &testOdr{sdb: sdb, ldb: ldb}
-	lightchain, _ := NewLightChain(odr, testChainConfig(), pow, evmux)
-	lightchain.SetValidator(bproc{})
+	lightchain, _ := NewLightChain(odr, params.TestChainConfig, ethash.NewFullFaker(), evmux)
 	headers := make([]*types.Header, len(gchain))
 	for i, block := range gchain {
 		headers[i] = block.Header()
@@ -276,8 +275,11 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 		for i := uint64(0); i <= blockchain.CurrentHeader().Number.Uint64(); i++ {
 			bhash := core.GetCanonicalHash(sdb, i)
 			b1 := fn(NoOdr, sdb, blockchain, nil, bhash)
-			ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
 			b2 := fn(ctx, ldb, nil, lightchain, bhash)
+
 			eq := bytes.Equal(b1, b2)
 			exp := i < expFail
 			if exp && !eq {

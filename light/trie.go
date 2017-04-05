@@ -17,9 +17,10 @@
 package light
 
 import (
+	"context"
+
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"golang.org/x/net/context"
 )
 
 // LightTrie is an ODR-capable wrapper around trie.SecureTrie

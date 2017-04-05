@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/les/flowcontrol"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -38,7 +38,10 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-const maxHeadInfoLen = 20
+const (
+	maxHeadInfoLen    = 20
+	maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
+)
 
 type peer struct {
 	*p2p.Peer
@@ -54,9 +57,11 @@ type peer struct {
 	lock     sync.RWMutex
 
 	announceChn chan announceData
+	sendQueue   *execQueue
 
-	poolEntry *poolEntry
-	hasBlock  func(common.Hash, uint64) bool
+	poolEntry      *poolEntry
+	hasBlock       func(common.Hash, uint64) bool
+	responseErrors int
 
 	fcClient       *flowcontrol.ClientNode // nil if the peer is server only
 	fcServer       *flowcontrol.ServerNode // nil if the peer is client only
@@ -75,6 +80,14 @@ func newPeer(version, network int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		id:          fmt.Sprintf("%x", id[:8]),
 		announceChn: make(chan announceData, 20),
 	}
+}
+
+func (p *peer) canQueue() bool {
+	return p.sendQueue.canQueue()
+}
+
+func (p *peer) queueSend(f func()) {
+	p.sendQueue.queue(f)
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
@@ -116,6 +129,11 @@ func (p *peer) Td() *big.Int {
 	defer p.lock.RUnlock()
 
 	return new(big.Int).Set(p.headInfo.Td)
+}
+
+// waitBefore implements distPeer interface
+func (p *peer) waitBefore(maxCost uint64) (time.Duration, float64) {
+	return p.fcServer.CanSend(maxCost)
 }
 
 func sendRequest(w p2p.MsgWriter, msgcode, reqID, cost uint64, data interface{}) error {
@@ -195,54 +213,51 @@ func (p *peer) SendHeaderProofs(reqID, bv uint64, proofs []ChtResp) error {
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
-	log.Debug(fmt.Sprintf("%v fetching %d headers from %x, skipping %d (reverse = %v)", p, amount, origin[:4], skip, reverse))
+	p.Log().Debug("Fetching batch of headers", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Hash: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *peer) RequestHeadersByNumber(reqID, cost, origin uint64, amount int, skip int, reverse bool) error {
-	log.Debug(fmt.Sprintf("%v fetching %d headers from #%d, skipping %d (reverse = %v)", p, amount, origin, skip, reverse))
+	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes
 // specified.
 func (p *peer) RequestBodies(reqID, cost uint64, hashes []common.Hash) error {
-	log.Debug(fmt.Sprintf("%v fetching %d block bodies", p, len(hashes)))
+	p.Log().Debug("Fetching batch of block bodies", "count", len(hashes))
 	return sendRequest(p.rw, GetBlockBodiesMsg, reqID, cost, hashes)
 }
 
 // RequestCode fetches a batch of arbitrary data from a node's known state
 // data, corresponding to the specified hashes.
 func (p *peer) RequestCode(reqID, cost uint64, reqs []*CodeReq) error {
-	log.Debug(fmt.Sprintf("%v fetching %v state data", p, len(reqs)))
+	p.Log().Debug("Fetching batch of codes", "count", len(reqs))
 	return sendRequest(p.rw, GetCodeMsg, reqID, cost, reqs)
 }
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 func (p *peer) RequestReceipts(reqID, cost uint64, hashes []common.Hash) error {
-	log.Debug(fmt.Sprintf("%v fetching %v receipts", p, len(hashes)))
+	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	return sendRequest(p.rw, GetReceiptsMsg, reqID, cost, hashes)
 }
 
 // RequestProofs fetches a batch of merkle proofs from a remote node.
 func (p *peer) RequestProofs(reqID, cost uint64, reqs []*ProofReq) error {
-	log.Debug(fmt.Sprintf("%v fetching %v proofs", p, len(reqs)))
+	p.Log().Debug("Fetching batch of proofs", "count", len(reqs))
 	return sendRequest(p.rw, GetProofsMsg, reqID, cost, reqs)
 }
 
 // RequestHeaderProofs fetches a batch of header merkle proofs from a remote node.
 func (p *peer) RequestHeaderProofs(reqID, cost uint64, reqs []*ChtReq) error {
-	log.Debug(fmt.Sprintf("%v fetching %v header proofs", p, len(reqs)))
+	p.Log().Debug("Fetching batch of header proofs", "count", len(reqs))
 	return sendRequest(p.rw, GetHeaderProofsMsg, reqID, cost, reqs)
 }
 
-func (p *peer) SendTxs(cost uint64, txs types.Transactions) error {
-	log.Debug(fmt.Sprintf("%v relaying %v txs", p, len(txs)))
-	reqID := getNextReqID()
-	p.fcServer.MustAssignRequest(reqID)
-	p.fcServer.SendRequest(reqID, cost)
+func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
+	p.Log().Debug("Fetching batch of transactions", "count", len(txs))
 	return p2p.Send(p.rw, SendTxMsg, txs)
 }
 
@@ -445,6 +460,7 @@ func (ps *peerSet) Register(p *peer) error {
 		return errAlreadyRegistered
 	}
 	ps.peers[p.id] = p
+	p.sendQueue = newExecQueue(100)
 	return nil
 }
 
@@ -454,8 +470,10 @@ func (ps *peerSet) Unregister(id string) error {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	if _, ok := ps.peers[id]; !ok {
+	if p, ok := ps.peers[id]; !ok {
 		return errNotRegistered
+	} else {
+		p.sendQueue.quit()
 	}
 	delete(ps.peers, id)
 	return nil

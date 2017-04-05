@@ -130,7 +130,7 @@ func init() {
 	// Override flag defaults so bzzd can run alongside geth.
 	utils.ListenPortFlag.Value = 30399
 	utils.IPCPathFlag.Value = utils.DirectoryString{Value: "bzzd.ipc"}
-	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, web3"
+	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, swarmfs, web3"
 
 	// Set up the cli app.
 	app.Action = bzzd
@@ -153,6 +153,15 @@ The output of this command is supposed to be machine-readable.
 			ArgsUsage: " <file>",
 			Description: `
 "upload a file or directory to swarm using the HTTP API and prints the root hash",
+`,
+		},
+		{
+			Action:    list,
+			Name:      "ls",
+			Usage:     "list files and directories contained in a manifest",
+			ArgsUsage: " <manifest> [<prefix>]",
+			Description: `
+Lists files and directories contained in a manifest.
 `,
 		},
 		{

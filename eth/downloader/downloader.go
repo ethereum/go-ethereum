@@ -277,7 +277,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	d.cancelLock.RUnlock()
 
 	if master {
-		d.cancel()
+		d.Cancel()
 	}
 	return nil
 }
@@ -352,7 +352,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	d.cancelPeer = id
 	d.cancelLock.Unlock()
 
-	defer d.cancel() // No matter what, we can't leave the cancel channel open
+	defer d.Cancel() // No matter what, we can't leave the cancel channel open
 
 	// Set the requested sync mode, unless it's forbidden
 	d.mode = mode
@@ -473,7 +473,7 @@ func (d *Downloader) spawnSync(origin uint64, fetchers ...func() error) error {
 		}
 	}
 	d.queue.Close()
-	d.cancel()
+	d.Cancel()
 	wg.Wait()
 
 	// If sync failed in the critical section, bump the fail counter
@@ -483,9 +483,9 @@ func (d *Downloader) spawnSync(origin uint64, fetchers ...func() error) error {
 	return err
 }
 
-// cancel cancels all of the operations and resets the queue. It returns true
+// Cancel cancels all of the operations and resets the queue. It returns true
 // if the cancel operation was completed.
-func (d *Downloader) cancel() {
+func (d *Downloader) Cancel() {
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
@@ -512,7 +512,7 @@ func (d *Downloader) Terminate() {
 	d.quitLock.Unlock()
 
 	// Cancel any pending download requests
-	d.cancel()
+	d.Cancel()
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
@@ -945,7 +945,7 @@ func (d *Downloader) fetchNodeData() error {
 				if err != nil {
 					// If the node data processing failed, the root hash is very wrong, abort
 					log.Error("State processing failed", "peer", packet.PeerId(), "err", err)
-					d.cancel()
+					d.Cancel()
 					return
 				}
 				// Processing succeeded, notify state fetcher of continuation
@@ -1208,7 +1208,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 				if atomic.LoadUint32(&d.fsPivotFails) == 0 {
 					for _, header := range rollback {
 						if header.Number.Uint64() == pivot {
-							log.Warn("Fast-sync critical section failure, locked pivot to header", "number", pivot, "hash", header.Hash())
+							log.Warn("Fast-sync pivot locked in", "number", pivot, "hash", header.Hash())
 							d.fsPivotLock = header
 						}
 					}

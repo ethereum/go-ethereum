@@ -42,11 +42,11 @@ var (
 )
 
 func newTestBackend() *backends.SimulatedBackend {
-	return backends.NewSimulatedBackend(
-		core.GenesisAccount{Address: addr0, Balance: big.NewInt(1000000000)},
-		core.GenesisAccount{Address: addr1, Balance: big.NewInt(1000000000)},
-		core.GenesisAccount{Address: addr2, Balance: big.NewInt(1000000000)},
-	)
+	return backends.NewSimulatedBackend(core.GenesisAlloc{
+		addr0: {Balance: big.NewInt(1000000000)},
+		addr1: {Balance: big.NewInt(1000000000)},
+		addr2: {Balance: big.NewInt(1000000000)},
+	})
 }
 
 func deploy(prvKey *ecdsa.PrivateKey, amount *big.Int, backend *backends.SimulatedBackend) (common.Address, error) {

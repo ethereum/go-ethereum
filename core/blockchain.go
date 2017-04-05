@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -39,7 +40,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
@@ -104,7 +104,7 @@ type BlockChain struct {
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 
-	pow       pow.PoW
+	engine    consensus.Engine
 	processor Processor // block processor interface
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
@@ -115,7 +115,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialiser the default Ethereum Validator and
 // Processor.
-func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, mux *event.TypeMux, vmConfig vm.Config) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -131,25 +131,22 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 		bodyRLPCache: bodyRLPCache,
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
-		pow:          pow,
+		engine:       engine,
 		vmConfig:     vmConfig,
 		badBlocks:    badBlocks,
 	}
-	bc.SetValidator(NewBlockValidator(config, bc, pow))
-	bc.SetProcessor(NewStateProcessor(config, bc))
+	bc.SetValidator(NewBlockValidator(config, bc, engine))
+	bc.SetProcessor(NewStateProcessor(config, bc, engine))
 
-	gv := func() HeaderValidator { return bc.Validator() }
 	var err error
-	bc.hc, err = NewHeaderChain(chainDb, config, gv, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(chainDb, config, engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
-
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -182,16 +179,25 @@ func (self *BlockChain) loadLastState() error {
 	head := GetHeadBlockHash(self.chainDb)
 	if head == (common.Hash{}) {
 		// Corrupt or empty database, init from scratch
-		self.Reset()
-	} else {
-		if block := self.GetBlockByHash(head); block != nil {
-			// Block found, set as the current head
-			self.currentBlock = block
-		} else {
-			// Corrupt or empty database, init from scratch
-			self.Reset()
-		}
+		log.Warn("Empty database, resetting chain")
+		return self.Reset()
 	}
+	// Make sure the entire head block is available
+	currentBlock := self.GetBlockByHash(head)
+	if currentBlock == nil {
+		// Corrupt or empty database, init from scratch
+		log.Warn("Head block missing, resetting chain", "hash", head)
+		return self.Reset()
+	}
+	// Make sure the state associated with the block is available
+	if _, err := state.New(currentBlock.Root(), self.chainDb); err != nil {
+		// Dangling block without a state associated, init from scratch
+		log.Warn("Head state missing, resetting chain", "number", currentBlock.Number(), "hash", currentBlock.Hash())
+		return self.Reset()
+	}
+	// Everything seems to be fine, set as the head block
+	self.currentBlock = currentBlock
+
 	// Restore the last known head header
 	currentHeader := self.currentBlock.Header()
 	if head := GetHeadHeaderHash(self.chainDb); head != (common.Hash{}) {
@@ -200,6 +206,7 @@ func (self *BlockChain) loadLastState() error {
 		}
 	}
 	self.hc.SetCurrentHeader(currentHeader)
+
 	// Restore the last known head fast block
 	self.currentFastBlock = self.currentBlock
 	if head := GetHeadFastBlockHash(self.chainDb); head != (common.Hash{}) {
@@ -230,14 +237,18 @@ func (self *BlockChain) loadLastState() error {
 // above the new head will be deleted and the new one set. In the case of blocks
 // though, the head may be further rewound if block bodies are missing (non-archive
 // nodes after a fast sync).
-func (bc *BlockChain) SetHead(head uint64) {
+func (bc *BlockChain) SetHead(head uint64) error {
+	log.Warn("Rewinding blockchain", "target", head)
+
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
+	// Rewind the header chain, deleting all block bodies until then
 	delFn := func(hash common.Hash, num uint64) {
 		DeleteBody(bc.chainDb, hash, num)
 	}
 	bc.hc.SetHead(head, delFn)
+	currentHeader := bc.hc.CurrentHeader()
 
 	// Clear out any stale content from the caches
 	bc.bodyCache.Purge()
@@ -245,29 +256,34 @@ func (bc *BlockChain) SetHead(head uint64) {
 	bc.blockCache.Purge()
 	bc.futureBlocks.Purge()
 
-	// Update all computed fields to the new head
-	currentHeader := bc.hc.CurrentHeader()
+	// Rewind the block chain, ensuring we don't end up with a stateless head block
 	if bc.currentBlock != nil && currentHeader.Number.Uint64() < bc.currentBlock.NumberU64() {
 		bc.currentBlock = bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
 	}
+	if bc.currentBlock != nil {
+		if _, err := state.New(bc.currentBlock.Root(), bc.chainDb); err != nil {
+			// Rewound state missing, rolled back to before pivot, reset to genesis
+			bc.currentBlock = nil
+		}
+	}
+	// Rewind the fast block in a simpleton way to the target head
 	if bc.currentFastBlock != nil && currentHeader.Number.Uint64() < bc.currentFastBlock.NumberU64() {
 		bc.currentFastBlock = bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64())
 	}
-
+	// If either blocks reached nil, reset to the genesis state
 	if bc.currentBlock == nil {
 		bc.currentBlock = bc.genesisBlock
 	}
 	if bc.currentFastBlock == nil {
 		bc.currentFastBlock = bc.genesisBlock
 	}
-
 	if err := WriteHeadBlockHash(bc.chainDb, bc.currentBlock.Hash()); err != nil {
 		log.Crit("Failed to reset head full block", "err", err)
 	}
 	if err := WriteHeadFastBlockHash(bc.chainDb, bc.currentFastBlock.Hash()); err != nil {
 		log.Crit("Failed to reset head fast block", "err", err)
 	}
-	bc.loadLastState()
+	return bc.loadLastState()
 }
 
 // FastSyncCommitHead sets the current head block to the one defined by the hash
@@ -361,9 +377,6 @@ func (self *BlockChain) Processor() Processor {
 	return self.processor
 }
 
-// AuxValidator returns the auxiliary validator (Proof of work atm)
-func (self *BlockChain) AuxValidator() pow.PoW { return self.pow }
-
 // State returns a new mutable state based on the current HEAD block.
 func (self *BlockChain) State() (*state.StateDB, error) {
 	return self.StateAt(self.CurrentBlock().Root())
@@ -375,16 +388,17 @@ func (self *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 }
 
 // Reset purges the entire blockchain, restoring it to its genesis state.
-func (bc *BlockChain) Reset() {
-	bc.ResetWithGenesisBlock(bc.genesisBlock)
+func (bc *BlockChain) Reset() error {
+	return bc.ResetWithGenesisBlock(bc.genesisBlock)
 }
 
 // ResetWithGenesisBlock purges the entire blockchain, restoring it to the
 // specified genesis state.
-func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
+func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 	// Dump the entire block chain and purge the caches
-	bc.SetHead(0)
-
+	if err := bc.SetHead(0); err != nil {
+		return err
+	}
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
@@ -401,6 +415,8 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) {
 	bc.hc.SetGenesis(bc.genesisBlock.Header())
 	bc.hc.SetCurrentHeader(bc.genesisBlock.Header())
 	bc.currentFastBlock = bc.genesisBlock
+
+	return nil
 }
 
 // Export writes the active chain to the given writer.
@@ -787,12 +803,15 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 	}
 	// Update the head fast sync block if better
 	self.mu.Lock()
+
 	head := blockChain[len(errs)-1]
-	if self.GetTd(self.currentFastBlock.Hash(), self.currentFastBlock.NumberU64()).Cmp(self.GetTd(head.Hash(), head.NumberU64())) < 0 {
-		if err := WriteHeadFastBlockHash(self.chainDb, head.Hash()); err != nil {
-			log.Crit("Failed to update head fast block hash", "err", err)
+	if td := self.GetTd(head.Hash(), head.NumberU64()); td != nil { // Rewind may have occurred, skip in that case
+		if self.GetTd(self.currentFastBlock.Hash(), self.currentFastBlock.NumberU64()).Cmp(td) < 0 {
+			if err := WriteHeadFastBlockHash(self.chainDb, head.Hash()); err != nil {
+				log.Crit("Failed to update head fast block hash", "err", err)
+			}
+			self.currentFastBlock = head
 		}
-		self.currentFastBlock = head
 	}
 	self.mu.Unlock()
 
@@ -878,38 +897,38 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		stats         = insertStats{startTime: mclock.Now()}
 		events        = make([]interface{}, 0, len(chain))
 		coalescedLogs []*types.Log
-		nonceChecked  = make([]bool, len(chain))
 	)
-
-	// Start the parallel nonce verifier.
-	nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
-	defer close(nonceAbort)
+	// Start the parallel header verifier
+	headers := make([]*types.Header, len(chain))
+	seals := make([]bool, len(chain))
 
 	for i, block := range chain {
+		headers[i] = block.Header()
+		seals[i] = true
+	}
+	abort, results := self.engine.VerifyHeaders(self, headers, seals)
+	defer close(abort)
+
+	// Iterate over the blocks and insert when the verifier permits
+	for i, block := range chain {
+		// If the chain is terminating, stop processing blocks
 		if atomic.LoadInt32(&self.procInterrupt) == 1 {
 			log.Debug("Premature abort during blocks processing")
 			break
 		}
-		bstart := time.Now()
-		// Wait for block i's nonce to be verified before processing
-		// its state transition.
-		for !nonceChecked[i] {
-			r := <-nonceResults
-			nonceChecked[r.index] = true
-			if !r.valid {
-				invalid := chain[r.index]
-				return r.index, &BlockNonceErr{Hash: invalid.Hash(), Number: invalid.Number(), Nonce: invalid.Nonce()}
-			}
-		}
-
+		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
 			err := BadHashError(block.Hash())
 			self.reportBlock(block, nil, err)
 			return i, err
 		}
-		// Stage 1 validation of the block using the chain's validator
-		// interface.
-		err := self.Validator().ValidateBlock(block)
+		// Wait for the block's verification to complete
+		bstart := time.Now()
+
+		err := <-results
+		if err == nil {
+			err = self.Validator().ValidateBody(block)
+		}
 		if err != nil {
 			if IsKnownBlockErr(err) {
 				stats.ignored++
@@ -924,7 +943,6 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 				if block.Time().Cmp(max) == 1 {
 					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
 				}
-
 				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
@@ -1016,12 +1034,10 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		case SplitStatTy:
 			events = append(events, ChainSplitEvent{block, logs})
 		}
-
 		stats.processed++
 		stats.usedGas += usedGas.Uint64()
 		stats.report(chain, i)
 	}
-
 	go self.postChainEvents(events, coalescedLogs)
 
 	return 0, nil
@@ -1287,6 +1303,11 @@ Error: %v
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	start := time.Now()
+	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+		return i, err
+	}
+
 	// Make sure only one thread manipulates the chain at once
 	self.chainmu.Lock()
 	defer self.chainmu.Unlock()
@@ -1302,7 +1323,7 @@ func (self *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		return err
 	}
 
-	return self.hc.InsertHeaderChain(chain, checkFreq, whFunc)
+	return self.hc.InsertHeaderChain(chain, whFunc, start)
 }
 
 // writeHeader writes a header into the local chain, given that its parent is

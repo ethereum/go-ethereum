@@ -73,6 +73,7 @@ type (
 	touchChange struct {
 		account *common.Address
 		prev    bool
+		prevDirty bool
 	}
 )
 
@@ -97,8 +98,10 @@ var ripemd = common.HexToAddress("0000000000000000000000000000000000000003")
 
 func (ch touchChange) undo(s *StateDB) {
 	if !ch.prev && *ch.account != ripemd {
-		delete(s.stateObjects, *ch.account)
-		delete(s.stateObjectsDirty, *ch.account)
+		s.getStateObject(*ch.account).touched = ch.prev
+		if !ch.prevDirty {
+			delete(s.stateObjectsDirty, *ch.account)
+		}
 	}
 }
 

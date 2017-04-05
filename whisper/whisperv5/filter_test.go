@@ -18,7 +18,7 @@ package whisperv5
 
 import (
 	"math/big"
-	"math/rand"
+	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -33,12 +33,12 @@ var seed int64
 // reproduciblity independent of their sequence.
 func InitSingleTest() {
 	seed = time.Now().Unix()
-	rand.Seed(seed)
+	mrand.Seed(seed)
 }
 
 func InitDebugTest(i int64) {
 	seed = i
-	rand.Seed(seed)
+	mrand.Seed(seed)
 }
 
 type FilterTestCase struct {
@@ -55,7 +55,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	const topicNum = 8
 	f.Topics = make([]TopicType, topicNum)
 	for i := 0; i < topicNum; i++ {
-		randomize(f.Topics[i][:])
+		mrand.Read(f.Topics[i][:])
 		f.Topics[i][0] = 0x01
 	}
 
@@ -68,7 +68,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 
 	if symmetric {
 		f.KeySym = make([]byte, 12)
-		randomize(f.KeySym)
+		mrand.Read(f.KeySym)
 		f.SymKeyHash = crypto.Keccak256Hash(f.KeySym)
 	} else {
 		f.KeyAsym, err = crypto.GenerateKey()
@@ -87,7 +87,7 @@ func generateTestCases(t *testing.T, SizeTestFilters int) []FilterTestCase {
 	for i := 0; i < SizeTestFilters; i++ {
 		f, _ := generateFilter(t, true)
 		cases[i].f = f
-		cases[i].alive = (rand.Int()&int(1) == 0)
+		cases[i].alive = (mrand.Int()&int(1) == 0)
 	}
 	return cases
 }
@@ -147,7 +147,7 @@ func TestComparePubKey(t *testing.T) {
 	}
 
 	// generate key3 == key1
-	rand.Seed(seed)
+	mrand.Seed(seed)
 	key3, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatalf("failed to generate third key with seed %d: %s.", seed, err)
@@ -193,7 +193,7 @@ func TestMatchEnvelope(t *testing.T) {
 	}
 
 	// encrypt symmetrically
-	i := rand.Int() % 4
+	i := mrand.Int() % 4
 	fsym.Topics[i] = params.Topic
 	fasym.Topics[i] = params.Topic
 	msg = NewSentMessage(params)
@@ -544,7 +544,7 @@ func TestWatchers(t *testing.T) {
 
 	var envelopes [NumMessages]*Envelope
 	for i = 0; i < NumMessages; i++ {
-		j = rand.Uint32() % NumFilters
+		j = mrand.Uint32() % NumFilters
 		e = generateCompatibeEnvelope(t, tst[j].f)
 		envelopes[i] = e
 		tst[j].msgCnt++
@@ -597,7 +597,7 @@ func TestWatchers(t *testing.T) {
 	envelopes[0] = e
 	tst[0].msgCnt++
 	for i = 1; i < NumMessages; i++ {
-		j = rand.Uint32() % NumFilters
+		j = mrand.Uint32() % NumFilters
 		e = generateCompatibeEnvelope(t, tst[j].f)
 		envelopes[i] = e
 		tst[j].msgCnt++

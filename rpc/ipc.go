@@ -17,12 +17,11 @@
 package rpc
 
 import (
+	"context"
 	"fmt"
 	"net"
 
 	"github.com/ethereum/go-ethereum/log"
-
-	"golang.org/x/net/context"
 )
 
 // CreateIPCListener creates an listener, on Unix platforms this is a unix socket, on
