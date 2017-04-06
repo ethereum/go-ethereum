@@ -20,6 +20,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path"
@@ -31,21 +33,42 @@ import (
 )
 
 func upload(ctx *cli.Context) {
+
 	args := ctx.Args()
 	var (
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		recursive    = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
 		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
+		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
+		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
 	)
+
+	var client = swarm.NewClient(bzzapi)
+	var entry swarm.ManifestEntry
+	var file string
+
 	if len(args) != 1 {
-		utils.Fatalf("Need filename as the first and only argument")
+		if fromStdin {
+			tmp, err := ioutil.TempFile("", "swarm-stdin")
+			if err != nil {
+				utils.Fatalf("error create tempfile: %s", err)
+			}
+			defer os.Remove(tmp.Name())
+			n, err := io.Copy(tmp, os.Stdin)
+			if err != nil {
+				utils.Fatalf("error copying stdin to tempfile: %s", err)
+			} else if n == 0 {
+				utils.Fatalf("error reading from stdin: zero length")
+			}
+			file = tmp.Name()
+		} else {
+			utils.Fatalf("Need filename as the first and only argument")
+		}
+	} else {
+		file = args[0]
 	}
 
-	var (
-		file   = args[0]
-		client = swarm.NewClient(bzzapi)
-	)
 	fi, err := os.Stat(expandPath(file))
 	if err != nil {
 		utils.Fatalf("Failed to stat file: %v", err)
@@ -64,7 +87,7 @@ func upload(ctx *cli.Context) {
 		fmt.Println(mhash)
 		return
 	}
-	entry, err := client.UploadFile(file, fi)
+	entry, err = client.UploadFile(file, fi, mimeType)
 	if err != nil {
 		utils.Fatalf("Upload failed: %v", err)
 	}

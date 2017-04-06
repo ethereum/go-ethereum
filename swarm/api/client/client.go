@@ -89,8 +89,32 @@ func (c *Client) UploadDirectory(dir string, defaultPath string) (string, error)
 	return mhash, err
 }
 
-func (c *Client) UploadFile(file string, fi os.FileInfo) (ManifestEntry, error) {
+func (c *Client) UploadFile(file string, fi os.FileInfo, mimetype_hint string) (ManifestEntry, error) {
+	var mimetype string
 	hash, err := c.uploadFileContent(file, fi)
+	if mimetype_hint != "" {
+		mimetype = mimetype_hint
+		log.Info("Mime type set by override", "mime", mimetype)
+	} else {
+		ext := filepath.Ext(file)
+		log.Info("Ext", "ext", ext, "file", file)
+		if ext != "" {
+			mimetype = mime.TypeByExtension(filepath.Ext(fi.Name()))
+			log.Info("Mime type set by fileextension", "mime", mimetype, "ext", filepath.Ext(file))
+		} else {
+			f, err := os.Open(file)
+			if err == nil {
+				first512 := make([]byte, 512)
+				fread, _ := f.ReadAt(first512, 0)
+				if fread > 0 {
+					mimetype = http.DetectContentType(first512[:fread])
+					log.Info("Mime type set by autodetection", "mime", mimetype)
+				}
+			}
+			f.Close()
+		}
+
+	}
 	m := ManifestEntry{
 		Hash:        hash,
 		ContentType: mime.TypeByExtension(filepath.Ext(fi.Name())),
