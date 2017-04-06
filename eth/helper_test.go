@@ -65,7 +65,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(gspec.Config, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, engine, blockchain, db)
+	pm, err := NewProtocolManager(gspec.Config, fastSync, DefaultConfig.NetworkId, 1000, evmux, &testTxPool{added: newtx}, engine, blockchain, db)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash) {
 	msg := &statusData{
 		ProtocolVersion: uint32(p.version),
-		NetworkId:       uint32(NetworkId),
+		NetworkId:       uint32(DefaultConfig.NetworkId),
 		TD:              td,
 		CurrentBlock:    head,
 		GenesisBlock:    genesis,

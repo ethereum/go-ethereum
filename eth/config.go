@@ -61,36 +61,50 @@ func init() {
 type Config struct {
 	// The genesis block, which is inserted if the database is empty.
 	// If nil, the Ethereum main net block is used.
-	Genesis              *core.Genesis `toml:",omitempty"`
-	NetworkId            int           // Network ID to use for selecting peers to connect to
-	FastSync             bool          // Enables the state download based fast synchronisation algorithm
-	LightMode            bool          // Running in light client mode
-	LightServ            int           // Maximum percentage of time allowed for serving LES requests
-	LightPeers           int           // Maximum number of LES client peers
-	MaxPeers             int           // Maximum number of global peers
-	SkipBcVersionCheck   bool          `toml:",omitempty"` // e.g. blockchain export
-	DatabaseCache        int
-	DatabaseHandles      int    `toml:"-"`
-	DocRoot              string `toml:",omitempty"`
-	PowFake              bool   `toml:",omitempty"`
-	PowTest              bool   `toml:",omitempty"`
-	PowShared            bool   `toml:",omitempty"`
-	ExtraData            []byte
-	EthashCacheDir       string `toml:",omitempty"`
+	Genesis *core.Genesis `toml:",omitempty"`
+
+	// Protocol options
+	NetworkId int  // Network ID to use for selecting peers to connect to
+	FastSync  bool // Enables the state download based fast synchronisation algorithm
+	LightMode bool // Running in light client mode
+
+	// Light client options
+	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
+	LightPeers int `toml:",omitempty"` // Maximum number of LES client peers
+	MaxPeers   int `toml:"-"`          // Maximum number of global peers
+
+	// Database options
+	SkipBcVersionCheck bool `toml:"-"`
+	DatabaseHandles    int  `toml:"-"`
+	DatabaseCache      int
+
+	// Mining-related options
+	Etherbase    common.Address `toml:",omitempty"`
+	MinerThreads int            `toml:",omitempty"`
+	ExtraData    []byte         `toml:",omitempty"`
+	GasPrice     *big.Int
+
+	// Ethash options
+	EthashCacheDir       string
 	EthashCachesInMem    int
 	EthashCachesOnDisk   int
-	EthashDatasetDir     string `toml:",omitempty"`
+	EthashDatasetDir     string
 	EthashDatasetsInMem  int
 	EthashDatasetsOnDisk int
-	Etherbase            common.Address `toml:",omitempty"`
-	GasPrice             *big.Int
-	MinerThreads         int    `toml:",omitempty"`
-	SolcPath             string `toml:",omitempty"`
 
+	// Gas Price Oracle options
 	GpoBlocks     int
 	GpoPercentile int
 
+	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
+
+	// Miscellaneous options
+	SolcPath  string
+	DocRoot   string `toml:"-"`
+	PowFake   bool   `toml:"-"`
+	PowTest   bool   `toml:"-"`
+	PowShared bool   `toml:"-"`
 }
 
 type configMarshaling struct {

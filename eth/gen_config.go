@@ -16,30 +16,30 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		NetworkId               int
 		FastSync                bool
 		LightMode               bool
-		LightServ               int
-		LightPeers              int
-		MaxPeers                int
-		SkipBcVersionCheck      bool `toml:",omitempty"`
+		LightServ               int  `toml:",omitempty"`
+		LightPeers              int  `toml:",omitempty"`
+		MaxPeers                int  `toml:"-"`
+		SkipBcVersionCheck      bool `toml:"-"`
+		DatabaseHandles         int  `toml:"-"`
 		DatabaseCache           int
-		DatabaseHandles         int    `toml:"-"`
-		DocRoot                 string `toml:",omitempty"`
-		PowFake                 bool   `toml:",omitempty"`
-		PowTest                 bool   `toml:",omitempty"`
-		PowShared               bool   `toml:",omitempty"`
-		ExtraData               hexutil.Bytes
-		EthashCacheDir          string `toml:",omitempty"`
+		Etherbase               common.Address `toml:",omitempty"`
+		MinerThreads            int            `toml:",omitempty"`
+		ExtraData               hexutil.Bytes  `toml:",omitempty"`
+		GasPrice                *big.Int
+		EthashCacheDir          string
 		EthashCachesInMem       int
 		EthashCachesOnDisk      int
-		EthashDatasetDir        string `toml:",omitempty"`
+		EthashDatasetDir        string
 		EthashDatasetsInMem     int
 		EthashDatasetsOnDisk    int
-		Etherbase               common.Address `toml:",omitempty"`
-		GasPrice                *big.Int
-		MinerThreads            int    `toml:",omitempty"`
-		SolcPath                string `toml:",omitempty"`
 		GpoBlocks               int
 		GpoPercentile           int
 		EnablePreimageRecording bool
+		SolcPath                string
+		DocRoot                 string `toml:"-"`
+		PowFake                 bool   `toml:"-"`
+		PowTest                 bool   `toml:"-"`
+		PowShared               bool   `toml:"-"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -50,26 +50,26 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.LightPeers = c.LightPeers
 	enc.MaxPeers = c.MaxPeers
 	enc.SkipBcVersionCheck = c.SkipBcVersionCheck
-	enc.DatabaseCache = c.DatabaseCache
 	enc.DatabaseHandles = c.DatabaseHandles
-	enc.DocRoot = c.DocRoot
-	enc.PowFake = c.PowFake
-	enc.PowTest = c.PowTest
-	enc.PowShared = c.PowShared
+	enc.DatabaseCache = c.DatabaseCache
+	enc.Etherbase = c.Etherbase
+	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
+	enc.GasPrice = c.GasPrice
 	enc.EthashCacheDir = c.EthashCacheDir
 	enc.EthashCachesInMem = c.EthashCachesInMem
 	enc.EthashCachesOnDisk = c.EthashCachesOnDisk
 	enc.EthashDatasetDir = c.EthashDatasetDir
 	enc.EthashDatasetsInMem = c.EthashDatasetsInMem
 	enc.EthashDatasetsOnDisk = c.EthashDatasetsOnDisk
-	enc.Etherbase = c.Etherbase
-	enc.GasPrice = c.GasPrice
-	enc.MinerThreads = c.MinerThreads
-	enc.SolcPath = c.SolcPath
 	enc.GpoBlocks = c.GpoBlocks
 	enc.GpoPercentile = c.GpoPercentile
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
+	enc.SolcPath = c.SolcPath
+	enc.DocRoot = c.DocRoot
+	enc.PowFake = c.PowFake
+	enc.PowTest = c.PowTest
+	enc.PowShared = c.PowShared
 	return &enc, nil
 }
 
@@ -79,30 +79,30 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		NetworkId               *int
 		FastSync                *bool
 		LightMode               *bool
-		LightServ               *int
-		LightPeers              *int
-		MaxPeers                *int
-		SkipBcVersionCheck      *bool `toml:",omitempty"`
+		LightServ               *int  `toml:",omitempty"`
+		LightPeers              *int  `toml:",omitempty"`
+		MaxPeers                *int  `toml:"-"`
+		SkipBcVersionCheck      *bool `toml:"-"`
+		DatabaseHandles         *int  `toml:"-"`
 		DatabaseCache           *int
-		DatabaseHandles         *int    `toml:"-"`
-		DocRoot                 *string `toml:",omitempty"`
-		PowFake                 *bool   `toml:",omitempty"`
-		PowTest                 *bool   `toml:",omitempty"`
-		PowShared               *bool   `toml:",omitempty"`
-		ExtraData               hexutil.Bytes
-		EthashCacheDir          *string `toml:",omitempty"`
+		Etherbase               *common.Address `toml:",omitempty"`
+		MinerThreads            *int            `toml:",omitempty"`
+		ExtraData               hexutil.Bytes   `toml:",omitempty"`
+		GasPrice                *big.Int
+		EthashCacheDir          *string
 		EthashCachesInMem       *int
 		EthashCachesOnDisk      *int
-		EthashDatasetDir        *string `toml:",omitempty"`
+		EthashDatasetDir        *string
 		EthashDatasetsInMem     *int
 		EthashDatasetsOnDisk    *int
-		Etherbase               *common.Address `toml:",omitempty"`
-		GasPrice                *big.Int
-		MinerThreads            *int    `toml:",omitempty"`
-		SolcPath                *string `toml:",omitempty"`
 		GpoBlocks               *int
 		GpoPercentile           *int
 		EnablePreimageRecording *bool
+		SolcPath                *string
+		DocRoot                 *string `toml:"-"`
+		PowFake                 *bool   `toml:"-"`
+		PowTest                 *bool   `toml:"-"`
+		PowShared               *bool   `toml:"-"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -132,26 +132,23 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.SkipBcVersionCheck != nil {
 		c.SkipBcVersionCheck = *dec.SkipBcVersionCheck
 	}
-	if dec.DatabaseCache != nil {
-		c.DatabaseCache = *dec.DatabaseCache
-	}
 	if dec.DatabaseHandles != nil {
 		c.DatabaseHandles = *dec.DatabaseHandles
 	}
-	if dec.DocRoot != nil {
-		c.DocRoot = *dec.DocRoot
+	if dec.DatabaseCache != nil {
+		c.DatabaseCache = *dec.DatabaseCache
 	}
-	if dec.PowFake != nil {
-		c.PowFake = *dec.PowFake
+	if dec.Etherbase != nil {
+		c.Etherbase = *dec.Etherbase
 	}
-	if dec.PowTest != nil {
-		c.PowTest = *dec.PowTest
-	}
-	if dec.PowShared != nil {
-		c.PowShared = *dec.PowShared
+	if dec.MinerThreads != nil {
+		c.MinerThreads = *dec.MinerThreads
 	}
 	if dec.ExtraData != nil {
 		c.ExtraData = dec.ExtraData
+	}
+	if dec.GasPrice != nil {
+		c.GasPrice = dec.GasPrice
 	}
 	if dec.EthashCacheDir != nil {
 		c.EthashCacheDir = *dec.EthashCacheDir
@@ -171,18 +168,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.EthashDatasetsOnDisk != nil {
 		c.EthashDatasetsOnDisk = *dec.EthashDatasetsOnDisk
 	}
-	if dec.Etherbase != nil {
-		c.Etherbase = *dec.Etherbase
-	}
-	if dec.GasPrice != nil {
-		c.GasPrice = dec.GasPrice
-	}
-	if dec.MinerThreads != nil {
-		c.MinerThreads = *dec.MinerThreads
-	}
-	if dec.SolcPath != nil {
-		c.SolcPath = *dec.SolcPath
-	}
 	if dec.GpoBlocks != nil {
 		c.GpoBlocks = *dec.GpoBlocks
 	}
@@ -191,6 +176,21 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
+	}
+	if dec.SolcPath != nil {
+		c.SolcPath = *dec.SolcPath
+	}
+	if dec.DocRoot != nil {
+		c.DocRoot = *dec.DocRoot
+	}
+	if dec.PowFake != nil {
+		c.PowFake = *dec.PowFake
+	}
+	if dec.PowTest != nil {
+		c.PowTest = *dec.PowTest
+	}
+	if dec.PowShared != nil {
+		c.PowShared = *dec.PowShared
 	}
 	return nil
 }
