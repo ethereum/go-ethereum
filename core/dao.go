@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -46,11 +47,11 @@ func ValidateDAOHeaderExtraData(config *params.ChainConfig, header *types.Header
 	// Depending whether we support or oppose the fork, validate the extra-data contents
 	if config.DAOForkSupport {
 		if !bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-			return ValidationError("DAO pro-fork bad block extra-data: 0x%x", header.Extra)
+			return fmt.Errorf("DAO pro-fork bad block extra-data: 0x%x", header.Extra)
 		}
 	} else {
 		if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-			return ValidationError("DAO no-fork bad block extra-data: 0x%x", header.Extra)
+			return fmt.Errorf("DAO no-fork bad block extra-data: 0x%x", header.Extra)
 		}
 	}
 	// All ok, header has the same extra-data we expect

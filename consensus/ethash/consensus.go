@@ -42,20 +42,15 @@ var (
 )
 
 var (
-	ErrInvalidChain        = errors.New("invalid header chain")
-	ErrParentUnknown       = errors.New("parent not known locally")
-	ErrFutureBlock         = errors.New("block in the future")
-	ErrLargeBlockTimestamp = errors.New("timestamp too big")
-	ErrZeroBlockTime       = errors.New("timestamp equals parent's")
-	ErrInvalidNumber       = errors.New("invalid block number")
-	ErrTooManyUncles       = errors.New("too many uncles")
-	ErrDuplicateUncle      = errors.New("duplicate uncle")
-	ErrUncleIsAncestor     = errors.New("uncle is ancestor")
-	ErrDanglingUncle       = errors.New("uncle's parent is not ancestor")
-	ErrNonceOutOfRange     = errors.New("nonce out of range")
-	ErrInvalidDifficulty   = errors.New("non-positive difficulty")
-	ErrInvalidMixDigest    = errors.New("invalid mix digest")
-	ErrInvalidPoW          = errors.New("invalid proof-of-work")
+	ErrInvalidChain      = errors.New("invalid header chain")
+	ErrTooManyUncles     = errors.New("too many uncles")
+	ErrDuplicateUncle    = errors.New("duplicate uncle")
+	ErrUncleIsAncestor   = errors.New("uncle is ancestor")
+	ErrDanglingUncle     = errors.New("uncle's parent is not ancestor")
+	ErrNonceOutOfRange   = errors.New("nonce out of range")
+	ErrInvalidDifficulty = errors.New("non-positive difficulty")
+	ErrInvalidMixDigest  = errors.New("invalid mix digest")
+	ErrInvalidPoW        = errors.New("invalid proof-of-work")
 )
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
@@ -72,7 +67,7 @@ func (ethash *Ethash) VerifyHeader(chain consensus.ChainReader, header *types.He
 	}
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
-		return ErrParentUnknown
+		return consensus.ErrUnknownAncestor
 	}
 	// Sanity checks passed, do a proper verification
 	return ethash.verifyHeader(chain, header, parent, false, seal)
@@ -125,7 +120,7 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 				case chain.GetHeader(headers[index].Hash(), headers[index].Number.Uint64()-1) != nil:
 					outputs <- result{index: index, err: nil}
 				case parent == nil:
-					failure = ErrParentUnknown
+					failure = consensus.ErrUnknownAncestor
 					outputs <- result{index: index, err: failure}
 				default:
 					failure = ethash.verifyHeader(chain, headers[index], parent, false, seals[index])
@@ -254,15 +249,15 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	// Verify the header's timestamp
 	if uncle {
 		if header.Time.Cmp(math.MaxBig256) > 0 {
-			return ErrLargeBlockTimestamp
+			return consensus.ErrLargeBlockTime
 		}
 	} else {
 		if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
-			return ErrFutureBlock
+			return consensus.ErrFutureBlock
 		}
 	}
 	if header.Time.Cmp(parent.Time) <= 0 {
-		return ErrZeroBlockTime
+		return consensus.ErrZeroBlockTime
 	}
 	// Verify the block's difficulty based in it's timestamp and parent's difficulty
 	expected := CalcDifficulty(chain.Config(), header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
@@ -282,7 +277,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	}
 	// Verify that the block number is parent's +1
 	if diff := new(big.Int).Sub(header.Number, parent.Number); diff.Cmp(big.NewInt(1)) != 0 {
-		return ErrInvalidNumber
+		return consensus.ErrInvalidNumber
 	}
 	// Verify the engine specific seal securing the block
 	if seal {
@@ -449,7 +444,7 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 func (ethash *Ethash) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
-		return ErrParentUnknown
+		return consensus.ErrUnknownAncestor
 	}
 	header.Difficulty = CalcDifficulty(chain.Config(), header.Time.Uint64(),
 		parent.Time.Uint64(), parent.Number, parent.Difficulty)

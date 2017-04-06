@@ -327,9 +327,8 @@ func TestBadHeaderHashes(t *testing.T) {
 	var err error
 	headers := makeHeaderChainWithDiff(bc.genesisBlock, []int{1, 2, 4}, 10)
 	core.BadHashes[headers[2].Hash()] = true
-	_, err = bc.InsertHeaderChain(headers, 1)
-	if !core.IsBadHashError(err) {
-		t.Errorf("error mismatch: want: BadHashError, have: %v", err)
+	if _, err = bc.InsertHeaderChain(headers, 1); err != core.ErrBlacklistedHash {
+		t.Errorf("error mismatch: have: %v, want %v", err, core.ErrBlacklistedHash)
 	}
 }
 

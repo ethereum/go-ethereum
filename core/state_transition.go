@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -195,26 +196,17 @@ func (self *StateTransition) buyGas() error {
 	return nil
 }
 
-func (self *StateTransition) preCheck() (err error) {
+func (self *StateTransition) preCheck() error {
 	msg := self.msg
 	sender := self.from()
 
 	// Make sure this transaction's nonce is correct
 	if msg.CheckNonce() {
 		if n := self.state.GetNonce(sender.Address()); n != msg.Nonce() {
-			return NonceError(msg.Nonce(), n)
+			return fmt.Errorf("invalid nonce: have %d, expected %d", msg.Nonce(), n)
 		}
 	}
-
-	// Pre-pay gas
-	if err = self.buyGas(); err != nil {
-		if IsGasLimitErr(err) {
-			return err
-		}
-		return InvalidTxError(err)
-	}
-
-	return nil
+	return self.buyGas()
 }
 
 // TransitionDb will transition the state by applying the current message and returning the result
@@ -233,11 +225,10 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	// TODO convert to uint64
 	intrinsicGas := IntrinsicGas(self.data, contractCreation, homestead)
 	if intrinsicGas.BitLen() > 64 {
-		return nil, nil, nil, InvalidTxError(vm.ErrOutOfGas)
+		return nil, nil, nil, vm.ErrOutOfGas
 	}
-
 	if err = self.useGas(intrinsicGas.Uint64()); err != nil {
-		return nil, nil, nil, InvalidTxError(err)
+		return nil, nil, nil, err
 	}
 
 	var (
@@ -260,10 +251,9 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
 		if vmerr == vm.ErrInsufficientBalance {
-			return nil, nil, nil, InvalidTxError(vmerr)
+			return nil, nil, nil, vmerr
 		}
 	}
-
 	requiredGas = new(big.Int).Set(self.gasUsed())
 
 	self.refundGas()
