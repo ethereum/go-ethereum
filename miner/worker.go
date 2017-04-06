@@ -279,21 +279,11 @@ func (self *worker) wait() {
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
 				work.state.Commit(self.config.IsEIP158(block.Number()))
-				parent := self.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
-				if parent == nil {
-					log.Error("Invalid block found during mining")
-					continue
-				}
-				if err := self.engine.VerifyHeader(self.chain, block.Header(), false); err != nil {
-					log.Error("Invalid header on mined block", "err", err)
-					continue
-				}
 				stat, err := self.chain.WriteBlock(block)
 				if err != nil {
 					log.Error("Failed writing block to chain", "err", err)
 					continue
 				}
-
 				// update block hash since it is now available and not when the receipt/log of individual transactions were created
 				for _, r := range work.receipts {
 					for _, l := range r.Logs {
