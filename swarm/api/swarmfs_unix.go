@@ -91,11 +91,16 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, fmt.Errorf("%s is already mounted", cleanedMountPoint)
 	}
 
-	key, _, path, err := self.swarmApi.parseAndResolve(mhash, true)
+	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
-		return nil, fmt.Errorf("can't resolve %q: %v", mhash, err)
+		return nil, err
+	}
+	key, err := self.swarmApi.Resolve(uri)
+	if err != nil {
+		return nil, err
 	}
 
+	path := uri.Path
 	if len(path) > 0 {
 		path += "/"
 	}

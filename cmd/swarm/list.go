@@ -44,7 +44,7 @@ func list(ctx *cli.Context) {
 
 	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 	client := swarm.NewClient(bzzapi)
-	entries, err := client.ManifestFileList(manifest, prefix)
+	list, err := client.List(manifest, prefix)
 	if err != nil {
 		utils.Fatalf("Failed to generate file and directory list: %s", err)
 	}
@@ -52,7 +52,10 @@ func list(ctx *cli.Context) {
 	w := tabwriter.NewWriter(os.Stdout, 1, 2, 2, ' ', 0)
 	defer w.Flush()
 	fmt.Fprintln(w, "HASH\tCONTENT TYPE\tPATH")
-	for _, entry := range entries {
+	for _, prefix := range list.CommonPrefixes {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", "", "DIR", prefix)
+	}
+	for _, entry := range list.Entries {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", entry.Hash, entry.ContentType, entry.Path)
 	}
 }

@@ -18,13 +18,15 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"mime"
+	"net/http"
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -42,11 +44,9 @@ func upload(ctx *cli.Context) {
 		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
 		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
 		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
+		client       = swarm.NewClient(bzzapi)
+		file         string
 	)
-
-	var client = swarm.NewClient(bzzapi)
-	var entry swarm.ManifestEntry
-	var file string
 
 	if len(args) != 1 {
 		if fromStdin {
@@ -66,41 +66,47 @@ func upload(ctx *cli.Context) {
 			utils.Fatalf("Need filename as the first and only argument")
 		}
 	} else {
-		file = args[0]
+		file = expandPath(args[0])
 	}
 
-	fi, err := os.Stat(expandPath(file))
-	if err != nil {
-		utils.Fatalf("Failed to stat file: %v", err)
+	if !wantManifest {
+		f, err := swarm.Open(file)
+		if err != nil {
+			utils.Fatalf("Error opening file: %s", err)
+		}
+		defer f.Close()
+		hash, err := client.UploadRaw(f, f.Size)
+		if err != nil {
+			utils.Fatalf("Upload failed: %s", err)
+		}
+		fmt.Println(hash)
+		return
 	}
-	if fi.IsDir() {
+
+	stat, err := os.Stat(file)
+	if err != nil {
+		utils.Fatalf("Error opening file: %s", err)
+	}
+	var hash string
+	if stat.IsDir() {
 		if !recursive {
 			utils.Fatalf("Argument is a directory and recursive upload is disabled")
 		}
-		if !wantManifest {
-			utils.Fatalf("Manifest is required for directory uploads")
+		hash, err = client.UploadDirectory(file, defaultPath, "")
+	} else {
+		if mimeType == "" {
+			mimeType = detectMimeType(file)
 		}
-		mhash, err := client.UploadDirectory(file, defaultPath)
+		f, err := swarm.Open(file)
 		if err != nil {
-			utils.Fatalf("Failed to upload directory: %v", err)
+			utils.Fatalf("Error opening file: %s", err)
 		}
-		fmt.Println(mhash)
-		return
+		defer f.Close()
+		f.ContentType = mimeType
+		hash, err = client.Upload(f, "")
 	}
-	entry, err = client.UploadFile(file, fi, mimeType)
 	if err != nil {
-		utils.Fatalf("Upload failed: %v", err)
-	}
-	mroot := swarm.Manifest{Entries: []swarm.ManifestEntry{entry}}
-	if !wantManifest {
-		// Print the manifest. This is the only output to stdout.
-		mrootJSON, _ := json.MarshalIndent(mroot, "", "  ")
-		fmt.Println(string(mrootJSON))
-		return
-	}
-	hash, err := client.UploadManifest(mroot)
-	if err != nil {
-		utils.Fatalf("Manifest upload failed: %v", err)
+		utils.Fatalf("Upload failed: %s", err)
 	}
 	fmt.Println(hash)
 }
@@ -125,6 +131,22 @@ func homeDir() string {
 	}
 	if usr, err := user.Current(); err == nil {
 		return usr.HomeDir
+	}
+	return ""
+}
+
+func detectMimeType(file string) string {
+	if ext := filepath.Ext(file); ext != "" {
+		return mime.TypeByExtension(ext)
+	}
+	f, err := os.Open(file)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	buf := make([]byte, 512)
+	if n, _ := f.Read(buf); n > 0 {
+		return http.DetectContentType(buf)
 	}
 	return ""
 }

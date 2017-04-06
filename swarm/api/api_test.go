@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -81,8 +82,9 @@ func expResponse(content string, mimeType string, status int) *Response {
 }
 
 // func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
-func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
-	reader, mimeType, status, err := api.Get(bzzhash, true)
+func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
+	key := storage.Key(common.Hex2Bytes(bzzhash))
+	reader, mimeType, status, err := api.Get(key, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,11 +109,11 @@ func TestApiPut(t *testing.T) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		bzzhash, err := api.Put(content, exp.MimeType)
+		key, err := api.Put(content, exp.MimeType)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		resp := testGet(t, api, bzzhash)
+		resp := testGet(t, api, key.String(), "")
 		checkResponse(t, resp, exp)
 	})
 }

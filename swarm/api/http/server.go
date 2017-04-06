@@ -20,13 +20,19 @@ A simple http server interface to Swarm
 package http
 
 import (
-	"bytes"
+	"archive/tar"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
-	"regexp"
+	"os"
+	"path"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,26 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/rs/cors"
 )
-
-const (
-	rawType = "application/octet-stream"
-)
-
-var (
-	// accepted protocols: bzz (traditional), bzzi (immutable) and bzzr (raw)
-	bzzPrefix       = regexp.MustCompile("^/+bzz[ir]?:/+")
-	trailingSlashes = regexp.MustCompile("/+$")
-	rootDocumentUri = regexp.MustCompile("^/+bzz[i]?:/+[^/]+$")
-	// forever         = func() time.Time { return time.Unix(0, 0) }
-	forever = time.Now
-)
-
-type sequentialReader struct {
-	reader io.Reader
-	pos    int64
-	ahead  map[int64](chan bool)
-	lock   sync.Mutex
-}
 
 // ServerConfig is the basic configuration needed for the HTTP server and also
 // includes CORS settings.
@@ -94,242 +80,569 @@ type Server struct {
 	api *api.Api
 }
 
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	requestURL := r.URL
-	// This is wrong
-	//	if requestURL.Host == "" {
-	//		var err error
-	//		requestURL, err = url.Parse(r.Referer() + requestURL.String())
-	//		if err != nil {
-	//			http.Error(w, err.Error(), http.StatusBadRequest)
-	//			return
-	//		}
-	//	}
-	log.Debug(fmt.Sprintf("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept")))
-	uri := requestURL.Path
-	var raw, nameresolver bool
-	var proto string
+// Request wraps http.Request and also includes the parsed bzz URI
+type Request struct {
+	http.Request
 
-	// HTTP-based URL protocol handler
-	log.Debug(fmt.Sprintf("BZZ request URI: '%s'", uri))
+	uri *api.URI
+}
 
-	path := bzzPrefix.ReplaceAllStringFunc(uri, func(p string) string {
-		proto = p
-		return ""
-	})
-
-	// protocol identification (ugly)
-	if proto == "" {
-		log.Error(fmt.Sprintf("[BZZ] Swarm: Protocol error in request `%s`.", uri))
-		http.Error(w, "Invalid request URL: need access protocol (bzz:/, bzzr:/, bzzi:/) as first element in path.", http.StatusBadRequest)
+// HandlePostRaw handles a POST request to a raw bzzr:/ URI, stores the request
+// body in swarm and returns the resulting storage key as a text/plain response
+func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
+	if r.uri.Path != "" {
+		s.BadRequest(w, r, "raw POST request cannot contain a path")
 		return
 	}
-	if len(proto) > 4 {
-		raw = proto[1:5] == "bzzr"
-		nameresolver = proto[1:5] != "bzzi"
+
+	if r.Header.Get("Content-Length") == "" {
+		s.BadRequest(w, r, "missing Content-Length header in request")
+		return
 	}
 
-	log.Debug("", "msg", log.Lazy{Fn: func() string {
-		return fmt.Sprintf("[BZZ] Swarm: %s request over protocol %s '%s' received.", r.Method, proto, path)
-	}})
+	key, err := s.api.Store(r.Body, r.ContentLength, nil)
+	if err != nil {
+		s.Error(w, r, err)
+		return
+	}
+	s.logDebug("content for %s stored", key.Log())
 
-	switch {
-	case r.Method == "POST" || r.Method == "PUT":
-		if r.Header.Get("content-length") == "" {
-			http.Error(w, "Missing Content-Length header in request.", http.StatusBadRequest)
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, key)
+}
+
+// HandlePostFiles handles a POST request (or deprecated PUT request) to
+// bzz:/<hash>/<path> which contains either a single file or multiple files
+// (either a tar archive or multipart form), adds those files either to an
+// existing manifest or to a new manifest under <path> and returns the
+// resulting manifest hash as a text/plain response
+func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
+	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		s.BadRequest(w, r, err.Error())
+		return
+	}
+
+	var key storage.Key
+	if r.uri.Addr != "" {
+		key, err = s.api.Resolve(r.uri)
+		if err != nil {
+			s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 			return
 		}
-		key, err := s.api.Store(io.LimitReader(r.Body, r.ContentLength), r.ContentLength, nil)
-		if err == nil {
-			log.Debug(fmt.Sprintf("Content for %v stored", key.Log()))
-		} else {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+	} else {
+		key, err = s.api.NewManifest()
+		if err != nil {
+			s.Error(w, r, err)
 			return
 		}
-		if r.Method == "POST" {
-			if raw {
-				w.Header().Set("Content-Type", "text/plain")
-				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(common.Bytes2Hex(key))))
-			} else {
-				http.Error(w, "No POST to "+uri+" allowed.", http.StatusBadRequest)
-				return
-			}
-		} else {
-			// PUT
-			if raw {
-				http.Error(w, "No PUT to /raw allowed.", http.StatusBadRequest)
-				return
-			} else {
-				path = api.RegularSlashes(path)
-				mime := r.Header.Get("Content-Type")
-				// TODO proper root hash separation
-				log.Debug(fmt.Sprintf("Modify '%s' to store %v as '%s'.", path, key.Log(), mime))
-				newKey, err := s.api.Modify(path, common.Bytes2Hex(key), mime, nameresolver)
-				if err == nil {
-					log.Debug(fmt.Sprintf("Swarm replaced manifest by '%s'", newKey))
-					w.Header().Set("Content-Type", "text/plain")
-					http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
-				} else {
-					http.Error(w, "PUT to "+path+"failed.", http.StatusBadRequest)
-					return
-				}
-			}
+	}
+
+	newKey, err := s.updateManifest(key, func(mw *api.ManifestWriter) error {
+		switch contentType {
+
+		case "application/x-tar":
+			return s.handleTarUpload(r, mw)
+
+		case "multipart/form-data":
+			return s.handleMultipartUpload(r, params["boundary"], mw)
+
+		default:
+			return s.handleDirectUpload(r, mw)
 		}
-	case r.Method == "DELETE":
-		if raw {
-			http.Error(w, "No DELETE to /raw allowed.", http.StatusBadRequest)
-			return
-		} else {
-			path = api.RegularSlashes(path)
-			log.Debug(fmt.Sprintf("Delete '%s'.", path))
-			newKey, err := s.api.Modify(path, "", "", nameresolver)
-			if err == nil {
-				log.Debug(fmt.Sprintf("Swarm replaced manifest by '%s'", newKey))
-				w.Header().Set("Content-Type", "text/plain")
-				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
-			} else {
-				http.Error(w, "DELETE to "+path+"failed.", http.StatusBadRequest)
-				return
-			}
+	})
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error creating manifest: %s", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, newKey)
+}
+
+func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
+	tr := tar.NewReader(req.Body)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("error reading tar stream: %s", err)
 		}
-	case r.Method == "GET" || r.Method == "HEAD":
-		path = trailingSlashes.ReplaceAllString(path, "")
-		if path == "" {
-			http.Error(w, "Empty path not allowed", http.StatusBadRequest)
-			return
+
+		// only store regular files
+		if !hdr.FileInfo().Mode().IsRegular() {
+			continue
 		}
-		if raw {
-			var reader storage.LazySectionReader
-			parsedurl, _ := api.Parse(path)
 
-			if parsedurl == path {
-				key, err := s.api.Resolve(parsedurl, nameresolver)
-				if err != nil {
-					log.Error(fmt.Sprintf("%v", err))
-					http.Error(w, err.Error(), http.StatusBadRequest)
-					return
-				}
-				reader = s.api.Retrieve(key)
-			} else {
-				var status int
-				readertmp, _, status, err := s.api.Get(path, nameresolver)
-				if err != nil {
-					http.Error(w, err.Error(), status)
-					return
-				}
-				reader = readertmp
-			}
-
-			// retrieving content
-
-			quitC := make(chan bool)
-			size, err := reader.Size(quitC)
-			if err != nil {
-				log.Debug(fmt.Sprintf("Could not determine size: %v", err.Error()))
-				//An error on call to Size means we don't have the root chunk
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			log.Debug(fmt.Sprintf("Reading %d bytes.", size))
-
-			// setting mime type
-			qv := requestURL.Query()
-			mimeType := qv.Get("content_type")
-			if mimeType == "" {
-				mimeType = rawType
-			}
-
-			w.Header().Set("Content-Type", mimeType)
-			http.ServeContent(w, r, uri, forever(), reader)
-			log.Debug(fmt.Sprintf("Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType))
-
-			// retrieve path via manifest
-		} else {
-			log.Debug(fmt.Sprintf("Structured GET request '%s' received.", uri))
-			// add trailing slash, if missing
-			if rootDocumentUri.MatchString(uri) {
-				http.Redirect(w, r, path+"/", http.StatusFound)
-				return
-			}
-			reader, mimeType, status, err := s.api.Get(path, nameresolver)
-			if err != nil {
-				if _, ok := err.(api.ErrResolve); ok {
-					log.Debug(fmt.Sprintf("%v", err))
-					status = http.StatusBadRequest
-				} else {
-					log.Debug(fmt.Sprintf("error retrieving '%s': %v", uri, err))
-					status = http.StatusNotFound
-				}
-				http.Error(w, err.Error(), status)
-				return
-			}
-			// set mime type and status headers
-			w.Header().Set("Content-Type", mimeType)
-			if status > 0 {
-				w.WriteHeader(status)
-			} else {
-				status = 200
-			}
-			quitC := make(chan bool)
-			size, err := reader.Size(quitC)
-			if err != nil {
-				log.Debug(fmt.Sprintf("Could not determine size: %v", err.Error()))
-				//An error on call to Size means we don't have the root chunk
-				http.Error(w, err.Error(), http.StatusNotFound)
-				return
-			}
-			log.Debug(fmt.Sprintf("Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status))
-
-			http.ServeContent(w, r, path, forever(), reader)
-
+		// add the entry under the path from the request
+		path := path.Join(req.uri.Path, hdr.Name)
+		entry := &api.ManifestEntry{
+			Path:        path,
+			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			Mode:        hdr.Mode,
+			Size:        hdr.Size,
+			ModTime:     hdr.ModTime,
 		}
-	default:
-		http.Error(w, "Method "+r.Method+" is not supported.", http.StatusMethodNotAllowed)
+		s.logDebug("adding %s (%d bytes) to new manifest", entry.Path, entry.Size)
+		contentKey, err := mw.AddEntry(tr, entry)
+		if err != nil {
+			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
+		}
+		s.logDebug("content for %s stored", contentKey.Log())
 	}
 }
 
-func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error) {
-	self.lock.Lock()
-	// assert self.pos <= off
-	if self.pos > off {
-		log.Error(fmt.Sprintf("non-sequential read attempted from sequentialReader; %d > %d", self.pos, off))
-		panic("Non-sequential read attempt")
+func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
+	mr := multipart.NewReader(req.Body, boundary)
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("error reading multipart form: %s", err)
+		}
+
+		var size int64
+		var reader io.Reader = part
+		if contentLength := part.Header.Get("Content-Length"); contentLength != "" {
+			size, err = strconv.ParseInt(contentLength, 10, 64)
+			if err != nil {
+				return fmt.Errorf("error parsing multipart content length: %s", err)
+			}
+			reader = part
+		} else {
+			// copy the part to a tmp file to get its size
+			tmp, err := ioutil.TempFile("", "swarm-multipart")
+			if err != nil {
+				return err
+			}
+			defer os.Remove(tmp.Name())
+			defer tmp.Close()
+			size, err = io.Copy(tmp, part)
+			if err != nil {
+				return fmt.Errorf("error copying multipart content: %s", err)
+			}
+			if _, err := tmp.Seek(0, os.SEEK_SET); err != nil {
+				return fmt.Errorf("error copying multipart content: %s", err)
+			}
+			reader = tmp
+		}
+
+		// add the entry under the path from the request
+		name := part.FileName()
+		if name == "" {
+			name = part.FormName()
+		}
+		path := path.Join(req.uri.Path, name)
+		entry := &api.ManifestEntry{
+			Path:        path,
+			ContentType: part.Header.Get("Content-Type"),
+			Size:        size,
+			ModTime:     time.Now(),
+		}
+		s.logDebug("adding %s (%d bytes) to new manifest", entry.Path, entry.Size)
+		contentKey, err := mw.AddEntry(reader, entry)
+		if err != nil {
+			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
+		}
+		s.logDebug("content for %s stored", contentKey.Log())
 	}
-	if self.pos != off {
-		log.Debug(fmt.Sprintf("deferred read in POST at position %d, offset %d.", self.pos, off))
-		wait := make(chan bool)
-		self.ahead[off] = wait
-		self.lock.Unlock()
-		if <-wait {
-			// failed read behind
-			n = 0
-			err = io.ErrUnexpectedEOF
+}
+
+func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error {
+	key, err := mw.AddEntry(req.Body, &api.ManifestEntry{
+		Path:        req.uri.Path,
+		ContentType: req.Header.Get("Content-Type"),
+		Mode:        0644,
+		Size:        req.ContentLength,
+		ModTime:     time.Now(),
+	})
+	if err != nil {
+		return err
+	}
+	s.logDebug("content for %s stored", key.Log())
+	return nil
+}
+
+// HandleDelete handles a DELETE request to bzz:/<manifest>/<path>, removes
+// <path> from <manifest> and returns the resulting manifest hash as a
+// text/plain response
+func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
+	key, err := s.api.Resolve(r.uri)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		return
+	}
+
+	newKey, err := s.updateManifest(key, func(mw *api.ManifestWriter) error {
+		s.logDebug("removing %s from manifest %s", r.uri.Path, key.Log())
+		return mw.RemoveEntry(r.uri.Path)
+	})
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error updating manifest: %s", err))
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, newKey)
+}
+
+// HandleGetRaw handles a GET request to bzzr://<key> and responds with
+// the raw content stored at the given storage key
+func (s *Server) HandleGetRaw(w http.ResponseWriter, r *Request) {
+	key, err := s.api.Resolve(r.uri)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		return
+	}
+
+	// if path is set, interpret <key> as a manifest and return the
+	// raw entry at the given path
+	if r.uri.Path != "" {
+		walker, err := s.api.NewManifestWalker(key, nil)
+		if err != nil {
+			s.BadRequest(w, r, fmt.Sprintf("%s is not a manifest", key))
 			return
 		}
-		self.lock.Lock()
-	}
-	localPos := 0
-	for localPos < len(target) {
-		n, err = self.reader.Read(target[localPos:])
-		localPos += n
-		log.Debug(fmt.Sprintf("Read %d bytes into buffer size %d from POST, error %v.", n, len(target), err))
-		if err != nil {
-			log.Debug(fmt.Sprintf("POST stream's reading terminated with %v.", err))
-			for i := range self.ahead {
-				self.ahead[i] <- true
-				delete(self.ahead, i)
+		var entry *api.ManifestEntry
+		walker.Walk(func(e *api.ManifestEntry) error {
+			// if the entry matches the path, set entry and stop
+			// the walk
+			if e.Path == r.uri.Path {
+				entry = e
+				// return an error to cancel the walk
+				return errors.New("found")
 			}
-			self.lock.Unlock()
-			return localPos, err
+
+			// ignore non-manifest files
+			if e.ContentType != api.ManifestType {
+				return nil
+			}
+
+			// if the manifest's path is a prefix of the
+			// requested path, recurse into it by returning
+			// nil and continuing the walk
+			if strings.HasPrefix(r.uri.Path, e.Path) {
+				return nil
+			}
+
+			return api.SkipManifest
+		})
+		if entry == nil {
+			http.NotFound(w, &r.Request)
+			return
 		}
-		self.pos += int64(n)
+		key = storage.Key(common.Hex2Bytes(entry.Hash))
 	}
-	wait := self.ahead[self.pos]
-	if wait != nil {
-		log.Debug(fmt.Sprintf("deferred read in POST at position %d triggered.", self.pos))
-		delete(self.ahead, self.pos)
-		close(wait)
+
+	// check the root chunk exists by retrieving the file's size
+	reader := s.api.Retrieve(key)
+	if _, err := reader.Size(nil); err != nil {
+		s.logDebug("key not found %s: %s", key, err)
+		http.NotFound(w, &r.Request)
+		return
 	}
-	self.lock.Unlock()
-	return localPos, err
+
+	// allow the request to overwrite the content type using a query
+	// parameter
+	contentType := "application/octet-stream"
+	if typ := r.URL.Query().Get("content_type"); typ != "" {
+		contentType = typ
+	}
+	w.Header().Set("Content-Type", contentType)
+
+	http.ServeContent(w, &r.Request, "", time.Now(), reader)
+}
+
+// HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
+// header of "application/x-tar" and returns a tar stream of all files
+// contained in the manifest
+func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
+	if r.uri.Path != "" {
+		s.BadRequest(w, r, "files request cannot contain a path")
+		return
+	}
+
+	key, err := s.api.Resolve(r.uri)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		return
+	}
+
+	walker, err := s.api.NewManifestWalker(key, nil)
+	if err != nil {
+		s.Error(w, r, err)
+		return
+	}
+
+	tw := tar.NewWriter(w)
+	defer tw.Close()
+	w.Header().Set("Content-Type", "application/x-tar")
+	w.WriteHeader(http.StatusOK)
+
+	err = walker.Walk(func(entry *api.ManifestEntry) error {
+		// ignore manifests (walk will recurse into them)
+		if entry.ContentType == api.ManifestType {
+			return nil
+		}
+
+		// retrieve the entry's key and size
+		reader := s.api.Retrieve(storage.Key(common.Hex2Bytes(entry.Hash)))
+		size, err := reader.Size(nil)
+		if err != nil {
+			return err
+		}
+
+		// write a tar header for the entry
+		hdr := &tar.Header{
+			Name:    entry.Path,
+			Mode:    entry.Mode,
+			Size:    size,
+			ModTime: entry.ModTime,
+			Xattrs: map[string]string{
+				"user.swarm.content-type": entry.ContentType,
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+
+		// copy the file into the tar stream
+		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
+		if err != nil {
+			return err
+		} else if n != size {
+			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
+		}
+
+		return nil
+	})
+	if err != nil {
+		s.logError("error generating tar stream: %s", err)
+	}
+}
+
+// HandleGetList handles a GET request to bzz:/<manifest>/<path> which has
+// the "list" query parameter set to "true" and returns a list of all files
+// contained in <manifest> under <path> grouped into common prefixes using
+// "/" as a delimiter
+func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
+	// ensure the root path has a trailing slash so that relative URLs work
+	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
+		http.Redirect(w, &r.Request, r.URL.Path+"/?list=true", http.StatusMovedPermanently)
+		return
+	}
+
+	key, err := s.api.Resolve(r.uri)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		return
+	}
+
+	walker, err := s.api.NewManifestWalker(key, nil)
+	if err != nil {
+		s.Error(w, r, err)
+		return
+	}
+
+	var list api.ManifestList
+	prefix := r.uri.Path
+	err = walker.Walk(func(entry *api.ManifestEntry) error {
+		// handle non-manifest files
+		if entry.ContentType != api.ManifestType {
+			// ignore the file if it doesn't have the specified prefix
+			if !strings.HasPrefix(entry.Path, prefix) {
+				return nil
+			}
+
+			// if the path after the prefix contains a slash, add a
+			// common prefix to the list, otherwise add the entry
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return nil
+			}
+			if entry.Path == "" {
+				entry.Path = "/"
+			}
+			list.Entries = append(list.Entries, entry)
+			return nil
+		}
+
+		// if the manifest's path is a prefix of the specified prefix
+		// then just recurse into the manifest by returning nil and
+		// continuing the walk
+		if strings.HasPrefix(prefix, entry.Path) {
+			return nil
+		}
+
+		// if the manifest's path has the specified prefix, then if the
+		// path after the prefix contains a slash, add a common prefix
+		// to the list and skip the manifest, otherwise recurse into
+		// the manifest by returning nil and continuing the walk
+		if strings.HasPrefix(entry.Path, prefix) {
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return api.SkipManifest
+			}
+			return nil
+		}
+
+		// the manifest neither has the prefix or needs recursing in to
+		// so just skip it
+		return api.SkipManifest
+	})
+	if err != nil {
+		s.Error(w, r, err)
+		return
+	}
+
+	// if the client wants HTML (e.g. a browser) then render the list as a
+	// HTML index with relative URLs
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		w.Header().Set("Content-Type", "text/html")
+		err := htmlListTemplate.Execute(w, &htmlListData{
+			URI:  r.uri,
+			List: &list,
+		})
+		if err != nil {
+			s.logError("error rendering list HTML: %s", err)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&list)
+}
+
+// HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
+// with the content of the file at <path> from the given <manifest>
+func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
+	key, err := s.api.Resolve(r.uri)
+	if err != nil {
+		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		return
+	}
+
+	reader, contentType, _, err := s.api.Get(key, r.uri.Path)
+	if err != nil {
+		s.Error(w, r, err)
+		return
+	}
+
+	// check the root chunk exists by retrieving the file's size
+	if _, err := reader.Size(nil); err != nil {
+		s.logDebug("file not found %s: %s", r.uri, err)
+		http.NotFound(w, &r.Request)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+
+	http.ServeContent(w, &r.Request, "", time.Now(), reader)
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.logDebug("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, r.URL.Host, r.URL.Path, r.Referer(), r.Header.Get("Accept"))
+
+	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
+	if err != nil {
+		s.logError("Invalid URI %q: %s", r.URL.Path, err)
+		http.Error(w, fmt.Sprintf("Invalid bzz URI: %s", err), http.StatusBadRequest)
+		return
+	}
+	s.logDebug("%s request received for %s", r.Method, uri)
+
+	req := &Request{Request: *r, uri: uri}
+	switch r.Method {
+	case "POST":
+		if uri.Raw() {
+			s.HandlePostRaw(w, req)
+		} else {
+			s.HandlePostFiles(w, req)
+		}
+
+	case "PUT":
+		// DEPRECATED:
+		//   clients should send a POST request (the request creates a
+		//   new manifest leaving the existing one intact, so it isn't
+		//   strictly a traditional PUT request which replaces content
+		//   at a URI, and POST is more ubiquitous)
+		if uri.Raw() {
+			http.Error(w, fmt.Sprintf("No PUT to %s allowed.", uri), http.StatusBadRequest)
+			return
+		} else {
+			s.HandlePostFiles(w, req)
+		}
+
+	case "DELETE":
+		if uri.Raw() {
+			http.Error(w, fmt.Sprintf("No DELETE to %s allowed.", uri), http.StatusBadRequest)
+			return
+		}
+		s.HandleDelete(w, req)
+
+	case "GET":
+		if uri.Raw() {
+			s.HandleGetRaw(w, req)
+			return
+		}
+
+		if r.Header.Get("Accept") == "application/x-tar" {
+			s.HandleGetFiles(w, req)
+			return
+		}
+
+		if r.URL.Query().Get("list") == "true" {
+			s.HandleGetList(w, req)
+			return
+		}
+
+		s.HandleGetFile(w, req)
+
+	default:
+		http.Error(w, "Method "+r.Method+" is not supported.", http.StatusMethodNotAllowed)
+
+	}
+}
+
+func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWriter) error) (storage.Key, error) {
+	mw, err := s.api.NewManifestWriter(key, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := update(mw); err != nil {
+		return nil, err
+	}
+
+	key, err = mw.Store()
+	if err != nil {
+		return nil, err
+	}
+	s.logDebug("generated manifest %s", key)
+	return key, nil
+}
+
+func (s *Server) logDebug(format string, v ...interface{}) {
+	log.Debug(fmt.Sprintf("[BZZ] HTTP: "+format, v...))
+}
+
+func (s *Server) logError(format string, v ...interface{}) {
+	log.Error(fmt.Sprintf("[BZZ] HTTP: "+format, v...))
+}
+
+func (s *Server) BadRequest(w http.ResponseWriter, r *Request, reason string) {
+	s.logDebug("bad request %s %s: %s", r.Method, r.uri, reason)
+	http.Error(w, reason, http.StatusBadRequest)
+}
+
+func (s *Server) Error(w http.ResponseWriter, r *Request, err error) {
+	s.logError("error serving %s %s: %s", r.Method, r.uri, err)
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
