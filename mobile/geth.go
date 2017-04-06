@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
@@ -151,8 +152,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			DatabaseCache:      config.EthereumDatabaseCache,
 			NetworkId:          config.EthereumNetworkID,
 			GasPrice:           new(big.Int).SetUint64(20 * params.Shannon),
-			GpoBlocks:          10,
-			GpoPercentile:      50,
+			GPO:                gasprice.Config{Blocks: 10, Percentile: 50},
 			EthashCacheDir:     "ethash",
 			EthashCachesInMem:  2,
 			EthashCachesOnDisk: 3,

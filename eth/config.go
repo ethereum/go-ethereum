@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -38,8 +39,11 @@ var DefaultConfig = Config{
 	LightPeers:           20,
 	DatabaseCache:        128,
 	GasPrice:             big.NewInt(20 * params.Shannon),
-	GpoBlocks:            10,
-	GpoPercentile:        50,
+
+	GPO: gasprice.Config{
+		Blocks:     10,
+		Percentile: 50,
+	},
 }
 
 func init() {
@@ -93,8 +97,7 @@ type Config struct {
 	EthashDatasetsOnDisk int
 
 	// Gas Price Oracle options
-	GpoBlocks     int
-	GpoPercentile int
+	GPO gasprice.Config `toml:"gpo"`
 
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool

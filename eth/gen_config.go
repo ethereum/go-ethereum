@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
 )
 
 func (c Config) MarshalTOML() (interface{}, error) {
@@ -32,8 +33,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EthashDatasetDir        string
 		EthashDatasetsInMem     int
 		EthashDatasetsOnDisk    int
-		GpoBlocks               int
-		GpoPercentile           int
+		GPO                     gasprice.Config `toml:"gpo"`
 		EnablePreimageRecording bool
 		SolcPath                string
 		DocRoot                 string `toml:"-"`
@@ -62,8 +62,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EthashDatasetDir = c.EthashDatasetDir
 	enc.EthashDatasetsInMem = c.EthashDatasetsInMem
 	enc.EthashDatasetsOnDisk = c.EthashDatasetsOnDisk
-	enc.GpoBlocks = c.GpoBlocks
-	enc.GpoPercentile = c.GpoPercentile
+	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
 	enc.SolcPath = c.SolcPath
 	enc.DocRoot = c.DocRoot
@@ -95,8 +94,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EthashDatasetDir        *string
 		EthashDatasetsInMem     *int
 		EthashDatasetsOnDisk    *int
-		GpoBlocks               *int
-		GpoPercentile           *int
+		GPO                     *gasprice.Config `toml:"gpo"`
 		EnablePreimageRecording *bool
 		SolcPath                *string
 		DocRoot                 *string `toml:"-"`
@@ -168,11 +166,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.EthashDatasetsOnDisk != nil {
 		c.EthashDatasetsOnDisk = *dec.EthashDatasetsOnDisk
 	}
-	if dec.GpoBlocks != nil {
-		c.GpoBlocks = *dec.GpoBlocks
-	}
-	if dec.GpoPercentile != nil {
-		c.GpoPercentile = *dec.GpoPercentile
+	if dec.GPO != nil {
+		c.GPO = *dec.GPO
 	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording

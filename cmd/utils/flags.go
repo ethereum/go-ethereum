@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/event"
@@ -411,12 +412,12 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: eth.DefaultConfig.GpoBlocks,
+		Value: eth.DefaultConfig.GPO.Blocks,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: eth.DefaultConfig.GpoPercentile,
+		Value: eth.DefaultConfig.GPO.Percentile,
 	}
 )
 
@@ -761,12 +762,12 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 	return stack
 }
 
-func setGPO(ctx *cli.Context, cfg *eth.Config) {
+func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
-		cfg.GpoBlocks = ctx.GlobalInt(GpoBlocksFlag.Name)
+		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
 	}
 	if ctx.GlobalIsSet(GpoPercentileFlag.Name) {
-		cfg.GpoPercentile = ctx.GlobalInt(GpoPercentileFlag.Name)
+		cfg.Percentile = ctx.GlobalInt(GpoPercentileFlag.Name)
 	}
 }
 
@@ -806,7 +807,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
-	setGPO(ctx, cfg)
+	setGPO(ctx, &cfg.GPO)
 	setEthash(ctx, cfg)
 
 	if ctx.GlobalIsSet(FastSyncFlag.Name) {
