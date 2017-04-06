@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -42,23 +41,8 @@ func (s *SampleService) Start(*p2p.Server) error   { fmt.Println("Service starti
 func (s *SampleService) Stop() error               { fmt.Println("Service stopping..."); return nil }
 
 func ExampleService() {
-	// Create a network node to run protocols with the default values. The below list
-	// is only used to display each of the configuration options. All of these could
-	// have been omitted if the default behavior is desired.
-	nodeConfig := &node.Config{
-		DataDir:         "",                 // Empty uses ephemeral storage
-		PrivateKey:      nil,                // Nil generates a node key on the fly
-		Name:            "",                 // Any textual node name is allowed
-		NoDiscovery:     false,              // Can disable discovering remote nodes
-		BootstrapNodes:  []*discover.Node{}, // List of bootstrap nodes to use
-		ListenAddr:      ":0",               // Network interface to listen on
-		NAT:             nil,                // UPnP port mapper to use for crossing firewalls
-		Dialer:          nil,                // Custom dialer to use for establishing peer connections
-		NoDial:          false,              // Can prevent this node from dialing out
-		MaxPeers:        0,                  // Number of peers to allow
-		MaxPendingPeers: 0,                  // Number of peers allowed to handshake concurrently
-	}
-	stack, err := node.New(nodeConfig)
+	// Create a network node to run protocols with the default values.
+	stack, err := node.New(&node.Config{})
 	if err != nil {
 		log.Fatalf("Failed to create network node: %v", err)
 	}
