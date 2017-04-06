@@ -111,7 +111,12 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	relay.reqDist = eth.protocolManager.reqDist
 
 	eth.ApiBackend = &LesApiBackend{eth, nil}
-	eth.ApiBackend.gpo = gasprice.NewLightPriceOracle(eth.ApiBackend)
+	gpoParams := gasprice.Config{
+		Blocks:     config.GpoBlocks,
+		Percentile: config.GpoPercentile,
+		Default:    config.GasPrice,
+	}
+	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 	return eth, nil
 }
 

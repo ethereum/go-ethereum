@@ -168,20 +168,16 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
 		ethConf := &eth.Config{
-			Genesis:                 genesis,
-			LightMode:               true,
-			DatabaseCache:           config.EthereumDatabaseCache,
-			NetworkId:               config.EthereumNetworkID,
-			GasPrice:                new(big.Int).SetUint64(20 * params.Shannon),
-			GpoMinGasPrice:          new(big.Int).SetUint64(50 * params.Shannon),
-			GpoMaxGasPrice:          new(big.Int).SetUint64(500 * params.Shannon),
-			GpoFullBlockRatio:       80,
-			GpobaseStepDown:         10,
-			GpobaseStepUp:           100,
-			GpobaseCorrectionFactor: 110,
-			EthashCacheDir:          "ethash",
-			EthashCachesInMem:       2,
-			EthashCachesOnDisk:      3,
+			Genesis:            genesis,
+			LightMode:          true,
+			DatabaseCache:      config.EthereumDatabaseCache,
+			NetworkId:          config.EthereumNetworkID,
+			GasPrice:           new(big.Int).SetUint64(20 * params.Shannon),
+			GpoBlocks:          5,
+			GpoPercentile:      50,
+			EthashCacheDir:     "ethash",
+			EthashCachesInMem:  2,
+			EthashCachesOnDisk: 3,
 		}
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, ethConf)

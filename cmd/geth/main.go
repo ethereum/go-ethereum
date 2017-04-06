@@ -147,12 +147,8 @@ func init() {
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
 		utils.SolcPathFlag,
-		utils.GpoMinGasPriceFlag,
-		utils.GpoMaxGasPriceFlag,
-		utils.GpoFullBlockRatioFlag,
-		utils.GpobaseStepDownFlag,
-		utils.GpobaseStepUpFlag,
-		utils.GpobaseCorrectionFactorFlag,
+		utils.GpoBlocksFlag,
+		utils.GpoPercentileFlag,
 		utils.ExtraDataFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
