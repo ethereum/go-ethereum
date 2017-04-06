@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 
 	cli "gopkg.in/urfave/cli.v1"
@@ -137,10 +138,18 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
 	_, cfg := makeConfigNode(ctx)
+	comment := ""
+
+	if cfg.Eth.Genesis != nil {
+		cfg.Eth.Genesis = nil
+		comment += "# Note: this config doesn't contain the genesis block.\n\n"
+	}
+
 	out, err := toml.Marshal(&cfg)
 	if err != nil {
 		return err
 	}
+	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
 }
