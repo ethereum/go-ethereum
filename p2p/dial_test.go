@@ -236,13 +236,29 @@ func TestDialStateDynDialBootnode(t *testing.T) {
 	runDialTest(t, dialtest{
 		init: newDialState(nil, bootnodes, table, 5, nil),
 		rounds: []round{
-			// 1 out of 3 bootnodes are dialed on no peers, 2 other dynamic dials
+			// 2 dynamic dials attempted, bootnodes pending fallback interval
+			{
+				new: []task{
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(4)}},
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(5)}},
+					&discoverTask{},
+				},
+			},
+			// No dials succeed, bootnodes still pending fallback interval
+			{
+				done: []task{
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(4)}},
+					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(5)}},
+				},
+			},
+			// No dials succeed, bootnodes still pending fallback interval
+			{},
+			// No dials succeed, 2 dynamic dials attempted and 1 bootnode too as fallback interval was reached
 			{
 				new: []task{
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(1)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(4)}},
 					&dialTask{flags: dynDialedConn, dest: &discover.Node{ID: uintID(5)}},
-					&discoverTask{},
 				},
 			},
 			// No dials succeed, 2nd bootnode is attempted
