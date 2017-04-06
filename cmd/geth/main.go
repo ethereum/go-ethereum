@@ -165,12 +165,6 @@ func init() {
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
-		// This should be the only place where reporting is enabled
-		// because it is not intended to run while testing.
-		// In addition to this check, bad block reports are sent only
-		// for chains with the main network genesis block and network id 1.
-		eth.EnableBadBlockReporting = true
-
 		utils.SetupNetwork(ctx)
 		return nil
 	}
