@@ -24,8 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 )
+
+var maxPrice = big.NewInt(500 * params.Shannon)
 
 type Config struct {
 	Blocks     int
@@ -42,8 +45,8 @@ type Oracle struct {
 	cacheLock sync.RWMutex
 	fetchLock sync.Mutex
 
-	checkBlocks, minBlocks, maxBlocks int
-	percentile                        int
+	checkBlocks, maxEmpty, maxBlocks int
+	percentile                       int
 }
 
 // NewOracle returns a new oracle.
@@ -63,7 +66,7 @@ func NewOracle(backend ethapi.Backend, params Config) *Oracle {
 		backend:     backend,
 		lastPrice:   params.Default,
 		checkBlocks: blocks,
-		minBlocks:   (blocks + 1) / 2,
+		maxEmpty:    blocks / 2,
 		maxBlocks:   blocks * 5,
 		percentile:  percent,
 	}
@@ -105,7 +108,7 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 		exp++
 		blockNum--
 	}
-	maxEmpty := gpo.checkBlocks - gpo.minBlocks
+	maxEmpty := gpo.maxEmpty
 	for exp > 0 {
 		res := <-ch
 		if res.err != nil {
@@ -131,6 +134,9 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	if len(txPrices) > 0 {
 		sort.Sort(bigIntArray(txPrices))
 		price = txPrices[(len(txPrices)-1)*gpo.percentile/100]
+	}
+	if price.Cmp(maxPrice) > 0 {
+		price = new(big.Int).Set(maxPrice)
 	}
 
 	gpo.cacheLock.Lock()

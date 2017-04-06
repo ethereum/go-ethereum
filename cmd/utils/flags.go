@@ -412,7 +412,7 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpoblocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: 5,
+		Value: 10,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpopercentile",
