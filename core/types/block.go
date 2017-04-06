@@ -68,21 +68,21 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"`
-	UncleHash   common.Hash    `json:"sha3Uncles"`
-	Coinbase    common.Address `json:"miner"`
-	Root        common.Hash    `json:"stateRoot"`
-	TxHash      common.Hash    `json:"transactionsRoot"`
-	ReceiptHash common.Hash    `json:"receiptsRoot"`
-	Bloom       Bloom          `json:"logsBloom"`
-	Difficulty  *big.Int       `json:"difficulty"`
-	Number      *big.Int       `json:"number"`
-	GasLimit    *big.Int       `json:"gasLimit"`
-	GasUsed     *big.Int       `json:"gasUsed"`
-	Time        *big.Int       `json:"timestamp"`
-	Extra       []byte         `json:"extraData"`
-	MixDigest   common.Hash    `json:"mixHash"`
-	Nonce       BlockNonce     `json:"nonce"`
+	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
+	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+	Coinbase    common.Address `json:"miner"            gencodec:"required"`
+	Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
+	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
+	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
+	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
+	Number      *big.Int       `json:"number"           gencodec:"required"`
+	GasLimit    *big.Int       `json:"gasLimit"         gencodec:"required"`
+	GasUsed     *big.Int       `json:"gasUsed"          gencodec:"required"`
+	Time        *big.Int       `json:"timestamp"        gencodec:"required"`
+	Extra       []byte         `json:"extraData"        gencodec:"required"`
+	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
+	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -93,6 +93,7 @@ type headerMarshaling struct {
 	GasUsed    *hexutil.Big
 	Time       *hexutil.Big
 	Extra      hexutil.Bytes
+	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its

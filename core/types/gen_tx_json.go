@@ -12,19 +12,19 @@ import (
 )
 
 func (t txdata) MarshalJSON() ([]byte, error) {
-	type txdataJSON struct {
-		AccountNonce hexutil.Uint64  `json:"nonce"`
-		Price        *hexutil.Big    `json:"gasPrice"`
-		GasLimit     *hexutil.Big    `json:"gas"`
-		Recipient    *common.Address `json:"to" optional:"yes" rlp:"nil"`
-		Amount       *hexutil.Big    `json:"value"`
-		Payload      hexutil.Bytes   `json:"input"`
-		V            *hexutil.Big    `json:"v"`
-		R            *hexutil.Big    `json:"r"`
-		S            *hexutil.Big    `json:"s"`
-		Hash         *common.Hash    `json:"hash" optional:"yes" rlp:"-"`
+	type txdata struct {
+		AccountNonce hexutil.Uint64  `json:"nonce"    gencodec:"required"`
+		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
+		GasLimit     *hexutil.Big    `json:"gas"      gencodec:"required"`
+		Recipient    *common.Address `json:"to"       rlp:"nil"`
+		Amount       *hexutil.Big    `json:"value"    gencodec:"required"`
+		Payload      hexutil.Bytes   `json:"input"    gencodec:"required"`
+		V            *hexutil.Big    `json:"v" gencodec:"required"`
+		R            *hexutil.Big    `json:"r" gencodec:"required"`
+		S            *hexutil.Big    `json:"s" gencodec:"required"`
+		Hash         *common.Hash    `json:"hash" rlp:"-"`
 	}
-	var enc txdataJSON
+	var enc txdata
 	enc.AccountNonce = hexutil.Uint64(t.AccountNonce)
 	enc.Price = (*hexutil.Big)(t.Price)
 	enc.GasLimit = (*hexutil.Big)(t.GasLimit)
@@ -39,61 +39,59 @@ func (t txdata) MarshalJSON() ([]byte, error) {
 }
 
 func (t *txdata) UnmarshalJSON(input []byte) error {
-	type txdataJSON struct {
-		AccountNonce *hexutil.Uint64 `json:"nonce"`
-		Price        *hexutil.Big    `json:"gasPrice"`
-		GasLimit     *hexutil.Big    `json:"gas"`
-		Recipient    *common.Address `json:"to" optional:"yes" rlp:"nil"`
-		Amount       *hexutil.Big    `json:"value"`
-		Payload      hexutil.Bytes   `json:"input"`
-		V            *hexutil.Big    `json:"v"`
-		R            *hexutil.Big    `json:"r"`
-		S            *hexutil.Big    `json:"s"`
-		Hash         *common.Hash    `json:"hash" optional:"yes" rlp:"-"`
+	type txdata struct {
+		AccountNonce *hexutil.Uint64 `json:"nonce"    gencodec:"required"`
+		Price        *hexutil.Big    `json:"gasPrice" gencodec:"required"`
+		GasLimit     *hexutil.Big    `json:"gas"      gencodec:"required"`
+		Recipient    *common.Address `json:"to"       rlp:"nil"`
+		Amount       *hexutil.Big    `json:"value"    gencodec:"required"`
+		Payload      hexutil.Bytes   `json:"input"    gencodec:"required"`
+		V            *hexutil.Big    `json:"v" gencodec:"required"`
+		R            *hexutil.Big    `json:"r" gencodec:"required"`
+		S            *hexutil.Big    `json:"s" gencodec:"required"`
+		Hash         *common.Hash    `json:"hash" rlp:"-"`
 	}
-	var dec txdataJSON
+	var dec txdata
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	var x txdata
 	if dec.AccountNonce == nil {
 		return errors.New("missing required field 'nonce' for txdata")
 	}
-	x.AccountNonce = uint64(*dec.AccountNonce)
+	t.AccountNonce = uint64(*dec.AccountNonce)
 	if dec.Price == nil {
 		return errors.New("missing required field 'gasPrice' for txdata")
 	}
-	x.Price = (*big.Int)(dec.Price)
+	t.Price = (*big.Int)(dec.Price)
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gas' for txdata")
 	}
-	x.GasLimit = (*big.Int)(dec.GasLimit)
+	t.GasLimit = (*big.Int)(dec.GasLimit)
 	if dec.Recipient != nil {
-		x.Recipient = dec.Recipient
+		t.Recipient = dec.Recipient
 	}
 	if dec.Amount == nil {
 		return errors.New("missing required field 'value' for txdata")
 	}
-	x.Amount = (*big.Int)(dec.Amount)
+	t.Amount = (*big.Int)(dec.Amount)
 	if dec.Payload == nil {
 		return errors.New("missing required field 'input' for txdata")
 	}
-	x.Payload = dec.Payload
+	t.Payload = dec.Payload
 	if dec.V == nil {
 		return errors.New("missing required field 'v' for txdata")
 	}
-	x.V = (*big.Int)(dec.V)
+	t.V = (*big.Int)(dec.V)
 	if dec.R == nil {
 		return errors.New("missing required field 'r' for txdata")
 	}
-	x.R = (*big.Int)(dec.R)
+	t.R = (*big.Int)(dec.R)
 	if dec.S == nil {
 		return errors.New("missing required field 's' for txdata")
 	}
-	x.S = (*big.Int)(dec.S)
+	t.S = (*big.Int)(dec.S)
 	if dec.Hash != nil {
-		x.Hash = dec.Hash
+		t.Hash = dec.Hash
 	}
-	*t = x
 	return nil
 }
