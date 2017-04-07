@@ -139,16 +139,17 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 // threads allowed to use.
 func (api *PrivateMinerAPI) Start(threads *int) error {
 	// Set the number of threads if the seal engine supports it
-	if threads != nil {
-		type threaded interface {
-			SetThreads(threads int)
-		}
-		if th, ok := api.e.engine.(threaded); ok {
-			log.Info("Updated mining threads", "threads", *threads)
-			th.SetThreads(*threads)
-		} else {
-			log.Warn("Current seal engine isn't threaded")
-		}
+	if threads == nil {
+		threads = new(int)
+	} else if *threads == 0 {
+		*threads = -1 // Disable the miner from within
+	}
+	type threaded interface {
+		SetThreads(threads int)
+	}
+	if th, ok := api.e.engine.(threaded); ok {
+		log.Info("Updated mining threads", "threads", *threads)
+		th.SetThreads(*threads)
 	}
 	// Start the miner and return
 	if !api.e.IsMining() {
@@ -159,6 +160,12 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 
 // Stop the miner
 func (api *PrivateMinerAPI) Stop() bool {
+	type threaded interface {
+		SetThreads(threads int)
+	}
+	if th, ok := api.e.engine.(threaded); ok {
+		th.SetThreads(-1)
+	}
 	api.e.StopMining()
 	return true
 }
