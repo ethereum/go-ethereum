@@ -55,10 +55,6 @@ type NodeConfig struct {
 	// decide if remote peers should be accepted or not.
 	EthereumNetworkID int
 
-	// EthereumChainConfig is the default parameters of the blockchain to use. If no
-	// configuration is specified, it defaults to the main network.
-	EthereumChainConfig *ChainConfig
-
 	// EthereumGenesis is the genesis JSON to use to seed the blockchain with. An
 	// empty genesis state is equivalent to using the mainnet's state.
 	EthereumGenesis string
@@ -84,7 +80,6 @@ var defaultNodeConfig = &NodeConfig{
 	MaxPeers:              25,
 	EthereumEnabled:       true,
 	EthereumNetworkID:     1,
-	EthereumChainConfig:   MainnetChainConfig(),
 	EthereumDatabaseCache: 16,
 }
 
@@ -92,18 +87,6 @@ var defaultNodeConfig = &NodeConfig{
 func NewNodeConfig() *NodeConfig {
 	config := *defaultNodeConfig
 	return &config
-}
-
-// SetMainnet sets up the node for use on the Ethereum mainnet.
-func (cfg *NodeConfig) SetMainnet() {
-	cfg.EthereumGenesis = ""
-	cfg.EthereumChainConfig = MainnetChainConfig()
-}
-
-// SetTestnet sets up the node for use on the Ethereum testnet.
-func (cfg *NodeConfig) SetTestnet() {
-	cfg.EthereumGenesis = TestnetGenesis()
-	cfg.EthereumChainConfig = TestnetChainConfig()
 }
 
 // Node represents a Geth Ethereum node instance.
@@ -144,27 +127,19 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 
 	var genesis *core.Genesis
 	if config.EthereumGenesis != "" {
+		// Parse the user supplied genesis spec if not mainnet
 		genesis = new(core.Genesis)
 		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
-			return nil, fmt.Errorf("invalid EthereumGenesis: %v", err)
+			return nil, fmt.Errorf("invalid genesis spec: %v", err)
+		}
+		// If we have the testnet, hard code the chain configs too
+		if config.EthereumGenesis == TestnetGenesis() {
+			genesis.Config = params.TestnetChainConfig
+			if config.EthereumNetworkID == 1 {
+				config.EthereumNetworkID = 3
+			}
 		}
 	}
-	if config.EthereumChainConfig != nil {
-		if genesis == nil {
-			genesis = core.DefaultGenesisBlock()
-		}
-		genesis.Config = &params.ChainConfig{
-			ChainId:        big.NewInt(config.EthereumChainConfig.ChainID),
-			HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
-			DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
-			DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
-			EIP150Block:    big.NewInt(config.EthereumChainConfig.EIP150Block),
-			EIP150Hash:     config.EthereumChainConfig.EIP150Hash.hash,
-			EIP155Block:    big.NewInt(config.EthereumChainConfig.EIP155Block),
-			EIP158Block:    big.NewInt(config.EthereumChainConfig.EIP158Block),
-		}
-	}
-
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
 		ethConf := &eth.Config{
@@ -173,7 +148,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			DatabaseCache:      config.EthereumDatabaseCache,
 			NetworkId:          config.EthereumNetworkID,
 			GasPrice:           new(big.Int).SetUint64(20 * params.Shannon),
-			GpoBlocks:          5,
+			GpoBlocks:          10,
 			GpoPercentile:      50,
 			EthashCacheDir:     "ethash",
 			EthashCachesInMem:  2,
