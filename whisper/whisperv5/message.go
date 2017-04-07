@@ -237,7 +237,7 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	} else if options.KeySym != nil {
 		salt, nonce, err = msg.encryptSymmetric(options.KeySym)
 	} else {
-		err = errors.New("unable to encrypt the message: neither symmetric nor assymmmetric key provided")
+		err = errors.New("unable to encrypt the message: neither symmetric nor assymmetric key provided")
 	}
 
 	if err != nil {

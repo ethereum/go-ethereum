@@ -423,7 +423,7 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	case "asym":
 		args.Symmetric = false
 	default:
-		return errors.New("wrong type (sym/asym")
+		return errors.New("wrong type (sym/asym)")
 	}
 
 	args.Key = obj.Key
@@ -464,7 +464,7 @@ type WhisperMessage struct {
 	Payload   string  `json:"payload"`
 	Padding   string  `json:"padding"`
 	Src       string  `json:"signedWith"`
-	Dst       string  `json:"receipientPublicKey"`
+	Dst       string  `json:"recipientPublicKey"`
 	Timestamp uint32  `json:"timestamp"`
 	TTL       uint32  `json:"ttl"`
 	PoW       float64 `json:"pow"`
