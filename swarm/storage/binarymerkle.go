@@ -5,27 +5,24 @@ package storage
 import (
 	"bytes"
 	_ "crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 var hashFunc Hasher = sha3.NewKeccak256 //default hasher
 
+const (
+	segmentsize int = 32
+)
+
 type state struct {
 	btree BTree
 	root  Root
 }
-
-const (
-	// max number of leafs on 4096 chunk len in 32 bytes segments
-	mprocessors = 128
-)
 
 // A merkle tree for a user that stores the entire tree
 // Specifically this tree is left a leaning balanced binary tree
@@ -36,6 +33,7 @@ type BTree struct {
 	count    uint64
 	root     *node
 	rootHash []byte
+	chunklen int
 	//hashFunc Hasher
 }
 
@@ -52,17 +50,15 @@ type node struct {
 }
 
 type jobparam struct {
-	data   [][]byte
-	height int
-	n0     *node
-	n1     *node
-	id     int
+	//data [][]byte
+	n0 *node
+	n1 *node
+	id int
 }
 
 type jobresult struct {
-	n    *node
-	data [][]byte
-	id   int
+	n  *node
+	id int
 }
 
 func (t BTree) Count() uint64 {
@@ -141,20 +137,21 @@ func rootHash(count uint64, data []byte) []byte {
 	h := hashFunc()
 	h.Reset()
 	h.Write(data)
-	binary.Write(h, binary.LittleEndian, count)
+	//binary.Write(h, binary.LittleEndian, count)
 	return h.Sum(nil)
 }
 
 func makeHash(left, right *node) []byte {
 	h := hashFunc()
 	h.Reset()
+
 	if left != nil {
 		h.Write(left.label)
 		if right != nil {
 			h.Write(right.label)
 		}
 	}
-	return h.Sum(make([]byte, 0))
+	return h.Sum(nil)
 }
 
 // Returns the height of the tree containing count leaf nodes.
@@ -176,161 +173,173 @@ func GetHeight(count uint64) int {
 // BMT - The BMT Representation of the data
 // ROOT - BMT Root
 // Count - Numers of leafs at the BMT
-// error -
-func BuildBMT(h Hasher, data []byte, segmentsize int) (bmt *BTree, roor *Root, count int, err error) {
-	if len(data) == 0 {
+// err
+// The bmt computation is done in parallel by deviding the tree to  subtree .
+// (each sub tree is calculated in parallel using goroutine ) and then merge the results in parallel and get the tree.
+// The paralel merging is done by creating seperate channel for each node and make it to wait(on a seperate go routine) for the calculation of
+// its left and right childerens.
+func BuildBMT(h Hasher, data []byte, validate bool) (bmt *BTree, roor *Root, count int, err error) {
+
+	if (len(data) & (len(data) - 1)) == 0 { //check if power of 2
+		return buildBMTfaster(h, data, validate)
+	} else {
+		return buildBMTfast(h, data, validate)
+	}
+}
+
+//This function assume its data len value is a power of 2
+func buildBMTfaster(h Hasher, data []byte, validate bool) (bmt *BTree, roor *Root, count int, err error) {
+
+	datalen := len(data)
+	if datalen == 0 {
 		return nil, nil, 0, errors.New("data length is 0 ")
 	}
 	hashFunc = h
-	leafcount := len(data) / segmentsize
-	if len(data)%segmentsize != 0 {
+	leafcount := datalen / segmentsize
+	if datalen%segmentsize != 0 {
 		leafcount++
 	}
-	tree := BuildParralel(data, segmentsize)
-	err = tree.Validate()
-	if err != nil {
-		return nil, nil, 0, errors.New("Validation error")
-	}
-	if tree.Count() != uint64(leafcount) {
-		return nil, nil, 0, errors.New("Validation count error")
+	var rootnode *node
+	var subtreescount = 4
+	//setting the subtreescount to 4 yield the best benchmarks results.
+	if leafcount < 4 {
+		subtreescount = 2
 	}
 
+	if leafcount > 1 {
+		subtreesize := datalen / subtreescount
+		subtreeleafcount := subtreesize / segmentsize
+		if subtreesize%segmentsize != 0 {
+			subtreeleafcount++
+		}
+		subtreeheight := GetHeight(uint64(subtreeleafcount))
+		height := GetHeight(uint64(subtreescount))
+		results := make([]chan *node, (1 << uint(height))) //array of channels for each node
+		//start := time.Now()
+
+		for i := 0; i < subtreescount; i++ {
+			results[i] = make(chan *node)
+			results[subtreescount+i] = make(chan *node)
+			go func(subdata []byte, index int) {
+				subtreerootnode, _ := buildNode(subdata, subtreeheight)
+				results[index] <- subtreerootnode
+			}(data[i*subtreesize:(i+1)*subtreesize], i)
+		}
+		for i := 0; i < subtreescount-1; i++ {
+			go func(index int, resultindex int) {
+				var leftnode, rightnode *node
+				select {
+				case leftnode = <-results[index]:
+					rightnode = <-results[index+1]
+				case rightnode = <-results[index+1]:
+					leftnode = <-results[index]
+				}
+				results[resultindex] <- &node{label: makeHash(leftnode, rightnode),
+					children: [2]*node{leftnode, rightnode}}
+			}(i*2, subtreescount+i)
+		}
+
+		rootnode = <-results[(1<<uint(height)-1)-1]
+	} else {
+		rootnode = &node{label: data, children: [2]*node{nil, nil}}
+	}
+
+	tree := &BTree{uint64(leafcount), rootnode, rootHash(uint64(leafcount), rootnode.label), datalen}
+
+	if validate {
+		err = tree.Validate()
+		if err != nil {
+			return nil, nil, 0, errors.New("Validation error")
+		}
+		if tree.Count() != uint64(leafcount) {
+			return nil, nil, 0, errors.New("Validation count error")
+		}
+	}
+	return tree, &Root{uint64(leafcount), tree.Root()}, leafcount, nil
+
+}
+func buildBMTfast(h Hasher, data []byte, validate bool) (bmt *BTree, roor *Root, count int, err error) {
+
+	datalen := len(data)
+	if datalen == 0 {
+		return nil, nil, 0, errors.New("data length is 0 ")
+	}
+	hashFunc = h
+	blocks := splitData(data, segmentsize)
+	leafcount := len(blocks)
+	var rootnode *node
+	var subtreescount = 4
+	//setting the subtreescount to 4 yield the best benchmarks results.
+	if leafcount < 4 {
+		subtreescount = 2
+	}
+	if leafcount > 1 {
+		subtreesize := leafcount / subtreescount
+		subtreeheight := GetHeight(uint64(subtreesize))
+		height := GetHeight(uint64(subtreescount))
+		results := make([]chan *node, (1 << uint(height))) //array of channels for each node
+
+		for i := 0; i < subtreescount; i++ {
+			results[i] = make(chan *node)
+			results[subtreescount+i] = make(chan *node)
+			go func(subdata [][]byte, index int) {
+				subtreerootnode, _ := buildNode2(subdata, subtreeheight)
+				results[index] <- subtreerootnode
+			}(blocks[i*(leafcount/subtreescount):(i+1)*(leafcount/subtreescount)], i)
+		}
+
+		for i := 0; i < subtreescount-1; i++ {
+			go func(index int, resultindex int) {
+				var leftnode, rightnode *node
+				select {
+				case leftnode = <-results[index]:
+					rightnode = <-results[index+1]
+				case rightnode = <-results[index+1]:
+					leftnode = <-results[index]
+				}
+				results[resultindex] <- &node{label: makeHash(leftnode, rightnode),
+					children: [2]*node{leftnode, rightnode}}
+			}(i*2, subtreescount+i)
+
+		}
+
+		rootnode = <-results[(1<<uint(height)-1)-1]
+	} else {
+		rootnode = &node{label: data, children: [2]*node{nil, nil}}
+	}
+
+	tree := &BTree{uint64(leafcount), rootnode, rootHash(uint64(leafcount), rootnode.label), datalen}
+
+	if validate {
+		err = tree.Validate()
+		if err != nil {
+			return nil, nil, 0, errors.New("Validation error")
+		}
+		if tree.Count() != uint64(leafcount) {
+			return nil, nil, 0, errors.New("Validation count error")
+		}
+	}
 	return tree, &Root{uint64(leafcount), tree.Root()}, leafcount, nil
 
 }
 
-func processor(pend *sync.WaitGroup, id int, tasks <-chan jobparam, results chan<- jobresult) {
-
-	defer pend.Done()
-	for task := range tasks {
-
-		var res jobresult
-
-		switch task.height {
-		case 0:
-			res = jobresult{nil, task.data, task.id}
-		case 1:
-			res = jobresult{&node{label: task.data[0]}, nil, task.id}
-		default:
-			hash := makeHash(task.n0, task.n1)
-			res = jobresult{&node{label: hash, children: [2]*node{task.n0, task.n1}}, task.data, task.id}
-		}
-		results <- res
-		pend.Done()
-	}
-
-}
-
-// Build a tree
-func Build(data [][]byte) *BTree {
-	count := uint64(len(data))
-	height := GetHeight(count)
-
-	node, leftOverData := buildNode(data, height)
-	if len(leftOverData) != 0 {
-		panic("Build failed to consume all data")
-	}
-	rootLabel := make([]byte, 0)
-	if height > 0 {
-		rootLabel = node.label
-	}
-	hash := rootHash(count, rootLabel)
-	t := BTree{count, node, hash}
-	return &t
-}
-
-// Build a tree parralel computation
-// We build it level by level ..starting from the depper one and get up..
-func BuildParralel(data []byte, segmentsize int) *BTree {
-	count := len(data) / segmentsize
-	var height int
-
-	if len(data)%segmentsize != 0 {
-		height = GetHeight(uint64(count + 1))
-
-	} else {
-		height = GetHeight(uint64(count))
-	}
-
-	jobs := make(chan jobparam, mprocessors)
-	results := make(chan jobresult, mprocessors)
-
-	pend := new(sync.WaitGroup)
-
-	for w := 1; w <= mprocessors; w++ {
-		pend.Add(1)
-		go processor(pend, 2, jobs, results)
-	}
-	/*build leafs*/
-	var leaflevelcount = 1 << uint(height-1)
-	for k := 0; k < leaflevelcount; k++ {
-		datasegment := make([][]byte, 0, 1)
-		pend.Add(1)
-		if k*segmentsize+segmentsize > len(data) {
-			if (k*segmentsize + len(data)%segmentsize) > len(data) {
-				jobs <- jobparam{data: nil, height: 0, n0: nil, n1: nil, id: k}
-			} else {
-				datasegment = append(datasegment, data[k*segmentsize:k*segmentsize+len(data)%segmentsize])
-				jobs <- jobparam{data: datasegment, height: 1, n0: nil, n1: nil, id: k}
-			}
-		} else {
-			datasegment = append(datasegment, data[k*segmentsize:(k+1)*segmentsize])
-			jobs <- jobparam{data: datasegment, height: 1, n0: nil, n1: nil, id: k}
-		}
-	}
-	fmt.Println("1")
-	close(jobs)
-	pend.Wait()
-
-	if len(data)%segmentsize != 0 {
-		count++
-	}
-	restmp := make([]jobresult, leaflevelcount)
-	fmt.Println("2", leaflevelcount)
-	//Get computation results
-	for i := 0; i < leaflevelcount; i++ {
-		tres := <-results
-		restmp[tres.id] = tres
-	}
-	fmt.Println("3", height)
-	for i := 1; i < height; i++ {
-		jobs := make(chan jobparam, mprocessors)
-		for w := 1; w <= mprocessors; w++ {
-			pend.Add(1)
-			go processor(pend, 2, jobs, results)
-		}
-		var indexres = 0
-		for j := 0; j < (1<<uint(height-1))>>uint(i); j++ {
-			pend.Add(1)
-			jobs <- jobparam{n0: restmp[indexres].n, n1: restmp[indexres+1].n, data: restmp[indexres+1].data, height: 2, id: j}
-			indexres += 2
-		}
-		close(jobs)
-		pend.Wait()
-		if i < height-1 {
-			for l := 0; l < (1<<uint(height-1))>>uint(i); l++ {
-				tmpres := <-results
-				restmp[tmpres.id] = tmpres
-			}
-		}
-	}
-	rootLabel := make([]byte, 0)
-	var res jobresult
-	if leaflevelcount == 1 {
-		res = restmp[0]
-	} else {
-		res = <-results
-	}
-	if height > 0 {
-		rootLabel = res.n.label
-	}
-	hash := rootHash(uint64(count), rootLabel)
-	t := BTree{uint64(count), res.n, hash}
-	return &t
-}
-
 // returns a node and the left over data not used by it
-func buildNode(data [][]byte, height int) (*node, [][]byte) {
+func buildNode(data []byte, height int) (*node, []byte) {
+	if height == 0 || len(data) == 0 {
+		return nil, data
+	}
+	if height == 1 {
+		// leaf
+		return &node{label: data[0:segmentsize]}, data[segmentsize:]
+	}
+	n0, data := buildNode(data, height-1)
+	n1, data := buildNode(data, height-1)
+
+	hash := makeHash(n0, n1)
+	return &node{label: hash, children: [2]*node{n0, n1}}, data
+}
+
+func buildNode2(data [][]byte, height int) (*node, [][]byte) {
 	if height == 0 || len(data) == 0 {
 		return nil, data
 	}
@@ -338,8 +347,8 @@ func buildNode(data [][]byte, height int) (*node, [][]byte) {
 		// leaf
 		return &node{label: data[0]}, data[1:]
 	}
-	n0, data := buildNode(data, height-1)
-	n1, data := buildNode(data, height-1)
+	n0, data := buildNode2(data, height-1)
+	n1, data := buildNode2(data, height-1)
 
 	hash := makeHash(n0, n1)
 	return &node{label: hash, children: [2]*node{n0, n1}}, data
@@ -356,44 +365,98 @@ func splitData(data []byte, size int) [][]byte {
 	if len(data)%size != 0 {
 		blocks = append(blocks, data[len(blocks)*size:])
 	}
+	height := GetHeight(uint64(len(blocks)))
+	for i := len(blocks); i < (1 << uint(height)); i++ {
+		blocks = append(blocks, nil)
+	}
+	//
 	return blocks
+}
+
+type inclusionproofs struct {
+	proofs []inclusionproof
+	offset int
+	len    int
+}
+
+type inclusionproof struct {
+	proof  [][]byte
+	offset int
+	len    int
+	index  int
+}
+
+func (t *BTree) GetInclusionProofs(offset int, length int) (proofs inclusionproofs, err error) {
+
+	if offset+length > t.chunklen {
+
+		return proofs, errors.New(fmt.Sprintf("wrong offset+len %d  :chunklen:%d", offset+length, t.chunklen))
+	}
+
+	n := (offset%segmentsize+length)/segmentsize + 1
+
+	proofs.proofs = make([]inclusionproof, n+1)
+	var index int = 0
+	var segment = offset / segmentsize
+	for i := segment; i <= segment+n; i++ {
+		proofs.proofs[index], err = t.InclusionProof(i)
+		index++
+	}
+	proofs.len = length
+	proofs.offset = offset
+	return proofs, nil
 }
 
 // Return a [][]byte needed to prove the gkf of the item at the passed index
 // The payload of the item at index is the first value in the proof
-func (t *BTree) InclusionProof(index int) [][]byte {
+func (t *BTree) InclusionProof(index int) (proof inclusionproof, err error) {
 	if uint64(index) >= t.count {
-		panic("Invalid index: too large")
+		return proof, errors.New("Invalid index: too large")
 	}
 	if index < 0 {
-		panic("Invalid index: negative")
+		return proof, errors.New("Invalid index: negative")
 	}
 	h := GetHeight(t.count)
-	fmt.Println(h)
-	return proveNode(h, t.root, index)
+	proof.proof, err = proveNode(h, t.root, index)
+	proof.offset = index * segmentsize
+	proof.len = segmentsize
+	proof.index = index
+	return proof, err
 }
 
-func proveNode(height int, n *node, index int) [][]byte {
+func proveNode(height int, n *node, index int) ([][]byte, error) {
 	if height == 1 {
 		if index != 0 {
-			panic("Invalid index: non 0 for final node")
+			return nil, errors.New("Invalid index: non 0 for final node")
 		}
-		return [][]byte{n.label}
+		return [][]byte{n.label}, nil
 	}
 	childIndex := index >> uint(height-2)
 	nextIndex := index & (^(1 << uint(height-2)))
-	b := proveNode(height-1, n.children[childIndex], nextIndex)
+	b, _ := proveNode(height-1, n.children[childIndex], nextIndex)
 	otherChildIndex := (childIndex + 1) % 2
 	if n.children[otherChildIndex] != nil {
 		b = append(b, n.children[otherChildIndex].label)
 	}
-	return b
+	return b, nil
 }
 
 // The Root of a merkle tree for a client that does not store the tree
 type Root struct {
 	Count uint64
 	Base  []byte
+}
+
+func (r *Root) CheckProofs(h Hasher, proofs inclusionproofs) (bool, error) {
+	n := (proofs.offset%segmentsize+proofs.len)/segmentsize + 1
+
+	for i := 0; i < n; i++ {
+		ok, err := r.CheckProof(h, proofs.proofs[i].proof, proofs.proofs[i].index)
+		if (ok == false) || (err != nil) {
+			return ok, err
+		}
+	}
+	return true, nil
 }
 
 // Proves theof an element at the given index with the value thats the first entry in proof
@@ -484,7 +547,8 @@ func (d *state) Reset() {
 
 // Write absorbs more data into the hash's state.
 func (d *state) Write(p []byte) (written int, err error) {
-	tree, r, count, err1 := BuildBMT(hashFunc, p, 32)
+
+	tree, r, count, err1 := BuildBMT(hashFunc, p, true)
 	d.btree = *tree
 	d.root = *r
 
