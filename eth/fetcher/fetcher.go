@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
@@ -654,7 +654,7 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
 			go f.broadcastBlock(block, true)
 
-		case core.BlockFutureErr:
+		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate
 
 		default:

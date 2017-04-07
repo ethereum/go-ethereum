@@ -137,7 +137,7 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	// Calculate the total difficulty of the header
 	ptd := hc.GetTd(header.ParentHash, number-1)
 	if ptd == nil {
-		return NonStatTy, ParentError(header.ParentHash)
+		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 	localTd := hc.GetTd(hc.currentHeaderHash, hc.currentHeader.Number.Uint64())
 	externTd := new(big.Int).Add(header.Difficulty, ptd)
@@ -246,7 +246,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[header.Hash()] {
-			return i, BadHashError(header.Hash())
+			return i, ErrBlacklistedHash
 		}
 		// Otherwise wait for headers checks and ensure they pass
 		if err := <-results; err != nil {

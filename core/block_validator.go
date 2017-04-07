@@ -54,15 +54,15 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
 	if v.bc.HasBlock(block.Hash()) {
 		if _, err := state.New(block.Root(), v.bc.chainDb); err == nil {
-			return &KnownBlockError{block.Number(), block.Hash()}
+			return ErrKnownBlock
 		}
 	}
 	parent := v.bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return ParentError(block.ParentHash())
+		return consensus.ErrUnknownAncestor
 	}
 	if _, err := state.New(parent.Root(), v.bc.chainDb); err != nil {
-		return ParentError(block.ParentHash())
+		return consensus.ErrUnknownAncestor
 	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
@@ -82,10 +82,10 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) (err error) {
+func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas *big.Int) error {
 	header := block.Header()
 	if block.GasUsed().Cmp(usedGas) != 0 {
-		return ValidationError(fmt.Sprintf("invalid gas used (remote: %v local: %v)", block.GasUsed(), usedGas))
+		return fmt.Errorf("invalid gas used (remote: %v local: %v)", block.GasUsed(), usedGas)
 	}
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.

@@ -279,21 +279,11 @@ func (self *worker) wait() {
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
 				work.state.Commit(self.config.IsEIP158(block.Number()))
-				parent := self.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
-				if parent == nil {
-					log.Error("Invalid block found during mining")
-					continue
-				}
-				if err := self.engine.VerifyHeader(self.chain, block.Header(), false); err != nil {
-					log.Error("Invalid header on mined block", "err", err)
-					continue
-				}
 				stat, err := self.chain.WriteBlock(block)
 				if err != nil {
 					log.Error("Failed writing block to chain", "err", err)
 					continue
 				}
-
 				// update block hash since it is now available and not when the receipt/log of individual transactions were created
 				for _, r := range work.receipts {
 					for _, l := range r.Logs {
@@ -513,13 +503,13 @@ func (self *worker) commitNewWork() {
 func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	hash := uncle.Hash()
 	if work.uncles.Has(hash) {
-		return core.UncleError("uncle not unique")
+		return fmt.Errorf("uncle not unique")
 	}
 	if !work.ancestors.Has(uncle.ParentHash) {
-		return core.UncleError(fmt.Sprintf("uncle's parent unknown (%x)", uncle.ParentHash[0:4]))
+		return fmt.Errorf("uncle's parent unknown (%x)", uncle.ParentHash[0:4])
 	}
 	if work.family.Has(hash) {
-		return core.UncleError(fmt.Sprintf("uncle already in family (%x)", hash))
+		return fmt.Errorf("uncle already in family (%x)", hash)
 	}
 	work.uncles.Add(uncle.Hash())
 	return nil
@@ -564,23 +554,23 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		env.state.StartRecord(tx.Hash(), common.Hash{}, env.tcount)
 
 		err, logs := env.commitTransaction(tx, bc, gp)
-		switch {
-		case core.IsGasLimitErr(err):
+		switch err {
+		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)
 			txs.Pop()
 
-		case err != nil:
-			// Pop the current failed transaction without shifting in the next from the account
-			log.Trace("Transaction failed, will be removed", "hash", tx.Hash(), "err", err)
-			env.failedTxs = append(env.failedTxs, tx)
-			txs.Pop()
-
-		default:
+		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
 			txs.Shift()
+
+		default:
+			// Pop the current failed transaction without shifting in the next from the account
+			log.Trace("Transaction failed, will be removed", "hash", tx.Hash(), "err", err)
+			env.failedTxs = append(env.failedTxs, tx)
+			txs.Pop()
 		}
 	}
 

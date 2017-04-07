@@ -126,7 +126,7 @@ func testBlockChainImport(chain types.Blocks, blockchain *BlockChain) error {
 			err = blockchain.validator.ValidateBody(block)
 		}
 		if err != nil {
-			if IsKnownBlockErr(err) {
+			if err == ErrKnownBlock {
 				continue
 			}
 			return err
@@ -441,8 +441,8 @@ func testBadHashes(t *testing.T, full bool) {
 		BadHashes[headers[2].Hash()] = true
 		_, err = bc.InsertHeaderChain(headers, 1)
 	}
-	if !IsBadHashError(err) {
-		t.Errorf("error mismatch: want: BadHashError, have: %v", err)
+	if err != ErrBlacklistedHash {
+		t.Errorf("error mismatch: have: %v, want: %v", err, ErrBlacklistedHash)
 	}
 }
 

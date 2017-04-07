@@ -831,7 +831,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 	// Calculate the total difficulty of the block
 	ptd := self.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
-		return NonStatTy, ParentError(block.ParentHash())
+		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 	// Make sure no inconsistent state is leaked during insertion
 	self.mu.Lock()
@@ -918,9 +918,8 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			err := BadHashError(block.Hash())
-			self.reportBlock(block, nil, err)
-			return i, err
+			self.reportBlock(block, nil, ErrBlacklistedHash)
+			return i, ErrBlacklistedHash
 		}
 		// Wait for the block's verification to complete
 		bstart := time.Now()
@@ -930,25 +929,25 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			err = self.Validator().ValidateBody(block)
 		}
 		if err != nil {
-			if IsKnownBlockErr(err) {
+			if err == ErrKnownBlock {
 				stats.ignored++
 				continue
 			}
 
-			if err == BlockFutureErr {
+			if err == consensus.ErrFutureBlock {
 				// Allow up to MaxFuture second in the future blocks. If this limit
 				// is exceeded the chain is discarded and processed at a later time
 				// if given.
 				max := big.NewInt(time.Now().Unix() + maxTimeFutureBlocks)
-				if block.Time().Cmp(max) == 1 {
-					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
+				if block.Time().Cmp(max) > 0 {
+					return i, fmt.Errorf("future block: %v > %v", block.Time(), max)
 				}
 				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
 			}
 
-			if IsParentErr(err) && self.futureBlocks.Contains(block.ParentHash()) {
+			if err == consensus.ErrUnknownAncestor && self.futureBlocks.Contains(block.ParentHash()) {
 				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
