@@ -83,6 +83,8 @@ func MakeHashFunc(hash string) Hasher {
 		return crypto.SHA256.New
 	case "SHA3":
 		return sha3.NewKeccak256
+	case "BMTSHA3":
+		return NewBMTSHA3
 	}
 	return nil
 }
