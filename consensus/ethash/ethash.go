@@ -555,11 +555,18 @@ func (ethash *Ethash) Threads() int {
 
 // SetThreads updates the number of mining threads currently enabled. Calling
 // this method does not start mining, only sets the thread count. If zero is
-// specified, the miner will use all cores of the machine.
+// specified, the miner will use all cores of the machine. Setting a thread
+// count below zero is allowed and will cause the miner to idle, without any
+// work being done.
 func (ethash *Ethash) SetThreads(threads int) {
 	ethash.lock.Lock()
 	defer ethash.lock.Unlock()
 
+	// If we're running a shared PoW, set the thread count on that instead
+	if ethash.shared != nil {
+		ethash.shared.SetThreads(threads)
+		return
+	}
 	// Update the threads and ping any running seal to pull in any changes
 	ethash.threads = threads
 	select {
