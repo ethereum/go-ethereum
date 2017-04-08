@@ -170,7 +170,6 @@ func newPssBaseTester(t *testing.T, addr *peerAddr, n int) *pssTester {
 	ct.Register(&getPeersMsg{})
 	ct.Register(&subPeersMsg{}) // why is this public?
 
-	simPipe := adapters.NewSimPipe
 	kp := NewKadParams()
 	kp.MinProxBinSize = 3
 	to := NewKademlia(addr.OverlayAddr(), kp)
@@ -178,7 +177,7 @@ func newPssBaseTester(t *testing.T, addr *peerAddr, n int) *pssTester {
 	ps := NewPss(to, addr.OverlayAddr())
 	net := simulations.NewNetwork(&simulations.NetworkConfig{})
 	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-		na := adapters.NewSimNode(conf.Id, net, simPipe)
+		na := adapters.NewSimNode(conf.Id, net)
 		return na
 	}
 	net.SetNaf(naf)

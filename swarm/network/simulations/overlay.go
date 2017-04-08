@@ -57,7 +57,7 @@ func (self *SimNode) RunProtocol(id *adapters.NodeId, rw, rrw p2p.MsgReadWriter,
 // NewSimNode creates adapters for nodes in the simulation.
 func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
-	na := adapters.NewSimNode(id, self.Network, adapters.NewSimPipe)
+	na := adapters.NewSimNode(id, self.Network)
 	addr := network.NewPeerAddrFromNodeId(id)
 	kp := network.NewKadParams()
 

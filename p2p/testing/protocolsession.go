@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
@@ -71,15 +72,14 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 	if peer == nil {
 		panic(fmt.Sprintf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids)))
 	}
-	m := peer.Messenger
-	if m == nil {
+	if peer.MsgPipeRW == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", trig.Peer)
 	}
 	errc := make(chan error)
 
 	go func() {
 		glog.V(logger.Detail).Infof("trigger %v (%v)....", trig.Msg, trig.Code)
-		errc <- m.(TestMessenger).TriggerMsg(trig.Code, trig.Msg)
+		errc <- p2p.Send(peer, trig.Code, trig.Msg)
 		glog.V(logger.Detail).Infof("triggered %v (%v)", trig.Msg, trig.Code)
 	}()
 
@@ -105,15 +105,14 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	if peer == nil {
 		panic(fmt.Sprintf("expect: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids)))
 	}
-	m := peer.Messenger
-	if m == nil {
+	if peer.MsgPipeRW == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", exp.Peer)
 	}
 
 	errc := make(chan error)
 	go func() {
 		glog.V(logger.Detail).Infof("waiting for msg, %v", exp.Msg)
-		errc <- m.(TestMessenger).ExpectMsg(exp.Code, exp.Msg)
+		errc <- p2p.ExpectMsg(peer, exp.Code, exp.Msg)
 	}()
 
 	t := exp.Timeout
@@ -210,7 +209,7 @@ func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error 
 func (self *ProtocolSession) Stop() {
 	for _, id := range self.Ids {
 		p := self.GetPeer(id)
-		if p != nil && p.Messenger != nil {
+		if p != nil && p.MsgPipeRW != nil {
 			p.Close()
 		}
 	}

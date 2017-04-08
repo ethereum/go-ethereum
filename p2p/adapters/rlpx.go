@@ -31,28 +31,18 @@ type RLPx struct {
 	id   *NodeId
 	net  *p2p.Server
 	addr []byte
-	m    func(p2p.MsgReadWriter) Messenger
 	r    Reporter
 }
 
-type RLPxMessenger struct {
-	rw p2p.MsgReadWriter
-}
-
-func NewRLPxMessenger(rw p2p.MsgReadWriter) Messenger {
-	return Messenger(&RLPxMessenger{rw: rw})
-}
-
-func NewRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Messenger) *RLPx {
+func NewRLPx(addr []byte, srv *p2p.Server) *RLPx {
 	return &RLPx{
 		net:  srv,
 		addr: addr,
-		m:    m,
 	}
 }
 
-func NewReportingRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Messenger, r Reporter) *RLPx {
-	rlpx := NewRLPx(addr, srv, m)
+func NewReportingRLPx(addr []byte, srv *p2p.Server, r Reporter) *RLPx {
+	rlpx := NewRLPx(addr, srv)
 	rlpx.r = r
 	srv.PeerConnHook = func(p *p2p.Peer) {
 		r.DidConnect(rlpx.id, &NodeId{p.ID()})
@@ -61,18 +51,6 @@ func NewReportingRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Me
 		r.DidDisconnect(rlpx.id, &NodeId{p.ID()})
 	}
 	return rlpx
-}
-
-func (self *RLPxMessenger) SendMsg(code uint64, msg interface{}) error {
-	return p2p.Send(self.rw, code, msg)
-}
-
-func (self *RLPxMessenger) ReadMsg() (p2p.Msg, error) {
-	return self.rw.ReadMsg()
-}
-
-func (self *RLPxMessenger) Close() {
-
 }
 
 func (self *RLPx) LocalAddr() []byte {
@@ -88,10 +66,6 @@ func (self *RLPx) Connect(enode []byte) error {
 	}
 	self.net.AddPeer(node)
 	return nil
-}
-
-func (self *RLPx) Messenger(rw p2p.MsgReadWriter) Messenger {
-	return self.m(rw)
 }
 
 //func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {

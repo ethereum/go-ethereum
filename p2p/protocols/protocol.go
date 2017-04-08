@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
@@ -160,17 +159,13 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 	}
 }
 
-func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
+func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, ct *CodeMap, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 
 	// PeerInfo is an optional helper method to retrieve protocol specific metadata
 	// about a certain peer in the network. If an info retrieval function is set,
 	// but returns nil, it is assumed that the protocol handshake is still running.
 	r := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-
-		m := na.Messenger(rw)
-
-		peer := NewPeer(p, ct, m)
-		return run(peer)
+		return run(NewPeer(p, ct, rw))
 
 	}
 
@@ -192,7 +187,6 @@ type Disconnect struct {
 // a remote peer
 type Peer struct {
 	ct        *CodeMap                                   // CodeMap for the protocol
-	m         adapters.Messenger                         // defines senf and receive
 	*p2p.Peer                                            // the p2p.Peer object representing the remote
 	rw        p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers  map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
@@ -204,11 +198,11 @@ type Peer struct {
 // this constructor is called by the p2p.Protocol#Run function
 // the first two arguments are comming the arguments passed to p2p.Protocol.Run function
 // the third argument is the CodeMap describing the protocol messages and options
-func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger) *Peer {
+func NewPeer(p *p2p.Peer, ct *CodeMap, rw p2p.MsgReadWriter) *Peer {
 	return &Peer{
 		ct:       ct,
-		m:        m,
 		Peer:     p,
+		rw:       rw,
 		Errc:     make(chan error),
 		wErrc:    make(chan error),
 		handlers: make(map[reflect.Type][]func(interface{}) error),
@@ -276,7 +270,7 @@ func (self *Peer) Send(msg interface{}) error {
 	}
 	glog.V(logger.Detail).Infof("=> msg #%d TO %v : %v", code, self.ID(), msg)
 	go func() {
-		self.wErrc <- self.m.SendMsg(uint64(code), msg)
+		self.wErrc <- p2p.Send(self.rw, uint64(code), msg)
 	}()
 	var err error
 	select {
@@ -306,7 +300,7 @@ func (self *Peer) DisconnectHook(f func(error)) {
 // checks message size, out-of-range message codes, handles decoding with reflection,
 // call handlers as callback onside
 func (self *Peer) handleIncoming() (interface{}, error) {
-	msg, err := self.m.ReadMsg()
+	msg, err := self.rw.ReadMsg()
 	if err != nil {
 		return nil, err
 	}

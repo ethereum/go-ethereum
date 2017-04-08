@@ -109,7 +109,7 @@ func newNode(id *adapters.NodeId, net *simulations.Network, trigger chan *adapte
 	kademlia := newKademlia(addr.OverlayAddr())
 	hive := newHive(kademlia)
 	codeMap := network.BzzCodeMap(network.DiscoveryMsgs...)
-	nodeAdapter := adapters.NewSimNode(id, net, adapters.NewSimPipe)
+	nodeAdapter := adapters.NewSimNode(id, net)
 	node := &node{
 		Hive:        hive,
 		NodeAdapter: nodeAdapter,

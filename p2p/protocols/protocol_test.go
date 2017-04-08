@@ -2,7 +2,6 @@ package protocols
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -57,14 +56,11 @@ const networkId = "420"
 // newProtocol sets up a protocol
 // the run function here demonstrates a typical protocol using peerPool, handshake
 // and messages registered to handlers
-func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.NodeAdapter) adapters.ProtoCall {
+func newProtocol(pp *p2ptest.TestPeerPool) func(adapters.NodeAdapter) adapters.ProtoCall {
 	ct := NewCodeMap("test", 42, 1024, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
 	return func(na adapters.NodeAdapter) adapters.ProtoCall {
 		return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			if wg != nil {
-				wg.Add(1)
-			}
-			peer := NewPeer(p, ct, na.Messenger(rw))
+			peer := NewPeer(p, ct, rw)
 
 			// demonstrates use of peerPool, killing another peer connection as a response to a message
 			peer.Register(&kill{}, func(msg interface{}) error {
@@ -116,9 +112,6 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 			pp.Add(peer)
 			defer pp.Remove(peer)
 			err = peer.Run()
-			if wg != nil {
-				wg.Done()
-			}
 			glog.V(logger.Detail).Infof("peer  %v protocol quitting: %v", peer, err)
 
 			return err
@@ -126,9 +119,9 @@ func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.Nod
 	}
 }
 
-func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) *p2ptest.ProtocolTester {
+func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTester {
 	id := adapters.RandomNodeId()
-	return p2ptest.NewProtocolTester(t, id, 2, newProtocol(pp, wg))
+	return p2ptest.NewProtocolTester(t, id, 2, newProtocol(pp))
 }
 
 func protoHandshakeExchange(id *adapters.NodeId, proto *protoHandshake) []p2ptest.Exchange {
@@ -157,7 +150,7 @@ func protoHandshakeExchange(id *adapters.NodeId, proto *protoHandshake) []p2ptes
 
 func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
-	s := protocolTester(t, pp, nil)
+	s := protocolTester(t, pp)
 	// TODO: make this more than one handshake
 	id := s.Ids[0]
 	s.TestExchanges(protoHandshakeExchange(id, proto)...)
@@ -206,7 +199,7 @@ func moduleHandshakeExchange(id *adapters.NodeId, resp uint) []p2ptest.Exchange 
 
 func runModuleHandshake(t *testing.T, resp uint, errs ...error) {
 	pp := p2ptest.NewTestPeerPool()
-	s := protocolTester(t, pp, nil)
+	s := protocolTester(t, pp)
 	id := s.Ids[0]
 	s.TestExchanges(protoHandshakeExchange(id, &protoHandshake{42, "420"})...)
 	s.TestExchanges(moduleHandshakeExchange(id, resp)...)
@@ -279,9 +272,8 @@ func testMultiPeerSetup(a, b *adapters.NodeId) []p2ptest.Exchange {
 }
 
 func runMultiplePeers(t *testing.T, peer int, errs ...error) {
-	wg := &sync.WaitGroup{}
 	pp := p2ptest.NewTestPeerPool()
-	s := protocolTester(t, pp, wg)
+	s := protocolTester(t, pp)
 
 	s.TestExchanges(testMultiPeerSetup(s.Ids[0], s.Ids[1])...)
 	// after some exchanges of messages, we can test state changes
@@ -320,7 +312,6 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 			},
 		},
 	})
-	wg.Wait()
 	// check the actual discconnect errors on the individual peers
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {

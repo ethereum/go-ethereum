@@ -108,7 +108,7 @@ func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, servi
 		return bee.Run()
 	}
 
-	return protocols.NewProtocol(ProtocolName, Version, run, na, ct, peerInfo, nodeInfo)
+	return protocols.NewProtocol(ProtocolName, Version, run, ct, peerInfo, nodeInfo)
 }
 
 /*

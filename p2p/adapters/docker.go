@@ -7,7 +7,7 @@ import (
 	// "time"
 )
 
-func NewRemoteNode(id *NodeId, n Network, m Messenger) *RemoteNode {
+func NewRemoteNode(id *NodeId, n Network) *RemoteNode {
 	return &RemoteNode{
 		ID:      id,
 		Network: n,

@@ -63,20 +63,12 @@ func (self *NodeId) Label() string {
 	return self.String()[:lablen]
 }
 
-type Messenger interface {
-	SendMsg(uint64, interface{}) error
-	ReadMsg() (p2p.Msg, error)
-	Close()
-}
-
 type NodeAdapter interface {
 	Connect([]byte) error
 	Disconnect([]byte) error
 	// Disconnect(*p2p.Peer, p2p.MsgReadWriter)
 	LocalAddr() []byte
 	ParseAddr([]byte, string) ([]byte, error)
-	// Messenger() Messenger  <<<... old version
-	Messenger(p2p.MsgReadWriter) Messenger
 }
 
 type ProtocolRunner interface {

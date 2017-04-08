@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -181,15 +180,14 @@ func NewDebugController(journal *Journal) Controller {
 // messaging is implemented in the particular NodeAdapter interface
 type Network struct {
 	// input trigger events and other events
-	events    *event.TypeMux // generated events a journal can subsribe to
-	lock      sync.RWMutex
-	nodeMap   map[discover.NodeID]int
-	connMap   map[string]int
-	Nodes     []*Node `json:"nodes"`
-	Conns     []*Conn `json:"conns"`
-	messenger func(p2p.MsgReadWriter) adapters.Messenger
-	quitc     chan bool
-	conf      *NetworkConfig
+	events  *event.TypeMux // generated events a journal can subsribe to
+	lock    sync.RWMutex
+	nodeMap map[discover.NodeID]int
+	connMap map[string]int
+	Nodes   []*Node `json:"nodes"`
+	Conns   []*Conn `json:"conns"`
+	quitc   chan bool
+	conf    *NetworkConfig
 	//
 	// adapters.Messenger
 	// node adapter function that creates the node model for
@@ -199,12 +197,11 @@ type Network struct {
 
 func NewNetwork(conf *NetworkConfig) *Network {
 	return &Network{
-		conf:      conf,
-		events:    &event.TypeMux{},
-		nodeMap:   make(map[discover.NodeID]int),
-		connMap:   make(map[string]int),
-		messenger: adapters.NewSimPipe,
-		quitc:     make(chan bool),
+		conf:    conf,
+		events:  &event.TypeMux{},
+		nodeMap: make(map[discover.NodeID]int),
+		connMap: make(map[string]int),
+		quitc:   make(chan bool),
 	}
 }
 
@@ -430,7 +427,7 @@ func (self *Network) Config() *NetworkConfig {
 }
 func (self *Network) NewSimNode(conf *NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
-	na := adapters.NewSimNode(id, self, self.messenger)
+	na := adapters.NewSimNode(id, self)
 	return na
 }
 

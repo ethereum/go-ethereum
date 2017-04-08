@@ -17,10 +17,9 @@ type ProtocolTester struct {
 
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(id adapters.NodeAdapter) adapters.ProtoCall) *ProtocolTester {
 
-	simPipe := adapters.NewSimPipe
 	net := simulations.NewNetwork(&simulations.NetworkConfig{})
 	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-		na := adapters.NewSimNode(conf.Id, net, simPipe)
+		na := adapters.NewSimNode(conf.Id, net)
 		if conf.Id.NodeID == id.NodeID {
 			glog.V(logger.Detail).Infof("adapter run function set to protocol for node %v (=%v)", conf.Id, id)
 			na.Run = run(na)
