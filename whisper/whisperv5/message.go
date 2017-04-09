@@ -25,8 +25,6 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"errors"
-	"fmt"
-	mrand "math/rand"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -102,14 +100,18 @@ func NewSentMessage(params *MessageParams) *SentMessage {
 	msg := SentMessage{}
 	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimitUpper)
 	msg.Raw[0] = 0 // set all the flags to zero
-	msg.appendPadding(params)
+	err := msg.appendPadding(params)
+	if err != nil {
+		log.Error("failed to create NewSentMessage", "err", err)
+		return nil
+	}
 	msg.Raw = append(msg.Raw, params.Payload...)
 	return &msg
 }
 
 // appendPadding appends the pseudorandom padding bytes and sets the padding flag.
 // The last byte contains the size of padding (thus, its size must not exceed 256).
-func (msg *SentMessage) appendPadding(params *MessageParams) {
+func (msg *SentMessage) appendPadding(params *MessageParams) error {
 	total := len(params.Payload) + 1
 	if params.Src != nil {
 		total += signatureLength
@@ -128,7 +130,10 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 			panic("please fix the padding algorithm before releasing new version")
 		}
 		buf := make([]byte, padSize)
-		mrand.Read(buf[1:])
+		_, err := crand.Read(buf[1:])
+		if err != nil {
+			return err
+		}
 		buf[0] = byte(padSize)
 		if params.Padding != nil {
 			copy(buf[1:], params.Padding)
@@ -136,6 +141,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 		msg.Raw = append(msg.Raw, buf...)
 		msg.Raw[0] |= byte(0x1) // number of bytes indicating the padding size
 	}
+	return nil
 }
 
 // sign calculates and sets the cryptographic signature for the message,
@@ -143,7 +149,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 	if isMessageSigned(msg.Raw[0]) {
 		// this should not happen, but no reason to panic
-		log.Error(fmt.Sprintf("Trying to sign a message which was already signed"))
+		log.Error("failed to sign the message: already signed")
 		return nil
 	}
 
@@ -161,7 +167,7 @@ func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 // encryptAsymmetric encrypts a message with a public key.
 func (msg *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 	if !ValidatePublicKey(key) {
-		return fmt.Errorf("Invalid public key provided for asymmetric encryption")
+		return errors.New("invalid public key provided for asymmetric encryption")
 	}
 	encrypted, err := ecies.Encrypt(crand.Reader, ecies.ImportECDSAPublic(key), msg.Raw, nil, nil)
 	if err == nil {
@@ -215,17 +221,6 @@ func (msg *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte,
 }
 
 // Wrap bundles the message into an Envelope to transmit over the network.
-//
-// pow (Proof Of Work) controls how much time to spend on hashing the message,
-// inherently controlling its priority through the network (smaller hash, bigger
-// priority).
-//
-// The user can control the amount of identity, privacy and encryption through
-// the options parameter as follows:
-//   - options.From == nil && options.To == nil: anonymous broadcast
-//   - options.From != nil && options.To == nil: signed broadcast (known sender)
-//   - options.From == nil && options.To != nil: encrypted anonymous message
-//   - options.From != nil && options.To != nil: encrypted signed message
 func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err error) {
 	if options.TTL == 0 {
 		options.TTL = DefaultTTL
@@ -236,17 +231,13 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 			return nil, err
 		}
 	}
-	if len(msg.Raw) > MaxMessageLength {
-		log.Error(fmt.Sprintf("Message size must not exceed %d bytes", MaxMessageLength))
-		return nil, errors.New("Oversized message")
-	}
 	var salt, nonce []byte
 	if options.Dst != nil {
 		err = msg.encryptAsymmetric(options.Dst)
 	} else if options.KeySym != nil {
 		salt, nonce, err = msg.encryptSymmetric(options.KeySym)
 	} else {
-		err = errors.New("Unable to encrypt the message: neither Dst nor Key")
+		err = errors.New("unable to encrypt the message: neither symmetric nor assymmetric key provided")
 	}
 
 	if err != nil {
@@ -258,7 +249,6 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 	if err != nil {
 		return nil, err
 	}
-
 	return envelope, nil
 }
 
@@ -279,9 +269,8 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []by
 		return err
 	}
 	if len(nonce) != aesgcm.NonceSize() {
-		info := fmt.Sprintf("Wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
-		log.Error(fmt.Sprintf(info))
-		return errors.New(info)
+		log.Error("decrypting the message", "AES nonce size", len(nonce))
+		return errors.New("wrong AES nonce size")
 	}
 	decrypted, err := aesgcm.Open(nil, nonce, msg.Raw, nil)
 	if err != nil {
@@ -336,7 +325,7 @@ func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
 	paddingSize := 0
 	sz := int(msg.Raw[0] & paddingMask) // number of bytes containing the entire size of padding, could be zero
 	if sz != 0 {
-		paddingSize = int(bytesToIntLittleEndian(msg.Raw[1 : 1+sz]))
+		paddingSize = int(bytesToUintLittleEndian(msg.Raw[1 : 1+sz]))
 		if paddingSize < sz || paddingSize+1 > end {
 			return 0, false
 		}
@@ -351,7 +340,7 @@ func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 
 	pub, err := crypto.SigToPub(msg.hash(), msg.Signature)
 	if err != nil {
-		log.Error(fmt.Sprintf("Could not get public key from signature: %v", err))
+		log.Error("failed to recover public key from signature", "err", err)
 		return nil
 	}
 	return pub

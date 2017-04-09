@@ -21,7 +21,6 @@ package whisperv5
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	gmath "math"
 	"math/big"
@@ -83,7 +82,7 @@ func (e *Envelope) isAsymmetric() bool {
 }
 
 func (e *Envelope) Ver() uint64 {
-	return bytesToIntLittleEndian(e.Version)
+	return bytesToUintLittleEndian(e.Version)
 }
 
 // Seal closes the envelope by spending the requested amount of time as a proof
@@ -95,6 +94,9 @@ func (e *Envelope) Seal(options *MessageParams) error {
 		e.Expiry += options.WorkTime
 	} else {
 		target = e.powToFirstBit(options.PoW)
+		if target < 1 {
+			target = 1
+		}
 	}
 
 	buf := make([]byte, 64)
@@ -118,7 +120,7 @@ func (e *Envelope) Seal(options *MessageParams) error {
 	}
 
 	if target > 0 && bestBit < target {
-		return errors.New("Failed to reach the PoW target, insufficient work time")
+		return fmt.Errorf("failed to reach the PoW target, specified pow time (%d seconds) was insufficient", options.WorkTime)
 	}
 
 	return nil

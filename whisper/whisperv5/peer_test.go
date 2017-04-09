@@ -114,12 +114,13 @@ func initialize(t *testing.T) {
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
 		node.shh = New()
-		node.shh.test = true
+		node.shh.SetMinimumPoW(0.00000001)
 		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
-		f := Filter{KeySym: sharedKey, Topics: topics}
-		node.filerId, err = node.shh.Watch(&f)
+		f := Filter{KeySym: sharedKey}
+		f.Topics = [][]byte{topics[0][:]}
+		node.filerId, err = node.shh.Subscribe(&f)
 		if err != nil {
 			t.Fatalf("failed to install the filter: %s.", err)
 		}
@@ -166,7 +167,7 @@ func stopServers() {
 	for i := 0; i < NumNodes; i++ {
 		n := nodes[i]
 		if n != nil {
-			n.shh.Unwatch(n.filerId)
+			n.shh.Unsubscribe(n.filerId)
 			n.shh.Stop()
 			n.server.Stop()
 		}
@@ -257,7 +258,7 @@ func sendMsg(t *testing.T, expected bool, id int) {
 		return
 	}
 
-	opt := MessageParams{KeySym: sharedKey, Topic: sharedTopic, Payload: expectedMessage, PoW: 0.00000001}
+	opt := MessageParams{KeySym: sharedKey, Topic: sharedTopic, Payload: expectedMessage, PoW: 0.00000001, WorkTime: 1}
 	if !expected {
 		opt.KeySym[0]++
 		opt.Topic[0]++
@@ -267,12 +268,12 @@ func sendMsg(t *testing.T, expected bool, id int) {
 	msg := NewSentMessage(&opt)
 	envelope, err := msg.Wrap(&opt)
 	if err != nil {
-		t.Fatalf("failed to seal message.")
+		t.Fatalf("failed to seal message: %s", err)
 	}
 
 	err = nodes[id].shh.Send(envelope)
 	if err != nil {
-		t.Fatalf("failed to send message.")
+		t.Fatalf("failed to send message: %s", err)
 	}
 }
 
