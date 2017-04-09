@@ -103,7 +103,7 @@ func (api *PublicMinerAPI) SubmitWork(nonce types.BlockNonce, solution, digest c
 // result[2], 32 bytes hex encoded boundary condition ("target"), 2^256/difficulty
 func (api *PublicMinerAPI) GetWork() ([3]string, error) {
 	if !api.e.IsMining() {
-		if err := api.e.StartMining(); err != nil {
+		if err := api.e.StartMining(false); err != nil {
 			return [3]string{}, err
 		}
 	}
@@ -153,7 +153,7 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 	}
 	// Start the miner and return
 	if !api.e.IsMining() {
-		return api.e.StartMining()
+		return api.e.StartMining(true)
 	}
 	return nil
 }
