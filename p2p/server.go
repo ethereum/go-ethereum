@@ -69,9 +69,9 @@ type Config struct {
 	// Zero defaults to preset values.
 	MaxPendingPeers int `toml:",omitempty"`
 
-	// Discovery specifies whether the peer discovery mechanism should be started
-	// or not. Disabling is usually useful for protocol debugging (manual topology).
-	Discovery bool
+	// NoDiscowery can be used to disable the peer discovery mechanism.
+	// Disabling is useful for protocol debugging (manual topology).
+	NoDiscovery bool
 
 	// DiscoveryV5 specifies whether the the new topic-discovery based V5 discovery
 	// protocol should be started or not.
@@ -370,7 +370,7 @@ func (srv *Server) Start() (err error) {
 	srv.peerOpDone = make(chan struct{})
 
 	// node table
-	if srv.Discovery {
+	if !srv.NoDiscovery {
 		ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.NodeDatabase, srv.NetRestrict)
 		if err != nil {
 			return err
@@ -393,7 +393,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	dynPeers := (srv.MaxPeers + 1) / 2
-	if !srv.Discovery {
+	if srv.NoDiscovery {
 		dynPeers = 0
 	}
 	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)

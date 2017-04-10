@@ -54,13 +54,10 @@ var (
 )
 
 var defaultNodeConfig = node.Config{
-	Name:    clientIdentifier,
-	Version: params.VersionWithCommit(gitCommit),
-	DataDir: node.DefaultDataDir(),
-	P2P: p2p.Config{
-		MaxPeers:  25,
-		Discovery: true,
-	},
+	Name:        clientIdentifier,
+	Version:     params.VersionWithCommit(gitCommit),
+	DataDir:     node.DefaultDataDir(),
+	P2P:         p2p.Config{MaxPeers: 25},
 	HTTPModules: []string{"eth", "net", "web3"},
 	WSModules:   []string{"eth", "net", "web3"},
 }

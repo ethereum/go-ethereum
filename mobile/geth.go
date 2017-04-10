@@ -115,7 +115,6 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		DataDir:     datadir,
 		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
 		P2P: p2p.Config{
-			Discovery:        true,
 			DiscoveryV5:      true,
 			DiscoveryV5Addr:  ":0",
 			BootstrapNodesV5: config.BootstrapNodes.nodes,

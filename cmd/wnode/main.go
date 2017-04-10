@@ -257,7 +257,6 @@ func initialize() {
 		Config: p2p.Config{
 			PrivateKey:     nodeid,
 			MaxPeers:       maxPeers,
-			Discovery:      true,
 			Name:           common.MakeName("wnode", "5.0"),
 			Protocols:      shh.Protocols(),
 			ListenAddr:     *argIP,
