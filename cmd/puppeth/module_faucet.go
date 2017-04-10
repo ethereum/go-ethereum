@@ -40,7 +40,7 @@ RUN \
   apk add --update git go make gcc musl-dev ca-certificates linux-headers                             && \
 	mkdir -p $GOPATH/src/github.com/ethereum                                                            && \
 	(cd $GOPATH/src/github.com/ethereum && git clone --depth=1 https://github.com/ethereum/go-ethereum) && \
-  go build -v github.com/ethereum/go-ethereum/cmd/puppeth/faucet                                      && \
+  go build -v github.com/ethereum/go-ethereum/cmd/faucet                                              && \
   apk del git go make gcc musl-dev linux-headers                                                      && \
   rm -rf $GOPATH && rm -rf /var/cache/apk/*
 

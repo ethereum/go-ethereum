@@ -307,7 +307,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to GitHub Gists"})
 			continue
 		}
-		log.Info("Faucet funs requested", "gist", msg.URL)
+		log.Info("Faucet funds requested", "gist", msg.URL)
 
 		// Retrieve the gist from the GitHub Gist APIs
 		parts := strings.Split(msg.URL, "/")
