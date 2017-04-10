@@ -67,7 +67,7 @@ type Config struct {
 	DataDir string
 
 	// Configuration of peer-to-peer networking.
-	P2P p2p.Config `toml:"p2p"`
+	P2P p2p.Config
 
 	// KeyStoreDir is the file system folder that contains private keys. The directory can
 	// be specified as a relative path, in which case it is resolved relative to the
@@ -80,51 +80,51 @@ type Config struct {
 
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
 	// scrypt KDF at the expense of security.
-	UseLightweightKDF bool `toml:"use_lightweight_kdf,omitempty"`
+	UseLightweightKDF bool `toml:",omitempty"`
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
 	// relative), then that specific path is enforced. An empty path disables IPC.
-	IPCPath string `toml:"ipc_path,omitempty"`
+	IPCPath string `toml:",omitempty"`
 
 	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
 	// field is empty, no HTTP API endpoint will be started.
-	HTTPHost string `toml:"http_host,omitempty"`
+	HTTPHost string `toml:",omitempty"`
 
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
 	// for ephemeral nodes).
-	HTTPPort int `toml:"http_port,omitempty"`
+	HTTPPort int `toml:",omitempty"`
 
 	// HTTPCors is the Cross-Origin Resource Sharing header to send to requesting
 	// clients. Please be aware that CORS is a browser enforced security, it's fully
 	// useless for custom HTTP clients.
-	HTTPCors string `toml:"http_cors,omitempty"`
+	HTTPCors string `toml:",omitempty"`
 
 	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	HTTPModules []string `toml:"http_modules,omitempty"`
+	HTTPModules []string `toml:",omitempty"`
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
-	WSHost string `toml:"ws_host,omitempty"`
+	WSHost string `toml:",omitempty"`
 
 	// WSPort is the TCP port number on which to start the websocket RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful for
 	// ephemeral nodes).
-	WSPort int `toml:"ws_port,omitempty"`
+	WSPort int `toml:",omitempty"`
 
 	// WSOrigins is the list of domain to accept websocket requests from. Please be
 	// aware that the server can only act upon the HTTP request the client sends and
 	// cannot verify the validity of the request header.
-	WSOrigins string `toml:"ws_origins,omitempty"`
+	WSOrigins string `toml:",omitempty"`
 
 	// WSModules is a list of API modules to expose via the websocket RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	WSModules []string `toml:"ws_modules,omitempty"`
+	WSModules []string `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

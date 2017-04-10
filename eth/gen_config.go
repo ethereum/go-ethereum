@@ -33,7 +33,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EthashDatasetDir        string
 		EthashDatasetsInMem     int
 		EthashDatasetsOnDisk    int
-		GPO                     gasprice.Config `toml:"gpo"`
+		GPO                     gasprice.Config
 		EnablePreimageRecording bool
 		SolcPath                string
 		DocRoot                 string `toml:"-"`
@@ -94,7 +94,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EthashDatasetDir        *string
 		EthashDatasetsInMem     *int
 		EthashDatasetsOnDisk    *int
-		GPO                     *gasprice.Config `toml:"gpo"`
+		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
 		SolcPath                *string
 		DocRoot                 *string `toml:"-"`

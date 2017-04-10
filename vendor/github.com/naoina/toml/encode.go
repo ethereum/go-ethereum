@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/naoina/go-stringutil"
 	"github.com/naoina/toml/ast"
 )
 
@@ -25,6 +24,7 @@ const (
 // the TOML structure unless
 //   - the field's tag is "-", or
 //   - the field is empty and its tag specifies the "omitempty" option.
+//
 // The "toml" key in the struct field's tag value is the key name, followed by
 // an optional comma and options. Examples:
 //
@@ -41,20 +41,21 @@ const (
 //   // Field appears in TOML as key "field", but the field is skipped if
 //   // empty. Note the leading comma.
 //   Field int `toml:",omitempty"`
-func Marshal(v interface{}) ([]byte, error) {
+func (cfg *Config) Marshal(v interface{}) ([]byte, error) {
 	buf := new(bytes.Buffer)
-	err := NewEncoder(buf).Encode(v)
+	err := cfg.NewEncoder(buf).Encode(v)
 	return buf.Bytes(), err
 }
 
 // A Encoder writes TOML to an output stream.
 type Encoder struct {
-	w io.Writer
+	w   io.Writer
+	cfg *Config
 }
 
 // NewEncoder returns a new Encoder that writes to w.
-func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w: w}
+func (cfg *Config) NewEncoder(w io.Writer) *Encoder {
+	return &Encoder{w, cfg}
 }
 
 // Encode writes the TOML of v to the stream.
@@ -71,9 +72,9 @@ func (e *Encoder) Encode(v interface{}) error {
 	var err error
 	switch rv.Kind() {
 	case reflect.Struct:
-		err = buf.structFields(rv)
+		err = buf.structFields(e.cfg, rv)
 	case reflect.Map:
-		err = buf.mapFields(rv)
+		err = buf.mapFields(e.cfg, rv)
 	default:
 		err = &marshalTableError{rv.Type()}
 	}
@@ -161,7 +162,7 @@ func (b *tableBuf) addChild(child *tableBuf) {
 	b.children = append(b.children, child)
 }
 
-func (b *tableBuf) structFields(rv reflect.Value) error {
+func (b *tableBuf) structFields(cfg *Config, rv reflect.Value) error {
 	rt := rv.Type()
 	for i := 0; i < rv.NumField(); i++ {
 		ft := rt.Field(i)
@@ -177,9 +178,9 @@ func (b *tableBuf) structFields(rv reflect.Value) error {
 			continue
 		}
 		if name == "" {
-			name = stringutil.ToSnakeCase(ft.Name)
+			name = cfg.FieldToKey(rt, ft.Name)
 		}
-		if err := b.field(name, fv); err != nil {
+		if err := b.field(cfg, name, fv); err != nil {
 			return err
 		}
 	}
@@ -195,7 +196,7 @@ func (l mapKeyList) Len() int           { return len(l) }
 func (l mapKeyList) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
 func (l mapKeyList) Less(i, j int) bool { return l[i].key < l[j].key }
 
-func (b *tableBuf) mapFields(rv reflect.Value) error {
+func (b *tableBuf) mapFields(cfg *Config, rv reflect.Value) error {
 	keys := rv.MapKeys()
 	keylist := make(mapKeyList, len(keys))
 	for i, key := range keys {
@@ -209,18 +210,18 @@ func (b *tableBuf) mapFields(rv reflect.Value) error {
 	sort.Sort(keylist)
 
 	for _, kv := range keylist {
-		if err := b.field(kv.key, kv.value); err != nil {
+		if err := b.field(cfg, kv.key, kv.value); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (b *tableBuf) field(name string, rv reflect.Value) error {
+func (b *tableBuf) field(cfg *Config, name string, rv reflect.Value) error {
 	off := len(b.body)
 	b.body = append(b.body, quoteName(name)...)
 	b.body = append(b.body, " = "...)
-	isTable, err := b.value(rv, name)
+	isTable, err := b.value(cfg, rv, name)
 	if isTable {
 		b.body = b.body[:off] // rub out "key ="
 	} else {
@@ -229,8 +230,8 @@ func (b *tableBuf) field(name string, rv reflect.Value) error {
 	return err
 }
 
-func (b *tableBuf) value(rv reflect.Value, name string) (bool, error) {
-	isMarshaler, isTable, err := b.marshaler(rv, name)
+func (b *tableBuf) value(cfg *Config, rv reflect.Value, name string) (bool, error) {
+	isMarshaler, isTable, err := b.marshaler(cfg, rv, name)
 	if isMarshaler {
 		return isTable, err
 	}
@@ -249,7 +250,7 @@ func (b *tableBuf) value(rv reflect.Value, name string) (bool, error) {
 		if rv.IsNil() {
 			return false, &marshalNilError{rv.Type()}
 		}
-		return b.value(rv.Elem(), name)
+		return b.value(cfg, rv.Elem(), name)
 	case reflect.Slice, reflect.Array:
 		rvlen := rv.Len()
 		if rvlen == 0 {
@@ -261,7 +262,7 @@ func (b *tableBuf) value(rv reflect.Value, name string) (bool, error) {
 		wroteElem := false
 		b.body = append(b.body, '[')
 		for i := 0; i < rvlen; i++ {
-			isTable, err := b.value(rv.Index(i), name)
+			isTable, err := b.value(cfg, rv.Index(i), name)
 			if err != nil {
 				return isTable, err
 			}
@@ -281,12 +282,12 @@ func (b *tableBuf) value(rv reflect.Value, name string) (bool, error) {
 		return !wroteElem, nil
 	case reflect.Struct:
 		child := b.newChild(name)
-		err := child.structFields(rv)
+		err := child.structFields(cfg, rv)
 		b.addChild(child)
 		return true, err
 	case reflect.Map:
 		child := b.newChild(name)
-		err := child.mapFields(rv)
+		err := child.mapFields(cfg, rv)
 		b.addChild(child)
 		return true, err
 	default:
@@ -295,7 +296,7 @@ func (b *tableBuf) value(rv reflect.Value, name string) (bool, error) {
 	return false, nil
 }
 
-func (b *tableBuf) marshaler(rv reflect.Value, name string) (handled, isTable bool, err error) {
+func (b *tableBuf) marshaler(cfg *Config, rv reflect.Value, name string) (handled, isTable bool, err error) {
 	switch t := rv.Interface().(type) {
 	case encoding.TextMarshaler:
 		enc, err := t.MarshalText()
@@ -309,7 +310,7 @@ func (b *tableBuf) marshaler(rv reflect.Value, name string) (handled, isTable bo
 		if err != nil {
 			return true, false, err
 		}
-		isTable, err = b.value(reflect.ValueOf(newval), name)
+		isTable, err = b.value(cfg, reflect.ValueOf(newval), name)
 		return true, isTable, err
 	case Marshaler:
 		enc, err := t.MarshalTOML()

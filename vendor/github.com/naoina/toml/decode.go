@@ -47,12 +47,12 @@ var timeType = reflect.TypeOf(time.Time{})
 //	TOML arrays to any type of slice
 //	TOML tables to struct or map
 //	TOML array tables to slice of struct or map
-func Unmarshal(data []byte, v interface{}) error {
+func (cfg *Config) Unmarshal(data []byte, v interface{}) error {
 	table, err := Parse(data)
 	if err != nil {
 		return err
 	}
-	if err := UnmarshalTable(table, v); err != nil {
+	if err := cfg.UnmarshalTable(table, v); err != nil {
 		return err
 	}
 	return nil
@@ -60,15 +60,14 @@ func Unmarshal(data []byte, v interface{}) error {
 
 // A Decoder reads and decodes TOML from an input stream.
 type Decoder struct {
-	r io.Reader
+	r   io.Reader
+	cfg *Config
 }
 
 // NewDecoder returns a new Decoder that reads from r.
 // Note that it reads all from r before parsing it.
-func NewDecoder(r io.Reader) *Decoder {
-	return &Decoder{
-		r: r,
-	}
+func (cfg *Config) NewDecoder(r io.Reader) *Decoder {
+	return &Decoder{r, cfg}
 }
 
 // Decode parses the TOML data from its input and stores it in the value pointed to by v.
@@ -78,7 +77,7 @@ func (d *Decoder) Decode(v interface{}) error {
 	if err != nil {
 		return err
 	}
-	return Unmarshal(b, v)
+	return d.cfg.Unmarshal(b, v)
 }
 
 // UnmarshalerRec may be implemented by types to customize their behavior when being
@@ -113,17 +112,17 @@ type Unmarshaler interface {
 //	TOML arrays to any type of slice
 //	TOML tables to struct or map
 //	TOML array tables to slice of struct or map
-func UnmarshalTable(t *ast.Table, v interface{}) error {
+func (cfg *Config) UnmarshalTable(t *ast.Table, v interface{}) error {
 	rv := reflect.ValueOf(v)
 	toplevelMap := rv.Kind() == reflect.Map
 	if (!toplevelMap && rv.Kind() != reflect.Ptr) || rv.IsNil() {
 		return &invalidUnmarshalError{reflect.TypeOf(v)}
 	}
-	return unmarshalTable(rv, t, toplevelMap)
+	return unmarshalTable(cfg, rv, t, toplevelMap)
 }
 
 // used for UnmarshalerRec.
-func unmarshalTableOrValue(rv reflect.Value, av interface{}) error {
+func unmarshalTableOrValue(cfg *Config, rv reflect.Value, av interface{}) error {
 	if (rv.Kind() != reflect.Ptr && rv.Kind() != reflect.Map) || rv.IsNil() {
 		return &invalidUnmarshalError{rv.Type()}
 	}
@@ -131,12 +130,12 @@ func unmarshalTableOrValue(rv reflect.Value, av interface{}) error {
 
 	switch av.(type) {
 	case *ast.KeyValue, *ast.Table, []*ast.Table:
-		if err := unmarshalField(rv, av); err != nil {
+		if err := unmarshalField(cfg, rv, av); err != nil {
 			return lineError(fieldLineNumber(av), err)
 		}
 		return nil
 	case ast.Value:
-		return setValue(rv, av.(ast.Value))
+		return setValue(cfg, rv, av.(ast.Value))
 	default:
 		panic(fmt.Sprintf("BUG: unhandled AST node type %T", av))
 	}
@@ -146,21 +145,23 @@ func unmarshalTableOrValue(rv reflect.Value, av interface{}) error {
 //
 // toplevelMap is true when rv is an (unadressable) map given to UnmarshalTable. In this
 // (special) case, the map is used as-is instead of creating a new map.
-func unmarshalTable(rv reflect.Value, t *ast.Table, toplevelMap bool) error {
+func unmarshalTable(cfg *Config, rv reflect.Value, t *ast.Table, toplevelMap bool) error {
 	rv = indirect(rv)
-	if err, ok := setUnmarshaler(rv, t); ok {
+	if err, ok := setUnmarshaler(cfg, rv, t); ok {
 		return lineError(t.Line, err)
 	}
 	switch {
 	case rv.Kind() == reflect.Struct:
-		fc := makeFieldCache(rv.Type())
+		fc := makeFieldCache(cfg, rv.Type())
 		for key, fieldAst := range t.Fields {
-			fv, fieldName, err := fc.findField(rv, key)
+			fv, fieldName, err := fc.findField(cfg, rv, key)
 			if err != nil {
 				return lineError(fieldLineNumber(fieldAst), err)
 			}
-			if err := unmarshalField(fv, fieldAst); err != nil {
-				return lineErrorField(fieldLineNumber(fieldAst), rv.Type().String()+"."+fieldName, err)
+			if fv.IsValid() {
+				if err := unmarshalField(cfg, fv, fieldAst); err != nil {
+					return lineErrorField(fieldLineNumber(fieldAst), rv.Type().String()+"."+fieldName, err)
+				}
 			}
 		}
 	case rv.Kind() == reflect.Map || isEface(rv):
@@ -179,7 +180,7 @@ func unmarshalTable(rv reflect.Value, t *ast.Table, toplevelMap bool) error {
 				return lineError(fieldLineNumber(fieldAst), err)
 			}
 			fv := reflect.New(elemtyp).Elem()
-			if err := unmarshalField(fv, fieldAst); err != nil {
+			if err := unmarshalField(cfg, fv, fieldAst); err != nil {
 				return lineError(fieldLineNumber(fieldAst), err)
 			}
 			m.SetMapIndex(kv, fv)
@@ -206,15 +207,15 @@ func fieldLineNumber(fieldAst interface{}) int {
 	}
 }
 
-func unmarshalField(rv reflect.Value, fieldAst interface{}) error {
+func unmarshalField(cfg *Config, rv reflect.Value, fieldAst interface{}) error {
 	switch av := fieldAst.(type) {
 	case *ast.KeyValue:
-		return setValue(rv, av.Value)
+		return setValue(cfg, rv, av.Value)
 	case *ast.Table:
-		return unmarshalTable(rv, av, false)
+		return unmarshalTable(cfg, rv, av, false)
 	case []*ast.Table:
 		rv = indirect(rv)
-		if err, ok := setUnmarshaler(rv, fieldAst); ok {
+		if err, ok := setUnmarshaler(cfg, rv, fieldAst); ok {
 			return err
 		}
 		var slice reflect.Value
@@ -228,7 +229,7 @@ func unmarshalField(rv reflect.Value, fieldAst interface{}) error {
 		}
 		for i, tbl := range av {
 			vv := reflect.New(slice.Type().Elem()).Elem()
-			if err := unmarshalTable(vv, tbl, false); err != nil {
+			if err := unmarshalTable(cfg, vv, tbl, false); err != nil {
 				return err
 			}
 			slice.Index(i).Set(vv)
@@ -266,9 +267,9 @@ func unmarshalMapKey(typ reflect.Type, key string) (reflect.Value, error) {
 	return rv, nil
 }
 
-func setValue(lhs reflect.Value, val ast.Value) error {
+func setValue(cfg *Config, lhs reflect.Value, val ast.Value) error {
 	lhs = indirect(lhs)
-	if err, ok := setUnmarshaler(lhs, val); ok {
+	if err, ok := setUnmarshaler(cfg, lhs, val); ok {
 		return err
 	}
 	if err, ok := setTextUnmarshaler(lhs, val); ok {
@@ -286,7 +287,7 @@ func setValue(lhs reflect.Value, val ast.Value) error {
 	case *ast.Datetime:
 		return setDatetime(lhs, v)
 	case *ast.Array:
-		return setArray(lhs, v)
+		return setArray(cfg, lhs, v)
 	default:
 		panic(fmt.Sprintf("BUG: unhandled node type %T", v))
 	}
@@ -302,11 +303,11 @@ func indirect(rv reflect.Value) reflect.Value {
 	return rv
 }
 
-func setUnmarshaler(lhs reflect.Value, av interface{}) (error, bool) {
+func setUnmarshaler(cfg *Config, lhs reflect.Value, av interface{}) (error, bool) {
 	if lhs.CanAddr() {
 		if u, ok := lhs.Addr().Interface().(UnmarshalerRec); ok {
 			err := u.UnmarshalTOML(func(v interface{}) error {
-				return unmarshalTableOrValue(reflect.ValueOf(v), av)
+				return unmarshalTableOrValue(cfg, reflect.ValueOf(v), av)
 			})
 			return err, true
 		}
@@ -438,7 +439,7 @@ func setDatetime(rv reflect.Value, v *ast.Datetime) error {
 	return nil
 }
 
-func setArray(rv reflect.Value, v *ast.Array) error {
+func setArray(cfg *Config, rv reflect.Value, v *ast.Array) error {
 	var slicetyp reflect.Type
 	switch {
 	case rv.Kind() == reflect.Slice:
@@ -463,7 +464,7 @@ func setArray(rv reflect.Value, v *ast.Array) error {
 			return errArrayMultiType
 		}
 		tmp := reflect.New(typ).Elem()
-		if err := setValue(tmp, vv); err != nil {
+		if err := setValue(cfg, tmp, vv); err != nil {
 			return err
 		}
 		slice.Index(i).Set(tmp)

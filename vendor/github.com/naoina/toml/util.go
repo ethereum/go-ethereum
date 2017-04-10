@@ -20,7 +20,7 @@ type fieldInfo struct {
 	ignored bool
 }
 
-func makeFieldCache(rt reflect.Type) fieldCache {
+func makeFieldCache(cfg *Config, rt reflect.Type) fieldCache {
 	named, auto := make(map[string]fieldInfo), make(map[string]fieldInfo)
 	for i := 0; i < rt.NumField(); i++ {
 		ft := rt.Field(i)
@@ -31,7 +31,7 @@ func makeFieldCache(rt reflect.Type) fieldCache {
 		col, _ := extractTag(ft.Tag.Get(fieldTagName))
 		info := fieldInfo{index: ft.Index, name: ft.Name, ignored: col == "-"}
 		if col == "" || col == "-" {
-			auto[normFieldName(ft.Name)] = info
+			auto[cfg.NormFieldName(rt, ft.Name)] = info
 		} else {
 			named[col] = info
 		}
@@ -39,21 +39,21 @@ func makeFieldCache(rt reflect.Type) fieldCache {
 	return fieldCache{named, auto}
 }
 
-func (fc fieldCache) findField(rv reflect.Value, name string) (reflect.Value, string, error) {
+func (fc fieldCache) findField(cfg *Config, rv reflect.Value, name string) (reflect.Value, string, error) {
 	info, found := fc.named[name]
 	if !found {
-		info, found = fc.auto[normFieldName(name)]
+		info, found = fc.auto[cfg.NormFieldName(rv.Type(), name)]
 	}
 	if !found {
-		return reflect.Value{}, "", fmt.Errorf("field corresponding to `%s' is not defined in %v", name, rv.Type())
+		if cfg.MissingField == nil {
+			return reflect.Value{}, "", fmt.Errorf("field corresponding to `%s' is not defined in %v", name, rv.Type())
+		} else {
+			return reflect.Value{}, "", cfg.MissingField(rv.Type(), name)
+		}
 	} else if info.ignored {
 		return reflect.Value{}, "", fmt.Errorf("field corresponding to `%s' in %v cannot be set through TOML", name, rv.Type())
 	}
 	return rv.FieldByIndex(info.index), info.name, nil
-}
-
-func normFieldName(s string) string {
-	return strings.Replace(strings.ToLower(s), "_", "", -1)
 }
 
 func extractTag(tag string) (col, rest string) {

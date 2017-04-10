@@ -97,7 +97,7 @@ type Config struct {
 	EthashDatasetsOnDisk int
 
 	// Gas Price Oracle options
-	GPO gasprice.Config `toml:"gpo"`
+	GPO gasprice.Config
 
 	// Enables tracking of SHA3 preimages in the VM
 	EnablePreimageRecording bool
