@@ -47,13 +47,65 @@ type operation struct {
 	// jumps indicates whether operation made a jump. This prevents the program
 	// counter from further incrementing.
 	jumps bool
+	// writes determines whether this a state modifying operation
+	writes bool
 	// valid is used to check whether the retrieved operation is valid and known
 	valid bool
+	// reverts determined whether the operation reverts state
+	reverts bool
 }
 
-var defaultJumpTable = NewJumpTable()
+var (
+	baseInstructionSet       = NewBaseInstructionSet()
+	homesteadInstructionSet  = NewHomesteadInstructionSet()
+	metropolisInstructionSet = NewMetropolisInstructionSet()
+)
 
-func NewJumpTable() [256]operation {
+func NewMetropolisInstructionSet() [256]operation {
+	instructionSet := NewHomesteadInstructionSet()
+	instructionSet[STATIC_CALL] = operation{
+		execute:       opStaticCall,
+		gasCost:       gasStaticCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryStaticCall,
+		valid:         true,
+	}
+	instructionSet[REVERT] = operation{
+		execute:       opRevert,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 0),
+		valid:         true,
+		reverts:       true,
+	}
+	instructionSet[RETURNDATASIZE] = operation{
+		execute:       opReturnDataSize,
+		gasCost:       constGasFunc(0), // TODO
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+	instructionSet[RETURNDATACOPY] = operation{
+		execute:       opReturnDataCopy,
+		gasCost:       gasReturnDataCopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryReturnDataCopy,
+		valid:         true,
+	}
+	return instructionSet
+}
+
+func NewHomesteadInstructionSet() [256]operation {
+	instructionSet := NewBaseInstructionSet()
+	instructionSet[DELEGATECALL] = operation{
+		execute:       opDelegateCall,
+		gasCost:       gasDelegateCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryDelegateCall,
+		valid:         true,
+	}
+	return instructionSet
+}
+
+func NewBaseInstructionSet() [256]operation {
 	return [256]operation{
 		STOP: {
 			execute:       opStop,
@@ -357,6 +409,7 @@ func NewJumpTable() [256]operation {
 			gasCost:       gasSStore,
 			validateStack: makeStackFunc(2, 0),
 			valid:         true,
+			writes:        true,
 		},
 		JUMP: {
 			execute:       opJump,
@@ -821,6 +874,7 @@ func NewJumpTable() [256]operation {
 			validateStack: makeStackFunc(3, 1),
 			memorySize:    memoryCreate,
 			valid:         true,
+			writes:        true,
 		},
 		CALL: {
 			execute:       opCall,
@@ -844,19 +898,13 @@ func NewJumpTable() [256]operation {
 			halts:         true,
 			valid:         true,
 		},
-		DELEGATECALL: {
-			execute:       opDelegateCall,
-			gasCost:       gasDelegateCall,
-			validateStack: makeStackFunc(6, 1),
-			memorySize:    memoryDelegateCall,
-			valid:         true,
-		},
 		SELFDESTRUCT: {
 			execute:       opSuicide,
 			gasCost:       gasSuicide,
 			validateStack: makeStackFunc(1, 0),
 			halts:         true,
 			valid:         true,
+			writes:        true,
 		},
 	}
 }
