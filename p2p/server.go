@@ -396,7 +396,7 @@ func (srv *Server) Start() (err error) {
 	if !srv.Discovery {
 		dynPeers = 0
 	}
-	dialer := newDialState(srv.StaticNodes, srv.ntab, dynPeers, srv.NetRestrict)
+	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)
 
 	// handshake
 	srv.ourHandshake = &protoHandshake{Version: baseProtocolVersion, Name: srv.Name, ID: discover.PubkeyID(&srv.PrivateKey.PublicKey)}
