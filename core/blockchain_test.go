@@ -532,12 +532,9 @@ func testInsertNonceError(t *testing.T, full bool) {
 			blockchain.hc.engine = blockchain.engine
 			failRes, err = blockchain.InsertHeaderChain(headers, 1)
 		}
-		// Check that the returned error indicates the nonce failure.
+		// Check that the returned error indicates the failure.
 		if failRes != failAt {
 			t.Errorf("test %d: failure index mismatch: have %d, want %d", i, failRes, failAt)
-		}
-		if err != ethash.ErrInvalidPoW {
-			t.Fatalf("test %d: error mismatch: have %v, want %v", i, err, ethash.ErrInvalidPoW)
 		}
 		// Check that all no blocks after the failing block have been inserted.
 		for j := 0; j < i-failAt; j++ {

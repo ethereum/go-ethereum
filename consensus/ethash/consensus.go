@@ -41,16 +41,22 @@ var (
 	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
 )
 
+// Various error messages to mark blocks invalid. These should be private to
+// prevent engine specific errors from being referenced in the remainder of the
+// codebase, inherently breaking if the engine is swapped out. Please put common
+// error types into the consensus package.
 var (
-	ErrInvalidChain      = errors.New("invalid header chain")
-	ErrTooManyUncles     = errors.New("too many uncles")
-	ErrDuplicateUncle    = errors.New("duplicate uncle")
-	ErrUncleIsAncestor   = errors.New("uncle is ancestor")
-	ErrDanglingUncle     = errors.New("uncle's parent is not ancestor")
-	ErrNonceOutOfRange   = errors.New("nonce out of range")
-	ErrInvalidDifficulty = errors.New("non-positive difficulty")
-	ErrInvalidMixDigest  = errors.New("invalid mix digest")
-	ErrInvalidPoW        = errors.New("invalid proof-of-work")
+	errInvalidChain      = errors.New("invalid header chain")
+	errLargeBlockTime    = errors.New("timestamp too big")
+	errZeroBlockTime     = errors.New("timestamp equals parent's")
+	errTooManyUncles     = errors.New("too many uncles")
+	errDuplicateUncle    = errors.New("duplicate uncle")
+	errUncleIsAncestor   = errors.New("uncle is ancestor")
+	errDanglingUncle     = errors.New("uncle's parent is not ancestor")
+	errNonceOutOfRange   = errors.New("nonce out of range")
+	errInvalidDifficulty = errors.New("non-positive difficulty")
+	errInvalidMixDigest  = errors.New("invalid mix digest")
+	errInvalidPoW        = errors.New("invalid proof-of-work")
 )
 
 // VerifyHeader checks whether a header conforms to the consensus rules of the
@@ -104,7 +110,7 @@ func (ethash *Ethash) VerifyHeaders(chain consensus.ChainReader, headers []*type
 			for index := range inputs {
 				// If we've found a bad block already before this, stop validating
 				if bad := atomic.LoadUint64(&badblock); bad != 0 && bad <= headers[index].Number.Uint64() {
-					outputs <- result{index: index, err: ErrInvalidChain}
+					outputs <- result{index: index, err: errInvalidChain}
 					continue
 				}
 				// We need to look up the first parent
@@ -194,7 +200,7 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	}
 	// Verify that there are at most 2 uncles included in this block
 	if len(block.Uncles()) > maxUncles {
-		return ErrTooManyUncles
+		return errTooManyUncles
 	}
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := set.New(), make(map[common.Hash]*types.Header)
@@ -219,16 +225,16 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 		// Make sure every uncle is rewarded only once
 		hash := uncle.Hash()
 		if uncles.Has(hash) {
-			return ErrDuplicateUncle
+			return errDuplicateUncle
 		}
 		uncles.Add(hash)
 
 		// Make sure the uncle has a valid ancestry
 		if ancestors[hash] != nil {
-			return ErrUncleIsAncestor
+			return errUncleIsAncestor
 		}
 		if ancestors[uncle.ParentHash] == nil || uncle.ParentHash == block.ParentHash() {
-			return ErrDanglingUncle
+			return errDanglingUncle
 		}
 		if err := ethash.verifyHeader(chain, uncle, ancestors[uncle.ParentHash], true, true); err != nil {
 			return err
@@ -249,7 +255,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	// Verify the header's timestamp
 	if uncle {
 		if header.Time.Cmp(math.MaxBig256) > 0 {
-			return consensus.ErrLargeBlockTime
+			return errLargeBlockTime
 		}
 	} else {
 		if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
@@ -257,7 +263,7 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 		}
 	}
 	if header.Time.Cmp(parent.Time) <= 0 {
-		return consensus.ErrZeroBlockTime
+		return errZeroBlockTime
 	}
 	// Verify the block's difficulty based in it's timestamp and parent's difficulty
 	expected := CalcDifficulty(chain.Config(), header.Time.Uint64(), parent.Time.Uint64(), parent.Number, parent.Difficulty)
@@ -403,7 +409,7 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 	if ethash.fakeMode {
 		time.Sleep(ethash.fakeDelay)
 		if ethash.fakeFail == header.Number.Uint64() {
-			return ErrInvalidPoW
+			return errInvalidPoW
 		}
 		return nil
 	}
@@ -415,11 +421,11 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 	number := header.Number.Uint64()
 	if number/epochLength >= uint64(len(cacheSizes)) {
 		// Go < 1.7 cannot calculate new cache/dataset sizes (no fast prime check)
-		return ErrNonceOutOfRange
+		return errNonceOutOfRange
 	}
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty.Sign() <= 0 {
-		return ErrInvalidDifficulty
+		return errInvalidDifficulty
 	}
 	// Recompute the digest and PoW value and verify against the header
 	cache := ethash.cache(number)
@@ -430,11 +436,11 @@ func (ethash *Ethash) VerifySeal(chain consensus.ChainReader, header *types.Head
 	}
 	digest, result := hashimotoLight(size, cache, header.HashNoNonce().Bytes(), header.Nonce.Uint64())
 	if !bytes.Equal(header.MixDigest[:], digest) {
-		return ErrInvalidMixDigest
+		return errInvalidMixDigest
 	}
 	target := new(big.Int).Div(maxUint256, header.Difficulty)
 	if new(big.Int).SetBytes(result).Cmp(target) > 0 {
-		return ErrInvalidPoW
+		return errInvalidPoW
 	}
 	return nil
 }

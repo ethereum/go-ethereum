@@ -23,14 +23,6 @@ var (
 	// that is unknown.
 	ErrUnknownAncestor = errors.New("unknown ancestor")
 
-	// ErrLargeBlockTime is returned if the value of the timestamp is beyond
-	// any reasonable value.
-	ErrLargeBlockTime = errors.New("timestamp too big")
-
-	// ErrZeroBlockTime is returned if the block's timestamp is the same as the one
-	// its parent has.
-	ErrZeroBlockTime = errors.New("timestamp equals parent's")
-
 	// ErrFutureBlock is returned when a block's timestamp is in the future according
 	// to the current node.
 	ErrFutureBlock = errors.New("block in the future")
