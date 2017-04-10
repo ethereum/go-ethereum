@@ -79,9 +79,14 @@ var tomlSettings = toml.Config{
 	},
 }
 
+type ethstatsConfig struct {
+	URL string `toml:",omitempty"`
+}
+
 type gethConfig struct {
-	Eth  eth.Config
-	Node node.Config
+	Eth      eth.Config
+	Node     node.Config
+	Ethstats ethstatsConfig
 }
 
 func loadConfig(file string, cfg *gethConfig) error {
@@ -105,12 +110,14 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		Eth:  eth.DefaultConfig,
 		Node: defaultNodeConfig,
 	}
+
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
+
 	// Apply flags.
 	utils.SetNodeConfig(ctx, clientIdentifier, gitCommit, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
@@ -118,6 +125,10 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		utils.Fatalf("Failed to create the protocol stack: %v", err)
 	}
 	utils.SetEthConfig(ctx, stack, &cfg.Eth)
+	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
+		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
+	}
+
 	return stack, cfg
 }
 
@@ -132,10 +143,12 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 	if shhEnabled || shhAutoEnabled {
 		utils.RegisterShhService(stack)
 	}
-	// Add the Ethereum Stats daemon if requested
-	if url := ctx.GlobalString(utils.EthStatsURLFlag.Name); url != "" {
-		utils.RegisterEthStatsService(stack, url)
+
+	// Add the Ethereum Stats daemon if requested.
+	if cfg.Ethstats.URL != "" {
+		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
+
 	// Add the release oracle service so it boots along with node.
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		config := release.Config{
