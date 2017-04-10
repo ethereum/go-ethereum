@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+
+		<title>{{.Network}}: GitHub Faucet</title>
+
+		<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" />
+		<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" />
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-noty/2.4.1/packaged/jquery.noty.packaged.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.0/moment.min.js"></script>
+
+		<style>
+			.vertical-center {
+				min-height: 100%;
+				min-height: 100vh;
+				display: flex;
+				align-items: center;
+			}
+			.progress {
+				position: relative;
+			}
+			.progress span {
+				position: absolute;
+				display: block;
+				width: 100%;
+				color: white;
+			 }
+			 pre {
+				 padding: 6px;
+				 margin: 0;
+			 }
+		</style>
+	</head>
+
+	<body>
+		<div class="vertical-center">
+			<div class="container">
+				<div class="row" style="margin-bottom: 16px;">
+					<div class="col-lg-12">
+						<h1 style="text-align: center;"><i class="fa fa-bath" aria-hidden="true"></i> {{.Network}} GitHub Authenticated Faucet <i class="fa fa-github-alt" aria-hidden="true"></i></h1>
+					</div>
+				</div>
+				<div class="row">
+					<div class="col-lg-8 col-lg-offset-2">
+						<div class="input-group">
+							<input id="gist" type="text" class="form-control" placeholder="GitHub Gist URL containing your Ethereum address...">
+							<span class="input-group-btn">
+								<button class="btn btn-default" type="button" onclick="submit()">Give me Ether!</button>
+							</span>
+						</div>
+					</div>
+				</div>
+				<div class="row" style="margin-top: 32px;">
+						<div class="col-lg-6 col-lg-offset-3">
+						<div class="panel panel-small panel-default">
+							<div class="panel-body" style="padding: 0; overflow: auto; max-height: 300px;">
+								<table id="requests" class="table table-condensed" style="margin: 0;"></table>
+							</div>
+							<div class="panel-footer">
+								<table style="width: 100%"><tr>
+									<td style="text-align: center;"><i class="fa fa-rss" aria-hidden="true"></i> <span id="peers"></span> peers</td>
+									<td style="text-align: center;"><i class="fa fa-database" aria-hidden="true"></i> <span id="block"></span> blocks</td>
+									<td style="text-align: center;"><i class="fa fa-heartbeat" aria-hidden="true"></i> <span id="funds"></span> Ethers</td>
+									<td style="text-align: center;"><i class="fa fa-university" aria-hidden="true"></i> <span id="funded"></span> funded</td>
+								</tr></table>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="row" style="margin-top: 32px;">
+					<div class="col-lg-12">
+						<h3>How does this work?</h3>
+						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to GitHub accounts. Anyone having a GitHub account may request funds within the permitted limit of <strong>{{.Amount}} Ether(s) / {{.Period}}</strong>.</p>
+						<p>To request funds, simply create a <a href="https://gist.github.com/" target="_about:blank">GitHub Gist</a> with your Ethereum address pasted into the contents (the file name doesn't matter), copy paste the gists URL into the above input box and fire away! You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Global variables to hold the current status of the faucet
+			var attempt = 0;
+			var server;
+
+			// Define the function that submits a gist url to the server
+			var submit = function() {
+				server.send(JSON.stringify({url: $("#gist")[0].value}));
+			};
+			// Define a method to reconnect upon server loss
+			var reconnect = function() {
+				if (attempt % 2 == 0) {
+					server = new WebSocket("wss://" + location.host + "/api");
+				} else {
+					server = new WebSocket("ws://" + location.host + "/api");
+				}
+				attempt++;
+
+				server.onmessage = function(event) {
+					var msg = JSON.parse(event.data);
+					if (msg === null) {
+						return;
+					}
+
+					if (msg.funds !== undefined) {
+						$("#funds").text(msg.funds);
+					}
+					if (msg.funded !== undefined) {
+						$("#funded").text(msg.funded);
+					}
+					if (msg.peers !== undefined) {
+						$("#peers").text(msg.peers);
+					}
+					if (msg.number !== undefined) {
+						$("#block").text(parseInt(msg.number, 16));
+					}
+					if (msg.error !== undefined) {
+						noty({layout: 'topCenter', text: msg.error, type: 'error'});
+					}
+					if (msg.success !== undefined) {
+						noty({layout: 'topCenter', text: msg.success, type: 'success'});
+					}
+					if (msg.requests !== undefined && msg.requests !== null) {
+						var content = "";
+						for (var i=0; i<msg.requests.length; i++) {
+							content += "<tr><td><div style=\"background: url('https://github.com/" + msg.requests[i].username + ".png?size=64'); background-size: cover; width:32px; height: 32px; border-radius: 4px;\"></div></td><td><pre>" + msg.requests[i].account + "</pre></td><td style=\"width: 100%; text-align: center; vertical-align: middle;\">" + moment.duration(moment(msg.requests[i].time).unix()-moment().unix(), 'seconds').humanize(true) + "</td></tr>";
+						}
+						$("#requests").html("<tbody>" + content + "</tbody>");
+					}
+				}
+				server.onclose = function() { setTimeout(reconnect, 3000); };
+				server.onerror = function() { setTimeout(reconnect, 3000); };
+			}
+			// Establish a websocket connection to the API server
+			reconnect();
+		</script>
+	</body>
+</html>
