@@ -69,7 +69,7 @@ type Config struct {
 	// Zero defaults to preset values.
 	MaxPendingPeers int `toml:",omitempty"`
 
-	// NoDiscowery can be used to disable the peer discovery mechanism.
+	// NoDiscovery can be used to disable the peer discovery mechanism.
 	// Disabling is useful for protocol debugging (manual topology).
 	NoDiscovery bool
 
