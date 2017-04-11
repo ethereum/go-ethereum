@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 )
@@ -52,15 +51,6 @@ var (
 		Usage: "TOML configuration file",
 	}
 )
-
-var defaultNodeConfig = node.Config{
-	Name:        clientIdentifier,
-	Version:     params.VersionWithCommit(gitCommit),
-	DataDir:     node.DefaultDataDir(),
-	P2P:         p2p.Config{MaxPeers: 25},
-	HTTPModules: []string{"eth", "net", "web3"},
-	WSModules:   []string{"eth", "net", "web3"},
-}
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
 var tomlSettings = toml.Config{
@@ -104,11 +94,20 @@ func loadConfig(file string, cfg *gethConfig) error {
 	return err
 }
 
+func defaultNodeConfig() node.Config {
+	cfg := node.DefaultConfig
+	cfg.Name = clientIdentifier
+	cfg.Version = params.VersionWithCommit(gitCommit)
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth")
+	cfg.WSModules = append(cfg.WSModules, "eth")
+	return cfg
+}
+
 func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:  eth.DefaultConfig,
-		Node: defaultNodeConfig,
+		Node: defaultNodeConfig(),
 	}
 
 	// Load config file.
