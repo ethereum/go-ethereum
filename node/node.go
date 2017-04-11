@@ -159,7 +159,7 @@ func (n *Node) Start() error {
 	if n.serverConfig.StaticNodes == nil {
 		n.serverConfig.StaticNodes = n.config.StaticNodes()
 	}
-	if n.serverConfig.StaticNodes == nil {
+	if n.serverConfig.TrustedNodes == nil {
 		n.serverConfig.TrustedNodes = n.config.TrusterNodes()
 	}
 	if n.serverConfig.NodeDatabase == "" {
