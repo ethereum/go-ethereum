@@ -365,6 +365,11 @@ var (
 		Usage: "Comma separated enode URLs for P2P discovery bootstrap",
 		Value: "",
 	}
+	BootnodesV5Flag = cli.StringFlag{
+		Name:  "v5bootnodes",
+		Usage: "Comma separated enode URLs for experimental RLPx V5 (Topic Discovery) bootstrap",
+		Value: "",
+	}
 	NodeKeyFileFlag = cli.StringFlag{
 		Name:  "nodekey",
 		Usage: "P2P node key file",
@@ -541,8 +546,8 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 // flags, reverting to pre-configured ones if none have been specified.
 func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	urls := params.DiscoveryV5Bootnodes
-	if ctx.GlobalIsSet(BootnodesFlag.Name) {
-		urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
+	if ctx.GlobalIsSet(BootnodesV5Flag.Name) {
+		urls = strings.Split(ctx.GlobalString(BootnodesV5Flag.Name), ",")
 	}
 
 	bootnodes := make([]*discv5.Node, 0, len(urls))
