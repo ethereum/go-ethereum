@@ -117,36 +117,38 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 }
 
+var testdata1 = []struct{ k, v string }{
+	{"bar", "b"},
+	{"barb", "ba"},
+	{"bars", "bb"},
+	{"bard", "bc"},
+	{"fab", "z"},
+	{"foo", "a"},
+	{"food", "ab"},
+	{"foos", "aa"},
+}
+
+var testdata2 = []struct{ k, v string }{
+	{"aardvark", "c"},
+	{"bar", "b"},
+	{"barb", "bd"},
+	{"bars", "be"},
+	{"fab", "z"},
+	{"foo", "a"},
+	{"foos", "aa"},
+	{"food", "ab"},
+	{"jars", "d"},
+}
+
 func TestDifferenceIterator(t *testing.T) {
 	triea := newEmpty()
-	valsa := []struct{ k, v string }{
-		{"bar", "b"},
-		{"barb", "ba"},
-		{"bars", "bb"},
-		{"bard", "bc"},
-		{"fab", "z"},
-		{"foo", "a"},
-		{"food", "ab"},
-		{"foos", "aa"},
-	}
-	for _, val := range valsa {
+	for _, val := range testdata1 {
 		triea.Update([]byte(val.k), []byte(val.v))
 	}
 	triea.Commit()
 
 	trieb := newEmpty()
-	valsb := []struct{ k, v string }{
-		{"aardvark", "c"},
-		{"bar", "b"},
-		{"barb", "bd"},
-		{"bars", "be"},
-		{"fab", "z"},
-		{"foo", "a"},
-		{"foos", "aa"},
-		{"food", "ab"},
-		{"jars", "d"},
-	}
-	for _, val := range valsb {
+	for _, val := range testdata2 {
 		trieb.Update([]byte(val.k), []byte(val.v))
 	}
 	trieb.Commit()
@@ -166,10 +168,57 @@ func TestDifferenceIterator(t *testing.T) {
 	}
 	for _, item := range all {
 		if found[item.k] != item.v {
-			t.Errorf("iterator value mismatch for %s: got %q want %q", item.k, found[item.k], item.v)
+			t.Errorf("iterator value mismatch for %s: got %v want %v", item.k, found[item.k], item.v)
 		}
 	}
 	if len(found) != len(all) {
 		t.Errorf("iterator count mismatch: got %d values, want %d", len(found), len(all))
+	}
+}
+
+func TestUnionIterator(t *testing.T) {
+	triea := newEmpty()
+	for _, val := range testdata1 {
+		triea.Update([]byte(val.k), []byte(val.v))
+	}
+	triea.Commit()
+
+	trieb := newEmpty()
+	for _, val := range testdata2 {
+		trieb.Update([]byte(val.k), []byte(val.v))
+	}
+	trieb.Commit()
+
+	di, _ := NewUnionIterator([]NodeIterator{NewNodeIterator(triea), NewNodeIterator(trieb)})
+	it := NewIteratorFromNodeIterator(di)
+
+	all := []struct{ k, v string }{
+		{"aardvark", "c"},
+		{"barb", "bd"},
+		{"barb", "ba"},
+		{"bard", "bc"},
+		{"bars", "bb"},
+		{"bars", "be"},
+		{"bar", "b"},
+		{"fab", "z"},
+		{"food", "ab"},
+		{"foos", "aa"},
+		{"foo", "a"},
+		{"jars", "d"},
+	}
+
+	for i, kv := range all {
+		if !it.Next() {
+			t.Errorf("Iterator ends prematurely at element %d", i)
+		}
+		if kv.k != string(it.Key) {
+			t.Errorf("iterator value mismatch for element %d: got key %s want %s", i, it.Key, kv.k)
+		}
+		if kv.v != string(it.Value) {
+			t.Errorf("iterator value mismatch for element %d: got value %s want %s", i, it.Value, kv.v)
+		}
+	}
+	if it.Next() {
+		t.Errorf("Iterator returned extra values.")
 	}
 }
