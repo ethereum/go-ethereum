@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
+// DefaultConfig contains default settings for use on the Ethereum main net.
 var DefaultConfig = Config{
 	EthashCachesInMem:    2,
 	EthashCachesOnDisk:   3,
