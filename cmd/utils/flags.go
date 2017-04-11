@@ -174,6 +174,13 @@ var (
 		Name:  "light",
 		Usage: "Enable light client mode",
 	}
+	defaultSyncMode = eth.DefaultConfig.SyncMode
+	SyncModeFlag    = TextMarshalerFlag{
+		Name:  "syncmode",
+		Usage: `Blockchain sync mode ("fast", "full", or "light")`,
+		Value: &defaultSyncMode,
+	}
+
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
 		Usage: "Maximum percentage of time allowed for serving LES requests (0-90)",
@@ -760,11 +767,11 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
-func checkExclusive(ctx *cli.Context, flags ...cli.BoolFlag) {
+func checkExclusive(ctx *cli.Context, flags ...cli.Flag) {
 	set := make([]string, 0, 1)
 	for _, flag := range flags {
-		if ctx.GlobalIsSet(flag.Name) {
-			set = append(set, "--"+flag.Name)
+		if ctx.GlobalIsSet(flag.GetName()) {
+			set = append(set, "--"+flag.GetName())
 		}
 	}
 	if len(set) > 1 {
@@ -776,16 +783,19 @@ func checkExclusive(ctx *cli.Context, flags ...cli.BoolFlag) {
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
 	checkExclusive(ctx, DevModeFlag, TestNetFlag)
-	checkExclusive(ctx, FastSyncFlag, LightModeFlag)
+	checkExclusive(ctx, FastSyncFlag, LightModeFlag, SyncModeFlag)
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setEthash(ctx, cfg)
 
-	if ctx.GlobalBool(FastSyncFlag.Name) {
+	switch {
+	case ctx.GlobalIsSet(SyncModeFlag.Name):
+		cfg.SyncMode = *GlobalTextMarshaler(ctx, SyncModeFlag.Name).(*downloader.SyncMode)
+	case ctx.GlobalBool(FastSyncFlag.Name):
 		cfg.SyncMode = downloader.FastSync
-	} else if ctx.GlobalBool(LightModeFlag.Name) {
+	case ctx.GlobalBool(LightModeFlag.Name):
 		cfg.SyncMode = downloader.LightSync
 	}
 	if ctx.GlobalIsSet(LightServFlag.Name) {

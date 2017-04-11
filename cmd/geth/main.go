@@ -96,6 +96,7 @@ func init() {
 		utils.EthashDatasetsOnDiskFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
+		utils.SyncModeFlag,
 		utils.LightServFlag,
 		utils.LightPeersFlag,
 		utils.LightKDFFlag,
