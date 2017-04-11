@@ -126,7 +126,6 @@ func init() {
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
-		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.ExecFlag,
 		utils.PreloadJSFlag,

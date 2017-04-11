@@ -242,7 +242,6 @@ Cleans database of corrupted entries.
 		utils.MaxPeersFlag,
 		utils.NATFlag,
 		utils.IPCDisabledFlag,
-		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.PasswordFileFlag,
 		// bzzd-specific flags
