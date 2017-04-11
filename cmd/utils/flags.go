@@ -711,7 +711,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 }
 
 // SetNodeConfig applies node-related command line flags to the config.
-func SetNodeConfig(ctx *cli.Context, name, gitCommit string, cfg *node.Config) {
+func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
 	setHTTP(ctx, cfg)
@@ -733,18 +733,6 @@ func SetNodeConfig(ctx *cli.Context, name, gitCommit string, cfg *node.Config) {
 	if ctx.GlobalIsSet(LightKDFFlag.Name) {
 		cfg.UseLightweightKDF = ctx.GlobalBool(LightKDFFlag.Name)
 	}
-}
-
-// MakeNode configures a node with no services from command line flags.
-// Deprecated: use SetNodeConfig
-func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
-	cfg := new(node.Config)
-	SetNodeConfig(ctx, name, gitCommit, cfg)
-	stack, err := node.New(cfg)
-	if err != nil {
-		Fatalf("Failed to create the protocol stack: %v", err)
-	}
-	return stack
 }
 
 func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
