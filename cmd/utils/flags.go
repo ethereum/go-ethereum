@@ -778,14 +778,14 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 }
 
 func checkExclusive(ctx *cli.Context, flags ...cli.BoolFlag) {
-	set := 0
+	set := make([]string, 0, 1)
 	for _, flag := range flags {
 		if ctx.GlobalIsSet(flag.Name) {
-			set++
+			set = append(set, "--"+flag.Name)
 		}
 	}
-	if set > 1 {
-		Fatalf("The %v flags are mutually exclusive", flags)
+	if len(set) > 1 {
+		Fatalf("flags %v can't be used at the same time", strings.Join(set, ", "))
 	}
 }
 
