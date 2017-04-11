@@ -22,12 +22,11 @@ package geth
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
@@ -145,19 +144,13 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
-		ethConf := &eth.Config{
-			Genesis:            genesis,
-			LightMode:          true,
-			DatabaseCache:      config.EthereumDatabaseCache,
-			NetworkId:          config.EthereumNetworkID,
-			GasPrice:           new(big.Int).SetUint64(20 * params.Shannon),
-			GPO:                gasprice.Config{Blocks: 10, Percentile: 50},
-			EthashCacheDir:     "ethash",
-			EthashCachesInMem:  2,
-			EthashCachesOnDisk: 3,
-		}
+		ethConf := eth.DefaultConfig
+		ethConf.Genesis = genesis
+		ethConf.SyncMode = downloader.LightSync
+		ethConf.NetworkId = config.EthereumNetworkID
+		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, ethConf)
+			return les.New(ctx, &ethConf)
 		}); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}

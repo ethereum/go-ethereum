@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethstats"
@@ -792,29 +793,33 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
+func checkExclusive(ctx *cli.Context, flags ...cli.BoolFlag) {
+	set := 0
+	for _, flag := range flags {
+		if ctx.GlobalIsSet(flag.Name) {
+			set++
+		}
+	}
+	if set > 1 {
+		Fatalf("The %v flags are mutually exclusive", flags)
+	}
+}
+
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
-	networks, netFlags := 0, []cli.BoolFlag{DevModeFlag, TestNetFlag}
-	for _, flag := range netFlags {
-		if ctx.GlobalBool(flag.Name) {
-			networks++
-		}
-	}
-	if networks > 1 {
-		Fatalf("The %v flags are mutually exclusive", netFlags)
-	}
+	checkExclusive(ctx, DevModeFlag, TestNetFlag)
+	checkExclusive(ctx, FastSyncFlag, LightModeFlag)
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
 	setEthash(ctx, cfg)
 
-	if ctx.GlobalIsSet(FastSyncFlag.Name) {
-		cfg.FastSync = ctx.GlobalBool(FastSyncFlag.Name)
-	}
-	if ctx.GlobalIsSet(LightModeFlag.Name) {
-		cfg.LightMode = ctx.GlobalBool(LightModeFlag.Name)
+	if ctx.GlobalBool(FastSyncFlag.Name) {
+		cfg.SyncMode = downloader.FastSync
+	} else if ctx.GlobalBool(LightModeFlag.Name) {
+		cfg.SyncMode = downloader.LightSync
 	}
 	if ctx.GlobalIsSet(LightServFlag.Name) {
 		cfg.LightServ = ctx.GlobalInt(LightServFlag.Name)
@@ -880,7 +885,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	var err error
-	if cfg.LightMode {
+	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, cfg)
 		})

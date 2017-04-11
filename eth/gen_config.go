@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 )
 
@@ -15,8 +16,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               int
-		FastSync                bool
-		LightMode               bool
+		SyncMode                downloader.SyncMode
 		LightServ               int  `toml:",omitempty"`
 		LightPeers              int  `toml:",omitempty"`
 		MaxPeers                int  `toml:"-"`
@@ -44,8 +44,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	var enc Config
 	enc.Genesis = c.Genesis
 	enc.NetworkId = c.NetworkId
-	enc.FastSync = c.FastSync
-	enc.LightMode = c.LightMode
+	enc.SyncMode = c.SyncMode
 	enc.LightServ = c.LightServ
 	enc.LightPeers = c.LightPeers
 	enc.MaxPeers = c.MaxPeers
@@ -76,8 +75,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
 		NetworkId               *int
-		FastSync                *bool
-		LightMode               *bool
+		SyncMode                *downloader.SyncMode
 		LightServ               *int  `toml:",omitempty"`
 		LightPeers              *int  `toml:",omitempty"`
 		MaxPeers                *int  `toml:"-"`
@@ -112,11 +110,8 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.NetworkId != nil {
 		c.NetworkId = *dec.NetworkId
 	}
-	if dec.FastSync != nil {
-		c.FastSync = *dec.FastSync
-	}
-	if dec.LightMode != nil {
-		c.LightMode = *dec.LightMode
+	if dec.SyncMode != nil {
+		c.SyncMode = *dec.SyncMode
 	}
 	if dec.LightServ != nil {
 		c.LightServ = *dec.LightServ

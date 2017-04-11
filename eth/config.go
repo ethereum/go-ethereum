@@ -26,12 +26,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/params"
 )
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
 var DefaultConfig = Config{
+	SyncMode:             downloader.FullSync,
 	EthashCachesInMem:    2,
 	EthashCachesOnDisk:   3,
 	EthashDatasetsInMem:  1,
@@ -69,9 +71,8 @@ type Config struct {
 	Genesis *core.Genesis `toml:",omitempty"`
 
 	// Protocol options
-	NetworkId int  // Network ID to use for selecting peers to connect to
-	FastSync  bool // Enables the state download based fast synchronisation algorithm
-	LightMode bool // Running in light client mode
+	NetworkId int // Network ID to use for selecting peers to connect to
+	SyncMode  downloader.SyncMode
 
 	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests

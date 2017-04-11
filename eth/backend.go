@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -92,6 +93,13 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
+	if config.SyncMode == downloader.LightSync {
+		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
+	}
+	if !config.SyncMode.IsValid() {
+		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
+	}
+
 	chainDb, err := CreateDB(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
@@ -156,7 +164,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		}
 	}
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.FastSync, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, maxPeers, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
 

@@ -41,7 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
@@ -195,16 +195,11 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network i
 	}
 	// Assemble the Ethereum light client protocol
 	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		return les.New(ctx, &eth.Config{
-			LightMode:          true,
-			NetworkId:          network,
-			Genesis:            genesis,
-			GasPrice:           big.NewInt(20 * params.Shannon),
-			GPO:                gasprice.Config{Blocks: 10, Percentile: 50},
-			EthashCacheDir:     "ethash",
-			EthashCachesInMem:  2,
-			EthashCachesOnDisk: 3,
-		})
+		cfg := eth.DefaultConfig
+		cfg.SyncMode = downloader.LightSync
+		cfg.NetworkId = network
+		cfg.Genesis = genesis
+		return les.New(ctx, &cfg)
 	}); err != nil {
 		return nil, err
 	}
