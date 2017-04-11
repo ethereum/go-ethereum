@@ -240,19 +240,6 @@ var (
 		Value: "",
 	}
 
-	VMForceJitFlag = cli.BoolFlag{
-		Name:  "forcejit",
-		Usage: "Force the JIT VM to take precedence",
-	}
-	VMJitCacheFlag = cli.IntFlag{
-		Name:  "jitcache",
-		Usage: "Amount of cached JIT VM programs",
-		Value: 64,
-	}
-	VMEnableJitFlag = cli.BoolFlag{
-		Name:  "jitvm",
-		Usage: "Enable the JIT VM",
-	}
 	VMEnableDebugFlag = cli.BoolFlag{
 		Name:  "vmdebug",
 		Usage: "Record information useful for VM and contract debugging",
@@ -468,9 +455,6 @@ func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
 	comps := strings.Split(cfg.UserIdent, "/")
 	if identity := ctx.GlobalString(IdentityFlag.Name); len(identity) > 0 {
 		comps = append(comps, identity)
-	}
-	if ctx.GlobalBool(VMEnableJitFlag.Name) {
-		comps = append(comps, "JIT")
 	}
 	cfg.UserIdent = strings.Join(comps, "/")
 }
