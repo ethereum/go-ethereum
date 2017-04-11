@@ -24,8 +24,9 @@ import (
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -64,14 +65,14 @@ func RunTransactionTestsWithReader(config *params.ChainConfig, r io.Reader, skip
 	for name, test := range bt {
 		// if the test should be skipped, return
 		if skipTest[name] {
-			glog.Infoln("Skipping transaction test", name)
+			log.Info(fmt.Sprint("Skipping transaction test", name))
 			return nil
 		}
 		// test the block
 		if err := runTransactionTest(config, test); err != nil {
 			return err
 		}
-		glog.Infoln("Transaction test passed: ", name)
+		log.Info(fmt.Sprint("Transaction test passed: ", name))
 
 	}
 	return nil
@@ -98,7 +99,7 @@ func runTransactionTests(config *params.ChainConfig, tests map[string]Transactio
 	for name, test := range tests {
 		// if the test should be skipped, return
 		if skipTest[name] {
-			glog.Infoln("Skipping transaction test", name)
+			log.Info(fmt.Sprint("Skipping transaction test", name))
 			return nil
 		}
 
@@ -106,7 +107,7 @@ func runTransactionTests(config *params.ChainConfig, tests map[string]Transactio
 		if err := runTransactionTest(config, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
-		glog.Infoln("Transaction test passed: ", name)
+		log.Info(fmt.Sprint("Transaction test passed: ", name))
 
 	}
 	return nil
@@ -161,7 +162,7 @@ func verifyTxFields(chainConfig *params.ChainConfig, txTest TransactionTest, dec
 
 	var decodedSender common.Address
 
-	signer := types.MakeSigner(chainConfig, common.String2Big(txTest.Blocknumber))
+	signer := types.MakeSigner(chainConfig, math.MustParseBig256(txTest.Blocknumber))
 	decodedSender, err = types.Sender(signer, decodedTx)
 	if err != nil {
 		return err

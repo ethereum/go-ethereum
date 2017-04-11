@@ -21,25 +21,26 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm"
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -76,7 +77,6 @@ var (
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:  "bzznetworkid",
 		Usage: "Network identifier (integer, default 3=swarm testnet)",
-		Value: network.NetworkId,
 	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
@@ -112,6 +112,14 @@ var (
 		Name:  "defaultpath",
 		Usage: "path to file served for empty url path (none)",
 	}
+	SwarmUpFromStdinFlag = cli.BoolFlag{
+		Name:  "stdin",
+		Usage: "reads data to be uploaded from stdin",
+	}
+	SwarmUploadMimeType = cli.StringFlag{
+		Name:  "mime",
+		Usage: "force mime type",
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
 		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
@@ -122,7 +130,7 @@ func init() {
 	// Override flag defaults so bzzd can run alongside geth.
 	utils.ListenPortFlag.Value = 30399
 	utils.IPCPathFlag.Value = utils.DirectoryString{Value: "bzzd.ipc"}
-	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, web3"
+	utils.IPCApiFlag.Value = "admin, bzz, chequebook, debug, rpc, swarmfs, web3"
 
 	// Set up the cli app.
 	app.Action = bzzd
@@ -148,12 +156,67 @@ The output of this command is supposed to be machine-readable.
 `,
 		},
 		{
+			Action:    list,
+			Name:      "ls",
+			Usage:     "list files and directories contained in a manifest",
+			ArgsUsage: " <manifest> [<prefix>]",
+			Description: `
+Lists files and directories contained in a manifest.
+`,
+		},
+		{
 			Action:    hash,
 			Name:      "hash",
 			Usage:     "print the swarm hash of a file or directory",
 			ArgsUsage: " <file>",
 			Description: `
 Prints the swarm hash of file or directory.
+`,
+		},
+		{
+			Name:      "manifest",
+			Usage:     "update a MANIFEST",
+			ArgsUsage: "manifest COMMAND",
+			Description: `
+Updates a MANIFEST by adding/removing/updating the hash of a path.
+`,
+			Subcommands: []cli.Command{
+				{
+					Action:    add,
+					Name:      "add",
+					Usage:     "add a new path to the manifest",
+					ArgsUsage: "<MANIFEST> <path> <hash> [<content-type>]",
+					Description: `
+Adds a new path to the manifest
+`,
+				},
+				{
+					Action:    update,
+					Name:      "update",
+					Usage:     "update the hash for an already existing path in the manifest",
+					ArgsUsage: "<MANIFEST> <path> <newhash> [<newcontent-type>]",
+					Description: `
+Update the hash for an already existing path in the manifest
+`,
+				},
+				{
+					Action:    remove,
+					Name:      "remove",
+					Usage:     "removes a path from the manifest",
+					ArgsUsage: "<MANIFEST> <path>",
+					Description: `
+Removes a path from the manifest
+`,
+				},
+			},
+		},
+		{
+			Action:    cleandb,
+			Name:      "cleandb",
+			Usage:     "Cleans database of corrupted entries",
+			ArgsUsage: " ",
+			Description: `
+Cleans database of corrupted entries.
 `,
 		},
 	}
@@ -189,6 +252,8 @@ Prints the swarm hash of file or directory.
 		SwarmRecursiveUploadFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
+		SwarmUpFromStdinFlag,
+		SwarmUploadMimeType,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -226,6 +291,14 @@ func bzzd(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	registerBzzService(ctx, stack)
 	utils.StartNode(stack)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		<-sigc
+		log.Info("Got sigterm, shutting swarm down...")
+		stack.Stop()
+	}()
 	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
@@ -242,6 +315,7 @@ func bzzd(ctx *cli.Context) error {
 }
 
 func registerBzzService(ctx *cli.Context, stack *node.Node) {
+
 	prvkey := getAccount(ctx, stack)
 
 	chbookaddr := common.HexToAddress(ctx.GlobalString(ChequebookAddrFlag.Name))
@@ -249,6 +323,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if bzzdir == "" {
 		bzzdir = stack.InstanceDir()
 	}
+
 	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
@@ -280,38 +355,46 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	keyid := ctx.GlobalString(SwarmAccountFlag.Name)
+
 	if keyid == "" {
 		utils.Fatalf("Option %q is required", SwarmAccountFlag.Name)
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(keyid); err == nil {
-		glog.V(logger.Info).Infof("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey))
+		log.Info("Swarm account key loaded", "address", crypto.PubkeyToAddress(key.PublicKey))
 		return key
 	}
 	// Otherwise try getting it from the keystore.
-	return decryptStoreAccount(stack.AccountManager(), keyid)
+	am := stack.AccountManager()
+	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+
+	return decryptStoreAccount(ks, keyid)
 }
 
-func decryptStoreAccount(accman *accounts.Manager, account string) *ecdsa.PrivateKey {
+func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKey {
 	var a accounts.Account
 	var err error
 	if common.IsHexAddress(account) {
-		a, err = accman.Find(accounts.Account{Address: common.HexToAddress(account)})
-	} else if ix, ixerr := strconv.Atoi(account); ixerr == nil {
-		a, err = accman.AccountByIndex(ix)
+		a, err = ks.Find(accounts.Account{Address: common.HexToAddress(account)})
+	} else if ix, ixerr := strconv.Atoi(account); ixerr == nil && ix > 0 {
+		if accounts := ks.Accounts(); len(accounts) > ix {
+			a = accounts[ix]
+		} else {
+			err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
+		}
 	} else {
 		utils.Fatalf("Can't find swarm account key %s", account)
 	}
 	if err != nil {
 		utils.Fatalf("Can't find swarm account key: %v", err)
 	}
-	keyjson, err := ioutil.ReadFile(a.File)
+	keyjson, err := ioutil.ReadFile(a.URL.Path)
 	if err != nil {
 		utils.Fatalf("Can't load swarm account key: %v", err)
 	}
 	for i := 1; i <= 3; i++ {
 		passphrase := promptPassphrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i))
-		key, err := accounts.DecryptKey(keyjson, passphrase)
+		key, err := keystore.DecryptKey(keyjson, passphrase)
 		if err == nil {
 			return key.PrivateKey
 		}
@@ -335,7 +418,7 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 	for _, url := range nodes {
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			glog.Errorf("invalid bootnode %q", err)
+			log.Error("Invalid swarm bootnode", "err", err)
 			continue
 		}
 		srv.AddPeer(n)

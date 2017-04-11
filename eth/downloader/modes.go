@@ -24,3 +24,17 @@ const (
 	FastSync                  // Quickly download the headers, full sync only at the chain head
 	LightSync                 // Download only the headers and terminate afterwards
 )
+
+// String implements the stringer interface.
+func (mode SyncMode) String() string {
+	switch mode {
+	case FullSync:
+		return "full"
+	case FastSync:
+		return "fast"
+	case LightSync:
+		return "light"
+	default:
+		return "unknown"
+	}
+}

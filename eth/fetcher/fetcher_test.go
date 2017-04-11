@@ -51,7 +51,7 @@ func makeChain(n int, seed byte, parent *types.Block) ([]common.Hash, map[common
 		// If the block number is multiple of 3, send a bonus transaction to the miner
 		if parent == genesis && i%3 == 0 {
 			signer := types.MakeSigner(params.TestChainConfig, block.Number())
-			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), params.TxGas, nil, nil), signer, testKey)
+			tx, err := types.SignTx(types.NewTransaction(block.TxNonce(testAddress), common.Address{seed}, big.NewInt(1000), new(big.Int).SetUint64(params.TxGas), nil, nil), signer, testKey)
 			if err != nil {
 				panic(err)
 			}
@@ -91,7 +91,7 @@ func newTester() *fetcherTester {
 		blocks: map[common.Hash]*types.Block{genesis.Hash(): genesis},
 		drops:  make(map[string]bool),
 	}
-	tester.fetcher = New(tester.getBlock, tester.verifyBlock, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
+	tester.fetcher = New(tester.getBlock, tester.verifyHeader, tester.broadcastBlock, tester.chainHeight, tester.insertChain, tester.dropPeer)
 	tester.fetcher.Start()
 
 	return tester
@@ -105,8 +105,8 @@ func (f *fetcherTester) getBlock(hash common.Hash) *types.Block {
 	return f.blocks[hash]
 }
 
-// verifyBlock is a nop placeholder for the block header verification.
-func (f *fetcherTester) verifyBlock(block *types.Block, parent *types.Block) error {
+// verifyHeader is a nop placeholder for the block header verification.
+func (f *fetcherTester) verifyHeader(header *types.Header) error {
 	return nil
 }
 

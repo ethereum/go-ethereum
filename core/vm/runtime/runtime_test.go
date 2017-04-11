@@ -39,8 +39,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.Time == nil {
 		t.Error("expected time to be non nil")
 	}
-	if cfg.GasLimit == nil {
-		t.Error("expected time to be non nil")
+	if cfg.GasLimit == 0 {
+		t.Error("didn't expect gaslimit to be zero")
 	}
 	if cfg.GasPrice == nil {
 		t.Error("expected time to be non nil")
@@ -87,7 +87,7 @@ func TestExecute(t *testing.T) {
 		t.Fatal("didn't expect error", err)
 	}
 
-	num := common.BytesToBig(ret)
+	num := new(big.Int).SetBytes(ret)
 	if num.Cmp(big.NewInt(10)) != 0 {
 		t.Error("Expected 10, got", num)
 	}
@@ -111,7 +111,7 @@ func TestCall(t *testing.T) {
 		t.Fatal("didn't expect error", err)
 	}
 
-	num := common.BytesToBig(ret)
+	num := new(big.Int).SetBytes(ret)
 	if num.Cmp(big.NewInt(10)) != 0 {
 		t.Error("Expected 10, got", num)
 	}

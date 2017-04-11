@@ -20,6 +20,7 @@ import (
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 // packBytesSlice packs the given bytes as [L, V] as the canonical representation
@@ -45,9 +46,9 @@ func packElement(t Type, reflectValue reflect.Value) []byte {
 		return common.LeftPadBytes(reflectValue.Bytes(), 32)
 	case BoolTy:
 		if reflectValue.Bool() {
-			return common.LeftPadBytes(common.Big1.Bytes(), 32)
+			return math.PaddedBigBytes(common.Big1, 32)
 		} else {
-			return common.LeftPadBytes(common.Big0.Bytes(), 32)
+			return math.PaddedBigBytes(common.Big0, 32)
 		}
 	case BytesTy:
 		if reflectValue.Kind() == reflect.Array {

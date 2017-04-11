@@ -17,12 +17,12 @@
 package rpc_test
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
 )
 
 // In this example, our client whishes to track the latest 'block number'

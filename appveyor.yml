@@ -22,8 +22,8 @@ environment:
 
 install:
   - rmdir C:\go /s /q
-  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.7.4.windows-%GETH_ARCH%.zip
-  - 7z x go1.7.4.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.8.1.windows-%GETH_ARCH%.zip
+  - 7z x go1.8.1.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
   - go version
   - gcc --version
 
@@ -36,4 +36,4 @@ after_build:
 
 test_script:
   - set CGO_ENABLED=1
-  - go run build\ci.go test -vet -coverage
+  - go run build\ci.go test -coverage

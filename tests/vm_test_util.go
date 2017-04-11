@@ -25,11 +25,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -129,8 +130,8 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 	}
 
 	for name, test := range tests {
-		if skipTest[name] /*|| name != "loop_stacklimit_1021"*/ {
-			glog.Infoln("Skipping VM test", name)
+		if skipTest[name] /*|| name != "exp0"*/ {
+			log.Info(fmt.Sprint("Skipping VM test", name))
 			continue
 		}
 
@@ -138,7 +139,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 			return fmt.Errorf("%s %s", name, err.Error())
 		}
 
-		glog.Infoln("VM test passed: ", name)
+		log.Info(fmt.Sprint("VM test passed: ", name))
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil
@@ -180,23 +181,23 @@ func runVmTest(test VmTest) error {
 	if len(test.Gas) == 0 && err == nil {
 		return fmt.Errorf("gas unspecified, indicating an error. VM returned (incorrectly) successful")
 	} else {
-		gexp := common.Big(test.Gas)
+		gexp := math.MustParseBig256(test.Gas)
 		if gexp.Cmp(gas) != 0 {
 			return fmt.Errorf("gas failed. Expected %v, got %v\n", gexp, gas)
 		}
 	}
 
 	// check post state
-	for addr, account := range test.Post {
-		obj := statedb.GetStateObject(common.HexToAddress(addr))
-		if obj == nil {
+	for address, account := range test.Post {
+		accountAddr := common.HexToAddress(address)
+		if !statedb.Exist(accountAddr) {
 			continue
 		}
 		for addr, value := range account.Storage {
-			v := statedb.GetState(obj.Address(), common.HexToHash(addr))
+			v := statedb.GetState(accountAddr, common.HexToHash(addr))
 			vexp := common.HexToHash(value)
 			if v != vexp {
-				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", obj.Address().Bytes()[0:4], addr, vexp, v, vexp.Big(), v.Big())
+				return fmt.Errorf("(%x: %s) storage failed. Expected %x, got %x (%v %v)\n", addr[:4], addr, vexp, v, vexp.Big(), v.Big())
 			}
 		}
 	}
@@ -222,13 +223,13 @@ func RunVm(statedb *state.StateDB, env, exec map[string]string) ([]byte, []*type
 		to    = common.HexToAddress(exec["address"])
 		from  = common.HexToAddress(exec["caller"])
 		data  = common.FromHex(exec["data"])
-		gas   = common.Big(exec["gas"])
-		value = common.Big(exec["value"])
+		gas   = math.MustParseBig256(exec["gas"])
+		value = math.MustParseBig256(exec["value"])
 	)
 	caller := statedb.GetOrNewStateObject(from)
 	vm.PrecompiledContracts = make(map[common.Address]vm.PrecompiledContract)
 
 	environment, _ := NewEVMEnvironment(true, chainConfig, statedb, env, exec)
-	ret, err := environment.Call(caller, to, data, gas, value)
-	return ret, statedb.Logs(), gas, err
+	ret, g, err := environment.Call(caller, to, data, gas.Uint64(), value)
+	return ret, statedb.Logs(), new(big.Int).SetUint64(g), err
 }

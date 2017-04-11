@@ -17,6 +17,7 @@
 package abi
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -129,16 +130,15 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	var size int
 	var offset int
 	if t.Type.IsSlice {
-
 		// get the offset which determines the start of this array ...
-		offset = int(common.BytesToBig(output[index : index+32]).Uint64())
+		offset = int(binary.BigEndian.Uint64(output[index+24 : index+32]))
 		if offset+32 > len(output) {
 			return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
 		}
 
 		slice = output[offset:]
 		// ... starting with the size of the array in elements ...
-		size = int(common.BytesToBig(slice[:32]).Uint64())
+		size = int(binary.BigEndian.Uint64(slice[24:32]))
 		slice = slice[32:]
 		// ... and make sure that we've at the very least the amount of bytes
 		// available in the buffer.
@@ -147,7 +147,7 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 		}
 
 		// reslice to match the required size
-		slice = slice[:(size * 32)]
+		slice = slice[:size*32]
 	} else if t.Type.IsArray {
 		//get the number of elements in the array
 		size = t.Type.SliceSize
@@ -165,33 +165,12 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 			inter        interface{}             // interface type
 			returnOutput = slice[i*32 : i*32+32] // the return output
 		)
-
 		// set inter to the correct type (cast)
 		switch elem.T {
 		case IntTy, UintTy:
-			bigNum := common.BytesToBig(returnOutput)
-			switch t.Type.Kind {
-			case reflect.Uint8:
-				inter = uint8(bigNum.Uint64())
-			case reflect.Uint16:
-				inter = uint16(bigNum.Uint64())
-			case reflect.Uint32:
-				inter = uint32(bigNum.Uint64())
-			case reflect.Uint64:
-				inter = bigNum.Uint64()
-			case reflect.Int8:
-				inter = int8(bigNum.Int64())
-			case reflect.Int16:
-				inter = int16(bigNum.Int64())
-			case reflect.Int32:
-				inter = int32(bigNum.Int64())
-			case reflect.Int64:
-				inter = bigNum.Int64()
-			default:
-				inter = common.BytesToBig(returnOutput)
-			}
+			inter = readInteger(t.Type.Kind, returnOutput)
 		case BoolTy:
-			inter = common.BytesToBig(returnOutput).Uint64() > 0
+			inter = !allZero(returnOutput)
 		case AddressTy:
 			inter = common.BytesToAddress(returnOutput)
 		case HashTy:
@@ -205,6 +184,38 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 
 	// return the interface
 	return refSlice.Interface(), nil
+}
+
+func readInteger(kind reflect.Kind, b []byte) interface{} {
+	switch kind {
+	case reflect.Uint8:
+		return uint8(b[len(b)-1])
+	case reflect.Uint16:
+		return binary.BigEndian.Uint16(b[len(b)-2:])
+	case reflect.Uint32:
+		return binary.BigEndian.Uint32(b[len(b)-4:])
+	case reflect.Uint64:
+		return binary.BigEndian.Uint64(b[len(b)-8:])
+	case reflect.Int8:
+		return int8(b[len(b)-1])
+	case reflect.Int16:
+		return int16(binary.BigEndian.Uint16(b[len(b)-2:]))
+	case reflect.Int32:
+		return int32(binary.BigEndian.Uint32(b[len(b)-4:]))
+	case reflect.Int64:
+		return int64(binary.BigEndian.Uint64(b[len(b)-8:]))
+	default:
+		return new(big.Int).SetBytes(b)
+	}
+}
+
+func allZero(b []byte) bool {
+	for _, byte := range b {
+		if byte != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // toGoType parses the input and casts it to the proper type defined by the ABI
@@ -226,12 +237,12 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	switch t.Type.T {
 	case StringTy, BytesTy: // variable arrays are written at the end of the return bytes
 		// parse offset from which we should start reading
-		offset := int(common.BytesToBig(output[index : index+32]).Uint64())
+		offset := int(binary.BigEndian.Uint64(output[index+24 : index+32]))
 		if offset+32 > len(output) {
 			return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32)
 		}
 		// parse the size up until we should be reading
-		size := int(common.BytesToBig(output[offset : offset+32]).Uint64())
+		size := int(binary.BigEndian.Uint64(output[offset+24 : offset+32]))
 		if offset+32+size > len(output) {
 			return nil, fmt.Errorf("abi: cannot marshal in to go type: length insufficient %d require %d", len(output), offset+32+size)
 		}
@@ -245,32 +256,9 @@ func toGoType(i int, t Argument, output []byte) (interface{}, error) {
 	// convert the bytes to whatever is specified by the ABI.
 	switch t.Type.T {
 	case IntTy, UintTy:
-		bigNum := common.BytesToBig(returnOutput)
-
-		// If the type is a integer convert to the integer type
-		// specified by the ABI.
-		switch t.Type.Kind {
-		case reflect.Uint8:
-			return uint8(bigNum.Uint64()), nil
-		case reflect.Uint16:
-			return uint16(bigNum.Uint64()), nil
-		case reflect.Uint32:
-			return uint32(bigNum.Uint64()), nil
-		case reflect.Uint64:
-			return uint64(bigNum.Uint64()), nil
-		case reflect.Int8:
-			return int8(bigNum.Int64()), nil
-		case reflect.Int16:
-			return int16(bigNum.Int64()), nil
-		case reflect.Int32:
-			return int32(bigNum.Int64()), nil
-		case reflect.Int64:
-			return int64(bigNum.Int64()), nil
-		case reflect.Ptr:
-			return bigNum, nil
-		}
+		return readInteger(t.Type.Kind, returnOutput), nil
 	case BoolTy:
-		return common.BytesToBig(returnOutput).Uint64() > 0, nil
+		return !allZero(returnOutput), nil
 	case AddressTy:
 		return common.BytesToAddress(returnOutput), nil
 	case HashTy:

@@ -35,7 +35,7 @@ import (
 func tmpDatadirWithKeystore(t *testing.T) string {
 	datadir := tmpdir(t)
 	keystore := filepath.Join(datadir, "keystore")
-	source := filepath.Join("..", "..", "accounts", "testdata", "keystore")
+	source := filepath.Join("..", "..", "accounts", "keystore", "testdata", "keystore")
 	if err := cp.CopyAll(keystore, source); err != nil {
 		t.Fatal(err)
 	}
@@ -53,15 +53,15 @@ func TestAccountList(t *testing.T) {
 	defer geth.expectExit()
 	if runtime.GOOS == "windows" {
 		geth.expect(`
-Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} {{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
-Account #1: {f466859ead1932d743d622cb74fc058882e8648a} {{.Datadir}}\keystore\aaa
-Account #2: {289d485d9771714cce91d3393d764e1311907acc} {{.Datadir}}\keystore\zzz
+Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}\keystore\UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}\keystore\aaa
+Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}\keystore\zzz
 `)
 	} else {
 		geth.expect(`
-Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} {{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
-Account #1: {f466859ead1932d743d622cb74fc058882e8648a} {{.Datadir}}/keystore/aaa
-Account #2: {289d485d9771714cce91d3393d764e1311907acc} {{.Datadir}}/keystore/zzz
+Account #0: {7ef5a6135f1fd6a02593eedc869c6d41d934aef8} keystore://{{.Datadir}}/keystore/UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8
+Account #1: {f466859ead1932d743d622cb74fc058882e8648a} keystore://{{.Datadir}}/keystore/aaa
+Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}/keystore/zzz
 `)
 	}
 }
@@ -145,7 +145,8 @@ Passphrase: {{.InputLine "foobar"}}
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
+		"Unlocked account",
+		"=0xf466859ead1932d743d622cb74fc058882e8648a",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -189,8 +190,9 @@ Passphrase: {{.InputLine "foobar"}}
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account 7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
-		"Unlocked account 289d485d9771714cce91d3393d764e1311907acc",
+		"Unlocked account",
+		"=0x7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
+		"=0x289d485d9771714cce91d3393d764e1311907acc",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -208,8 +210,9 @@ func TestUnlockFlagPasswordFile(t *testing.T) {
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account 7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
-		"Unlocked account 289d485d9771714cce91d3393d764e1311907acc",
+		"Unlocked account",
+		"=0x7ef5a6135f1fd6a02593eedc869c6d41d934aef8",
+		"=0x289d485d9771714cce91d3393d764e1311907acc",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -230,7 +233,7 @@ Fatal: Failed to unlock account 0 (could not decrypt key with given passphrase)
 }
 
 func TestUnlockFlagAmbiguous(t *testing.T) {
-	store := filepath.Join("..", "..", "accounts", "testdata", "dupes")
+	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
 	geth := runGeth(t,
 		"--keystore", store, "--nat", "none", "--nodiscover", "--dev",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a",
@@ -247,17 +250,18 @@ Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "foobar"}}
 Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
-   {{keypath "1"}}
-   {{keypath "2"}}
+   keystore://{{keypath "1"}}
+   keystore://{{keypath "2"}}
 Testing your passphrase against all of them...
-Your passphrase unlocked {{keypath "1"}}
+Your passphrase unlocked keystore://{{keypath "1"}}
 In order to avoid this warning, you need to remove the following duplicate key files:
-   {{keypath "2"}}
+   keystore://{{keypath "2"}}
 `)
 	geth.expectExit()
 
 	wantMessages := []string{
-		"Unlocked account f466859ead1932d743d622cb74fc058882e8648a",
+		"Unlocked account",
+		"=0xf466859ead1932d743d622cb74fc058882e8648a",
 	}
 	for _, m := range wantMessages {
 		if !strings.Contains(geth.stderrText(), m) {
@@ -267,7 +271,7 @@ In order to avoid this warning, you need to remove the following duplicate key f
 }
 
 func TestUnlockFlagAmbiguousWrongPassword(t *testing.T) {
-	store := filepath.Join("..", "..", "accounts", "testdata", "dupes")
+	store := filepath.Join("..", "..", "accounts", "keystore", "testdata", "dupes")
 	geth := runGeth(t,
 		"--keystore", store, "--nat", "none", "--nodiscover", "--dev",
 		"--unlock", "f466859ead1932d743d622cb74fc058882e8648a")
@@ -283,8 +287,8 @@ Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
 !! Unsupported terminal, password will be echoed.
 Passphrase: {{.InputLine "wrong"}}
 Multiple key files exist for address f466859ead1932d743d622cb74fc058882e8648a:
-   {{keypath "1"}}
-   {{keypath "2"}}
+   keystore://{{keypath "1"}}
+   keystore://{{keypath "2"}}
 Testing your passphrase against all of them...
 Fatal: None of the listed files could be unlocked.
 `)

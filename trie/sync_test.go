@@ -81,9 +81,9 @@ func checkTrieConsistency(db Database, root common.Hash) error {
 		return nil // // Consider a non existent state consistent
 	}
 	it := NewNodeIterator(trie)
-	for it.Next() {
+	for it.Next(true) {
 	}
-	return it.Error
+	return it.Error()
 }
 
 // Tests that an empty trie is not scheduled for syncing.

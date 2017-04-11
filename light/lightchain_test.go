@@ -17,21 +17,18 @@
 package light
 
 import (
+	"context"
 	"fmt"
 	"math/big"
-	"runtime"
 	"testing"
 
-	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/pow"
-	"github.com/hashicorp/golang-lru"
-	"golang.org/x/net/context"
 )
 
 // So we can deterministically seed different blockchains
@@ -52,22 +49,15 @@ func makeHeaderChain(parent *types.Header, n int, db ethdb.Database, seed int) [
 	return headers
 }
 
-func testChainConfig() *params.ChainConfig {
-	return &params.ChainConfig{HomesteadBlock: big.NewInt(0)}
-}
-
 // newCanonical creates a chain database, and injects a deterministic canonical
 // chain. Depending on the full flag, if creates either a full block chain or a
 // header only chain.
 func newCanonical(n int) (ethdb.Database, *LightChain, error) {
-	// Create te new chain database
 	db, _ := ethdb.NewMemDatabase()
-	evmux := &event.TypeMux{}
+	gspec := core.Genesis{Config: params.TestChainConfig}
+	genesis := gspec.MustCommit(db)
+	blockchain, _ := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFaker(), new(event.TypeMux))
 
-	// Initialize a fresh chain with only a genesis block
-	genesis, _ := core.WriteTestNetGenesisBlock(db)
-
-	blockchain, _ := NewLightChain(&dummyOdr{db: db}, testChainConfig(), core.FakePow{}, evmux)
 	// Create and inject the requested chain
 	if n == 0 {
 		return db, blockchain, nil
@@ -78,26 +68,19 @@ func newCanonical(n int) (ethdb.Database, *LightChain, error) {
 	return db, blockchain, err
 }
 
-func init() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-}
-
-func thePow() pow.PoW {
-	pow, _ := ethash.NewForTesting()
-	return pow
-}
-
-func theLightChain(db ethdb.Database, t *testing.T) *LightChain {
-	var eventMux event.TypeMux
-	core.WriteTestNetGenesisBlock(db)
-	LightChain, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), thePow(), &eventMux)
-	if err != nil {
-		t.Error("failed creating LightChain:", err)
-		t.FailNow()
-		return nil
+// newTestLightChain creates a LightChain that doesn't validate anything.
+func newTestLightChain() *LightChain {
+	db, _ := ethdb.NewMemDatabase()
+	gspec := &core.Genesis{
+		Difficulty: big.NewInt(1),
+		Config:     params.TestChainConfig,
 	}
-
-	return LightChain
+	gspec.MustCommit(db)
+	lc, err := NewLightChain(&dummyOdr{db: db}, gspec.Config, ethash.NewFullFaker(), new(event.TypeMux))
+	if err != nil {
+		panic(err)
+	}
+	return lc
 }
 
 // Test fork of length N starting from block i
@@ -143,17 +126,17 @@ func printChain(bc *LightChain) {
 
 // testHeaderChainImport tries to process a chain of header, writing them into
 // the database if successful.
-func testHeaderChainImport(chain []*types.Header, LightChain *LightChain) error {
+func testHeaderChainImport(chain []*types.Header, lightchain *LightChain) error {
 	for _, header := range chain {
 		// Try and validate the header
-		if err := LightChain.Validator().ValidateHeader(header, LightChain.GetHeaderByHash(header.ParentHash), false); err != nil {
+		if err := lightchain.engine.VerifyHeader(lightchain.hc, header, true); err != nil {
 			return err
 		}
 		// Manually insert the header into the database, but don't reorganize (allows subsequent testing)
-		LightChain.mu.Lock()
-		core.WriteTd(LightChain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, LightChain.GetTdByHash(header.ParentHash)))
-		core.WriteHeader(LightChain.chainDb, header)
-		LightChain.mu.Unlock()
+		lightchain.mu.Lock()
+		core.WriteTd(lightchain.chainDb, header.Hash(), header.Number.Uint64(), new(big.Int).Add(header.Difficulty, lightchain.GetTdByHash(header.ParentHash)))
+		core.WriteHeader(lightchain.chainDb, header)
+		lightchain.mu.Unlock()
 	}
 	return nil
 }
@@ -270,10 +253,6 @@ func TestBrokenHeaderChain(t *testing.T) {
 	}
 }
 
-type bproc struct{}
-
-func (bproc) ValidateHeader(*types.Header, *types.Header, bool) error { return nil }
-
 func makeHeaderChainWithDiff(genesis *types.Block, d []int, seed byte) []*types.Header {
 	var chain []*types.Header
 	for i, difficulty := range d {
@@ -308,20 +287,6 @@ func (odr *dummyOdr) Retrieve(ctx context.Context, req OdrRequest) error {
 	return nil
 }
 
-func chm(genesis *types.Block, db ethdb.Database) *LightChain {
-	odr := &dummyOdr{db: db}
-	var eventMux event.TypeMux
-	bc := &LightChain{odr: odr, chainDb: db, genesisBlock: genesis, eventMux: &eventMux, pow: core.FakePow{}}
-	bc.hc, _ = core.NewHeaderChain(db, testChainConfig(), bc.Validator, bc.getProcInterrupt)
-	bc.bodyCache, _ = lru.New(100)
-	bc.bodyRLPCache, _ = lru.New(100)
-	bc.blockCache, _ = lru.New(100)
-	bc.SetValidator(bproc{})
-	bc.ResetWithGenesisBlock(genesis)
-
-	return bc
-}
-
 // Tests that reorganizing a long difficult chain after a short easy one
 // overwrites the canonical numbers and links in the database.
 func TestReorgLongHeaders(t *testing.T) {
@@ -335,14 +300,11 @@ func TestReorgShortHeaders(t *testing.T) {
 }
 
 func testReorg(t *testing.T, first, second []int, td int64) {
-	// Create a pristine block chain
-	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := core.WriteTestNetGenesisBlock(db)
-	bc := chm(genesis, db)
+	bc := newTestLightChain()
 
 	// Insert an easy and a difficult chain afterwards
-	bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, first, 11), 1)
-	bc.InsertHeaderChain(makeHeaderChainWithDiff(genesis, second, 22), 1)
+	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, first, 11), 1)
+	bc.InsertHeaderChain(makeHeaderChainWithDiff(bc.genesisBlock, second, 22), 1)
 	// Check that the chain is valid number and link wise
 	prev := bc.CurrentHeader()
 	for header := bc.GetHeaderByNumber(bc.CurrentHeader().Number.Uint64() - 1); header.Number.Uint64() != 0; prev, header = header, bc.GetHeaderByNumber(header.Number.Uint64()-1) {
@@ -351,7 +313,7 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 		}
 	}
 	// Make sure the chain total difficulty is the correct one
-	want := new(big.Int).Add(genesis.Difficulty(), big.NewInt(td))
+	want := new(big.Int).Add(bc.genesisBlock.Difficulty(), big.NewInt(td))
 	if have := bc.GetTdByHash(bc.CurrentHeader().Hash()); have.Cmp(want) != 0 {
 		t.Errorf("total difficulty mismatch: have %v, want %v", have, want)
 	}
@@ -359,31 +321,24 @@ func testReorg(t *testing.T, first, second []int, td int64) {
 
 // Tests that the insertion functions detect banned hashes.
 func TestBadHeaderHashes(t *testing.T) {
-	// Create a pristine block chain
-	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := core.WriteTestNetGenesisBlock(db)
-	bc := chm(genesis, db)
+	bc := newTestLightChain()
 
 	// Create a chain, ban a hash and try to import
 	var err error
-	headers := makeHeaderChainWithDiff(genesis, []int{1, 2, 4}, 10)
+	headers := makeHeaderChainWithDiff(bc.genesisBlock, []int{1, 2, 4}, 10)
 	core.BadHashes[headers[2].Hash()] = true
-	_, err = bc.InsertHeaderChain(headers, 1)
-	if !core.IsBadHashError(err) {
-		t.Errorf("error mismatch: want: BadHashError, have: %v", err)
+	if _, err = bc.InsertHeaderChain(headers, 1); err != core.ErrBlacklistedHash {
+		t.Errorf("error mismatch: have: %v, want %v", err, core.ErrBlacklistedHash)
 	}
 }
 
 // Tests that bad hashes are detected on boot, and the chan rolled back to a
 // good state prior to the bad hash.
 func TestReorgBadHeaderHashes(t *testing.T) {
-	// Create a pristine block chain
-	db, _ := ethdb.NewMemDatabase()
-	genesis, _ := core.WriteTestNetGenesisBlock(db)
-	bc := chm(genesis, db)
+	bc := newTestLightChain()
 
 	// Create a chain, import and ban aferwards
-	headers := makeHeaderChainWithDiff(genesis, []int{1, 2, 3, 4}, 10)
+	headers := makeHeaderChainWithDiff(bc.genesisBlock, []int{1, 2, 3, 4}, 10)
 
 	if _, err := bc.InsertHeaderChain(headers, 1); err != nil {
 		t.Fatalf("failed to import headers: %v", err)
@@ -393,8 +348,9 @@ func TestReorgBadHeaderHashes(t *testing.T) {
 	}
 	core.BadHashes[headers[3].Hash()] = true
 	defer func() { delete(core.BadHashes, headers[3].Hash()) }()
-	// Create a new chain manager and check it rolled back the state
-	ncm, err := NewLightChain(&dummyOdr{db: db}, testChainConfig(), core.FakePow{}, new(event.TypeMux))
+
+	// Create a new LightChain and check that it rolled back the state.
+	ncm, err := NewLightChain(&dummyOdr{db: bc.chainDb}, params.TestChainConfig, ethash.NewFaker(), new(event.TypeMux))
 	if err != nil {
 		t.Fatalf("failed to create new chain manager: %v", err)
 	}

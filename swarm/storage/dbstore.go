@@ -28,8 +28,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -252,18 +251,59 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// actual gc
 	for i := 0; i < gcnt; i++ {
 		if s.gcArray[i].value <= cutval {
-			batch := new(leveldb.Batch)
-			batch.Delete(s.gcArray[i].idxKey)
-			batch.Delete(getDataKey(s.gcArray[i].idx))
-			s.entryCnt--
-			batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
-			s.db.Write(batch)
+			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey)
 		}
 	}
 
 	// fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
+}
+
+func (s *DbStore) Cleanup() {
+	//Iterates over the database and checks that there are no faulty chunks
+	it := s.db.NewIterator()
+	startPosition := []byte{kpIndex}
+	it.Seek(startPosition)
+	var key []byte
+	var errorsFound, total int
+	for it.Valid() {
+		key = it.Key()
+		if (key == nil) || (key[0] != kpIndex) {
+			break
+		}
+		total++
+		var index dpaDBIndex
+		decodeIndex(it.Value(), &index)
+
+		data, err := s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
+			s.delete(index.Idx, getIndexKey(key[1:]))
+			errorsFound++
+		} else {
+			hasher := s.hashfunc()
+			hasher.Write(data)
+			hash := hasher.Sum(nil)
+			if !bytes.Equal(hash, key[1:]) {
+				log.Warn(fmt.Sprintf("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:]))
+				s.delete(index.Idx, getIndexKey(key[1:]))
+				errorsFound++
+			}
+		}
+		it.Next()
+	}
+	it.Release()
+	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
+}
+
+func (s *DbStore) delete(idx uint64, idxKey []byte) {
+	batch := new(leveldb.Batch)
+	batch.Delete(idxKey)
+	batch.Delete(getDataKey(idx))
+	s.entryCnt--
+	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
+	s.db.Write(batch)
 }
 
 func (s *DbStore) Counter() uint64 {
@@ -283,6 +323,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 		if chunk.dbStored != nil {
 			close(chunk.dbStored)
 		}
+		log.Trace(fmt.Sprintf("Storing to DB: chunk already exists, only update access"))
 		return // already exists, only update access
 	}
 
@@ -314,7 +355,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	if chunk.dbStored != nil {
 		close(chunk.dbStored)
 	}
-	glog.V(logger.Detail).Infof("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx)
+	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
 }
 
 // try to find index; if found, update access cnt and return true
@@ -348,6 +389,8 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		var data []byte
 		data, err = s.db.Get(getDataKey(index.Idx))
 		if err != nil {
+			log.Trace(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
+			s.delete(index.Idx, getIndexKey(key))
 			return
 		}
 
@@ -355,9 +398,8 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hasher.Write(data)
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
-			s.db.Delete(getDataKey(index.Idx))
-			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
-			return
+			s.delete(index.Idx, getIndexKey(key))
+			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 		}
 
 		chunk = &Chunk{
@@ -408,7 +450,7 @@ func (s *DbStore) getEntryCnt() uint64 {
 	return s.entryCnt
 }
 
-func (s *DbStore) close() {
+func (s *DbStore) Close() {
 	s.db.Close()
 }
 

@@ -23,7 +23,7 @@ import (
 )
 
 type account struct {
-	stateObject *StateObject
+	stateObject *stateObject
 	nstart      uint64
 	nonces      []bool
 }
@@ -82,10 +82,12 @@ func (ms *ManagedState) NewNonce(addr common.Address) uint64 {
 	return uint64(len(account.nonces)-1) + account.nstart
 }
 
-// GetNonce returns the canonical nonce for the managed or unmanaged account
+// GetNonce returns the canonical nonce for the managed or unmanaged account.
+//
+// Because GetNonce mutates the DB, we must take a write lock.
 func (ms *ManagedState) GetNonce(addr common.Address) uint64 {
-	ms.mu.RLock()
-	defer ms.mu.RUnlock()
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
 
 	if ms.hasAccount(addr) {
 		account := ms.getAccount(addr)
@@ -126,7 +128,7 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 	} else {
 		// Always make sure the state account nonce isn't actually higher
 		// than the tracked one.
-		so := ms.StateDB.GetStateObject(addr)
+		so := ms.StateDB.getStateObject(addr)
 		if so != nil && uint64(len(account.nonces))+account.nstart < so.Nonce() {
 			ms.accounts[addr] = newAccount(so)
 		}
@@ -136,6 +138,6 @@ func (ms *ManagedState) getAccount(addr common.Address) *account {
 	return ms.accounts[addr]
 }
 
-func newAccount(so *StateObject) *account {
+func newAccount(so *stateObject) *account {
 	return &account{so, so.Nonce(), nil}
 }

@@ -169,7 +169,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy an interaction tester contract and call a transaction on it
 			_, _, interactor, err := DeployInteractor(auth, sim, "Deploy string")
@@ -210,7 +210,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, getter, err := DeployGetter(auth, sim)
@@ -242,7 +242,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a tuple tester contract and execute a structured call on it
 			_, _, tupler, err := DeployTupler(auth, sim)
@@ -284,7 +284,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a slice tester contract and execute a n array call on it
 			_, _, slicer, err := DeploySlicer(auth, sim)
@@ -318,7 +318,7 @@ var bindTests = []struct {
 			// Generate a new random account and a funded simulator
 			key, _ := crypto.GenerateKey()
 			auth := bind.NewKeyedTransactor(key)
-			sim := backends.NewSimulatedBackend(core.GenesisAccount{Address: auth.From, Balance: big.NewInt(10000000000)})
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
 
 			// Deploy a default method invoker contract and execute its default method
 			_, _, defaulter, err := DeployDefaulter(auth, sim)
@@ -341,17 +341,17 @@ var bindTests = []struct {
 	{
 		`NonExistent`,
 		`
-		contract NonExistent {
-			function String() constant returns(string) {
-				return "I don't exist";
+			contract NonExistent {
+				function String() constant returns(string) {
+					return "I don't exist";
+				}
 			}
-		}
 		`,
 		`6060604052609f8060106000396000f3606060405260e060020a6000350463f97a60058114601a575b005b600060605260c0604052600d60809081527f4920646f6e27742065786973740000000000000000000000000000000000000060a052602060c0908152600d60e081905281906101009060a09080838184600060046012f15050815172ffffffffffffffffffffffffffffffffffffff1916909152505060405161012081900392509050f3`,
 		`[{"constant":true,"inputs":[],"name":"String","outputs":[{"name":"","type":"string"}],"type":"function"}]`,
 		`
 			// Create a simulator and wrap a non-deployed contract
-			sim := backends.NewSimulatedBackend()
+			sim := backends.NewSimulatedBackend(nil)
 
 			nonexistent, err := NewNonExistent(common.Address{}, sim)
 			if err != nil {
@@ -362,6 +362,88 @@ var bindTests = []struct {
 				t.Fatalf("Call succeeded on non-existent contract: %v", res)
 			} else if (err != bind.ErrNoCode) {
 				t.Fatalf("Error mismatch: have %v, want %v", err, bind.ErrNoCode)
+			}
+		`,
+	},
+	// Tests that gas estimation works for contracts with	weird gas mechanics too.
+	{
+		`FunkyGasPattern`,
+		`
+			contract FunkyGasPattern {
+				string public field;
+
+				function SetField(string value) {
+					// This check will screw gas estimation! Good, good!
+					if (msg.gas < 100000) {
+						throw;
+					}
+					field = value;
+				}
+			}
+		`,
+		`606060405261021c806100126000396000f3606060405260e060020a600035046323fcf32a81146100265780634f28bf0e1461007b575b005b6040805160206004803580820135601f8101849004840285018401909552848452610024949193602493909291840191908190840183828082843750949650505050505050620186a05a101561014e57610002565b6100db60008054604080516020601f600260001961010060018816150201909516949094049384018190048102820181019092528281529291908301828280156102145780601f106101e957610100808354040283529160200191610214565b60405180806020018281038252838181518152602001915080519060200190808383829060006004602084601f0104600302600f01f150905090810190601f16801561013b5780820380516001836020036101000a031916815260200191505b509250505060405180910390f35b505050565b8060006000509080519060200190828054600181600116156101000203166002900490600052602060002090601f016020900481019282601f106101b557805160ff19168380011785555b506101499291505b808211156101e557600081556001016101a1565b82800160010185558215610199579182015b828111156101995782518260005055916020019190600101906101c7565b5090565b820191906000526020600020905b8154815290600101906020018083116101f757829003601f168201915b50505050508156`,
+		`[{"constant":false,"inputs":[{"name":"value","type":"string"}],"name":"SetField","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"field","outputs":[{"name":"","type":"string"}],"type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			// Deploy a funky gas pattern contract
+			_, _, limiter, err := DeployFunkyGasPattern(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy funky contract: %v", err)
+			}
+			sim.Commit()
+
+			// Set the field with automatic estimation and check that it succeeds
+			auth.GasLimit = nil
+			if _, err := limiter.SetField(auth, "automatic"); err != nil {
+				t.Fatalf("Failed to call automatically gased transaction: %v", err)
+			}
+			sim.Commit()
+
+			if field, _ := limiter.Field(nil); field != "automatic" {
+				t.Fatalf("Field mismatch: have %v, want %v", field, "automatic")
+			}
+		`,
+	},
+	// Test that constant functions can be called from an (optional) specified address
+	{
+		`CallFrom`,
+		`
+			contract CallFrom {
+				function callFrom() constant returns(address) {
+					return msg.sender;
+				}
+			}
+		`, `6060604052346000575b6086806100176000396000f300606060405263ffffffff60e060020a60003504166349f8e98281146022575b6000565b34600057602c6055565b6040805173ffffffffffffffffffffffffffffffffffffffff9092168252519081900360200190f35b335b905600a165627a7a72305820aef6b7685c0fa24ba6027e4870404a57df701473fe4107741805c19f5138417c0029`,
+		`[{"constant":true,"inputs":[],"name":"callFrom","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"}]`,
+		`
+			// Generate a new random account and a funded simulator
+			key, _ := crypto.GenerateKey()
+			auth := bind.NewKeyedTransactor(key)
+			sim := backends.NewSimulatedBackend(core.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000)}})
+
+			// Deploy a sender tester contract and execute a structured call on it
+			_, _, callfrom, err := DeployCallFrom(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy sender contract: %v", err)
+			}
+			sim.Commit()
+
+			if res, err := callfrom.CallFrom(nil); err != nil {
+				t.Errorf("Failed to call constant function: %v", err)
+			} else if res != (common.Address{}) {
+				t.Errorf("Invalid address returned, want: %x, got: %x", (common.Address{}), res)
+			}
+
+			for _, addr := range []common.Address{common.Address{}, common.Address{1}, common.Address{2}} {
+				if res, err := callfrom.CallFrom(&bind.CallOpts{From: addr}); err != nil {
+					t.Fatalf("Failed to call constant function: %v", err)
+				} else if res != addr {
+					t.Fatalf("Invalid address returned, want: %x, got: %x", addr, res)
+				}
 			}
 		`,
 	},
@@ -376,7 +458,7 @@ func TestBindings(t *testing.T) {
 		t.Skip("go sdk not found for testing")
 	}
 	// Skip the test if the go-ethereum sources are symlinked (https://github.com/golang/go/issues/14845)
-	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend())\n}")
+	linkTestCode := fmt.Sprintf("package linktest\nfunc CheckSymlinks(){\nfmt.Println(backends.NewSimulatedBackend(nil))\n}")
 	linkTestDeps, err := imports.Process("", []byte(linkTestCode), nil)
 	if err != nil {
 		t.Fatalf("failed check for goimports symlink bug: %v", err)

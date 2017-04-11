@@ -45,6 +45,7 @@ func TestConsoleWelcome(t *testing.T) {
 
 	// Gather all the infos the welcome message needs to contain
 	geth.setTemplateFunc("goos", func() string { return runtime.GOOS })
+	geth.setTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	geth.setTemplateFunc("gover", runtime.Version)
 	geth.setTemplateFunc("gethver", func() string { return params.Version })
 	geth.setTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
@@ -58,7 +59,7 @@ func TestConsoleWelcome(t *testing.T) {
 	geth.expect(`
 Welcome to the Geth JavaScript console!
 
-instance: Geth/v{{gethver}}/{{goos}}/{{gover}}
+instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
@@ -131,6 +132,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
 
 	// Gather all the infos the welcome message needs to contain
 	attach.setTemplateFunc("goos", func() string { return runtime.GOOS })
+	attach.setTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.setTemplateFunc("gover", runtime.Version)
 	attach.setTemplateFunc("gethver", func() string { return params.Version })
 	attach.setTemplateFunc("etherbase", func() string { return geth.Etherbase })
@@ -152,7 +154,7 @@ func testAttachWelcome(t *testing.T, geth *testgeth, endpoint string) {
 	attach.expect(`
 Welcome to the Geth JavaScript console!
 
-instance: Geth/v{{gethver}}/{{goos}}/{{gover}}
+instance: Geth/v{{gethver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}

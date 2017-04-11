@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
@@ -35,9 +36,7 @@ func generateKeyPair() (pubkey, privkey []byte) {
 		panic(err)
 	}
 	pubkey = elliptic.Marshal(S256(), key.X, key.Y)
-	privkey = make([]byte, 32)
-	readBits(privkey, key.D)
-	return pubkey, privkey
+	return pubkey, math.PaddedBigBytes(key.D, 32)
 }
 
 func randSig() []byte {
@@ -109,6 +108,24 @@ func TestSignAndRecover(t *testing.T) {
 	}
 	if !bytes.Equal(pubkey1, pubkey2) {
 		t.Errorf("pubkey mismatch: want: %x have: %x", pubkey1, pubkey2)
+	}
+}
+
+func TestSignDeterministic(t *testing.T) {
+	_, seckey := generateKeyPair()
+	msg := make([]byte, 32)
+	copy(msg, "hi there")
+
+	sig1, err := Sign(msg, seckey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig2, err := Sign(msg, seckey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(sig1, sig2) {
+		t.Fatal("signatures not equal")
 	}
 }
 

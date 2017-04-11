@@ -18,30 +18,37 @@ package debug
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/log/term"
+	colorable "github.com/mattn/go-colorable"
 	"gopkg.in/urfave/cli.v1"
 )
 
 var (
-	verbosityFlag = cli.GenericFlag{
+	verbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=core, 5=debug, 6=detail",
-		Value: glog.GetVerbosity(),
+		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
+		Value: 3,
 	}
-	vmoduleFlag = cli.GenericFlag{
+	vmoduleFlag = cli.StringFlag{
 		Name:  "vmodule",
-		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=6,p2p=5)",
-		Value: glog.GetVModule(),
+		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
+		Value: "",
 	}
-	backtraceAtFlag = cli.GenericFlag{
+	backtraceAtFlag = cli.StringFlag{
 		Name:  "backtrace",
 		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
-		Value: glog.GetTraceLocation(),
+		Value: "",
+	}
+	debugFlag = cli.BoolFlag{
+		Name:  "debug",
+		Usage: "Prepends log messages with call-site location (file and line number)",
 	}
 	pprofFlag = cli.BoolFlag{
 		Name:  "pprof",
@@ -78,17 +85,31 @@ var (
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
-	verbosityFlag, vmoduleFlag, backtraceAtFlag,
+	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
 	pprofFlag, pprofAddrFlag, pprofPortFlag,
 	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
+}
+
+var glogger *log.GlogHandler
+
+func init() {
+	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
+	output := io.Writer(os.Stderr)
+	if usecolor {
+		output = colorable.NewColorableStderr()
+	}
+	glogger = log.NewGlogHandler(log.StreamHandler(output, log.TerminalFormat(usecolor)))
 }
 
 // Setup initializes profiling and logging based on the CLI flags.
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
 	// logging
-	glog.CopyStandardLogTo("INFO")
-	glog.SetToStderr(true)
+	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
+	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
+	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
+	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
+	log.Root().SetHandler(glogger)
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
@@ -108,8 +129,10 @@ func Setup(ctx *cli.Context) error {
 	if ctx.GlobalBool(pprofFlag.Name) {
 		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
 		go func() {
-			glog.V(logger.Info).Infof("starting pprof server at http://%s/debug/pprof", address)
-			glog.Errorln(http.ListenAndServe(address, nil))
+			log.Info("Starting pprof server", "addr", fmt.Sprintf("http://%s/debug/pprof", address))
+			if err := http.ListenAndServe(address, nil); err != nil {
+				log.Error("Failure in running pprof server", "err", err)
+			}
 		}()
 	}
 	return nil

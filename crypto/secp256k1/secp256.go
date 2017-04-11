@@ -38,23 +38,12 @@ import "C"
 
 import (
 	"errors"
-	"math/big"
 	"unsafe"
-
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 )
 
-var (
-	context *C.secp256k1_context
-	N       *big.Int
-	HalfN   *big.Int
-)
+var context *C.secp256k1_context
 
 func init() {
-	N, _ = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
-	// N / 2 == 57896044618658097711785492504343953926418782139537452191302581570759080747168
-	HalfN, _ = new(big.Int).SetString("7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0", 16)
-
 	// around 20 ms on a modern CPU.
 	context = C.secp256k1_context_create_sign_verify()
 	C.secp256k1_context_set_illegal_callback(context, C.callbackFunc(C.secp256k1GoPanicIllegal), nil)
@@ -89,13 +78,11 @@ func Sign(msg []byte, seckey []byte) ([]byte, error) {
 	}
 
 	var (
-		msgdata       = (*C.uchar)(unsafe.Pointer(&msg[0]))
-		nonce         = randentropy.GetEntropyCSPRNG(32)
-		noncefunc     = &(*C.secp256k1_nonce_function_default)
-		noncefuncData = unsafe.Pointer(&nonce[0])
-		sigstruct     C.secp256k1_ecdsa_recoverable_signature
+		msgdata   = (*C.uchar)(unsafe.Pointer(&msg[0]))
+		noncefunc = C.secp256k1_nonce_function_rfc6979
+		sigstruct C.secp256k1_ecdsa_recoverable_signature
 	)
-	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, noncefuncData) == 0 {
+	if C.secp256k1_ecdsa_sign_recoverable(context, &sigstruct, msgdata, seckeydata, noncefunc, nil) == 0 {
 		return nil, ErrSignFailed
 	}
 
@@ -140,17 +127,4 @@ func checkSignature(sig []byte) error {
 		return ErrInvalidRecoveryID
 	}
 	return nil
-}
-
-// reads num into buf as big-endian bytes.
-func readBits(buf []byte, num *big.Int) {
-	const wordLen = int(unsafe.Sizeof(big.Word(0)))
-	i := len(buf)
-	for _, d := range num.Bits() {
-		for j := 0; j < wordLen && i > 0; j++ {
-			i--
-			buf[i] = byte(d)
-			d >>= 8
-		}
-	}
 }

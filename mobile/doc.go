@@ -16,7 +16,7 @@
 
 // Package geth contains the simplified mobile APIs to go-ethereum.
 //
-// The scope of this package is *not* to allow writing a custom Ethereun client
+// The scope of this package is *not* to allow writing a custom Ethereum client
 // with pieces plucked from go-ethereum, rather to allow writing native dapps on
 // mobile platforms. Keep this in mind when using or extending this package!
 //

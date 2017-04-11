@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/core/state"
@@ -46,11 +47,11 @@ func ValidateDAOHeaderExtraData(config *params.ChainConfig, header *types.Header
 	// Depending whether we support or oppose the fork, validate the extra-data contents
 	if config.DAOForkSupport {
 		if !bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-			return ValidationError("DAO pro-fork bad block extra-data: 0x%x", header.Extra)
+			return fmt.Errorf("DAO pro-fork bad block extra-data: 0x%x", header.Extra)
 		}
 	} else {
 		if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-			return ValidationError("DAO no-fork bad block extra-data: 0x%x", header.Extra)
+			return fmt.Errorf("DAO no-fork bad block extra-data: 0x%x", header.Extra)
 		}
 	}
 	// All ok, header has the same extra-data we expect
@@ -62,13 +63,13 @@ func ValidateDAOHeaderExtraData(config *params.ChainConfig, header *types.Header
 // contract.
 func ApplyDAOHardFork(statedb *state.StateDB) {
 	// Retrieve the contract to refund balances into
-	refund := statedb.GetOrNewStateObject(params.DAORefundContract)
+	if !statedb.Exist(params.DAORefundContract) {
+		statedb.CreateAccount(params.DAORefundContract)
+	}
 
 	// Move every DAO account and extra-balance account funds into the refund contract
-	for _, addr := range params.DAODrainList {
-		if account := statedb.GetStateObject(addr); account != nil {
-			refund.AddBalance(account.Balance())
-			account.SetBalance(new(big.Int))
-		}
+	for _, addr := range params.DAODrainList() {
+		statedb.AddBalance(params.DAORefundContract, statedb.GetBalance(addr))
+		statedb.SetBalance(addr, new(big.Int))
 	}
 }

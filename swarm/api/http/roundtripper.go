@@ -20,8 +20,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
@@ -58,7 +57,7 @@ func (self *RoundTripper) RoundTrip(req *http.Request) (resp *http.Response, err
 		host = "localhost"
 	}
 	url := fmt.Sprintf("http://%s:%s/%s:/%s/%s", host, self.Port, req.Proto, req.URL.Host, req.URL.Path)
-	glog.V(logger.Info).Infof("roundtripper: proxying request '%s' to '%s'", req.RequestURI, url)
+	log.Info(fmt.Sprintf("roundtripper: proxying request '%s' to '%s'", req.RequestURI, url))
 	reqProxy, err := http.NewRequest(req.Method, url, req.Body)
 	if err != nil {
 		return nil, err

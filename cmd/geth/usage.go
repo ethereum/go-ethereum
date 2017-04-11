@@ -78,6 +78,17 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "ETHASH",
+		Flags: []cli.Flag{
+			utils.EthashCacheDirFlag,
+			utils.EthashCachesInMemoryFlag,
+			utils.EthashCachesOnDiskFlag,
+			utils.EthashDatasetDirFlag,
+			utils.EthashDatasetsInMemoryFlag,
+			utils.EthashDatasetsOnDiskFlag,
+		},
+	},
+	{
 		Name: "PERFORMANCE TUNING",
 		Flags: []cli.Flag{
 			utils.CacheFlag,
@@ -131,7 +142,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.AutoDAGFlag,
 			utils.EtherbaseFlag,
 			utils.TargetGasLimitFlag,
 			utils.GasPriceFlag,
@@ -141,12 +151,8 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "GAS PRICE ORACLE",
 		Flags: []cli.Flag{
-			utils.GpoMinGasPriceFlag,
-			utils.GpoMaxGasPriceFlag,
-			utils.GpoFullBlockRatioFlag,
-			utils.GpobaseStepDownFlag,
-			utils.GpobaseStepUpFlag,
-			utils.GpobaseCorrectionFactorFlag,
+			utils.GpoBlocksFlag,
+			utils.GpoPercentileFlag,
 		},
 	},
 	{

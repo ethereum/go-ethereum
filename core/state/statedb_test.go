@@ -116,7 +116,6 @@ func TestIntermediateLeaks(t *testing.T) {
 }
 
 func TestSnapshotRandom(t *testing.T) {
-	t.Skip("@fjl fix me please")
 	config := &quick.Config{MaxCount: 1000}
 	err := quick.Check((*snapshotTest).run, config)
 	if cerr, ok := err.(*quick.CheckError); ok {
@@ -331,12 +330,11 @@ func (test *snapshotTest) checkEqual(state, checkstate *StateDB) error {
 		checkeq("GetCodeHash", state.GetCodeHash(addr), checkstate.GetCodeHash(addr))
 		checkeq("GetCodeSize", state.GetCodeSize(addr), checkstate.GetCodeSize(addr))
 		// Check storage.
-		if obj := state.GetStateObject(addr); obj != nil {
-			obj.ForEachStorage(func(key, val common.Hash) bool {
+		if obj := state.getStateObject(addr); obj != nil {
+			state.ForEachStorage(addr, func(key, val common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", val, checkstate.GetState(addr, key))
 			})
-			checkobj := checkstate.GetStateObject(addr)
-			checkobj.ForEachStorage(func(key, checkval common.Hash) bool {
+			checkstate.ForEachStorage(addr, func(key, checkval common.Hash) bool {
 				return checkeq("GetState("+key.Hex()+")", state.GetState(addr, key), checkval)
 			})
 		}
