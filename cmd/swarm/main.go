@@ -133,7 +133,6 @@ func init() {
 	defaultNodeConfig.IPCPath = "bzzd.ipc"
 	// Set flag defaults for --help display.
 	utils.ListenPortFlag.Value = 30399
-	utils.IPCPathFlag.Value = utils.DirectoryString{"bzzd.ipc"}
 }
 
 var app = utils.NewApp(gitCommit, "Ethereum Swarm")
