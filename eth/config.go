@@ -105,7 +105,6 @@ type Config struct {
 	EnablePreimageRecording bool
 
 	// Miscellaneous options
-	SolcPath  string
 	DocRoot   string `toml:"-"`
 	PowFake   bool   `toml:"-"`
 	PowTest   bool   `toml:"-"`

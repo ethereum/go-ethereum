@@ -144,11 +144,6 @@ web3._extend({
 			params: 2
 		}),
 		new web3._extend.Method({
-			name: 'setSolc',
-			call: 'admin_setSolc',
-			params: 1
-		}),
-		new web3._extend.Method({
 			name: 'startRPC',
 			call: 'admin_startRPC',
 			params: 4,

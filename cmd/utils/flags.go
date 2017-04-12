@@ -392,11 +392,6 @@ var (
 		Usage: "JavaScript root path for `loadScript`",
 		Value: ".",
 	}
-	SolcPathFlag = cli.StringFlag{
-		Name:  "solc",
-		Usage: "Solidity compiler command to be used",
-		Value: "solc",
-	}
 
 	// Gas price oracle settings
 	GpoBlocksFlag = cli.IntFlag{
@@ -827,10 +822,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(GasPriceFlag.Name) {
 		cfg.GasPrice = GlobalBig(ctx, GasPriceFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(SolcPathFlag.Name) {
-		cfg.SolcPath = ctx.GlobalString(SolcPathFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
