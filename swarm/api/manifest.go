@@ -302,7 +302,8 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 	if (len(path) >= epl) && (path[:epl] == entry.Path) {
 		glog.V(logger.Detail).Infof("entry.ContentType = %v", entry.ContentType)
 		if entry.ContentType == manifestType {
-			if self.loadSubTrie(entry, quitC) != nil {
+			err := self.loadSubTrie(entry, quitC)
+			if err != nil {
 				return nil, 0
 			}
 			entry, pos = entry.subtrie.findPrefixOf(path[epl:], quitC)
@@ -312,8 +313,6 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 		} else {
 			pos = epl
 		}
-	} else {
-		entry = nil
 	}
 	return
 }

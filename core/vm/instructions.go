@@ -247,7 +247,12 @@ func opMulmod(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *S
 
 func opSha3(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	offset, size := stack.pop(), stack.pop()
-	hash := crypto.Keccak256(memory.Get(offset.Int64(), size.Int64()))
+	data := memory.Get(offset.Int64(), size.Int64())
+	hash := crypto.Keccak256(data)
+
+	if env.vmConfig.EnablePreimageRecording {
+		env.StateDB.AddPreimage(common.BytesToHash(hash), data)
+	}
 
 	stack.push(common.BytesToBig(hash))
 	return nil, nil

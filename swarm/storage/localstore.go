@@ -72,3 +72,8 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	self.memStore.Put(chunk)
 	return
 }
+
+// Close local store
+func (self *LocalStore) Close() {
+	return
+}

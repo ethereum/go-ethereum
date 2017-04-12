@@ -60,6 +60,7 @@ type StateDB interface {
 	Snapshot() int
 
 	AddLog(*types.Log)
+	AddPreimage(common.Hash, []byte)
 }
 
 // Account represents a contract or basic ethereum account.

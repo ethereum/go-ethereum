@@ -33,6 +33,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/eth/downloader"
 	"github.com/ubiq/go-ubiq/eth/filters"
 	"github.com/ubiq/go-ubiq/eth/gasprice"
@@ -77,7 +78,6 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseHandles    int
 
-	NatSpec   bool
 	DocRoot   string
 	AutoDAG   bool
 	PowFake   bool
@@ -97,8 +97,7 @@ type Config struct {
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
 
-	EnableJit bool
-	ForceJit  bool
+	EnablePreimageRecording bool
 
 	TestGenesisBlock *types.Block   // Genesis block to seed the chain database with (testing only!)
 	TestGenesisState ethdb.Database // Genesis state to seed the database with (testing only!)
@@ -106,7 +105,6 @@ type Config struct {
 
 type LesServer interface {
 	Start(srvr *p2p.Server)
-	Synced()
 	Stop()
 	Protocols() []p2p.Protocol
 }
@@ -140,7 +138,6 @@ type Ethereum struct {
 	etherbase    common.Address
 	solcPath     string
 
-	NatSpec       bool
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
 }
@@ -174,7 +171,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		netVersionId:   config.NetworkId,
-		NatSpec:        config.NatSpec,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
 		AutoDAG:        config.AutoDAG,
@@ -218,7 +214,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 	glog.V(logger.Info).Infoln("Chain config:", eth.chainConfig)
 
-	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux())
+	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`No chain found. Please initialise a new chain using the "init" subcommand.`)
@@ -365,15 +361,15 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
-	eb = s.etherbase
-	if (eb == common.Address{}) {
-		firstAccount, err := s.AccountManager().AccountByIndex(0)
-		eb = firstAccount.Address
-		if err != nil {
-			return eb, fmt.Errorf("etherbase address must be explicitly specified")
+	if s.etherbase != (common.Address{}) {
+		return s.etherbase, nil
+	}
+	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			return accounts[0].Address, nil
 		}
 	}
-	return eb, nil
+	return common.Address{}, fmt.Errorf("etherbase address must be explicitly specified")
 }
 
 // set in js console via admin interface or wrapper from cli flags

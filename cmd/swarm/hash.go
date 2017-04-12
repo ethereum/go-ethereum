@@ -36,6 +36,7 @@ func hash(ctx *cli.Context) {
 		fmt.Println("Error opening file " + args[1])
 		os.Exit(1)
 	}
+	defer f.Close()
 
 	stat, _ := f.Stat()
 	chunker := storage.NewTreeChunker(storage.NewChunkerParams())

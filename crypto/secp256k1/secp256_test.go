@@ -112,6 +112,24 @@ func TestSignAndRecover(t *testing.T) {
 	}
 }
 
+func TestSignDeterministic(t *testing.T) {
+	_, seckey := generateKeyPair()
+	msg := make([]byte, 32)
+	copy(msg, "hi there")
+
+	sig1, err := Sign(msg, seckey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig2, err := Sign(msg, seckey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(sig1, sig2) {
+		t.Fatal("signatures not equal")
+	}
+}
+
 func TestRandomMessagesWithSameKey(t *testing.T) {
 	pubkey, seckey := generateKeyPair()
 	keys := func() ([]byte, []byte) {

@@ -157,7 +157,7 @@ var _baseCheck = map[OpCode]req{
 	CALL:         {7, Zero, 1},
 	CALLCODE:     {7, Zero, 1},
 	DELEGATECALL: {6, Zero, 1},
-	SUICIDE:      {1, Zero, 0},
+	SELFDESTRUCT: {1, Zero, 0},
 	JUMPDEST:     {0, params.JumpdestGas, 0},
 	RETURN:       {2, Zero, 0},
 	PUSH1:        {0, GasFastestStep, 1},

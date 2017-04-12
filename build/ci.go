@@ -236,6 +236,14 @@ func goToolArch(arch string, subcmd string, args ...string) *exec.Cmd {
 	gocmd := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cmd := exec.Command(gocmd, subcmd)
 	cmd.Args = append(cmd.Args, args...)
+
+	if subcmd == "build" || subcmd == "install" || subcmd == "test" {
+		// Go CGO has a Windows linker error prior to 1.8 (https://github.com/golang/go/issues/8756).
+		// Work around issue by allowing multiple definitions for <1.8 builds.
+		if runtime.GOOS == "windows" && runtime.Version() < "go1.8" {
+			cmd.Args = append(cmd.Args, []string{"-ldflags", "-extldflags -Wl,--allow-multiple-definition"}...)
+		}
+	}
 	cmd.Env = []string{
 		"GO15VENDOREXPERIMENT=1",
 		"GOPATH=" + build.GOPATH(),
@@ -309,7 +317,7 @@ func spellcheck(packages []string) {
 	// Ensure the spellchecker is available
 	build.MustRun(goTool("get", "github.com/client9/misspell/cmd/misspell"))
 
-	// Windows chokes on long argument lists, check packages individualy
+	// Windows chokes on long argument lists, check packages individually
 	for _, pkg := range packages {
 		// The spell checker doesn't work on packages, gather all .go files for it
 		out, err := goTool("list", "-f", "{{.Dir}}{{range .GoFiles}}\n{{.}}{{end}}{{range .CgoFiles}}\n{{.}}{{end}}{{range .TestGoFiles}}\n{{.}}{{end}}", pkg).CombinedOutput()
@@ -700,9 +708,16 @@ func doAndroidArchive(cmdline []string) {
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
 
+	// Sanity check that the SDK and NDK are installed and set
+	if os.Getenv("ANDROID_HOME") == "" {
+		log.Fatal("Please ensure ANDROID_HOME points to your Android SDK")
+	}
+	if os.Getenv("ANDROID_NDK") == "" {
+		log.Fatal("Please ensure ANDROID_NDK points to your Android NDK")
+	}
 	// Build the Android archive and Maven resources
 	build.MustRun(goTool("get", "golang.org/x/mobile/cmd/gomobile"))
-	build.MustRun(gomobileTool("init"))
+	build.MustRun(gomobileTool("init", "--ndk", os.Getenv("ANDROID_NDK")))
 	build.MustRun(gomobileTool("bind", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ubiq/go-ubiq/mobile"))
 
 	if *local {

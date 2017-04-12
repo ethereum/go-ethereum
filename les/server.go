@@ -42,9 +42,7 @@ type LesServer struct {
 	fcManager       *flowcontrol.ClientManager // nil if our node is client only
 	fcCostStats     *requestCostStats
 	defParams       *flowcontrol.ServerParams
-	srvr            *p2p.Server
-	synced, stopped bool
-	lock            sync.Mutex
+	stopped         bool
 }
 
 func NewLesServer(eth *eth.Ethereum, config *eth.Config) (*LesServer, error) {
@@ -70,35 +68,13 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 	return s.protocolManager.SubProtocols
 }
 
-// Start only starts the actual service if the ETH protocol has already been synced,
-// otherwise it will be started by Synced()
+// Start starts the LES server
 func (s *LesServer) Start(srvr *p2p.Server) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.srvr = srvr
-	if s.synced {
-		s.protocolManager.Start(s.srvr)
-	}
-}
-
-// Synced notifies the server that the ETH protocol has been synced and LES service can be started
-func (s *LesServer) Synced() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.synced = true
-	if s.srvr != nil && !s.stopped {
-		s.protocolManager.Start(s.srvr)
-	}
+	s.protocolManager.Start(srvr)
 }
 
 // Stop stops the LES service
 func (s *LesServer) Stop() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	s.stopped = true
 	s.fcCostStats.store()
 	s.fcManager.Stop()
 	go func() {

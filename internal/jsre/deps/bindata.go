@@ -206,8 +206,8 @@ type bintree struct {
 }
 
 var _bintree = &bintree{nil, map[string]*bintree{
-	"bignumber.js": &bintree{bignumberJs, map[string]*bintree{}},
-	"web3.js":      &bintree{web3Js, map[string]*bintree{}},
+	"bignumber.js": {bignumberJs, map[string]*bintree{}},
+	"web3.js":      {web3Js, map[string]*bintree{}},
 }}
 
 // RestoreAsset restores an asset under the given directory

@@ -30,6 +30,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
@@ -143,7 +144,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		odr = NewLesOdr(db)
 		chain, _ = light.NewLightChain(odr, chainConfig, pow, evmux)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux)
+		blockchain, _ := core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
 		gchain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)

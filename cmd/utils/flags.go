@@ -30,9 +30,11 @@ import (
 
 	"github.com/ethereum/ethash"
 	"github.com/ubiq/go-ubiq/accounts"
+	"github.com/ubiq/go-ubiq/accounts/keystore"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/state"
+	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/eth"
 	"github.com/ubiq/go-ubiq/ethdb"
@@ -130,10 +132,6 @@ var (
 		Name:  "identity",
 		Usage: "Custom node name",
 	}
-	NatspecEnabledFlag = cli.BoolFlag{
-		Name:  "natspec",
-		Usage: "Enable NatSpec confirmation notice",
-	}
 	DocRootFlag = DirectoryFlag{
 		Name:  "docroot",
 		Usage: "Document Root for HTTPClient file scheme",
@@ -229,6 +227,10 @@ var (
 	VMEnableJitFlag = cli.BoolFlag{
 		Name:  "jitvm",
 		Usage: "Enable the JIT VM",
+	}
+	VMEnableDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Record information useful for VM and contract debugging",
 	}
 	// Logging and debug settings
 	EthStatsURLFlag = cli.StringFlag{
@@ -586,23 +588,27 @@ func MakeDatabaseHandles() int {
 
 // MakeAddress converts an account specified directly as a hex encoded string or
 // a key index in the key store to an internal account representation.
-func MakeAddress(accman *accounts.Manager, account string) (accounts.Account, error) {
+func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error) {
 	// If the specified account is a valid address, return it
 	if common.IsHexAddress(account) {
 		return accounts.Account{Address: common.HexToAddress(account)}, nil
 	}
 	// Otherwise try to interpret the account as a keystore index
 	index, err := strconv.Atoi(account)
-	if err != nil {
+	if err != nil || index < 0 {
 		return accounts.Account{}, fmt.Errorf("invalid account address or index %q", account)
 	}
-	return accman.AccountByIndex(index)
+	accs := ks.Accounts()
+	if len(accs) <= index {
+		return accounts.Account{}, fmt.Errorf("index %d higher than number of accounts %d", index, len(accs))
+	}
+	return accs[index], nil
 }
 
 // MakeEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func MakeEtherbase(accman *accounts.Manager, ctx *cli.Context) common.Address {
-	accounts := accman.Accounts()
+func MakeEtherbase(ks *keystore.KeyStore, ctx *cli.Context) common.Address {
+	accounts := ks.Accounts()
 	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 		return common.Address{}
@@ -612,7 +618,7 @@ func MakeEtherbase(accman *accounts.Manager, ctx *cli.Context) common.Address {
 		return common.Address{}
 	}
 	// If the specified etherbase is a valid address, return it
-	account, err := MakeAddress(accman, etherbase)
+	account, err := MakeAddress(ks, etherbase)
 	if err != nil {
 		Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
 	}
@@ -653,6 +659,10 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		vsn += "-" + gitCommit[:8]
 	}
 
+	// if we're running a light client or server, force enable the v5 peer discovery unless it is explicitly disabled with --nodiscover
+	// note that explicitly specifying --v5disc overrides --nodiscover, in which case the later only disables v4 discovery
+	forceV5Discovery := (ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0) && !ctx.GlobalBool(NoDiscoverFlag.Name)
+
 	config := &node.Config{
 		DataDir:           MakeDataDir(ctx),
 		KeyStoreDir:       ctx.GlobalString(KeyStoreDirFlag.Name),
@@ -661,8 +671,8 @@ func MakeNode(ctx *cli.Context, name, gitCommit string) *node.Node {
 		Name:              name,
 		Version:           vsn,
 		UserIdent:         makeNodeUserIdent(ctx),
-		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name),
-		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalInt(LightServFlag.Name) > 0,
+		NoDiscovery:       ctx.GlobalBool(NoDiscoverFlag.Name) || ctx.GlobalBool(LightModeFlag.Name), // always disable v4 discovery in light client mode
+		DiscoveryV5:       ctx.GlobalBool(DiscoveryV5Flag.Name) || forceV5Discovery,
 		DiscoveryV5Addr:   MakeDiscoveryV5Address(ctx),
 		BootstrapNodes:    MakeBootstrapNodes(ctx),
 		BootstrapNodesV5:  MakeBootstrapNodesV5(ctx),
@@ -716,9 +726,10 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 	if networks > 1 {
 		Fatalf("The %v flags are mutually exclusive", netFlags)
 	}
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	ethConf := &eth.Config{
-		Etherbase:               MakeEtherbase(stack.AccountManager(), ctx),
+		Etherbase:               MakeEtherbase(ks, ctx),
 		ChainConfig:             MakeChainConfig(ctx, stack),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		LightMode:               ctx.GlobalBool(LightModeFlag.Name),
@@ -730,7 +741,6 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		ExtraData:               MakeMinerExtra(extra, ctx),
-		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
 		GasPrice:                common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
 		GpoMinGasPrice:          common.String2Big(ctx.GlobalString(GpoMinGasPriceFlag.Name)),
@@ -741,6 +751,7 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 		GpobaseCorrectionFactor: ctx.GlobalInt(GpobaseCorrectionFactorFlag.Name),
 		SolcPath:                ctx.GlobalString(SolcPathFlag.Name),
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
+		EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name),
 	}
 
 	// Override any default configs in dev mode or the test net
@@ -909,7 +920,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if !ctx.GlobalBool(FakePoWFlag.Name) {
 		pow = ethash.New()
 	}
-	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux))
+	chain, err = core.NewBlockChain(chainDb, chainConfig, pow, new(event.TypeMux), vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)})
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}

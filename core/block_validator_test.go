@@ -24,6 +24,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/state"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
 	"github.com/ubiq/go-ubiq/params"
@@ -39,7 +40,7 @@ func proc() (Validator, *BlockChain) {
 	var mux event.TypeMux
 
 	WriteTestNetGenesisBlock(db)
-	blockchain, err := NewBlockChain(db, testChainConfig(), thePow(), &mux)
+	blockchain, err := NewBlockChain(db, testChainConfig(), thePow(), &mux, vm.Config{})
 	if err != nil {
 		fmt.Println(err)
 	}

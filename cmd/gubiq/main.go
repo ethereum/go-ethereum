@@ -25,11 +25,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ubiq/go-ubiq/accounts"
+	"github.com/ubiq/go-ubiq/accounts/keystore"
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/console"
 	"github.com/ubiq/go-ubiq/contracts/release"
 	"github.com/ubiq/go-ubiq/eth"
+	"github.com/ubiq/go-ubiq/ethclient"
 	"github.com/ubiq/go-ubiq/internal/debug"
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
@@ -106,7 +109,6 @@ func init() {
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
-		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
 		utils.NetrestrictFlag,
@@ -132,6 +134,7 @@ func init() {
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
 		utils.VMEnableJitFlag,
+		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.EthStatsURLFlag,
@@ -245,14 +248,50 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	accman := stack.AccountManager()
+	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+
 	passwords := utils.MakePasswordList(ctx)
-	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
-	for i, account := range accounts {
+	unlocks := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
+	for i, account := range unlocks {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			unlockAccount(ctx, accman, trimmed, i, passwords)
+			unlockAccount(ctx, ks, trimmed, i, passwords)
 		}
 	}
+	// Register wallet event handlers to open and auto-derive wallets
+	events := make(chan accounts.WalletEvent, 16)
+	stack.AccountManager().Subscribe(events)
+
+	go func() {
+		// Create an chain state reader for self-derivation
+		rpcClient, err := stack.Attach()
+		if err != nil {
+			utils.Fatalf("Failed to attach to self: %v", err)
+		}
+		stateReader := ethclient.NewClient(rpcClient)
+
+		// Open and self derive any wallets already attached
+		for _, wallet := range stack.AccountManager().Wallets() {
+			if err := wallet.Open(""); err != nil {
+				glog.V(logger.Warn).Infof("Failed to open wallet %s: %v", wallet.URL(), err)
+			} else {
+				wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+			}
+		}
+		// Listen for wallet event till termination
+		for event := range events {
+			if event.Arrive {
+				if err := event.Wallet.Open(""); err != nil {
+					glog.V(logger.Info).Infof("New wallet appeared: %s, failed to open: %s", event.Wallet.URL(), err)
+				} else {
+					glog.V(logger.Info).Infof("New wallet appeared: %s, %s", event.Wallet.URL(), event.Wallet.Status())
+					event.Wallet.SelfDerive(accounts.DefaultBaseDerivationPath, stateReader)
+				}
+			} else {
+				glog.V(logger.Info).Infof("Old wallet dropped:  %s", event.Wallet.URL())
+				event.Wallet.Close()
+			}
+		}
+	}()
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
 		var ethereum *eth.Ethereum

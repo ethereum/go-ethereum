@@ -167,6 +167,7 @@ The ChunkStore interface is implemented by :
 type ChunkStore interface {
 	Put(*Chunk) // effectively there is no error even if there is an error
 	Get(Key) (*Chunk, error)
+	Close()
 }
 
 /*

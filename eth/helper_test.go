@@ -30,6 +30,7 @@ import (
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core"
 	"github.com/ubiq/go-ubiq/core/types"
+	"github.com/ubiq/go-ubiq/core/vm"
 	"github.com/ubiq/go-ubiq/crypto"
 	"github.com/ubiq/go-ubiq/ethdb"
 	"github.com/ubiq/go-ubiq/event"
@@ -56,7 +57,7 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
 		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
-		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux)
+		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux, vm.Config{})
 	)
 	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {

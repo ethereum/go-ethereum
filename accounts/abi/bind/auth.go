@@ -22,7 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/ubiq/go-ubiq/accounts"
+	"github.com/ubiq/go-ubiq/accounts/keystore"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/core/types"
 	"github.com/ubiq/go-ubiq/crypto"
@@ -35,7 +35,7 @@ func NewTransactor(keyin io.Reader, passphrase string) (*TransactOpts, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := accounts.DecryptKey(json, passphrase)
+	key, err := keystore.DecryptKey(json, passphrase)
 	if err != nil {
 		return nil, err
 	}

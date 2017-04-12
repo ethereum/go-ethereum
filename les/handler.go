@@ -160,9 +160,6 @@ func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, network
 				if manager.serverPool != nil {
 					addr := p.RemoteAddr().(*net.TCPAddr)
 					entry = manager.serverPool.connect(peer, addr.IP, uint16(addr.Port))
-					if entry == nil {
-						return fmt.Errorf("unwanted connection")
-					}
 				}
 				peer.poolEntry = entry
 				select {

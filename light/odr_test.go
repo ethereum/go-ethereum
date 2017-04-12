@@ -251,7 +251,7 @@ func testChainOdr(t *testing.T, protocol int, expFail uint64, fn odrTestFn) {
 	)
 	core.WriteGenesisBlockForTesting(ldb, core.GenesisAccount{Address: testBankAddress, Balance: testBankFunds})
 	// Assemble the test environment
-	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux)
+	blockchain, _ := core.NewBlockChain(sdb, testChainConfig(), pow, evmux, vm.Config{})
 	chainConfig := &params.ChainConfig{HomesteadBlock: new(big.Int)}
 	gchain, _ := core.GenerateChain(chainConfig, genesis, sdb, 4, testChainGen)
 	if _, err := blockchain.InsertChain(gchain); err != nil {

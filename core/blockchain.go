@@ -109,12 +109,13 @@ type BlockChain struct {
 	pow       pow.PoW
 	processor Processor // block processor interface
 	validator Validator // block and state validator interface
+	vmConfig  vm.Config
 }
 
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialiser the default Ethereum Validator and
 // Processor.
-func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux) (*BlockChain, error) {
+func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux, vmConfig vm.Config) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -130,6 +131,7 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
 		pow:          pow,
+		vmConfig:     vmConfig,
 	}
 	bc.SetValidator(NewBlockValidator(config, bc, pow))
 	bc.SetProcessor(NewStateProcessor(config, bc))
@@ -884,7 +886,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 	return
 }
 
-// InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. It an error is returned
+// InsertChain will attempt to insert the given chain in to the canonical chain or, otherwise, create a fork. If an error is returned
 // it will return the index number of the failing block as well an error describing what went wrong (for possible errors see core/errors.go).
 func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
@@ -987,7 +989,7 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			return i, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, vm.Config{})
+		receipts, logs, usedGas, err := self.processor.Process(block, self.stateCache, self.vmConfig)
 		if err != nil {
 			self.reportBlock(block, receipts, err)
 			return i, err
@@ -1035,6 +1037,10 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			}
 			// Write map map bloom filters
 			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
+				return i, err
+			}
+			// Write hash preimages
+			if err := WritePreimages(self.chainDb, block.NumberU64(), self.stateCache.Preimages()); err != nil {
 				return i, err
 			}
 		case SideStatTy:
@@ -1115,8 +1121,6 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		newChain    types.Blocks
 		oldChain    types.Blocks
 		commonBlock *types.Block
-		oldStart    = oldBlock
-		newStart    = newBlock
 		deletedTxs  types.Transactions
 		deletedLogs []*types.Log
 		// collectLogs collects the logs that were generated during the
@@ -1157,7 +1161,6 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		return fmt.Errorf("Invalid new chain")
 	}
 
-	numSplit := newBlock.Number()
 	for {
 		if oldBlock.Hash() == newBlock.Hash() {
 			commonBlock = oldBlock
@@ -1178,9 +1181,19 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 	}
 
-	if glog.V(logger.Debug) {
-		commonHash := commonBlock.Hash()
-		glog.Infof("Chain split detected @ %x. Reorganising chain from #%v %x to %x", commonHash[:4], numSplit, oldStart.Hash().Bytes()[:4], newStart.Hash().Bytes()[:4])
+	if oldLen := len(oldChain); oldLen > 63 || glog.V(logger.Debug) {
+		newLen := len(newChain)
+		newLast := newChain[0]
+		newFirst := newChain[newLen-1]
+		oldLast := oldChain[0]
+		oldFirst := oldChain[oldLen-1]
+		glog.Infof("Chain split detected after #%v [%x…]. Reorganising chain (-%v +%v blocks), rejecting #%v-#%v [%x…/%x…] in favour of #%v-#%v [%x…/%x…]",
+			commonBlock.Number(), commonBlock.Hash().Bytes()[:4],
+			oldLen, newLen,
+			oldFirst.Number(), oldLast.Number(),
+			oldFirst.Hash().Bytes()[:4], oldLast.Hash().Bytes()[:4],
+			newFirst.Number(), newLast.Number(),
+			newFirst.Hash().Bytes()[:4], newLast.Hash().Bytes()[:4])
 	}
 
 	var addedTxs types.Transactions

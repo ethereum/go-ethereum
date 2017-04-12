@@ -19,6 +19,7 @@ package api
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -71,6 +72,7 @@ type ErrResolve error
 
 // DNS Resolver
 func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error) {
+	glog.V(logger.Detail).Infof("Resolving : %v", hostPort)
 	if hashMatcher.MatchString(hostPort) || self.dns == nil {
 		glog.V(logger.Detail).Infof("host is a contentHash: '%v'", hostPort)
 		return storage.Key(common.Hex2Bytes(hostPort)), nil
@@ -86,8 +88,10 @@ func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error
 	glog.V(logger.Detail).Infof("host lookup: %v -> %v", err)
 	return contentHash[:], err
 }
-
-func parse(uri string) (hostPort, path string) {
+func Parse(uri string) (hostPort, path string) {
+	if uri == "" {
+		return
+	}
 	parts := slashes.Split(uri, 3)
 	var i int
 	if len(parts) == 0 {
@@ -111,7 +115,7 @@ func parse(uri string) (hostPort, path string) {
 }
 
 func (self *Api) parseAndResolve(uri string, nameresolver bool) (key storage.Key, hostPort, path string, err error) {
-	hostPort, path = parse(uri)
+	hostPort, path = Parse(uri)
 	//resolving host and port
 	contentHash, err := self.Resolve(hostPort, nameresolver)
 	glog.V(logger.Debug).Infof("Resolved '%s' to contentHash: '%s', path: '%s'", uri, contentHash, path)
@@ -153,7 +157,9 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionR
 	}
 
 	glog.V(logger.Detail).Infof("getEntry(%s)", path)
+
 	entry, _ := trie.getEntry(path)
+
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
@@ -161,6 +167,7 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionR
 		glog.V(logger.Detail).Infof("content lookup key: '%v' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
+		status = http.StatusNotFound
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
 		glog.V(logger.Warn).Infof("%v", err)
 	}

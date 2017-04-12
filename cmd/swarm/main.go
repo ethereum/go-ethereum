@@ -21,11 +21,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/ubiq/go-ubiq/accounts"
+	"github.com/ubiq/go-ubiq/accounts/keystore"
 	"github.com/ubiq/go-ubiq/cmd/utils"
 	"github.com/ubiq/go-ubiq/common"
 	"github.com/ubiq/go-ubiq/console"
@@ -39,7 +42,6 @@ import (
 	"github.com/ubiq/go-ubiq/p2p/discover"
 	"github.com/ubiq/go-ubiq/swarm"
 	bzzapi "github.com/ubiq/go-ubiq/swarm/api"
-	"github.com/ubiq/go-ubiq/swarm/network"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -70,7 +72,6 @@ var (
 	SwarmNetworkIdFlag = cli.IntFlag{
 		Name:  "bzznetworkid",
 		Usage: "Network identifier (integer, default 3=swarm testnet)",
-		Value: network.NetworkId,
 	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
@@ -150,6 +151,52 @@ The output of this command is supposed to be machine-readable.
 Prints the swarm hash of file or directory.
 `,
 		},
+		{
+			Name:      "manifest",
+			Usage:     "update a MANIFEST",
+			ArgsUsage: "manifest COMMAND",
+			Description: `
+Updates a MANIFEST by adding/removing/updating the hash of a path.
+`,
+			Subcommands: []cli.Command{
+				{
+					Action:    add,
+					Name:      "add",
+					Usage:     "add a new path to the manifest",
+					ArgsUsage: "<MANIFEST> <path> <hash> [<content-type>]",
+					Description: `
+Adds a new path to the manifest
+`,
+				},
+				{
+					Action:    update,
+					Name:      "update",
+					Usage:     "update the hash for an already existing path in the manifest",
+					ArgsUsage: "<MANIFEST> <path> <newhash> [<newcontent-type>]",
+					Description: `
+Update the hash for an already existing path in the manifest
+`,
+				},
+				{
+					Action:    remove,
+					Name:      "remove",
+					Usage:     "removes a path from the manifest",
+					ArgsUsage: "<MANIFEST> <path>",
+					Description: `
+Removes a path from the manifest
+`,
+				},
+			},
+		},
+		{
+			Action:    cleandb,
+			Name:      "cleandb",
+			Usage:     "Cleans database of corrupted entries",
+			ArgsUsage: " ",
+			Description: `
+Cleans database of corrupted entries.
+`,
+		},
 	}
 
 	app.Flags = []cli.Flag{
@@ -220,6 +267,14 @@ func bzzd(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 	registerBzzService(ctx, stack)
 	utils.StartNode(stack)
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		<-sigc
+		glog.V(logger.Info).Infoln("Got sigterm, shutting down...")
+		stack.Stop()
+	}()
 	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
 	// Add bootnodes as initial peers.
 	if ctx.GlobalIsSet(utils.BootnodesFlag.Name) {
@@ -236,6 +291,7 @@ func bzzd(ctx *cli.Context) error {
 }
 
 func registerBzzService(ctx *cli.Context, stack *node.Node) {
+
 	prvkey := getAccount(ctx, stack)
 
 	chbookaddr := common.HexToAddress(ctx.GlobalString(ChequebookAddrFlag.Name))
@@ -243,6 +299,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if bzzdir == "" {
 		bzzdir = stack.InstanceDir()
 	}
+
 	bzzconfig, err := bzzapi.NewConfig(bzzdir, chbookaddr, prvkey, ctx.GlobalUint64(SwarmNetworkIdFlag.Name))
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
@@ -274,6 +331,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 
 func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	keyid := ctx.GlobalString(SwarmAccountFlag.Name)
+
 	if keyid == "" {
 		utils.Fatalf("Option %q is required", SwarmAccountFlag.Name)
 	}
@@ -283,29 +341,36 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 		return key
 	}
 	// Otherwise try getting it from the keystore.
-	return decryptStoreAccount(stack.AccountManager(), keyid)
+	am := stack.AccountManager()
+	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+
+	return decryptStoreAccount(ks, keyid)
 }
 
-func decryptStoreAccount(accman *accounts.Manager, account string) *ecdsa.PrivateKey {
+func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKey {
 	var a accounts.Account
 	var err error
 	if common.IsHexAddress(account) {
-		a, err = accman.Find(accounts.Account{Address: common.HexToAddress(account)})
-	} else if ix, ixerr := strconv.Atoi(account); ixerr == nil {
-		a, err = accman.AccountByIndex(ix)
+		a, err = ks.Find(accounts.Account{Address: common.HexToAddress(account)})
+	} else if ix, ixerr := strconv.Atoi(account); ixerr == nil && ix > 0 {
+		if accounts := ks.Accounts(); len(accounts) > ix {
+			a = accounts[ix]
+		} else {
+			err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
+		}
 	} else {
 		utils.Fatalf("Can't find swarm account key %s", account)
 	}
 	if err != nil {
 		utils.Fatalf("Can't find swarm account key: %v", err)
 	}
-	keyjson, err := ioutil.ReadFile(a.File)
+	keyjson, err := ioutil.ReadFile(a.URL.Path)
 	if err != nil {
 		utils.Fatalf("Can't load swarm account key: %v", err)
 	}
 	for i := 1; i <= 3; i++ {
 		passphrase := promptPassphrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i))
-		key, err := accounts.DecryptKey(keyjson, passphrase)
+		key, err := keystore.DecryptKey(keyjson, passphrase)
 		if err == nil {
 			return key.PrivateKey
 		}

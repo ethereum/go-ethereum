@@ -438,7 +438,7 @@ LOOP:
 			for priority = High; priority >= 0; priority-- {
 				// the first priority channel that is non-empty will be assigned to keys
 				if len(self.keys[priority]) > 0 {
-					glog.V(logger.Detail).Infof("syncer[%v]: reading request with	 priority %v", self.key.Log(), priority)
+					glog.V(logger.Detail).Infof("syncer[%v]: reading request with	priority %v", self.key.Log(), priority)
 					keys = self.keys[priority]
 					break PRIORITIES
 				}
@@ -551,10 +551,10 @@ LOOP:
 		}
 		if sreq, err := self.newSyncRequest(req, priority); err == nil {
 			// extract key from req
-			glog.V(logger.Detail).Infof("syncer(priority %v): request %v (synced = %v)", self.key.Log(), priority, req, state.Synced)
+			glog.V(logger.Detail).Infof("syncer[%v]: (priority %v): request %v (synced = %v)", self.key.Log(), priority, req, state.Synced)
 			unsynced = append(unsynced, sreq)
 		} else {
-			glog.V(logger.Warn).Infof("syncer(priority %v): error creating request for %v: %v)", self.key.Log(), priority, req, state.Synced, err)
+			glog.V(logger.Warn).Infof("syncer[%v]: (priority %v): error creating request for %v: %v)", self.key.Log(), priority, req, state.Synced, err)
 		}
 
 	}

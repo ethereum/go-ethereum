@@ -99,6 +99,7 @@ func (self *Depo) HandleDeliveryRequestMsg(req *deliveryRequestMsgData, p *peer)
 // if key found locally, return. otherwise
 // remote is untrusted, so hash is verified and chunk passed on to NetStore
 func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
+	var islocal bool
 	req.from = p
 	chunk, err := self.localStore.Get(req.Key)
 	switch {
@@ -110,27 +111,32 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 
 	case chunk.SData == nil:
 		// found chunk in memory store, needs the data, validate now
-		hasher := self.hashfunc()
-		hasher.Write(req.SData)
-		if !bytes.Equal(hasher.Sum(nil), req.Key) {
-			// data does not validate, ignore
-			// TODO: peer should be penalised/dropped?
-			glog.V(logger.Warn).Infof("Depo.HandleStoreRequest: chunk invalid. store request ignored: %v", req)
-			return
-		}
 		glog.V(logger.Detail).Infof("Depo.HandleStoreRequest: %v. request entry found", req)
 
 	default:
 		// data is found, store request ignored
 		// this should update access count?
 		glog.V(logger.Detail).Infof("Depo.HandleStoreRequest: %v found locally. ignore.", req)
+		islocal = true
+		//return
+	}
+	
+	hasher := self.hashfunc()
+	hasher.Write(req.SData)
+	if !bytes.Equal(hasher.Sum(nil), req.Key) {
+		// data does not validate, ignore
+		// TODO: peer should be penalised/dropped?
+		glog.V(logger.Warn).Infof("Depo.HandleStoreRequest: chunk invalid. store request ignored: %v", req)
 		return
 	}
 
+	if islocal {
+		return
+	}
 	// update chunk with size and data
 	chunk.SData = req.SData // protocol validates that SData is minimum 9 bytes long (int64 size  + at least one byte of data)
 	chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
-	glog.V(logger.Detail).Infof("delivery of %p from %v", chunk, p)
+	glog.V(logger.Detail).Infof("delivery of %v from %v", chunk, p)
 	chunk.Source = p
 	self.netStore.Put(chunk)
 }

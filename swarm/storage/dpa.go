@@ -237,3 +237,8 @@ func (self *dpaChunkStore) Put(entry *Chunk) {
 	self.n++
 	self.netStore.Put(chunk)
 }
+
+// Close chunk store
+func (self *dpaChunkStore) Close() {
+	return
+}

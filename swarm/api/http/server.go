@@ -33,6 +33,7 @@ import (
 	"github.com/ubiq/go-ubiq/logger"
 	"github.com/ubiq/go-ubiq/logger/glog"
 	"github.com/ubiq/go-ubiq/swarm/api"
+	"github.com/ubiq/go-ubiq/swarm/storage"
 )
 
 const (
@@ -194,17 +195,34 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		}
 	case r.Method == "GET" || r.Method == "HEAD":
 		path = trailingSlashes.ReplaceAllString(path, "")
+		if path == "" {
+			http.Error(w, "Empty path not allowed", http.StatusBadRequest)
+			return
+		}
 		if raw {
-			// resolving host
-			key, err := a.Resolve(path, nameresolver)
-			if err != nil {
-				glog.V(logger.Error).Infof("%v", err)
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+			var reader storage.LazySectionReader
+			parsedurl, _ := api.Parse(path)
+
+			if parsedurl == path {
+				key, err := a.Resolve(parsedurl, nameresolver)
+				if err != nil {
+					glog.V(logger.Error).Infof("%v", err)
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+				reader = a.Retrieve(key)
+			} else {
+				var status int
+				readertmp, _, status, err := a.Get(path, nameresolver)
+				if err != nil {
+					http.Error(w, err.Error(), status)
+					return
+				}
+				reader = readertmp
 			}
 
 			// retrieving content
-			reader := a.Retrieve(key)
+
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
 			if err != nil {
