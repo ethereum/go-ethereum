@@ -1398,3 +1398,6 @@ func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 
 // Config retrieves the blockchain's chain configuration.
 func (self *BlockChain) Config() *params.ChainConfig { return self.config }
+
+// Engine retrieves the blockchain's consensus engine.
+func (self *BlockChain) Engine() consensus.Engine { return self.engine }
