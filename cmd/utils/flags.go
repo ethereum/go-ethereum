@@ -454,11 +454,9 @@ func setNodeKey(ctx *cli.Context, cfg *p2p.Config) {
 
 // setNodeUserIdent creates the user identifier from CLI flags.
 func setNodeUserIdent(ctx *cli.Context, cfg *node.Config) {
-	comps := strings.Split(cfg.UserIdent, "/")
 	if identity := ctx.GlobalString(IdentityFlag.Name); len(identity) > 0 {
-		comps = append(comps, identity)
+		cfg.UserIdent = identity
 	}
-	cfg.UserIdent = strings.Join(comps, "/")
 }
 
 // setBootstrapNodes creates a list of bootstrap nodes from the command line
