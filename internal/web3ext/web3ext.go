@@ -30,9 +30,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
-
 }
-
 
 const Chequebook_JS = `
 web3._extend({
@@ -77,12 +75,22 @@ web3._extend({
 			params: 1,
       inputFormatter: [null]
 		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'clique_getSnapshotAtHash',
+			params: 1
+		}),
     new web3._extend.Method({
       name: 'getSigners',
       call: 'clique_getSigners',
       params: 1,
       inputFormatter: [null]
     }),
+		new web3._extend.Method({
+			name: 'getSignersAtHash',
+			call: 'clique_getSignersAtHash',
+			params: 1
+		}),
 		new web3._extend.Method({
 			name: 'propose',
 			call: 'clique_propose',
