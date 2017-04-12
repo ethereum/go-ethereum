@@ -31,7 +31,7 @@ type API struct {
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
-func (api *API) GetSnapshot(number *rpc.BlockNumber) (interface{}, error) {
+func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	// Retrieve the requested block number (or current if none requested)
 	var header *types.Header
 	if number == nil || *number == rpc.LatestBlockNumber {
@@ -40,6 +40,15 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (interface{}, error) {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
 	// Ensure we have an actually valid block and return its snapshot
+	if header == nil {
+		return nil, errUnknownBlock
+	}
+	return api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+}
+
+// GetSnapshotAtHash retrieves the state snapshot at a given block.
+func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
+	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
 		return nil, errUnknownBlock
 	}
@@ -56,6 +65,19 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
 	}
 	// Ensure we have an actually valid block and return the signers from its snapshot
+	if header == nil {
+		return nil, errUnknownBlock
+	}
+	snap, err := api.clique.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return snap.signers(), nil
+}
+
+// GetSignersAtHash retrieves the state snapshot at a given block.
+func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
+	header := api.chain.GetHeaderByHash(hash)
 	if header == nil {
 		return nil, errUnknownBlock
 	}
