@@ -220,6 +220,12 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 	}
 }
 
+// Author implements consensus.Engine, returning the Ethereum address recovered
+// from the signature in the header's extra-data section.
+func (c *Clique) Author(header *types.Header) (common.Address, error) {
+	return ecrecover(header)
+}
+
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *Clique) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
 	return c.verifyHeader(chain, header, nil)

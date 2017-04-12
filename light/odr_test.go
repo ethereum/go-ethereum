@@ -175,7 +175,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
 
-				context := core.NewEVMContext(msg, header, bc)
+				context := core.NewEVMContext(msg, header, bc, nil)
 				vmenv := vm.NewEVM(context, statedb, config, vm.Config{})
 
 				gp := new(core.GasPool).AddGas(math.MaxBig256)
@@ -191,7 +191,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain
 				from.SetBalance(math.MaxBig256)
 
 				msg := callmsg{types.NewMessage(from.Address(), &testContractAddr, 0, new(big.Int), big.NewInt(1000000), new(big.Int), data, false)}
-				context := core.NewEVMContext(msg, header, lc)
+				context := core.NewEVMContext(msg, header, lc, nil)
 				vmenv := vm.NewEVM(context, vmstate, config, vm.Config{})
 				gp := new(core.GasPool).AddGas(math.MaxBig256)
 				ret, _, _ := core.ApplyMessage(vmenv, msg, gp)

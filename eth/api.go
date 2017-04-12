@@ -548,7 +548,7 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 		if err != nil {
 			return nil, fmt.Errorf("sender retrieval failed: %v", err)
 		}
-		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain())
+		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain(), nil)
 
 		// Mutate the state if we haven't reached the tracing transaction yet
 		if uint64(idx) < txIndex {

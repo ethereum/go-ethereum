@@ -213,6 +213,9 @@ func (bc *LightChain) ResetWithGenesisBlock(genesis *types.Block) {
 
 // Accessors
 
+// Engine retrieves the light chain's consensus engine.
+func (bc *LightChain) Engine() consensus.Engine { return bc.engine }
+
 // Genesis returns the genesis block
 func (bc *LightChain) Genesis() *types.Block {
 	return bc.genesisBlock

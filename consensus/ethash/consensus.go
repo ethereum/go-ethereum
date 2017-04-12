@@ -59,6 +59,12 @@ var (
 	errInvalidPoW        = errors.New("invalid proof-of-work")
 )
 
+// Author implements consensus.Engine, returning the header's coinbase as the
+// proof-of-work verified author of the block.
+func (ethash *Ethash) Author(header *types.Header) (common.Address, error) {
+	return header.Coinbase, nil
+}
+
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum ethash engine.
 func (ethash *Ethash) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {

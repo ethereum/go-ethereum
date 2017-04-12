@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -54,6 +55,7 @@ type Service struct {
 	server *p2p.Server        // Peer-to-peer server to retrieve networking infos
 	eth    *eth.Ethereum      // Full Ethereum service if monitoring a full node
 	les    *les.LightEthereum // Light Ethereum service if monitoring a light node
+	engine consensus.Engine   // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
 	pass string // Password to authorize access to the monitoring page
@@ -72,9 +74,16 @@ func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Servic
 		return nil, fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
 	// Assemble and return the stats service
+	var engine consensus.Engine
+	if ethServ != nil {
+		engine = ethServ.Engine()
+	} else {
+		engine = lesServ.Engine()
+	}
 	return &Service{
 		eth:    ethServ,
 		les:    lesServ,
+		engine: engine,
 		node:   parts[1],
 		pass:   parts[3],
 		host:   parts[4],
@@ -493,12 +502,14 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		td = s.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 	}
 	// Assemble and return the block stats
+	author, _ := s.engine.Author(header)
+
 	return &blockStats{
 		Number:     header.Number,
 		Hash:       header.Hash(),
 		ParentHash: header.ParentHash,
 		Timestamp:  header.Time,
-		Miner:      header.Coinbase,
+		Miner:      author,
 		GasUsed:    new(big.Int).Set(header.GasUsed),
 		GasLimit:   new(big.Int).Set(header.GasLimit),
 		Diff:       header.Difficulty.String(),
