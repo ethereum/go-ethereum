@@ -25,9 +25,13 @@ import (
 	"strings"
 	"sync"
 
+	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"mime"
+	"path/filepath"
+	"time"
 )
 
 var (
@@ -57,6 +61,13 @@ func NewApi(dpa *storage.DPA, dns Resolver) (self *Api) {
 		dns: dns,
 	}
 	return
+}
+
+// to be used only in TEST
+func (self *Api) Upload(uploadDir, index string) (hash string, err error) {
+	fs := NewFileSystem(self)
+	hash, err = fs.Upload(uploadDir, index)
+	return hash, err
 }
 
 // DPA reader API
@@ -111,7 +122,7 @@ func (self *Api) Put(content, contentType string) (storage.Key, error) {
 }
 
 // Get uses iterative manifest retrieval and prefix matching
-// to resolve path to content using dpa retrieve
+// to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
 	trie, err := loadManifest(self.dpa, key, nil)
@@ -159,4 +170,182 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 		return nil, err
 	}
 	return trie.hash, nil
+}
+
+func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
+
+	uri, err := Parse("bzz:/" + mhash)
+	if err != nil {
+		return nil, "", err
+	}
+	mkey, err := self.Resolve(uri)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// trim the root dir we added
+	if path[:1] == "/" {
+		path = path[1:]
+	}
+
+	entry := &ManifestEntry{
+		Path:        filepath.Join(path, fname),
+		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
+		Mode:        0700,
+		Size:        int64(len(content)),
+		ModTime:     time.Now(),
+	}
+
+	mw, err := self.NewManifestWriter(mkey, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	fkey, err := mw.AddEntry(bytes.NewReader(content), entry)
+	if err != nil {
+		return nil, "", err
+	}
+
+	newMkey, err := mw.Store()
+	if err != nil {
+		return nil, "", err
+
+	}
+
+	return fkey, newMkey.String(), nil
+
+}
+
+func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
+
+	uri, err := Parse("bzz:/" + mhash)
+	if err != nil {
+		return "", err
+	}
+	mkey, err := self.Resolve(uri)
+	if err != nil {
+		return "", err
+	}
+
+	// trim the root dir we added
+	if path[:1] == "/" {
+		path = path[1:]
+	}
+
+	mw, err := self.NewManifestWriter(mkey, nil)
+	if err != nil {
+		return "", err
+	}
+
+	err = mw.RemoveEntry(filepath.Join(path, fname))
+	if err != nil {
+		return "", err
+	}
+
+	newMkey, err := mw.Store()
+	if err != nil {
+		return "", err
+
+	}
+
+	return newMkey.String(), nil
+}
+
+func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
+
+	buffSize := offset + addSize
+	if buffSize < existingSize {
+		buffSize = existingSize
+	}
+
+	buf := make([]byte, buffSize)
+
+	oldReader := self.Retrieve(oldKey)
+	io.ReadAtLeast(oldReader, buf, int(offset))
+
+	newReader := bytes.NewReader(content)
+	io.ReadAtLeast(newReader, buf[offset:], int(addSize))
+
+	if buffSize < existingSize {
+		io.ReadAtLeast(oldReader, buf[addSize:], int(buffSize))
+	}
+
+	combinedReader := bytes.NewReader(buf)
+	totalSize := int64(len(buf))
+
+	// TODO(jmozah): to append using pyramid chunker when it is ready
+	//oldReader := self.Retrieve(oldKey)
+	//newReader := bytes.NewReader(content)
+	//combinedReader := io.MultiReader(oldReader, newReader)
+
+	uri, err := Parse("bzz:/" + mhash)
+	if err != nil {
+		return nil, "", err
+	}
+	mkey, err := self.Resolve(uri)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// trim the root dir we added
+	if path[:1] == "/" {
+		path = path[1:]
+	}
+
+	mw, err := self.NewManifestWriter(mkey, nil)
+	if err != nil {
+		return nil, "", err
+	}
+
+	err = mw.RemoveEntry(filepath.Join(path, fname))
+	if err != nil {
+		return nil, "", err
+	}
+
+	entry := &ManifestEntry{
+		Path:        filepath.Join(path, fname),
+		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
+		Mode:        0700,
+		Size:        totalSize,
+		ModTime:     time.Now(),
+	}
+
+	fkey, err := mw.AddEntry(io.Reader(combinedReader), entry)
+	if err != nil {
+		return nil, "", err
+	}
+
+	newMkey, err := mw.Store()
+	if err != nil {
+		return nil, "", err
+
+	}
+
+	return fkey, newMkey.String(), nil
+
+}
+
+func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+
+	uri, err := Parse("bzz:/" + mhash)
+	if err != nil {
+		return nil, nil, err
+	}
+	key, err = self.Resolve(uri)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	quitC := make(chan bool)
+	rootTrie, err := loadManifest(self.dpa, key, quitC)
+	if err != nil {
+		return nil, nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
+	}
+
+	manifestEntryMap = map[string]*manifestTrieEntry{}
+	err = rootTrie.listWithPrefix(uri.Path, quitC, func(entry *manifestTrieEntry, suffix string) {
+		manifestEntryMap[suffix] = entry
+	})
+
+	return key, manifestEntryMap, nil
 }

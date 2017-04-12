@@ -162,7 +162,7 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 
 type manifestTrie struct {
 	dpa     *storage.DPA
-	entries [257]*manifestTrieEntry // indexed by first character of path, entries[256] is the empty path entry
+	entries [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	hash    storage.Key             // if hash != nil, it is stored
 }
 
@@ -340,6 +340,7 @@ func (self *manifestTrie) recalcAndStore() error {
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
+
 	}
 
 	manifest, err := json.Marshal(list)

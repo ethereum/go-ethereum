@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -54,7 +55,7 @@ type Swarm struct {
 	corsString  string
 	swapEnabled bool
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs         *api.SwarmFS        // need this to cleanup all the active mounts on node exit
+	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 }
 
 type SwarmAPI struct {
@@ -143,7 +144,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
-	self.sfs = api.NewSwarmFS(self.api)
+	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("-> Initializing Fuse file system")
 
 	return self, nil
@@ -262,7 +263,7 @@ func (self *Swarm) APIs() []rpc.API {
 		},
 		{
 			Namespace: "swarmfs",
-			Version:   api.Swarmfs_Version,
+			Version:   fuse.Swarmfs_Version,
 			Service:   self.sfs,
 			Public:    false,
 		},
