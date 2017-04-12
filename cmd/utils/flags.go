@@ -533,14 +533,6 @@ func splitAndTrim(input string) []string {
 	return result
 }
 
-func makeRPCCORS(input string) []string {
-	result := strings.Split(input, ",")
-	for i, r := range result {
-		result[i] = strings.TrimSpace(r)
-	}
-	return result
-}
-
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
@@ -576,7 +568,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSPort = ctx.GlobalInt(WSPortFlag.Name)
 	}
 	if ctx.GlobalIsSet(WSAllowedOriginsFlag.Name) {
-		cfg.WSOrigins = ctx.GlobalString(WSAllowedOriginsFlag.Name)
+		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSAllowedOriginsFlag.Name))
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
 		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))

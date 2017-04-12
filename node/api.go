@@ -146,8 +146,13 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 	if port == nil {
 		port = &api.node.config.WSPort
 	}
-	if allowedOrigins == nil {
-		allowedOrigins = &api.node.config.WSOrigins
+
+	origins := api.node.config.WSOrigins
+	if allowedOrigins != nil {
+		origins = nil
+		for _, origin := range strings.Split(*allowedOrigins, ",") {
+			origins = append(origins, strings.TrimSpace(origin))
+		}
 	}
 
 	modules := api.node.config.WSModules
@@ -158,7 +163,7 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *int, allowedOrigins *str
 		}
 	}
 
-	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, *allowedOrigins); err != nil {
+	if err := api.node.startWS(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, origins); err != nil {
 		return false, err
 	}
 	return true, nil
