@@ -92,8 +92,13 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 	if port == nil {
 		port = &api.node.config.HTTPPort
 	}
-	if cors == nil {
-		cors = &api.node.config.HTTPCors
+
+	allowedOrigins := api.node.config.HTTPCors
+	if cors != nil {
+		allowedOrigins = nil
+		for _, origin := range strings.Split(*cors, ",") {
+			allowedOrigins = append(allowedOrigins, strings.TrimSpace(origin))
+		}
 	}
 
 	modules := api.node.httpWhitelist
@@ -104,7 +109,7 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *int, cors *string, apis
 		}
 	}
 
-	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, *cors); err != nil {
+	if err := api.node.startHTTP(fmt.Sprintf("%s:%d", *host, *port), api.node.rpcAPIs, modules, allowedOrigins); err != nil {
 		return false, err
 	}
 	return true, nil

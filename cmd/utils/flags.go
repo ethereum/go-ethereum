@@ -523,9 +523,17 @@ func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
-// makeRPCModules splits input separated by a comma and trims excessive white
-// space from the substrings.
-func makeRPCModules(input string) []string {
+// splitAndTrim splits input separated by a comma
+// and trims excessive white space from the substrings.
+func splitAndTrim(input string) []string {
+	result := strings.Split(input, ",")
+	for i, r := range result {
+		result[i] = strings.TrimSpace(r)
+	}
+	return result
+}
+
+func makeRPCCORS(input string) []string {
 	result := strings.Split(input, ",")
 	for i, r := range result {
 		result[i] = strings.TrimSpace(r)
@@ -547,10 +555,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPPort = ctx.GlobalInt(RPCPortFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCCORSDomainFlag.Name) {
-		cfg.HTTPCors = ctx.GlobalString(RPCCORSDomainFlag.Name)
+		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCCORSDomainFlag.Name))
 	}
 	if ctx.GlobalIsSet(RPCApiFlag.Name) {
-		cfg.HTTPModules = makeRPCModules(ctx.GlobalString(RPCApiFlag.Name))
+		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(RPCApiFlag.Name))
 	}
 }
 
@@ -571,7 +579,7 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSOrigins = ctx.GlobalString(WSAllowedOriginsFlag.Name)
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
-		cfg.WSModules = makeRPCModules(ctx.GlobalString(WSApiFlag.Name))
+		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))
 	}
 }
 
