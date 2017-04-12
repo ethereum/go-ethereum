@@ -545,11 +545,11 @@ func makeRPCModules(input string) []string {
 func setHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalBool(RPCEnabledFlag.Name) && cfg.HTTPHost == "" {
 		cfg.HTTPHost = "127.0.0.1"
+		if ctx.GlobalIsSet(RPCListenAddrFlag.Name) {
+			cfg.HTTPHost = ctx.GlobalString(RPCListenAddrFlag.Name)
+		}
 	}
 
-	if ctx.GlobalIsSet(RPCListenAddrFlag.Name) {
-		cfg.HTTPHost = ctx.GlobalString(RPCListenAddrFlag.Name)
-	}
 	if ctx.GlobalIsSet(RPCPortFlag.Name) {
 		cfg.HTTPPort = ctx.GlobalInt(RPCPortFlag.Name)
 	}
@@ -566,11 +566,11 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 func setWS(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalBool(WSEnabledFlag.Name) && cfg.WSHost == "" {
 		cfg.WSHost = "127.0.0.1"
+		if ctx.GlobalIsSet(WSListenAddrFlag.Name) {
+			cfg.WSHost = ctx.GlobalString(WSListenAddrFlag.Name)
+		}
 	}
 
-	if ctx.GlobalIsSet(WSListenAddrFlag.Name) {
-		cfg.WSHost = ctx.GlobalString(WSListenAddrFlag.Name)
-	}
 	if ctx.GlobalIsSet(WSPortFlag.Name) {
 		cfg.WSPort = ctx.GlobalInt(WSPortFlag.Name)
 	}
