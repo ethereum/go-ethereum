@@ -237,6 +237,7 @@ Cleans database of corrupted entries.
 		utils.IPCDisabledFlag,
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
+		utils.PasswordFileFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
 		EthAPIFlag,
@@ -368,10 +369,10 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	return decryptStoreAccount(ks, keyid)
+	return decryptStoreAccount(ks, keyid, utils.MakePasswordList(ctx))
 }
 
-func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKey {
+func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []string) *ecdsa.PrivateKey {
 	var a accounts.Account
 	var err error
 	if common.IsHexAddress(account) {
@@ -392,9 +393,9 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 	if err != nil {
 		utils.Fatalf("Can't load swarm account key: %v", err)
 	}
-	for i := 1; i <= 3; i++ {
-		passphrase := promptPassphrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i))
-		key, err := keystore.DecryptKey(keyjson, passphrase)
+	for i := 0; i < 3; i++ {
+		password := getPassPhrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i+1), i, passwords)
+		key, err := keystore.DecryptKey(keyjson, password)
 		if err == nil {
 			return key.PrivateKey
 		}
@@ -403,7 +404,18 @@ func decryptStoreAccount(ks *keystore.KeyStore, account string) *ecdsa.PrivateKe
 	return nil
 }
 
-func promptPassphrase(prompt string) string {
+// getPassPhrase retrieves the password associated with bzz account, either by fetching
+// from a list of pre-loaded passwords, or by requesting it interactively from user.
+func getPassPhrase(prompt string, i int, passwords []string) string {
+	// non-interactive
+	if len(passwords) > 0 {
+		if i < len(passwords) {
+			return passwords[i]
+		}
+		return passwords[len(passwords)-1]
+	}
+
+	// fallback to interactive mode
 	if prompt != "" {
 		fmt.Println(prompt)
 	}
