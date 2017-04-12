@@ -79,7 +79,6 @@ type Ethereum struct {
 	Mining       bool
 	MinerThreads int
 	etherbase    common.Address
-	solcPath     string
 
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
@@ -122,7 +121,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		netVersionId:   config.NetworkId,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
-		solcPath:       config.SolcPath,
 	}
 
 	if err := addMipmapBloomBins(chainDb); err != nil {
@@ -236,7 +234,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.ApiBackend, s.solcPath)
+	apis := ethapi.GetAPIs(s.ApiBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)

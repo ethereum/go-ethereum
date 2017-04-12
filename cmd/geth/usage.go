@@ -174,12 +174,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.WhisperEnabledFlag,
 		},
 	},
-	{
-		Name: "MISCELLANEOUS",
-		Flags: []cli.Flag{
-			utils.SolcPathFlag,
-		},
-	},
 }
 
 func init() {

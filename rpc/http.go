@@ -25,7 +25,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -140,8 +139,8 @@ func (t *httpReadWriteNopCloser) Close() error {
 // NewHTTPServer creates a new HTTP RPC server around an API provider.
 //
 // Deprecated: Server implements http.Handler
-func NewHTTPServer(corsString string, srv *Server) *http.Server {
-	return &http.Server{Handler: newCorsHandler(srv, corsString)}
+func NewHTTPServer(cors []string, srv *Server) *http.Server {
+	return &http.Server{Handler: newCorsHandler(srv, cors)}
 }
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
@@ -162,11 +161,7 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
 }
 
-func newCorsHandler(srv *Server, corsString string) http.Handler {
-	var allowedOrigins []string
-	for _, domain := range strings.Split(corsString, ",") {
-		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
-	}
+func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"POST", "GET"},

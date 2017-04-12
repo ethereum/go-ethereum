@@ -392,11 +392,6 @@ var (
 		Usage: "JavaScript root path for `loadScript`",
 		Value: ".",
 	}
-	SolcPathFlag = cli.StringFlag{
-		Name:  "solc",
-		Usage: "Solidity compiler command to be used",
-		Value: "solc",
-	}
 
 	// Gas price oracle settings
 	GpoBlocksFlag = cli.IntFlag{
@@ -528,9 +523,9 @@ func setNAT(ctx *cli.Context, cfg *p2p.Config) {
 	}
 }
 
-// makeRPCModules splits input separated by a comma and trims excessive white
-// space from the substrings.
-func makeRPCModules(input string) []string {
+// splitAndTrim splits input separated by a comma
+// and trims excessive white space from the substrings.
+func splitAndTrim(input string) []string {
 	result := strings.Split(input, ",")
 	for i, r := range result {
 		result[i] = strings.TrimSpace(r)
@@ -552,10 +547,10 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPPort = ctx.GlobalInt(RPCPortFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCCORSDomainFlag.Name) {
-		cfg.HTTPCors = ctx.GlobalString(RPCCORSDomainFlag.Name)
+		cfg.HTTPCors = splitAndTrim(ctx.GlobalString(RPCCORSDomainFlag.Name))
 	}
 	if ctx.GlobalIsSet(RPCApiFlag.Name) {
-		cfg.HTTPModules = makeRPCModules(ctx.GlobalString(RPCApiFlag.Name))
+		cfg.HTTPModules = splitAndTrim(ctx.GlobalString(RPCApiFlag.Name))
 	}
 }
 
@@ -573,10 +568,10 @@ func setWS(ctx *cli.Context, cfg *node.Config) {
 		cfg.WSPort = ctx.GlobalInt(WSPortFlag.Name)
 	}
 	if ctx.GlobalIsSet(WSAllowedOriginsFlag.Name) {
-		cfg.WSOrigins = ctx.GlobalString(WSAllowedOriginsFlag.Name)
+		cfg.WSOrigins = splitAndTrim(ctx.GlobalString(WSAllowedOriginsFlag.Name))
 	}
 	if ctx.GlobalIsSet(WSApiFlag.Name) {
-		cfg.WSModules = makeRPCModules(ctx.GlobalString(WSApiFlag.Name))
+		cfg.WSModules = splitAndTrim(ctx.GlobalString(WSApiFlag.Name))
 	}
 }
 
@@ -827,10 +822,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	if ctx.GlobalIsSet(GasPriceFlag.Name) {
 		cfg.GasPrice = GlobalBig(ctx, GasPriceFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(SolcPathFlag.Name) {
-		cfg.SolcPath = ctx.GlobalString(SolcPathFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode

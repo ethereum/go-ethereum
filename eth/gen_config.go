@@ -35,7 +35,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		EthashDatasetsOnDisk    int
 		GPO                     gasprice.Config
 		EnablePreimageRecording bool
-		SolcPath                string
 		DocRoot                 string `toml:"-"`
 		PowFake                 bool   `toml:"-"`
 		PowTest                 bool   `toml:"-"`
@@ -63,7 +62,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.EthashDatasetsOnDisk = c.EthashDatasetsOnDisk
 	enc.GPO = c.GPO
 	enc.EnablePreimageRecording = c.EnablePreimageRecording
-	enc.SolcPath = c.SolcPath
 	enc.DocRoot = c.DocRoot
 	enc.PowFake = c.PowFake
 	enc.PowTest = c.PowTest
@@ -94,7 +92,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		EthashDatasetsOnDisk    *int
 		GPO                     *gasprice.Config
 		EnablePreimageRecording *bool
-		SolcPath                *string
 		DocRoot                 *string `toml:"-"`
 		PowFake                 *bool   `toml:"-"`
 		PowTest                 *bool   `toml:"-"`
@@ -166,9 +163,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.EnablePreimageRecording != nil {
 		c.EnablePreimageRecording = *dec.EnablePreimageRecording
-	}
-	if dec.SolcPath != nil {
-		c.SolcPath = *dec.SolcPath
 	}
 	if dec.DocRoot != nil {
 		c.DocRoot = *dec.DocRoot
