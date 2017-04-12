@@ -32,95 +32,95 @@ import (
 var dashboardContent = `
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <!-- Meta, title, CSS, favicons, etc. -->
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<!-- Meta, title, CSS, favicons, etc. -->
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>{{.NetworkTitle}}: Ethereum Testnet</title>
+		<title>{{.NetworkTitle}}: Ethereum Testnet</title>
 
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/css/custom.min.css" rel="stylesheet">
-    <style>
-      .vertical-center {
-        min-height: 100%;
-        min-height: 95vh;
-        display: flex;
-        align-items: center;
-      }
-      .nav.side-menu li a {
-        font-size: 18px;
-      }
-      .nav-sm .nav.side-menu li a {
-        font-size: 10px;
-      }
-      pre{
-        white-space: pre-wrap;
-      }
-    </style>
-  </head>
+		<link href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+		<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+		<link href="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/css/custom.min.css" rel="stylesheet">
+		<style>
+			.vertical-center {
+				min-height: 100%;
+				min-height: 95vh;
+				display: flex;
+				align-items: center;
+			}
+			.nav.side-menu li a {
+				font-size: 18px;
+			}
+			.nav-sm .nav.side-menu li a {
+				font-size: 10px;
+			}
+			pre{
+				white-space: pre-wrap;
+			}
+		</style>
+	</head>
 
-  <body class="nav-sm" style="overflow-x: hidden">
-    <div class="container body">
-      <div class="main_container">
-        <div class="col-md-3 left_col">
-          <div class="left_col scroll-view">
-            <div class="navbar nav_title" style="border: 0; margin-top: 8px;">
-              <a class="site_title"><i class="fa fa-globe" style="margin-left: 6px"></i> <span>{{.NetworkTitle}} Testnet</span></a>
-            </div>
-            <div class="clearfix"></div>
-            <br />
-            <div id="sidebar-menu" class="main_menu_side hidden-print main_menu">
-              <div class="menu_section">
-                <ul class="nav side-menu">
+	<body class="nav-sm" style="overflow-x: hidden">
+		<div class="container body">
+			<div class="main_container">
+				<div class="col-md-3 left_col">
+					<div class="left_col scroll-view">
+						<div class="navbar nav_title" style="border: 0; margin-top: 8px;">
+							<a class="site_title"><i class="fa fa-globe" style="margin-left: 6px"></i> <span>{{.NetworkTitle}} Testnet</span></a>
+						</div>
+						<div class="clearfix"></div>
+						<br />
+						<div id="sidebar-menu" class="main_menu_side hidden-print main_menu">
+							<div class="menu_section">
+								<ul class="nav side-menu">
 									{{if .EthstatsPage}}<li><a onclick="load('//{{.EthstatsPage}}')"><i class="fa fa-tachometer"></i> Network Stats</a></li>{{end}}
-                  {{if .ExplorerPage}}<li><a onclick="load('//{{.ExplorerPage}}')"><i class="fa fa-database"></i> Block Explorer</a></li>{{end}}
-                  {{if .WalletPage}}<li><a onclick="load('//{{.WalletPage}}')"><i class="fa fa-address-book-o"></i> Browser Wallet</a></li>{{end}}
-                  {{if .FaucetPage}}<li><a onclick="load('//{{.FaucetPage}}')"><i class="fa fa-bath"></i> Crypto Faucet</a></li>{{end}}
-                  <li id="connect"><a><i class="fa fa-plug"></i> Connect Yourself</a>
+									{{if .ExplorerPage}}<li><a onclick="load('//{{.ExplorerPage}}')"><i class="fa fa-database"></i> Block Explorer</a></li>{{end}}
+									{{if .WalletPage}}<li><a onclick="load('//{{.WalletPage}}')"><i class="fa fa-address-book-o"></i> Browser Wallet</a></li>{{end}}
+									{{if .FaucetPage}}<li><a onclick="load('//{{.FaucetPage}}')"><i class="fa fa-bath"></i> Crypto Faucet</a></li>{{end}}
+									<li id="connect"><a><i class="fa fa-plug"></i> Connect Yourself</a>
 										<ul id="connect_list" class="nav child_menu">
 											<li><a onclick="$('#connect').removeClass('active'); $('#connect_list').toggle(); load('#connect-go-ethereum-geth')">Go Ethereum: Geth</a></li>
 											<li><a onclick="$('#connect').removeClass('active'); $('#connect_list').toggle(); load('#connect-go-ethereum-mist')">Go Ethereum: Wallet & Mist</a></li>
 											<li><a onclick="$('#connect').removeClass('active'); $('#connect_list').toggle(); load('#connect-go-ethereum-mobile')">Go Ethereum: Android & iOS</a></li>
 										</ul>
 									</li>
-                  <li><a onclick="load('#about')"><i class="fa fa-heartbeat"></i> About Puppeth</a></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="right_col" role="main" style="padding: 0">
+									<li><a onclick="load('#about')"><i class="fa fa-heartbeat"></i> About Puppeth</a></li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="right_col" role="main" style="padding: 0">
 					<div id="connect-go-ethereum-geth" hidden style="padding: 16px;">
-	          <div class="page-title">
-	            <div class="title_left">
-	              <h3>Connect Yourself &ndash; Go Ethereum: Geth</h3>
-	            </div>
-	          </div>
-	        	<div class="clearfix"></div>
+						<div class="page-title">
+							<div class="title_left">
+								<h3>Connect Yourself &ndash; Go Ethereum: Geth</h3>
+							</div>
+						</div>
+						<div class="clearfix"></div>
 						<div class="row">
-              <div class="col-md-6">
-                <div class="x_panel">
-                  <div class="x_title">
-                    <h2><i class="fa fa-archive" aria-hidden="true"></i> Archive node <small>Retains all historical data</small></h2>
-                    <div class="clearfix"></div>
-                  </div>
-                  <div class="x_content">
+							<div class="col-md-6">
+								<div class="x_panel">
+									<div class="x_title">
+										<h2><i class="fa fa-archive" aria-hidden="true"></i> Archive node <small>Retains all historical data</small></h2>
+										<div class="clearfix"></div>
+									</div>
+									<div class="x_content">
 										<p>An archive node synchronizes the blockchain by downloading the full chain from the genesis block to the current head block, executing all the transactions contained within. As the node crunches through the transactions, all past historical state is stored on disk, and can be queried for each and every block.</p>
 										<p>Initial processing required to execute all transactions may require non-negligible time and disk capacity required to store all past state may be non-insignificant. High end machines with SSD storage, modern CPUs and 8GB+ RAM are recommended.</p>
 										<br/>
 										<p>To run an archive node, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and start Geth with:
-                      <pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
-                      <pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --cache=1024{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesFullFlat}}</pre>
+											<pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
+											<pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --cache=1024 --syncmode=full{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesFullFlat}}</pre>
 										</p>
 										<br/>
 										<p>You can download Geth from <a href="https://geth.ethereum.org/downloads/" target="about:blank">https://geth.ethereum.org/downloads/</a>.</p>
-	                </div>
-	              </div>
-	            </div>
+									</div>
+								</div>
+							</div>
 							<div class="col-md-6">
 								<div class="x_panel">
 									<div class="x_title">
@@ -132,8 +132,8 @@ var dashboardContent = `
 										<p>Initial processing required to synchronize is more bandwidth intensive, but is light on the CPU and has significantly reduced disk requirements. Mid range machines with HDD storage, decent CPUs and 4GB+ RAM should be enough.</p>
 										<br/>
 										<p>To run a full node, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and start Geth with:
-                      <pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
-                      <pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --cache=512 --fast{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesFullFlat}}</pre>
+											<pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
+											<pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --cache=512{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesFullFlat}}</pre>
 										</p>
 										<br/>
 										<p>You can download Geth from <a href="https://geth.ethereum.org/downloads/" target="about:blank">https://geth.ethereum.org/downloads/</a>.</p>
@@ -150,12 +150,12 @@ var dashboardContent = `
 										<div class="clearfix"></div>
 									</div>
 									<div class="x_content">
-                    <p>A light node synchronizes the blockchain by downloading and verifying only the chain of headers from the genesis block to the current head, without executing any transactions or retrieving any associated state. As no state is available locally, any interaction with the blockchain relies on on-demand data retrievals from remote nodes.</p>
+										<p>A light node synchronizes the blockchain by downloading and verifying only the chain of headers from the genesis block to the current head, without executing any transactions or retrieving any associated state. As no state is available locally, any interaction with the blockchain relies on on-demand data retrievals from remote nodes.</p>
 										<p>Initial processing required to synchronize is light, as it only verifies the validity of the headers; similarly required disk capacity is small, tallying around 500 bytes per header. Low end machines with arbitrary storage, weak CPUs and 512MB+ RAM should cope well.</p>
 										<br/>
 										<p>To run a light node, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and start Geth with:
-                      <pre>geth --datadir=$HOME/.{{.Network}} --light init {{.GethGenesis}}</pre>
-                      <pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --light{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesLightFlat}}</pre>
+											<pre>geth --datadir=$HOME/.{{.Network}} --light init {{.GethGenesis}}</pre>
+											<pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --syncmode=light{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesLightFlat}}</pre>
 										</p>
 										<br/>
 										<p>You can download Geth from <a href="https://geth.ethereum.org/downloads/" target="about:blank">https://geth.ethereum.org/downloads/</a>.</p>
@@ -169,12 +169,12 @@ var dashboardContent = `
 										<div class="clearfix"></div>
 									</div>
 									<div class="x_content">
-                    <p>An embedded node is a variation of the light node with configuration parameters tuned towards low memory footprint. As such, it may sacrifice processing and disk IO performance to conserve memory. It should be considered an <strong>experimental</strong> direction for now without hard guarantees or bounds on the resources used.</p>
+										<p>An embedded node is a variation of the light node with configuration parameters tuned towards low memory footprint. As such, it may sacrifice processing and disk IO performance to conserve memory. It should be considered an <strong>experimental</strong> direction for now without hard guarantees or bounds on the resources used.</p>
 										<p>Initial processing required to synchronize is light, as it only verifies the validity of the headers; similarly required disk capacity is small, tallying around 500 bytes per header. Embedded machines with arbitrary storage, low power CPUs and 128MB+ RAM may work.</p>
 										<br/>
 										<p>To run an embedded node, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and start Geth with:
-                      <pre>geth --datadir=$HOME/.{{.Network}} --light init {{.GethGenesis}}</pre>
-                      <pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --cache=32 --light{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesLightFlat}}</pre>
+											<pre>geth --datadir=$HOME/.{{.Network}} --light init {{.GethGenesis}}</pre>
+											<pre>geth --networkid={{.NetworkID}} --datadir=$HOME/.{{.Network}} --cache=32 --syncmode=light{{if .Ethstats}} --ethstats='{{.Ethstats}}'{{end}} --bootnodes={{.BootnodesLightFlat}}</pre>
 										</p>
 										<br/>
 										<p>You can download Geth from <a href="https://geth.ethereum.org/downloads/" target="about:blank">https://geth.ethereum.org/downloads/</a>.</p>
@@ -182,81 +182,81 @@ var dashboardContent = `
 								</div>
 							</div>
 						</div>
-          </div>
-          <div id="connect-go-ethereum-mist" hidden style="padding: 16px;">
-            <div class="page-title">
-              <div class="title_left">
-                <h3>Connect Yourself &ndash; Go Ethereum: Wallet &amp; Mist</h3>
-              </div>
-            </div>
-            <div class="clearfix"></div>
-            <div class="row">
-              <div class="col-md-6">
-                <div class="x_panel">
-                  <div class="x_title">
-                    <h2><i class="fa fa-credit-card" aria-hidden="true"></i> Desktop wallet <small>Interacts with accounts and contracts</small></h2>
-                    <div class="clearfix"></div>
-                  </div>
-                  <div class="x_content">
-                    <p>The Ethereum Wallet is an <a href="https://electron.atom.io/" target="about:blank">Electron</a> based desktop application to manage your Ethereum accounts and funds. Beside the usual account life-cycle operations you would expect to perform, the wallet also provides a means to send transactions from your accounts and to interact with smart contracts deployed on the network.</p>
-                    <p>Under the hood the wallet is backed by a go-ethereum full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
-                    <br/>
-                    <p>To connect with the Ethereum Wallet, you'll need to initialize your private network first via Geth as the wallet does not currently support calling Geth directly. To initialize your local chain, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and run:
-                      <pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
-                    </p>
-                    <p>With your local chain initialized, you can start the Ethereum Wallet:
-                      <pre>ethereumwallet --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFullFlat}}</pre>
-                    <p>
-                    <br/>
-                    <p>You can download the Ethereum Wallet from <a href="https://github.com/ethereum/mist/releases" target="about:blank">https://github.com/ethereum/mist/releases</a>.</p>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="x_panel">
-                  <div class="x_title">
-                    <h2><i class="fa fa-picture-o" aria-hidden="true"></i> Mist browser <small>Interacts with third party DApps</small></h2>
-                    <div class="clearfix"></div>
-                  </div>
-                  <div class="x_content">
-                    <p>The Mist browser is an <a href="https://electron.atom.io/" target="about:blank">Electron</a> based desktop application to load and interact with Ethereum enabled third party web DApps. Beside all the functionality provided by the Ethereum Wallet, Mist is an extended web-browser where loaded pages have access to the Ethereum network via a web3.js provider, and may also interact with users' own accounts (given proper authorization and confirmation of course).</p>
-                    <p>Under the hood the browser is backed by a go-ethereum full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
-                    <br/>
-                    <p>To connect with the Mist browser, you'll need to initialize your private network first via Geth as Mist does not currently support calling Geth directly. To initialize your local chain, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and run:
-                      <pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
-                    </p>
-                    <p>With your local chain initialized, you can start Mist:
-                      <pre>mist --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFullFlat}}</pre>
-                    <p>
-                    <br/>
-                    <p>You can download the Mist browser from <a href="https://github.com/ethereum/mist/releases" target="about:blank">https://github.com/ethereum/mist/releases</a>.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div id="connect-go-ethereum-mobile" hidden style="padding: 16px;">
-            <div class="page-title">
-              <div class="title_left">
-                <h3>Connect Yourself &ndash; Go Ethereum: Android &amp; iOS</h3>
-              </div>
-            </div>
-            <div class="clearfix"></div>
-            <div class="row">
-              <div class="col-md-6">
-                <div class="x_panel">
-                  <div class="x_title">
-                    <h2><i class="fa fa-android" aria-hidden="true"></i> Android devices <small>Accesses Ethereum via Java</small></h2>
-                    <div class="clearfix"></div>
-                  </div>
-                  <div class="x_content">
-                    <p>Starting with the 1.5 release of go-ethereum, we've transitioned away from shipping only full blown Ethereum clients and started focusing on releasing the code as reusable packages initially for Go projects, then later for Java based Android projects too. Mobile support is still evolving, hence is bound to change often and hard, but the Ethereum network can nonetheless be accessed from Android too.</p>
-                    <p>Under the hood the Android library is backed by a go-ethereum light node, meaning that given a not-too-old Android device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
-                    <br/>
-                    <p>The stable Android archives are distributed via Maven Central, and the develop snapshots via the Sonatype repositories. Before proceeding, please ensure you have a recent version configured in your Android project. You can find details in <a href="https://github.com/ethereum/go-ethereum/wiki/Mobile:-Introduction#android-archive" target="about:blank">Mobile: Introduction &ndash; Android archive</a>.
-                    <p>Before connecting to the Ethereum network, download the <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> genesis json file and either store it in your Android project as a resource file you can access, or save it as a string in a variable. You're going to need to to initialize your client.</p>
-                    <p>Inside your Java code you can now import the geth archive and connect to Ethereum:
-                      <pre>import org.ethereum.geth.*;</pre>
+					</div>
+					<div id="connect-go-ethereum-mist" hidden style="padding: 16px;">
+						<div class="page-title">
+							<div class="title_left">
+								<h3>Connect Yourself &ndash; Go Ethereum: Wallet &amp; Mist</h3>
+							</div>
+						</div>
+						<div class="clearfix"></div>
+						<div class="row">
+							<div class="col-md-6">
+								<div class="x_panel">
+									<div class="x_title">
+										<h2><i class="fa fa-credit-card" aria-hidden="true"></i> Desktop wallet <small>Interacts with accounts and contracts</small></h2>
+										<div class="clearfix"></div>
+									</div>
+									<div class="x_content">
+										<p>The Ethereum Wallet is an <a href="https://electron.atom.io/" target="about:blank">Electron</a> based desktop application to manage your Ethereum accounts and funds. Beside the usual account life-cycle operations you would expect to perform, the wallet also provides a means to send transactions from your accounts and to interact with smart contracts deployed on the network.</p>
+										<p>Under the hood the wallet is backed by a go-ethereum full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
+										<br/>
+										<p>To connect with the Ethereum Wallet, you'll need to initialize your private network first via Geth as the wallet does not currently support calling Geth directly. To initialize your local chain, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and run:
+											<pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
+										</p>
+										<p>With your local chain initialized, you can start the Ethereum Wallet:
+											<pre>ethereumwallet --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFullFlat}}</pre>
+										<p>
+										<br/>
+										<p>You can download the Ethereum Wallet from <a href="https://github.com/ethereum/mist/releases" target="about:blank">https://github.com/ethereum/mist/releases</a>.</p>
+									</div>
+								</div>
+							</div>
+							<div class="col-md-6">
+								<div class="x_panel">
+									<div class="x_title">
+										<h2><i class="fa fa-picture-o" aria-hidden="true"></i> Mist browser <small>Interacts with third party DApps</small></h2>
+										<div class="clearfix"></div>
+									</div>
+									<div class="x_content">
+										<p>The Mist browser is an <a href="https://electron.atom.io/" target="about:blank">Electron</a> based desktop application to load and interact with Ethereum enabled third party web DApps. Beside all the functionality provided by the Ethereum Wallet, Mist is an extended web-browser where loaded pages have access to the Ethereum network via a web3.js provider, and may also interact with users' own accounts (given proper authorization and confirmation of course).</p>
+										<p>Under the hood the browser is backed by a go-ethereum full node, meaning that a mid range machine is assumed. Similarly, synchronization is based on <strong>fast-sync</strong>, which will download all blockchain data from the network and make it available to the wallet. Light nodes cannot currently fully back the wallet, but it's a target actively pursued.</p>
+										<br/>
+										<p>To connect with the Mist browser, you'll need to initialize your private network first via Geth as Mist does not currently support calling Geth directly. To initialize your local chain, download <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> and run:
+											<pre>geth --datadir=$HOME/.{{.Network}} init {{.GethGenesis}}</pre>
+										</p>
+										<p>With your local chain initialized, you can start Mist:
+											<pre>mist --rpc $HOME/.{{.Network}}/geth.ipc --node-networkid={{.NetworkID}} --node-datadir=$HOME/.{{.Network}}{{if .Ethstats}} --node-ethstats='{{.Ethstats}}'{{end}} --node-bootnodes={{.BootnodesFullFlat}}</pre>
+										<p>
+										<br/>
+										<p>You can download the Mist browser from <a href="https://github.com/ethereum/mist/releases" target="about:blank">https://github.com/ethereum/mist/releases</a>.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div id="connect-go-ethereum-mobile" hidden style="padding: 16px;">
+						<div class="page-title">
+							<div class="title_left">
+								<h3>Connect Yourself &ndash; Go Ethereum: Android &amp; iOS</h3>
+							</div>
+						</div>
+						<div class="clearfix"></div>
+						<div class="row">
+							<div class="col-md-6">
+								<div class="x_panel">
+									<div class="x_title">
+										<h2><i class="fa fa-android" aria-hidden="true"></i> Android devices <small>Accesses Ethereum via Java</small></h2>
+										<div class="clearfix"></div>
+									</div>
+									<div class="x_content">
+										<p>Starting with the 1.5 release of go-ethereum, we've transitioned away from shipping only full blown Ethereum clients and started focusing on releasing the code as reusable packages initially for Go projects, then later for Java based Android projects too. Mobile support is still evolving, hence is bound to change often and hard, but the Ethereum network can nonetheless be accessed from Android too.</p>
+										<p>Under the hood the Android library is backed by a go-ethereum light node, meaning that given a not-too-old Android device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
+										<br/>
+										<p>The stable Android archives are distributed via Maven Central, and the develop snapshots via the Sonatype repositories. Before proceeding, please ensure you have a recent version configured in your Android project. You can find details in <a href="https://github.com/ethereum/go-ethereum/wiki/Mobile:-Introduction#android-archive" target="about:blank">Mobile: Introduction &ndash; Android archive</a>.
+										<p>Before connecting to the Ethereum network, download the <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> genesis json file and either store it in your Android project as a resource file you can access, or save it as a string in a variable. You're going to need to to initialize your client.</p>
+										<p>Inside your Java code you can now import the geth archive and connect to Ethereum:
+											<pre>import org.ethereum.geth.*;</pre>
 <pre>
 Enodes bootnodes = new Enodes();{{range .BootnodesLight}}
 bootnodes.append(new Enode("{{.}}"));{{end}}
@@ -270,24 +270,24 @@ config.setEthereumNetStats("{{.Ethstats}}");{{end}}
 Node node = new Node(getFilesDir() + "/.{{.Network}}", config);
 node.start();
 </pre>
-                    <p>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="x_panel">
-                  <div class="x_title">
-                    <h2><i class="fa fa-apple" aria-hidden="true"></i> iOS devices <small>Accesses Ethereum via ObjC/Swift</small></h2>
-                    <div class="clearfix"></div>
-                  </div>
-                  <div class="x_content">
-                    <p>Starting with the 1.5 release of go-ethereum, we've transitioned away from shipping only full blown Ethereum clients and started focusing on releasing the code as reusable packages initially for Go projects, then later for ObjC/Swift based iOS projects too. Mobile support is still evolving, hence is bound to change often and hard, but the Ethereum network can nonetheless be accessed from iOS too.</p>
-                    <p>Under the hood the iOS library is backed by a go-ethereum light node, meaning that given a not-too-old Apple device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
-                    <br/>
-                    <p>Both stable and develop builds of the iOS framework are available via CocoaPods. Before proceeding, please ensure you have a recent version configured in your iOS project. You can find details in <a href="https://github.com/ethereum/go-ethereum/wiki/Mobile:-Introduction#ios-framework" target="about:blank">Mobile: Introduction &ndash; iOS framework</a>.
-                    <p>Before connecting to the Ethereum network, download the <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> genesis json file and either store it in your iOS project as a resource file you can access, or save it as a string in a variable. You're going to need to to initialize your client.</p>
-                    <p>Inside your Swift code you can now import the geth framework and connect to Ethereum (ObjC should be analogous):
-                      <pre>import Geth</pre>
+										<p>
+									</div>
+								</div>
+							</div>
+							<div class="col-md-6">
+								<div class="x_panel">
+									<div class="x_title">
+										<h2><i class="fa fa-apple" aria-hidden="true"></i> iOS devices <small>Accesses Ethereum via ObjC/Swift</small></h2>
+										<div class="clearfix"></div>
+									</div>
+									<div class="x_content">
+										<p>Starting with the 1.5 release of go-ethereum, we've transitioned away from shipping only full blown Ethereum clients and started focusing on releasing the code as reusable packages initially for Go projects, then later for ObjC/Swift based iOS projects too. Mobile support is still evolving, hence is bound to change often and hard, but the Ethereum network can nonetheless be accessed from iOS too.</p>
+										<p>Under the hood the iOS library is backed by a go-ethereum light node, meaning that given a not-too-old Apple device, you should be able to join the network without significant issues. Certain functionality is not yet available and rough edges are bound to appear here and there, please report issues if you find any.</p>
+										<br/>
+										<p>Both stable and develop builds of the iOS framework are available via CocoaPods. Before proceeding, please ensure you have a recent version configured in your iOS project. You can find details in <a href="https://github.com/ethereum/go-ethereum/wiki/Mobile:-Introduction#ios-framework" target="about:blank">Mobile: Introduction &ndash; iOS framework</a>.
+										<p>Before connecting to the Ethereum network, download the <a href="/{{.GethGenesis}}"><code>{{.GethGenesis}}</code></a> genesis json file and either store it in your iOS project as a resource file you can access, or save it as a string in a variable. You're going to need to to initialize your client.</p>
+										<p>Inside your Swift code you can now import the geth framework and connect to Ethereum (ObjC should be analogous):
+											<pre>import Geth</pre>
 <pre>
 var error: NSError?
 
@@ -304,86 +304,86 @@ let datadir = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomai
 let node = GethNewNode(datadir + "/.{{.Network}}", config, &error);
 try! node?.start();
 </pre>
-                    <p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div id="about" hidden>
-            <div class="row vertical-center">
-              <div style="margin: 0 auto;">
-                <div class="x_panel">
-                  <div class="x_title">
-                    <h3>Puppeth &ndash; Your Ethereum private network manager</h3>
-                    <div class="clearfix"></div>
-                  </div>
-                  <div style="display: inline-block; vertical-align: bottom; width: 623px; margin-top: 16px;">
-                    <p>Puppeth is a tool to aid you in creating a new Ethereum network down to the genesis block, bootnodes, signers, ethstats server, crypto faucet, wallet browsers, block explorer, dashboard and more; without the hassle that it would normally entail to manually configure all these services one by one.</p>
-                    <p>Puppeth uses ssh to dial in to remote servers, and builds its network components out of docker containers using docker-compose. The user is guided through the process via a command line wizard that does the heavy lifting and topology configuration automatically behind the scenes.</p>
-                    <br/>
-                    <p>Puppeth is distributed as part of the <a href="https://geth.ethereum.org/downloads/" target="about:blank">Geth &amp; Tools</a> bundles, but can also be installed separately via:<pre>go get github.com/ethereum/go-ethereum/cmd/puppeth</pre></p>
-                    <br/>
-                    <p><em>Copyright 2017. The go-ethereum Authors.</em></p>
-                  </div>
-                  <div style="display: inline-block; vertical-align: bottom; width: 217px;">
-                    <img src="puppeth.png" style="height: 256px; margin: 16px 16px 16px 16px"></img>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+										<p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div id="about" hidden>
+						<div class="row vertical-center">
+							<div style="margin: 0 auto;">
+								<div class="x_panel">
+									<div class="x_title">
+										<h3>Puppeth &ndash; Your Ethereum private network manager</h3>
+										<div class="clearfix"></div>
+									</div>
+									<div style="display: inline-block; vertical-align: bottom; width: 623px; margin-top: 16px;">
+										<p>Puppeth is a tool to aid you in creating a new Ethereum network down to the genesis block, bootnodes, signers, ethstats server, crypto faucet, wallet browsers, block explorer, dashboard and more; without the hassle that it would normally entail to manually configure all these services one by one.</p>
+										<p>Puppeth uses ssh to dial in to remote servers, and builds its network components out of docker containers using docker-compose. The user is guided through the process via a command line wizard that does the heavy lifting and topology configuration automatically behind the scenes.</p>
+										<br/>
+										<p>Puppeth is distributed as part of the <a href="https://geth.ethereum.org/downloads/" target="about:blank">Geth &amp; Tools</a> bundles, but can also be installed separately via:<pre>go get github.com/ethereum/go-ethereum/cmd/puppeth</pre></p>
+										<br/>
+										<p><em>Copyright 2017. The go-ethereum Authors.</em></p>
+									</div>
+									<div style="display: inline-block; vertical-align: bottom; width: 217px;">
+										<img src="puppeth.png" style="height: 256px; margin: 16px 16px 16px 16px"></img>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
 					<div id="frame-wrapper" hidden style="position: absolute; height: 100%;">
-	          <iframe id="frame" style="position: absolute; width: 1920px; height: 100%; border: none;" onload="if ($(this).attr('src') != '') { resize(); $('#frame-wrapper').fadeIn(300); }"></iframe>
-          </div>
-        </div>
-      </div>
-    </div>
+						<iframe id="frame" style="position: absolute; width: 1920px; height: 100%; border: none;" onload="if ($(this).attr('src') != '') { resize(); $('#frame-wrapper').fadeIn(300); }"></iframe>
+					</div>
+				</div>
+			</div>
+		</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/js/custom.min.js"></script>
-    <script>
-      var load = function(url) {
-        $("#connect-go-ethereum-geth").fadeOut(300)
-        $("#connect-go-ethereum-mist").fadeOut(300)
-        $("#connect-go-ethereum-mobile").fadeOut(300)
-        $("#about").fadeOut(300)
-        $("#frame-wrapper").fadeOut(300);
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/gentelella/1.3.0/js/custom.min.js"></script>
+		<script>
+			var load = function(url) {
+				$("#connect-go-ethereum-geth").fadeOut(300)
+				$("#connect-go-ethereum-mist").fadeOut(300)
+				$("#connect-go-ethereum-mobile").fadeOut(300)
+				$("#about").fadeOut(300)
+				$("#frame-wrapper").fadeOut(300);
 
-        setTimeout(function() {
-          if (url.substring(0, 1) == "#") {
-            $('.body').css({overflowY: 'auto'});
-            $("#frame").attr("src", "");
-            $(url).fadeIn(300);
-          } else {
-            $('.body').css({overflowY: 'hidden'});
-            $("#frame").attr("src", url);
-          }
-        }, 300);
-      }
-      var resize = function() {
-        var sidebar = $($(".navbar")[0]).width();
-        var content = 1920;
-        var limit   = document.body.clientWidth - sidebar;
-        var scale   = limit / content;
+				setTimeout(function() {
+					if (url.substring(0, 1) == "#") {
+						$('.body').css({overflowY: 'auto'});
+						$("#frame").attr("src", "");
+						$(url).fadeIn(300);
+					} else {
+						$('.body').css({overflowY: 'hidden'});
+						$("#frame").attr("src", url);
+					}
+				}, 300);
+			}
+			var resize = function() {
+				var sidebar = $($(".navbar")[0]).width();
+				var content = 1920;
+				var limit   = document.body.clientWidth - sidebar;
+				var scale   = limit / content;
 
-        console.log(document.body.clientHeight);
+				console.log(document.body.clientHeight);
 
-        $("#frame-wrapper").width(content / scale);
-        $("#frame-wrapper").height(document.body.clientHeight / scale);
-        $("#frame-wrapper").css({
-          transform: 'scale(' + (scale) + ')',
-          transformOrigin: "0 0"
-        });
-      };
+				$("#frame-wrapper").width(content / scale);
+				$("#frame-wrapper").height(document.body.clientHeight / scale);
+				$("#frame-wrapper").css({
+					transform: 'scale(' + (scale) + ')',
+					transformOrigin: "0 0"
+				});
+			};
 			$(window).resize(resize);
 
 			var item = $(".side-menu").children()[0];
 			$(item).children()[0].click();
 			$(item).addClass("active");
-    </script>
-  </body>
+		</script>
+	</body>
 </html>
 `
 
@@ -396,7 +396,7 @@ var dashboardDockerfile = `
 FROM mhart/alpine-node:latest
 
 RUN \
-  npm install connect serve-static && \
+	npm install connect serve-static && \
 	\
 	echo 'var connect = require("connect");'                                > server.js && \
 	echo 'var serveStatic = require("serve-static");'                      >> server.js && \
