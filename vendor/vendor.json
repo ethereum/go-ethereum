@@ -202,6 +202,18 @@
 			"revisionTime": "2015-03-14T17:03:34Z"
 		},
 		{
+			"checksumSHA1": "2gmvVTDCks8cPhpmyDlvm0sbrXE=",
+			"path": "github.com/naoina/toml",
+			"revision": "ac014c6b6502388d89a85552b7208b8da7cfe104",
+			"revisionTime": "2017-04-10T21:57:17Z"
+		},
+		{
+			"checksumSHA1": "xZBlSMT5o/A+EDOro6KbfHZwSNc=",
+			"path": "github.com/naoina/toml/ast",
+			"revision": "eb52202f758b98ac5b1a8eb26f36455205d688f0",
+			"revisionTime": "2017-04-03T15:03:10Z"
+		},
+		{
 			"checksumSHA1": "R1h9XHH3dTmLq7yKL9/uW0xFwfs=",
 			"path": "github.com/nsf/termbox-go",
 			"revision": "3540b76b9c77679aeffd0a47e00243fb0ce47133",

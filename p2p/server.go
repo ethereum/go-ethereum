@@ -58,7 +58,7 @@ var errServerStopped = errors.New("server stopped")
 // Config holds Server options.
 type Config struct {
 	// This field must be set to a valid secp256k1 private key.
-	PrivateKey *ecdsa.PrivateKey
+	PrivateKey *ecdsa.PrivateKey `toml:"-"`
 
 	// MaxPeers is the maximum number of peers that can be
 	// connected. It must be greater than zero.
@@ -67,22 +67,22 @@ type Config struct {
 	// MaxPendingPeers is the maximum number of peers that can be pending in the
 	// handshake phase, counted separately for inbound and outbound connections.
 	// Zero defaults to preset values.
-	MaxPendingPeers int
+	MaxPendingPeers int `toml:",omitempty"`
 
-	// Discovery specifies whether the peer discovery mechanism should be started
-	// or not. Disabling is usually useful for protocol debugging (manual topology).
-	Discovery bool
+	// NoDiscovery can be used to disable the peer discovery mechanism.
+	// Disabling is useful for protocol debugging (manual topology).
+	NoDiscovery bool
 
 	// DiscoveryV5 specifies whether the the new topic-discovery based V5 discovery
 	// protocol should be started or not.
-	DiscoveryV5 bool
+	DiscoveryV5 bool `toml:",omitempty"`
 
 	// Listener address for the V5 discovery protocol UDP traffic.
-	DiscoveryV5Addr string
+	DiscoveryV5Addr string `toml:",omitempty"`
 
 	// Name sets the node name of this server.
 	// Use common.MakeName to create a name that follows existing conventions.
-	Name string
+	Name string `toml:"-"`
 
 	// BootstrapNodes are used to establish connectivity
 	// with the rest of the network.
@@ -91,7 +91,7 @@ type Config struct {
 	// BootstrapNodesV5 are used to establish connectivity
 	// with the rest of the network using the V5 discovery
 	// protocol.
-	BootstrapNodesV5 []*discv5.Node
+	BootstrapNodesV5 []*discv5.Node `toml:",omitempty"`
 
 	// Static nodes are used as pre-configured connections which are always
 	// maintained and re-connected on disconnects.
@@ -104,16 +104,16 @@ type Config struct {
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
 	// IP networks contained in the list are considered.
-	NetRestrict *netutil.Netlist
+	NetRestrict *netutil.Netlist `toml:",omitempty"`
 
 	// NodeDatabase is the path to the database containing the previously seen
 	// live nodes in the network.
-	NodeDatabase string
+	NodeDatabase string `toml:",omitempty"`
 
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
-	Protocols []Protocol
+	Protocols []Protocol `toml:"-"`
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
@@ -126,14 +126,14 @@ type Config struct {
 	// If set to a non-nil value, the given NAT port mapper
 	// is used to make the listening port available to the
 	// Internet.
-	NAT nat.Interface
+	NAT nat.Interface `toml:",omitempty"`
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
-	Dialer *net.Dialer
+	Dialer *net.Dialer `toml:"-"`
 
 	// If NoDial is true, the server will not dial any peers.
-	NoDial bool
+	NoDial bool `toml:",omitempty"`
 }
 
 // Server manages all peer connections.
@@ -370,7 +370,7 @@ func (srv *Server) Start() (err error) {
 	srv.peerOpDone = make(chan struct{})
 
 	// node table
-	if srv.Discovery {
+	if !srv.NoDiscovery {
 		ntab, err := discover.ListenUDP(srv.PrivateKey, srv.ListenAddr, srv.NAT, srv.NodeDatabase, srv.NetRestrict)
 		if err != nil {
 			return err
@@ -393,7 +393,7 @@ func (srv *Server) Start() (err error) {
 	}
 
 	dynPeers := (srv.MaxPeers + 1) / 2
-	if !srv.Discovery {
+	if srv.NoDiscovery {
 		dynPeers = 0
 	}
 	dialer := newDialState(srv.StaticNodes, srv.BootstrapNodes, srv.ntab, dynPeers, srv.NetRestrict)

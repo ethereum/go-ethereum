@@ -33,7 +33,7 @@ var maxPrice = big.NewInt(500 * params.Shannon)
 type Config struct {
 	Blocks     int
 	Percentile int
-	Default    *big.Int
+	Default    *big.Int `toml:",omitempty"`
 }
 
 // Oracle recommends gas prices based on the content of recent

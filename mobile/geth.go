@@ -22,15 +22,16 @@ package geth
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
@@ -108,17 +109,19 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Create the empty networking stack
 	nodeConf := &node.Config{
-		Name:             clientIdentifier,
-		Version:          params.Version,
-		DataDir:          datadir,
-		KeyStoreDir:      filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
-		NoDiscovery:      true,
-		DiscoveryV5:      true,
-		DiscoveryV5Addr:  ":0",
-		BootstrapNodesV5: config.BootstrapNodes.nodes,
-		ListenAddr:       ":0",
-		NAT:              nat.Any(),
-		MaxPeers:         config.MaxPeers,
+		Name:        clientIdentifier,
+		Version:     params.Version,
+		DataDir:     datadir,
+		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
+		P2P: p2p.Config{
+			NoDiscovery:      true,
+			DiscoveryV5:      true,
+			DiscoveryV5Addr:  ":0",
+			BootstrapNodesV5: config.BootstrapNodes.nodes,
+			ListenAddr:       ":0",
+			NAT:              nat.Any(),
+			MaxPeers:         config.MaxPeers,
+		},
 	}
 	rawStack, err := node.New(nodeConf)
 	if err != nil {
@@ -142,20 +145,13 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
-		ethConf := &eth.Config{
-			Genesis:            genesis,
-			LightMode:          true,
-			DatabaseCache:      config.EthereumDatabaseCache,
-			NetworkId:          config.EthereumNetworkID,
-			GasPrice:           new(big.Int).SetUint64(20 * params.Shannon),
-			GpoBlocks:          10,
-			GpoPercentile:      50,
-			EthashCacheDir:     "ethash",
-			EthashCachesInMem:  2,
-			EthashCachesOnDisk: 3,
-		}
+		ethConf := eth.DefaultConfig
+		ethConf.Genesis = genesis
+		ethConf.SyncMode = downloader.LightSync
+		ethConf.NetworkId = config.EthereumNetworkID
+		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, ethConf)
+			return les.New(ctx, &ethConf)
 		}); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
