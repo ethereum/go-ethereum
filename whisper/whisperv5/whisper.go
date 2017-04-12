@@ -262,22 +262,12 @@ func (w *Whisper) GetPrivateKey(id string) (*ecdsa.PrivateKey, error) {
 // GenerateSymKey generates a random symmetric key and stores it under id,
 // which is then returned. Will be used in the future for session key exchange.
 func (w *Whisper) GenerateSymKey() (string, error) {
-	const size = aesKeyLength * 2
-	buf := make([]byte, size)
-	_, err := crand.Read(buf)
+	key := make([]byte, aesKeyLength)
+	_, err := crand.Read(key)
 	if err != nil {
 		return "", err
-	} else if !validateSymmetricKey(buf) {
+	} else if !validateSymmetricKey(key) {
 		return "", fmt.Errorf("error in GenerateSymKey: crypto/rand failed to generate random data")
-	}
-
-	key := buf[:aesKeyLength]
-	salt := buf[aesKeyLength:]
-	derived, err := DeriveOneTimeKey(key, salt, EnvelopeVersion)
-	if err != nil {
-		return "", err
-	} else if !validateSymmetricKey(derived) {
-		return "", fmt.Errorf("failed to derive valid key")
 	}
 
 	id, err := GenerateRandomID()
@@ -291,7 +281,7 @@ func (w *Whisper) GenerateSymKey() (string, error) {
 	if w.symKeys[id] != nil {
 		return "", fmt.Errorf("failed to generate unique ID")
 	}
-	w.symKeys[id] = derived
+	w.symKeys[id] = key
 	return id, nil
 }
 
@@ -554,10 +544,6 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		// the standard AES GSM nonce size is 12,
 		// but const gcmStandardNonceSize cannot be accessed directly
 		return false, fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
-	}
-
-	if len(envelope.Salt) > saltLength {
-		return false, fmt.Errorf("oversized salt [%x]", envelope.Hash())
 	}
 
 	if envelope.PoW() < wh.minPoW {

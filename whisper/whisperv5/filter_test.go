@@ -68,7 +68,7 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	f.Src = &key.PublicKey
 
 	if symmetric {
-		f.KeySym = make([]byte, 12)
+		f.KeySym = make([]byte, aesKeyLength)
 		mrand.Read(f.KeySym)
 		f.SymKeyHash = crypto.Keccak256Hash(f.KeySym)
 	} else {

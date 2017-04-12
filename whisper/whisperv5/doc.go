@@ -52,7 +52,6 @@ const (
 	TopicLength       = 4
 	signatureLength   = 65
 	aesKeyLength      = 32
-	saltLength        = 12
 	AESNonceMaxLength = 12
 	keyIdSize         = 32
 

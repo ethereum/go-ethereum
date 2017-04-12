@@ -58,8 +58,9 @@ func TestDBKey(t *testing.T) {
 }
 
 func generateEnvelope(t *testing.T) *whisper.Envelope {
+	h := crypto.Keccak256Hash([]byte("test sample data"))
 	params := &whisper.MessageParams{
-		KeySym:   []byte("test key"),
+		KeySym:   h[:],
 		Topic:    whisper.TopicType{},
 		Payload:  []byte("test payload"),
 		PoW:      powRequirement,

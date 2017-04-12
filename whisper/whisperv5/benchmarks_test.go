@@ -28,12 +28,6 @@ func BenchmarkDeriveKeyMaterial(b *testing.B) {
 	}
 }
 
-func BenchmarkDeriveOneTimeKey(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		DeriveOneTimeKey([]byte("test value 1"), []byte("test value 2"), 0)
-	}
-}
-
 func BenchmarkEncryptionSym(b *testing.B) {
 	InitSingleTest()
 
