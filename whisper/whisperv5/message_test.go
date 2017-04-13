@@ -31,9 +31,9 @@ func copyFromBuf(dst []byte, src []byte, beg int) int {
 }
 
 func generateMessageParams() (*MessageParams, error) {
-	// set all the parameters except p.Dst
+	// set all the parameters except p.Dst and p.Padding
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4)
 	mrand.Read(buf)
 	sz := mrand.Intn(400)
 
@@ -42,14 +42,10 @@ func generateMessageParams() (*MessageParams, error) {
 	p.WorkTime = 1
 	p.TTL = uint32(mrand.Intn(1024))
 	p.Payload = make([]byte, sz)
-	p.Padding = make([]byte, padSizeLimit)
 	p.KeySym = make([]byte, aesKeyLength)
-
-	var b int
-	b = copyFromBuf(p.Payload, buf, b)
-	b = copyFromBuf(p.Padding, buf, b)
-	b = copyFromBuf(p.KeySym, buf, b)
-	p.Topic = BytesToTopic(buf[b:])
+	mrand.Read(p.Payload)
+	mrand.Read(p.KeySym)
+	p.Topic = BytesToTopic(buf)
 
 	var err error
 	p.Src, err = crypto.GenerateKey()
@@ -349,4 +345,50 @@ func TestRlpEncode(t *testing.T) {
 	if he != hd {
 		t.Fatalf("Hashes are not equal: %x vs. %x", he, hd)
 	}
+}
+
+func singlePaddingTest(t *testing.T, padSize int) {
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d and sz=%d: %s.", seed, padSize, err)
+	}
+
+	params.Padding = make([]byte, padSize)
+	params.PoW = 0.0000000001
+	pad := make([]byte, padSize)
+	mrand.Read(pad)
+	copy(params.Padding, pad)
+	if !bytes.Equal(pad, params.Padding) {
+		t.Fatalf("padding is not copied as expected with seed %d and sz=%d:\n[%x]\n[%x].", seed, padSize, pad, params.Padding)
+	}
+
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed to wrap, seed: %d and sz=%d.", seed, padSize)
+	}
+
+	f := Filter{KeySym: params.KeySym}
+	decrypted := env.Open(&f)
+	if decrypted == nil {
+		t.Fatalf("failed to open, seed and sz=%d: %d.", seed, padSize)
+	}
+	if !bytes.Equal(pad, decrypted.Padding) {
+		t.Fatalf("padding is not retireved as expected with seed %d and sz=%d:\n[%x]\n[%x].", seed, padSize, pad, decrypted.Padding)
+	}
+}
+
+func TestPadding(t *testing.T) {
+	InitSingleTest()
+
+	for i := 1; i < 260; i++ {
+		singlePaddingTest(t, i)
+	}
+
+	lim := 256 * 256
+	for i := lim - 5; i < lim+2; i++ {
+		singlePaddingTest(t, i)
+	}
+
+	// todo: add several in interval 256 < i < 256*256, and another several with i > 256*256
 }
