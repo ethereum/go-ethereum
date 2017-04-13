@@ -17,7 +17,6 @@
 package api
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -84,24 +83,27 @@ type ErrResolve error
 // DNS Resolver
 func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
+
+	var err error
+	if !uri.Immutable() {
+		if self.dns != nil {
+			resolved, err := self.dns.Resolve(uri.Addr)
+			if err == nil {
+				return resolved[:], nil
+			}
+		} else {
+			err = fmt.Errorf("no DNS to resolve name")
+		}
+	}
 	if hashMatcher.MatchString(uri.Addr) {
-		log.Trace(fmt.Sprintf("addr is a hash: %q", uri.Addr))
 		return storage.Key(common.Hex2Bytes(uri.Addr)), nil
 	}
-	if uri.Immutable() {
-		return nil, errors.New("refusing to resolve immutable address")
-	}
-	if self.dns == nil {
-		return nil, fmt.Errorf("unable to resolve addr %q, resolver not configured", uri.Addr)
-	}
-	hash, err := self.dns.Resolve(uri.Addr)
 	if err != nil {
-		log.Warn(fmt.Sprintf("DNS error resolving addr %q: %s", uri.Addr, err))
-		return nil, ErrResolve(err)
+		return nil, fmt.Errorf("'%s' does not resolve: %v but is not a content hash", uri.Addr, err)
 	}
-	log.Trace(fmt.Sprintf("addr lookup: %v -> %v", uri.Addr, hash))
-	return hash[:], nil
+	return nil, fmt.Errorf("'%s' is not a content hash", uri.Addr)
 }
+
 
 // Put provides singleton manifest creation on top of dpa store
 func (self *Api) Put(content, contentType string) (storage.Key, error) {
