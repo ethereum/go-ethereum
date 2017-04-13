@@ -42,7 +42,7 @@ func generateMessageParams() (*MessageParams, error) {
 	p.WorkTime = 1
 	p.TTL = uint32(mrand.Intn(1024))
 	p.Payload = make([]byte, sz)
-	p.Padding = make([]byte, padSizeLimitUpper)
+	p.Padding = make([]byte, padSizeLimit)
 	p.KeySym = make([]byte, aesKeyLength)
 
 	var b int
@@ -289,21 +289,29 @@ func TestEncryptWithZeroKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
 	}
-
 	msg := NewSentMessage(params)
-
 	params.KeySym = make([]byte, aesKeyLength)
 	_, err = msg.Wrap(params)
 	if err == nil {
 		t.Fatalf("wrapped with zero key, seed: %d.", seed)
 	}
 
+	params, err = generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	msg = NewSentMessage(params)
 	params.KeySym = make([]byte, 0)
 	_, err = msg.Wrap(params)
 	if err == nil {
 		t.Fatalf("wrapped with empty key, seed: %d.", seed)
 	}
 
+	params, err = generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	msg = NewSentMessage(params)
 	params.KeySym = nil
 	_, err = msg.Wrap(params)
 	if err == nil {

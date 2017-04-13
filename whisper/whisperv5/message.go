@@ -23,6 +23,7 @@ import (
 	"crypto/cipher"
 	"crypto/ecdsa"
 	crand "crypto/rand"
+	"encoding/binary"
 	"errors"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -87,7 +88,7 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
 func NewSentMessage(params *MessageParams) *SentMessage {
 	msg := SentMessage{}
-	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimitUpper)
+	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
 	err := msg.appendPadding(params)
 	if err != nil {
@@ -98,35 +99,77 @@ func NewSentMessage(params *MessageParams) *SentMessage {
 	return &msg
 }
 
+// getSizeOfLength returns the number of bytes necessary to encode the entire size padding (including these bytes)
+func getSizeOfLength(b []byte) (int, error) {
+	// prefer clarity over efficiency
+	var sizeOfLength int
+	len := len(b)
+
+	// first iteration
+	if len < 256 {
+		sizeOfLength = 1
+	} else if len < 256*256 {
+		sizeOfLength = 2
+	} else if len < 256*256*256 {
+		sizeOfLength = 3
+	} else {
+		return 0, errors.New("oversized padding parameter")
+	}
+
+	// second iteration
+	total := len + sizeOfLength
+	if total < 256 {
+		sizeOfLength = 1
+	} else if total < 256*256 {
+		sizeOfLength = 2
+	} else if total < 256*256*256 {
+		sizeOfLength = 3
+	} else {
+		return 0, errors.New("oversized padding parameter")
+	}
+
+	return sizeOfLength, nil
+}
+
 // appendPadding appends the pseudorandom padding bytes and sets the padding flag.
 // The last byte contains the size of padding (thus, its size must not exceed 256).
 func (msg *SentMessage) appendPadding(params *MessageParams) error {
-	total := len(params.Payload) + 1
+	rawSize := len(params.Payload) + 1
 	if params.Src != nil {
-		total += signatureLength
+		rawSize += signatureLength
 	}
-	padChunk := padSizeLimitUpper
-	if total <= padSizeLimitLower {
-		padChunk = padSizeLimitLower
-	}
-	odd := total % padChunk
-	if odd > 0 {
-		padSize := padChunk - odd
-		if padSize > 255 {
-			// this algorithm is only valid if padSizeLimitUpper <= 256.
-			// if padSizeLimitUpper will ever change, please fix the algorithm
-			// (for more information see ReceivedMessage.extractPadding() function).
+	odd := rawSize % padSizeLimit
+
+	if len(params.Padding) != 0 {
+		padSize := len(params.Padding)
+		padLengthSize, err := getSizeOfLength(params.Padding)
+		if err != nil {
+			return err
+		}
+		totalPadSize := padSize + padLengthSize
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint32(buf, uint32(totalPadSize))
+		buf = buf[:padLengthSize]
+		msg.Raw = append(msg.Raw, buf...)
+		msg.Raw = append(msg.Raw, params.Padding...)
+		msg.Raw[0] |= byte(padLengthSize) // number of bytes indicating the padding size
+	} else if odd != 0 {
+		totalPadSize := padSizeLimit - odd
+		if totalPadSize > 255 {
+			// this algorithm is only valid if padSizeLimit < 256.
+			// if padSizeLimit will ever change, please fix the algorithm
+			// (please see also ReceivedMessage.extractPadding() function).
 			panic("please fix the padding algorithm before releasing new version")
 		}
-		buf := make([]byte, padSize)
+		buf := make([]byte, totalPadSize)
 		_, err := crand.Read(buf[1:])
 		if err != nil {
 			return err
 		}
-		buf[0] = byte(padSize)
-		if params.Padding != nil {
-			copy(buf[1:], params.Padding)
+		if !validateSymmetricKey(buf) {
+			return errors.New("failed to generate random padding")
 		}
+		buf[0] = byte(totalPadSize)
 		msg.Raw = append(msg.Raw, buf...)
 		msg.Raw[0] |= byte(0x1) // number of bytes indicating the padding size
 	}
@@ -292,7 +335,8 @@ func (msg *ReceivedMessage) Validate() bool {
 // can be successfully decrypted.
 func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
 	paddingSize := 0
-	sz := int(msg.Raw[0] & paddingMask) // number of bytes containing the entire size of padding, could be zero
+	sz := int(msg.Raw[0] & paddingMask) // number of bytes indicating the entire size of padding (including these bytes)
+	// could be zero -- it means no padding
 	if sz != 0 {
 		paddingSize = int(bytesToUintLittleEndian(msg.Raw[1 : 1+sz]))
 		if paddingSize < sz || paddingSize+1 > end {

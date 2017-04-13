@@ -385,6 +385,9 @@ func (w *Whisper) Unsubscribe(id string) error {
 // network in the coming cycles.
 func (w *Whisper) Send(envelope *Envelope) error {
 	ok, err := w.add(envelope)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return fmt.Errorf("failed to add envelope")
 	}
@@ -540,10 +543,11 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		return false, fmt.Errorf("oversized version [%x]", envelope.Hash())
 	}
 
-	if len(envelope.AESNonce) > AESNonceMaxLength {
-		// the standard AES GSM nonce size is 12,
-		// but const gcmStandardNonceSize cannot be accessed directly
-		return false, fmt.Errorf("oversized AESNonce [%x]", envelope.Hash())
+	aesNonceSize := len(envelope.AESNonce)
+	if aesNonceSize != 0 && aesNonceSize != AESNonceLength {
+		// the standard AES GCM nonce size is 12 bytes,
+		// but constant gcmStandardNonceSize cannot be accessed (not exported)
+		return false, fmt.Errorf("wrong size of AESNonce: %d bytes [env: %x]", aesNonceSize, envelope.Hash())
 	}
 
 	if envelope.PoW() < wh.minPoW {
