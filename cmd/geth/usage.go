@@ -30,7 +30,7 @@ import (
 var AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
 
-   Copyright 2013-2016 The go-ethereum Authors
+   Copyright 2013-2017 The go-ethereum Authors
 
 USAGE:
    {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
@@ -64,14 +64,15 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "ETHEREUM",
 		Flags: []cli.Flag{
+			configFileFlag,
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			utils.NetworkIdFlag,
 			utils.TestNetFlag,
 			utils.DevModeFlag,
+			utils.SyncModeFlag,
+			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
-			utils.FastSyncFlag,
-			utils.LightModeFlag,
 			utils.LightServFlag,
 			utils.LightPeersFlag,
 			utils.LightKDFFlag,
@@ -132,6 +133,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.NATFlag,
 			utils.NoDiscoverFlag,
 			utils.DiscoveryV5Flag,
+			utils.NetrestrictFlag,
 			utils.NodeKeyFileFlag,
 			utils.NodeKeyHexFlag,
 		},
@@ -163,10 +165,17 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "LOGGING AND DEBUGGING",
 		Flags: append([]cli.Flag{
-			utils.EthStatsURLFlag,
 			utils.MetricsEnabledFlag,
 			utils.FakePoWFlag,
+			utils.NoCompactionFlag,
 		}, debug.Flags...),
+	},
+	{
+		Name: "DEPRECATED",
+		Flags: []cli.Flag{
+			utils.FastSyncFlag,
+			utils.LightModeFlag,
+		},
 	},
 	{
 		Name: "EXPERIMENTAL",
