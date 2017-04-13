@@ -85,7 +85,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
 
 	var err error
-	if uri.Immutable() {
+	if !uri.Immutable() {
 		if self.dns != nil {
 			resolved, err := self.dns.Resolve(uri.Addr)
 			if err == nil {

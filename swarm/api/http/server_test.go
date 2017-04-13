@@ -100,15 +100,15 @@ func TestBzzrGetPath(t *testing.T) {
 	}
 
 	nonhashtests := []string{
-		"http://127.0.0.1:8504/bzz:/name",
-		"http://127.0.0.1:8504/bzzi:/nonhash",
-		"http://127.0.0.1:8504/bzzr:/nonhash",
+		srv.URL + "/bzz:/name",
+		srv.URL + "/bzzi:/nonhash",
+		srv.URL + "/bzzr:/nonhash",
 	}
 
 	nonhashresponses := []string{
-		"can't resolve: 'name' does not resolve: no DNS to resolve name but is not a content hash\n",
-		"can't resolve: '%!s(MISSING)' is not a content hash\n",
-		"'nonhash' does not resolve: no DNS to resolve name but is not a content hash\n",
+		"error resolving name: 'name' does not resolve: no DNS to resolve name but is not a content hash\n",
+		"error resolving nonhash: 'nonhash' is not a content hash\n",
+		"error resolving nonhash: 'nonhash' does not resolve: no DNS to resolve name but is not a content hash\n",
 	}
 
 	for i, url := range nonhashtests {
