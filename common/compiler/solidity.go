@@ -25,20 +25,20 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
-	versionRegexp = regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+`)
-	solcParams    = []string{
-		"--combined-json", "bin,abi,userdoc,devdoc",
-		"--add-std",  // include standard lib contracts
-		"--optimize", // code optimizer switched on
-	}
+	versionRegexp = regexp.MustCompile(`([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	spmu          = &sync.Mutex{} // protects access to mutating _solcParams variable (contents are never mutated)
+	_solcParams    = []string{}   // zero-len means uninitialized, protected by spmu
 )
+
 
 type Contract struct {
 	Code string       `json:"code"`
@@ -54,6 +54,7 @@ type ContractInfo struct {
 	AbiDefinition   interface{} `json:"abiDefinition"`
 	UserDoc         interface{} `json:"userDoc"`
 	DeveloperDoc    interface{} `json:"developerDoc"`
+	Metadata        string      `json:"metadata"`
 }
 
 // Solidity contains information about the solidity compiler.
@@ -63,8 +64,60 @@ type Solidity struct {
 
 // --combined-output format
 type solcOutput struct {
-	Contracts map[string]struct{ Bin, Abi, Devdoc, Userdoc string }
+	Contracts map[string]struct{ Bin, Abi, Devdoc, Userdoc, Metadata string }
 	Version   string
+}
+
+func findSolcParams(solc string) []string {
+	spmu.Lock()
+	defer spmu.Unlock()
+
+	if ( len(_solcParams) != 0 ) {
+		return _solcParams
+	} else {
+		recent, _ := atLeast047(solc) // on err, we default to considering the solidity version recent, see atLeast047
+		var mbmeta string
+		if ( recent ) {
+			mbmeta = ",metadata"
+		} else {
+			mbmeta = ""
+		}
+		_solcParams = []string{
+			"--combined-json", "bin,abi,userdoc,devdoc" + mbmeta,
+			"--add-std",  // include standard lib contracts
+			"--optimize", // code optimizer switched on
+		}
+		return _solcParams
+	}
+}
+
+func atLeast047(solc string) (bool, error) {
+	var (
+		solidity *Solidity
+		major    int
+		minor    int
+		patch    int
+		err      error
+	)
+	solidity, err = SolidityVersion(solc)
+	if ( err != nil ) {
+		return true, err
+	}
+
+	matches := versionRegexp.FindStringSubmatch( solidity.Version )
+	major, err = strconv.Atoi( matches[1] )
+	if ( err != nil ) {
+		return true, err
+	}
+	minor, err = strconv.Atoi( matches[2] )
+	if ( err != nil ) {
+		return true, err
+	}
+	patch, err = strconv.Atoi( matches[3] )
+	if ( err != nil ) {
+		return true, err
+	}
+	return (major > 0 || minor > 4 || patch > 6), nil
 }
 
 // SolidityVersion runs solc and parses its version output.
@@ -94,10 +147,11 @@ func CompileSolidityString(solc, source string) (map[string]*Contract, error) {
 	if solc == "" {
 		solc = "solc"
 	}
+	solcParams := findSolcParams(solc)
 	args := append(solcParams, "--")
 	cmd := exec.Command(solc, append(args, "-")...)
 	cmd.Stdin = strings.NewReader(source)
-	return runsolc(cmd, source)
+	return runsolc(cmd, solcParams, source)
 }
 
 // CompileSolidity compiles all given Solidity source files.
@@ -112,12 +166,13 @@ func CompileSolidity(solc string, sourcefiles ...string) (map[string]*Contract, 
 	if solc == "" {
 		solc = "solc"
 	}
+	solcParams := findSolcParams(solc)
 	args := append(solcParams, "--")
 	cmd := exec.Command(solc, append(args, sourcefiles...)...)
-	return runsolc(cmd, source)
+	return runsolc(cmd, solcParams, source)
 }
 
-func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
+func runsolc(cmd *exec.Cmd, solcParams []string, source string) (map[string]*Contract, error) {
 	var stderr, stdout bytes.Buffer
 	cmd.Stderr = &stderr
 	cmd.Stdout = &stdout
@@ -146,6 +201,16 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
 			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
+		var metadata string
+		if info.Metadata != "" {
+			jstring, err := json.Marshal( string(info.Metadata) )
+			if ( err != nil ) {
+			      return nil, fmt.Errorf("solc: error coercing metadata to string: %v", err)
+			}
+		        if err := json.Unmarshal(jstring, &metadata); err != nil {
+			      return nil, fmt.Errorf("solc: error reading metadata: %v", err)
+			}
+		}
 		contracts[name] = &Contract{
 			Code: "0x" + info.Bin,
 			Info: ContractInfo{
@@ -157,6 +222,7 @@ func runsolc(cmd *exec.Cmd, source string) (map[string]*Contract, error) {
 				AbiDefinition:   abi,
 				UserDoc:         userdoc,
 				DeveloperDoc:    devdoc,
+				Metadata:        metadata,
 			},
 		}
 	}
