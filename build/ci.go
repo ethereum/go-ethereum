@@ -292,7 +292,8 @@ func doTest(cmdline []string) {
 	// Run analysis tools before the tests.
 	build.MustRun(goTool("vet", packages...))
 	if *misspell {
-		spellcheck(packages)
+		// TODO(karalabe): Reenable after false detection is fixed: https://github.com/client9/misspell/issues/105
+		// spellcheck(packages)
 	}
 	// Run the actual tests.
 	gotest := goTool("test", buildFlags(env)...)
