@@ -130,13 +130,16 @@ func memoryMapAndGenerate(path string, size uint64, generator func(buffer []uint
 	data := buffer[len(dumpMagic):]
 	generator(data)
 
-	if err := mem.Flush(); err != nil {
-		mem.Unmap()
-		dump.Close()
+	if err := mem.Unmap(); err != nil {
 		return nil, nil, nil, err
 	}
-	os.Rename(temp, path)
-	return dump, mem, data, nil
+	if err := dump.Close(); err != nil {
+		return nil, nil, nil, err
+	}
+	if err := os.Rename(temp, path); err != nil {
+		return nil, nil, nil, err
+	}
+	return memoryMap(path)
 }
 
 // cache wraps an ethash cache with some metadata to allow easier concurrent use.
