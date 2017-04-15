@@ -25,6 +25,7 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"errors"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -86,17 +87,16 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 }
 
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
-func NewSentMessage(params *MessageParams) *SentMessage {
+func NewSentMessage(params *MessageParams) (*SentMessage, error) {
 	msg := SentMessage{}
-	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimit)
+	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
 	err := msg.appendPadding(params)
 	if err != nil {
-		log.Error("failed to create NewSentMessage", "err", err)
-		return nil
+		return nil, err
 	}
 	msg.Raw = append(msg.Raw, params.Payload...)
-	return &msg
+	return &msg, nil
 }
 
 // getSizeOfLength returns the number of bytes necessary to encode the entire size padding (including these bytes)
@@ -166,8 +166,8 @@ func (msg *SentMessage) appendPadding(params *MessageParams) error {
 		if err != nil {
 			return err
 		}
-		if !validateSymmetricKey(buf) {
-			return errors.New("failed to generate random padding")
+		if totalPadSize > 6 && !validateSymmetricKey(buf) {
+			return errors.New("failed to generate random padding of size " + strconv.Itoa(totalPadSize))
 		}
 		buf[0] = byte(totalPadSize)
 		msg.Raw = append(msg.Raw, buf...)

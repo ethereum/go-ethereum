@@ -67,7 +67,10 @@ func generateEnvelope(t *testing.T) *whisper.Envelope {
 		WorkTime: 2,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)
@@ -189,7 +192,10 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 		Src:      p.key,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)

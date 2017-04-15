@@ -492,10 +492,9 @@ func sendMsg(payload []byte) common.Hash {
 		WorkTime: uint32(*argWorkTime),
 	}
 
-	msg := whisper.NewSentMessage(&params)
-	if msg == nil {
-		fmt.Printf("failed to create new message (OS level error)")
-		os.Exit(0)
+	msg, err := whisper.NewSentMessage(&params)
+	if err != nil {
+		utils.Fatalf("failed to create new message: %s", err)
 	}
 	envelope, err := msg.Wrap(&params)
 	if err != nil {
@@ -625,9 +624,9 @@ func requestExpiredMessagesLoop() {
 		params.Src = nodeid
 		params.WorkTime = 5
 
-		msg := whisper.NewSentMessage(&params)
-		if msg == nil {
-			utils.Fatalf("failed to create new message (OS level error)")
+		msg, err := whisper.NewSentMessage(&params)
+		if err != nil {
+			utils.Fatalf("failed to create new message: %s", err)
 		}
 		env, err := msg.Wrap(&params)
 		if err != nil {

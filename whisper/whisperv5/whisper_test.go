@@ -455,7 +455,10 @@ func TestExpiry(t *testing.T) {
 	}
 
 	params.TTL = 1
-	msg := NewSentMessage(params)
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -515,7 +518,10 @@ func TestCustomization(t *testing.T) {
 	params.Topic = BytesToTopic(f.Topics[2])
 	params.PoW = smallPoW
 	params.TTL = 3600 * 24 // one day
-	msg := NewSentMessage(params)
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
@@ -533,7 +539,10 @@ func TestCustomization(t *testing.T) {
 	}
 
 	params.TTL++
-	msg = NewSentMessage(params)
+	msg, err = NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err = msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)

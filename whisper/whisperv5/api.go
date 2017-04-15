@@ -354,9 +354,9 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 	}
 
 	// encrypt and send
-	message := NewSentMessage(&params)
-	if message == nil {
-		return errors.New("post: failed create new message, probably due to failed rand function (OS level)")
+	message, err := NewSentMessage(&params)
+	if err != nil {
+		return err
 	}
 	envelope, err := message.Wrap(&params)
 	if err != nil {
