@@ -56,7 +56,7 @@ const (
 	keyIdSize       = 32
 
 	DefaultMaxMessageLength = 1024 * 1024
-	DefaultMinimumPoW       = 1.0 // todo: review after testing.
+	DefaultMinimumPoW       = 1.0
 
 	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol (must not exceed 2^24)
 	messageQueueLimit = 1024

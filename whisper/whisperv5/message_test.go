@@ -367,16 +367,17 @@ func singlePaddingTest(t *testing.T, padSize int) {
 	if err != nil {
 		t.Fatalf("failed generateMessageParams with seed %d and sz=%d: %s.", seed, padSize, err)
 	}
-
 	params.Padding = make([]byte, padSize)
 	params.PoW = 0.0000000001
 	pad := make([]byte, padSize)
-	mrand.Read(pad)
-	copy(params.Padding, pad)
-	if !bytes.Equal(pad, params.Padding) {
-		t.Fatalf("padding is not copied as expected with seed %d and sz=%d:\n[%x]\n[%x].", seed, padSize, pad, params.Padding)
+	_, err = mrand.Read(pad)
+	if err != nil {
+		t.Fatalf("padding is not generated (seed %d): %s", seed, err)
 	}
-
+	n := copy(params.Padding, pad)
+	if n != padSize {
+		t.Fatalf("padding is not copied (seed %d): %s", seed, err)
+	}
 	msg, err := NewSentMessage(params)
 	if err != nil {
 		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
@@ -385,7 +386,6 @@ func singlePaddingTest(t *testing.T, padSize int) {
 	if err != nil {
 		t.Fatalf("failed to wrap, seed: %d and sz=%d.", seed, padSize)
 	}
-
 	f := Filter{KeySym: params.KeySym}
 	decrypted := env.Open(&f)
 	if decrypted == nil {
@@ -408,5 +408,13 @@ func TestPadding(t *testing.T) {
 		singlePaddingTest(t, i)
 	}
 
-	// todo: add several in interval 256 < i < 256*256, and another several with i > 256*256
+	for i := 0; i < 256; i++ {
+		n := mrand.Intn(256*254) + 256
+		singlePaddingTest(t, n)
+	}
+
+	for i := 0; i < 256; i++ {
+		n := mrand.Intn(256*1024) + 256*256
+		singlePaddingTest(t, n)
+	}
 }
