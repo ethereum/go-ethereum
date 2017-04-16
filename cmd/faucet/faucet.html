@@ -136,7 +136,7 @@
 					}
 				}
 				server.onclose = function() { setTimeout(reconnect, 3000); };
-				server.onerror = function() { setTimeout(reconnect, 3000); };
+				//server.onerror = function() { setTimeout(reconnect, 3000); };
 			}
 			// Establish a websocket connection to the API server
 			reconnect();
