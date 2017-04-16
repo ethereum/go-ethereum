@@ -306,7 +306,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to GitHub Gists"})
 			continue
 		}
-		log.Info("Faucet funds requested", "gist", msg.URL)
+		log.Info("Faucet funds requested", "addr", conn.RemoteAddr(), "gist", msg.URL)
 
 		// Retrieve the gist from the GitHub Gist APIs
 		parts := strings.Split(msg.URL, "/")
@@ -346,6 +346,17 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		}
 		if address == (common.Address{}) {
 			websocket.JSON.Send(conn, map[string]string{"error": "No Ethereum address found to fund"})
+			continue
+		}
+		// Validate the user's existence since the API is unhelpful here
+		if res, err = http.Head("https://github.com/%s", gist.Owner.Login); err != nil {
+			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+			continue
+		}
+		res.Body.Close()
+
+		if res.StatusCode != 200 {
+			websocket.JSON.Send(conn, map[string]string{"error": "Invalid user... boom!"})
 			continue
 		}
 		// Ensure the user didn't request funds too recently
