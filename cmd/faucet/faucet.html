@@ -51,9 +51,10 @@
 						<div class="input-group">
 							<input id="gist" type="text" class="form-control" placeholder="GitHub Gist URL containing your Ethereum address...">
 							<span class="input-group-btn">
-								<button class="btn btn-default" type="button" onclick="submit()">Give me Ether!</button>
+								<button class="btn btn-default" type="button" onclick="{{if .Recaptcha}}grecaptcha.execute(){{else}}submit(){{end}}">Give me Ether!</button>
 							</span>
-						</div>
+						</div>{{if .Recaptcha}}
+						<div class="g-recaptcha" data-sitekey="{{.Recaptcha}}" data-callback="submit" data-size="invisible"></div>{{end}}
 					</div>
 				</div>
 				<div class="row" style="margin-top: 32px;">
@@ -89,8 +90,9 @@
 			var server;
 
 			// Define the function that submits a gist url to the server
-			var submit = function() {
-				server.send(JSON.stringify({url: $("#gist")[0].value}));
+			var submit = function({{if .Recaptcha}}captcha{{end}}) {
+				server.send(JSON.stringify({url: $("#gist")[0].value{{if .Recaptcha}}, captcha: captcha{{end}}}));{{if .Recaptcha}}
+				grecaptcha.reset();{{end}}
 			};
 			// Define a method to reconnect upon server loss
 			var reconnect = function() {
@@ -138,6 +140,7 @@
 			}
 			// Establish a websocket connection to the API server
 			reconnect();
-		</script>
+		</script>{{if .Recaptcha}}
+		<script src="https://www.google.com/recaptcha/api.js" async defer></script>{{end}}
 	</body>
 </html>

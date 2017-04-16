@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,6 +74,9 @@ var (
 	githubUser  = flag.String("github.user", "", "GitHub user to authenticate with for Gist access")
 	githubToken = flag.String("github.token", "", "GitHub personal token to access Gists with")
 
+	captchaToken  = flag.String("captcha.token", "", "Recaptcha site key to authenticate client side")
+	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
+
 	logFlag = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
 )
 
@@ -96,9 +100,10 @@ func main() {
 	}
 	website := new(bytes.Buffer)
 	template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
-		"Network": *netnameFlag,
-		"Amount":  *payoutFlag,
-		"Period":  period,
+		"Network":   *netnameFlag,
+		"Amount":    *payoutFlag,
+		"Period":    period,
+		"Recaptcha": *captchaToken,
 	})
 	// Load and parse the genesis block requested by the user
 	blob, err := ioutil.ReadFile(*genesisFlag)
@@ -297,7 +302,8 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 	for {
 		// Fetch the next funding request and validate against github
 		var msg struct {
-			URL string `json:"url"`
+			URL     string `json:"url"`
+			Captcha string `json:"captcha"`
 		}
 		if err := websocket.JSON.Receive(conn, &msg); err != nil {
 			return
@@ -306,8 +312,35 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to GitHub Gists"})
 			continue
 		}
-		log.Info("Faucet funds requested", "addr", conn.RemoteAddr(), "gist", msg.URL)
+		log.Info("Faucet funds requested", "gist", msg.URL)
 
+		// If captcha verifications are enabled, make sure we're not dealing with a robot
+		if *captchaToken != "" {
+			form := url.Values{}
+			form.Add("secret", *captchaSecret)
+			form.Add("response", msg.Captcha)
+
+			res, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify", form)
+			if err != nil {
+				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+				continue
+			}
+			var result struct {
+				Success bool            `json:"success"`
+				Errors  json.RawMessage `json:"error-codes"`
+			}
+			err = json.NewDecoder(res.Body).Decode(&result)
+			res.Body.Close()
+			if err != nil {
+				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+				continue
+			}
+			if !result.Success {
+				log.Warn("Captcha verification failed", "err", string(result.Errors))
+				websocket.JSON.Send(conn, map[string]string{"error": "Beep-boop, you're a robot!"})
+				continue
+			}
+		}
 		// Retrieve the gist from the GitHub Gist APIs
 		parts := strings.Split(msg.URL, "/")
 		req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
@@ -334,7 +367,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			continue
 		}
 		if gist.Owner.Login == "" {
-			websocket.JSON.Send(conn, map[string]string{"error": "Nice try ;)"})
+			websocket.JSON.Send(conn, map[string]string{"error": "Anonymous Gists not allowed"})
 			continue
 		}
 		// Iterate over all the files and look for Ethereum addresses
@@ -349,7 +382,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			continue
 		}
 		// Validate the user's existence since the API is unhelpful here
-		if res, err = http.Head("https://github.com/%s", gist.Owner.Login); err != nil {
+		if res, err = http.Head("https://github.com/" + gist.Owner.Login); err != nil {
 			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
 			continue
 		}
