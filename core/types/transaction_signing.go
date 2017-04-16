@@ -45,6 +45,8 @@ type sigCache struct {
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
+	case config.IsMetropolis(blockNumber):
+		signer = NewEIP86Signer(config.ChainId)
 	case config.IsEIP155(blockNumber):
 		signer = NewEIP155Signer(config.ChainId)
 	case config.IsHomestead(blockNumber):
@@ -88,6 +90,10 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 
 	pubkey, err := signer.PublicKey(tx)
 	if err != nil {
+		if err == errAbstractSigner {
+			return abstractSignerAddress, nil
+		}
+
 		return common.Address{}, err
 	}
 	var addr common.Address
@@ -106,6 +112,37 @@ type Signer interface {
 	WithSignature(tx *Transaction, sig []byte) (*Transaction, error)
 	// Checks for equality on the signers
 	Equal(Signer) bool
+}
+
+// EIP86Signer implements the the abstract signing feature
+type EIP86Signer struct {
+	EIP155Signer
+}
+
+func NewEIP86Signer(chainId *big.Int) EIP86Signer {
+	return EIP86Signer{
+		EIP155Signer: NewEIP155Signer(chainId),
+	}
+}
+
+func (s EIP86Signer) Equal(s2 Signer) bool {
+	_, ok := s2.(EIP86Signer)
+	return ok && s.EIP155Signer.Equal(s2)
+}
+
+// isAbstractSigner checks whether the transaction signature is that of
+// the abstract signer. The abstract signer is determined by V being equal
+// to the chain identifier and r and s being 0.
+func isAbstractSigner(tx *Transaction, chainId *big.Int) bool {
+	v, r, s := tx.RawSignatureValues()
+	return v.Cmp(chainId) == 0 && r.BitLen() == 0 && s.BitLen() == 0
+}
+
+func (s EIP86Signer) PublicKey(tx *Transaction) ([]byte, error) {
+	if isAbstractSigner(tx, s.chainId) {
+		return nil, errAbstractSigner
+	}
+	return s.EIP155Signer.PublicKey(tx)
 }
 
 // EIP155Transaction implements TransactionInterface using the

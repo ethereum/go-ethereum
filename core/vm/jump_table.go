@@ -56,12 +56,43 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet  = NewFrontierInstructionSet()
-	homesteadInstructionSet = NewHomesteadInstructionSet()
+	frontierInstructionSet   = NewFrontierInstructionSet()
+	homesteadInstructionSet  = NewHomesteadInstructionSet()
+	metropolisInstructionSet = NewMetropolisInstructionSet()
 )
 
-// NewHomesteadInstructionSet returns the frontier and homestead
-// instructions that can be executed during the homestead phase.
+func NewMetropolisInstructionSet() [256]operation {
+	instructionSet := NewHomesteadInstructionSet()
+	instructionSet[STATIC_CALL] = operation{
+		execute:       opStaticCall,
+		gasCost:       gasStaticCall,
+		validateStack: makeStackFunc(6, 1),
+		memorySize:    memoryStaticCall,
+		valid:         true,
+	}
+	instructionSet[REVERT] = operation{
+		execute:       opRevert,
+		gasCost:       constGasFunc(GasFastestStep),
+		validateStack: makeStackFunc(2, 0),
+		valid:         true,
+		reverts:       true,
+	}
+	instructionSet[RETURNDATASIZE] = operation{
+		execute:       opReturnDataSize,
+		gasCost:       constGasFunc(0), // TODO
+		validateStack: makeStackFunc(0, 1),
+		valid:         true,
+	}
+	instructionSet[RETURNDATACOPY] = operation{
+		execute:       opReturnDataCopy,
+		gasCost:       gasReturnDataCopy,
+		validateStack: makeStackFunc(3, 0),
+		memorySize:    memoryReturnDataCopy,
+		valid:         true,
+	}
+	return instructionSet
+}
+
 func NewHomesteadInstructionSet() [256]operation {
 	instructionSet := NewFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = operation{

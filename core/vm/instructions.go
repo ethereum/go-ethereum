@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -28,7 +29,8 @@ import (
 )
 
 var (
-	bigZero = new(big.Int)
+	bigZero            = new(big.Int)
+	errWriteProtection = errors.New("evm write protection")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -570,6 +572,35 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	return nil, nil
 }
 
+func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// pop gas
+	gas := stack.pop().Uint64()
+	// pop address
+	addr := stack.pop()
+	// pop input size and offset
+	inOffset, inSize := stack.pop(), stack.pop()
+	// pop return size and offset
+	retOffset, retSize := stack.pop(), stack.pop()
+
+	address := common.BigToAddress(addr)
+
+	// Get the arguments from the memory
+	args := memory.Get(inOffset.Int64(), inSize.Int64())
+
+	ret, returnGas, err := evm.StaticCall(contract, address, args, gas)
+	if err != nil {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(big.NewInt(1))
+
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+	contract.Gas += returnGas
+
+	evm.interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
+	return ret, nil
+}
+
 func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	gas := stack.pop().Uint64()
 	// pop gas and value of the stack.
@@ -665,6 +696,14 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	return ret, nil
 }
 
+func opRevert(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	offset, size := stack.pop(), stack.pop()
+	ret := memory.GetPtr(offset.Int64(), size.Int64())
+
+	evm.interpreter.intPool.put(offset, size)
+	return ret, nil
+}
+
 func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	return nil, nil
 }
@@ -675,6 +714,23 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 
 	evm.StateDB.Suicide(contract.Address())
 
+	return nil, nil
+}
+
+func opReturnDataSize(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(memory.lastReturn))))
+	return nil, nil
+}
+
+func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		mOff = stack.pop()
+		cOff = stack.pop()
+		l    = stack.pop()
+	)
+	memory.Set(mOff.Uint64(), l.Uint64(), getData(memory.lastReturn, cOff, l))
+
+	evm.interpreter.intPool.put(mOff, cOff, l)
 	return nil, nil
 }
 

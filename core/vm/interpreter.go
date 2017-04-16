@@ -51,10 +51,9 @@ type Config struct {
 	JumpTable [256]operation
 }
 
-// Interpreter is used to run Ethereum based contracts and will utilise the
-// passed evmironment to query external sources for state information.
-// The Interpreter will run the byte code VM or JIT VM based on the passed
-// configuration.
+// Interpreter is capable of interpreting Ethereum Byte code and uses the passed
+// Ethereum Virtual Machine to query for auxiliary data such as state, block and
+// caller information.
 type Interpreter struct {
 	evm      *EVM
 	cfg      Config
@@ -71,6 +70,8 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
 		switch {
+		case evm.ChainConfig().IsMetropolis(evm.BlockNumber):
+			cfg.JumpTable = metropolisInstructionSet
 		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
 			cfg.JumpTable = homesteadInstructionSet
 		default:
@@ -87,6 +88,16 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 }
 
 func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
+	if in.evm.chainRules.IsMetropolis {
+		if in.readonly {
+			// if the interpreter is operating in readonly mode, make sure no
+			// state-modifying operation is performed.
+			if operation.writes ||
+				((op == CALL || op == CALLCODE) && stack.Back(3).BitLen() > 0) {
+				return errWriteProtection
+			}
+		}
+	}
 	return nil
 }
 
@@ -199,6 +210,11 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		// of the integer pool by comparing values to a default value.
 		if verifyPool {
 			verifyIntegerPool(in.intPool)
+		}
+
+		// checks whether the operation should revert state.
+		if operation.reverts {
+			in.evm.StateDB.RevertToSnapshot(snapshot)
 		}
 
 		switch {
