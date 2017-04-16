@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -28,7 +29,9 @@ import (
 )
 
 var (
-	bigZero = new(big.Int)
+	bigZero            = new(big.Int)
+	errWriteProtection = errors.New("evm: write protection")
+	errReadOutOfBound  = errors.New("evm: read out of bound")
 )
 
 func opAdd(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -539,6 +542,18 @@ func opGas(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 	return nil, nil
 }
 
+func CreateAddressFn(chainConfig *params.ChainConfig, blockNumber *big.Int, senderAddress common.Address, nonce uint64, input []byte) func() common.Address {
+	if chainConfig.IsMetropolis(blockNumber) {
+		return func() common.Address {
+			return common.BytesToAddress(crypto.Keccak256(senderAddress.Bytes(), crypto.Keccak256(input))[12:])
+		}
+	} else {
+		return func() common.Address {
+			return crypto.CreateAddress(senderAddress, nonce)
+		}
+	}
+}
+
 func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	var (
 		value        = stack.pop()
@@ -550,8 +565,10 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 		gas -= gas / 64
 	}
 
+	createAddressFn := CreateAddressFn(evm.ChainConfig(), evm.BlockNumber, contract.Address(), evm.StateDB.GetNonce(contract.Address()), input)
+
 	contract.UseGas(gas)
-	_, addr, returnGas, suberr := evm.Create(contract, input, gas, value)
+	_, addr, returnGas, suberr := evm.Create(contract, createAddressFn, input, gas, value)
 	// Push item on the stack based on the returned error. If the ruleset is
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
@@ -568,6 +585,71 @@ func opCreate(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	evm.interpreter.intPool.put(value, offset, size)
 
 	return nil, nil
+}
+
+func opCreate2(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		value        = stack.pop()
+		salt         = stack.pop()
+		offset, size = stack.pop(), stack.pop()
+		input        = memory.Get(offset.Int64(), size.Int64())
+		gas          = contract.Gas
+	)
+	if evm.ChainConfig().IsEIP150(evm.BlockNumber) {
+		gas -= gas / 64
+	}
+
+	createAddress := func() common.Address {
+		return common.BytesToAddress(crypto.Keccak256(contract.Address().Bytes(), salt.Bytes(), crypto.Keccak256(input))[12:])
+	}
+
+	contract.UseGas(gas)
+	_, addr, returnGas, suberr := evm.Create(contract, createAddress, input, gas, value)
+	// Push item on the stack based on the returned error. If the ruleset is
+	// homestead we must check for CodeStoreOutOfGasError (homestead only
+	// rule) and treat as an error, if the ruleset is frontier we must
+	// ignore this error and pretend the operation was successful.
+	if evm.ChainConfig().IsHomestead(evm.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
+		stack.push(new(big.Int))
+	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(addr.Big())
+	}
+	contract.Gas += returnGas
+
+	evm.interpreter.intPool.put(value, offset, size)
+
+	return nil, nil
+}
+
+func opStaticCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	// pop gas
+	gas := stack.pop().Uint64()
+	// pop address
+	addr := stack.pop()
+	// pop input size and offset
+	inOffset, inSize := stack.pop(), stack.pop()
+	// pop return size and offset
+	retOffset, retSize := stack.pop(), stack.pop()
+
+	address := common.BigToAddress(addr)
+
+	// Get the arguments from the memory
+	args := memory.Get(inOffset.Int64(), inSize.Int64())
+
+	ret, returnGas, err := evm.StaticCall(contract, address, args, gas)
+	if err != nil {
+		stack.push(new(big.Int))
+	} else {
+		stack.push(big.NewInt(1))
+
+		memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
+	}
+	contract.Gas += returnGas
+
+	evm.interpreter.intPool.put(addr, inOffset, inSize, retOffset, retSize)
+	return ret, nil
 }
 
 func opCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -665,6 +747,14 @@ func opReturn(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *S
 	return ret, nil
 }
 
+func opRevert(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	offset, size := stack.pop(), stack.pop()
+	ret := memory.GetPtr(offset.Int64(), size.Int64())
+
+	evm.interpreter.intPool.put(offset, size)
+	return ret, nil
+}
+
 func opStop(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	return nil, nil
 }
@@ -674,6 +764,28 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 	evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance)
 
 	evm.StateDB.Suicide(contract.Address())
+
+	return nil, nil
+}
+
+func opReturnDataSize(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(evm.interpreter.returnData))))
+	return nil, nil
+}
+
+func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		mOff = stack.pop()
+		cOff = stack.pop()
+		l    = stack.pop()
+	)
+	defer evm.interpreter.intPool.put(mOff, cOff, l)
+
+	cEnd := new(big.Int).Add(cOff, l)
+	if cEnd.BitLen() > 64 || uint64(len(evm.interpreter.returnData)) < cEnd.Uint64() {
+		return nil, errReadOutOfBound
+	}
+	memory.Set(mOff.Uint64(), l.Uint64(), evm.interpreter.returnData[cOff.Uint64():cEnd.Uint64()])
 
 	return nil, nil
 }
