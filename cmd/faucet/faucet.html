@@ -77,7 +77,7 @@
 				<div class="row" style="margin-top: 32px;">
 					<div class="col-lg-12">
 						<h3>How does this work?</h3>
-						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to GitHub accounts. Anyone having a GitHub account may request funds within the permitted limit of <strong>{{.Amount}} Ether(s) / {{.Period}}</strong>.</p>
+						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to GitHub accounts. Anyone having a GitHub account may request funds within the permitted limit of <strong>{{.Amount}} Ether(s) / {{.Period}}</strong>.{{if .Recaptcha}} The faucet is running invisible reCaptcha protection against bots.{{end}}</p>
 						<p>To request funds, simply create a <a href="https://gist.github.com/" target="_about:blank">GitHub Gist</a> with your Ethereum address pasted into the contents (the file name doesn't matter), copy paste the gists URL into the above input box and fire away! You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
 					</div>
 				</div>
@@ -136,7 +136,6 @@
 					}
 				}
 				server.onclose = function() { setTimeout(reconnect, 3000); };
-				//server.onerror = function() { setTimeout(reconnect, 3000); };
 			}
 			// Establish a websocket connection to the API server
 			reconnect();
