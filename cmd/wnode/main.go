@@ -84,7 +84,7 @@ var (
 	testMode       = flag.Bool("test", false, "use of predefined parameters for diagnostics")
 	echoMode       = flag.Bool("echo", false, "echo mode: prints some arguments for diagnostics")
 
-	argVerbosity = flag.Int("verbosity", int(log.LvlWarn), "log verbosity level")
+	argVerbosity = flag.Int("verbosity", int(log.LvlError), "log verbosity level")
 	argTTL       = flag.Uint("ttl", 30, "time-to-live for messages in seconds")
 	argWorkTime  = flag.Uint("work", 5, "work time in seconds")
 	argMaxSize   = flag.Int("maxsize", whisper.DefaultMaxMessageLength, "max size of message")
