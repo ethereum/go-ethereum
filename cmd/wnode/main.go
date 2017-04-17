@@ -65,7 +65,7 @@ var (
 	pub        *ecdsa.PublicKey
 	asymKey    *ecdsa.PrivateKey
 	nodeid     *ecdsa.PrivateKey
-	topic      []byte
+	topic      whisper.TopicType
 	asymKeyID  string
 	filterID   string
 	symPass    string
@@ -129,7 +129,7 @@ func processArgs() {
 		if err != nil {
 			utils.Fatalf("Failed to parse the topic: %s", err)
 		}
-		topic = x
+		topic = whisper.BytesToTopic(x)
 	}
 
 	if *asymmetricMode && len(*argPub) > 0 {
@@ -355,7 +355,7 @@ func configureNode() {
 	filter := whisper.Filter{
 		KeySym:   symKey,
 		KeyAsym:  asymKey,
-		Topics:   [][]byte{topic},
+		Topics:   [][]byte{topic[:]},
 		AllowP2P: p2pAccept,
 	}
 	filterID, err = shh.Subscribe(&filter)
@@ -366,7 +366,7 @@ func configureNode() {
 }
 
 func generateTopic(password []byte) {
-	x := pbkdf2.Key(password, password, 8196, 128, sha512.New)
+	x := pbkdf2.Key(password, password, 4096, 128, sha512.New)
 	for i := 0; i < len(x); i++ {
 		topic[i%whisper.TopicLength] ^= x[i]
 	}
@@ -486,7 +486,7 @@ func sendMsg(payload []byte) common.Hash {
 		Dst:      pub,
 		KeySym:   symKey,
 		Payload:  payload,
-		Topic:    whisper.BytesToTopic(topic),
+		Topic:    topic,
 		TTL:      uint32(*argTTL),
 		PoW:      *argPoW,
 		WorkTime: uint32(*argWorkTime),
