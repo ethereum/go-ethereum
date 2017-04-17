@@ -448,7 +448,7 @@ func TestIntegrationSym(t *testing.T) {
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
-	f.MinPoW = 0.324
+	f.MinPoW = DefaultMinimumPoW / 2
 	f.SignedWith = sigPubKey.String()
 	f.AllowP2P = false
 
@@ -546,7 +546,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
-	f.MinPoW = 0.324
+	f.MinPoW = DefaultMinimumPoW / 2
 	f.SignedWith = sigPubKey.String()
 	f.AllowP2P = false
 
