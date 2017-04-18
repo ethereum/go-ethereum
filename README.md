@@ -100,6 +100,22 @@ always use separate accounts for play-money and real-money. Unless you manually 
 will by default correctly separate the two networks and will not make any accounts available between
 them.*
 
+### Configuration
+
+As an alternative to passing the numerous flags to the `geth` binary, you can also pass a configuration file via:
+
+```
+$ geth --config /path/to/your_config.toml
+```
+
+To get an idea how the file should look like you can use the `dumpconfig` subcommand to export your existing configuration:
+
+```
+$ geth --your-favourite-flags dumpconfig
+```
+
+*Note: This works only with geth v1.6.0 and above*
+
 #### Docker quick start
 
 One of the quickest ways to get Ethereum up and running on your machine is by using Docker:
