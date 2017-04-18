@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"container/heap"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -48,7 +49,7 @@ func NewIteratorFromNodeIterator(it NodeIterator) *Iterator {
 func (it *Iterator) Next() bool {
 	for it.nodeIt.Next(true) {
 		if it.nodeIt.Leaf() {
-			it.Key = decodeCompact(it.nodeIt.Path())
+			it.Key = hexToKeybytes(it.nodeIt.Path())
 			it.Value = it.nodeIt.LeafBlob()
 			return true
 		}
