@@ -31,15 +31,8 @@ type Iterator struct {
 	Value []byte // Current data value on which the iterator is positioned on
 }
 
-// NewIterator creates a new key-value iterator.
-func NewIterator(trie *Trie) *Iterator {
-	return &Iterator{
-		nodeIt: NewNodeIterator(trie),
-	}
-}
-
-// FromNodeIterator creates a new key-value iterator from a node iterator
-func NewIteratorFromNodeIterator(it NodeIterator) *Iterator {
+// NewIterator creates a new key-value iterator from a node iterator
+func NewIterator(it NodeIterator) *Iterator {
 	return &Iterator{
 		nodeIt: it,
 	}
@@ -99,8 +92,8 @@ type nodeIterator struct {
 	path []byte // Path to the current node
 }
 
-// NewNodeIterator creates an post-order trie iterator.
-func NewNodeIterator(trie *Trie) NodeIterator {
+// newNodeIterator creates an post-order trie iterator.
+func newNodeIterator(trie *Trie) NodeIterator {
 	if trie.Hash() == emptyState {
 		return new(nodeIterator)
 	}

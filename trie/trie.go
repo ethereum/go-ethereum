@@ -126,8 +126,8 @@ func New(root common.Hash, db Database) (*Trie, error) {
 }
 
 // Iterator returns an iterator over all mappings in the trie.
-func (t *Trie) Iterator() *Iterator {
-	return NewIterator(t)
+func (t *Trie) NodeIterator() NodeIterator {
+	return newNodeIterator(t)
 }
 
 // Get returns the value for key stored in the trie.

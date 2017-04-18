@@ -42,7 +42,7 @@ func TestIterator(t *testing.T) {
 	trie.Commit()
 
 	found := make(map[string]string)
-	it := NewIterator(trie)
+	it := NewIterator(trie.NodeIterator())
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -72,7 +72,7 @@ func TestIteratorLargeData(t *testing.T) {
 		vals[string(value2.k)] = value2
 	}
 
-	it := NewIterator(trie)
+	it := NewIterator(trie.NodeIterator())
 	for it.Next() {
 		vals[string(it.Key)].t = true
 	}
@@ -99,7 +99,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})
-	for it := NewNodeIterator(trie); it.Next(true); {
+	for it := trie.NodeIterator(); it.Next(true); {
 		if it.Hash() != (common.Hash{}) {
 			hashes[it.Hash()] = struct{}{}
 		}
@@ -154,8 +154,8 @@ func TestDifferenceIterator(t *testing.T) {
 	trieb.Commit()
 
 	found := make(map[string]string)
-	di, _ := NewDifferenceIterator(NewNodeIterator(triea), NewNodeIterator(trieb))
-	it := NewIteratorFromNodeIterator(di)
+	di, _ := NewDifferenceIterator(triea.NodeIterator(), trieb.NodeIterator())
+	it := NewIterator(di)
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -189,8 +189,8 @@ func TestUnionIterator(t *testing.T) {
 	}
 	trieb.Commit()
 
-	di, _ := NewUnionIterator([]NodeIterator{NewNodeIterator(triea), NewNodeIterator(trieb)})
-	it := NewIteratorFromNodeIterator(di)
+	di, _ := NewUnionIterator([]NodeIterator{triea.NodeIterator(), trieb.NodeIterator()})
+	it := NewIterator(di)
 
 	all := []struct{ k, v string }{
 		{"aardvark", "c"},

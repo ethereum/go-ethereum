@@ -118,7 +118,7 @@ func (it *NodeIterator) step() error {
 	if err != nil {
 		return err
 	}
-	it.dataIt = trie.NewNodeIterator(dataTrie)
+	it.dataIt = dataTrie.NodeIterator()
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
