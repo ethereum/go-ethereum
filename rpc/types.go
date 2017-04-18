@@ -19,11 +19,11 @@ package rpc
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"reflect"
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -121,18 +121,12 @@ type ServerCodec interface {
 	Closed() <-chan interface{}
 }
 
-var (
-	pendingBlockNumber  = big.NewInt(-2)
-	latestBlockNumber   = big.NewInt(-1)
-	earliestBlockNumber = big.NewInt(0)
-	maxBlockNumber      = big.NewInt(math.MaxInt64)
-)
-
 type BlockNumber int64
 
 const (
-	PendingBlockNumber = BlockNumber(-2)
-	LatestBlockNumber  = BlockNumber(-1)
+	PendingBlockNumber  = BlockNumber(-2)
+	LatestBlockNumber   = BlockNumber(-1)
+	EarliestBlockNumber = BlockNumber(0)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
@@ -143,45 +137,32 @@ const (
 // - an out of range error when the given block number is either too little or too large
 func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	input := strings.TrimSpace(string(data))
-
 	if len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"' {
 		input = input[1 : len(input)-1]
 	}
 
-	if len(input) == 0 {
-		*bn = BlockNumber(latestBlockNumber.Int64())
+	switch input {
+	case "earliest":
+		*bn = EarliestBlockNumber
+		return nil
+	case "latest":
+		*bn = LatestBlockNumber
+		return nil
+	case "pending":
+		*bn = PendingBlockNumber
 		return nil
 	}
 
-	in := new(big.Int)
-	_, ok := in.SetString(input, 0)
-
-	if !ok { // test if user supplied string tag
-		strBlockNumber := input
-		if strBlockNumber == "latest" {
-			*bn = BlockNumber(latestBlockNumber.Int64())
-			return nil
-		}
-
-		if strBlockNumber == "earliest" {
-			*bn = BlockNumber(earliestBlockNumber.Int64())
-			return nil
-		}
-
-		if strBlockNumber == "pending" {
-			*bn = BlockNumber(pendingBlockNumber.Int64())
-			return nil
-		}
-
-		return fmt.Errorf(`invalid blocknumber %s`, data)
+	blckNum, err := hexutil.DecodeUint64(input)
+	if err != nil {
+		return err
+	}
+	if blckNum > math.MaxInt64 {
+		return fmt.Errorf("Blocknumber too high")
 	}
 
-	if in.Cmp(earliestBlockNumber) >= 0 && in.Cmp(maxBlockNumber) <= 0 {
-		*bn = BlockNumber(in.Int64())
-		return nil
-	}
-
-	return fmt.Errorf("blocknumber not in range [%d, %d]", earliestBlockNumber, maxBlockNumber)
+	*bn = BlockNumber(blckNum)
+	return nil
 }
 
 func (bn BlockNumber) Int64() int64 {
