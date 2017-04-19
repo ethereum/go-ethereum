@@ -18,7 +18,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
 	"os"
 	"runtime"
@@ -29,17 +28,13 @@ import (
 	"github.com/expanse-org/go-expanse/accounts/keystore"
 	"github.com/expanse-org/go-expanse/cmd/utils"
 	"github.com/expanse-org/go-expanse/common"
-	"github.com/expanse-org/go-expanse/common/hexutil"
 	"github.com/expanse-org/go-expanse/console"
-	"github.com/expanse-org/go-expanse/contracts/release"
 	"github.com/expanse-org/go-expanse/eth"
 	"github.com/expanse-org/go-expanse/ethclient"
 	"github.com/expanse-org/go-expanse/internal/debug"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/metrics"
 	"github.com/expanse-org/go-expanse/node"
-	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -82,6 +77,8 @@ func init() {
 		versionCommand,
 		bugCommand,
 		licenseCommand,
+		// See config.go
+		dumpConfigCommand,
 	}
 
 	app.Flags = []cli.Flag{
@@ -99,6 +96,7 @@ func init() {
 		utils.EthashDatasetsOnDiskFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
+		utils.SyncModeFlag,
 		utils.LightServFlag,
 		utils.LightPeersFlag,
 		utils.LightKDFFlag,
@@ -129,16 +127,12 @@ func init() {
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
-		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.ExecFlag,
 		utils.PreloadJSFlag,
 		utils.WhisperEnabledFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
-		utils.VMForceJitFlag,
-		utils.VMJitCacheFlag,
-		utils.VMEnableJitFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
@@ -146,14 +140,10 @@ func init() {
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
-		utils.SolcPathFlag,
-		utils.GpoMinGasPriceFlag,
-		utils.GpoMaxGasPriceFlag,
-		utils.GpoFullBlockRatioFlag,
-		utils.GpobaseStepDownFlag,
-		utils.GpobaseStepUpFlag,
-		utils.GpobaseCorrectionFactorFlag,
+		utils.GpoBlocksFlag,
+		utils.GpoPercentileFlag,
 		utils.ExtraDataFlag,
+		configFileFlag,
 	}
 	app.Flags = append(app.Flags, debug.Flags...)
 
@@ -164,12 +154,6 @@ func init() {
 		}
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
-
-		// This should be the only place where reporting is enabled
-		// because it is not intended to run while testing.
-		// In addition to this check, bad block reports are sent only
-		// for chains with the main network genesis block and network id 1.
-		eth.EnableBadBlockReporting = false
 
 		utils.SetupNetwork(ctx)
 		return nil
@@ -197,52 +181,6 @@ func gexp(ctx *cli.Context) error {
 	startNode(ctx, node)
 	node.Wait()
 	return nil
-}
-
-func makeFullNode(ctx *cli.Context) *node.Node {
-	// Create the default extradata and construct the base node
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		log.Warn("Failed to set canonical miner information", "err", err)
-	}
-	if uint64(len(extra)) > params.MaximumExtraDataSize {
-		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
-		extra = nil
-	}
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-	utils.RegisterEthService(ctx, stack, extra)
-
-	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
-	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
-	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
-	if shhEnabled || shhAutoEnabled {
-		utils.RegisterShhService(stack)
-	}
-	// Add the Ethereum Stats daemon if requested
-	if url := ctx.GlobalString(utils.EthStatsURLFlag.Name); url != "" {
-		utils.RegisterEthStatsService(stack, url)
-	}
-	// Add the release oracle service so it boots along with node.
-	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-		config := release.Config{
-			Oracle: relOracle,
-			Major:  uint32(params.VersionMajor),
-			Minor:  uint32(params.VersionMinor),
-			Patch:  uint32(params.VersionPatch),
-		}
-		commit, _ := hex.DecodeString(gitCommit)
-		copy(config.Commit[:], commit)
-		return release.NewReleaseService(ctx, config)
-	}); err != nil {
-		utils.Fatalf("Failed to register the Gexp release oracle service: %v", err)
-	}
-	return stack
 }
 
 // startNode boots up the system node and all registered protocols, after which
@@ -303,7 +241,15 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		if err := stack.Service(&ethereum); err != nil {
 			utils.Fatalf("expanse service not running: %v", err)
 		}
-		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+		if threads := ctx.GlobalInt(utils.MinerThreadsFlag.Name); threads > 0 {
+			type threaded interface {
+				SetThreads(threads int)
+			}
+			if th, ok := ethereum.Engine().(threaded); ok {
+				th.SetThreads(threads)
+			}
+		}
+		if err := ethereum.StartMining(true); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

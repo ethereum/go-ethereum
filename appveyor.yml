@@ -22,8 +22,8 @@ environment:
 
 install:
   - rmdir C:\go /s /q
-  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.8.windows-%GETH_ARCH%.zip
-  - 7z x go1.8.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
+  - appveyor DownloadFile https://storage.googleapis.com/golang/go1.8.1.windows-%GETH_ARCH%.zip
+  - 7z x go1.8.1.windows-%GETH_ARCH%.zip -y -oC:\ > NUL
   - go version
   - gcc --version
 

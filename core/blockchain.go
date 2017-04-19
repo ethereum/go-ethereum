@@ -30,6 +30,7 @@ import (
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/mclock"
+	"github.com/expanse-org/go-expanse/consensus"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/core/vm"
@@ -39,7 +40,6 @@ import (
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/metrics"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
 	"github.com/hashicorp/golang-lru"
@@ -104,7 +104,7 @@ type BlockChain struct {
 	procInterrupt int32          // interrupt signaler for block processing
 	wg            sync.WaitGroup // chain processing wait group for shutting down
 
-	pow       pow.PoW
+	engine    consensus.Engine
 	processor Processor // block processor interface
 	validator Validator // block and state validator interface
 	vmConfig  vm.Config
@@ -113,9 +113,9 @@ type BlockChain struct {
 }
 
 // NewBlockChain returns a fully initialised block chain using information
-// available in the database. It initialiser the default Ethereum Validator and
+// available in the database. It initialises the default Ethereum Validator and
 // Processor.
-func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.PoW, mux *event.TypeMux, vmConfig vm.Config) (*BlockChain, error) {
+func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, engine consensus.Engine, mux *event.TypeMux, vmConfig vm.Config) (*BlockChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	blockCache, _ := lru.New(blockCacheLimit)
@@ -131,25 +131,22 @@ func NewBlockChain(chainDb ethdb.Database, config *params.ChainConfig, pow pow.P
 		bodyRLPCache: bodyRLPCache,
 		blockCache:   blockCache,
 		futureBlocks: futureBlocks,
-		pow:          pow,
+		engine:       engine,
 		vmConfig:     vmConfig,
 		badBlocks:    badBlocks,
 	}
-	bc.SetValidator(NewBlockValidator(config, bc, pow))
-	bc.SetProcessor(NewStateProcessor(config, bc))
+	bc.SetValidator(NewBlockValidator(config, bc, engine))
+	bc.SetProcessor(NewStateProcessor(config, bc, engine))
 
-	gv := func() HeaderValidator { return bc.Validator() }
 	var err error
-	bc.hc, err = NewHeaderChain(chainDb, config, gv, bc.getProcInterrupt)
+	bc.hc, err = NewHeaderChain(chainDb, config, engine, bc.getProcInterrupt)
 	if err != nil {
 		return nil, err
 	}
-
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
 		return nil, ErrNoGenesis
 	}
-
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
@@ -232,9 +229,6 @@ func (self *BlockChain) loadLastState() error {
 	log.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
 	log.Info("Loaded most recent local full block", "number", self.currentBlock.Number(), "hash", self.currentBlock.Hash(), "td", blockTd)
 	log.Info("Loaded most recent local fast block", "number", self.currentFastBlock.Number(), "hash", self.currentFastBlock.Hash(), "td", fastTd)
-
-	// Try to be smart and issue a pow verification for the head to pre-generate caches
-	go self.pow.Verify(types.NewBlockWithHeader(currentHeader))
 
 	return nil
 }
@@ -382,9 +376,6 @@ func (self *BlockChain) Processor() Processor {
 	defer self.procmu.RUnlock()
 	return self.processor
 }
-
-// AuxValidator returns the auxiliary validator (Proof of work atm)
-func (self *BlockChain) AuxValidator() pow.PoW { return self.pow }
 
 // State returns a new mutable state based on the current HEAD block.
 func (self *BlockChain) State() (*state.StateDB, error) {
@@ -840,7 +831,7 @@ func (self *BlockChain) WriteBlock(block *types.Block) (status WriteStatus, err 
 	// Calculate the total difficulty of the block
 	ptd := self.GetTd(block.ParentHash(), block.NumberU64()-1)
 	if ptd == nil {
-		return NonStatTy, ParentError(block.ParentHash())
+		return NonStatTy, consensus.ErrUnknownAncestor
 	}
 	// Make sure no inconsistent state is leaked during insertion
 	self.mu.Lock()
@@ -906,59 +897,57 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 		stats         = insertStats{startTime: mclock.Now()}
 		events        = make([]interface{}, 0, len(chain))
 		coalescedLogs []*types.Log
-		nonceChecked  = make([]bool, len(chain))
 	)
-
-	// Start the parallel nonce verifier.
-	nonceAbort, nonceResults := verifyNoncesFromBlocks(self.pow, chain)
-	defer close(nonceAbort)
+	// Start the parallel header verifier
+	headers := make([]*types.Header, len(chain))
+	seals := make([]bool, len(chain))
 
 	for i, block := range chain {
+		headers[i] = block.Header()
+		seals[i] = true
+	}
+	abort, results := self.engine.VerifyHeaders(self, headers, seals)
+	defer close(abort)
+
+	// Iterate over the blocks and insert when the verifier permits
+	for i, block := range chain {
+		// If the chain is terminating, stop processing blocks
 		if atomic.LoadInt32(&self.procInterrupt) == 1 {
 			log.Debug("Premature abort during blocks processing")
 			break
 		}
-		bstart := time.Now()
-		// Wait for block i's nonce to be verified before processing
-		// its state transition.
-		for !nonceChecked[i] {
-			r := <-nonceResults
-			nonceChecked[r.index] = true
-			if !r.valid {
-				invalid := chain[r.index]
-				return r.index, &BlockNonceErr{Hash: invalid.Hash(), Number: invalid.Number(), Nonce: invalid.Nonce()}
-			}
-		}
-
+		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
-			err := BadHashError(block.Hash())
-			self.reportBlock(block, nil, err)
-			return i, err
+			self.reportBlock(block, nil, ErrBlacklistedHash)
+			return i, ErrBlacklistedHash
 		}
-		// Stage 1 validation of the block using the chain's validator
-		// interface.
-		err := self.Validator().ValidateBlock(block)
+		// Wait for the block's verification to complete
+		bstart := time.Now()
+
+		err := <-results
+		if err == nil {
+			err = self.Validator().ValidateBody(block)
+		}
 		if err != nil {
-			if IsKnownBlockErr(err) {
+			if err == ErrKnownBlock {
 				stats.ignored++
 				continue
 			}
 
-			if err == BlockFutureErr {
+			if err == consensus.ErrFutureBlock {
 				// Allow up to MaxFuture second in the future blocks. If this limit
 				// is exceeded the chain is discarded and processed at a later time
 				// if given.
 				max := big.NewInt(time.Now().Unix() + maxTimeFutureBlocks)
-				if block.Time().Cmp(max) == 1 {
-					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
+				if block.Time().Cmp(max) > 0 {
+					return i, fmt.Errorf("future block: %v > %v", block.Time(), max)
 				}
-
 				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
 			}
 
-			if IsParentErr(err) && self.futureBlocks.Contains(block.ParentHash()) {
+			if err == consensus.ErrUnknownAncestor && self.futureBlocks.Contains(block.ParentHash()) {
 				self.futureBlocks.Add(block.Hash(), block)
 				stats.queued++
 				continue
@@ -1409,3 +1398,6 @@ func (self *BlockChain) GetHeaderByNumber(number uint64) *types.Header {
 
 // Config retrieves the blockchain's chain configuration.
 func (self *BlockChain) Config() *params.ChainConfig { return self.config }
+
+// Engine retrieves the blockchain's consensus engine.
+func (self *BlockChain) Engine() consensus.Engine { return self.engine }

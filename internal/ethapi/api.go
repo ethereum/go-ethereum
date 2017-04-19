@@ -31,6 +31,7 @@ import (
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/hexutil"
 	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/consensus/ethash"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/core/vm"
@@ -39,7 +40,6 @@ import (
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/rpc"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -1378,7 +1378,7 @@ func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string,
 	if block == nil {
 		return "", fmt.Errorf("block #%d not found", number)
 	}
-	return fmt.Sprintf("0x%x", pow.EthashSeedHash(number)), nil
+	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
 }
 
 // PrivateDebugAPI is the collection of Etheruem APIs exposed over the private

@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/consensus/ethash"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -35,7 +36,6 @@ import (
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/log"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
 )
 
@@ -172,7 +172,7 @@ func runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, test *Blo
 	core.WriteHeadBlockHash(db, test.Genesis.Hash())
 	evmux := new(event.TypeMux)
 	config := &params.ChainConfig{HomesteadBlock: homesteadBlock, DAOForkBlock: daoForkBlock, DAOForkSupport: true, EIP150Block: gasPriceFork}
-	chain, err := core.NewBlockChain(db, config, pow.NewSharedEthash(), evmux, vm.Config{})
+	chain, err := core.NewBlockChain(db, config, ethash.NewShared(), evmux, vm.Config{})
 	if err != nil {
 		return err
 	}

@@ -23,13 +23,14 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"net/url"
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/consensus"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/eth"
@@ -54,6 +55,7 @@ type Service struct {
 	server *p2p.Server        // Peer-to-peer server to retrieve networking infos
 	eth    *eth.Ethereum      // Full Ethereum service if monitoring a full node
 	les    *les.LightEthereum // Light Ethereum service if monitoring a light node
+	engine consensus.Engine   // Consensus engine to retrieve variadic block fields
 
 	node string // Name of the node to display on the monitoring page
 	pass string // Password to authorize access to the monitoring page
@@ -72,9 +74,16 @@ func New(url string, ethServ *eth.Ethereum, lesServ *les.LightEthereum) (*Servic
 		return nil, fmt.Errorf("invalid netstats url: \"%s\", should be nodename:secret@host:port", url)
 	}
 	// Assemble and return the stats service
+	var engine consensus.Engine
+	if ethServ != nil {
+		engine = ethServ.Engine()
+	} else {
+		engine = lesServ.Engine()
+	}
 	return &Service{
 		eth:    ethServ,
 		les:    lesServ,
+		engine: engine,
 		node:   parts[1],
 		pass:   parts[3],
 		host:   parts[4],
@@ -128,7 +137,7 @@ func (s *Service) loop() {
 		path := fmt.Sprintf("%s/api", s.host)
 		urls := []string{path}
 
-		if parsed, err := url.Parse(path); err == nil && !parsed.IsAbs() {
+		if !strings.Contains(path, "://") { // url.Parse and url.IsAbs is unsuitable (https://github.com/golang/go/issues/19779)
 			urls = []string{"wss://" + path, "ws://" + path}
 		}
 		// Establish a websocket connection to the server on any supported URL
@@ -493,12 +502,14 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		td = s.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 	}
 	// Assemble and return the block stats
+	author, _ := s.engine.Author(header)
+
 	return &blockStats{
 		Number:     header.Number,
 		Hash:       header.Hash(),
 		ParentHash: header.ParentHash,
 		Timestamp:  header.Time,
-		Miner:      header.Coinbase,
+		Miner:      author,
 		GasUsed:    new(big.Int).Set(header.GasUsed),
 		GasLimit:   new(big.Int).Set(header.GasLimit),
 		Diff:       header.Difficulty.String(),
@@ -537,15 +548,29 @@ func (s *Service) reportHistory(conn *websocket.Conn, list []uint64) error {
 	// Gather the batch of blocks to report
 	history := make([]*blockStats, len(indexes))
 	for i, number := range indexes {
+		// Retrieve the next block if it's known to us
+		var block *types.Block
 		if s.eth != nil {
-			history[len(history)-1-i] = s.assembleBlockStats(s.eth.BlockChain().GetBlockByNumber(number))
+			block = s.eth.BlockChain().GetBlockByNumber(number)
 		} else {
-			history[len(history)-1-i] = s.assembleBlockStats(types.NewBlockWithHeader(s.les.BlockChain().GetHeaderByNumber(number)))
+			if header := s.les.BlockChain().GetHeaderByNumber(number); header != nil {
+				block = types.NewBlockWithHeader(header)
+			}
 		}
+		// If we do have the block, add to the history and continue
+		if block != nil {
+			history[len(history)-1-i] = s.assembleBlockStats(block)
+			continue
+		}
+		// Ran out of blocks, cut the report short and send
+		history = history[len(history)-i:]
 	}
 	// Assemble the history report and send it to the server
-	log.Trace("Sending historical blocks to ethstats", "first", history[0].Number, "last", history[len(history)-1].Number)
-
+	if len(history) > 0 {
+		log.Trace("Sending historical blocks to ethstats", "first", history[0].Number, "last", history[len(history)-1].Number)
+	} else {
+		log.Trace("No history to send to stats server")
+	}
 	stats := map[string]interface{}{
 		"id":      s.node,
 		"history": history,

@@ -34,6 +34,7 @@ var (
 		EIP150Hash:     MainNetHomesteadGasRepriceHash,
 		EIP155Block:    MainNetSpuriousDragon,
 		EIP158Block:    MainNetSpuriousDragon,
+		Ethash:         new(EthashConfig),
 	}
 
 	// TestnetChainConfig contains the chain parameters to run a node on the ropsten test network.
@@ -46,6 +47,7 @@ var (
 		EIP150Hash:     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:    big.NewInt(10),
 		EIP158Block:    big.NewInt(10),
+		Ethash:         new(EthashConfig),
 	}
 
 	// AllProtocolChanges contains every protocol change (EIPs)
@@ -57,8 +59,8 @@ var (
 	// means that all fields must be set at all times. This forces
 	// anyone adding flags to the config to also have to set these
 	// fields.
-	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
-	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0)}
+	AllProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
+	TestChainConfig    = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), new(EthashConfig), nil}
 )
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -69,21 +71,53 @@ var (
 type ChainConfig struct {
 	ChainId *big.Int `json:"chainId"` // Chain id identifies the current chain and is used for replay protection
 
-	HomesteadBlock *big.Int `json:"homesteadBlock"` // Homestead switch block (nil = no fork, 0 = already homestead)
-	DAOForkBlock   *big.Int `json:"daoForkBlock"`   // TheDAO hard-fork switch block (nil = no fork)
-	DAOForkSupport bool     `json:"daoForkSupport"` // Whether the nodes supports or opposes the DAO hard-fork
+	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
+	DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
+	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
 
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
-	EIP150Block *big.Int    `json:"eip150Block"` // EIP150 HF block (nil = no fork)
-	EIP150Hash  common.Hash `json:"eip150Hash"`  // EIP150 HF hash (fast sync aid)
+	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
+	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (fast sync aid)
 
-	EIP155Block *big.Int `json:"eip155Block"` // EIP155 HF block
-	EIP158Block *big.Int `json:"eip158Block"` // EIP158 HF block
+	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
+	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
+
+	// Various consensus engines
+	Ethash *EthashConfig `json:"ethash,omitempty"`
+	Clique *CliqueConfig `json:"clique,omitempty"`
+}
+
+// EthashConfig is the consensus engine configs for proof-of-work based sealing.
+type EthashConfig struct{}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *EthashConfig) String() string {
+	return "ethash"
+}
+
+// CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
+type CliqueConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *CliqueConfig) String() string {
+	return "clique"
 }
 
 // String implements the fmt.Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+	var engine interface{}
+	switch {
+	case c.Ethash != nil:
+		engine = c.Ethash
+	case c.Clique != nil:
+		engine = c.Clique
+	default:
+		engine = "unknown"
+	}
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Engine: %v}",
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -91,6 +125,7 @@ func (c *ChainConfig) String() string {
 		c.EIP150Block,
 		c.EIP155Block,
 		c.EIP158Block,
+		engine,
 	)
 }
 

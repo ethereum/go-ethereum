@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"encoding"
 	"errors"
 	"flag"
 	"fmt"
@@ -76,6 +77,58 @@ func (self DirectoryFlag) Apply(set *flag.FlagSet) {
 	eachName(self.Name, func(name string) {
 		set.Var(&self.Value, self.Name, self.Usage)
 	})
+}
+
+type TextMarshaler interface {
+	encoding.TextMarshaler
+	encoding.TextUnmarshaler
+}
+
+// textMarshalerVal turns a TextMarshaler into a flag.Value
+type textMarshalerVal struct {
+	v TextMarshaler
+}
+
+func (v textMarshalerVal) String() string {
+	if v.v == nil {
+		return ""
+	}
+	text, _ := v.v.MarshalText()
+	return string(text)
+}
+
+func (v textMarshalerVal) Set(s string) error {
+	return v.v.UnmarshalText([]byte(s))
+}
+
+// TextMarshalerFlag wraps a TextMarshaler value.
+type TextMarshalerFlag struct {
+	Name  string
+	Value TextMarshaler
+	Usage string
+}
+
+func (f TextMarshalerFlag) GetName() string {
+	return f.Name
+}
+
+func (f TextMarshalerFlag) String() string {
+	return fmt.Sprintf("%s \"%v\"\t%v", prefixedNames(f.Name), f.Value, f.Usage)
+}
+
+func (f TextMarshalerFlag) Apply(set *flag.FlagSet) {
+	eachName(f.Name, func(name string) {
+		set.Var(textMarshalerVal{f.Value}, f.Name, f.Usage)
+	})
+}
+
+// GlobalTextMarshaler returns the value of a TextMarshalerFlag from the global flag set.
+func GlobalTextMarshaler(ctx *cli.Context, name string) TextMarshaler {
+	val := ctx.GlobalGeneric(name)
+	if val == nil {
+		return nil
+	}
+	return val.(textMarshalerVal).v
 }
 
 // BigFlag is a command line flag that accepts 256 bit big integers in decimal or

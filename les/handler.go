@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/consensus"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -39,7 +40,6 @@ import (
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/p2p/discv5"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 	"github.com/expanse-org/go-expanse/rlp"
 	"github.com/expanse-org/go-expanse/trie"
 )
@@ -128,7 +128,7 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId int, mux *event.TypeMux, pow pow.PoW, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay) (*ProtocolManager, error) {
+func NewProtocolManager(chainConfig *params.ChainConfig, lightSync bool, networkId int, mux *event.TypeMux, engine consensus.Engine, blockchain BlockChain, txpool txPool, chainDb ethdb.Database, odr *LesOdr, txrelay *LesTxRelay) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		lightSync:   lightSync,

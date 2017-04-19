@@ -36,9 +36,9 @@ import (
 //
 // allowedOrigins should be a comma-separated list of allowed origin URLs.
 // To allow connections with any origin, pass "*".
-func (srv *Server) WebsocketHandler(allowedOrigins string) http.Handler {
+func (srv *Server) WebsocketHandler(allowedOrigins []string) http.Handler {
 	return websocket.Server{
-		Handshake: wsHandshakeValidator(strings.Split(allowedOrigins, ",")),
+		Handshake: wsHandshakeValidator(allowedOrigins),
 		Handler: func(conn *websocket.Conn) {
 			srv.ServeCodec(NewJSONCodec(conn), OptionMethodInvocation|OptionSubscriptions)
 		},
@@ -48,7 +48,7 @@ func (srv *Server) WebsocketHandler(allowedOrigins string) http.Handler {
 // NewWSServer creates a new websocket RPC server around an API provider.
 //
 // Deprecated: use Server.WebsocketHandler
-func NewWSServer(allowedOrigins string, srv *Server) *http.Server {
+func NewWSServer(allowedOrigins []string, srv *Server) *http.Server {
 	return &http.Server{Handler: srv.WebsocketHandler(allowedOrigins)}
 }
 

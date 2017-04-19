@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/expanse-org/go-expanse/eth/downloader"
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 )
@@ -29,12 +30,12 @@ import (
 // imported into the blockchain.
 func TestFastSyncDisabling(t *testing.T) {
 	// Create a pristine protocol manager, check that fast sync is left enabled
-	pmEmpty := newTestProtocolManagerMust(t, true, 0, nil, nil)
+	pmEmpty := newTestProtocolManagerMust(t, downloader.FastSync, 0, nil, nil)
 	if atomic.LoadUint32(&pmEmpty.fastSync) == 0 {
 		t.Fatalf("fast sync disabled on pristine blockchain")
 	}
 	// Create a full protocol manager, check that fast sync gets disabled
-	pmFull := newTestProtocolManagerMust(t, true, 1024, nil, nil)
+	pmFull := newTestProtocolManagerMust(t, downloader.FastSync, 1024, nil, nil)
 	if atomic.LoadUint32(&pmFull.fastSync) == 1 {
 		t.Fatalf("fast sync not disabled on non-empty blockchain")
 	}

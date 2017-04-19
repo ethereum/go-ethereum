@@ -72,7 +72,7 @@ type State interface {
 	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
-func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
+func GetAPIs(apiBackend Backend) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: "eth",

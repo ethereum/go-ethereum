@@ -20,10 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"strings"
 
 	"github.com/expanse-org/go-expanse/core/asm"
 	cli "gopkg.in/urfave/cli.v1"
-	"strings"
 )
 
 var disasmCommand = cli.Command{

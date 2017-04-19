@@ -53,8 +53,9 @@ func generateFilter(t *testing.T, symmetric bool) (*Filter, error) {
 	f.Messages = make(map[common.Hash]*ReceivedMessage)
 
 	const topicNum = 8
-	f.Topics = make([]TopicType, topicNum)
+	f.Topics = make([][]byte, topicNum)
 	for i := 0; i < topicNum; i++ {
+		f.Topics[i] = make([]byte, 4)
 		mrand.Read(f.Topics[i][:])
 		f.Topics[i][0] = 0x01
 	}
@@ -108,7 +109,7 @@ func TestInstallFilters(t *testing.T) {
 			t.Fatalf("seed %d: failed to install filter: %s", seed, err)
 		}
 		tst[i].id = j
-		if len(j) != 40 {
+		if len(j) != keyIdSize*2 {
 			t.Fatalf("seed %d: wrong filter id size [%d]", seed, len(j))
 		}
 	}
@@ -194,8 +195,8 @@ func TestMatchEnvelope(t *testing.T) {
 
 	// encrypt symmetrically
 	i := mrand.Int() % 4
-	fsym.Topics[i] = params.Topic
-	fasym.Topics[i] = params.Topic
+	fsym.Topics[i] = params.Topic[:]
+	fasym.Topics[i] = params.Topic[:]
 	msg = NewSentMessage(params)
 	env, err = msg.Wrap(params)
 	if err != nil {
@@ -320,7 +321,7 @@ func TestMatchMessageSym(t *testing.T) {
 
 	const index = 1
 	params.KeySym = f.KeySym
-	params.Topic = f.Topics[index]
+	params.Topic = BytesToTopic(f.Topics[index])
 
 	sentMessage := NewSentMessage(params)
 	env, err := sentMessage.Wrap(params)
@@ -413,7 +414,7 @@ func TestMatchMessageAsym(t *testing.T) {
 	}
 
 	const index = 1
-	params.Topic = f.Topics[index]
+	params.Topic = BytesToTopic(f.Topics[index])
 	params.Dst = &f.KeyAsym.PublicKey
 	keySymOrig := params.KeySym
 	params.KeySym = nil
@@ -491,7 +492,7 @@ func cloneFilter(orig *Filter) *Filter {
 	clone.KeySym = orig.KeySym
 	clone.Topics = orig.Topics
 	clone.PoW = orig.PoW
-	clone.AcceptP2P = orig.AcceptP2P
+	clone.AllowP2P = orig.AllowP2P
 	clone.SymKeyHash = orig.SymKeyHash
 	return &clone
 }
@@ -504,7 +505,7 @@ func generateCompatibeEnvelope(t *testing.T, f *Filter) *Envelope {
 	}
 
 	params.KeySym = f.KeySym
-	params.Topic = f.Topics[2]
+	params.Topic = BytesToTopic(f.Topics[2])
 	sentMessage := NewSentMessage(params)
 	env, err := sentMessage.Wrap(params)
 	if err != nil {
@@ -655,7 +656,7 @@ func TestWatchers(t *testing.T) {
 	if f == nil {
 		t.Fatalf("failed to get the filter with seed %d.", seed)
 	}
-	f.AcceptP2P = true
+	f.AllowP2P = true
 	total = 0
 	filters.NotifyWatchers(envelopes[0], true)
 
@@ -666,5 +667,42 @@ func TestWatchers(t *testing.T) {
 
 	if total != 1 {
 		t.Fatalf("failed with seed %d: total: got %d, want 1.", seed, total)
+	}
+}
+
+func TestVariableTopics(t *testing.T) {
+	InitSingleTest()
+
+	var match bool
+	params, err := generateMessageParams()
+	if err != nil {
+		t.Fatalf("failed generateMessageParams with seed %d: %s.", seed, err)
+	}
+	msg := NewSentMessage(params)
+	env, err := msg.Wrap(params)
+	if err != nil {
+		t.Fatalf("failed Wrap with seed %d: %s.", seed, err)
+	}
+
+	f, err := generateFilter(t, true)
+	if err != nil {
+		t.Fatalf("failed generateFilter with seed %d: %s.", seed, err)
+	}
+
+	for i := 0; i < 4; i++ {
+		arr := make([]byte, i+1, 4)
+		copy(arr, env.Topic[:i+1])
+
+		f.Topics[4] = arr
+		match = f.MatchEnvelope(env)
+		if !match {
+			t.Fatalf("failed MatchEnvelope symmetric with seed %d, step %d.", seed, i)
+		}
+
+		f.Topics[4][i]++
+		match = f.MatchEnvelope(env)
+		if match {
+			t.Fatalf("MatchEnvelope symmetric with seed %d, step %d: false positive.", seed, i)
+		}
 	}
 }

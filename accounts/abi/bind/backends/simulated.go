@@ -27,6 +27,7 @@ import (
 	"github.com/expanse-org/go-expanse/accounts/abi/bind"
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/math"
+	"github.com/expanse-org/go-expanse/consensus/ethash"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/state"
 	"github.com/expanse-org/go-expanse/core/types"
@@ -34,7 +35,6 @@ import (
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 )
 
 // This nil assignment ensures compile time that SimulatedBackend implements bind.ContractBackend.
@@ -61,7 +61,7 @@ func NewSimulatedBackend(alloc core.GenesisAlloc) *SimulatedBackend {
 	database, _ := ethdb.NewMemDatabase()
 	genesis := core.Genesis{Config: params.AllProtocolChanges, Alloc: alloc}
 	genesis.MustCommit(database)
-	blockchain, _ := core.NewBlockChain(database, genesis.Config, new(pow.FakePow), new(event.TypeMux), vm.Config{})
+	blockchain, _ := core.NewBlockChain(database, genesis.Config, ethash.NewFaker(), new(event.TypeMux), vm.Config{})
 	backend := &SimulatedBackend{database: database, blockchain: blockchain, config: genesis.Config}
 	backend.rollback()
 	return backend
@@ -248,7 +248,7 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call ethereum.CallM
 	// Execute the call.
 	msg := callmsg{call}
 
-	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain)
+	evmContext := core.NewEVMContext(msg, block.Header(), b.blockchain, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(evmContext, statedb, b.config, vm.Config{})

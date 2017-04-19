@@ -24,6 +24,7 @@ import (
 
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/common/mclock"
+	"github.com/expanse-org/go-expanse/consensus"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/light"
@@ -498,7 +499,7 @@ func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) boo
 		headers[int(req.amount)-1-i] = header
 	}
 	if _, err := f.chain.InsertHeaderChain(headers, 1); err != nil {
-		if err == core.BlockFutureErr {
+		if err == consensus.ErrFutureBlock {
 			return true
 		}
 		log.Debug("Failed to insert header chain", "err", err)

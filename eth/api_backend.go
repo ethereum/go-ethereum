@@ -39,7 +39,7 @@ import (
 // EthApiBackend implements ethapi.Backend for full nodes
 type EthApiBackend struct {
 	eth *Ethereum
-	gpo *gasprice.GasPriceOracle
+	gpo *gasprice.Oracle
 }
 
 func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
@@ -114,7 +114,7 @@ func (b *EthApiBackend) GetEVM(ctx context.Context, msg core.Message, state etha
 	from.SetBalance(math.MaxBig256)
 	vmError := func() error { return nil }
 
-	context := core.NewEVMContext(msg, header, b.eth.BlockChain())
+	context := core.NewEVMContext(msg, header, b.eth.BlockChain(), nil)
 	return vm.NewEVM(context, statedb, b.eth.chainConfig, vmCfg), vmError, nil
 }
 
@@ -186,7 +186,7 @@ func (b *EthApiBackend) ProtocolVersion() int {
 }
 
 func (b *EthApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(), nil
+	return b.gpo.SuggestPrice(ctx)
 }
 
 func (b *EthApiBackend) ChainDb() ethdb.Database {

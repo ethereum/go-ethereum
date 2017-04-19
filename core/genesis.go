@@ -41,16 +41,16 @@ var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config     *params.ChainConfig `json:"config" optional:"true"`
-	Nonce      uint64              `json:"nonce" optional:"true"`
-	Timestamp  uint64              `json:"timestamp" optional:"true"`
-	ParentHash common.Hash         `json:"parentHash" optional:"true"`
-	ExtraData  []byte              `json:"extraData" optional:"true"`
-	GasLimit   uint64              `json:"gasLimit"`
-	Difficulty *big.Int            `json:"difficulty"`
-	Mixhash    common.Hash         `json:"mixHash" optional:"true"`
-	Coinbase   common.Address      `json:"coinbase" optional:"true"`
-	Alloc      GenesisAlloc        `json:"alloc"`
+	Config     *params.ChainConfig `json:"config"`
+	Nonce      uint64              `json:"nonce"`
+	Timestamp  uint64              `json:"timestamp"`
+	ParentHash common.Hash         `json:"parentHash"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
+	Mixhash    common.Hash         `json:"mixHash"`
+	Coinbase   common.Address      `json:"coinbase"`
+	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -58,10 +58,10 @@ type GenesisAlloc map[common.Address]GenesisAccount
 
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
-	Code    []byte                      `json:"code,omitempty" optional:"true"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty" optional:"true"`
-	Balance *big.Int                    `json:"balance"`
-	Nonce   uint64                      `json:"nonce,omitempty" optional:"true"`
+	Code    []byte                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance *big.Int                    `json:"balance" gencodec:"required"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
 }
 
 // field type overrides for gencodec

@@ -207,6 +207,20 @@ func MustParseNode(rawurl string) *Node {
 	return n
 }
 
+// MarshalText implements encoding.TextMarshaler.
+func (n *Node) MarshalText() ([]byte, error) {
+	return []byte(n.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (n *Node) UnmarshalText(text []byte) error {
+	dec, err := ParseNode(string(text))
+	if err == nil {
+		*n = *dec
+	}
+	return err
+}
+
 // NodeID is a unique identifier for each node.
 // The node identifier is a marshaled elliptic curve public key.
 type NodeID [NodeIDBits / 8]byte

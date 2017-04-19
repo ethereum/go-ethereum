@@ -26,9 +26,9 @@ import (
 	"strings"
 
 	"github.com/expanse-org/go-expanse/cmd/utils"
+	"github.com/expanse-org/go-expanse/consensus/ethash"
 	"github.com/expanse-org/go-expanse/eth"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -87,7 +87,7 @@ func makedag(ctx *cli.Context) error {
 				utils.Fatalf("Can't find dir")
 			}
 			fmt.Println("making DAG, this could take awhile...")
-			pow.MakeDataset(blockNum, dir)
+			ethash.MakeDataset(blockNum, dir)
 		}
 	default:
 		wrongArgs()
@@ -101,10 +101,11 @@ func version(ctx *cli.Context) error {
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
+	fmt.Println("Architecture:", runtime.GOARCH)
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
 	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
-	fmt.Println("OS:", runtime.GOOS)
+	fmt.Println("Operating System:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
 	return nil

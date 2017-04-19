@@ -21,15 +21,31 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+
+	"github.com/expanse-org/go-expanse/p2p"
+	"github.com/expanse-org/go-expanse/p2p/nat"
 )
 
 const (
-	DefaultIPCSocket = "gexp.ipc"  // Default (relative) name of the IPC RPC socket
-	DefaultHTTPHost  = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort  = 9656        // Default TCP port for the HTTP RPC server
-	DefaultWSHost    = "localhost" // Default host interface for the websocket RPC server
-	DefaultWSPort    = 8546        // Default TCP port for the websocket RPC server
+	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
+	DefaultHTTPPort = 9656        // Default TCP port for the HTTP RPC server
+	DefaultWSHost   = "localhost" // Default host interface for the websocket RPC server
+	DefaultWSPort   = 9657       // Default TCP port for the websocket RPC server
 )
+
+// DefaultConfig contains reasonable default settings.
+var DefaultConfig = Config{
+	DataDir:     DefaultDataDir(),
+	HTTPPort:    DefaultHTTPPort,
+	HTTPModules: []string{"net", "web3"},
+	WSPort:      DefaultWSPort,
+	WSModules:   []string{"net", "web3"},
+	P2P: p2p.Config{
+		ListenAddr: ":42786",
+		MaxPeers:   50,
+		NAT:        nat.Any(),
+	},
+}
 
 // DefaultDataDir is the default data directory to use for the databases and other
 // persistence requirements.
