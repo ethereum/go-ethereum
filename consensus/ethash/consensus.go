@@ -36,7 +36,7 @@ import (
 
 // Ethash proof-of-work protocol constants.
 var (
-	blockReward *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
+	blockReward *big.Int = big.NewInt(8e+18) // Block reward in wei for successfully mining a block
 	maxUncles            = 2                 // Maximum number of uncles allowed in a single block
 )
 
@@ -363,7 +363,7 @@ func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *b
 		}
 
 		periodCount := new(big.Int).Add(parentNumber, common.Big1)
-		periodCount.Div(periodCount, )
+		periodCount.Div(periodCount, expDiffPeriod)
 		if periodCount.Cmp(common.Big1) > 0 {
 			// diff = diff + 2^(periodCount - 2)
 			expDiff := periodCount.Sub(periodCount, common.Big2)
