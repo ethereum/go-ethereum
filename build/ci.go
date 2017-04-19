@@ -217,9 +217,16 @@ func doInstall(cmdline []string) {
 }
 
 func buildFlags(env build.Environment) (flags []string) {
-	// Set gitCommit constant via link-time assignment.
+	var ld []string
 	if env.Commit != "" {
-		flags = append(flags, "-ldflags", "-X main.gitCommit="+env.Commit)
+		ld = append(ld, "-X", "main.gitCommit="+env.Commit)
+	}
+	if runtime.GOOS == "darwin" {
+		ld = append(ld, "-s")
+	}
+
+	if len(ld) > 0 {
+		flags = append(flags, "-ldflags", strings.Join(ld, " "))
 	}
 	return flags
 }
@@ -266,6 +273,7 @@ func doTest(cmdline []string) {
 		coverage = flag.Bool("coverage", false, "Whether to record code coverage")
 	)
 	flag.CommandLine.Parse(cmdline)
+	env := build.Env()
 
 	packages := []string{"./..."}
 	if len(flag.CommandLine.Args()) > 0 {
@@ -279,7 +287,7 @@ func doTest(cmdline []string) {
 		spellcheck(packages)
 	}
 	// Run the actual tests.
-	gotest := goTool("test")
+	gotest := goTool("test", buildFlags(env)...)
 	// Test a single package at a time. CI builders are slow
 	// and some tests run into timeouts under load.
 	gotest.Args = append(gotest.Args, "-p", "1")
