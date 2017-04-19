@@ -783,12 +783,6 @@ func (self *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain
 				log.Crit("Failed to write block receipts", "err", err)
 				return
 			}
-			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
-				errs[index] = fmt.Errorf("failed to write log blooms: %v", err)
-				atomic.AddInt32(&failed, 1)
-				log.Crit("Failed to write log blooms", "err", err)
-				return
-			}
 			if err := WriteTransactions(self.chainDb, block); err != nil {
 				errs[index] = fmt.Errorf("failed to write individual transactions: %v", err)
 				atomic.AddInt32(&failed, 1)
@@ -1041,10 +1035,6 @@ func (self *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 			if err := WriteReceipts(self.chainDb, receipts); err != nil {
 				return i, err
 			}
-			// Write map map bloom filters
-			if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
-				return i, err
-			}
 			// Write hash preimages
 			if err := WritePreimages(self.chainDb, block.NumberU64(), self.stateCache.Preimages()); err != nil {
 				return i, err
@@ -1205,10 +1195,6 @@ func (self *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		receipts := GetBlockReceipts(self.chainDb, block.Hash(), block.NumberU64())
 		// write receipts
 		if err := WriteReceipts(self.chainDb, receipts); err != nil {
-			return err
-		}
-		// Write map map bloom filters
-		if err := WriteMipmapBloom(self.chainDb, block.NumberU64(), receipts); err != nil {
 			return err
 		}
 		addedTxs = append(addedTxs, block.Transactions()...)

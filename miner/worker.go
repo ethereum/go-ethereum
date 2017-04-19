@@ -300,8 +300,6 @@ func (self *worker) wait() {
 					core.WriteTransactions(self.chainDb, block)
 					// store the receipts
 					core.WriteReceipts(self.chainDb, work.receipts)
-					// Write map map bloom filters
-					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
 					// implicit by posting ChainHeadEvent
 					mustCommitNewWork = false
 				}

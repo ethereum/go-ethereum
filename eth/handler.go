@@ -46,7 +46,6 @@ const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
 	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
 
-	useBloomBits     = false
 	bloomBitsSection = 4096
 )
 
@@ -117,10 +116,8 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		quitSync:    make(chan struct{}),
 	}
 
-	if useBloomBits {
-		manager.bloomBitsProcessor = NewBloomBitsProcessor(manager.chaindb, manager.quitSync)
-		blockchain.AddChainProcessor(manager.bloomBitsProcessor)
-	}
+	manager.bloomBitsProcessor = NewBloomBitsProcessor(manager.chaindb, manager.quitSync)
+	blockchain.AddChainProcessor(manager.bloomBitsProcessor)
 
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {

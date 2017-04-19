@@ -18,7 +18,6 @@ package filters
 
 import (
 	"context"
-	"math"
 	"math/big"
 	"time"
 
@@ -41,9 +40,8 @@ type Backend interface {
 
 // Filter can be used to retrieve and filter logs.
 type Filter struct {
-	backend                 Backend
-	useMipMap, useBloomBits bool
-	bloomBitsSection        uint64
+	backend          Backend
+	bloomBitsSection uint64
 
 	created time.Time
 
@@ -57,13 +55,9 @@ type Filter struct {
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
-// MipMaps allow past blocks to be searched much more efficiently, but are not available
-// to light clients.
-func New(backend Backend, useMipMap bool, bloomBitsSection uint64) *Filter {
+func New(backend Backend, bloomBitsSection uint64) *Filter {
 	return &Filter{
 		backend:          backend,
-		useMipMap:        useMipMap,
-		useBloomBits:     bloomBitsSection != 0,
 		bloomBitsSection: bloomBitsSection,
 		db:               backend.ChainDb(),
 		matcher:          bloombits.NewMatcher(bloomBitsSection),
@@ -86,17 +80,13 @@ func (f *Filter) SetEndBlock(end int64) {
 // in the given addresses.
 func (f *Filter) SetAddresses(addr []common.Address) {
 	f.addresses = addr
-	if f.useBloomBits {
-		f.matcher.SetAddresses(addr)
-	}
+	f.matcher.SetAddresses(addr)
 }
 
 // SetTopics matches only logs that have topics matching the given topics.
 func (f *Filter) SetTopics(topics [][]common.Hash) {
 	f.topics = topics
-	if f.useBloomBits {
-		f.matcher.SetTopics(topics)
-	}
+	f.matcher.SetTopics(topics)
 }
 
 // FindOnce searches the blockchain for matching log entries, returning
@@ -119,18 +109,9 @@ func (f *Filter) FindOnce(ctx context.Context) ([]*types.Log, error) {
 		endBlockNo = headBlockNumber
 	}
 
-	// if no addresses are present we can't make use of fast search which
-	// uses the mipmap bloom filters to check for fast inclusion and uses
-	// higher range probability in order to ensure at least a false positive
-	if !f.useMipMap || len(f.addresses) == 0 {
-		logs, blockNumber, err := f.getLogs(ctx, beginBlockNo, endBlockNo)
-		f.begin = int64(blockNumber + 1)
-		return logs, err
-	}
-
-	logs, blockNumber := f.mipFind(beginBlockNo, endBlockNo, 0)
+	logs, blockNumber, err := f.getLogs(ctx, beginBlockNo, endBlockNo)
 	f.begin = int64(blockNumber + 1)
-	return logs, nil
+	return logs, err
 }
 
 // Run filters logs with the current parameters set
@@ -142,42 +123,6 @@ func (f *Filter) Find(ctx context.Context) (logs []*types.Log, err error) {
 		}
 		logs = append(logs, newLogs...)
 	}
-}
-
-func (f *Filter) mipFind(start, end uint64, depth int) (logs []*types.Log, blockNumber uint64) {
-	level := core.MIPMapLevels[depth]
-	// normalise numerator so we can work in level specific batches and
-	// work with the proper range checks
-	for num := start / level * level; num <= end; num += level {
-		// find addresses in bloom filters
-		bloom := core.GetMipmapBloom(f.db, num, level)
-		// Don't bother checking the first time through the loop - we're probably picking
-		// up where a previous run left off.
-		first := true
-		for _, addr := range f.addresses {
-			if first || bloom.TestBytes(addr[:]) {
-				first = false
-				// range check normalised values and make sure that
-				// we're resolving the correct range instead of the
-				// normalised values.
-				start := uint64(math.Max(float64(num), float64(start)))
-				end := uint64(math.Min(float64(num+level-1), float64(end)))
-				if depth+1 == len(core.MIPMapLevels) {
-					l, blockNumber, _ := f.getLogs(context.Background(), start, end)
-					if len(l) > 0 {
-						return l, blockNumber
-					}
-				} else {
-					l, blockNumber := f.mipFind(start, end, depth+1)
-					if len(l) > 0 {
-						return l, blockNumber
-					}
-				}
-			}
-		}
-	}
-
-	return nil, end
 }
 
 // serveMatcher serves the bloomBits matcher by fetching the requested vectors
@@ -227,8 +172,8 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 		return nil, i, nil
 	}
 
-	if f.useBloomBits {
-		haveBloomBitsBefore := core.GetBloomBitsAvailable(f.db) * f.bloomBitsSection
+	haveBloomBitsBefore := core.GetBloomBitsAvailable(f.db) * f.bloomBitsSection
+	if haveBloomBitsBefore > start {
 		e := end
 		if haveBloomBitsBefore <= e {
 			e = haveBloomBitsBefore - 1
@@ -236,7 +181,6 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 
 		stop := make(chan struct{})
 		defer close(stop)
-		//fmt.Println("GetMatches")
 		matches := f.matcher.GetMatches(start, e, stop)
 		errChn := f.serveMatcher(ctx, stop)
 

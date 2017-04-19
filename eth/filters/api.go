@@ -52,7 +52,6 @@ type filter struct {
 // information related to the Ethereum protocol such als blocks, transactions and logs.
 type PublicFilterAPI struct {
 	backend          Backend
-	useMipMap        bool
 	bloomBitsSection uint64
 	mux              *event.TypeMux
 	quit             chan struct{}
@@ -66,7 +65,6 @@ type PublicFilterAPI struct {
 func NewPublicFilterAPI(backend Backend, lightMode bool, bloomBitsSection uint64) *PublicFilterAPI {
 	api := &PublicFilterAPI{
 		backend:          backend,
-		useMipMap:        bloomBitsSection == 0,
 		bloomBitsSection: bloomBitsSection,
 		mux:              backend.EventMux(),
 		chainDb:          backend.ChainDb(),
@@ -335,7 +333,7 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		crit.ToBlock = big.NewInt(rpc.LatestBlockNumber.Int64())
 	}
 
-	filter := New(api.backend, api.useMipMap, api.bloomBitsSection)
+	filter := New(api.backend, api.bloomBitsSection)
 	filter.SetBeginBlock(crit.FromBlock.Int64())
 	filter.SetEndBlock(crit.ToBlock.Int64())
 	filter.SetAddresses(crit.Addresses)
@@ -375,7 +373,7 @@ func (api *PublicFilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*ty
 		return nil, fmt.Errorf("filter not found")
 	}
 
-	filter := New(api.backend, api.useMipMap, api.bloomBitsSection)
+	filter := New(api.backend, api.bloomBitsSection)
 	if f.crit.FromBlock != nil {
 		filter.SetBeginBlock(f.crit.FromBlock.Int64())
 	} else {
