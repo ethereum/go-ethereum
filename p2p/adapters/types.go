@@ -67,8 +67,6 @@ type NodeAdapter interface {
 	Connect([]byte) error
 	Disconnect([]byte) error
 	// Disconnect(*p2p.Peer, p2p.MsgReadWriter)
-	LocalAddr() []byte
-	ParseAddr([]byte, string) ([]byte, error)
 }
 
 type ProtocolRunner interface {

@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -40,7 +39,6 @@ const (
 // bzz is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
 type bzzPeer struct {
 	*protocols.Peer
-	network    adapters.NodeAdapter
 	localAddr  *peerAddr
 	*peerAddr  // remote address
 	lastActive time.Time
@@ -79,14 +77,11 @@ func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 
 // Bzz is the protocol constructor
 // returns p2p.Protocol that is to be offered by the node.Service
-func Bzz(localAddr []byte, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Peer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
+func Bzz(oAddr, uAddr []byte, ct *protocols.CodeMap, services func(Peer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 	run := func(p *protocols.Peer) error {
-		addr := &peerAddr{localAddr, na.LocalAddr()}
-
 		bee := &bzzPeer{
 			Peer:      p,
-			network:   na,
-			localAddr: addr,
+			localAddr: &peerAddr{oAddr, uAddr},
 		}
 		// protocol handshake and its validation
 		// sets remote peer address
@@ -193,22 +188,13 @@ func (self *bzzPeer) bzzHandshake() error {
 	}
 
 	rhs := hs.(*bzzHandshake)
+	self.peerAddr = rhs.Addr
 	err = checkBzzHandshake(rhs)
 	if err != nil {
 		glog.V(6).Infof("handshake between %v and %v  failed: %v", self.localAddr, self.peerAddr, err)
 		return err
 	}
 
-	addr := rhs.Addr
-	// Addr returns the remote address of the network connection.
-	// with rlpx use this to set adverrtised IP
-	self.localAddr.UAddr, err = self.network.ParseAddr(self.localAddr.UAddr, self.RemoteAddr().String())
-	if err != nil {
-		return err
-	}
-
-	glog.V(logger.Debug).Infof("self: advertised net address: %x, local address: %v\npeer: advertised: %v, remote address: %v\n", self.network.LocalAddr(), self.LocalAddr(), NodeId(addr), self.RemoteAddr())
-	self.peerAddr = addr
 	return nil
 
 }

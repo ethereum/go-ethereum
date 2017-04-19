@@ -125,7 +125,7 @@ func newNode(id *adapters.NodeId, net *simulations.Network, trigger chan *adapte
 		})
 		return nil
 	}
-	nodeAdapter.Run = network.Bzz(addr.OverlayAddr(), nodeAdapter, codeMap, services, nil, nil).Run
+	nodeAdapter.Run = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), codeMap, services, nil, nil).Run
 	return node
 }
 

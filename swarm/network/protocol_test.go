@@ -47,10 +47,7 @@ func newBzzBaseTester(t *testing.T, n int, addr *peerAddr, ct *protocols.CodeMap
 		return services(p)
 	}
 
-	protocall := func(na adapters.NodeAdapter) adapters.ProtoCall {
-		protocol := Bzz(addr.OverlayAddr(), na, ct, srv, nil, nil)
-		return protocol.Run
-	}
+	protocall := Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, srv, nil, nil).Run
 
 	s := p2ptest.NewProtocolTester(t, NodeId(addr), n, protocall)
 

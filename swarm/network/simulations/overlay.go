@@ -87,7 +87,7 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	}
 
 	ct := network.BzzCodeMap(network.DiscoveryMsgs...) // bzz protocol code map
-	na.Run = network.Bzz(addr.OverlayAddr(), na, ct, services, nil, nil).Run
+	na.Run = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nil).Run
 	connect := func(s string) error {
 		return self.Connect(id, adapters.NewNodeIdFromHex(s))
 	}

@@ -56,66 +56,64 @@ const networkId = "420"
 // newProtocol sets up a protocol
 // the run function here demonstrates a typical protocol using peerPool, handshake
 // and messages registered to handlers
-func newProtocol(pp *p2ptest.TestPeerPool) func(adapters.NodeAdapter) adapters.ProtoCall {
+func newProtocol(pp *p2ptest.TestPeerPool) adapters.ProtoCall {
 	ct := NewCodeMap("test", 42, 1024, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
-	return func(na adapters.NodeAdapter) adapters.ProtoCall {
-		return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			peer := NewPeer(p, ct, rw)
+	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		peer := NewPeer(p, ct, rw)
 
-			// demonstrates use of peerPool, killing another peer connection as a response to a message
-			peer.Register(&kill{}, func(msg interface{}) error {
-				id := msg.(*kill).C
-				pp.Get(id).Drop(fmt.Errorf("killed"))
-				glog.V(logger.Detail).Infof("id %v killed", id)
-				return nil
-			})
+		// demonstrates use of peerPool, killing another peer connection as a response to a message
+		peer.Register(&kill{}, func(msg interface{}) error {
+			id := msg.(*kill).C
+			pp.Get(id).Drop(fmt.Errorf("killed"))
+			glog.V(logger.Detail).Infof("id %v killed", id)
+			return nil
+		})
 
-			// for testing we can trigger self induced disconnect upon receiving drop message
-			peer.Register(&drop{}, func(msg interface{}) error {
-				glog.V(logger.Detail).Infof("dropped")
-				return fmt.Errorf("dropped")
-			})
+		// for testing we can trigger self induced disconnect upon receiving drop message
+		peer.Register(&drop{}, func(msg interface{}) error {
+			glog.V(logger.Detail).Infof("dropped")
+			return fmt.Errorf("dropped")
+		})
 
-			// initiate one-off protohandshake and check validity
-			phs := &protoHandshake{ct.Version, networkId}
-			hs, err := peer.Handshake(phs)
-			if err != nil {
-				return err
-			}
-			rhs := hs.(*protoHandshake)
-			err = checkProtoHandshake(phs, rhs)
-			if err != nil {
-				return err
-			}
-
-			lhs := &hs0{42}
-			// module handshake demonstrating a simple repeatable exchange of same-type message
-			hs, err = peer.Handshake(lhs)
-			if err != nil {
-				return err
-			}
-
-			if rmhs := hs.(*hs0); rmhs.C > lhs.C {
-				return fmt.Errorf("handshake mismatch remote %v > local %v", rmhs.C, lhs.C)
-			}
-
-			peer.Register(lhs, func(msg interface{}) error {
-				rhs := msg.(*hs0)
-				if rhs.C > lhs.C {
-					return fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C)
-				}
-				lhs.C += rhs.C
-				return peer.Send(lhs)
-			})
-
-			glog.V(logger.Detail).Infof("adding peer  %v", peer)
-			pp.Add(peer)
-			defer pp.Remove(peer)
-			err = peer.Run()
-			glog.V(logger.Detail).Infof("peer  %v protocol quitting: %v", peer, err)
-
+		// initiate one-off protohandshake and check validity
+		phs := &protoHandshake{ct.Version, networkId}
+		hs, err := peer.Handshake(phs)
+		if err != nil {
 			return err
 		}
+		rhs := hs.(*protoHandshake)
+		err = checkProtoHandshake(phs, rhs)
+		if err != nil {
+			return err
+		}
+
+		lhs := &hs0{42}
+		// module handshake demonstrating a simple repeatable exchange of same-type message
+		hs, err = peer.Handshake(lhs)
+		if err != nil {
+			return err
+		}
+
+		if rmhs := hs.(*hs0); rmhs.C > lhs.C {
+			return fmt.Errorf("handshake mismatch remote %v > local %v", rmhs.C, lhs.C)
+		}
+
+		peer.Register(lhs, func(msg interface{}) error {
+			rhs := msg.(*hs0)
+			if rhs.C > lhs.C {
+				return fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C)
+			}
+			lhs.C += rhs.C
+			return peer.Send(lhs)
+		})
+
+		glog.V(logger.Detail).Infof("adding peer  %v", peer)
+		pp.Add(peer)
+		defer pp.Remove(peer)
+		err = peer.Run()
+		glog.V(logger.Detail).Infof("peer  %v protocol quitting: %v", peer, err)
+
+		return err
 	}
 }
 
