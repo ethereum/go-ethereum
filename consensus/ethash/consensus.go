@@ -363,7 +363,7 @@ func calcDifficultyFrontier(time, parentTime uint64, parentNumber, parentDiff *b
 		}
 
 		periodCount := new(big.Int).Add(parentNumber, common.Big1)
-		periodCount.Div(periodCount, ExpDiffPeriod)
+		periodCount.Div(periodCount, )
 		if periodCount.Cmp(common.Big1) > 0 {
 			// diff = diff + 2^(periodCount - 2)
 			expDiff := periodCount.Sub(periodCount, common.Big2)
