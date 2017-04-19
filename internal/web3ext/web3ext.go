@@ -345,6 +345,11 @@ web3._extend({
 			call: 'debug_getBadBlocks',
 			params: 0,
 		}),
+		new web3._extend.Method({
+			name: 'storageRangeAt',
+			call: 'debug_storageRangeAt',
+			params: 5,
+		}),
 	],
 	properties: []
 });
