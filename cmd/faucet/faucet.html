@@ -51,9 +51,10 @@
 						<div class="input-group">
 							<input id="gist" type="text" class="form-control" placeholder="GitHub Gist URL containing your Ethereum address...">
 							<span class="input-group-btn">
-								<button class="btn btn-default" type="button" onclick="submit()">Give me Ether!</button>
+								<button class="btn btn-default" type="button" onclick="{{if .Recaptcha}}grecaptcha.execute(){{else}}submit(){{end}}">Give me Ether!</button>
 							</span>
-						</div>
+						</div>{{if .Recaptcha}}
+						<div class="g-recaptcha" data-sitekey="{{.Recaptcha}}" data-callback="submit" data-size="invisible"></div>{{end}}
 					</div>
 				</div>
 				<div class="row" style="margin-top: 32px;">
@@ -76,7 +77,7 @@
 				<div class="row" style="margin-top: 32px;">
 					<div class="col-lg-12">
 						<h3>How does this work?</h3>
-						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to GitHub accounts. Anyone having a GitHub account may request funds within the permitted limit of <strong>{{.Amount}} Ether(s) / {{.Period}}</strong>.</p>
+						<p>This Ether faucet is running on the {{.Network}} network. To prevent malicious actors from exhausting all available funds or accumulating enough Ether to mount long running spam attacks, requests are tied to GitHub accounts. Anyone having a GitHub account may request funds within the permitted limit of <strong>{{.Amount}} Ether(s) / {{.Period}}</strong>.{{if .Recaptcha}} The faucet is running invisible reCaptcha protection against bots.{{end}}</p>
 						<p>To request funds, simply create a <a href="https://gist.github.com/" target="_about:blank">GitHub Gist</a> with your Ethereum address pasted into the contents (the file name doesn't matter), copy paste the gists URL into the above input box and fire away! You can track the current pending requests below the input field to see how much you have to wait until your turn comes.</p>
 					</div>
 				</div>
@@ -89,8 +90,9 @@
 			var server;
 
 			// Define the function that submits a gist url to the server
-			var submit = function() {
-				server.send(JSON.stringify({url: $("#gist")[0].value}));
+			var submit = function({{if .Recaptcha}}captcha{{end}}) {
+				server.send(JSON.stringify({url: $("#gist")[0].value{{if .Recaptcha}}, captcha: captcha{{end}}}));{{if .Recaptcha}}
+				grecaptcha.reset();{{end}}
 			};
 			// Define a method to reconnect upon server loss
 			var reconnect = function() {
@@ -134,10 +136,10 @@
 					}
 				}
 				server.onclose = function() { setTimeout(reconnect, 3000); };
-				server.onerror = function() { setTimeout(reconnect, 3000); };
 			}
 			// Establish a websocket connection to the API server
 			reconnect();
-		</script>
+		</script>{{if .Recaptcha}}
+		<script src="https://www.google.com/recaptcha/api.js" async defer></script>{{end}}
 	</body>
 </html>
