@@ -140,7 +140,7 @@ func (tt *TestCmd) matchExactOutput(want []byte) error {
 //
 // Note that an arbitrary amount of output may be consumed by the
 // regular expression. This usually means that expect cannot be used
-// after expectRegexp.
+// after ExpectRegexp.
 func (tt *TestCmd) ExpectRegexp(resource string) (*regexp.Regexp, []string) {
 	var (
 		re      = regexp.MustCompile(resource)
@@ -155,11 +155,12 @@ func (tt *TestCmd) ExpectRegexp(resource string) (*regexp.Regexp, []string) {
 		return re, nil
 	}
 	tt.Logf("Matched stdout text:\n%s", output)
-	var submatch []string
+	var submatches []string
 	for i := 0; i < len(matches); i += 2 {
-		submatch = append(submatch, string(output[i:i+1]))
+		submatch := string(output[matches[i]:matches[i+1]])
+		submatches = append(submatches, submatch)
 	}
-	return re, submatch
+	return re, submatches
 }
 
 // ExpectExit expects the child process to exit within 5s without
@@ -199,13 +200,17 @@ func (tt *TestCmd) CloseStdin() {
 	tt.stdin.Close()
 }
 
+func (tt *TestCmd) Kill() {
+	tt.cmd.Process.Kill()
+	if tt.Cleanup != nil {
+		tt.Cleanup()
+	}
+}
+
 func (tt *TestCmd) withKillTimeout(fn func()) {
 	timeout := time.AfterFunc(5*time.Second, func() {
 		tt.Log("killing the child process (timeout)")
-		tt.cmd.Process.Kill()
-		if tt.Cleanup != nil {
-			tt.Cleanup()
-		}
+		tt.Kill()
 	})
 	defer timeout.Stop()
 	fn()
