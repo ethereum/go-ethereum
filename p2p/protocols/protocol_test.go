@@ -2,19 +2,18 @@ package protocols
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
 func init() {
-	glog.SetV(logger.Error)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 // handshake message type
@@ -65,13 +64,13 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.ProtoCall {
 		peer.Register(&kill{}, func(msg interface{}) error {
 			id := msg.(*kill).C
 			pp.Get(id).Drop(fmt.Errorf("killed"))
-			glog.V(logger.Detail).Infof("id %v killed", id)
+			log.Trace(fmt.Sprintf("id %v killed", id))
 			return nil
 		})
 
 		// for testing we can trigger self induced disconnect upon receiving drop message
 		peer.Register(&drop{}, func(msg interface{}) error {
-			glog.V(logger.Detail).Infof("dropped")
+			log.Trace("dropped")
 			return fmt.Errorf("dropped")
 		})
 
@@ -107,11 +106,11 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.ProtoCall {
 			return peer.Send(lhs)
 		})
 
-		glog.V(logger.Detail).Infof("adding peer  %v", peer)
+		log.Trace(fmt.Sprintf("adding peer  %v", peer))
 		pp.Add(peer)
 		defer pp.Remove(peer)
 		err = peer.Run()
-		glog.V(logger.Detail).Infof("peer  %v protocol quitting: %v", peer, err)
+		log.Trace(fmt.Sprintf("peer  %v protocol quitting: %v", peer, err))
 
 		return err
 	}
@@ -280,7 +279,7 @@ func runMultiplePeers(t *testing.T, peer int, errs ...error) {
 	// time.Sleep(1)
 	for !pp.Has(s.Ids[0]) {
 		time.Sleep(1)
-		glog.V(logger.Detail).Infof("missing peer test-0: %v (%v)", pp, s.Ids)
+		log.Trace(fmt.Sprintf("missing peer test-0: %v (%v)", pp, s.Ids))
 	}
 	// if !pp.Has(s.Ids[0]) {
 	// 	t.Fatalf("missing peer test-0: %v (%v)", pp, s.Ids)

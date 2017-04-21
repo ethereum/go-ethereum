@@ -19,13 +19,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const (
@@ -34,8 +34,7 @@ const (
 )
 
 func init() {
-	glog.SetV(0)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 type testBVAddr struct {
@@ -303,7 +302,7 @@ func TestPotMergeOne(t *testing.T) {
 	pot1.Add(NewTestAddr("00", 0))
 	pot2 := NewPot(nil, 0)
 	pot2.Add(NewTestAddr("01", 0))
-	glog.V(logger.Debug).Infof("\n%v\n%v", pot2, pot1)
+	log.Debug(fmt.Sprintf("\n%v\n%v", pot2, pot1))
 	pot1.Merge(pot2)
 	count := 0
 	pot1.Each(func(val PotVal, i int) bool {
@@ -326,7 +325,7 @@ func TestPotMergeCommon(t *testing.T) {
 		max1 := rand.Intn(mergeTestChoose) + 1
 		n0 := NewPot(nil, 0)
 		n1 := NewPot(nil, 0)
-		glog.V(3).Infof("round %v: %v - %v", i, max0, max1)
+		log.Trace(fmt.Sprintf("round %v: %v - %v", i, max0, max1))
 		m := make(map[string]bool)
 		for j := 0; j < max0; {
 			r := rand.Intn(max0)
@@ -357,9 +356,9 @@ func TestPotMergeCommon(t *testing.T) {
 			continue
 		}
 		expSize := len(m)
-		glog.V(4).Infof("%v-0: pin: %v, size: %v", i, n0.Pin(), max0)
-		glog.V(4).Infof("%v-1: pin: %v, size: %v", i, n1.Pin(), max1)
-		glog.V(4).Infof("%v: merged tree size: %v, newly added: %v", i, expSize, expAdded)
+		log.Trace(fmt.Sprintf("%v-0: pin: %v, size: %v", i, n0.Pin(), max0))
+		log.Trace(fmt.Sprintf("%v-1: pin: %v, size: %v", i, n1.Pin(), max1))
+		log.Trace(fmt.Sprintf("%v: merged tree size: %v, newly added: %v", i, expSize, expAdded))
 		n, common := Union(n0, n1)
 		added := n1.Size() - common
 		size := n.Size()
@@ -388,7 +387,7 @@ func TestPotMergeScale(t *testing.T) {
 		max1 := rand.Intn(maxEachNeighbour) + 1
 		n0 := NewPot(nil, 0)
 		n1 := NewPot(nil, 0)
-		glog.V(3).Infof("round %v: %v - %v", i, max0, max1)
+		log.Trace(fmt.Sprintf("round %v: %v - %v", i, max0, max1))
 		m := make(map[string]bool)
 		for j := 0; j < max0; {
 			v := randomTestBVAddr(keylen, j)
@@ -418,9 +417,9 @@ func TestPotMergeScale(t *testing.T) {
 			continue
 		}
 		expSize := len(m)
-		glog.V(4).Infof("%v-0: pin: %v, size: %v", i, n0.Pin(), max0)
-		glog.V(4).Infof("%v-1: pin: %v, size: %v", i, n1.Pin(), max1)
-		glog.V(4).Infof("%v: merged tree size: %v, newly added: %v", i, expSize, expAdded)
+		log.Trace(fmt.Sprintf("%v-0: pin: %v, size: %v", i, n0.Pin(), max0))
+		log.Trace(fmt.Sprintf("%v-1: pin: %v, size: %v", i, n1.Pin(), max1))
+		log.Trace(fmt.Sprintf("%v: merged tree size: %v, newly added: %v", i, expSize, expAdded))
 		n, common := Union(n0, n1)
 		added := n1.Size() - common
 		size := n.Size()
@@ -476,7 +475,7 @@ func TestPotEachNeighbourSync(t *testing.T) {
 		}
 		count := rand.Intn(size/2) + size/2
 		val := randomTestAddr(keylen, max+1)
-		glog.V(3).Infof("%v: pin: %v, size: %v, val: %v, count: %v", i, n.Pin(), size, val, count)
+		log.Trace(fmt.Sprintf("%v: pin: %v, size: %v, val: %v, count: %v", i, n.Pin(), size, val, count))
 		err := testPotEachNeighbour(n, val, count, checkPo(val), checkOrder(val), checkValues(m, val))
 		if err != nil {
 			t.Fatal(err)
@@ -525,16 +524,16 @@ func TestPotEachNeighbourAsync(t *testing.T) {
 		mu := sync.Mutex{}
 		m := make(map[string]bool)
 		maxPos := rand.Intn(keylen)
-		glog.V(3).Infof("%v: pin: %v, size: %v, val: %v, count: %v, maxPos: %v", i, n.Pin(), size, val, count, maxPos)
+		log.Trace(fmt.Sprintf("%v: pin: %v, size: %v, val: %v, count: %v, maxPos: %v", i, n.Pin(), size, val, count, maxPos))
 		msize := 0
 		remember := func(v PotVal, po int) error {
 			// mu.Lock()
 			// defer mu.Unlock()
 			if po > maxPos {
-				// glog.V(4).Infof("NOT ADD %v", v)
+				// log.Trace(fmt.Sprintf("NOT ADD %v", v))
 				return errNoCount
 			}
-			// glog.V(4).Infof("ADD %v, %v", v, msize)
+			// log.Trace(fmt.Sprintf("ADD %v, %v", v, msize))
 			m[v.String()] = true
 			msize++
 			return nil
@@ -544,14 +543,14 @@ func TestPotEachNeighbourAsync(t *testing.T) {
 		}
 		err := testPotEachNeighbour(n, val, count, remember)
 		if err != nil {
-			glog.V(6).Info(err)
+			log.Error(err.Error())
 		}
 		d := 0
 		forget := func(v PotVal, po int) {
 			mu.Lock()
 			defer mu.Unlock()
 			d++
-			// glog.V(4).Infof("DEL %v", v)
+			// log.Trace(fmt.Sprintf("DEL %v", v))
 			delete(m, v.String())
 		}
 

@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
@@ -26,7 +25,7 @@ func NewMockersController(eventer *event.TypeMux, defaultMockerConfig *MockerCon
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", parent.id)
 					}
-					glog.V(logger.Detail).Infof("new mocker controller on %v", conf.Id)
+					log.Trace(fmt.Sprintf("new mocker controller on %v", conf.Id))
 					if parent != nil {
 						parent.SetResource(conf.Id, c)
 						parent.id++
@@ -127,7 +126,7 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 
 	rounds := 0
 	for _ = range conf.ticker.C {
-		glog.V(logger.Detail).Infof("rates: %v/%v, %v (%v/%v)", switchonRate, dropoutRate, newConnCount, connFailRate, disconnRate)
+		log.Trace(fmt.Sprintf("rates: %v/%v, %v (%v/%v)", switchonRate, dropoutRate, newConnCount, connFailRate, disconnRate))
 		// here switchon rate will depend
 		nodesUp := len(offNodes) / switchonRate
 		missing := nodesTarget - len(onNodes)
@@ -149,7 +148,7 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 			}
 		}
 		connsDown := len(onConns) / disconnRate
-		glog.V(logger.Detail).Infof("Nodes Up: %v, Down: %v [ON: %v/%v]\nConns Up: %v, Down: %v [ON: %v/%v(%v)]", nodesUp, nodesDown, len(onNodes), len(onNodes)+len(offNodes), connsUp, connsDown, len(onConns), len(conns)-len(onConns), len(conns))
+		log.Trace(fmt.Sprintf("Nodes Up: %v, Down: %v [ON: %v/%v]\nConns Up: %v, Down: %v [ON: %v/%v(%v)]", nodesUp, nodesDown, len(onNodes), len(onNodes)+len(offNodes), connsUp, connsDown, len(onConns), len(conns)-len(onConns), len(conns)))
 
 		for i := 0; len(onNodes) > 0 && i < nodesDown; i++ {
 			c := rand.Intn(len(onNodes))

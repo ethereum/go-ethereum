@@ -1,10 +1,10 @@
 package testing
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 )
@@ -21,7 +21,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run adapters.Pr
 	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
 		na := adapters.NewSimNode(conf.Id, net)
 		if conf.Id.NodeID == id.NodeID {
-			glog.V(logger.Detail).Infof("adapter run function set to protocol for node %v (=%v)", conf.Id, id)
+			log.Trace(fmt.Sprintf("adapter run function set to protocol for node %v (=%v)", conf.Id, id))
 			na.Run = run
 		}
 		return na
@@ -56,11 +56,11 @@ func (self *ProtocolTester) Start(id *adapters.NodeId) error {
 	}
 	node := self.network.GetNode(id)
 	if node == nil {
-		glog.V(logger.Detail).Infof("node for peer %v not found", id)
+		log.Trace(fmt.Sprintf("node for peer %v not found", id))
 		return nil
 	}
 	if node.Adapter() == nil {
-		glog.V(logger.Detail).Infof("node adapter for peer %v not found", id)
+		log.Trace(fmt.Sprintf("node adapter for peer %v not found", id))
 		return nil
 	}
 	return nil
@@ -68,15 +68,15 @@ func (self *ProtocolTester) Start(id *adapters.NodeId) error {
 
 func (self *ProtocolTester) Connect(ids ...*adapters.NodeId) {
 	for _, id := range ids {
-		glog.V(logger.Detail).Infof("start node %v", id)
+		log.Trace(fmt.Sprintf("start node %v", id))
 		err := self.Start(id)
 		if err != nil {
-			glog.V(logger.Detail).Infof("error starting peer %v: %v", id, err)
+			log.Trace(fmt.Sprintf("error starting peer %v: %v", id, err))
 		}
-		glog.V(logger.Detail).Infof("connect to %v", id)
+		log.Trace(fmt.Sprintf("connect to %v", id))
 		err = self.na.Connect(id.Bytes())
 		if err != nil {
-			glog.V(logger.Detail).Infof("error connecting to peer %v: %v", id, err)
+			log.Trace(fmt.Sprintf("error connecting to peer %v: %v", id, err))
 		}
 	}
 

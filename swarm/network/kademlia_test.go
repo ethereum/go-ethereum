@@ -21,8 +21,7 @@ import (
 	"testing"
 	"time"
 
-	// "github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pot"
 )
 
@@ -111,7 +110,7 @@ func (k *testKademlia) newTestKadPeer(s string) Peer {
 }
 
 func overlayStr(a PeerAddr) string {
-	glog.V(6).Infof("PeerAddr: %v (%T)", a, a)
+	log.Error(fmt.Sprintf("PeerAddr: %v (%T)", a, a))
 	// if a == (*KadPeer)(nil) || a == (*testDiscPeer)(nil) || a == (*bzzPeer)(nil) || a == nil {
 	// 	return "<nil>"
 	// }
@@ -122,7 +121,7 @@ func overlayStr(a PeerAddr) string {
 	// } else {
 	// 	p = a.(*testDiscPeer).Peer
 	// }
-	// glog.V(6).Infof("PeerAddr: %v (%T)", p, p)
+	// log.Error(fmt.Sprintf("PeerAddr: %v (%T)", p, p))
 	// if p == (Peer)(nil) || p == (*testDiscPeer)(nil) || p == (*bzzPeer)(nil) {
 	// 	return "<nil>"
 	// }

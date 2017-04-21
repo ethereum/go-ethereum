@@ -22,8 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pot"
 )
 
@@ -118,7 +117,7 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 func (self *Kademlia) Prune(c <-chan time.Time) {
 	go func() {
 		for _ = range c {
-			glog.V(logger.Debug).Infof("pruning...")
+			log.Debug("pruning...")
 			total := 0
 			self.peers.EachBin(self.addr, 0, func(po, size int, f func(func(pot.PotVal, int) bool) bool) bool {
 				extra := size - self.MinBinSize
@@ -136,7 +135,7 @@ func (self *Kademlia) Prune(c <-chan time.Time) {
 				}
 				return true
 			})
-			glog.V(logger.Debug).Infof("pruned %v peers", total)
+			log.Debug(fmt.Sprintf("pruned %v peers", total))
 		}
 	}()
 }
@@ -166,25 +165,25 @@ func (self *Kademlia) callable(val pot.PotVal) *KadPeer {
 	kp := val.(*KadPeer)
 	// not callable if peer is live or exceeded maxRetries
 	if kp.Peer != nil || kp.retries > self.MaxRetries {
-		glog.V(logger.Detail).Infof("peer %v (%T) not callable", kp, kp.Peer)
+		log.Trace(fmt.Sprintf("peer %v (%T) not callable", kp, kp.Peer))
 		return nil
 	}
 	// calculate the allowed number of retries based on time lapsed since last seen
 	timeAgo := time.Since(kp.seenAt)
 	var retries int
 	for delta := int(timeAgo) / self.RetryInterval; delta > 0; delta /= self.RetryExponent {
-		glog.V(logger.Detail).Infof("delta: %v", delta)
+		log.Trace(fmt.Sprintf("delta: %v", delta))
 		retries++
 	}
 	// this is never called concurrently, so safe to increment
 	// peer can be retried again
 
 	if retries < kp.retries {
-		glog.V(logger.Detail).Infof("log time needed before retry %v, wait only warrants %v", kp.retries, retries)
+		log.Trace(fmt.Sprintf("log time needed before retry %v, wait only warrants %v", kp.retries, retries))
 		return nil
 	}
 	kp.retries++
-	glog.V(logger.Detail).Infof("peer %v is callable", kp)
+	log.Trace(fmt.Sprintf("peer %v is callable", kp))
 
 	return kp
 }
@@ -204,7 +203,7 @@ func (self *Kademlia) Register(nas ...PeerAddr) error {
 	np := pot.NewPot(nil, 0)
 	for _, na := range nas {
 		if bytes.Equal(na.OverlayAddr(), self.addr.OverlayAddr()) {
-			glog.V(logger.Warn).Infof("[%06s] add peers: %x is self.. skipped ", label, self.addr.OverlayAddr())
+			log.Warn(fmt.Sprintf("[%06s] add peers: %x is self.. skipped ", label, self.addr.OverlayAddr()))
 			continue
 		}
 		p := NewKadPeer(na)
@@ -217,7 +216,7 @@ func (self *Kademlia) Register(nas ...PeerAddr) error {
 	self.peers.Each(func(val pot.PotVal, i int) bool {
 		_, found := m[val.String()]
 		// TODO: remove this check
-		// glog.V(logger.Debug).Infof("-> %v  %v", val, i)
+		// log.Debug(fmt.Sprintf("-> %v  %v", val, i))
 		if found {
 			panic("duplicate found")
 		}
@@ -249,19 +248,19 @@ func (self *Kademlia) On(p Peer) {
 
 	vp, ok := kp.Peer.(KadDiscovery)
 	if !ok {
-		glog.V(logger.Detail).Infof("not discovery peer %T", kp)
+		log.Trace(fmt.Sprintf("not discovery peer %T", kp))
 		return
 	}
 	go vp.NotifyProx(uint8(prox))
 	f := func(val pot.PotVal, po int) {
 		dp := val.(*KadPeer).Peer.(KadDiscovery)
-		glog.V(logger.Debug).Infof("peer %v notified of %v (%v)", dp, kp, po)
+		log.Debug(fmt.Sprintf("peer %v notified of %v (%v)", dp, kp, po))
 		dp.NotifyPeer(kp.Peer, uint8(po))
 		if uint8(prox) != self.lastProxLimit {
 			self.lastProxLimit = uint8(prox)
 			dp.NotifyProx(uint8(prox))
 		}
-		glog.V(logger.Debug).Infof("peer notified")
+		log.Debug("peer notified")
 	}
 	self.conns.EachNeighbourAsync(kp, 1024, 255, f, false)
 }
@@ -349,7 +348,7 @@ func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
 	proxLimit := self.proxLimit()
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
-	glog.V(logger.Detail).Infof("candidate prox peer checking above PO %v", proxLimit)
+	log.Trace(fmt.Sprintf("candidate prox peer checking above PO %v", proxLimit))
 	var ppo int
 	self.peers.EachNeighbour(self.addr, func(val pot.PotVal, po int) bool {
 		r := self.callable(val)
@@ -361,15 +360,15 @@ func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
 		return false
 	})
 	if p != nil {
-		glog.V(logger.Detail).Infof("candidate prox peer found: %v (%v), %v", p, ppo, p)
+		log.Trace(fmt.Sprintf("candidate prox peer found: %v (%v), %v", p, ppo, p))
 		return p, 0, false
 	}
-	glog.V(logger.Detail).Infof("no candidate prox peers to connect to (ProxLimit: %v, minProxSize: %v)", proxLimit, self.MinProxBinSize)
+	log.Trace(fmt.Sprintf("no candidate prox peers to connect to (ProxLimit: %v, minProxSize: %v)", proxLimit, self.MinProxBinSize))
 
 	var bpo []int
 	prev := -1
 	self.conns.EachBin(self.addr, 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
-		glog.V(logger.Detail).Infof("check PO%02d: ", po)
+		log.Trace(fmt.Sprintf("check PO%02d: ", po))
 		prev++
 		if po > prev {
 			size = 0
@@ -395,7 +394,7 @@ func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
 			// for each bin we find callable candidate peers
 			f(func(val pot.PotVal, i int) bool {
 				r := self.callable(val)
-				glog.V(logger.Detail).Infof("check PO%02d: ", po)
+				log.Trace(fmt.Sprintf("check PO%02d: ", po))
 				if r == nil {
 					return i < proxLimit
 				}
@@ -472,7 +471,7 @@ func (self *Kademlia) String() string {
 			rowlen++
 			return rowlen < 4
 		})
-		// glog.V(logger.Debug).Infof("po: %v, peerrows length: %v, maxProxDisplay: %v", po, len(peersrows), self.MaxProxDisplay)
+		// log.Debug(fmt.Sprintf("po: %v, peerrows length: %v, maxProxDisplay: %v", po, len(peersrows), self.MaxProxDisplay))
 		// if po < self.MaxProxDisplay {
 		// 	peersrows[po] = strings.Join(row, " ")
 		// }

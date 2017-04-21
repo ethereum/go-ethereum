@@ -34,8 +34,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -223,7 +222,7 @@ func (self *Peer) Register(msg interface{}, handler func(interface{}) error) uin
 	if !found {
 		panic(fmt.Sprintf("message type '%v' unknown ", typ))
 	}
-	glog.V(logger.Detail).Infof("register handle for %v", typ)
+	log.Trace(fmt.Sprintf("register handle for %v", typ))
 	self.handlers[typ] = append(self.handlers[typ], handler)
 	return code
 }
@@ -243,7 +242,7 @@ func (self *Peer) Run() error {
 	err := <-self.Errc
 	d := &Disconnect{err}
 	for _, f := range self.handlers[reflect.TypeOf(d)] {
-		glog.V(6).Infof("disconnect hook for %v", d)
+		log.Trace(fmt.Sprintf("disconnect hook for %v", d))
 		f(err)
 	}
 	return err
@@ -268,7 +267,7 @@ func (self *Peer) Send(msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	glog.V(logger.Detail).Infof("=> msg #%d TO %v : %v", code, self.ID(), msg)
+	log.Trace(fmt.Sprintf("=> msg #%d TO %v : %v", code, self.ID(), msg))
 	go func() {
 		self.wErrc <- p2p.Send(self.rw, uint64(code), msg)
 	}()
@@ -304,7 +303,7 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Detail).Infof("<= %v", msg)
+	log.Trace(fmt.Sprintf("<= %v", msg))
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
@@ -326,7 +325,7 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 	if err := msg.Decode(val.Interface()); err != nil {
 		return nil, errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
-	glog.V(logger.Detail).Infof("<= %v FROM %v %v %v", msg, self.ID(), req, typ)
+	log.Trace(fmt.Sprintf("<= %v FROM %v %v %v", msg, self.ID(), req, typ))
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface
@@ -335,11 +334,11 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 	// chosen based on the proper type in the first place
 	handlers := self.handlers[typ]
 	if len(handlers) == 0 {
-		glog.V(6).Infof("no handler (msg code %v)", msg.Code)
+		log.Trace(fmt.Sprintf("no handler (msg code %v)", msg.Code))
 		// return nil, errorf(ErrNoHandler, "(msg code %v)", msg.Code)
 	} else {
 		for i, f := range handlers {
-			glog.V(6).Infof("handler %v for %v", i, typ)
+			log.Trace(fmt.Sprintf("handler %v for %v", i, typ))
 			err = f(req.Interface())
 			if err != nil {
 				return nil, errorf(ErrHandler, "(msg code %v): %v", msg.Code, err)

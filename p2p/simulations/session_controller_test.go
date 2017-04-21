@@ -7,11 +7,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
@@ -27,8 +28,8 @@ var quitc chan bool
 var controller *ResourceController
 
 func init() {
-	glog.SetV(0)
-	glog.SetToStderr(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+
 	controller, quitc = NewSessionController(DefaultNet)
 	StartRestApiServer(port, controller)
 }
@@ -160,9 +161,9 @@ func TestUpdate(t *testing.T) {
 }
 
 func mockNewNodes(eventer *event.TypeMux, ids []*adapters.NodeId) {
-	glog.V(6).Infof("mock starting")
+	log.Trace("mock starting")
 	for _, id := range ids {
-		glog.V(6).Infof("mock adding node %v", id)
+		log.Trace(fmt.Sprintf("mock adding node %v", id))
 		eventer.Post(&NodeEvent{
 			Action: "up",
 			Type:   "node",

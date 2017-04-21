@@ -6,13 +6,14 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"reflect"
 	"runtime"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -79,7 +80,7 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	services := func(p network.Peer) error {
 		dp := network.NewDiscovery(p, to)
 		pp.Add(dp)
-		glog.V(logger.Detail).Infof("kademlia on %v", dp)
+		log.Trace(fmt.Sprintf("kademlia on %v", dp))
 		p.DisconnectHook(func(err error) {
 			pp.Remove(dp)
 		})
@@ -138,7 +139,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 			time.Sleep(time.Duration(n) * time.Millisecond)
 			net.NewNode(&simulations.NodeConfig{Id: id})
 			net.Start(id)
-			glog.V(logger.Debug).Infof("node %v starting up", id)
+			log.Debug(fmt.Sprintf("node %v starting up", id))
 			// time.Sleep(1000 * time.Millisecond)
 			// net.Stop(id)
 		}
@@ -150,12 +151,12 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 	// 			// n := rand.Intn(5000)
 	// 			// n := 3000
 	// 			time.Sleep(time.Duration(n) * time.Millisecond)
-	// 			glog.V(logger.Debug).Infof("node %v shutting down", id)
+	// 			log.Debug(fmt.Sprintf("node %v shutting down", id))
 	// 			net.Stop(id)
 	// 			// n = rand.Intn(5000)
 	// 			n = 2000
 	// 			time.Sleep(time.Duration(n) * time.Millisecond)
-	// 			glog.V(logger.Debug).Infof("node %v starting up", id)
+	// 			log.Debug(fmt.Sprintf("node %v starting up", id))
 	// 			net.Start(id)
 	// 			n = 5000
 	// 		}
@@ -178,8 +179,8 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 // var server
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	glog.SetV(logger.Detail)
-	glog.SetToStderr(true)
+
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	c, quitc := simulations.NewSessionController(nethook)
 

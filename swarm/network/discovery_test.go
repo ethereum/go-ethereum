@@ -1,10 +1,10 @@
 package network
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -21,7 +21,7 @@ func TestDiscovery(t *testing.T) {
 	services := func(p Peer) error {
 		dp := NewDiscovery(p, to)
 		to.On(dp)
-		glog.V(logger.Detail).Infof("kademlia on %v", p)
+		log.Trace(fmt.Sprintf("kademlia on %v", p))
 		p.DisconnectHook(func(err error) {
 			to.Off(p)
 		})

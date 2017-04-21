@@ -5,8 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
@@ -78,9 +77,9 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 	errc := make(chan error)
 
 	go func() {
-		glog.V(logger.Detail).Infof("trigger %v (%v)....", trig.Msg, trig.Code)
+		log.Trace(fmt.Sprintf("trigger %v (%v)....", trig.Msg, trig.Code))
 		errc <- p2p.Send(peer, trig.Code, trig.Msg)
-		glog.V(logger.Detail).Infof("triggered %v (%v)", trig.Msg, trig.Code)
+		log.Trace(fmt.Sprintf("triggered %v (%v)", trig.Msg, trig.Code))
 	}()
 
 	t := trig.Timeout
@@ -111,7 +110,7 @@ func (self *ProtocolSession) expect(exp Expect) error {
 
 	errc := make(chan error)
 	go func() {
-		glog.V(logger.Detail).Infof("waiting for msg, %v", exp.Msg)
+		log.Trace(fmt.Sprintf("waiting for msg, %v", exp.Msg))
 		errc <- p2p.ExpectMsg(peer, exp.Code, exp.Msg)
 	}()
 
@@ -122,7 +121,7 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	alarm := time.NewTimer(t)
 	select {
 	case err := <-errc:
-		glog.V(logger.Detail).Infof("expected msg arrives with error %v", err)
+		log.Trace(fmt.Sprintf("expected msg arrives with error %v", err))
 		return err
 	case <-alarm.C:
 		return fmt.Errorf("timout expecting %v sent to peer %v", exp.Msg, exp.Peer)
@@ -158,7 +157,7 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 				defer wg.Done()
 				err := self.expect(exp)
 				if err != nil {
-					glog.V(logger.Detail).Infof("expect msg fails %v", err)
+					log.Trace(fmt.Sprintf("expect msg fails %v", err))
 					errc <- err
 				}
 			}(ex)
@@ -178,7 +177,7 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 			if err != nil {
 				return fmt.Errorf("exchange failed with: %v", err)
 			} else {
-				glog.V(logger.Detail).Infof("exchange %v: '%v' run successfully", i, e.Label)
+				log.Trace(fmt.Sprintf("exchange %v: '%v' run successfully", i, e.Label))
 			}
 		case <-alarm.C:
 			return fmt.Errorf("exchange %v: '%v' timed out", i, e.Label)

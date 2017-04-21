@@ -7,8 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type Controller interface {
@@ -25,16 +24,16 @@ func StartRestApiServer(port string, c Controller) {
 	})
 	fd, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		glog.Errorf("Can't listen on :%s: %v", port, err)
+		log.Error(fmt.Sprintf("Can't listen on :%s: %v", port, err))
 		return
 	}
 	go http.Serve(fd, serveMux)
-	glog.V(logger.Info).Infof("Swarm Network Controller HTTP server started on localhost:%s", port)
+	log.Info(fmt.Sprintf("Swarm Network Controller HTTP server started on localhost:%s", port))
 }
 
 func handle(w http.ResponseWriter, r *http.Request, c Controller) {
 	requestURL := r.URL
-	glog.V(logger.Debug).Infof("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
+	log.Debug(fmt.Sprintf("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept")))
 	uri := requestURL.Path
 	w.Header().Set("Content-Type", "text/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")

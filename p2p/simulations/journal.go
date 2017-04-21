@@ -9,8 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
@@ -41,7 +40,7 @@ func NewJournal() *Journal {
 // used for journalling history of a network
 // the goroutine terminates when the journal is closed
 func (self *Journal) Subscribe(eventer *event.TypeMux, types ...interface{}) {
-	glog.V(logger.Info).Infof("subscribe")
+	log.Info("subscribe")
 	sub := eventer.Subscribe(types...)
 	go func() {
 		defer sub.Unsubscribe()
@@ -151,7 +150,7 @@ func (self *Journal) TimedRead(acc float64, f func(interface{}) bool) (read int)
 			panic("events not ordered")
 		}
 		interval := ev.Time.Sub(lastEvent)
-		glog.V(6).Infof("reset timer to interval %v", interval)
+		log.Trace(fmt.Sprintf("reset timer to interval %v", interval))
 		timer.Reset(time.Duration(acc) * interval)
 		lastEvent = ev.Time
 		data = ev.Data
@@ -171,7 +170,7 @@ func (self *Journal) TimedRead(acc float64, f func(interface{}) bool) (read int)
 		}
 		read += n
 		if n == 0 || !f(data) {
-			glog.V(6).Infof("timed read ends (read %v entries)", read)
+			log.Trace(fmt.Sprintf("timed read ends (read %v entries)", read))
 			break
 		}
 	}
@@ -192,7 +191,7 @@ func (self *Journal) reset(n int) {
 	if n >= length-1 {
 		n = length - 1
 	}
-	glog.V(6).Infof("cursor reset from %v to %v/%v (%v)", self.cursor, n, len(self.Events), self.counter)
+	log.Trace(fmt.Sprintf("cursor reset from %v to %v/%v (%v)", self.cursor, n, len(self.Events), self.counter))
 	self.Events = self.Events[self.cursor:]
 	self.cursor = 0
 }

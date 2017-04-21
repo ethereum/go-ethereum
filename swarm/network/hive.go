@@ -17,11 +17,11 @@
 package network
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -97,7 +97,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 	self.toggle = make(chan bool)
 	self.more = make(chan bool, 1)
 	self.quit = make(chan bool)
-	glog.V(logger.Debug).Infof("hive started")
+	log.Debug("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
 	go self.keepAlive(af)
 	go func() {
@@ -108,17 +108,17 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			glog.V(logger.Detail).Infof("hive delegate to overlay driver: suggest addr to connect to")
+			log.Trace("hive delegate to overlay driver: suggest addr to connect to")
 			addr, order, want := self.SuggestPeer()
 
 			if addr != nil {
-				glog.V(logger.Info).Infof("========> connect to bee %v", addr)
+				log.Info(fmt.Sprintf("========> connect to bee %v", addr))
 				err := connectPeer(NodeId(addr).NodeID.String())
 				if err != nil {
-					glog.V(logger.Detail).Infof("===X====> connect to bee %v failed: %v", addr, err)
+					log.Error(fmt.Sprintf("===X====> connect to bee %v failed: %v", addr, err))
 				}
 			} else {
-				glog.V(logger.Detail).Infof("cannot suggest peers")
+				log.Trace("cannot suggest peers")
 			}
 
 			want = want && self.Discovery
@@ -128,11 +128,11 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 
 			select {
 			case self.toggle <- want:
-				glog.V(logger.Detail).Infof("keep hive alive: %v", want)
+				log.Trace(fmt.Sprintf("keep hive alive: %v", want))
 			case <-self.quit:
 				return
 			}
-			glog.V(logger.Info).Infof("%v", self)
+			log.Info(fmt.Sprintf("%v", self))
 		}
 	}()
 	return nil
@@ -148,12 +148,12 @@ func (self *Hive) ticker() <-chan time.Time {
 // wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive(af func() <-chan time.Time) {
-	glog.V(logger.Detail).Infof("keep alive loop started")
+	log.Trace("keep alive loop started")
 	alarm := af()
 	for {
 		select {
 		case <-alarm:
-			glog.V(logger.Detail).Infof("wake up: make hive alive")
+			log.Trace("wake up: make hive alive")
 			self.wake()
 		case need := <-self.toggle:
 			if alarm == nil && need {
@@ -174,17 +174,17 @@ func (self *Hive) keepAlive(af func() <-chan time.Time) {
 func (self *Hive) Add(p Peer) error {
 	defer self.wake()
 	dp := NewDiscovery(p, self.Overlay)
-	glog.V(logger.Debug).Infof("to add new bee %v", p)
+	log.Debug(fmt.Sprintf("to add new bee %v", p))
 	self.On(dp)
 	self.String()
-	glog.V(logger.Warn).Infof("%v", self)
+	log.Debug(fmt.Sprintf("%v", self))
 	return nil
 }
 
 // Remove called after peer is disconnected
 func (self *Hive) Remove(p Peer) {
 	defer self.wake()
-	glog.V(logger.Debug).Infof("remove bee %v", p)
+	log.Debug(fmt.Sprintf("remove bee %v", p))
 	self.Off(p)
 }
 
@@ -212,10 +212,10 @@ func (self *Hive) Stop() {
 func (self *Hive) wake() {
 	select {
 	case self.more <- true:
-		glog.V(logger.Detail).Infof("hive woken up")
+		log.Trace("hive woken up")
 	case <-self.quit:
 	default:
-		glog.V(logger.Detail).Infof("hive already awake")
+		log.Trace("hive already awake")
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -121,7 +121,7 @@ func (self *SimNode) Disconnect(rid []byte) error {
 	// na := self.network.GetNodeAdapter(id)
 	// peer = na.(*SimNode).GetPeer(self.Id)
 	// peer.RW = nil
-	glog.V(6).Infof("dropped peer %v", id)
+	log.Trace(fmt.Sprintf("dropped peer %v", id))
 
 	return nil
 }
@@ -158,10 +158,10 @@ func (self *SimNode) Connect(rid []byte) error {
 
 func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, peer *Peer) error {
 	if self.Run == nil {
-		glog.V(6).Infof("no protocol starting on peer %v (connection with %v)", self.Id, id)
+		log.Trace(fmt.Sprintf("no protocol starting on peer %v (connection with %v)", self.Id, id))
 		return nil
 	}
-	glog.V(6).Infof("protocol starting on peer %v (connection with %v)", self.Id, id)
+	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
 	p := p2p.NewPeer(id.NodeID, Name(id.Bytes()), []p2p.Cap{})
 	go func() {
 		self.network.DidConnect(self.Id, id)
@@ -169,7 +169,7 @@ func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, peer *Pe
 		<-peer.Readyc
 		self.Disconnect(id.Bytes())
 		peer.Errc <- err
-		glog.V(6).Infof("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err)
+		log.Trace(fmt.Sprintf("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err))
 		self.network.DidDisconnect(self.Id, id)
 	}()
 	return nil

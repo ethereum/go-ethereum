@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -87,7 +87,7 @@ func Bzz(oAddr, uAddr []byte, ct *protocols.CodeMap, services func(Peer) error, 
 		// sets remote peer address
 		err := bee.bzzHandshake()
 		if err != nil {
-			glog.V(6).Infof("handshake error in peer %v: %v", bee.ID(), err)
+			log.Error(fmt.Sprintf("handshake error in peer %v: %v", bee.ID(), err))
 			return err
 		}
 
@@ -95,7 +95,7 @@ func Bzz(oAddr, uAddr []byte, ct *protocols.CodeMap, services func(Peer) error, 
 		if services != nil {
 			err = services(bee)
 			if err != nil {
-				glog.V(6).Infof("protocol service error for peer %v: %v", bee.ID(), err)
+				log.Error(fmt.Sprintf("protocol service error for peer %v: %v", bee.ID(), err))
 				return err
 			}
 		}
@@ -183,7 +183,7 @@ func (self *bzzPeer) bzzHandshake() error {
 
 	hs, err := self.Handshake(lhs)
 	if err != nil {
-		glog.V(6).Infof("handshake failed: %v", err)
+		log.Error(fmt.Sprintf("handshake failed: %v", err))
 		return err
 	}
 
@@ -191,7 +191,7 @@ func (self *bzzPeer) bzzHandshake() error {
 	self.peerAddr = rhs.Addr
 	err = checkBzzHandshake(rhs)
 	if err != nil {
-		glog.V(6).Infof("handshake between %v and %v  failed: %v", self.localAddr, self.peerAddr, err)
+		log.Error(fmt.Sprintf("handshake between %v and %v  failed: %v", self.localAddr, self.peerAddr, err))
 		return err
 	}
 

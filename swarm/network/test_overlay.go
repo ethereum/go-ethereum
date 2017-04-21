@@ -5,9 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	// "github.com/ethereum/go-ethereum/p2p/adapters"
-	// "github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const orders = 8
@@ -39,7 +37,7 @@ func (self *testOverlay) register(nas ...PeerAddr) error {
 		}
 		self.posMap[string(addr)] = tna
 		o := order(addr)
-		glog.V(6).Infof("PO: %v, orders: %v", o, orders)
+		log.Trace(fmt.Sprintf("PO: %v, orders: %v", o, orders))
 		self.pos[o] = append(self.pos[o], tna)
 	}
 	return nil
@@ -60,7 +58,7 @@ func (self *testOverlay) On(n Peer) {
 	} else if na.Peer != nil {
 		return
 	}
-	glog.V(6).Infof("Online: %v", fmt.Sprintf("%x", addr[:4]))
+	log.Trace(fmt.Sprintf("Online: %x", addr[:4]))
 	na.Peer = n
 	return
 }
@@ -133,7 +131,7 @@ func (self *testOverlay) SuggestPeer() (PeerAddr, int, bool) {
 		if len(ons) < 2 {
 			offs := self.off(po)
 			if len(offs) > 0 {
-				glog.V(6).Infof("node %v is off", offs[0])
+				log.Trace(fmt.Sprintf("node %v is off", offs[0]))
 				return offs[0], i, true
 			}
 		}

@@ -3,9 +3,7 @@ package network
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	// "github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // discovery bzz overlay extension doing peer relaying
@@ -46,11 +44,11 @@ func NewDiscovery(p Peer, o Overlay) *discPeer {
 // NotifyPeer notifies the receiver remote end of a peer p or PO po.
 // callback for overlay driver
 func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
-	glog.V(logger.Warn).Infof("peers %v", self.peers)
+	log.Warn(fmt.Sprintf("peers %v", self.peers))
 	if po < self.proxLimit || self.seen(p) {
 		return nil
 	}
-	glog.V(logger.Warn).Infof("notification about %x", p.OverlayAddr())
+	log.Warn(fmt.Sprintf("notification about %x", p.OverlayAddr()))
 
 	resp := &peersMsg{
 		Peers: []*peerAddr{&peerAddr{OAddr: p.OverlayAddr(), UAddr: p.UnderlayAddr()}}, // perhaps the PeerAddr interface is unnecessary generalization
@@ -125,7 +123,7 @@ func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
 			peers = append(peers, &peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
 			return true
 		})
-		glog.V(logger.Warn).Infof("found initial %v peers not farther than %v", len(peers), self.proxLimit)
+		log.Warn(fmt.Sprintf("found initial %v peers not farther than %v", len(peers), self.proxLimit))
 		if len(peers) > 0 {
 			self.Send(&peersMsg{Peers: peers})
 		}
@@ -147,10 +145,10 @@ func (self *discPeer) handlePeersMsg(msg interface{}) error {
 	}
 
 	if len(nas) == 0 {
-		glog.V(logger.Debug).Infof("whoops, no peers in incoming peersMsg from %v", self)
+		log.Debug(fmt.Sprintf("whoops, no peers in incoming peersMsg from %v", self))
 		return nil
 	}
-	glog.V(logger.Debug).Infof("got peer addresses from %x, %v (%v)", self.OverlayAddr(), nas, len(nas))
+	log.Debug(fmt.Sprintf("got peer addresses from %x, %v (%v)", self.OverlayAddr(), nas, len(nas)))
 	return self.overlay.Register(nas...)
 }
 
@@ -172,10 +170,10 @@ func (self *discPeer) handleGetPeersMsg(msg interface{}) error {
 		return len(peers) < int(req.Max)
 	})
 	if len(peers) == 0 {
-		glog.V(logger.Debug).Infof("no peers found for %v", self)
+		log.Debug(fmt.Sprintf("no peers found for %v", self))
 		return nil
 	}
-	glog.V(logger.Debug).Infof("%v peers sent to %v", len(peers), self)
+	log.Debug(fmt.Sprintf("%v peers sent to %v", len(peers), self))
 	resp := &peersMsg{
 		Peers: peers,
 	}
@@ -190,7 +188,7 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 	var i uint8
 	var err error
 	k.EachLivePeer(nil, 255, func(n Peer, po int) bool {
-		glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
+		log.Trace(fmt.Sprintf("%T sent to %v", req, n.ID()))
 		err = n.Send(req)
 		if err == nil {
 			i++
@@ -200,7 +198,7 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 		}
 		return true
 	})
-	glog.V(logger.Info).Infof("requesting bees of PO%03d from %v/%v (each max %v)", order, i, broadcastSize, maxPeers)
+	log.Info(fmt.Sprintf("requesting bees of PO%03d from %v/%v (each max %v)", order, i, broadcastSize, maxPeers))
 }
 
 func (self *discPeer) seen(p PeerAddr) bool {

@@ -32,8 +32,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -81,7 +80,7 @@ func NewNetworkController(net NetworkControl, nodesController *ResourceControlle
 			// GET /<networkId>/
 			Retrieve: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					glog.V(logger.Detail).Infof("msg: %v", msg)
+					log.Trace(fmt.Sprintf("msg: %v", msg))
 					cyConfig, ok := msg.(*CyConfig)
 					if ok {
 						return UpdateCy(cyConfig, journal)
@@ -213,7 +212,7 @@ func (self *Network) SetNaf(naf func(*NodeConfig) adapters.NodeAdapter) {
 // and launches a goroutine that reads control events from an eventer Subsription channel
 // and executes the events
 func (self *Network) Subscribe(eventer *event.TypeMux, types ...interface{}) {
-	glog.V(logger.Info).Infof("subscribe")
+	log.Info("subscribe")
 	sub := eventer.Subscribe(types...)
 	go func() {
 		defer sub.Unsubscribe()
@@ -229,38 +228,38 @@ func (self *Network) Subscribe(eventer *event.TypeMux, types ...interface{}) {
 }
 
 func (self *Network) execute(in *event.TypeMuxEvent) {
-	glog.V(logger.Detail).Infof("execute event %v", in)
+	log.Trace(fmt.Sprintf("execute event %v", in))
 	ev := in.Data
 	if ne, ok := ev.(*NodeEvent); ok {
 		if ne.Action == "up" {
 			err := self.NewNode(&NodeConfig{Id: ne.node.Id})
 			if err != nil {
-				glog.V(logger.Detail).Infof("error execute event %v: %v", ne, err)
+				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
 			}
 			err = self.Start(ne.node.Id)
 			if err != nil {
-				glog.V(logger.Detail).Infof("error execute event %v: %v", ne, err)
+				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
 			}
 		} else {
 			err := self.Stop(ne.node.Id)
 			if err != nil {
-				glog.V(logger.Detail).Infof("error execute event %v: %v", ne, err)
+				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
 			}
 		}
 	} else if ce, ok := ev.(*ConnEvent); ok {
 		if ce.Action == "up" {
 			err := self.Connect(ce.conn.One, ce.conn.Other)
 			if err != nil {
-				glog.V(logger.Detail).Infof("error execute event %v: %v", ne, err)
+				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
 			}
 		} else {
 			err := self.Disconnect(ce.conn.One, ce.conn.Other)
 			if err != nil {
-				glog.V(logger.Detail).Infof("error execute event %v: %v", ne, err)
+				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
 			}
 		}
 	} else {
-		glog.V(logger.Detail).Infof("event: %#v", ev)
+		log.Trace(fmt.Sprintf("event: %#v", ev))
 		panic("unhandled event")
 	}
 }
@@ -418,7 +417,7 @@ func (self *Network) NewNode(conf *NodeConfig) error {
 		na:     na,
 	}
 	self.Nodes = append(self.Nodes, node)
-	glog.V(6).Infof("node %v created", id)
+	log.Trace(fmt.Sprintf("node %v created", id))
 	return nil
 }
 
@@ -469,7 +468,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	if node.Up {
 		return fmt.Errorf("node %v already up", id)
 	}
-	glog.V(6).Infof("starting node %v: %v adapter %v", id, node.Up, node.Adapter())
+	log.Trace(fmt.Sprintf("starting node %v: %v adapter %v", id, node.Up, node.Adapter()))
 	sa, ok := node.Adapter().(adapters.StartAdapter)
 	if ok {
 		err := sa.Start()
@@ -478,7 +477,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 		}
 	}
 	node.Up = true
-	glog.V(logger.Info).Infof("started node %v: %v", id, node.Up)
+	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
 
 	self.events.Post(&NodeEvent{
 		Action: "up",
@@ -505,7 +504,7 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 		}
 	}
 	node.Up = false
-	glog.V(logger.Info).Infof("stop node %v: %v", id, node.Up)
+	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
 
 	self.events.Post(&NodeEvent{
 		Action: "down",

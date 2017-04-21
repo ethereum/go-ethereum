@@ -1,11 +1,10 @@
 package testing
 
 import (
+	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -28,7 +27,7 @@ func NewTestPeerPool() *TestPeerPool {
 func (self *TestPeerPool) Add(p TestPeer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	glog.V(logger.Detail).Infof("pp add peer  %v", p.ID())
+	log.Trace(fmt.Sprintf("pp add peer  %v", p.ID()))
 	self.peers[p.ID()] = p
 
 }

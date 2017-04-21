@@ -10,8 +10,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
@@ -98,7 +97,7 @@ func NewSessionController(nethook func(*NetworkConfig) (NetworkControl, *Resourc
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 					conf := msg.(*NetworkConfig)
 					netC, nodesC := nethook(conf)
-					glog.V(logger.Info).Infof("new network controller on %v", conf.Id)
+					log.Info(fmt.Sprintf("new network controller on %v", conf.Id))
 					m := NewNetworkController(netC, nodesC)
 					if parent != nil {
 						parent.SetResource(conf.Id, m)
@@ -110,7 +109,7 @@ func NewSessionController(nethook func(*NetworkConfig) (NetworkControl, *Resourc
 
 			Destroy: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					glog.V(logger.Debug).Infof("destroy handler called")
+					log.Debug("destroy handler called")
 					// this can quit the entire app (shut down the backend server)
 					quitc <- true
 					return empty, nil

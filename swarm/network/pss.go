@@ -1,30 +1,29 @@
 package network
 
 import (
-	"fmt"
 	"bytes"
+	"fmt"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type Pss struct {
 	Overlay
-	LocalAddr	[]byte
-	C	chan []byte
+	LocalAddr []byte
+	C         chan []byte
 }
 
 func NewPss(k Overlay, addr []byte) *Pss {
 	return &Pss{
-		Overlay: k,
+		Overlay:   k,
 		LocalAddr: addr,
-		C: make(chan []byte),
+		C:         make(chan []byte),
 	}
 }
 
 type PssMsg struct {
 	To   []byte
-	Data	[]byte
+	Data []byte
 }
 
 func (pm *PssMsg) String() string {
@@ -35,7 +34,7 @@ func (ps *Pss) HandlePssMsg(msg interface{}) error {
 	pssmsg := msg.(*PssMsg)
 	to := pssmsg.To
 	if bytes.Equal(to, ps.LocalAddr) {
-		glog.V(logger.Detail).Infof("Pss to us, yay!", to)
+		log.Trace(fmt.Sprintf("Pss to us, yay! %v", to))
 		ps.C <- pssmsg.Data
 		return nil
 	}
@@ -47,6 +46,6 @@ func (ps *Pss) HandlePssMsg(msg interface{}) error {
 		}
 		return false
 	})
-	
+
 	return nil
 }

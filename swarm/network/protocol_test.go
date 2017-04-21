@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
@@ -166,7 +165,7 @@ func TestBzzPeerPoolAdd(t *testing.T) {
 	defer s.Stop()
 
 	id := s.Ids[0]
-	glog.V(logger.Detail).Infof("handshake with %v", id)
+	log.Trace(fmt.Sprintf("handshake with %v", id))
 	s.runHandshakes()
 
 	if !pp.Has(id) {
