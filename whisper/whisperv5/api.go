@@ -271,7 +271,7 @@ func (api *PublicWhisperAPI) Unsubscribe(id string) {
 
 // GetSubscriptionMessages retrieves all the new messages matched by the corresponding
 // subscription filter since the last retrieval.
-func (api *PublicWhisperAPI) GetSubscriptionMessages(id string) []*WhisperMessage {
+func (api *PublicWhisperAPI) GetNewSubscriptionMessages(id string) []*WhisperMessage {
 	f := api.whisper.GetFilter(id)
 	if f != nil {
 		newMail := f.Retrieve()
@@ -282,7 +282,7 @@ func (api *PublicWhisperAPI) GetSubscriptionMessages(id string) []*WhisperMessag
 
 // GetMessages retrieves all the floating messages that match a specific subscription filter.
 // It is likely to be called once per session, right after Subscribe call.
-func (api *PublicWhisperAPI) GetMessages(id string) []*WhisperMessage {
+func (api *PublicWhisperAPI) GetFloatingMessages(id string) []*WhisperMessage {
 	all := api.whisper.Messages(id)
 	return toWhisperMessages(all)
 }
@@ -475,7 +475,6 @@ type WhisperMessage struct {
 // NewWhisperMessage converts an internal message into an API version.
 func NewWhisperMessage(message *ReceivedMessage) *WhisperMessage {
 	msg := WhisperMessage{
-		Topic:     common.ToHex(message.Topic[:]),
 		Payload:   common.ToHex(message.Payload),
 		Padding:   common.ToHex(message.Padding),
 		Timestamp: message.Sent,
@@ -484,11 +483,20 @@ func NewWhisperMessage(message *ReceivedMessage) *WhisperMessage {
 		Hash:      common.ToHex(message.EnvelopeHash.Bytes()),
 	}
 
+	if len(message.Topic) == TopicLength {
+		msg.Topic = common.ToHex(message.Topic[:])
+	}
 	if message.Dst != nil {
-		msg.Dst = common.ToHex(crypto.FromECDSAPub(message.Dst))
+		b := crypto.FromECDSAPub(message.Dst)
+		if b != nil {
+			msg.Dst = common.ToHex(b)
+		}
 	}
 	if isMessageSigned(message.Raw[0]) {
-		msg.Src = common.ToHex(crypto.FromECDSAPub(message.SigToPubKey()))
+		b := crypto.FromECDSAPub(message.SigToPubKey())
+		if b != nil {
+			msg.Src = common.ToHex(b)
+		}
 	}
 	return &msg
 }
