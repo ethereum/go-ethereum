@@ -269,9 +269,10 @@ func (api *PublicWhisperAPI) Unsubscribe(id string) {
 	api.whisper.Unsubscribe(id)
 }
 
-// GetSubscriptionMessages retrieves all the new messages matched by a filter since the last retrieval.
-func (api *PublicWhisperAPI) GetSubscriptionMessages(filterId string) []*WhisperMessage {
-	f := api.whisper.GetFilter(filterId)
+// GetSubscriptionMessages retrieves all the new messages matched by the corresponding
+// subscription filter since the last retrieval.
+func (api *PublicWhisperAPI) GetSubscriptionMessages(id string) []*WhisperMessage {
+	f := api.whisper.GetFilter(id)
 	if f != nil {
 		newMail := f.Retrieve()
 		return toWhisperMessages(newMail)
@@ -279,10 +280,10 @@ func (api *PublicWhisperAPI) GetSubscriptionMessages(filterId string) []*Whisper
 	return toWhisperMessages(nil)
 }
 
-// GetMessages retrieves all the floating messages that match a specific filter.
+// GetMessages retrieves all the floating messages that match a specific subscription filter.
 // It is likely to be called once per session, right after Subscribe call.
-func (api *PublicWhisperAPI) GetMessages(filterId string) []*WhisperMessage {
-	all := api.whisper.Messages(filterId)
+func (api *PublicWhisperAPI) GetMessages(id string) []*WhisperMessage {
+	all := api.whisper.Messages(id)
 	return toWhisperMessages(all)
 }
 
@@ -383,7 +384,7 @@ type PostArgs struct {
 	Type       string        `json:"type"`       // "sym"/"asym" (symmetric or asymmetric)
 	TTL        uint32        `json:"ttl"`        // time-to-live in seconds
 	SignWith   string        `json:"signWith"`   // id of the signing key
-	Key        string        `json:"key"`        // id of encryption key
+	Key        string        `json:"key"`        // key id (in case of sym) or public key (in case of asym)
 	Topic      hexutil.Bytes `json:"topic"`      // topic (4 bytes)
 	Padding    hexutil.Bytes `json:"padding"`    // optional padding bytes
 	Payload    hexutil.Bytes `json:"payload"`    // payload to be encrypted
