@@ -51,7 +51,7 @@ func (self *NodeId) MarshalJSON() (out []byte, err error) {
 
 func (self *NodeId) UnmarshalJSON(value []byte) error {
 	s := string(value)
-	h, err := discover.HexID(s)
+	h, err := discover.HexID(s[1 : len(s)-1])
 	if err != nil {
 		return err
 	}
@@ -64,18 +64,15 @@ func (self *NodeId) Label() string {
 }
 
 type NodeAdapter interface {
-	Connect([]byte) error
-	Disconnect([]byte) error
-	// Disconnect(*p2p.Peer, p2p.MsgReadWriter)
+	Addr() []byte
+	Start() error
+	Stop() error
+	Connect(addr []byte) error
+	Disconnect(addr []byte) error
 }
 
 type ProtocolRunner interface {
 	RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, p *Peer) error
-}
-
-type StartAdapter interface {
-	Start() error
-	Stop() error
 }
 
 type Reporter interface {

@@ -66,12 +66,16 @@ func NewSimNode(id *NodeId, n Network) *SimNode {
 	}
 }
 
-func (self *SimNode) LocalAddr() []byte {
+func (self *SimNode) Addr() []byte {
 	return self.Id.Bytes()
 }
 
-func (self *SimNode) ParseAddr(p []byte, s string) ([]byte, error) {
-	return p, nil
+func (self *SimNode) Start() error {
+	return nil
+}
+
+func (self *SimNode) Stop() error {
+	return nil
 }
 
 func (self *SimNode) GetPeer(id *NodeId) *Peer {

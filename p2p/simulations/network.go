@@ -424,11 +424,6 @@ func (self *Network) NewNode(conf *NodeConfig) error {
 func (self *Network) Config() *NetworkConfig {
 	return self.conf
 }
-func (self *Network) NewSimNode(conf *NodeConfig) adapters.NodeAdapter {
-	id := conf.Id
-	na := adapters.NewSimNode(id, self)
-	return na
-}
 
 // newConn adds a new connection to the network
 // it errors if the respective nodes do not exist
@@ -469,12 +464,8 @@ func (self *Network) Start(id *adapters.NodeId) error {
 		return fmt.Errorf("node %v already up", id)
 	}
 	log.Trace(fmt.Sprintf("starting node %v: %v adapter %v", id, node.Up, node.Adapter()))
-	sa, ok := node.Adapter().(adapters.StartAdapter)
-	if ok {
-		err := sa.Start()
-		if err != nil {
-			return err
-		}
+	if err := node.Adapter().Start(); err != nil {
+		return err
 	}
 	node.Up = true
 	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
@@ -496,12 +487,8 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 	if !node.Up {
 		return fmt.Errorf("node %v already down", id)
 	}
-	sa, ok := node.Adapter().(adapters.StartAdapter)
-	if ok {
-		err := sa.Stop()
-		if err != nil {
-			return err
-		}
+	if err := node.Adapter().Stop(); err != nil {
+		return err
 	}
 	node.Up = false
 	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
@@ -539,9 +526,9 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	// to this method with connect = false to avoid infinite recursion
 	// this is not relevant for nodes starting up (which can only be externally triggered)
 	if rev {
-		err = conn.other.na.Connect(oneId.Bytes())
+		err = conn.other.na.Connect(conn.one.na.Addr())
 	} else {
-		err = conn.one.na.Connect(otherId.Bytes())
+		err = conn.one.na.Connect(conn.other.na.Addr())
 	}
 	if err != nil {
 		return err
@@ -678,4 +665,20 @@ func (self *Network) getConn(oneId, otherId *adapters.NodeId) *Conn {
 		return nil
 	}
 	return self.Conns[i]
+}
+
+func (self *Network) Shutdown() {
+	// disconnect all nodes
+	for _, conn := range self.Conns {
+		if err := self.Disconnect(conn.One, conn.Other); err != nil {
+			log.Warn(fmt.Sprintf("error disconnecting %s from %s", conn.One.Label(), conn.Other.Label()), "err", err)
+		}
+	}
+
+	// stop all nodes
+	for _, node := range self.Nodes {
+		if err := node.na.Stop(); err != nil {
+			log.Warn(fmt.Sprintf("error stopping node %s", node.Id.Label()), "err", err)
+		}
+	}
 }
