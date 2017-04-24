@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type NetworkConfig struct {
@@ -582,16 +583,19 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	// any other way of connection (like peerpool) will need to call back
 	// to this method with connect = false to avoid infinite recursion
 	// this is not relevant for nodes starting up (which can only be externally triggered)
+	var addr []byte
+	var client *rpc.Client
 	if rev {
-		err = conn.other.na.Connect(conn.one.na.Addr())
+		addr = conn.one.na.Addr()
+		client, err = conn.other.na.Client()
 	} else {
-		err = conn.one.na.Connect(conn.other.na.Addr())
+		addr = conn.other.na.Addr()
+		client, err = conn.one.na.Client()
 	}
 	if err != nil {
 		return err
 	}
-	return nil
-	// return self.DidConnect(oneId, otherId)
+	return client.Call(nil, "admin_addPeer", string(addr))
 }
 
 // Disconnect(i, j) attempts to disconnect nodes i and j (args given as nodeId)
@@ -611,11 +615,20 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 	if conn.One.NodeID != oneId.NodeID {
 		rev = true
 	}
+	var addr []byte
+	var client *rpc.Client
+	var err error
 	if rev {
-		return conn.other.na.Disconnect(oneId.Bytes())
+		addr = conn.one.na.Addr()
+		client, err = conn.other.na.Client()
+	} else {
+		addr = conn.other.na.Addr()
+		client, err = conn.one.na.Client()
 	}
-	return conn.one.na.Disconnect(otherId.Bytes())
-	// return self.DidDisconnect(oneId, otherId)
+	if err != nil {
+		return err
+	}
+	return client.Call(nil, "admin_removePeer", string(addr))
 }
 
 func (self *Network) DidConnect(one, other *adapters.NodeId) error {

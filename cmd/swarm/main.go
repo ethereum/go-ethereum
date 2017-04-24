@@ -440,7 +440,7 @@ func getPassPhrase(prompt string, i int, passwords []string) string {
 	return password
 }
 
-func injectBootnodes(srv *p2p.Server, nodes []string) {
+func injectBootnodes(srv p2p.Server, nodes []string) {
 	for _, url := range nodes {
 		n, err := discover.ParseNode(url)
 		if err != nil {

@@ -49,7 +49,7 @@ const (
 
 // dialstate schedules dials and discovery lookups.
 // it get's a chance to compute new tasks on every iteration
-// of the main loop in Server.run.
+// of the main loop in server.run.
 type dialstate struct {
 	maxDynDials int
 	ntab        discoverTable
@@ -84,7 +84,7 @@ type pastDial struct {
 }
 
 type task interface {
-	Do(*Server)
+	Do(*server)
 }
 
 // A dialTask is generated for each node that is dialed. Its
@@ -104,7 +104,7 @@ type discoverTask struct {
 }
 
 // A waitExpireTask is generated if there are no other tasks
-// to keep the loop in Server.run ticking.
+// to keep the loop in server.run ticking.
 type waitExpireTask struct {
 	time.Duration
 }
@@ -267,7 +267,7 @@ func (s *dialstate) taskDone(t task, now time.Time) {
 	}
 }
 
-func (t *dialTask) Do(srv *Server) {
+func (t *dialTask) Do(srv *server) {
 	if t.dest.Incomplete() {
 		if !t.resolve(srv) {
 			return
@@ -288,7 +288,7 @@ func (t *dialTask) Do(srv *Server) {
 // Resolve operations are throttled with backoff to avoid flooding the
 // discovery network with useless queries for nodes that don't exist.
 // The backoff delay resets when the node is found.
-func (t *dialTask) resolve(srv *Server) bool {
+func (t *dialTask) resolve(srv *server) bool {
 	if srv.ntab == nil {
 		log.Debug("Can't resolve node", "id", t.dest.ID, "err", "discovery is disabled")
 		return false
@@ -317,7 +317,7 @@ func (t *dialTask) resolve(srv *Server) bool {
 }
 
 // dial performs the actual connection attempt.
-func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
+func (t *dialTask) dial(srv *server, dest *discover.Node) bool {
 	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
 	fd, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
@@ -333,7 +333,7 @@ func (t *dialTask) String() string {
 	return fmt.Sprintf("%v %x %v:%d", t.flags, t.dest.ID[:8], t.dest.IP, t.dest.TCP)
 }
 
-func (t *discoverTask) Do(srv *Server) {
+func (t *discoverTask) Do(srv *server) {
 	// newTasks generates a lookup task whenever dynamic dials are
 	// necessary. Lookups need to take some time, otherwise the
 	// event loop spins too fast.
@@ -355,7 +355,7 @@ func (t *discoverTask) String() string {
 	return s
 }
 
-func (t waitExpireTask) Do(*Server) {
+func (t waitExpireTask) Do(*server) {
 	time.Sleep(t.Duration)
 }
 func (t waitExpireTask) String() string {

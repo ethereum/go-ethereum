@@ -5,9 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -173,13 +171,6 @@ func newPssBaseTester(t *testing.T, addr *peerAddr, n int) *pssTester {
 	to := NewKademlia(addr.OverlayAddr(), kp)
 	pp := NewHive(NewHiveParams(), to)
 	ps := NewPss(to, addr.OverlayAddr())
-	net := simulations.NewNetwork(&simulations.NetworkConfig{})
-	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-		na := adapters.NewSimNode(conf.Id, net)
-		return na
-	}
-	net.SetNaf(naf)
-
 	srv := func(p Peer) error {
 		p.Register(&PssMsg{}, ps.HandlePssMsg)
 		pp.Add(p)

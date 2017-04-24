@@ -26,7 +26,9 @@ const serviceName = "discovery"
 func init() {
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
-	adapters.RegisterService(serviceName, discoveryService)
+	adapters.RegisterService(serviceName, func(id *adapters.NodeId) p2pnode.Service {
+		return newNode(id)
+	})
 
 	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
@@ -98,7 +100,9 @@ func TestDiscoverySimulationExecAdapter(t *testing.T) {
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
 	setup := func(net *simulations.Network, trigger chan *adapters.NodeId) {
 		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-			return newSimNode(conf.Id, net, trigger)
+			node := newNode(conf.Id)
+			node.trigger = trigger
+			return adapters.NewSimNode(conf.Id, node, net)
 		})
 	}
 
@@ -188,25 +192,9 @@ type node struct {
 	*network.Hive
 	*adapters.SimNode
 
-	id          *adapters.NodeId
-	trigger     chan *adapters.NodeId
-	protocol    *p2p.Protocol
-	connectPeer func(string) error
-}
-
-func newSimNode(id *adapters.NodeId, net *simulations.Network, trigger chan *adapters.NodeId) *node {
-	node := newNode(id)
-
-	node.SimNode = adapters.NewSimNode(id, net)
-	node.Run = node.protocol.Run
-
-	node.trigger = trigger
-
-	node.connectPeer = func(s string) error {
-		return node.Connect(adapters.NewNodeIdFromHex(s).Bytes())
-	}
-
-	return node
+	id       *adapters.NodeId
+	trigger  chan *adapters.NodeId
+	protocol *p2p.Protocol
 }
 
 func newNode(id *adapters.NodeId) *node {
@@ -249,8 +237,24 @@ func newHive(kademlia *network.Kademlia) *network.Hive {
 	return network.NewHive(params, kademlia)
 }
 
-func (n *node) Start() error {
-	return n.Hive.Start(n.connectPeer, n.hiveKeepAlive)
+func (n *node) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{*n.protocol}
+}
+
+func (n *node) APIs() []rpc.API {
+	return nil
+}
+
+func (n *node) Start(server p2p.Server) error {
+	connectPeer := func(url string) error {
+		node, err := discover.ParseNode(url)
+		if err != nil {
+			return fmt.Errorf("invalid node URL: %v", err)
+		}
+		server.AddPeer(node)
+		return nil
+	}
+	return n.Hive.Start(connectPeer, n.hiveKeepAlive)
 }
 
 func (n *node) Stop() error {
@@ -276,39 +280,4 @@ func (n *node) hiveKeepAlive() <-chan time.Time {
 func (n *node) triggerCheck() {
 	// TODO: rate limit the trigger?
 	go func() { n.trigger <- n.id }()
-}
-
-func discoveryService(id *adapters.NodeId) p2pnode.ServiceConstructor {
-	return func(ctx *p2pnode.ServiceContext) (p2pnode.Service, error) {
-		node := newNode(id)
-		return &p2pService{node}, nil
-	}
-}
-
-type p2pService struct {
-	node *node
-}
-
-func (s *p2pService) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{*s.node.protocol}
-}
-
-func (s *p2pService) APIs() []rpc.API {
-	return nil
-}
-
-func (s *p2pService) Start(server *p2p.Server) error {
-	s.node.connectPeer = func(url string) error {
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			return fmt.Errorf("invalid node URL: %v", err)
-		}
-		server.AddPeer(node)
-		return nil
-	}
-	return s.node.Start()
-}
-
-func (s *p2pService) Stop() error {
-	return s.node.Stop()
 }

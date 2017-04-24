@@ -22,9 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// serviceFunc returns a node.ServiceConstructor which can be used to boot
-// devp2p nodes
-type serviceFunc func(id *NodeId) node.ServiceConstructor
+// serviceFunc returns a node.Service which can be used to boot devp2p nodes
+type serviceFunc func(id *NodeId) node.Service
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes
@@ -52,9 +51,9 @@ type ExecNode struct {
 	Dir     string
 	Config  *node.Config
 	Cmd     *exec.Cmd
-	Client  *rpc.Client
 	Info    *p2p.NodeInfo
 
+	client *rpc.Client
 	newCmd func() *exec.Cmd
 }
 
@@ -96,6 +95,10 @@ func (n *ExecNode) Addr() []byte {
 	return []byte(n.Info.Enode)
 }
 
+func (n *ExecNode) Client() (*rpc.Client, error) {
+	return n.client, nil
+}
+
 // Start exec's the node passing the ID and service as command line arguments
 // and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
 // variable
@@ -131,11 +134,11 @@ func (n *ExecNode) Start() (err error) {
 	n.Cmd = cmd
 
 	// create the RPC client and load the node info
-	n.Client = rpc.NewClientWithConn(pipe2)
+	n.client = rpc.NewClientWithConn(pipe2)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var info p2p.NodeInfo
-	if err := n.Client.CallContext(ctx, &info, "admin_nodeInfo"); err != nil {
+	if err := n.client.CallContext(ctx, &info, "admin_nodeInfo"); err != nil {
 		return fmt.Errorf("error getting node info: %s", err)
 	}
 	n.Info = &info
@@ -163,9 +166,9 @@ func (n *ExecNode) Stop() error {
 		n.Cmd = nil
 	}()
 
-	if n.Client != nil {
-		n.Client.Close()
-		n.Client = nil
+	if n.client != nil {
+		n.client.Close()
+		n.client = nil
 		n.Info = nil
 	}
 
@@ -182,24 +185,6 @@ func (n *ExecNode) Stop() error {
 	case <-time.After(5 * time.Second):
 		return n.Cmd.Process.Kill()
 	}
-}
-
-// Connect connects the node to the given addr by calling the Admin.AddPeer
-// IPC method
-func (n *ExecNode) Connect(addr []byte) error {
-	if n.Client == nil {
-		return errors.New("node not started")
-	}
-	return n.Client.Call(nil, "admin_addPeer", string(addr))
-}
-
-// Disconnect disconnects the node from the given addr by calling the
-// Admin.RemovePeer IPC method
-func (n *ExecNode) Disconnect(addr []byte) error {
-	if n.Client == nil {
-		return errors.New("node not started")
-	}
-	return n.Client.Call(nil, "admin_removePeer", string(addr))
 }
 
 func init() {
@@ -230,11 +215,12 @@ func execP2PNode() {
 		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
 	}
 
-	// lookup the service constructor
-	service, exists := serviceFuncs[serviceName]
+	// initialize the service
+	serviceFunc, exists := serviceFuncs[serviceName]
 	if !exists {
 		log.Crit(fmt.Sprintf("unknown node service %q", serviceName))
 	}
+	service := serviceFunc(id)
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	if strings.HasPrefix(conf.P2P.ListenAddr, ":") {
@@ -251,15 +237,9 @@ func execP2PNode() {
 	}
 
 	// start the devp2p stack
-	stack, err := node.New(&conf)
+	stack, err := startP2PNode(&conf, service)
 	if err != nil {
-		log.Crit("error creating node", "err", err)
-	}
-	if err := stack.Register(service(id)); err != nil {
-		log.Crit("error registering service", "err", err)
-	}
-	if err := stack.Start(); err != nil {
-		log.Crit("error starting node", "err", err)
+		log.Crit("error starting p2p node", "err", err)
 	}
 
 	// use stdin / stdout for RPC to avoid the parent needing to access
@@ -281,6 +261,23 @@ func execP2PNode() {
 	}()
 
 	stack.Wait()
+}
+
+func startP2PNode(conf *node.Config, service node.Service) (*node.Node, error) {
+	stack, err := node.New(conf)
+	if err != nil {
+		return nil, err
+	}
+	constructor := func(ctx *node.ServiceContext) (node.Service, error) {
+		return service, nil
+	}
+	if err := stack.Register(constructor); err != nil {
+		return nil, err
+	}
+	if err := stack.Start(); err != nil {
+		return nil, err
+	}
+	return stack, nil
 }
 
 // stdioConn wraps os.Stdin / os.Stdout with a nop Close method so we can

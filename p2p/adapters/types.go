@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const lablen = 4
@@ -65,10 +66,9 @@ func (self *NodeId) Label() string {
 
 type NodeAdapter interface {
 	Addr() []byte
+	Client() (*rpc.Client, error)
 	Start() error
 	Stop() error
-	Connect(addr []byte) error
-	Disconnect(addr []byte) error
 }
 
 type ProtocolRunner interface {

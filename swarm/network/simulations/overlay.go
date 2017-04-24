@@ -16,21 +16,30 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 // Network extends simulations.Network with hives for each node.
 type Network struct {
 	*simulations.Network
-	hives []*network.Hive
+	hives map[discover.NodeID]*network.Hive
 }
 
 // SimNode is the adapter used by Swarm simulations.
 type SimNode struct {
-	connect func(s string) error
-	hive    *network.Hive
-	adapters.NodeAdapter
+	hive     *network.Hive
+	protocol *p2p.Protocol
+}
+
+func (s *SimNode) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{*s.protocol}
+}
+
+func (s *SimNode) APIs() []rpc.API {
+	return nil
 }
 
 // the hive update ticker for hive
@@ -39,26 +48,29 @@ func af() <-chan time.Time {
 }
 
 // Start() starts up the hive
-// makes SimNode implement *NodeAdapter
-func (self *SimNode) Start() error {
-	return self.hive.Start(self.connect, af)
+// makes SimNode implement node.Service
+func (self *SimNode) Start(server p2p.Server) error {
+	connectPeer := func(url string) error {
+		node, err := discover.ParseNode(url)
+		if err != nil {
+			return fmt.Errorf("invalid node URL: %v", err)
+		}
+		server.AddPeer(node)
+		return nil
+	}
+	return self.hive.Start(connectPeer, af)
 }
 
 // Stop() shuts down the hive
-// makes SimNode implement *NodeAdapter
+// makes SimNode implement node.Service
 func (self *SimNode) Stop() error {
 	self.hive.Stop()
 	return nil
 }
 
-func (self *SimNode) RunProtocol(id *adapters.NodeId, rw, rrw p2p.MsgReadWriter, peer *adapters.Peer) error {
-	return self.NodeAdapter.(adapters.ProtocolRunner).RunProtocol(id, rw, rrw, peer)
-}
-
 // NewSimNode creates adapters for nodes in the simulation.
 func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
-	na := adapters.NewSimNode(id, self.Network)
 	addr := network.NewPeerAddrFromNodeId(id)
 	kp := network.NewKadParams()
 
@@ -70,12 +82,10 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	kp.RetryInterval = 1000000
 
 	to := network.NewKademlia(addr.OverlayAddr(), kp) // overlay topology driver
-	// to := network.NewTestOverlay(addr.OverlayAddr())   // overlay topology driver
 	hp := network.NewHiveParams()
 	hp.CallInterval = 5000
-	pp := network.NewHive(hp, to)       // hive
-	self.hives = append(self.hives, pp) // remember hive
-	// bzz protocol Run function. messaging through SimPipe
+	pp := network.NewHive(hp, to) // hive
+	self.hives[id.NodeID] = pp    // remember hive
 
 	services := func(p network.Peer) error {
 		dp := network.NewDiscovery(p, to)
@@ -88,20 +98,19 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	}
 
 	ct := network.BzzCodeMap(network.DiscoveryMsgs...) // bzz protocol code map
-	na.Run = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nil).Run
-	connect := func(s string) error {
-		return self.Connect(id, adapters.NewNodeIdFromHex(s))
+
+	node := &SimNode{
+		hive:     pp,
+		protocol: network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nil),
 	}
-	return &SimNode{
-		connect:     connect,
-		hive:        pp,
-		NodeAdapter: na,
-	}
+	return adapters.NewSimNode(id, node, self.Network)
+
 }
 
-func NewNetwork(network *simulations.Network) *Network {
+func NewNetwork(net *simulations.Network) *Network {
 	n := &Network{
-		Network: network,
+		Network: net,
+		hives:   make(map[discover.NodeID]*network.Hive),
 	}
 	n.SetNaf(n.NewSimNode)
 	return n
@@ -128,7 +137,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 		} else {
 			peerId = ids[i-1]
 		}
-		err := net.hives[i].Register(network.NewPeerAddrFromNodeId(peerId))
+		err := net.hives[id.NodeID].Register(network.NewPeerAddrFromNodeId(peerId))
 		if err != nil {
 			panic(err.Error())
 		}
@@ -171,7 +180,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
 					var results []string
 					for _, id := range ids {
-						pp := net.GetNode(id).Adapter().(*SimNode).hive
+						pp := net.hives[id.NodeID]
 						results = append(results, pp.String())
 					}
 					return results, nil
@@ -185,7 +194,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 				//GET /<networkId>/nodes/<nodeId>  -- returns <nodeId>'s kademlia table
 				Retrieve: &simulations.ResourceHandler{
 					Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-						pp := net.GetNode(id).Adapter().(*SimNode).hive
+						pp := net.hives[id.NodeID]
 						if pp != nil {
 							return pp.String(), nil
 						}

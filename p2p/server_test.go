@@ -72,7 +72,7 @@ func startTestServer(t *testing.T, id discover.NodeID, pf func(*Peer)) *Server {
 		ListenAddr: "127.0.0.1:0",
 		PrivateKey: newkey(),
 	}
-	server := &Server{
+	server := &server{
 		Config:       config,
 		newPeerHook:  pf,
 		newTransport: func(fd net.Conn) transport { return newTestTransport(id, fd) },
@@ -201,7 +201,7 @@ func TestServerTaskScheduling(t *testing.T) {
 
 	// The Server in this test isn't actually running
 	// because we're only interested in what run does.
-	srv := &Server{
+	srv := &server{
 		Config:  Config{MaxPeers: 10},
 		quit:    make(chan struct{}),
 		ntab:    fakeTable{},
@@ -246,7 +246,7 @@ func TestServerManyTasks(t *testing.T) {
 	}
 
 	var (
-		srv        = &Server{quit: make(chan struct{}), ntab: fakeTable{}, running: true}
+		srv        = &server{quit: make(chan struct{}), ntab: fakeTable{}, running: true}
 		done       = make(chan *testTask)
 		start, end = 0, 0
 	)
@@ -317,7 +317,7 @@ func (t *testTask) Do(srv *Server) {
 // at capacity. Trusted connections should still be accepted.
 func TestServerAtCap(t *testing.T) {
 	trustedID := randomID()
-	srv := &Server{
+	srv := &server{
 		Config: Config{
 			PrivateKey:   newkey(),
 			MaxPeers:     10,
@@ -420,7 +420,7 @@ func TestServerSetupConn(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		srv := &Server{
+		srv := &server{
 			Config: Config{
 				PrivateKey: srvkey,
 				MaxPeers:   10,

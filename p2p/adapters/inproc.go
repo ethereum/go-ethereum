@@ -17,12 +17,15 @@
 package adapters
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 func newPeer(rw *p2p.MsgPipeRW) *Peer {
@@ -53,29 +56,94 @@ type SimNode struct {
 	lock    sync.RWMutex
 	Id      *NodeId
 	network Network
+	service node.Service
 	peerMap map[discover.NodeID]int
 	peers   []*Peer
-	Run     ProtoCall
+	client  *rpc.Client
 }
 
-func NewSimNode(id *NodeId, n Network) *SimNode {
+func NewSimNode(id *NodeId, svc node.Service, n Network) *SimNode {
+	// for simplicity, only support single protocol services
+	if len(svc.Protocols()) != 1 {
+		panic("service must have a single protocol")
+	}
+
 	return &SimNode{
 		Id:      id,
 		network: n,
+		service: svc,
 		peerMap: make(map[discover.NodeID]int),
 	}
 }
 
+// Addr returns the node's address
 func (self *SimNode) Addr() []byte {
-	return self.Id.Bytes()
+	return []byte(self.Node().String())
 }
 
+func (self *SimNode) Node() *discover.Node {
+	return discover.NewNode(self.Id.NodeID, nil, 0, 0)
+}
+
+func (self *SimNode) Client() (*rpc.Client, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.client == nil {
+		return nil, errors.New("RPC not started")
+	}
+	return self.client, nil
+}
+
+// Start starts the RPC handler and the underlying service
 func (self *SimNode) Start() error {
+	if err := self.startRPC(); err != nil {
+		return err
+	}
+	return self.service.Start(self)
+}
+
+// Stop stops the RPC handler and the underlying service
+func (self *SimNode) Stop() error {
+	self.stopRPC()
+	return self.service.Stop()
+}
+
+func (self *SimNode) startRPC() error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.client != nil {
+		return errors.New("RPC already started")
+	}
+
+	// add SimAdminAPI so that the network can call the AddPeer
+	// and RemovePeer RPC methods
+	apis := append(self.service.APIs(), rpc.API{
+		Namespace: "admin",
+		Version:   "1.0",
+		Service:   &SimAdminAPI{self},
+	})
+
+	// start the RPC handler
+	handler := rpc.NewServer()
+	for _, api := range apis {
+		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+			return fmt.Errorf("error registering RPC: %s", err)
+		}
+	}
+
+	// create an in-process RPC client
+	self.client = rpc.DialInProc(handler)
+
 	return nil
 }
 
-func (self *SimNode) Stop() error {
-	return nil
+func (self *SimNode) stopRPC() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.client != nil {
+		self.client.Close()
+		self.client = nil
+	}
 }
 
 func (self *SimNode) GetPeer(id *NodeId) *Peer {
@@ -112,13 +180,13 @@ func (self *SimNode) setPeer(id *NodeId, rw *p2p.MsgPipeRW) *Peer {
 	return p
 }
 
-func (self *SimNode) Disconnect(rid []byte) error {
+func (self *SimNode) RemovePeer(node *discover.Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	id := NewNodeId(rid)
+	id := &NodeId{node.ID}
 	peer := self.getPeer(id)
 	if peer == nil || peer.MsgPipeRW == nil {
-		return fmt.Errorf("already disconnected")
+		return
 	}
 	peer.MsgPipeRW.Close()
 	peer.MsgPipeRW = nil
@@ -126,55 +194,85 @@ func (self *SimNode) Disconnect(rid []byte) error {
 	// peer = na.(*SimNode).GetPeer(self.Id)
 	// peer.RW = nil
 	log.Trace(fmt.Sprintf("dropped peer %v", id))
-
-	return nil
 }
 
-func (self *SimNode) Connect(rid []byte) error {
+func (self *SimNode) AddPeer(node *discover.Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	id := NewNodeId(rid)
+	id := &NodeId{node.ID}
 	na := self.network.GetNodeAdapter(id)
 	if na == nil {
-		return fmt.Errorf("node adapter for %v is missing", id)
+		panic(fmt.Sprintf("node adapter for %v is missing", id))
 	}
 	rw, rrw := p2p.MsgPipe()
 	// // run protocol on remote node with self as peer
 	peer := self.getPeer(id)
 	if peer != nil && peer.MsgPipeRW != nil {
-		return fmt.Errorf("already connected %v to peer %v", self.Id, id)
+		return
 	}
 	peer = self.setPeer(id, rrw)
 	close(peer.Connc)
 	defer close(peer.Readyc)
-	err := na.(ProtocolRunner).RunProtocol(self.Id, rrw, rw, peer)
-	if err != nil {
-		return fmt.Errorf("cannot run protocol (%v -> %v) %v", self.Id, id, err)
-	}
+	na.(*SimNode).RunProtocol(self, rrw, rw, peer)
 
 	// run protocol on remote node with self as peer
-	err = self.RunProtocol(id, rw, rrw, peer)
-	if err != nil {
-		return fmt.Errorf("cannot run protocol (%v -> %v): %v", id, self.Id, err)
-	}
+	self.RunProtocol(na.(*SimNode), rw, rrw, peer)
+}
+
+func (self *SimNode) PeerCount() int {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	return len(self.peers)
+}
+
+func (self *SimNode) NodeInfo() *p2p.NodeInfo {
+	return &p2p.NodeInfo{ID: self.Id.String()}
+}
+
+func (self *SimNode) PeersInfo() (info []*p2p.PeerInfo) {
 	return nil
 }
 
-func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, peer *Peer) error {
-	if self.Run == nil {
+func (self *SimNode) RunProtocol(node *SimNode, rw, rrw p2p.MsgReadWriter, peer *Peer) {
+	id := node.Id
+	protocol := self.service.Protocols()[0]
+	if protocol.Run == nil {
 		log.Trace(fmt.Sprintf("no protocol starting on peer %v (connection with %v)", self.Id, id))
-		return nil
+		return
 	}
 	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
 	p := p2p.NewPeer(id.NodeID, id.Label(), []p2p.Cap{})
 	go func() {
 		self.network.DidConnect(self.Id, id)
-		err := self.Run(p, rw)
+		err := protocol.Run(p, rw)
 		<-peer.Readyc
-		self.Disconnect(id.Bytes())
+		self.RemovePeer(node.Node())
 		peer.Errc <- err
 		log.Trace(fmt.Sprintf("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err))
 		self.network.DidDisconnect(self.Id, id)
 	}()
-	return nil
+}
+
+// SimAdminAPI implements the AddPeer and RemovePeer RPC methods (API
+// compatible with node.PrivateAdminAPI)
+type SimAdminAPI struct {
+	*SimNode
+}
+
+func (api *SimAdminAPI) AddPeer(url string) (bool, error) {
+	node, err := discover.ParseNode(url)
+	if err != nil {
+		return false, fmt.Errorf("invalid enode: %v", err)
+	}
+	api.SimNode.AddPeer(node)
+	return true, nil
+}
+
+func (api *SimAdminAPI) RemovePeer(url string) (bool, error) {
+	node, err := discover.ParseNode(url)
+	if err != nil {
+		return false, fmt.Errorf("invalid enode: %v", err)
+	}
+	api.SimNode.RemovePeer(node)
+	return true, nil
 }

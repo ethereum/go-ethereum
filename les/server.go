@@ -68,7 +68,7 @@ func (s *LesServer) Protocols() []p2p.Protocol {
 }
 
 // Start starts the LES server
-func (s *LesServer) Start(srvr *p2p.Server) {
+func (s *LesServer) Start(srvr p2p.Server) {
 	s.protocolManager.Start(srvr)
 }
 

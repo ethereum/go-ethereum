@@ -78,7 +78,7 @@ type TestData struct {
 type TestNode struct {
 	shh     *Whisper
 	id      *ecdsa.PrivateKey
-	server  *p2p.Server
+	server  p2p.Server
 	filerId string
 }
 
@@ -140,19 +140,17 @@ func initialize(t *testing.T) {
 			peers = append(peers, peer)
 		}
 
-		node.server = &p2p.Server{
-			Config: p2p.Config{
-				PrivateKey:     node.id,
-				MaxPeers:       NumNodes/2 + 1,
-				Name:           name,
-				Protocols:      node.shh.Protocols(),
-				ListenAddr:     addr,
-				NAT:            nat.Any(),
-				BootstrapNodes: peers,
-				StaticNodes:    peers,
-				TrustedNodes:   peers,
-			},
-		}
+		node.server = p2p.NewServer(p2p.Config{
+			PrivateKey:     node.id,
+			MaxPeers:       NumNodes/2 + 1,
+			Name:           name,
+			Protocols:      node.shh.Protocols(),
+			ListenAddr:     addr,
+			NAT:            nat.Any(),
+			BootstrapNodes: peers,
+			StaticNodes:    peers,
+			TrustedNodes:   peers,
+		})
 
 		err = node.server.Start()
 		if err != nil {

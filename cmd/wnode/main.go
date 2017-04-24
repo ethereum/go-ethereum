@@ -51,7 +51,7 @@ const quitCommand = "~Q"
 
 // singletons
 var (
-	server     *p2p.Server
+	server     p2p.Server
 	shh        *whisper.Whisper
 	done       chan struct{}
 	mailServer mailserver.WMailServer
@@ -253,19 +253,17 @@ func initialize() {
 		maxPeers = 800
 	}
 
-	server = &p2p.Server{
-		Config: p2p.Config{
-			PrivateKey:     nodeid,
-			MaxPeers:       maxPeers,
-			Name:           common.MakeName("wnode", "5.0"),
-			Protocols:      shh.Protocols(),
-			ListenAddr:     *argIP,
-			NAT:            nat.Any(),
-			BootstrapNodes: peers,
-			StaticNodes:    peers,
-			TrustedNodes:   peers,
-		},
-	}
+	server = p2p.NewServer(p2p.Config{
+		PrivateKey:     nodeid,
+		MaxPeers:       maxPeers,
+		Name:           common.MakeName("wnode", "5.0"),
+		Protocols:      shh.Protocols(),
+		ListenAddr:     *argIP,
+		NAT:            nat.Any(),
+		BootstrapNodes: peers,
+		StaticNodes:    peers,
+		TrustedNodes:   peers,
+	})
 }
 
 func startServer() {

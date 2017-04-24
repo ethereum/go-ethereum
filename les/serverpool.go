@@ -97,7 +97,7 @@ const (
 type serverPool struct {
 	db     ethdb.Database
 	dbKey  []byte
-	server *p2p.Server
+	server p2p.Server
 	quit   chan struct{}
 	wg     *sync.WaitGroup
 	connWg sync.WaitGroup
@@ -118,7 +118,7 @@ type serverPool struct {
 }
 
 // newServerPool creates a new serverPool instance
-func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic discv5.Topic, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
+func newServerPool(db ethdb.Database, dbPrefix []byte, server p2p.Server, topic discv5.Topic, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
 	pool := &serverPool{
 		db:           db,
 		dbKey:        append(dbPrefix, []byte(topic)...),
@@ -139,11 +139,11 @@ func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic
 	pool.loadNodes()
 	pool.checkDial()
 
-	if pool.server.DiscV5 != nil {
+	if srv, ok := pool.server.(discV5Server); ok && srv.DiscV5() != nil {
 		pool.discSetPeriod = make(chan time.Duration, 1)
 		pool.discNodes = make(chan *discv5.Node, 100)
 		pool.discLookups = make(chan bool, 100)
-		go pool.server.DiscV5.SearchTopic(topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
+		go srv.DiscV5().SearchTopic(topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
 	}
 
 	go pool.eventLoop()
