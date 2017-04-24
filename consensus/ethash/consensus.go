@@ -315,7 +315,7 @@ func calcDifficultyHomestead(time uint64, parent *types.Header) *big.Int {
 	//         (parent_diff / 2048 * max(1 - (block_timestamp - parent_timestamp) // 10, -99))
 	//        ) + 2^(periodCount - 2)
 
-	bigTime := new(big.Int).Set(parent.Time)
+	bigTime := new(big.Int).Set(time)
 	bigParentTime := new(big.Int).Set(parent.Time)
 
 	// holds intermediate values to make the algo easier to read & audit
