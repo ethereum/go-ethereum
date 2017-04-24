@@ -31,7 +31,7 @@ var (
 	ErrInvalidChainId = errors.New("invalid chaid id for signer")
 
 	errAbstractSigner     = errors.New("abstract signer")
-	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffff")
+	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffffff")
 )
 
 // sigCache is used to cache the derived sender and contains
