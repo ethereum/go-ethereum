@@ -2,6 +2,8 @@ package simulations
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"strings"
@@ -72,7 +74,13 @@ func handle(w http.ResponseWriter, r *http.Request, c Controller) {
 		return
 	}
 	// on return we close the request Body so we assume it is read synchronously
-	response, err := handler(r.Body)
+	var params io.ReadCloser
+	if r.Method == "GET" && len(r.URL.RawQuery) > 0 {
+		params = ioutil.NopCloser(strings.NewReader(r.URL.RawQuery))
+	} else {
+		params = r.Body
+	}
+	response, err := handler(params)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("handler error: %v", err), http.StatusBadRequest)
 		return

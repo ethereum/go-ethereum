@@ -166,9 +166,16 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 		&simulations.ResourceHandlers{
 			Retrieve: &simulations.ResourceHandler{
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					id := msg.(string)
-					pp := net.GetNode(adapters.NewNodeIdFromHex(id)).Adapter().(*SimNode).hive
-					return pp.String(), nil
+					ids := msg.([]string)
+					var results []string
+					for _, id := range ids {
+						if len(id) != 128 {
+							return nil, fmt.Errorf("Nodes controller expects 128 bytes size hex id")
+						}
+						pp := net.GetNode(adapters.NewNodeIdFromHex(id)).Adapter().(*SimNode).hive
+						results = append(results, pp.String())
+					}
+					return results, nil
 				},
 				Type: reflect.TypeOf([]string{}), // this is input not output param structure
 			},
