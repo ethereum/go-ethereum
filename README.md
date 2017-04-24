@@ -161,6 +161,12 @@ and agree upon. This consists of a small JSON file (e.g. call it `genesis.json`)
 
 ```json
 {
+  "config": {
+        "chainId": 0,
+        "homesteadBlock": 0,
+        "eip155Block": 0,
+        "eip158Block": 0
+    },
   "alloc"      : {},
   "coinbase"   : "0x0000000000000000000000000000000000000000",
   "difficulty" : "0x20000",
