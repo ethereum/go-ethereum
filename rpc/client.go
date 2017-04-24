@@ -178,6 +178,14 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	}
 }
 
+// NewClientWithConn creates an RPC client which uses the provided net.Conn.
+func NewClientWithConn(conn net.Conn) *Client {
+	client, _ := newClient(context.Background(), func(context.Context) (net.Conn, error) {
+		return conn, nil
+	})
+	return client
+}
+
 func newClient(initctx context.Context, connectFunc func(context.Context) (net.Conn, error)) (*Client, error) {
 	conn, err := connectFunc(initctx)
 	if err != nil {

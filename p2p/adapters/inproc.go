@@ -166,7 +166,7 @@ func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, peer *Pe
 		return nil
 	}
 	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
-	p := p2p.NewPeer(id.NodeID, Name(id.Bytes()), []p2p.Cap{})
+	p := p2p.NewPeer(id.NodeID, id.Label(), []p2p.Cap{})
 	go func() {
 		self.network.DidConnect(self.Id, id)
 		err := self.Run(p, rw)

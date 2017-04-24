@@ -41,6 +41,30 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestDiscoverySimulationDockerAdapter(t *testing.T) {
+	setup := func(net *simulations.Network, trigger chan *adapters.NodeId) {
+		var ids []*adapters.NodeId
+
+		// TODO: get events from the devp2p node
+		time.AfterFunc(10*time.Second, func() {
+			for _, id := range ids {
+				trigger <- id
+			}
+		})
+
+		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
+			node, err := adapters.NewDockerNode(conf.Id, serviceName)
+			if err != nil {
+				panic(err)
+			}
+			ids = append(ids, conf.Id)
+			return node
+		})
+	}
+
+	testDiscoverySimulation(t, setup)
+}
+
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
 	baseDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
@@ -52,7 +76,7 @@ func TestDiscoverySimulationExecAdapter(t *testing.T) {
 		var ids []*adapters.NodeId
 
 		// TODO: get events from the devp2p node
-		time.AfterFunc(5*time.Second, func() {
+		time.AfterFunc(10*time.Second, func() {
 			for _, id := range ids {
 				trigger <- id
 			}
@@ -133,7 +157,7 @@ func testDiscoverySimulation(t *testing.T, setup func(net *simulations.Network, 
 		return true, nil
 	}
 
-	timeout := 10 * time.Second
+	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 

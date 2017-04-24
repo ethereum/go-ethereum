@@ -568,6 +568,17 @@ func (n *Node) Attach() (*rpc.Client, error) {
 	return rpc.DialInProc(n.inprocHandler), nil
 }
 
+// RPCHandler returns the in-process RPC request handler.
+func (n *Node) RPCHandler() (*rpc.Server, error) {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	if n.inprocHandler == nil {
+		return nil, ErrNodeStopped
+	}
+	return n.inprocHandler, nil
+}
+
 // Server retrieves the currently running P2P network layer. This method is meant
 // only to inspect fields of the currently running server, life cycle management
 // should be left to this Node entity.

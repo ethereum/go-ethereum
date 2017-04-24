@@ -1,13 +1,17 @@
 package adapters
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -36,7 +40,12 @@ func RegisterService(name string, f serviceFunc) {
 }
 
 // ExecNode is a NodeAdapter which starts the node by exec'ing the current
-// binary and running a registered serviceFunc
+// binary and running a registered serviceFunc.
+//
+// Communication with the node is performed using RPC over stdin / stdout
+// so that we don't need access to either the node's filesystem or TCP stack
+// (so for example we can run the node in a remote Docker container and
+// still communicate with it).
 type ExecNode struct {
 	ID      *NodeId
 	Service string
@@ -45,6 +54,8 @@ type ExecNode struct {
 	Cmd     *exec.Cmd
 	Client  *rpc.Client
 	Info    *p2p.NodeInfo
+
+	newCmd func() *exec.Cmd
 }
 
 // NewExecNode creates a new ExecNode which will run the given service using a
@@ -63,17 +74,18 @@ func NewExecNode(id *NodeId, service, baseDir string) (*ExecNode, error) {
 	// generate the config
 	conf := node.DefaultConfig
 	conf.DataDir = filepath.Join(dir, "data")
-	conf.IPCPath = filepath.Join(dir, "ipc.sock")
 	conf.P2P.ListenAddr = "127.0.0.1:0"
 	conf.P2P.NoDiscovery = true
 	conf.P2P.NAT = nil
 
-	return &ExecNode{
+	node := &ExecNode{
 		ID:      id,
 		Service: service,
 		Dir:     dir,
 		Config:  &conf,
-	}, nil
+	}
+	node.newCmd = node.execCommand
+	return node, nil
 }
 
 // Addr returns the node's enode URL
@@ -104,38 +116,41 @@ func (n *ExecNode) Start() (err error) {
 		return fmt.Errorf("error generating node config: %s", err)
 	}
 
+	// create a net.Pipe for RPC communication over stdin / stdout
+	pipe1, pipe2 := net.Pipe()
+
 	// start the node
-	cmd := &exec.Cmd{
-		Path:   reexec.Self(),
-		Args:   []string{"p2p-node", n.Service, n.ID.String()},
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-		Env:    append(os.Environ(), fmt.Sprintf("_P2P_NODE_CONFIG=%s", conf)),
-	}
+	cmd := n.newCmd()
+	cmd.Stdin = pipe1
+	cmd.Stdout = pipe1
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), fmt.Sprintf("_P2P_NODE_CONFIG=%s", conf))
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting node: %s", err)
 	}
 	n.Cmd = cmd
 
-	// create the RPC client
-	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(50 * time.Millisecond) {
-		n.Client, err = rpc.Dial(n.Config.IPCPath)
-		if err == nil {
-			break
-		}
-	}
-	if n.Client == nil {
-		return fmt.Errorf("error creating IPC client: %s", err)
-	}
-
-	// load info
+	// create the RPC client and load the node info
+	n.Client = rpc.NewClientWithConn(pipe2)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	var info p2p.NodeInfo
-	if err := n.Client.Call(&info, "admin_nodeInfo"); err != nil {
+	if err := n.Client.CallContext(ctx, &info, "admin_nodeInfo"); err != nil {
 		return fmt.Errorf("error getting node info: %s", err)
 	}
 	n.Info = &info
 
 	return nil
+}
+
+// execCommand returns a command which runs the node locally by exec'ing
+// the current binary but setting argv[0] to "p2p-node" so that the child
+// runs execP2PNode
+func (n *ExecNode) execCommand() *exec.Cmd {
+	return &exec.Cmd{
+		Path: reexec.Self(),
+		Args: []string{"p2p-node", n.Service, n.ID.String()},
+	}
 }
 
 // Stop stops the node by first sending SIGTERM and then SIGKILL if the node
@@ -221,6 +236,20 @@ func execP2PNode() {
 		log.Crit(fmt.Sprintf("unknown node service %q", serviceName))
 	}
 
+	// use explicit IP address in ListenAddr so that Enode URL is usable
+	if strings.HasPrefix(conf.P2P.ListenAddr, ":") {
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			log.Crit("error getting IP address", "err", err)
+		}
+		for _, addr := range addrs {
+			if ip, ok := addr.(*net.IPNet); ok && !ip.IP.IsLoopback() {
+				conf.P2P.ListenAddr = ip.IP.String() + conf.P2P.ListenAddr
+				break
+			}
+		}
+	}
+
 	// start the devp2p stack
 	stack, err := node.New(&conf)
 	if err != nil {
@@ -233,6 +262,15 @@ func execP2PNode() {
 		log.Crit("error starting node", "err", err)
 	}
 
+	// use stdin / stdout for RPC to avoid the parent needing to access
+	// either the local filesystem or TCP stack (useful when running in
+	// Docker)
+	handler, err := stack.RPCHandler()
+	if err != nil {
+		log.Crit("error getting RPC server", "err", err)
+	}
+	go handler.ServeCodec(rpc.NewJSONCodec(&stdioConn{os.Stdin, os.Stdout}), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
+
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGTERM)
@@ -243,4 +281,15 @@ func execP2PNode() {
 	}()
 
 	stack.Wait()
+}
+
+// stdioConn wraps os.Stdin / os.Stdout with a nop Close method so we can
+// use them to handle RPC messages
+type stdioConn struct {
+	io.Reader
+	io.Writer
+}
+
+func (r *stdioConn) Close() error {
+	return nil
 }
