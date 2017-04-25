@@ -72,12 +72,12 @@ type DbStore struct {
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
 
-	hashfunc Hasher
+	hashfunc SwarmHasher
 
 	lock sync.Mutex
 }
 
-func NewDbStore(path string, hash Hasher, capacity uint64, radius int) (s *DbStore, err error) {
+func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *DbStore, err error) {
 	s = new(DbStore)
 
 	s.hashfunc = hash
