@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"reflect"
+	//	"reflect"
 	"runtime"
 	"time"
 
@@ -118,7 +118,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 	net := NewNetwork(simulations.NewNetwork(conf))
 
 	//ids := p2ptest.RandomNodeIds(10)
-	ids := adapters.RandomNodeIds(3)
+	ids := adapters.RandomNodeIds(10)
 
 	for i, id := range ids {
 		net.NewNode(&simulations.NodeConfig{Id: id})
@@ -144,42 +144,66 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 			// net.Stop(id)
 		}
 	}()
-	// for i, id := range ids {
-	// 	n := 3000 + i*1000
-	// 	go func() {
-	// 		for {
-	// 			// n := rand.Intn(5000)
-	// 			// n := 3000
-	// 			time.Sleep(time.Duration(n) * time.Millisecond)
-	// 			log.Debug(fmt.Sprintf("node %v shutting down", id))
-	// 			net.Stop(id)
-	// 			// n = rand.Intn(5000)
-	// 			n = 2000
-	// 			time.Sleep(time.Duration(n) * time.Millisecond)
-	// 			log.Debug(fmt.Sprintf("node %v starting up", id))
-	// 			net.Start(id)
-	// 			n = 5000
-	// 		}
-	// 	}()
-	// }
+
+	for i, id := range ids {
+		n := 3000 + i*1000
+		go func(id *adapters.NodeId) {
+			for {
+				// n := rand.Intn(5000)
+				// n := 3000
+				time.Sleep(time.Duration(n) * time.Millisecond)
+				log.Debug(fmt.Sprintf("node %v shutting down", id))
+				net.Stop(id)
+				// n = rand.Intn(5000)
+				n = 2000
+				time.Sleep(time.Duration(n) * time.Millisecond)
+				log.Debug(fmt.Sprintf("node %v starting up", id))
+				net.Start(id)
+				n = 5000
+			}
+		}(id)
+	}
+
 	nodes := simulations.NewResourceContoller(
 		&simulations.ResourceHandlers{
+			//GET /<networkId>/nodes  -- returns all nodes' kademlia table
 			Retrieve: &simulations.ResourceHandler{
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					ids := msg.([]string)
 					var results []string
 					for _, id := range ids {
-						if len(id) != 128 {
-							return nil, fmt.Errorf("Nodes controller expects 128 bytes size hex id")
-						}
-						pp := net.GetNode(adapters.NewNodeIdFromHex(id)).Adapter().(*SimNode).hive
+						pp := net.GetNode(id).Adapter().(*SimNode).hive
 						results = append(results, pp.String())
 					}
 					return results, nil
 				},
-				Type: reflect.TypeOf([]string{}), // this is input not output param structure
+				//Type: reflect.TypeOf([]string{}), // this is input not output param structure
 			},
 		})
+	for _, id := range ids {
+		idc := simulations.NewResourceContoller(
+			&simulations.ResourceHandlers{
+				//GET /<networkId>/nodes/<nodeId>  -- returns <nodeId>'s kademlia table
+				Retrieve: &simulations.ResourceHandler{
+					Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
+						nodeId, err := nodes.GetResourceIdForController(parent)
+						if err != nil {
+							return nil, fmt.Errorf("Node could not be found")
+						}
+						if len(nodeId) != 128 {
+							return nil, fmt.Errorf("Node length must be 128")
+						}
+						pp := net.GetNode(adapters.NewNodeIdFromHex(nodeId)).Adapter().(*SimNode).hive
+						if pp != nil {
+							return pp.String(), nil
+						}
+						//this shouldn't happen anymore, but just in case
+						return nil, fmt.Errorf("Node not found")
+					},
+					//Type: reflect.TypeOf([]string{}), // this is input not output param structure
+				},
+			})
+		nodes.SetResource(id.String(), idc)
+	}
 	return net, nodes
 }
 
