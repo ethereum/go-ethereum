@@ -6,19 +6,19 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 )
 
-// TODO: to implement cytoscape global behav
-type CyConfig struct {
+// TODO: to implement simulation global behav
+type SimConfig struct {
 }
 
-type CyData struct {
+type SimData struct {
 	Id     string `json:"id"`
 	Source string `json:"source,omitempty"`
 	Target string `json:"target,omitempty"`
 	Up     bool   `json:"up"`
 }
 
-type CyElement struct {
-	Data    *CyData `json:"data"`
+type SimElement struct {
+	Data    *SimData `json:"data"`
 	Classes string  `json:"classes,omitempty"`
 	Group   string  `json:"group"`
 	// selected: false, // whether the element is selected (default false)
@@ -27,19 +27,19 @@ type CyElement struct {
 	// grabbable: true, // whether the node can be grabbed and moved by the user
 }
 
-type CyUpdate struct {
-	Add     []*CyElement `json:"add"`
-	Remove  []*CyElement `json:"remove"`
-	Message []*CyElement `json:"message"`
+type SimUpdate struct {
+	Add     []*SimElement `json:"add"`
+	Remove  []*SimElement `json:"remove"`
+	Message []*SimElement `json:"message"`
 }
 
-func NewCyUpdate(e *event.TypeMuxEvent) (*CyUpdate, error) {
-	var update CyUpdate
-	var el *CyElement
+func NewSimUpdate(e *event.TypeMuxEvent) (*SimUpdate, error) {
+	var update SimUpdate
+	var el *SimElement
 	entry := e.Data
 	var action string
 	if ev, ok := entry.(*NodeEvent); ok {
-		el = &CyElement{Group: "nodes", Data: &CyData{Id: ev.node.Id.String()}}
+		el = &SimElement{Group: "nodes", Data: &SimData{Id: ev.node.Id.String()}}
 		action = ev.Action
 	} else if ev, ok := entry.(*MsgEvent); ok {
 		msg := ev.msg
@@ -47,7 +47,7 @@ func NewCyUpdate(e *event.TypeMuxEvent) (*CyUpdate, error) {
 		var source, target string
 		source = msg.One.String()
 		target = msg.Other.String()
-		el = &CyElement{Group: "msgs", Data: &CyData{Id: id, Source: source, Target: target}}
+		el = &SimElement{Group: "msgs", Data: &SimData{Id: id, Source: source, Target: target}}
 		action = ev.Action
 	} else if ev, ok := entry.(*ConnEvent); ok {
 		// mutually exclusive directed edge (caller -> callee)
@@ -61,7 +61,7 @@ func NewCyUpdate(e *event.TypeMuxEvent) (*CyUpdate, error) {
 			source = conn.One.String()
 			target = conn.Other.String()
 		}
-		el = &CyElement{Group: "edges", Data: &CyData{Id: id, Source: source, Target: target}}
+		el = &SimElement{Group: "edges", Data: &SimData{Id: id, Source: source, Target: target}}
 		action = ev.Action
 	} else {
 		return nil, fmt.Errorf("unknown event type: %T", entry)
@@ -84,10 +84,10 @@ func NewCyUpdate(e *event.TypeMuxEvent) (*CyUpdate, error) {
 	return &update, nil
 }
 
-func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
-	var update CyUpdate
+func UpdateSim(conf *SimConfig, j *Journal) (*SimUpdate, error) {
+	var update SimUpdate
 	j.Read(func(e *event.TypeMuxEvent) bool {
-		u, err := NewCyUpdate(e)
+		u, err := NewSimUpdate(e)
 		if err != nil {
 			panic(err.Error())
 		}

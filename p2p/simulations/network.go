@@ -66,7 +66,7 @@ type NetworkController struct {
 }
 
 // ServeStream subscribes to network events and sends them to the client as a
-// stream of Server-Sent-Events, with each event being a JSON encoded CyUpdate
+// stream of Server-Sent-Events, with each event being a JSON encoded SimUpdate
 // object
 func (n *NetworkController) ServeStream(w http.ResponseWriter, req *http.Request) {
 	sub := n.events.Subscribe(ConnectivityEvents...)
@@ -96,8 +96,8 @@ func (n *NetworkController) ServeStream(w http.ResponseWriter, req *http.Request
 	for {
 		select {
 		case event := <-ch:
-			// convert the event to a CyUpdate
-			update, err := NewCyUpdate(event)
+			// convert the event to a SimUpdate
+			update, err := NewSimUpdate(event)
 			if err != nil {
 				write("error", err.Error())
 				return
@@ -107,7 +107,7 @@ func (n *NetworkController) ServeStream(w http.ResponseWriter, req *http.Request
 				write("error", err.Error())
 				return
 			}
-			write("cyupdate", string(data))
+			write("simupdate", string(data))
 		case <-clientGone:
 			return
 		}
@@ -138,17 +138,17 @@ func NewNetworkController(net NetworkControl, nodesController *ResourceControlle
 			Retrieve: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 					log.Trace(fmt.Sprintf("msg: %v", msg))
-					cyConfig, ok := msg.(*CyConfig)
+					simConfig, ok := msg.(*SimConfig)
 					if ok {
-						return UpdateCy(cyConfig, journal)
+						return UpdateSim(simConfig, journal)
 					}
 					snapshotConfig, ok := msg.(*SnapshotConfig)
 					if ok {
 						return Snapshot(snapshotConfig, journal)
 					}
-					return nil, fmt.Errorf("invalid json body: must be CyConfig or SnapshotConfig")
+					return nil, fmt.Errorf("invalid json body: must be SimConfig or SnapshotConfig")
 				},
-				Type: reflect.TypeOf(&CyConfig{}),
+				Type: reflect.TypeOf(&SimConfig{}),
 			},
 			// DELETE /<networkId>/
 			Destroy: &ResourceHandler{
@@ -441,7 +441,7 @@ type NodeConfig struct {
 
 // TODO: ignored for now
 type QueryConfig struct {
-	Format string // "cy.update", "journal",
+	Format string // "sim.update", "journal",
 }
 
 type Know struct {

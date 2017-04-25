@@ -153,7 +153,7 @@ func TestUpdate(t *testing.T) {
   "remove": [],
   "message": []
 }`
-	s, _ := json.Marshal(&CyConfig{})
+	s, _ := json.Marshal(&SimConfig{})
 	resp := testResponse(t, "GET", url(port, "0"), bytes.NewReader(s))
 	if string(resp) != exp {
 		t.Fatalf("incorrect response body. got\n'%v', expected\n'%v'", string(resp), exp)
