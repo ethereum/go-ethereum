@@ -162,7 +162,9 @@ func (p *Peer) broadcast() error {
 			}
 		}
 	}
-	log.Trace("broadcast", "num. messages", cnt)
+	if cnt > 0 {
+		log.Trace("broadcast", "num. messages", cnt)
+	}
 	return nil
 }
 

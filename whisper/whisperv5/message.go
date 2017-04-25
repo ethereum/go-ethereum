@@ -100,35 +100,21 @@ func NewSentMessage(params *MessageParams) (*SentMessage, error) {
 }
 
 // getSizeOfLength returns the number of bytes necessary to encode the entire size padding (including these bytes)
-func getSizeOfLength(b []byte) (int, error) {
-	// prefer clarity over efficiency
-	var sizeOfLength int
-	len := len(b)
-
-	// first iteration
-	if len < 256 {
-		sizeOfLength = 1
-	} else if len < 256*256 {
-		sizeOfLength = 2
-	} else if len < 256*256*256 {
-		sizeOfLength = 3
-	} else {
-		return 0, errors.New("oversized padding parameter")
+func getSizeOfLength(b []byte) (sz int, err error) {
+	sz = intSize(len(b))      // first iteration
+	sz = intSize(len(b) + sz) // second iteration
+	if sz > 3 {
+		err = errors.New("oversized padding parameter")
 	}
+	return sz, err
+}
 
-	// second iteration
-	total := len + sizeOfLength
-	if total < 256 {
-		sizeOfLength = 1
-	} else if total < 256*256 {
-		sizeOfLength = 2
-	} else if total < 256*256*256 {
-		sizeOfLength = 3
-	} else {
-		return 0, errors.New("oversized padding parameter")
+// sizeOfIntSize returns minimal number of bytes necessary to encode an integer value
+func intSize(i int) (s int) {
+	for s = 1; i >= 256; s++ {
+		i /= 256
 	}
-
-	return sizeOfLength, nil
+	return s
 }
 
 // appendPadding appends the pseudorandom padding bytes and sets the padding flag.

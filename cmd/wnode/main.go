@@ -308,7 +308,11 @@ func configureNode() {
 	if *asymmetricMode {
 		if len(*argPub) == 0 {
 			s := scanLine("Please enter the peer's public key: ")
-			pub = crypto.ToECDSAPub(common.FromHex(s))
+			b := common.FromHex(s)
+			if b == nil {
+				utils.Fatalf("Error: can not convert hexadecimal string")
+			}
+			pub = crypto.ToECDSAPub(b)
 			if !isKeyValid(pub) {
 				utils.Fatalf("Error: invalid public key")
 			}

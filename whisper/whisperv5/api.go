@@ -214,7 +214,6 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 	}
 
 	filter := Filter{
-		Src:      crypto.ToECDSAPub(common.FromHex(args.SignedWith)),
 		PoW:      args.MinPoW,
 		Messages: make(map[common.Hash]*ReceivedMessage),
 		AllowP2P: args.AllowP2P,
@@ -233,6 +232,11 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 	}
 
 	if len(args.SignedWith) > 0 {
+		sb := common.FromHex(args.SignedWith)
+		if sb == nil {
+			return "", errors.New("subscribe: SignedWith parameter is invalid")
+		}
+		filter.Src = crypto.ToECDSAPub(sb)
 		if !ValidatePublicKey(filter.Src) {
 			return "", errors.New("subscribe: invalid 'SignedWith' field")
 		}
@@ -346,7 +350,11 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 			return errors.New("post: topic is missing for symmetric encryption")
 		}
 	} else if args.Type == "asym" {
-		params.Dst = crypto.ToECDSAPub(common.FromHex(args.Key))
+		kb := common.FromHex(args.Key)
+		if kb == nil {
+			return errors.New("post: public key for asymmetric encryption is invalid")
+		}
+		params.Dst = crypto.ToECDSAPub(kb)
 		if !ValidatePublicKey(params.Dst) {
 			return errors.New("post: public key for asymmetric encryption is invalid")
 		}
