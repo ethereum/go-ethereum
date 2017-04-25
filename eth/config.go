@@ -72,7 +72,7 @@ type Config struct {
 	Genesis *core.Genesis `toml:",omitempty"`
 
 	// Protocol options
-	NetworkId int // Network ID to use for selecting peers to connect to
+	NetworkId uint64 // Network ID to use for selecting peers to connect to
 	SyncMode  downloader.SyncMode
 
 	// Light client options

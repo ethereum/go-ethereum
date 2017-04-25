@@ -148,7 +148,7 @@ var (
 		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
 		Value: eth.DefaultConfig.EthashDatasetsOnDisk,
 	}
-	NetworkIdFlag = cli.IntFlag{
+	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten)",
 		Value: eth.DefaultConfig.NetworkId,
@@ -806,7 +806,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.LightPeers = ctx.GlobalInt(LightPeersFlag.Name)
 	}
 	if ctx.GlobalIsSet(NetworkIdFlag.Name) {
-		cfg.NetworkId = ctx.GlobalInt(NetworkIdFlag.Name)
+		cfg.NetworkId = ctx.GlobalUint64(NetworkIdFlag.Name)
 	}
 
 	// Ethereum needs to know maxPeers to calculate the light server peer ratio.

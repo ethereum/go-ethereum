@@ -80,7 +80,7 @@ type Ethereum struct {
 	MinerThreads int
 	etherbase    common.Address
 
-	netVersionId  int
+	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 }
 
@@ -118,7 +118,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
-		netVersionId:   config.NetworkId,
+		networkId:      config.NetworkId,
 		etherbase:      config.Etherbase,
 		MinerThreads:   config.MinerThreads,
 	}
@@ -347,7 +347,7 @@ func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
-func (s *Ethereum) NetVersion() int                    { return s.netVersionId }
+func (s *Ethereum) NetVersion() uint64                 { return s.networkId }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
 // Protocols implements node.Service, returning all the currently configured

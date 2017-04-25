@@ -1435,11 +1435,11 @@ func (api *PrivateDebugAPI) SetHead(number hexutil.Uint64) {
 // PublicNetAPI offers network related RPC methods
 type PublicNetAPI struct {
 	net            *p2p.Server
-	networkVersion int
+	networkVersion uint64
 }
 
 // NewPublicNetAPI creates a new net API instance.
-func NewPublicNetAPI(net *p2p.Server, networkVersion int) *PublicNetAPI {
+func NewPublicNetAPI(net *p2p.Server, networkVersion uint64) *PublicNetAPI {
 	return &PublicNetAPI{net, networkVersion}
 }
 

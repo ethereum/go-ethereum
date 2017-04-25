@@ -61,7 +61,7 @@ type LightEthereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
-	netVersionId  int
+	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 }
 
@@ -87,7 +87,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		accountManager: ctx.AccountManager,
 		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
-		netVersionId:   config.NetworkId,
+		networkId:      config.NetworkId,
 	}
 	if eth.blockchain, err = light.NewLightChain(odr, eth.chainConfig, eth.engine, eth.eventMux); err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 // Ethereum protocol implementation.
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
-	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.netVersionId)
+	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
 	s.protocolManager.Start(srvr)
 	return nil
 }

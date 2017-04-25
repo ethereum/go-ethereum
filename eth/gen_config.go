@@ -15,7 +15,7 @@ import (
 func (c Config) MarshalTOML() (interface{}, error) {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
-		NetworkId               int
+		NetworkId               uint64
 		SyncMode                downloader.SyncMode
 		LightServ               int  `toml:",omitempty"`
 		LightPeers              int  `toml:",omitempty"`
@@ -72,7 +72,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	type Config struct {
 		Genesis                 *core.Genesis `toml:",omitempty"`
-		NetworkId               *int
+		NetworkId               *uint64
 		SyncMode                *downloader.SyncMode
 		LightServ               *int  `toml:",omitempty"`
 		LightPeers              *int  `toml:",omitempty"`
