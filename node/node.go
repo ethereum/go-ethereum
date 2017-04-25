@@ -536,6 +536,7 @@ func (n *Node) Stop() error {
 func (n *Node) Wait() {
 	n.lock.RLock()
 	if n.server == nil {
+		n.lock.RUnlock()
 		return
 	}
 	stop := n.stop
