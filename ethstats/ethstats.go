@@ -323,10 +323,10 @@ func (s *Service) login(conn *websocket.Conn) error {
 
 	var network, protocol string
 	if info := infos.Protocols["eth"]; info != nil {
-		network = strconv.Itoa(info.(*eth.EthNodeInfo).Network)
+		network = fmt.Sprintf("%d", info.(*eth.EthNodeInfo).Network)
 		protocol = fmt.Sprintf("eth/%d", eth.ProtocolVersions[0])
 	} else {
-		network = strconv.Itoa(infos.Protocols["les"].(*eth.EthNodeInfo).Network)
+		network = fmt.Sprintf("%d", infos.Protocols["les"].(*eth.EthNodeInfo).Network)
 		protocol = fmt.Sprintf("les/%d", les.ProtocolVersions[0])
 	}
 	auth := &authMsg{

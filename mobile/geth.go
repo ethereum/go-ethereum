@@ -54,7 +54,7 @@ type NodeConfig struct {
 
 	// EthereumNetworkID is the network identifier used by the Ethereum protocol to
 	// decide if remote peers should be accepted or not.
-	EthereumNetworkID int
+	EthereumNetworkID int64 // uint64 in truth, but Java can't handle that...
 
 	// EthereumGenesis is the genesis JSON to use to seed the blockchain with. An
 	// empty genesis state is equivalent to using the mainnet's state.
@@ -148,7 +148,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		ethConf := eth.DefaultConfig
 		ethConf.Genesis = genesis
 		ethConf.SyncMode = downloader.LightSync
-		ethConf.NetworkId = config.EthereumNetworkID
+		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, &ethConf)

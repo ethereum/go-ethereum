@@ -173,7 +173,7 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesis common.Hash) {
 	msg := &statusData{
 		ProtocolVersion: uint32(p.version),
-		NetworkId:       uint32(DefaultConfig.NetworkId),
+		NetworkId:       DefaultConfig.NetworkId,
 		TD:              td,
 		CurrentBlock:    head,
 		GenesisBlock:    genesis,
