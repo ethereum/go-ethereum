@@ -38,7 +38,7 @@ import (
 // absence of the key.
 func (t *Trie) Prove(key []byte) []rlp.RawValue {
 	// Collect all nodes on the path to key.
-	key = compactHexDecode(key)
+	key = keybytesToHex(key)
 	nodes := []node{}
 	tn := t.root
 	for len(key) > 0 && tn != nil {
@@ -89,7 +89,7 @@ func (t *Trie) Prove(key []byte) []rlp.RawValue {
 // returns an error if the proof contains invalid trie nodes or the
 // wrong value.
 func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value []byte, err error) {
-	key = compactHexDecode(key)
+	key = keybytesToHex(key)
 	sha := sha3.NewKeccak256()
 	wantHash := rootHash.Bytes()
 	for i, buf := range proof {

@@ -439,7 +439,7 @@ func runRandTest(rt randTest) bool {
 			tr = newtr
 		case opItercheckhash:
 			checktr, _ := New(common.Hash{}, nil)
-			it := tr.Iterator()
+			it := NewIterator(tr.NodeIterator(nil))
 			for it.Next() {
 				checktr.Update(it.Key, it.Value)
 			}

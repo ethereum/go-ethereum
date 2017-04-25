@@ -296,6 +296,17 @@ func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	return common.Hash{}
 }
 
+// StorageTrie returns the storage trie of an account.
+// The return value is a copy and is nil for non-existent accounts.
+func (self *StateDB) StorageTrie(a common.Address) *trie.SecureTrie {
+	stateObject := self.getStateObject(a)
+	if stateObject == nil {
+		return nil
+	}
+	cpy := stateObject.deepCopy(self, nil)
+	return cpy.updateTrie(self.db)
+}
+
 func (self *StateDB) HasSuicided(addr common.Address) bool {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -481,7 +492,7 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 		cb(h, value)
 	}
 
-	it := so.getTrie(db.db).Iterator()
+	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
 	for it.Next() {
 		// ignore cached values
 		key := common.BytesToHash(db.trie.GetKey(it.Key))

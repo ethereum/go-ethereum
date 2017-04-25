@@ -139,8 +139,8 @@ func decodeShort(hash, buf, elems []byte, cachegen uint16) (node, error) {
 		return nil, err
 	}
 	flag := nodeFlag{hash: hash, gen: cachegen}
-	key := compactDecode(kbuf)
-	if key[len(key)-1] == 16 {
+	key := compactToHex(kbuf)
+	if hasTerm(key) {
 		// value node
 		val, _, err := rlp.SplitString(rest)
 		if err != nil {

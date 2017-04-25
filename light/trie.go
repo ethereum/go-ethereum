@@ -19,6 +19,7 @@ package light
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -46,25 +47,17 @@ func NewLightTrie(id *TrieID, odr OdrBackend, useFakeMap bool) *LightTrie {
 // retrieveKey retrieves a single key, returns true and stores nodes in local
 // database if successful
 func (t *LightTrie) retrieveKey(ctx context.Context, key []byte) bool {
-	r := &TrieRequest{Id: t.id, Key: key}
+	r := &TrieRequest{Id: t.id, Key: crypto.Keccak256(key)}
 	return t.odr.Retrieve(ctx, r) == nil
 }
 
 // do tries and retries to execute a function until it returns with no error or
 // an error type other than MissingNodeError
-func (t *LightTrie) do(ctx context.Context, fallbackKey []byte, fn func() error) error {
+func (t *LightTrie) do(ctx context.Context, key []byte, fn func() error) error {
 	err := fn()
 	for err != nil {
-		mn, ok := err.(*trie.MissingNodeError)
-		if !ok {
+		if _, ok := err.(*trie.MissingNodeError); !ok {
 			return err
-		}
-
-		var key []byte
-		if mn.PrefixLen+mn.SuffixLen > 0 {
-			key = mn.Key
-		} else {
-			key = fallbackKey
 		}
 		if !t.retrieveKey(ctx, key) {
 			break

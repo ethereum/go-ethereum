@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -41,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const defaultTraceTimeout = 5 * time.Second
@@ -526,59 +526,67 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, txHash common.
 	if tx == nil {
 		return nil, fmt.Errorf("transaction %x not found", txHash)
 	}
-	block := api.eth.BlockChain().GetBlockByHash(blockHash)
-	if block == nil {
-		return nil, fmt.Errorf("block %x not found", blockHash)
-	}
-	// Create the state database to mutate and eventually trace
-	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
-	if parent == nil {
-		return nil, fmt.Errorf("block parent %x not found", block.ParentHash())
-	}
-	stateDb, err := api.eth.BlockChain().StateAt(parent.Root())
+	msg, context, statedb, err := api.computeTxEnv(blockHash, int(txIndex))
 	if err != nil {
 		return nil, err
 	}
 
-	signer := types.MakeSigner(api.config, block.Number())
-	// Mutate the state and trace the selected transaction
-	for idx, tx := range block.Transactions() {
-		// Assemble the transaction call message
-		msg, err := tx.AsMessage(signer)
-		if err != nil {
-			return nil, fmt.Errorf("sender retrieval failed: %v", err)
-		}
-		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain(), nil)
-
-		// Mutate the state if we haven't reached the tracing transaction yet
-		if uint64(idx) < txIndex {
-			vmenv := vm.NewEVM(context, stateDb, api.config, vm.Config{})
-			_, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
-			if err != nil {
-				return nil, fmt.Errorf("mutation failed: %v", err)
-			}
-			stateDb.DeleteSuicides()
-			continue
-		}
-
-		vmenv := vm.NewEVM(context, stateDb, api.config, vm.Config{Debug: true, Tracer: tracer})
-		ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
-		if err != nil {
-			return nil, fmt.Errorf("tracing failed: %v", err)
-		}
-
-		switch tracer := tracer.(type) {
-		case *vm.StructLogger:
-			return &ethapi.ExecutionResult{
-				Gas:         gas,
-				ReturnValue: fmt.Sprintf("%x", ret),
-				StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
-			}, nil
-		case *ethapi.JavascriptTracer:
-			return tracer.GetResult()
-		}
+	// Run the transaction with tracing enabled.
+	vmenv := vm.NewEVM(context, statedb, api.config, vm.Config{Debug: true, Tracer: tracer})
+	ret, gas, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()))
+	if err != nil {
+		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
-	return nil, errors.New("database inconsistency")
+	switch tracer := tracer.(type) {
+	case *vm.StructLogger:
+		return &ethapi.ExecutionResult{
+			Gas:         gas,
+			ReturnValue: fmt.Sprintf("%x", ret),
+			StructLogs:  ethapi.FormatLogs(tracer.StructLogs()),
+		}, nil
+	case *ethapi.JavascriptTracer:
+		return tracer.GetResult()
+	default:
+		panic(fmt.Sprintf("bad tracer type %T", tracer))
+	}
+}
+
+// computeTxEnv returns the execution environment of a certain transaction.
+func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int) (core.Message, vm.Context, *state.StateDB, error) {
+	// Create the parent state.
+	block := api.eth.BlockChain().GetBlockByHash(blockHash)
+	if block == nil {
+		return nil, vm.Context{}, nil, fmt.Errorf("block %x not found", blockHash)
+	}
+	parent := api.eth.BlockChain().GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return nil, vm.Context{}, nil, fmt.Errorf("block parent %x not found", block.ParentHash())
+	}
+	statedb, err := api.eth.BlockChain().StateAt(parent.Root())
+	if err != nil {
+		return nil, vm.Context{}, nil, err
+	}
+	txs := block.Transactions()
+
+	// Recompute transactions up to the target index.
+	signer := types.MakeSigner(api.config, block.Number())
+	for idx, tx := range txs {
+		// Assemble the transaction call message
+		msg, _ := tx.AsMessage(signer)
+		context := core.NewEVMContext(msg, block.Header(), api.eth.BlockChain(), nil)
+		if idx == txIndex {
+			return msg, context, statedb, nil
+		}
+
+		vmenv := vm.NewEVM(context, statedb, api.config, vm.Config{})
+		gp := new(core.GasPool).AddGas(tx.Gas())
+		_, _, err := core.ApplyMessage(vmenv, msg, gp)
+		if err != nil {
+			return nil, vm.Context{}, nil, fmt.Errorf("tx %x failed: %v", tx.Hash(), err)
+		}
+		statedb.DeleteSuicides()
+	}
+	return nil, vm.Context{}, nil, fmt.Errorf("tx index %d out of range for block %x", txIndex, blockHash)
 }
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
@@ -591,4 +599,49 @@ func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hex
 // and returns them as a JSON list of block-hashes
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]core.BadBlockArgs, error) {
 	return api.eth.BlockChain().BadBlocks()
+}
+
+// StorageRangeResult is the result of a debug_storageRangeAt API call.
+type StorageRangeResult struct {
+	Storage storageMap   `json:"storage"`
+	NextKey *common.Hash `json:"nextKey"` // nil if Storage includes the last key in the trie.
+}
+
+type storageMap map[common.Hash]storageEntry
+
+type storageEntry struct {
+	Key   *common.Hash `json:"key"`
+	Value common.Hash  `json:"value"`
+}
+
+// StorageRangeAt returns the storage at the given block height and transaction index.
+func (api *PrivateDebugAPI) StorageRangeAt(ctx context.Context, blockHash common.Hash, txIndex int, contractAddress common.Address, keyStart hexutil.Bytes, maxResult int) (StorageRangeResult, error) {
+	_, _, statedb, err := api.computeTxEnv(blockHash, txIndex)
+	if err != nil {
+		return StorageRangeResult{}, err
+	}
+	st := statedb.StorageTrie(contractAddress)
+	if st == nil {
+		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
+	}
+	return storageRangeAt(st, keyStart, maxResult), nil
+}
+
+func storageRangeAt(st *trie.SecureTrie, start []byte, maxResult int) StorageRangeResult {
+	it := trie.NewIterator(st.NodeIterator(start))
+	result := StorageRangeResult{Storage: storageMap{}}
+	for i := 0; i < maxResult && it.Next(); i++ {
+		e := storageEntry{Value: common.BytesToHash(it.Value)}
+		if preimage := st.GetKey(it.Key); preimage != nil {
+			preimage := common.BytesToHash(preimage)
+			e.Key = &preimage
+		}
+		result.Storage[common.BytesToHash(it.Key)] = e
+	}
+	// Add the 'next key' so clients can continue downloading.
+	if it.Next() {
+		next := common.BytesToHash(it.Key)
+		result.NextKey = &next
+	}
+	return result
 }

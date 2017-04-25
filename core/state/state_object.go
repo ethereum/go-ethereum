@@ -201,7 +201,7 @@ func (self *stateObject) setState(key, value common.Hash) {
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
-func (self *stateObject) updateTrie(db trie.Database) {
+func (self *stateObject) updateTrie(db trie.Database) *trie.SecureTrie {
 	tr := self.getTrie(db)
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
@@ -213,6 +213,7 @@ func (self *stateObject) updateTrie(db trie.Database) {
 		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
 		tr.Update(key[:], v)
 	}
+	return tr
 }
 
 // UpdateRoot sets the trie root to the current root hash of
@@ -280,7 +281,11 @@ func (c *stateObject) ReturnGas(gas *big.Int) {}
 
 func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)) *stateObject {
 	stateObject := newObject(db, self.address, self.data, onDirty)
-	stateObject.trie = self.trie
+	if self.trie != nil {
+		// A shallow copy makes the two tries independent.
+		cpy := *self.trie
+		stateObject.trie = &cpy
+	}
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
