@@ -185,14 +185,7 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 				//GET /<networkId>/nodes/<nodeId>  -- returns <nodeId>'s kademlia table
 				Retrieve: &simulations.ResourceHandler{
 					Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-						nodeId, err := nodes.GetResourceIdForController(parent)
-						if err != nil {
-							return nil, fmt.Errorf("Node could not be found")
-						}
-						if len(nodeId) != 128 {
-							return nil, fmt.Errorf("Node length must be 128")
-						}
-						pp := net.GetNode(adapters.NewNodeIdFromHex(nodeId)).Adapter().(*SimNode).hive
+						pp := net.GetNode(id).Adapter().(*SimNode).hive
 						if pp != nil {
 							return pp.String(), nil
 						}

@@ -173,17 +173,6 @@ func (self *ResourceController) SetResource(id string, c Controller) {
 	}
 }
 
-func (self *ResourceController) GetResourceIdForController(controller Controller) (string, error) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	for id, c := range self.controllers {
-		if c == controller {
-			return id, nil
-		}
-	}
-	return "", fmt.Errorf("Id for Controller not found")
-}
-
 func (self *ResourceController) DeleteResource(id string) {
 	delete(self.controllers, id)
 }
