@@ -58,15 +58,19 @@ func TestDBKey(t *testing.T) {
 }
 
 func generateEnvelope(t *testing.T) *whisper.Envelope {
+	h := crypto.Keccak256Hash([]byte("test sample data"))
 	params := &whisper.MessageParams{
-		KeySym:   []byte("test key"),
+		KeySym:   h[:],
 		Topic:    whisper.TopicType{},
 		Payload:  []byte("test payload"),
 		PoW:      powRequirement,
 		WorkTime: 2,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)
@@ -188,7 +192,10 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 		Src:      p.key,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)

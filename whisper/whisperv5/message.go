@@ -23,14 +23,14 @@ import (
 	"crypto/cipher"
 	"crypto/ecdsa"
 	crand "crypto/rand"
-	"crypto/sha256"
+	"encoding/binary"
 	"errors"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/log"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 // Options specifies the exact way a message should be wrapped into an Envelope.
@@ -86,58 +86,76 @@ func (msg *ReceivedMessage) isAsymmetricEncryption() bool {
 	return msg.Dst != nil
 }
 
-func DeriveOneTimeKey(key []byte, salt []byte, version uint64) ([]byte, error) {
-	if version == 0 {
-		derivedKey := pbkdf2.Key(key, salt, 8, aesKeyLength, sha256.New)
-		return derivedKey, nil
-	} else {
-		return nil, unknownVersionError(version)
-	}
-}
-
 // NewMessage creates and initializes a non-signed, non-encrypted Whisper message.
-func NewSentMessage(params *MessageParams) *SentMessage {
+func NewSentMessage(params *MessageParams) (*SentMessage, error) {
 	msg := SentMessage{}
-	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Payload)+signatureLength+padSizeLimitUpper)
+	msg.Raw = make([]byte, 1, len(params.Payload)+len(params.Padding)+signatureLength+padSizeLimit)
 	msg.Raw[0] = 0 // set all the flags to zero
 	err := msg.appendPadding(params)
 	if err != nil {
-		log.Error("failed to create NewSentMessage", "err", err)
-		return nil
+		return nil, err
 	}
 	msg.Raw = append(msg.Raw, params.Payload...)
-	return &msg
+	return &msg, nil
+}
+
+// getSizeOfLength returns the number of bytes necessary to encode the entire size padding (including these bytes)
+func getSizeOfLength(b []byte) (sz int, err error) {
+	sz = intSize(len(b))      // first iteration
+	sz = intSize(len(b) + sz) // second iteration
+	if sz > 3 {
+		err = errors.New("oversized padding parameter")
+	}
+	return sz, err
+}
+
+// sizeOfIntSize returns minimal number of bytes necessary to encode an integer value
+func intSize(i int) (s int) {
+	for s = 1; i >= 256; s++ {
+		i /= 256
+	}
+	return s
 }
 
 // appendPadding appends the pseudorandom padding bytes and sets the padding flag.
 // The last byte contains the size of padding (thus, its size must not exceed 256).
 func (msg *SentMessage) appendPadding(params *MessageParams) error {
-	total := len(params.Payload) + 1
+	rawSize := len(params.Payload) + 1
 	if params.Src != nil {
-		total += signatureLength
+		rawSize += signatureLength
 	}
-	padChunk := padSizeLimitUpper
-	if total <= padSizeLimitLower {
-		padChunk = padSizeLimitLower
-	}
-	odd := total % padChunk
-	if odd > 0 {
-		padSize := padChunk - odd
-		if padSize > 255 {
-			// this algorithm is only valid if padSizeLimitUpper <= 256.
-			// if padSizeLimitUpper will ever change, please fix the algorithm
-			// (for more information see ReceivedMessage.extractPadding() function).
+	odd := rawSize % padSizeLimit
+
+	if len(params.Padding) != 0 {
+		padSize := len(params.Padding)
+		padLengthSize, err := getSizeOfLength(params.Padding)
+		if err != nil {
+			return err
+		}
+		totalPadSize := padSize + padLengthSize
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint32(buf, uint32(totalPadSize))
+		buf = buf[:padLengthSize]
+		msg.Raw = append(msg.Raw, buf...)
+		msg.Raw = append(msg.Raw, params.Padding...)
+		msg.Raw[0] |= byte(padLengthSize) // number of bytes indicating the padding size
+	} else if odd != 0 {
+		totalPadSize := padSizeLimit - odd
+		if totalPadSize > 255 {
+			// this algorithm is only valid if padSizeLimit < 256.
+			// if padSizeLimit will ever change, please fix the algorithm
+			// (please see also ReceivedMessage.extractPadding() function).
 			panic("please fix the padding algorithm before releasing new version")
 		}
-		buf := make([]byte, padSize)
+		buf := make([]byte, totalPadSize)
 		_, err := crand.Read(buf[1:])
 		if err != nil {
 			return err
 		}
-		buf[0] = byte(padSize)
-		if params.Padding != nil {
-			copy(buf[1:], params.Padding)
+		if totalPadSize > 6 && !validateSymmetricKey(buf) {
+			return errors.New("failed to generate random padding of size " + strconv.Itoa(totalPadSize))
 		}
+		buf[0] = byte(totalPadSize)
 		msg.Raw = append(msg.Raw, buf...)
 		msg.Raw[0] |= byte(0x1) // number of bytes indicating the padding size
 	}
@@ -178,46 +196,31 @@ func (msg *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 
 // encryptSymmetric encrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
-func (msg *SentMessage) encryptSymmetric(key []byte) (salt []byte, nonce []byte, err error) {
+func (msg *SentMessage) encryptSymmetric(key []byte) (nonce []byte, err error) {
 	if !validateSymmetricKey(key) {
-		return nil, nil, errors.New("invalid key provided for symmetric encryption")
+		return nil, errors.New("invalid key provided for symmetric encryption")
 	}
 
-	salt = make([]byte, saltLength)
-	_, err = crand.Read(salt)
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, nil, err
-	} else if !validateSymmetricKey(salt) {
-		return nil, nil, errors.New("crypto/rand failed to generate salt")
-	}
-
-	derivedKey, err := DeriveOneTimeKey(key, salt, EnvelopeVersion)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !validateSymmetricKey(derivedKey) {
-		return nil, nil, errors.New("failed to derive one-time key")
-	}
-	block, err := aes.NewCipher(derivedKey)
-	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	aesgcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// never use more than 2^32 random nonces with a given key
 	nonce = make([]byte, aesgcm.NonceSize())
 	_, err = crand.Read(nonce)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	} else if !validateSymmetricKey(nonce) {
-		return nil, nil, errors.New("crypto/rand failed to generate nonce")
+		return nil, errors.New("crypto/rand failed to generate nonce")
 	}
 
 	msg.Raw = aesgcm.Seal(nil, nonce, msg.Raw, nil)
-	return salt, nonce, nil
+	return nonce, nil
 }
 
 // Wrap bundles the message into an Envelope to transmit over the network.
@@ -231,11 +234,11 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 			return nil, err
 		}
 	}
-	var salt, nonce []byte
+	var nonce []byte
 	if options.Dst != nil {
 		err = msg.encryptAsymmetric(options.Dst)
 	} else if options.KeySym != nil {
-		salt, nonce, err = msg.encryptSymmetric(options.KeySym)
+		nonce, err = msg.encryptSymmetric(options.KeySym)
 	} else {
 		err = errors.New("unable to encrypt the message: neither symmetric nor assymmetric key provided")
 	}
@@ -244,7 +247,7 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 		return nil, err
 	}
 
-	envelope = NewEnvelope(options.TTL, options.Topic, salt, nonce, msg)
+	envelope = NewEnvelope(options.TTL, options.Topic, nonce, msg)
 	err = envelope.Seal(options)
 	if err != nil {
 		return nil, err
@@ -254,13 +257,8 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 
 // decryptSymmetric decrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
-func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []byte) error {
-	derivedKey, err := DeriveOneTimeKey(key, salt, msg.EnvelopeVersion)
-	if err != nil {
-		return err
-	}
-
-	block, err := aes.NewCipher(derivedKey)
+func (msg *ReceivedMessage) decryptSymmetric(key []byte, nonce []byte) error {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return err
 	}
@@ -323,7 +321,8 @@ func (msg *ReceivedMessage) Validate() bool {
 // can be successfully decrypted.
 func (msg *ReceivedMessage) extractPadding(end int) (int, bool) {
 	paddingSize := 0
-	sz := int(msg.Raw[0] & paddingMask) // number of bytes containing the entire size of padding, could be zero
+	sz := int(msg.Raw[0] & paddingMask) // number of bytes indicating the entire size of padding (including these bytes)
+	// could be zero -- it means no padding
 	if sz != 0 {
 		paddingSize = int(bytesToUintLittleEndian(msg.Raw[1 : 1+sz]))
 		if paddingSize < sz || paddingSize+1 > end {

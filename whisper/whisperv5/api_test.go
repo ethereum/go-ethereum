@@ -43,7 +43,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("wrong version: %d.", ver)
 	}
 
-	mail := api.GetSubscriptionMessages("non-existent-id")
+	mail := api.GetNewSubscriptionMessages("non-existent-id")
 	if len(mail) != 0 {
 		t.Fatalf("failed GetFilterChanges: premature result")
 	}
@@ -282,7 +282,7 @@ func waitForMessages(api *PublicWhisperAPI, id string, target int) []*WhisperMes
 	// timeout: 2 seconds
 	result := make([]*WhisperMessage, 0, target)
 	for i := 0; i < 100; i++ {
-		mail := api.GetSubscriptionMessages(id)
+		mail := api.GetNewSubscriptionMessages(id)
 		if len(mail) > 0 {
 			for _, m := range mail {
 				result = append(result, m)
@@ -448,7 +448,7 @@ func TestIntegrationSym(t *testing.T) {
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
-	f.MinPoW = 0.324
+	f.MinPoW = DefaultMinimumPoW / 2
 	f.SignedWith = sigPubKey.String()
 	f.AllowP2P = false
 
@@ -546,7 +546,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
-	f.MinPoW = 0.324
+	f.MinPoW = DefaultMinimumPoW / 2
 	f.SignedWith = sigPubKey.String()
 	f.AllowP2P = false
 
