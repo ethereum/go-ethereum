@@ -274,7 +274,7 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			} else {
-				work.state.Commit(self.config.IsEIP158(block.Number()))
+				work.state.CommitTo(self.chainDb, self.config.IsEIP158(block.Number()))
 				stat, err := self.chain.WriteBlock(block)
 				if err != nil {
 					log.Error("Failed writing block to chain", "err", err)

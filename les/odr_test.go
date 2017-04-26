@@ -79,7 +79,7 @@ func odrAccounts(ctx context.Context, db ethdb.Database, config *params.ChainCon
 	for _, addr := range acc {
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			st, err := state.New(header.Root, db)
+			st, err := state.New(header.Root, state.NewDatabase(db))
 			if err == nil {
 				bal := st.GetBalance(addr)
 				rlp, _ := rlp.EncodeToBytes(bal)
@@ -115,7 +115,7 @@ func odrContractCall(ctx context.Context, db ethdb.Database, config *params.Chai
 		data[35] = byte(i)
 		if bc != nil {
 			header := bc.GetHeaderByHash(bhash)
-			statedb, err := state.New(header.Root, db)
+			statedb, err := state.New(header.Root, state.NewDatabase(db))
 
 			if err == nil {
 				from := statedb.GetOrNewStateObject(testBankAddress)

@@ -31,7 +31,7 @@ import (
 
 func makeTestState() (common.Hash, ethdb.Database) {
 	sdb, _ := ethdb.NewMemDatabase()
-	st, _ := state.New(common.Hash{}, sdb)
+	st, _ := state.New(common.Hash{}, state.NewDatabase(sdb))
 	for i := byte(0); i < 100; i++ {
 		addr := common.Address{i}
 		for j := byte(0); j < 100; j++ {
@@ -41,7 +41,7 @@ func makeTestState() (common.Hash, ethdb.Database) {
 		st.AddBalance(addr, big.NewInt(int64(i)))
 		st.SetCode(addr, []byte{i, i, i})
 	}
-	root, _ := st.Commit(false)
+	root, _ := st.CommitTo(sdb, false)
 	return root, sdb
 }
 

@@ -41,7 +41,7 @@ type Dump struct {
 
 func (self *StateDB) RawDump() Dump {
 	dump := Dump{
-		Root:     common.Bytes2Hex(self.trie.Root()),
+		Root:     fmt.Sprintf("%x", self.trie.Hash()),
 		Accounts: make(map[string]DumpAccount),
 	}
 
