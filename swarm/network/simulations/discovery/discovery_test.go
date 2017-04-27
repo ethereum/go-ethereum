@@ -13,7 +13,6 @@ import (
 	p2pnode "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -246,15 +245,7 @@ func (n *node) APIs() []rpc.API {
 }
 
 func (n *node) Start(server p2p.Server) error {
-	connectPeer := func(url string) error {
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			return fmt.Errorf("invalid node URL: %v", err)
-		}
-		server.AddPeer(node)
-		return nil
-	}
-	return n.Hive.Start(connectPeer, n.hiveKeepAlive)
+	return n.Hive.Start(server, n.hiveKeepAlive)
 }
 
 func (n *node) Stop() error {

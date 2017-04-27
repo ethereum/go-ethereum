@@ -50,15 +50,7 @@ func af() <-chan time.Time {
 // Start() starts up the hive
 // makes SimNode implement node.Service
 func (self *SimNode) Start(server p2p.Server) error {
-	connectPeer := func(url string) error {
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			return fmt.Errorf("invalid node URL: %v", err)
-		}
-		server.AddPeer(node)
-		return nil
-	}
-	return self.hive.Start(connectPeer, af)
+	return self.hive.Start(server, af)
 }
 
 // Stop() shuts down the hive

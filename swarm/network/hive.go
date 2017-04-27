@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -92,7 +93,7 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 // af() returns an arbitrary ticker channel
-func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Time) error {
+func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time) error {
 
 	self.toggle = make(chan bool)
 	self.more = make(chan bool, 1)
@@ -113,9 +114,11 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 
 			if addr != nil {
 				log.Info(fmt.Sprintf("========> connect to bee %v", addr))
-				err := connectPeer(NodeId(addr).NodeID.String())
-				if err != nil {
-					log.Error(fmt.Sprintf("===X====> connect to bee %v failed: %v", addr, err))
+				node, err := discover.ParseNode(NodeId(addr).NodeID.String())
+				if err == nil {
+					server.AddPeer(node)
+				} else {
+					log.Error(fmt.Sprintf("===X====> connect to bee %v failed: invalid node URL: %v", addr, err))
 				}
 			} else {
 				log.Trace("cannot suggest peers")
