@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -285,8 +286,7 @@ func (self *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error)
 // * read is on demand, blocking unless history channel is read
 // * closes the channel once iteration finishes
 func (self *syncer) syncHistory(state *syncState) chan interface{} {
-	var roundCnt, stateCnt, totalCnt uint
-	var quit, wait bool
+	var roundCnt, roundsCnt, totalCnt uint
 	history := make(chan interface{}, historyBufferSize)
 
 	go func() {
@@ -294,19 +294,27 @@ func (self *syncer) syncHistory(state *syncState) chan interface{} {
 		defer close(history)
 		last := state.Last
 		since := state.Since
+		var prevKey storage.Key
 		for {
-			log.Debug(fmt.Sprintf("syncer[%v]: syncing history since %v for chunks of proximity order %v", self.key.Log(), since, state.PO))
+			var quit, wait bool
+			roundsCnt++
+			log.Debug(fmt.Sprintf("syncer[%v]: syncing history range %v-%v PO%03d, round %v, total: %v", self.key.Log(), since, state.SessionAt, state.PO, roundsCnt, totalCnt))
 			err := self.dbAccess.iterator(since, state.SessionAt, state.PO, func(key storage.Key, idx uint64) bool {
 				select {
 				// if history channel cannot be written to, we fall through to default
 				// and release the iterator
 				// last is not set to idx so the lost key will be retrieved in the next
-				// batch given Since is set to last
+				// batch given Since is set to last + 1
 				case history <- key:
 					roundCnt++
-					stateCnt++
 					totalCnt++
 					last = idx
+					log.Trace(fmt.Sprintf("key: %v, round %v, cnt: %v, total: %v", key, roundsCnt, roundCnt, totalCnt))
+					if bytes.Equal(key[:], prevKey[:]) {
+						log.Trace(fmt.Sprintf("repeating key: %v, round %v, cnt: %v, total: %v", key, roundsCnt, roundCnt, totalCnt))
+						panic("repeating key")
+					}
+					prevKey = key
 					return true
 				case <-self.quit:
 					quit = true
@@ -315,19 +323,18 @@ func (self *syncer) syncHistory(state *syncState) chan interface{} {
 					wait = true
 					return false
 				}
-				// return true //dummy return.
 			})
 			if err != nil {
-				log.Debug(fmt.Sprintf("syncer[%v]: sync for %v failed: %v: ..abort syncing", self.key.Log(), state, err))
+				log.Debug(fmt.Sprintf("syncer[%v]: sync for %v failed: %v: ..abort syncing, round %v, cnt: %v, total: %v", self.key.Log(), state, err, roundsCnt, roundCnt, totalCnt))
 				return
 			}
 			if quit {
 				return
 			}
 			// advancing syncstate
-			since = last
+			since = last + 1
 			if !wait {
-				log.Debug(fmt.Sprintf("syncer[%v]: sync for %v failed: %v: ..abort syncing", self.key.Log(), state, err))
+				log.Debug(fmt.Sprintf("syncer[%v]: nothing more to sync, round %v, cnt: %v, total: %v", self.key.Log(), roundsCnt, roundCnt, totalCnt))
 				break
 			}
 			// if history channel is no longer contented, continue outer loop
@@ -339,8 +346,8 @@ func (self *syncer) syncHistory(state *syncState) chan interface{} {
 				case <-self.quit:
 				}
 			}
+			roundCnt = 0
 		}
-		roundCnt = 0
 	}()
 	return history
 }
@@ -373,7 +380,7 @@ func (self *syncer) syncUnsyncedKeys() {
 	state := self.state
 
 	if state.IncludeCloser {
-		state.PO = 255
+		state.PO = storage.MaxPO
 	}
 	history := self.syncHistory(self.state)
 
@@ -396,10 +403,10 @@ LOOP:
 					keys = self.keys[priority]
 					break PRIORITIES
 				}
-				log.Trace(fmt.Sprintf("syncer[%v/%v]: queue: [%v, %v, %v]", self.key.Log(), priority, len(self.keys[High]), len(self.keys[Medium]), len(self.keys[Low])))
+				// log.Trace(fmt.Sprintf("syncer[%v/%v]: queue: [%v, %v, %v]", self.key.Log(), priority, len(self.keys[High]), len(self.keys[Medium]), len(self.keys[Low])))
 				// if the input queue is empty on this level, resort to history if there is any
 				if uint(priority) == histPrior && history != nil {
-					log.Trace(fmt.Sprintf("syncer[%v]: reading history for %v", self.key.Log(), self.key))
+					// log.Trace(fmt.Sprintf("syncer[%v]: reading history for %v", self.key.Log(), self.key))
 					keys = history
 					break PRIORITIES
 				}
@@ -554,7 +561,7 @@ func (self *syncer) syncDeliveries() {
 				log.Warn(fmt.Sprintf("syncer[%v]: failed to deliver %v: %v", self.key.Log(), req, err))
 			} else {
 				success++
-				log.Trace(fmt.Sprintf("syncer[%v]: %v successfully delivered", self.key.Log(), req))
+				// log.Trace(fmt.Sprintf("syncer[%v]: %v successfully delivered", self.key.Log(), req))
 			}
 		}
 		if total%self.SyncBatchSize == 0 {

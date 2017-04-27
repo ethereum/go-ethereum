@@ -29,7 +29,6 @@ import (
 )
 
 const openFileLimit = 128
-//const openFileLimit = -1
 
 type LDBDatabase struct {
 	db   *leveldb.DB

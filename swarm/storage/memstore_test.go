@@ -16,51 +16,82 @@
 
 package storage
 
-import (
-	"bytes"
-	"crypto/rand"
-	"io"
-	"testing"
-)
+import "testing"
 
-func testMemStore(indata io.Reader, l int64, branches int64, t *testing.T) {
-	if indata == nil {
-		indata = rand.Reader
-	}
-	m := NewMemStore(nil, defaultCacheCapacity)
-	testStore(m, indata, l, branches, t)
+func newTestMemStore() *MemStore {
+	return NewMemStore(nil, defaultCacheCapacity)
 }
 
-func TestMemStore128_10000(t *testing.T) {
-	testMemStore(nil, 10000, 128, t)
+func testMemStoreRandom(n int, processors int, chunksize int, t *testing.T) {
+	m := newTestMemStore()
+	defer m.Close()
+	testStoreRandom(m, processors, n, chunksize, t)
 }
 
-func TestMemStore128_1000(t *testing.T) {
-	testMemStore(nil, 1000, 128, t)
+func testMemStoreCorrect(n int, processors int, chunksize int, t *testing.T) {
+	m := newTestMemStore()
+	defer m.Close()
+	testStoreCorrect(m, processors, n, chunksize, t)
 }
 
-func TestMemStore128_100(t *testing.T) {
-	testMemStore(nil, 100, 128, t)
+func TestMemStoreRandom_1(t *testing.T) {
+	testMemStoreRandom(1, 1, 0, t)
 }
 
-func TestMemStore2_100(t *testing.T) {
-	testMemStore(nil, 100, 2, t)
+func TestMemStoreCorrect_1(t *testing.T) {
+	testMemStoreCorrect(1, 1, 4104, t)
 }
 
-func TestMemStore2_100_fixed_(t *testing.T) {
-	b := []byte{}
-	for i := 0; i < 100; i++ {
-		b = append(b, byte(i))
-	}
+func TestMemStoreRandom_1_10k(t *testing.T) {
+	testMemStoreRandom(1, 5000, 0, t)
+}
 
-	br := bytes.NewReader(b)
-	testMemStore(br, 100, 2, t)
+func TestMemStoreCorrect_1_10k(t *testing.T) {
+	testMemStoreCorrect(1, 5000, 4096, t)
+}
+
+func TestMemStoreRandom_8_10k(t *testing.T) {
+	testMemStoreRandom(8, 5000, 0, t)
+}
+
+func TestMemStoreCorrect_8_10k(t *testing.T) {
+	testMemStoreCorrect(8, 5000, 4096, t)
 }
 
 func TestMemStoreNotFound(t *testing.T) {
-	m := NewMemStore(nil, defaultCacheCapacity)
+	m := newTestMemStore()
+	defer m.Close()
+
 	_, err := m.Get(ZeroKey)
 	if err != notFound {
 		t.Errorf("Expected notFound, got %v", err)
 	}
+}
+
+func benchmarkMemStorePut(n int, processors int, chunksize int, b *testing.B) {
+	m := newTestMemStore()
+	defer m.Close()
+	benchmarkStorePut(m, processors, n, chunksize, b)
+}
+
+func benchmarkMemStoreGet(n int, processors int, chunksize int, b *testing.B) {
+	m := newTestMemStore()
+	defer m.Close()
+	benchmarkStoreGet(m, processors, n, chunksize, b)
+}
+
+func BenchmarkMemStorePut_1_5k(b *testing.B) {
+	benchmarkMemStorePut(5000, 1, 4096, b)
+}
+
+func BenchmarkMemStorePut_8_5k(b *testing.B) {
+	benchmarkMemStorePut(5000, 8, 4096, b)
+}
+
+func BenchmarkMemStoreGet_1_5k(b *testing.B) {
+	benchmarkMemStoreGet(5000, 1, 4096, b)
+}
+
+func BenchmarkMemStoreGet_8_5k(b *testing.B) {
+	benchmarkMemStoreGet(5000, 8, 4096, b)
 }

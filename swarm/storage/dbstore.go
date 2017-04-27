@@ -25,7 +25,6 @@ package storage
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -77,6 +76,8 @@ type DbStore struct {
 	hashfunc Hasher
 	po       func(Key) uint8
 	lock     sync.Mutex
+
+	trusted bool // if hash integity check is to be performed (for testing only)
 }
 
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
@@ -115,9 +116,14 @@ func NewDbStore(path string, hash Hasher, capacity uint64, po func(Key) uint8) (
 	//s.accessCnt = BytesToU64(data)
 	if len(data) == 8 {
 		s.accessCnt = binary.LittleEndian.Uint64(data)
+		s.accessCnt++
 	}
 	data, _ = s.db.Get(keyDataIdx)
-	s.dataIdx = BytesToU64(data)
+	if len(data) == 8 {
+		s.dataIdx = BytesToU64(data)
+		s.dataIdx++
+	}
+
 	s.gcPos, _ = s.db.Get(keyGCPos)
 	if s.gcPos == nil {
 		s.gcPos = s.gcStartPos
@@ -449,7 +455,6 @@ func (s *DbStore) Put(chunk *Chunk) {
 	po := s.po(chunk.Key)
 	t_datakey := getDataKey(s.dataIdx, po)
 	batch.Put(t_datakey, data)
-	log.Trace(fmt.Sprintf("batch put: datai		dx %v prox %v chunkkey %v datakey %v data %v", s.dataIdx, s.po(chunk.Key), hex.EncodeToString(chunk.Key), t_datakey, hex.EncodeToString(data[0:64])))
 
 	index.Idx = s.dataIdx
 	s.updateIndexAccess(&index)
@@ -518,23 +523,24 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 		proximity := s.po(key)
 		datakey := getDataKey(indx.Idx, proximity)
 		data, err = s.db.Get(datakey)
-		log.Trace(fmt.Sprintf("DBStore: Chunk %v indexkey %x datakey %x proximity %d", key.Log(), indx.Idx, datakey, proximity))
+		log.Trace(fmt.Sprintf("DBStore: Chunk %v indexkey %v datakey %x proximity %d", key.Log(), indx.Idx, datakey, proximity))
 		if err != nil {
 			log.Trace(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
 			s.delete(indx.Idx, getIndexKey(key), s.po(key))
 			return
 		}
 
-		//
-		data_mod := data[32:]
+		if !s.trusted {
+			data_mod := data[32:]
+			hasher := s.hashfunc()
+			hasher.Write(data_mod)
+			hash := hasher.Sum(nil)
 
-		hasher := s.hashfunc()
-		hasher.Write(data_mod)
-		hash := hasher.Sum(nil)
-
-		if !bytes.Equal(hash, key) {
-			s.delete(index.Idx, getIndexKey(key))
-			log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			if !bytes.Equal(hash, key) {
+				log.Trace(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
+				s.delete(indx.Idx, getIndexKey(key), s.po(key))
+				log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			}
 		}
 
 		chunk = &Chunk{
@@ -581,10 +587,6 @@ func (s *DbStore) setCapacity(c uint64) {
 	}
 }
 
-func (s *DbStore) getEntryCnt() uint64 {
-	return s.entryCnt
-}
-
 func (s *DbStore) Close() {
 	s.db.Close()
 }
@@ -593,11 +595,11 @@ func (s *DbStore) Close() {
 func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-
 	untilkey := getDataKey(until, po)
 
 	it := s.db.NewIterator()
-	it.Seek(getDataKey(since, po))
+	seek := getDataKey(since, po)
+	it.Seek(seek)
 	defer it.Release()
 	for it.Valid() {
 		dbkey := it.Key()

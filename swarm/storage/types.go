@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
+const MaxPO = 7
+
 type Hasher func() hash.Hash
 
 // Peer is the recorded as Source on the chunk
@@ -73,22 +75,24 @@ func (h Key) bits(i, j uint) uint {
 	return res
 }
 
-/*
-func proximity(one, other []byte) (ret int) {
-	retbig, _ := binary.Varint(other)
-	ret = int(int8(retbig))
-	return
-}*/
 func Proximity(one, other []byte) (ret int) {
-	for i := 0; i < len(one); i++ {
+	b := (MaxPO-1)/8 + 1
+	if b > len(one) {
+		b = len(one)
+	}
+	m := 8
+	for i := 0; i < b; i++ {
 		oxo := one[i] ^ other[i]
-		for j := 0; j < 8; j++ {
+		if i == b-1 {
+			m = MaxPO % 8
+		}
+		for j := 0; j < m; j++ {
 			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
 				return i*8 + j
 			}
 		}
 	}
-	return len(one) * 8
+	return MaxPO
 }
 
 func IsZeroKey(key Key) bool {

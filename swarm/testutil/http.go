@@ -38,7 +38,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		CacheCapacity: 5000,
 		Radius:        0,
 	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams)
+	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams, storage.ZeroKey)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)

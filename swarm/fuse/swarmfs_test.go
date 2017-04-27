@@ -38,6 +38,24 @@ type fileInfo struct {
 	contents []byte
 }
 
+func testFuseFileSystem(t *testing.T, f func(*api.Api)) {
+
+	datadir, err := ioutil.TempDir("", "fuse")
+	if err != nil {
+		t.Fatalf("unable to create temp dir: %v", err)
+	}
+	os.RemoveAll(datadir)
+
+	dpa, err := storage.NewLocalDPA(datadir, storage.ZeroKey)
+	if err != nil {
+		return
+	}
+	api := api.NewApi(dpa, nil)
+	dpa.Start()
+	f(api)
+	dpa.Stop()
+}
+
 func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[string]fileInfo, uploadDir string) string {
 	os.RemoveAll(uploadDir)
 
@@ -810,7 +828,7 @@ func TestFUSE(t *testing.T) {
 	}
 	os.RemoveAll(datadir)
 
-	dpa, err := storage.NewLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir, storage.ZeroKey)
 	if err != nil {
 		t.Fatal(err)
 	}
