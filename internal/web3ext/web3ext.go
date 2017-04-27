@@ -525,7 +525,105 @@ web3._extend({
 const Shh_JS = `
 web3._extend({
 	property: 'shh',
-	methods: [],
+	methods: [
+		new web3._extend.Method({
+			name: 'info',
+			call: 'shh_info'
+		}),
+		new web3._extend.Method({
+			name: 'setMaxMessageLength',
+			call: 'shh_setMaxMessageLength',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setMinimumPoW',
+			call: 'shh_setMinimumPoW',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'allowP2PMessagesFromPeer',
+			call: 'shh_allowP2PMessagesFromPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'hasKeyPair',
+			call: 'shh_hasKeyPair',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteKeyPair',
+			call: 'shh_deleteKeyPair',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'newKeyPair',
+			call: 'shh_newKeyPair'
+		}),
+		new web3._extend.Method({
+			name: 'getPublicKey',
+			call: 'shh_getPublicKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getPrivateKey',
+			call: 'shh_getPrivateKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'generateSymmetricKey',
+			call: 'shh_generateSymmetricKey',
+		}),
+		new web3._extend.Method({
+			name: 'addSymmetricKeyDirect',
+			call: 'shh_addSymmetricKeyDirect',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addSymmetricKeyFromPassword',
+			call: 'shh_addSymmetricKeyFromPassword',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'hasSymmetricKey',
+			call: 'shh_hasSymmetricKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getSymmetricKey',
+			call: 'shh_getSymmetricKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteSymmetricKey',
+			call: 'shh_deleteSymmetricKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'subscribe',
+			call: 'shh_subscribe',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'unsubscribe',
+			call: 'shh_unsubscribe',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getNewSubscriptionMessages',
+			call: 'shh_getNewSubscriptionMessages',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getFloatingMessages',
+			call: 'shh_getFloatingMessages',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'post',
+			call: 'shh_post',
+			params: 1
+		})
+	],
 	properties:
 	[
 		new web3._extend.Property({
@@ -536,6 +634,7 @@ web3._extend({
 	]
 });
 `
+
 const SWARMFS_JS = `
 web3._extend({
 	property: 'swarmfs',
