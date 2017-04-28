@@ -60,6 +60,26 @@ type protoHandshake struct {
 	Rest []rlp.RawValue `rlp:"tail"`
 }
 
+// PeerEventType is the type of peer events emitted by a p2p.Server
+type PeerEventType string
+
+const (
+	// PeerEventTypeAdd is the type of event emitted when a peer is added
+	// to a p2p.Server
+	PeerEventTypeAdd PeerEventType = "add"
+
+	// PeerEventTypeDrop is the type of event emitted when a peer is
+	// dropped from a p2p.Server
+	PeerEventTypeDrop PeerEventType = "drop"
+)
+
+// PeerEvent is an event emitted when peers are either added or dropped from
+// a p2p.Server
+type PeerEvent struct {
+	Type PeerEventType
+	Peer discover.NodeID
+}
+
 // Peer represents a connected remote node.
 type Peer struct {
 	rw      *conn

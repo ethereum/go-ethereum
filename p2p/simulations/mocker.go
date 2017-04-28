@@ -163,7 +163,8 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 		var mustconnect []int
 		for i := 0; len(offNodes) > 0 && i < nodesUp; i++ {
 			c := rand.Intn(len(offNodes))
-			sn := &Node{Id: offNodes[c]}
+			sn := &Node{}
+			sn.Id = offNodes[c]
 			err := eventer.Post(sn.EmitEvent(ControlEvent))
 			if err != nil {
 				panic(err.Error())

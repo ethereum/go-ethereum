@@ -86,6 +86,7 @@ func (n *pssTestNode) triggerCheck() {
 	//go func() { n.trigger <- n.id }()
 	go func() { n.trigger <- adapters.NewNodeId(n.Addr()) }()
 }
+
 /*
 func (n *pssTestNode) RunProtocol(id *adapters.NodeId, rw, rrw p2p.MsgReadWriter, peer *adapters.Peer) error {
 	return n.NodeAdapter.(adapters.ProtocolRunner).RunProtocol(id, rw, rrw, peer)
@@ -275,7 +276,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 	})
 	testpeers := make(map[*adapters.NodeId]*pssTestPeer)
 	nodes := newPssSimulationTester(t, numnodes, numfullnodes, net, trigger, vct, protocolName, protocolVersion, testpeers)
-	
+
 	ids := []*adapters.NodeId{}
 
 	// connect the peers
@@ -661,14 +662,14 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, net *s
 	psss := make(map[*adapters.NodeId]*Pss)
 	net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
 		node := &pssTestNode{
-			Pss: psss[conf.Id],
-			Hive: nil,
-			SimNode:	&adapters.SimNode{},
-			id:          conf.Id,
-			network:     net,
-			trigger:     trigger,
-			ct:          vct,
-			expectC:     make(chan []int),
+			Pss:     psss[conf.Id],
+			Hive:    nil,
+			SimNode: &adapters.SimNode{},
+			id:      conf.Id,
+			network: net,
+			trigger: trigger,
+			ct:      vct,
+			expectC: make(chan []int),
 		}
 		var handlefunc func(interface{}) error
 		addr := NewPeerAddrFromNodeId(conf.Id)
@@ -681,16 +682,18 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, net *s
 		//node = newPssTester(t, psss[conf.Id], addr, 0, handlefunc, net, trigger)
 		testservice := newPssTestService(t, handlefunc, node)
 		nodes[conf.Id] = testservice.node
-		svc :=  adapters.NewSimNode(conf.Id, testservice, net)
+		svc := adapters.NewSimNode(conf.Id, testservice, net)
 		testservice.Start(svc)
 		//svcs[conf.Id] = testservice
 		return node.SimNode
 	})
-	ids := adapters.RandomNodeIds(numnodes)
-	i := 0
-	for _, id := range ids {
-		addr := NewPeerAddrFromNodeId(id)
-		psss[id] = makePss(addr.OverlayAddr())
+	configs := make([]*simulations.NodeConfig, numnodes)
+	for i := 0; i < numnodes; i++ {
+		configs[i] = simulations.RandomNodeConfig()
+	}
+	for i, conf := range configs {
+		addr := NewPeerAddrFromNodeId(conf.Id)
+		psss[conf.Id] = makePss(addr.OverlayAddr())
 		if i < numfullnodes {
 			tp := &pssTestPeer{
 				Peer: &protocols.Peer{
@@ -699,25 +702,24 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, net *s
 				successC: make(chan bool),
 				resultC:  make(chan int),
 			}
-			testpeers[id] = tp
-			targetprotocol := makeCustomProtocol(name, version, vct, testpeers[id])
-			pssprotocol := NewPssProtocol(psss[id], &topic, vct, targetprotocol)
-			psss[id].Register(topic, pssprotocol.GetHandler())
+			testpeers[conf.Id] = tp
+			targetprotocol := makeCustomProtocol(name, version, vct, testpeers[conf.Id])
+			pssprotocol := NewPssProtocol(psss[conf.Id], &topic, vct, targetprotocol)
+			psss[conf.Id].Register(topic, pssprotocol.GetHandler())
 		}
 
-		net.NewNode(&simulations.NodeConfig{Id: id})
-		if err := net.Start(id); err != nil {
-			t.Fatalf("error starting node %s: %s", id.Label(), err)
+		net.NewNodeWithConfig(conf)
+		if err := net.Start(conf.Id); err != nil {
+			t.Fatalf("error starting node %s: %s", conf.Id.Label(), err)
 		}
-		i++
 	}
 
 	return nodes
 	//return svcs
 }
 
-type pssTestService struct{
-	node *pssTestNode // get addrs from this
+type pssTestService struct {
+	node    *pssTestNode // get addrs from this
 	msgFunc func(interface{}) error
 }
 
@@ -728,7 +730,7 @@ func newPssTestService(t *testing.T, handlefunc func(interface{}) error, testnod
 	return &pssTestService{
 		//nid := adapters.NewNodeId(addr.UnderlayAddr())
 		msgFunc: handlefunc,
-		node: testnode,
+		node:    testnode,
 	}
 }
 
@@ -749,17 +751,17 @@ func (self *pssTestService) Protocols() []p2p.Protocol {
 	ct.Register(&PssMsg{})
 	//Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, srv, nil, nil).Run
 	/*
-	node := &pssTestNode{
-		Hive:        hive,
-		Pss:         ps,
-		NodeAdapter: nil,
-		id:          nid,
-		network:     net,
-		trigger:     trigger,
-		ct:          ct,
-		expectC:     make(chan []int),
-	}*/
-	
+		node := &pssTestNode{
+			Hive:        hive,
+			Pss:         ps,
+			NodeAdapter: nil,
+			id:          nid,
+			network:     net,
+			trigger:     trigger,
+			ct:          ct,
+			expectC:     make(chan []int),
+		}*/
+
 	srv := func(p Peer) error {
 		p.Register(&PssMsg{}, self.msgFunc)
 		self.node.Add(p)
@@ -768,9 +770,9 @@ func (self *pssTestService) Protocols() []p2p.Protocol {
 		})
 		return nil
 	}
-	
+
 	proto := Bzz(self.node.OverlayAddr(), self.node.UnderlayAddr(), ct, srv, nil, nil)
-	
+
 	return []p2p.Protocol{*proto}
 }
 
@@ -781,11 +783,11 @@ func (self *pssTestService) APIs() []rpc.API {
 /*
 func newPssTester(t *testing.T, ps *Pss, addr *peerAddr, numsimnodes int, handlefunc func(interface{}) error, net *simulations.Network, trigger chan *adapters.NodeId) *pssTestNode {
 
-	
+
 
 	// set up the outer protocol
 
-	
+
 
 	srv := func(p Peer) error {
 		p.Register(&PssMsg{}, handlefunc)
@@ -795,13 +797,13 @@ func newPssTester(t *testing.T, ps *Pss, addr *peerAddr, numsimnodes int, handle
 		})
 		return nil
 	}
-	
+
 	node.run = Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, srv, nil, nil).Run
 	nodeAdapter.Run = node.run
-	
+
 	node.NodeAdapter = adapters.NewSimNode(nid, net)
-	
-	
+
+
 	return node
 }
 */

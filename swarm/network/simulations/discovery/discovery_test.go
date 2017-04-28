@@ -54,7 +54,7 @@ func TestDiscoverySimulationDockerAdapter(t *testing.T) {
 		})
 
 		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-			node, err := adapters.NewDockerNode(conf.Id, serviceName)
+			node, err := adapters.NewDockerNode(conf.Id, conf.PrivateKey, serviceName)
 			if err != nil {
 				panic(err)
 			}
@@ -84,7 +84,7 @@ func TestDiscoverySimulationExecAdapter(t *testing.T) {
 		})
 
 		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-			node, err := adapters.NewExecNode(conf.Id, serviceName, baseDir)
+			node, err := adapters.NewExecNode(conf.Id, conf.PrivateKey, serviceName, baseDir)
 			if err != nil {
 				panic(err)
 			}
@@ -118,12 +118,16 @@ func testDiscoverySimulation(t *testing.T, setup func(net *simulations.Network, 
 	})
 	defer net.Shutdown()
 	setup(net, trigger)
-	ids := adapters.RandomNodeIds(nodeCount)
-	for _, id := range ids {
-		net.NewNode(&simulations.NodeConfig{Id: id})
-		if err := net.Start(id); err != nil {
-			t.Fatalf("error starting node %s: %s", id.Label(), err)
+	ids := make([]*adapters.NodeId, nodeCount)
+	for i := 0; i < nodeCount; i++ {
+		conf, err := net.NewNode()
+		if err != nil {
+			t.Fatalf("error starting node %s: %s", conf.Id.Label(), err)
 		}
+		if err := net.Start(conf.Id); err != nil {
+			t.Fatalf("error starting node %s: %s", conf.Id.Label(), err)
+		}
+		ids[i] = conf.Id
 	}
 
 	// run a simulation which connects the 10 nodes in a ring and waits

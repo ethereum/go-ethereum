@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -53,13 +54,14 @@ type Network interface {
 
 // SimNode is the network adapter that
 type SimNode struct {
-	lock    sync.RWMutex
-	Id      *NodeId
-	network Network
-	service node.Service
-	peerMap map[discover.NodeID]int
-	peers   []*Peer
-	client  *rpc.Client
+	lock     sync.RWMutex
+	Id       *NodeId
+	network  Network
+	service  node.Service
+	peerMap  map[discover.NodeID]int
+	peers    []*Peer
+	peerFeed event.Feed
+	client   *rpc.Client
 }
 
 func NewSimNode(id *NodeId, svc node.Service, n Network) *SimNode {
@@ -115,13 +117,20 @@ func (self *SimNode) startRPC() error {
 		return errors.New("RPC already started")
 	}
 
-	// add SimAdminAPI so that the network can call the AddPeer
-	// and RemovePeer RPC methods
-	apis := append(self.service.APIs(), rpc.API{
-		Namespace: "admin",
-		Version:   "1.0",
-		Service:   &SimAdminAPI{self},
-	})
+	// add SimAdminAPI and PeerAPI so that the network can call the
+	// AddPeer, RemovePeer and PeerEvents RPC methods
+	apis := append(self.service.APIs(), []rpc.API{
+		{
+			Namespace: "admin",
+			Version:   "1.0",
+			Service:   &SimAdminAPI{self},
+		},
+		{
+			Namespace: "eth",
+			Version:   "1.0",
+			Service:   &PeerAPI{func() p2p.Server { return self }},
+		},
+	}...)
 
 	// start the RPC handler
 	handler := rpc.NewServer()
@@ -219,6 +228,10 @@ func (self *SimNode) AddPeer(node *discover.Node) {
 	self.RunProtocol(na.(*SimNode), rw, rrw, peer)
 }
 
+func (self *SimNode) SubscribePeers(ch chan *p2p.PeerEvent) event.Subscription {
+	return self.peerFeed.Subscribe(ch)
+}
+
 func (self *SimNode) PeerCount() int {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -243,13 +256,13 @@ func (self *SimNode) RunProtocol(node *SimNode, rw, rrw p2p.MsgReadWriter, peer 
 	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
 	p := p2p.NewPeer(id.NodeID, id.Label(), []p2p.Cap{})
 	go func() {
-		self.network.DidConnect(self.Id, id)
+		self.peerFeed.Send(&p2p.PeerEvent{Type: p2p.PeerEventTypeAdd, Peer: id.NodeID})
 		err := protocol.Run(p, rw)
 		<-peer.Readyc
 		self.RemovePeer(node.Node())
 		peer.Errc <- err
 		log.Trace(fmt.Sprintf("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err))
-		self.network.DidDisconnect(self.Id, id)
+		self.peerFeed.Send(&p2p.PeerEvent{Type: p2p.PeerEventTypeDrop, Peer: id.NodeID})
 	}()
 }
 

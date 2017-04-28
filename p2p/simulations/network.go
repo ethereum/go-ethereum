@@ -27,14 +27,19 @@
 package simulations
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"reflect"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -176,9 +181,7 @@ func NewNodesController(net *Network) *ResourceController {
 		&ResourceHandlers{
 			Create: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					nodeid := adapters.RandomNodeId()
-					net.NewNode(&NodeConfig{Id: nodeid})
-					return &NodeConfig{Id: nodeid}, nil
+					return net.NewNode()
 				},
 			},
 			Retrieve: &ResourceHandler{
@@ -289,7 +292,7 @@ func (self *Network) Subscribe(eventer *event.TypeMux, types ...interface{}) {
 
 func (self *Network) executeNodeEvent(ne *NodeControlEvent) {
 	if ne.Up {
-		err := self.NewNode(&NodeConfig{Id: ne.Node.Id})
+		err := self.NewNodeWithConfig(&ne.Node.NodeConfig)
 		if err != nil {
 			log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
 		}
@@ -370,9 +373,10 @@ type LiveEventer interface {
 }
 
 type Node struct {
-	Id           *adapters.NodeId `json:"id"`
-	Up           bool
-	config       *NodeConfig
+	NodeConfig
+
+	Up bool
+
 	na           adapters.NodeAdapter
 	controlFired bool
 }
@@ -511,7 +515,55 @@ func (self *Node) Adapter() adapters.NodeAdapter {
 }
 
 type NodeConfig struct {
-	Id *adapters.NodeId `json:"Id"`
+	Id         *adapters.NodeId
+	PrivateKey *ecdsa.PrivateKey
+}
+
+type nodeConfigJSON struct {
+	Id         string `json:"id"`
+	PrivateKey string `json:"private_key"`
+}
+
+func (n *NodeConfig) MarshalJSON() ([]byte, error) {
+	return json.Marshal(nodeConfigJSON{
+		n.Id.String(),
+		hex.EncodeToString(crypto.FromECDSA(n.PrivateKey)),
+	})
+}
+
+func (n *NodeConfig) UnmarshalJSON(data []byte) error {
+	var confJSON nodeConfigJSON
+	if err := json.Unmarshal(data, &confJSON); err != nil {
+		return err
+	}
+
+	nodeID, err := discover.HexID(confJSON.Id)
+	if err != nil {
+		return err
+	}
+	n.Id = &adapters.NodeId{NodeID: nodeID}
+
+	key, err := hex.DecodeString(confJSON.PrivateKey)
+	if err != nil {
+		return err
+	}
+	n.PrivateKey = crypto.ToECDSA(key)
+
+	return nil
+}
+
+func RandomNodeConfig() *NodeConfig {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("unable to generate key")
+	}
+	var id discover.NodeID
+	pubkey := crypto.FromECDSAPub(&key.PublicKey)
+	copy(id[:], pubkey[1:])
+	return &NodeConfig{
+		Id:         &adapters.NodeId{NodeID: id},
+		PrivateKey: key,
+	}
 }
 
 // TODO: ignored for now
@@ -530,9 +582,18 @@ type Know struct {
 	// swap balance
 }
 
-// NewNode adds a new node to the network
+// NewNode adds a new node to the network with a random ID
+func (self *Network) NewNode() (*NodeConfig, error) {
+	conf := RandomNodeConfig()
+	if err := self.NewNodeWithConfig(conf); err != nil {
+		return nil, err
+	}
+	return conf, nil
+}
+
+// NewNodeWithConfig adds a new node to the network with the given config
 // errors if a node by the same id already exist
-func (self *Network) NewNode(conf *NodeConfig) error {
+func (self *Network) NewNodeWithConfig(conf *NodeConfig) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	id := conf.Id
@@ -544,9 +605,8 @@ func (self *Network) NewNode(conf *NodeConfig) error {
 	self.nodeMap[id.NodeID] = len(self.Nodes)
 	na := self.naf(conf)
 	node := &Node{
-		Id:     conf.Id,
-		config: conf,
-		na:     na,
+		NodeConfig: *conf,
+		na:         na,
 	}
 	self.Nodes = append(self.Nodes, node)
 	log.Trace(fmt.Sprintf("node %v created", id))
@@ -603,7 +663,47 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
 
 	self.events.Post(node.EmitEvent(ControlEvent))
+
+	// subscribe to peer events
+	client, err := node.Adapter().Client()
+	if err != nil {
+		return fmt.Errorf("error getting rpc client  for node %v: %s", id, err)
+	}
+	events := make(chan *p2p.PeerEvent)
+	sub, err := client.EthSubscribe(context.Background(), events, "peerEvents")
+	if err != nil {
+		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+	}
+	go self.watchPeerEvents(id, events, sub)
 	return nil
+}
+
+func (self *Network) watchPeerEvents(id *adapters.NodeId, events chan *p2p.PeerEvent, sub event.Subscription) {
+	defer sub.Unsubscribe()
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			peer := &adapters.NodeId{NodeID: event.Peer}
+			switch event.Type {
+			case p2p.PeerEventTypeAdd:
+				if err := self.DidConnect(id, peer); err != nil {
+					log.Error(fmt.Sprintf("error generating connection up event %s => %s", id.Label(), peer.Label()), "err", err)
+				}
+			case p2p.PeerEventTypeDrop:
+				if err := self.DidDisconnect(id, peer); err != nil {
+					log.Error(fmt.Sprintf("error generating connection down event %s => %s", id.Label(), peer.Label()), "err", err)
+				}
+			}
+		case err := <-sub.Err():
+			if err != nil {
+				log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
+			}
+			return
+		}
+	}
 }
 
 // Stop(id) shuts down the node (relevant only for instance with own p2p or remote)
@@ -629,6 +729,7 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 // calling the node's nodadapters Connect method
 // connection is established (as if) the first node dials out to the other
 func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
+	log.Debug(fmt.Sprintf("connecting %s to %s", oneId, otherId))
 	conn, err := self.GetOrCreateConn(oneId, otherId)
 	if err != nil {
 		return err
@@ -700,7 +801,7 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 }
 
 func (self *Network) DidConnect(one, other *adapters.NodeId) error {
-  conn, err := self.GetOrCreateConn(one, other)
+	conn, err := self.GetOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -715,7 +816,7 @@ func (self *Network) DidConnect(one, other *adapters.NodeId) error {
 }
 
 func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
-  conn, err := self.GetOrCreateConn(one, other)
+	conn, err := self.GetOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -808,6 +909,7 @@ func (self *Network) getConn(oneId, otherId *adapters.NodeId) *Conn {
 func (self *Network) Shutdown() {
 	// disconnect all nodes
 	for _, conn := range self.Conns {
+		log.Debug(fmt.Sprintf("disconnecting %s from %s", conn.One.Label(), conn.Other.Label()))
 		if err := self.Disconnect(conn.One, conn.Other); err != nil {
 			log.Warn(fmt.Sprintf("error disconnecting %s from %s", conn.One.Label(), conn.Other.Label()), "err", err)
 		}
@@ -815,6 +917,7 @@ func (self *Network) Shutdown() {
 
 	// stop all nodes
 	for _, node := range self.Nodes {
+		log.Debug(fmt.Sprintf("stopping node %s", node.Id.Label()))
 		if err := node.na.Stop(); err != nil {
 			log.Warn(fmt.Sprintf("error stopping node %s", node.Id.Label()), "err", err)
 		}

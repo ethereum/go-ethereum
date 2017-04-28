@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -117,8 +118,8 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.ProtoCall {
 }
 
 func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTester {
-	id := adapters.RandomNodeId()
-	return p2ptest.NewProtocolTester(t, id, 2, newProtocol(pp))
+	conf := simulations.RandomNodeConfig()
+	return p2ptest.NewProtocolTester(t, conf.Id, 2, newProtocol(pp))
 }
 
 func protoHandshakeExchange(id *adapters.NodeId, proto *protoHandshake) []p2ptest.Exchange {

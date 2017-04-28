@@ -118,11 +118,16 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 	conf.Backend = true
 	net := NewNetwork(simulations.NewNetwork(conf))
 
-	//ids := p2ptest.RandomNodeIds(10)
-	ids := adapters.RandomNodeIds(10)
+	ids := make([]*adapters.NodeId, 10)
+	for i := 0; i < 10; i++ {
+		conf, err := net.NewNode()
+		if err != nil {
+			panic(err.Error())
+		}
+		ids[i] = conf.Id
+	}
 
 	for i, id := range ids {
-		net.NewNode(&simulations.NodeConfig{Id: id})
 		var peerId *adapters.NodeId
 		if i == 0 {
 			peerId = ids[len(ids)-1]
@@ -138,7 +143,6 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 		for _, id := range ids {
 			n := rand.Intn(1000)
 			time.Sleep(time.Duration(n) * time.Millisecond)
-			net.NewNode(&simulations.NodeConfig{Id: id})
 			net.Start(id)
 			log.Debug(fmt.Sprintf("node %v starting up", id))
 			// time.Sleep(1000 * time.Millisecond)

@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -22,7 +23,7 @@ type DockerNode struct {
 
 // NewDockerNode creates a new DockerNode, building the docker image if
 // necessary
-func NewDockerNode(id *NodeId, service string) (*DockerNode, error) {
+func NewDockerNode(id *NodeId, key *ecdsa.PrivateKey, service string) (*DockerNode, error) {
 	if runtime.GOOS != "linux" {
 		return nil, fmt.Errorf("NewDockerNode can only be used on Linux as it uses the current binary (which must be a Linux binary)")
 	}
@@ -51,6 +52,7 @@ func NewDockerNode(id *NodeId, service string) (*DockerNode, error) {
 			ID:      id,
 			Service: service,
 			Config:  &conf,
+			key:     key,
 		},
 	}
 	node.newCmd = node.dockerCommand
@@ -60,13 +62,13 @@ func NewDockerNode(id *NodeId, service string) (*DockerNode, error) {
 // dockerCommand returns a command which exec's the binary in a docker
 // container.
 //
-// It uses a shell so that we can pass the _P2P_NODE_CONFIG environment
-// variable to the container using the --env flag.
+// It uses a shell so that we can pass the _P2P_NODE_CONFIG and _P2P_NODE_KEY
+// environment variables to the container using the --env flag.
 func (n *DockerNode) dockerCommand() *exec.Cmd {
 	return exec.Command(
 		"sh", "-c",
 		fmt.Sprintf(
-			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" %s p2p-node %s %s`,
+			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" --env _P2P_NODE_KEY="${_P2P_NODE_KEY}" %s p2p-node %s %s`,
 			dockerImage, n.Service, n.ID.String(),
 		),
 	)

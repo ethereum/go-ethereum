@@ -28,7 +28,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	}
 	net.SetNaf(naf)
 
-	if err := net.NewNode(&simulations.NodeConfig{Id: id}); err != nil {
+	if err := net.NewNodeWithConfig(&simulations.NodeConfig{Id: id}); err != nil {
 		panic(err.Error())
 	}
 	if err := net.Start(id); err != nil {
@@ -36,30 +36,35 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	}
 
 	node := net.GetNodeAdapter(id).(*adapters.SimNode)
-	ids := adapters.RandomNodeIds(n)
-	ps := NewProtocolSession(node, ids)
+	peers := make([]*simulations.NodeConfig, n)
+	peerIDs := make([]*adapters.NodeId, n)
+	for i := 0; i < n; i++ {
+		peers[i] = simulations.RandomNodeConfig()
+		peerIDs[i] = peers[i].Id
+	}
+	ps := NewProtocolSession(node, peerIDs)
 	self := &ProtocolTester{
 		ProtocolSession: ps,
 		network:         net,
 	}
 
-	self.Connect(id, ids...)
+	self.Connect(id, peers...)
 
 	return self
 }
 
-func (self *ProtocolTester) Connect(selfId *adapters.NodeId, ids ...*adapters.NodeId) {
-	for _, id := range ids {
-		log.Trace(fmt.Sprintf("start node %v", id))
-		if err := self.network.NewNode(&simulations.NodeConfig{Id: id}); err != nil {
-			panic(fmt.Sprintf("error starting peer %v: %v", id, err))
+func (self *ProtocolTester) Connect(selfId *adapters.NodeId, peers ...*simulations.NodeConfig) {
+	for _, peer := range peers {
+		log.Trace(fmt.Sprintf("start node %v", peer.Id))
+		if err := self.network.NewNodeWithConfig(peer); err != nil {
+			panic(fmt.Sprintf("error starting peer %v: %v", peer.Id, err))
 		}
-		if err := self.network.Start(id); err != nil {
-			panic(fmt.Sprintf("error starting peer %v: %v", id, err))
+		if err := self.network.Start(peer.Id); err != nil {
+			panic(fmt.Sprintf("error starting peer %v: %v", peer.Id, err))
 		}
-		log.Trace(fmt.Sprintf("connect to %v", id))
-		if err := self.network.Connect(selfId, id); err != nil {
-			panic(fmt.Sprintf("error connecting to peer %v: %v", id, err))
+		log.Trace(fmt.Sprintf("connect to %v", peer.Id))
+		if err := self.network.Connect(selfId, peer.Id); err != nil {
+			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.Id, err))
 		}
 	}
 

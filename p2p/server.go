@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -141,6 +142,7 @@ type Server interface {
 	Stop() error
 	AddPeer(node *discover.Node)
 	RemovePeer(node *discover.Node)
+	SubscribePeers(ch chan *PeerEvent) event.Subscription
 	PeerCount() int
 	NodeInfo() *NodeInfo
 	PeersInfo() []*PeerInfo
@@ -180,6 +182,7 @@ type server struct {
 	addpeer       chan *conn
 	delpeer       chan peerDrop
 	loopWG        sync.WaitGroup // loop, listenLoop
+	peerFeed      event.Feed
 }
 
 type peerOpFunc func(map[discover.NodeID]*Peer)
@@ -303,6 +306,11 @@ func (srv *server) RemovePeer(node *discover.Node) {
 	case srv.removestatic <- node:
 	case <-srv.quit:
 	}
+}
+
+// SubscribePeers subscribes the given channel to peer events
+func (srv *server) SubscribePeers(ch chan *PeerEvent) event.Subscription {
+	return srv.peerFeed.Subscribe(ch)
 }
 
 // Self returns the local node's endpoint information.
@@ -770,6 +778,11 @@ func (srv *server) runPeer(p *Peer) {
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
+
+	// broadcast peer add / drop events
+	srv.peerFeed.Send(&PeerEvent{Type: PeerEventTypeAdd, Peer: p.ID()})
+	defer srv.peerFeed.Send(&PeerEvent{Type: PeerEventTypeDrop, Peer: p.ID()})
+
 	remoteRequested, err := p.run()
 	// Note: run waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
