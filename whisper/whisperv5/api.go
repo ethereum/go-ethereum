@@ -231,14 +231,14 @@ func (api *PublicWhisperAPI) Subscribe(args WhisperFilterArgs) (string, error) {
 		return "", errors.New("subscribe: " + err.Error())
 	}
 
-	if len(args.SignedWith) > 0 {
-		sb := common.FromHex(args.SignedWith)
+	if len(args.Sig) > 0 {
+		sb := common.FromHex(args.Sig)
 		if sb == nil {
-			return "", errors.New("subscribe: SignedWith parameter is invalid")
+			return "", errors.New("subscribe: sig parameter is invalid")
 		}
 		filter.Src = crypto.ToECDSAPub(sb)
 		if !ValidatePublicKey(filter.Src) {
-			return "", errors.New("subscribe: invalid 'SignedWith' field")
+			return "", errors.New("subscribe: invalid 'sig' field")
 		}
 	}
 
@@ -319,8 +319,8 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 		return errors.New("post: key is missing")
 	}
 
-	if len(args.SignWith) > 0 {
-		params.Src, err = api.whisper.GetPrivateKey(args.SignWith)
+	if len(args.Sig) > 0 {
+		params.Src, err = api.whisper.GetPrivateKey(args.Sig)
 		if err != nil {
 			return err
 		}
@@ -391,7 +391,7 @@ func (api *PublicWhisperAPI) Post(args PostArgs) error {
 type PostArgs struct {
 	Type       string        `json:"type"`       // "sym"/"asym" (symmetric or asymmetric)
 	TTL        uint32        `json:"ttl"`        // time-to-live in seconds
-	SignWith   string        `json:"signWith"`   // id of the signing key
+	Sig        string        `json:"sig"`        // id of the signing key
 	Key        string        `json:"key"`        // key id (in case of sym) or public key (in case of asym)
 	Topic      hexutil.Bytes `json:"topic"`      // topic (4 bytes)
 	Padding    hexutil.Bytes `json:"padding"`    // optional padding bytes
@@ -402,12 +402,12 @@ type PostArgs struct {
 }
 
 type WhisperFilterArgs struct {
-	Symmetric  bool     // encryption type
-	Key        string   // id of the key to be used for decryption
-	SignedWith string   // public key of the sender to be verified
-	MinPoW     float64  // minimal PoW requirement
-	Topics     [][]byte // list of topics (up to 4 bytes each) to match
-	AllowP2P   bool     // indicates wheather direct p2p messages are allowed for this filter
+	Symmetric bool     // encryption type
+	Key       string   // id of the key to be used for decryption
+	Sig       string   // public key of the sender to be verified
+	MinPoW    float64  // minimal PoW requirement
+	Topics    [][]byte // list of topics (up to 4 bytes each) to match
+	AllowP2P  bool     // indicates wheather direct p2p messages are allowed for this filter
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface, invoked to convert a
@@ -415,12 +415,12 @@ type WhisperFilterArgs struct {
 func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	// Unmarshal the JSON message and sanity check
 	var obj struct {
-		Type       string        `json:"type"`
-		Key        string        `json:"key"`
-		SignedWith string        `json:"signedWith"`
-		MinPoW     float64       `json:"minPoW"`
-		Topics     []interface{} `json:"topics"`
-		AllowP2P   bool          `json:"allowP2P"`
+		Type     string        `json:"type"`
+		Key      string        `json:"key"`
+		Sig      string        `json:"sig"`
+		MinPoW   float64       `json:"minPoW"`
+		Topics   []interface{} `json:"topics"`
+		AllowP2P bool          `json:"allowP2P"`
 	}
 	if err := json.Unmarshal(b, &obj); err != nil {
 		return err
@@ -436,7 +436,7 @@ func (args *WhisperFilterArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.Key = obj.Key
-	args.SignedWith = obj.SignedWith
+	args.Sig = obj.Sig
 	args.MinPoW = obj.MinPoW
 	args.AllowP2P = obj.AllowP2P
 
@@ -472,7 +472,7 @@ type WhisperMessage struct {
 	Topic     string  `json:"topic"`
 	Payload   string  `json:"payload"`
 	Padding   string  `json:"padding"`
-	Src       string  `json:"signedWith"`
+	Src       string  `json:"sig"`
 	Dst       string  `json:"recipientPublicKey"`
 	Timestamp uint32  `json:"timestamp"`
 	TTL       uint32  `json:"ttl"`

@@ -183,7 +183,7 @@ func initialize() {
 
 	if *testMode {
 		symPass = "wwww" // ascii code: 0x77777777
-		msPassword = "mail server test password"
+		msPassword = "wwww"
 	}
 
 	if *bootstrapMode {
@@ -330,7 +330,7 @@ func configureNode() {
 
 	if !*asymmetricMode && !*forwarderMode {
 		if len(symPass) == 0 {
-			symPass, err = console.Stdin.PromptPassword("Please enter the password: ")
+			symPass, err = console.Stdin.PromptPassword("Please enter the password for symmetric encryption: ")
 			if err != nil {
 				utils.Fatalf("Failed to read passphrase: %v", err)
 			}
@@ -347,6 +347,8 @@ func configureNode() {
 		if len(*argTopic) == 0 {
 			generateTopic([]byte(symPass))
 		}
+
+		fmt.Printf("Filter is configured for the topic: %x \n", topic)
 	}
 
 	if *mailServerMode {
@@ -365,7 +367,6 @@ func configureNode() {
 	if err != nil {
 		utils.Fatalf("Failed to install filter: %s", err)
 	}
-	fmt.Printf("Filter is configured for the topic: %x \n", topic)
 }
 
 func generateTopic(password []byte) {
