@@ -180,11 +180,6 @@ func (self *LightChain) Status() (td *big.Int, currentBlock common.Hash, genesis
 	return self.GetTd(hash, header.Number.Uint64()), hash, self.genesisBlock.Hash()
 }
 
-// State returns a new mutable state based on the current HEAD block.
-func (self *LightChain) State() *LightState {
-	return NewLightState(StateTrieID(self.hc.CurrentHeader()), self.odr)
-}
-
 // Reset purges the entire blockchain, restoring it to its genesis state.
 func (bc *LightChain) Reset() {
 	bc.ResetWithGenesisBlock(bc.genesisBlock)

@@ -62,7 +62,7 @@ func tfCodeAccess(db ethdb.Database, bhash common.Hash, number uint64) light.Odr
 		return nil
 	}
 	sti := light.StateTrieID(header)
-	ci := light.StorageTrieID(sti, testContractAddr, common.Hash{})
+	ci := light.StorageTrieID(sti, crypto.Keccak256Hash(testContractAddr[:]), common.Hash{})
 	return &light.CodeRequest{Id: ci, Hash: crypto.Keccak256Hash(testContractCodeDeployed)}
 }
 
