@@ -700,8 +700,8 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 }
 
 func (self *Network) DidConnect(one, other *adapters.NodeId) error {
-	conn := self.GetConn(one, other)
-	if conn == nil {
+  conn, err := self.GetOrCreateConn(one, other)
+	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
 	if conn.Up {
@@ -715,8 +715,8 @@ func (self *Network) DidConnect(one, other *adapters.NodeId) error {
 }
 
 func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
-	conn := self.GetConn(one, other)
-	if conn == nil {
+  conn, err := self.GetOrCreateConn(one, other)
+	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
 	if !conn.Up {
