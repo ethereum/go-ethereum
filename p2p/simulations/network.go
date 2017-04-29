@@ -58,7 +58,9 @@ type NetworkControl interface {
 
 // event types related to connectivity, i.e., nodes coming on dropping off
 // and connections established and dropped
-var ConnectivityEvents = []interface{}{&NodeEvent{}, &ConnEvent{}, &MsgEvent{}}
+var ConnectivityControlEvents = []interface{}{&NodeControlEvent{}, &ConnControlEvent{}, &MsgControlEvent{}}
+var ConnectivityLiveEvents = []interface{}{&NodeEvent{}, &ConnEvent{}, &MsgEvent{}}
+var ConnectivityAllEvents = append(ConnectivityControlEvents, ConnectivityLiveEvents...)
 
 type NetworkController struct {
 	*ResourceController
@@ -70,7 +72,7 @@ type NetworkController struct {
 // stream of Server-Sent-Events, with each event being a JSON encoded SimUpdate
 // object
 func (n *NetworkController) ServeStream(w http.ResponseWriter, req *http.Request) {
-	sub := n.events.Subscribe(ConnectivityEvents...)
+	sub := n.events.Subscribe(ConnectivityAllEvents...)
 	defer sub.Unsubscribe()
 
 	// stop the stream if the client goes away
@@ -126,12 +128,12 @@ func NewNetworkController(net NetworkControl, nodesController *ResourceControlle
 	eventer := &event.TypeMux{}
 	conf := net.Config()
 	if conf.Backend {
-		journal.Subscribe(net.Events(), ConnectivityEvents...)
+		journal.Subscribe(net.Events(), ConnectivityAllEvents...)
 		// the network can subscribe to the eventer fed by mockers and players
-		net.Subscribe(eventer, ConnectivityEvents...)
+		net.Subscribe(eventer, ConnectivityAllEvents...)
 	} else {
 		// alternatively  mocked and replayed events bypass the simulation network backend
-		journal.Subscribe(eventer, ConnectivityEvents...)
+		journal.Subscribe(eventer, ConnectivityAllEvents...)
 	}
 	self := NewResourceContoller(
 		&ResourceHandlers{
@@ -285,37 +287,62 @@ func (self *Network) Subscribe(eventer *event.TypeMux, types ...interface{}) {
 	}()
 }
 
+func (self *Network) executeNodeEvent(ne *NodeControlEvent) {
+	if ne.Up {
+		err := self.NewNode(&NodeConfig{Id: ne.Node.Id})
+		if err != nil {
+			log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
+		}
+		err = self.Start(ne.Node.Id)
+		if err != nil {
+			log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
+		}
+	} else {
+		err := self.Stop(ne.Node.Id)
+		if err != nil {
+			log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
+		}
+	}
+	ne.Node.controlFired = ne.Up
+}
+
+func (self *Network) executeConnEvent(ce *ConnControlEvent) {
+	if ce.Up {
+		err := self.Connect(ce.Connection.One, ce.Connection.Other)
+		if err != nil {
+			log.Trace(fmt.Sprintf("error execute event %v: %v", ce, err))
+		}
+	} else {
+		err := self.Disconnect(ce.Connection.One, ce.Connection.Other)
+		if err != nil {
+			log.Trace(fmt.Sprintf("error execute event %v: %v", ce, err))
+		}
+	}
+	ce.Connection.controlFired = ce.Up
+}
+
 func (self *Network) execute(in *event.TypeMuxEvent) {
 	log.Trace(fmt.Sprintf("execute event %v", in))
 	ev := in.Data
 	if ne, ok := ev.(*NodeEvent); ok {
-		if ne.Action == "up" {
-			err := self.NewNode(&NodeConfig{Id: ne.node.Id})
-			if err != nil {
-				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
-			}
-			err = self.Start(ne.node.Id)
-			if err != nil {
-				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
-			}
+		if ne.Up && ne.Node.controlFired || (!ne.Up && !ne.Node.controlFired) {
+			log.Trace(fmt.Sprintf("Got NodeEvent %v, but Control Event has already been applied for : %v", ne, ne.Node))
+			//ignore this real event; control event already took care of this
 		} else {
-			err := self.Stop(ne.node.Id)
-			if err != nil {
-				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
-			}
+			self.executeNodeEvent(ne.ToControlEvent())
 		}
 	} else if ce, ok := ev.(*ConnEvent); ok {
-		if ce.Action == "up" {
-			err := self.Connect(ce.conn.One, ce.conn.Other)
-			if err != nil {
-				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
-			}
+		if ce.Up && ce.Connection.controlFired || (!ce.Up && !ce.Connection.controlFired) {
+			log.Trace(fmt.Sprintf("Got ConnEvent %v, but Control Event has already been applied for : %v", ce, ce.Connection))
+			//ignore this real event; control event already took care of this
 		} else {
-			err := self.Disconnect(ce.conn.One, ce.conn.Other)
-			if err != nil {
-				log.Trace(fmt.Sprintf("error execute event %v: %v", ne, err))
-			}
+			self.executeConnEvent(ce.ToControlEvent())
 		}
+	}
+	if ne, ok := ev.(*NodeControlEvent); ok {
+		self.executeNodeEvent(ne)
+	} else if ce, ok := ev.(*ConnControlEvent); ok {
+		self.executeConnEvent(ce)
 	} else {
 		log.Trace(fmt.Sprintf("event: %#v", ev))
 		panic("unhandled event")
@@ -327,63 +354,31 @@ func (self *Network) Events() *event.TypeMux {
 	return self.events
 }
 
-type Node struct {
-	Id     *adapters.NodeId `json:"id"`
-	Up     bool
-	config *NodeConfig
-	na     adapters.NodeAdapter
+type EventType int
+
+const (
+	ControlEvent EventType = iota
+	LiveEvent
+)
+
+type EventEmitter interface {
+	EmitEvent()
 }
 
-func (self *Node) Adapter() adapters.NodeAdapter {
-	return self.na
+type LiveEventer interface {
+	ToControlEvent()
+}
+
+type Node struct {
+	Id           *adapters.NodeId `json:"id"`
+	Up           bool
+	config       *NodeConfig
+	na           adapters.NodeAdapter
+	controlFired bool
 }
 
 func (self *Node) String() string {
 	return fmt.Sprintf("Node %v", self.Id.Label())
-}
-
-type NodeEvent struct {
-	Action string
-	Type   string
-	node   *Node
-}
-
-type ConnEvent struct {
-	Action string
-	Type   string
-	conn   *Conn
-}
-
-type MsgEvent struct {
-	Action string
-	Type   string
-	msg    *Msg
-}
-
-func (self *ConnEvent) String() string {
-	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.conn)
-}
-
-func (self *NodeEvent) String() string {
-	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.node)
-}
-
-func (self *MsgEvent) String() string {
-	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.msg)
-}
-
-func (self *Node) event(up bool) *NodeEvent {
-	var action string
-	if up {
-		action = "up"
-	} else {
-		action = "down"
-	}
-	return &NodeEvent{
-		Action: action,
-		Type:   "node",
-		node:   self,
-	}
 }
 
 // active connections are represented by the Node entry object so that
@@ -399,41 +394,120 @@ type Conn struct {
 	Reverse bool `json:"reverse"`
 	// Info
 	// average throughput, recent average throughput etc
+	controlFired bool
 }
 
 func (self *Conn) String() string {
 	return fmt.Sprintf("Conn %v->%v", self.One.Label(), self.Other.Label())
 }
 
-func (self *Conn) event(up, rev bool) *ConnEvent {
-	var action string
-	if up {
-		action = "up"
-	} else {
-		action = "down"
-	}
-	return &ConnEvent{
-		Action: action,
-		Type:   "conn",
-		conn:   self,
-	}
-}
-
 type Msg struct {
-	One   *adapters.NodeId `json:"one"`
-	Other *adapters.NodeId `json:"other"`
-	Code  uint64           `json:"conn"`
+	One          *adapters.NodeId `json:"one"`
+	Other        *adapters.NodeId `json:"other"`
+	Code         uint64           `json:"conn"`
+	controlFired bool
 }
 
 func (self *Msg) String() string {
 	return fmt.Sprintf("Msg(%d) %v->%v", self.Code, self.One.Label(), self.Other.Label())
 }
 
-func (self *Msg) event() *MsgEvent {
-	return &MsgEvent{
-		Action: "up",
-		msg:    self,
+type NodeEvent struct {
+	Node *Node
+	Up   bool
+}
+
+type ConnEvent struct {
+	Connection *Conn
+	Up         bool
+	Reverse    bool
+}
+
+type MsgEvent struct {
+	Message *Msg
+}
+
+type NodeControlEvent struct {
+	*NodeEvent
+}
+
+type ConnControlEvent struct {
+	*ConnEvent
+}
+
+type MsgControlEvent struct {
+	*MsgEvent
+}
+
+func (self *NodeEvent) String() string {
+	return fmt.Sprintf("<Up: %v, Data: %v>\n", self.Up, self.Node)
+}
+
+func (self *ConnEvent) String() string {
+	return fmt.Sprintf("<Up: %v, Reverse: %v, Data: %v>\n", self.Up, self.Reverse, self.Connection)
+}
+
+func (self *MsgEvent) String() string {
+	return fmt.Sprintf("<Msg: %v>\n", self.Message)
+}
+
+func (self *Node) EmitEvent(eventType EventType) interface{} {
+	evt := &NodeEvent{
+		Node: self,
+		Up:   self.Up,
 	}
+	if eventType == ControlEvent {
+		return &NodeControlEvent{
+			evt,
+		}
+	} else {
+		return evt
+	}
+}
+
+func (self *Conn) EmitEvent(eventType EventType) interface{} {
+	evt := &ConnEvent{
+		Connection: self,
+		Up:         self.Up,
+		Reverse:    self.Reverse,
+	}
+
+	if eventType == ControlEvent {
+		return &ConnControlEvent{
+			evt,
+		}
+	} else {
+		return evt
+	}
+}
+
+func (self *Msg) EmitEvent(eventType EventType) interface{} {
+	evt := &MsgEvent{
+		Message: self,
+	}
+	if eventType == ControlEvent {
+		return &MsgControlEvent{
+			evt,
+		}
+	} else {
+		return evt
+	}
+}
+
+func (self *MsgEvent) ToControlEvent() *MsgControlEvent {
+	return &MsgControlEvent{self}
+}
+
+func (self *ConnEvent) ToControlEvent() *ConnControlEvent {
+	return &ConnControlEvent{self}
+}
+
+func (self *NodeEvent) ToControlEvent() *NodeControlEvent {
+	return &NodeControlEvent{self}
+}
+
+func (self *Node) Adapter() adapters.NodeAdapter {
+	return self.na
 }
 
 type NodeConfig struct {
@@ -528,11 +602,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	node.Up = true
 	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
 
-	self.events.Post(&NodeEvent{
-		Action: "up",
-		Type:   "node",
-		node:   node,
-	})
+	self.events.Post(node.EmitEvent(ControlEvent))
 	return nil
 }
 
@@ -551,11 +621,7 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 	node.Up = false
 	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
 
-	self.events.Post(&NodeEvent{
-		Action: "down",
-		Type:   "node",
-		node:   node,
-	})
+	self.events.Post(node.EmitEvent(ControlEvent))
 	return nil
 }
 
@@ -595,6 +661,7 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	if err != nil {
 		return err
 	}
+	self.events.Post(conn.EmitEvent(ControlEvent))
 	return client.Call(nil, "admin_addPeer", string(addr))
 }
 
@@ -628,6 +695,7 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 	if err != nil {
 		return err
 	}
+	self.events.Post(conn.EmitEvent(ControlEvent))
 	return client.Call(nil, "admin_removePeer", string(addr))
 }
 
@@ -642,7 +710,7 @@ func (self *Network) DidConnect(one, other *adapters.NodeId) error {
 	conn.Reverse = conn.One.NodeID != one.NodeID
 	conn.Up = true
 	// connection event posted
-	self.events.Post(conn.event(true, conn.Reverse))
+	self.events.Post(conn.EmitEvent(LiveEvent))
 	return nil
 }
 
@@ -656,7 +724,7 @@ func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
 	}
 	conn.Reverse = conn.One.NodeID != one.NodeID
 	conn.Up = false
-	self.events.Post(conn.event(false, conn.Reverse))
+	self.events.Post(conn.EmitEvent(LiveEvent))
 	return nil
 }
 
@@ -668,7 +736,7 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 		Code:  msgcode,
 	}
 	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
-	self.events.Post(msg.event()) // should also include send status maybe
+	self.events.Post(msg.EmitEvent(ControlEvent))
 }
 
 // GetNodeAdapter(id) returns the NodeAdapter for node with id

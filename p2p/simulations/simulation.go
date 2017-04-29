@@ -68,7 +68,7 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 func (s *Simulation) watchNetwork(result *StepResult) func() {
 	stop := make(chan struct{})
 	done := make(chan struct{})
-	sub := s.network.Events().Subscribe(ConnectivityEvents...)
+	sub := s.network.Events().Subscribe(ConnectivityAllEvents...)
 	go func() {
 		defer close(done)
 		defer sub.Unsubscribe()

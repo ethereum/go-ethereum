@@ -19,8 +19,9 @@ type SimData struct {
 
 type SimElement struct {
 	Data    *SimData `json:"data"`
-	Classes string  `json:"classes,omitempty"`
-	Group   string  `json:"group"`
+	Classes string   `json:"classes,omitempty"`
+	Group   string   `json:"group"`
+	Control bool     `json:"control"`
 	// selected: false, // whether the element is selected (default false)
 	// selectable: true, // whether the selection state is mutable (default true)
 	// locked: false, // when locked a node's position is immutable (default false)
@@ -37,21 +38,65 @@ func NewSimUpdate(e *event.TypeMuxEvent) (*SimUpdate, error) {
 	var update SimUpdate
 	var el *SimElement
 	entry := e.Data
-	var action string
-	if ev, ok := entry.(*NodeEvent); ok {
-		el = &SimElement{Group: "nodes", Data: &SimData{Id: ev.node.Id.String()}}
-		action = ev.Action
-	} else if ev, ok := entry.(*MsgEvent); ok {
-		msg := ev.msg
+
+	switch entry.(type) {
+	case *NodeControlEvent, *NodeEvent:
+		var data *SimData
+		var control bool
+		nce, ok := entry.(*NodeControlEvent)
+		if ok {
+			data = &SimData{Id: nce.Node.Id.String()}
+			data.Up = nce.Up
+			control = true
+		} else {
+			ne := entry.(*NodeEvent)
+			data = &SimData{Id: ne.Node.Id.String()}
+			data.Up = ne.Up
+			control = false
+		}
+		el = &SimElement{Group: "nodes", Data: data}
+		el.Control = control
+		if el.Data.Up {
+			update.Add = append(update.Add, el)
+		} else {
+			update.Remove = append(update.Remove, el)
+		}
+	case *MsgControlEvent, *MsgEvent:
+		var control bool
+		var msg *Msg
+		mce, ok := entry.(*MsgControlEvent)
+		if ok {
+			msg = mce.Message
+			control = true
+		} else {
+			me := entry.(*MsgEvent)
+			msg = me.Message
+			control = false
+		}
 		id := ConnLabel(msg.One, msg.Other)
 		var source, target string
 		source = msg.One.String()
 		target = msg.Other.String()
 		el = &SimElement{Group: "msgs", Data: &SimData{Id: id, Source: source, Target: target}}
-		action = ev.Action
-	} else if ev, ok := entry.(*ConnEvent); ok {
+		el.Data.Up = true
+		el.Control = control
+		update.Message = append(update.Message, el)
+	case *ConnControlEvent, *ConnEvent:
+		var control bool
+		var conn *Conn
+		var up bool
+		cce, ok := entry.(*ConnControlEvent)
+		if ok {
+			conn = cce.Connection
+			up = cce.Up
+			control = true
+		} else {
+			ce := entry.(*ConnEvent)
+			conn = ce.Connection
+			up = ce.Up
+			control = false
+		}
 		// mutually exclusive directed edge (caller -> callee)
-		conn := ev.conn
 		id := ConnLabel(conn.One, conn.Other)
 		var source, target string
 		if conn.Reverse {
@@ -62,23 +107,15 @@ func NewSimUpdate(e *event.TypeMuxEvent) (*SimUpdate, error) {
 			target = conn.Other.String()
 		}
 		el = &SimElement{Group: "edges", Data: &SimData{Id: id, Source: source, Target: target}}
-		action = ev.Action
-	} else {
-		return nil, fmt.Errorf("unknown event type: %T", entry)
-	}
-
-	switch action {
-	case "up":
-		el.Data.Up = true
-		update.Add = append(update.Add, el)
-	case "down":
-		el.Data.Up = false
-		update.Remove = append(update.Remove, el)
-	case "msg":
-		el.Data.Up = true
-		update.Message = append(update.Message, el)
+		el.Control = control
+		el.Data.Up = up
+		if up {
+			update.Add = append(update.Add, el)
+		} else {
+			update.Remove = append(update.Remove, el)
+		}
 	default:
-		return nil, fmt.Errorf("unknown action: %q", action)
+		return nil, fmt.Errorf("unknown event type: %T", entry)
 	}
 
 	return &update, nil
