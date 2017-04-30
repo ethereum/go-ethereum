@@ -120,13 +120,11 @@ type serverPool struct {
 }
 
 // newServerPool creates a new serverPool instance
-func newServerPool(db ethdb.Database, dbPrefix []byte, topic discv5.Topic, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
+func newServerPool(db ethdb.Database, quit chan struct{}, wg *sync.WaitGroup) *serverPool {
 	pool := &serverPool{
 		db:           db,
-		dbKey:        append(dbPrefix, []byte(topic)...),
 		quit:         quit,
 		wg:           wg,
-		topic:        topic,
 		entries:      make(map[discover.NodeID]*poolEntry),
 		timeout:      make(chan *poolEntry, 1),
 		adjustStats:  make(chan poolStatAdjust, 100),
@@ -137,15 +135,18 @@ func newServerPool(db ethdb.Database, dbPrefix []byte, topic discv5.Topic, quit 
 	}
 	pool.knownQueue = newPoolEntryQueue(maxKnownEntries, pool.removeEntry)
 	pool.newQueue = newPoolEntryQueue(maxNewEntries, pool.removeEntry)
-	wg.Add(1)
-	pool.loadNodes()
-
-	go pool.eventLoop()
 	return pool
 }
 
-func (pool *serverPool) setServer(server *p2p.Server) {
+func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 	pool.server = server
+	pool.topic = topic
+	pool.dbKey = append([]byte("serverPool/"), []byte(topic)...)
+	pool.wg.Add(1)
+	pool.loadNodes()
+
+	go pool.eventLoop()
+
 	pool.checkDial()
 	if pool.server.DiscV5 != nil {
 		pool.discSetPeriod = make(chan time.Duration, 1)

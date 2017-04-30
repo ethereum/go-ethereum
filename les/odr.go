@@ -31,10 +31,11 @@ type LesOdr struct {
 	retriever *retrieveManager
 }
 
-func NewLesOdr(db ethdb.Database) *LesOdr {
+func NewLesOdr(db ethdb.Database, retriever *retrieveManager) *LesOdr {
 	return &LesOdr{
-		db:   db,
-		stop: make(chan struct{}),
+		db:        db,
+		retriever: retriever,
+		stop:      make(chan struct{}),
 	}
 }
 

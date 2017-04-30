@@ -19,6 +19,7 @@ package les
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -38,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
 )
@@ -49,9 +51,13 @@ type LightEthereum struct {
 	// Channel for shutting down the service
 	shutdownChan chan bool
 	// Handlers
+	peers           *peerSet
 	txPool          *light.TxPool
 	blockchain      *light.LightChain
 	protocolManager *ProtocolManager
+	serverPool      *serverPool
+	reqDist         *requestDistributor
+	retriever       *retrieveManager
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
 
@@ -63,6 +69,9 @@ type LightEthereum struct {
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
+
+	quitSync chan struct{}
+	wg       sync.WaitGroup
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
@@ -76,20 +85,26 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
-	odr := NewLesOdr(chainDb)
-	relay := NewLesTxRelay()
+	peers := newPeerSet()
+	quitSync := make(chan struct{})
+
 	eth := &LightEthereum{
-		odr:            odr,
-		relay:          relay,
-		chainDb:        chainDb,
 		chainConfig:    chainConfig,
+		chainDb:        chainDb,
 		eventMux:       ctx.EventMux,
+		peers:          peers,
+		reqDist:        newRequestDistributor(peers, quitSync),
 		accountManager: ctx.AccountManager,
 		engine:         eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,
 	}
-	if eth.blockchain, err = light.NewLightChain(odr, eth.chainConfig, eth.engine, eth.eventMux); err != nil {
+
+	eth.relay = NewLesTxRelay(peers, eth.reqDist)
+	eth.serverPool = newServerPool(chainDb, quitSync, &eth.wg)
+	eth.retriever = newRetrieveManager(peers, eth.reqDist, eth.serverPool)
+	eth.odr = NewLesOdr(chainDb, eth.retriever)
+	if eth.blockchain, err = light.NewLightChain(eth.odr, eth.chainConfig, eth.engine, eth.eventMux); err != nil {
 		return nil, err
 	}
 	// Rewind the chain in case of an incompatible config upgrade.
@@ -100,13 +115,9 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 
 	eth.txPool = light.NewTxPool(eth.chainConfig, eth.eventMux, eth.blockchain, eth.relay)
-	lightSync := config.SyncMode == downloader.LightSync
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, lightSync, config.NetworkId, eth.eventMux, eth.engine, eth.blockchain, nil, chainDb, odr, relay); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, true, config.NetworkId, eth.eventMux, eth.engine, eth.peers, eth.blockchain, nil, chainDb, eth.odr, eth.relay, quitSync, &eth.wg); err != nil {
 		return nil, err
 	}
-	relay.ps = eth.protocolManager.peers
-	relay.reqDist = eth.protocolManager.reqDist
-
 	eth.ApiBackend = &LesApiBackend{eth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
@@ -114,6 +125,10 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 	return eth, nil
+}
+
+func lesTopic(genesisHash common.Hash) discv5.Topic {
+	return discv5.Topic("LES@" + common.Bytes2Hex(genesisHash.Bytes()[0:8]))
 }
 
 type LightDummyAPI struct{}
@@ -188,7 +203,8 @@ func (s *LightEthereum) Protocols() []p2p.Protocol {
 func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	log.Warn("Light client mode is an experimental feature")
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.networkId)
-	s.protocolManager.Start(srvr)
+	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash()))
+	s.protocolManager.Start()
 	return nil
 }
 

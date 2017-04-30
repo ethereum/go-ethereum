@@ -38,8 +38,8 @@ var (
 // matching replies by request ID and handles timeouts and resends if necessary.
 type retrieveManager struct {
 	dist       *requestDistributor
+	peers      *peerSet
 	serverPool peerSelector
-	removePeer peerDropFn
 
 	lock     sync.RWMutex
 	sentReqs map[uint64]*sentReq
@@ -47,9 +47,6 @@ type retrieveManager struct {
 
 // validatorFunc is a function that processes a reply message
 type validatorFunc func(distPeer, *Msg) error
-
-// peerDropFn is a callback type for dropping a peer detected as malicious.
-type peerDropFn func(id string)
 
 // peerSelector receives feedback info about response times and timeouts
 type peerSelector interface {
@@ -69,16 +66,12 @@ type sentReq struct {
 	sentCnt, softTimeoutCnt int
 }
 
-// reqPeerCallback is called after a request sent to a certain peer has either been
-// answered or timed out hard
-type reqPeerCallback func(p distPeer, respTime time.Duration, srto, hrto bool)
-
 // newRetrieveManager creates the retrieve manager
-func newRetrieveManager(dist *requestDistributor, serverPool peerSelector, removePeer peerDropFn) *retrieveManager {
+func newRetrieveManager(peers *peerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
 	return &retrieveManager{
+		peers:      peers,
 		dist:       dist,
 		serverPool: serverPool,
-		removePeer: removePeer,
 		sentReqs:   make(map[uint64]*sentReq),
 	}
 }
@@ -199,8 +192,8 @@ func (r *sentReq) tryRetrieve() {
 				}
 				if hrto {
 					pp.Log().Debug("Request timed out hard")
-					if r.rm.removePeer != nil {
-						r.rm.removePeer(pp.id)
+					if r.rm.peers != nil {
+						r.rm.peers.Unregister(pp.id)
 					}
 				}
 			}

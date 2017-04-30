@@ -39,26 +39,28 @@ type LesTxRelay struct {
 	reqDist *requestDistributor
 }
 
-func NewLesTxRelay() *LesTxRelay {
-	return &LesTxRelay{
+func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
+	r := &LesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),
+		ps:        ps,
+		reqDist:   reqDist,
 	}
+	ps.notify(r)
+	return r
 }
 
-func (self *LesTxRelay) addPeer(p *peer) {
+func (self *LesTxRelay) registerPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.ps.Register(p)
 	self.peerList = self.ps.AllPeers()
 }
 
-func (self *LesTxRelay) removePeer(id string) {
+func (self *LesTxRelay) unregisterPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
-	self.ps.Unregister(id)
 	self.peerList = self.ps.AllPeers()
 }
 
