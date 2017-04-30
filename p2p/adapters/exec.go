@@ -356,7 +356,7 @@ func (p *PeerAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
 
 	go func() {
 		events := make(chan *p2p.PeerEvent)
-		sub := p.server().SubscribePeers(events)
+		sub := p.server().SubscribeEvents(events)
 		defer sub.Unsubscribe()
 
 		for {

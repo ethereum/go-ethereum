@@ -29,9 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-func newPeer(rw *p2p.MsgPipeRW) *Peer {
+func newPeer(rw MsgReadWriteCloser) *Peer {
 	return &Peer{
-		MsgPipeRW: rw,
+		MsgReadWriteCloser: rw,
 		Errc:      make(chan error, 1),
 		Connc:     make(chan bool),
 		Readyc:    make(chan bool),
@@ -39,7 +39,7 @@ func newPeer(rw *p2p.MsgPipeRW) *Peer {
 }
 
 type Peer struct {
-	*p2p.MsgPipeRW
+	MsgReadWriteCloser
 	Connc  chan bool
 	Readyc chan bool
 	Errc   chan error
@@ -50,6 +50,12 @@ type Peer struct {
 type Network interface {
 	GetNodeAdapter(id *NodeId) NodeAdapter
 	Reporter
+}
+
+// Adds close pipe to the MsgReadWriter 
+type MsgReadWriteCloser interface {
+	p2p.MsgReadWriter
+	Close() error
 }
 
 // SimNode is the network adapter that
@@ -169,7 +175,7 @@ func (self *SimNode) getPeer(id *NodeId) *Peer {
 	return self.peers[i]
 }
 
-func (self *SimNode) setPeer(id *NodeId, rw *p2p.MsgPipeRW) *Peer {
+func (self *SimNode) setPeer(id *NodeId, rw MsgReadWriteCloser) *Peer {
 	i, found := self.peerMap[id.NodeID]
 	if !found {
 		i = len(self.peers)
@@ -183,7 +189,8 @@ func (self *SimNode) setPeer(id *NodeId, rw *p2p.MsgPipeRW) *Peer {
 	// }
 	// legit reconnect reset disconnection error,
 	p := self.peers[i]
-	p.MsgPipeRW = rw
+	//p.MsgPipeRW = rw
+	p.MsgReadWriteCloser = rw
 	p.Connc = make(chan bool)
 	p.Readyc = make(chan bool)
 	return p
@@ -194,11 +201,12 @@ func (self *SimNode) RemovePeer(node *discover.Node) {
 	defer self.lock.Unlock()
 	id := &NodeId{node.ID}
 	peer := self.getPeer(id)
-	if peer == nil || peer.MsgPipeRW == nil {
+	//if peer == nil || peer.MsgPipeRW == nil {
+	if peer == nil || peer.MsgReadWriteCloser == nil {
 		return
 	}
-	peer.MsgPipeRW.Close()
-	peer.MsgPipeRW = nil
+	peer.MsgReadWriteCloser.Close()
+	peer.MsgReadWriteCloser = nil
 	// na := self.network.GetNodeAdapter(id)
 	// peer = na.(*SimNode).GetPeer(self.Id)
 	// peer.RW = nil
@@ -216,7 +224,8 @@ func (self *SimNode) AddPeer(node *discover.Node) {
 	rw, rrw := p2p.MsgPipe()
 	// // run protocol on remote node with self as peer
 	peer := self.getPeer(id)
-	if peer != nil && peer.MsgPipeRW != nil {
+	//if peer != nil && peer.MsgPipeRW != nil {
+	if peer != nil && peer.MsgReadWriteCloser != nil {
 		return
 	}
 	peer = self.setPeer(id, rrw)
@@ -228,7 +237,7 @@ func (self *SimNode) AddPeer(node *discover.Node) {
 	self.RunProtocol(na.(*SimNode), rw, rrw, peer)
 }
 
-func (self *SimNode) SubscribePeers(ch chan *p2p.PeerEvent) event.Subscription {
+func (self *SimNode) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {
 	return self.peerFeed.Subscribe(ch)
 }
 
@@ -246,7 +255,7 @@ func (self *SimNode) PeersInfo() (info []*p2p.PeerInfo) {
 	return nil
 }
 
-func (self *SimNode) RunProtocol(node *SimNode, rw, rrw p2p.MsgReadWriter, peer *Peer) {
+func (self *SimNode) RunProtocol(node *SimNode, rw, rrw MsgReadWriteCloser, peer *Peer) {
 	id := node.Id
 	protocol := self.service.Protocols()[0]
 	if protocol.Run == nil {

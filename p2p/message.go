@@ -27,7 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
+	
+	
 )
 
 // Msg defines the structure of a p2p message.
@@ -268,6 +272,60 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 		if !bytes.Equal(actualContent, contentEnc) {
 			return fmt.Errorf("message %v payload mismatch:\ngot:  %x\nwant: %x", msg, actualContent, contentEnc)
 		}
+	}
+	return nil
+}
+
+
+// wraps a msgreadwriter to allow for emitting message events upon
+// send or receive
+type MsgReporterRW struct {
+	MsgReadWriter
+	feed *event.Feed
+	peerid discover.NodeID
+	closefunc func() error
+}
+
+func NewMsgReporterRW(feed *event.Feed, rw MsgReadWriter, id discover.NodeID, closefunc func() error) *MsgReporterRW {
+	return &MsgReporterRW{
+		MsgReadWriter: rw,
+		feed: feed,
+		peerid: id,
+		closefunc: closefunc,
+	}
+}
+
+func (self *MsgReporterRW) ReadMsg() (Msg, error) {
+	msg, err := self.MsgReadWriter.ReadMsg()
+	if err != nil {
+		return msg, err
+	}
+	event := PeerEvent{
+		Type: PeerEventTypeMsgRecv,
+		Peer: self.peerid,
+		Label: fmt.Sprintf("%d,%d", msg.Code, msg.Size),
+	}
+	self.feed.Send(event)
+	return msg, nil
+}
+
+func (self *MsgReporterRW) WriteMsg(msg Msg) error {
+	err := self.MsgReadWriter.WriteMsg(msg)
+	if err != nil {
+		return err
+	}
+	event := PeerEvent{
+		Type: PeerEventTypeMsgSend,
+		Peer: self.peerid,
+		Label: fmt.Sprintf("%d,%d", msg.Code, msg.Size),
+	}
+	self.feed.Send(event)
+	return nil
+}
+
+func (self *MsgReporterRW) Close() error {
+	if self.closefunc != nil {
+		return self.closefunc()
 	}
 	return nil
 }

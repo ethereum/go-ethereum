@@ -142,7 +142,7 @@ type Server interface {
 	Stop() error
 	AddPeer(node *discover.Node)
 	RemovePeer(node *discover.Node)
-	SubscribePeers(ch chan *PeerEvent) event.Subscription
+	SubscribeEvents(ch chan *PeerEvent) event.Subscription
 	PeerCount() int
 	NodeInfo() *NodeInfo
 	PeersInfo() []*PeerInfo
@@ -309,7 +309,7 @@ func (srv *server) RemovePeer(node *discover.Node) {
 }
 
 // SubscribePeers subscribes the given channel to peer events
-func (srv *server) SubscribePeers(ch chan *PeerEvent) event.Subscription {
+func (srv *server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
 }
 

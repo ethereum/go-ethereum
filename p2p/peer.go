@@ -71,6 +71,14 @@ const (
 	// PeerEventTypeDrop is the type of event emitted when a peer is
 	// dropped from a p2p.Server
 	PeerEventTypeDrop PeerEventType = "drop"
+	
+	// PeerEventTypeMsgSend is the type of event emitted when a 
+	// message is successfully sent to a peer
+	PeerEventTypeMsgSend PeerEventType = "msgsend"
+	
+	// PeerEventTypeMsgSend is the type of event emitted when a 
+	// message is successfully sent to a peer
+	PeerEventTypeMsgRecv PeerEventType = "msgrecv"
 )
 
 // PeerEvent is an event emitted when peers are either added or dropped from
@@ -78,6 +86,7 @@ const (
 type PeerEvent struct {
 	Type PeerEventType
 	Peer discover.NodeID
+	Label string
 }
 
 // Peer represents a connected remote node.
@@ -379,6 +388,10 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 	case <-rw.closed:
 		return Msg{}, io.EOF
 	}
+}
+
+func (rw *protoRW) Close() error {
+	return nil
 }
 
 // PeerInfo represents a short summary of the information known about a connected

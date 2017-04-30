@@ -79,7 +79,7 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 	if peer == nil {
 		panic(fmt.Sprintf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids)))
 	}
-	if peer.MsgPipeRW == nil {
+	if peer.MsgReadWriteCloser == nil {
 		return fmt.Errorf("trigger: peer %v unreachable", trig.Peer)
 	}
 	errc := make(chan error)
@@ -112,7 +112,7 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	if peer == nil {
 		panic(fmt.Sprintf("expect: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids)))
 	}
-	if peer.MsgPipeRW == nil {
+	if peer.MsgReadWriteCloser== nil {
 		return fmt.Errorf("trigger: peer %v unreachable", exp.Peer)
 	}
 
@@ -247,7 +247,7 @@ func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error 
 func (self *ProtocolSession) Stop() {
 	for _, id := range self.Ids {
 		p := self.GetPeer(id)
-		if p != nil && p.MsgPipeRW != nil {
+		if p != nil && p.MsgReadWriteCloser != nil {
 			p.Close()
 		}
 	}
