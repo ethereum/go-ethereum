@@ -213,6 +213,12 @@ func (self *Hive) Stop() {
 	close(self.quit)
 }
 
+func (self *Hive) Healthy() bool {
+	// TODO: determine if we have enough peers to consider the network
+	//       to be healthy
+	return true
+}
+
 func (self *Hive) wake() {
 	select {
 	case self.more <- true:
