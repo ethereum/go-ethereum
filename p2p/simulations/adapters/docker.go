@@ -1,7 +1,7 @@
 package adapters
 
 import (
-	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -9,36 +9,41 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sync"
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/node"
 )
 
-// DockerNode is a NodeAdapter which wraps an ExecNode but exec's the current
-// binary in a docker container rather than locally
-type DockerNode struct {
-	ExecNode
+// DockerAdapter is a NodeAdapter which runs nodes inside Docker containers.
+//
+// A Docker image is built which contains the current binary at /bin/p2p-node
+// which when executed runs the underlying service (see the description
+// of the execP2PNode function for more details)
+type DockerAdapter struct{}
+
+// NewDockerAdapter builds the p2p-node Docker image containing the current
+// binary and returns a DockerAdapter
+func NewDockerAdapter() (*DockerAdapter, error) {
+	if runtime.GOOS != "linux" {
+		return nil, errors.New("DockerAdapter can only be used on Linux as it uses the current binary (which must be a Linux binary)")
+	}
+
+	if err := buildDockerImage(); err != nil {
+		return nil, err
+	}
+
+	return &DockerAdapter{}, nil
 }
 
-// NewDockerNode creates a new DockerNode, building the docker image if
-// necessary
-func NewDockerNode(id *NodeId, key *ecdsa.PrivateKey, service string) (*DockerNode, error) {
-	if runtime.GOOS != "linux" {
-		return nil, fmt.Errorf("NewDockerNode can only be used on Linux as it uses the current binary (which must be a Linux binary)")
-	}
+// Name returns the name of the adapter for logging purpoeses
+func (d *DockerAdapter) Name() string {
+	return "docker-adapter"
+}
 
-	if _, exists := serviceFuncs[service]; !exists {
-		return nil, fmt.Errorf("unknown node service %q", service)
-	}
-
-	// build the docker image
-	var err error
-	dockerOnce.Do(func() {
-		err = buildDockerImage()
-	})
-	if err != nil {
-		return nil, err
+// NewNode returns a new DockerNode using the given config
+func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
+	if _, exists := serviceFuncs[config.Service]; !exists {
+		return nil, fmt.Errorf("unknown node service %q", config.Service)
 	}
 
 	// generate the config
@@ -49,14 +54,20 @@ func NewDockerNode(id *NodeId, key *ecdsa.PrivateKey, service string) (*DockerNo
 
 	node := &DockerNode{
 		ExecNode: ExecNode{
-			ID:      id,
-			Service: service,
+			ID:      config.Id,
+			Service: config.Service,
 			Config:  &conf,
-			key:     key,
+			key:     config.PrivateKey,
 		},
 	}
 	node.newCmd = node.dockerCommand
 	return node, nil
+}
+
+// DockerNode wraps an ExecNode but exec's the current binary in a docker
+// container rather than locally
+type DockerNode struct {
+	ExecNode
 }
 
 // dockerCommand returns a command which exec's the binary in a docker
@@ -76,9 +87,6 @@ func (n *DockerNode) dockerCommand() *exec.Cmd {
 
 // dockerImage is the name of the docker image
 const dockerImage = "p2p-node"
-
-// dockerOnce is used to build the docker image only once
-var dockerOnce sync.Once
 
 // buildDockerImage builds the docker image which is used to run devp2p nodes
 // using docker.

@@ -165,8 +165,6 @@ func (n *Node) Start() error {
 	if n.serverConfig.NodeDatabase == "" {
 		n.serverConfig.NodeDatabase = n.config.NodeDB()
 	}
-	running := p2p.NewServer(n.serverConfig)
-	log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
@@ -196,6 +194,8 @@ func (n *Node) Start() error {
 	for _, service := range services {
 		n.serverConfig.Protocols = append(n.serverConfig.Protocols, service.Protocols()...)
 	}
+	running := p2p.NewServer(n.serverConfig)
+	log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 	if err := running.Start(); err != nil {
 		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
 			return ErrDatadirUsed

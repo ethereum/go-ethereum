@@ -779,11 +779,22 @@ func (srv *server) runPeer(p *Peer) {
 		srv.newPeerHook(p)
 	}
 
-	// broadcast peer add / drop events
-	srv.peerFeed.Send(&PeerEvent{Type: PeerEventTypeAdd, Peer: p.ID()})
-	defer srv.peerFeed.Send(&PeerEvent{Type: PeerEventTypeDrop, Peer: p.ID()})
+	// broadcast peer add
+	srv.peerFeed.Send(&PeerEvent{
+		Type: PeerEventTypeAdd,
+		Peer: p.ID(),
+	})
 
+	// run the protocol
 	remoteRequested, err := p.run()
+
+	// broadcast peer drop
+	srv.peerFeed.Send(&PeerEvent{
+		Type:  PeerEventTypeDrop,
+		Peer:  p.ID(),
+		Error: err.Error(),
+	})
+
 	// Note: run waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
 	srv.delpeer <- peerDrop{p, err, remoteRequested}

@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -96,7 +96,6 @@ func (s *bzzTester) testHandshake(lhs, rhs *bzzHandshake, disconnects ...*p2ptes
 	} else {
 		peers = []*adapters.NodeId{id}
 	}
-	<-s.GetPeer(id).Connc
 
 	s.TestExchanges(bzzHandshakeExchange(lhs, rhs, id)...)
 	s.TestDisconnected(disconnects...)

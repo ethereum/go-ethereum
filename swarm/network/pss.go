@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -242,12 +242,12 @@ func (self *Pss) GetHandler(topic PssTopic) func([]byte, *p2p.Peer, []byte) erro
 // Links a pss peer address and topic to a dedicated p2p.MsgReadWriter in the pss peerpool, and runs the specificed protocol on this p2p.MsgReadWriter and the specified peer
 //
 // The effect is that now we have a "virtual" protocol running on an artificial p2p.Peer, which can be looked up and piped to through Pss using swarm overlay address and topic
-func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, protocall adapters.ProtoCall, topic PssTopic, rw p2p.MsgReadWriter) error {
+func (self *Pss) AddPeer(p *p2p.Peer, addr pot.Address, run adapters.RunProtocol, topic PssTopic, rw p2p.MsgReadWriter) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.addPeerTopic(addr, topic, rw)
 	go func() {
-		err := protocall(p, rw)
+		err := run(p, rw)
 		log.Warn(fmt.Sprintf("pss vprotocol quit on addr %v topic %v: %v", addr, topic, err))
 	}()
 	return nil

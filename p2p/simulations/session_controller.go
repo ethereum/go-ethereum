@@ -11,7 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 type returnHandler func(body io.Reader) (resp io.ReadSeeker, err error)
@@ -83,9 +83,12 @@ func NewResourceContoller(c *ResourceHandlers) *ResourceController {
 
 var empty = struct{}{}
 
-func DefaultNet(conf *NetworkConfig) (NetworkControl, *ResourceController) {
-	net := NewNetwork(conf)
-	return NetworkControl(net), NewNodesController(net)
+func DefaultNet(services map[string]adapters.ServiceFunc, defaultService string) func(conf *NetworkConfig) (NetworkControl, *ResourceController) {
+	return func(conf *NetworkConfig) (NetworkControl, *ResourceController) {
+		conf.DefaultService = defaultService
+		net := NewNetwork(adapters.NewSimAdapter(services), conf)
+		return NetworkControl(net), NewNodesController(net)
+	}
 }
 
 func NewSessionController(nethook func(*NetworkConfig) (NetworkControl, *ResourceController)) (*ResourceController, chan bool) {

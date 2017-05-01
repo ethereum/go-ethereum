@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 func testEvents(intervals ...int) (events []*event.TypeMuxEvent) {

@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
@@ -61,8 +62,7 @@ func (self *SimNode) Stop() error {
 }
 
 // NewSimNode creates adapters for nodes in the simulation.
-func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
-	id := conf.Id
+func (self *Network) NewSimNode(id *adapters.NodeId) node.Service {
 	addr := network.NewPeerAddrFromNodeId(id)
 	kp := network.NewKadParams()
 
@@ -91,21 +91,17 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 
 	ct := network.BzzCodeMap(network.DiscoveryMsgs...) // bzz protocol code map
 
-	node := &SimNode{
+	return &SimNode{
 		hive:     pp,
 		protocol: network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nil),
 	}
-	return adapters.NewSimNode(id, node, self.Network)
-
 }
 
 func NewNetwork(net *simulations.Network) *Network {
-	n := &Network{
+	return &Network{
 		Network: net,
 		hives:   make(map[discover.NodeID]*network.Hive),
 	}
-	n.SetNaf(n.NewSimNode)
-	return n
 }
 
 func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simulations.ResourceController) {
@@ -116,7 +112,14 @@ func nethook(conf *simulations.NetworkConfig) (simulations.NetworkControl, *simu
 	conf.DefaultMockerConfig.DegreeTarget = 0
 	conf.Id = "0"
 	conf.Backend = true
-	net := NewNetwork(simulations.NewNetwork(conf))
+	conf.DefaultService = "overlay"
+
+	net := &Network{
+		hives: make(map[discover.NodeID]*network.Hive),
+	}
+	services := map[string]adapters.ServiceFunc{"overlay": net.NewSimNode}
+	adapter := adapters.NewSimAdapter(services)
+	net.Network = simulations.NewNetwork(adapter, conf)
 
 	ids := make([]*adapters.NodeId, 10)
 	for i := 0; i < 10; i++ {

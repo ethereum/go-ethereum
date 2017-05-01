@@ -2,12 +2,14 @@ package testing
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -17,32 +19,39 @@ type ProtocolTester struct {
 }
 
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
-	net := simulations.NewNetwork(&simulations.NetworkConfig{})
-	naf := func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-		node := &testNode{}
-		if conf.Id.NodeID == id.NodeID {
-			log.Trace(fmt.Sprintf("adapter run function set to protocol for node %v (=%v)", conf.Id, id))
-			node.run = run
-		}
-		return adapters.NewSimNode(conf.Id, node, net)
+	services := map[string]adapters.ServiceFunc{
+		"test": func(id *adapters.NodeId) node.Service {
+			return &testNode{run}
+		},
+		"mock": func(id *adapters.NodeId) node.Service {
+			return newMockNode()
+		},
 	}
-	net.SetNaf(naf)
-
-	if err := net.NewNodeWithConfig(&simulations.NodeConfig{Id: id}); err != nil {
+	adapter := adapters.NewSimAdapter(services)
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{})
+	if err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Service: "test"}); err != nil {
 		panic(err.Error())
 	}
 	if err := net.Start(id); err != nil {
 		panic(err.Error())
 	}
 
-	node := net.GetNodeAdapter(id).(*adapters.SimNode)
-	peers := make([]*simulations.NodeConfig, n)
+	node := net.GetNode(id).Node.(*adapters.SimNode)
+	peers := make([]*adapters.NodeConfig, n)
 	peerIDs := make([]*adapters.NodeId, n)
 	for i := 0; i < n; i++ {
-		peers[i] = simulations.RandomNodeConfig()
+		peers[i] = adapters.RandomNodeConfig()
+		peers[i].Service = "mock"
 		peerIDs[i] = peers[i].Id
 	}
-	ps := NewProtocolSession(node, peerIDs)
+	events := make(chan *p2p.PeerEvent, 1000)
+	node.SubscribeEvents(events)
+	ps := &ProtocolSession{
+		SimNode: node,
+		Ids:     peerIDs,
+		adapter: adapter,
+		events:  events,
+	}
 	self := &ProtocolTester{
 		ProtocolSession: ps,
 		network:         net,
@@ -53,7 +62,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	return self
 }
 
-func (self *ProtocolTester) Connect(selfId *adapters.NodeId, peers ...*simulations.NodeConfig) {
+func (self *ProtocolTester) Connect(selfId *adapters.NodeId, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.Id))
 		if err := self.network.NewNodeWithConfig(peer); err != nil {
@@ -89,5 +98,59 @@ func (t *testNode) Start(server p2p.Server) error {
 }
 
 func (t *testNode) Stop() error {
+	return nil
+}
+
+// mockNode is a testNode which doesn't actually run a protocol, instead
+// exposing channels so that tests can manually trigger and expect certain
+// messages
+type mockNode struct {
+	testNode
+
+	trigger  chan *Trigger
+	expect   chan *Expect
+	err      chan error
+	stop     chan struct{}
+	stopOnce sync.Once
+}
+
+func newMockNode() *mockNode {
+	mock := &mockNode{
+		trigger: make(chan *Trigger),
+		expect:  make(chan *Expect),
+		err:     make(chan error),
+		stop:    make(chan struct{}),
+	}
+	mock.testNode.run = mock.Run
+	return mock
+}
+
+// Run is a protocol run function which just loops waiting for tests to
+// instruct it to either trigger or expect a message from the peer
+func (m *mockNode) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
+	for {
+		select {
+		case trig := <-m.trigger:
+			m.err <- p2p.Send(rw, trig.Code, trig.Msg)
+		case exp := <-m.expect:
+			m.err <- p2p.ExpectMsg(rw, exp.Code, exp.Msg)
+		case <-m.stop:
+			return nil
+		}
+	}
+}
+
+func (m *mockNode) Trigger(trig *Trigger) error {
+	m.trigger <- trig
+	return <-m.err
+}
+
+func (m *mockNode) Expect(exp *Expect) error {
+	m.expect <- exp
+	return <-m.err
+}
+
+func (m *mockNode) Stop() error {
+	m.stopOnce.Do(func() { close(m.stop) })
 	return nil
 }

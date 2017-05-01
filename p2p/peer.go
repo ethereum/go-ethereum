@@ -71,12 +71,12 @@ const (
 	// PeerEventTypeDrop is the type of event emitted when a peer is
 	// dropped from a p2p.Server
 	PeerEventTypeDrop PeerEventType = "drop"
-	
-	// PeerEventTypeMsgSend is the type of event emitted when a 
+
+	// PeerEventTypeMsgSend is the type of event emitted when a
 	// message is successfully sent to a peer
 	PeerEventTypeMsgSend PeerEventType = "msgsend"
-	
-	// PeerEventTypeMsgSend is the type of event emitted when a 
+
+	// PeerEventTypeMsgSend is the type of event emitted when a
 	// message is successfully sent to a peer
 	PeerEventTypeMsgRecv PeerEventType = "msgrecv"
 )
@@ -84,8 +84,9 @@ const (
 // PeerEvent is an event emitted when peers are either added or dropped from
 // a p2p.Server
 type PeerEvent struct {
-	Type PeerEventType
-	Peer discover.NodeID
+	Type  PeerEventType
+	Peer  discover.NodeID
+	Error string
 	Label string
 }
 

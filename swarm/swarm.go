@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -43,22 +43,21 @@ import (
 
 // the swarm stack
 type Swarm struct {
-	config      *api.Config            // swarm configuration
-	api         *api.Api               // high level api layer (fs/manifest)
-	dns         api.Resolver           // DNS registrar
-	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
-	dpa         *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	cloud       storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
-	hive        *network.Hive          // the logistic manager
-	backend     chequebook.Backend     // simple blockchain Backend
+	config      *api.Config        // swarm configuration
+	api         *api.Api           // high level api layer (fs/manifest)
+	dns         api.Resolver       // DNS registrar
+	storage     storage.ChunkStore // internal access to storage, common interface to cloud storage backends
+	dpa         *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	hive        *network.Hive      // the logistic manager
+	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
 	pssEnabled  bool
-	pss			*network.Pss
+	pss         *network.Pss
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	na			*adapters.NodeAdapter
 }
 
 type SwarmAPI struct {
@@ -91,7 +90,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		backend:     backend,
 		privateKey:  config.Swap.PrivateKey(),
 		corsString:  cors,
-		pssEnabled:	pssEnabled,
+		pssEnabled:  pssEnabled,
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
@@ -102,20 +101,20 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	log.Debug("Set up local db access (iterator/counter)")
-	
+
 	kp := network.NewKadParams()
-	
+
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		kp,
 	)
 	// set up the kademlia hive
 	self.hive = network.NewHive(
-		config.HiveParams,                    // configuration parameters
+		config.HiveParams, // configuration parameters
 		to,
 	)
 	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
-	
+
 	// setup cloud storage internal access layer
 	self.storage = storage.NewNetStore(hash, self.lstore, nil, config.StoreParams)
 	log.Debug("-> swarm net store shared access layer to Swarm Chunk Store")
@@ -142,7 +141,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
 	self.api = api.NewApi(self.dpa, self.dns)
-	
+
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -180,7 +179,7 @@ func (self *Swarm) Start(net p2p.Server) error {
 
 	self.hive.Start(
 		net,
-		func () <-chan time.Time{
+		func() <-chan time.Time {
 			return time.NewTicker(time.Second).C
 		},
 	)
@@ -190,14 +189,14 @@ func (self *Swarm) Start(net p2p.Server) error {
 	if self.pssEnabled {
 		pssparams := network.NewPssParams()
 		self.pss = network.NewPss(self.hive.Overlay, pssparams)
-		
+
 		// for testing purposes, shold be removed in production environment!!
 		pingtopic, _ := network.MakeTopic("pss", 1)
 		self.pss.Register(pingtopic, self.pss.GetPingHandler())
-		
+
 		log.Debug("Pss started: %v", self.pss)
 	}
-	
+
 	self.dpa.Start()
 	log.Debug(fmt.Sprintf("Swarm DPA started"))
 
@@ -245,7 +244,7 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 	if self.pssEnabled {
 		ct.Register(&network.PssMsg{})
 	}
-	
+
 	srv := func(p network.Peer) error {
 		if self.pssEnabled {
 			p.Register(&network.PssMsg{}, func(msg interface{}) error {
@@ -275,7 +274,7 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 		})
 		return nil
 	}
-	
+
 	proto := network.Bzz(
 		self.hive.Overlay.GetAddr().OverlayAddr(),
 		self.hive.Overlay.GetAddr().UnderlayAddr(),
@@ -284,7 +283,7 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 		nil,
 		nil,
 	)
-	
+
 	return []p2p.Protocol{*proto}
 }
 
@@ -339,12 +338,12 @@ func (self *Swarm) APIs() []rpc.API {
 	if self.pssEnabled {
 		apis = append(apis, rpc.API{
 			Namespace: "eth",
-			Version:	"0.1/pss",
-			Service:	network.NewPssApi(self.pss),
-			Public:		true,
+			Version:   "0.1/pss",
+			Service:   network.NewPssApi(self.pss),
+			Public:    true,
 		})
 	}
-		
+
 	return apis
 }
 
@@ -389,7 +388,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 
 	return
 }
-	
+
 // serialisable info about swarm
 type Info struct {
 	*api.Config

@@ -25,24 +25,63 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// serviceFunc returns a node.Service which can be used to boot devp2p nodes
-type serviceFunc func(id *NodeId) node.Service
+// ExecAdapter is a NodeAdapter which runs nodes by executing the current
+// binary as a child process.
+//
+// An init hook is used so that the child process executes the node service
+// (rather than whataver the main() function would normally do), see the
+// execP2PNode function for more information.
+type ExecAdapter struct {
+	BaseDir string
+}
 
-// serviceFuncs is a map of registered services which are used to boot devp2p
-// nodes
-var serviceFuncs = make(map[string]serviceFunc)
+// NewExecAdapter returns an ExecAdapter which stores node data in
+// subdirectories of the given base directory
+func NewExecAdapter(baseDir string) *ExecAdapter {
+	return &ExecAdapter{BaseDir: baseDir}
+}
 
-// RegisterService registers the given serviceFunc which can then be used to
-// start a devp2p node with the given name
-func RegisterService(name string, f serviceFunc) {
-	if _, exists := serviceFuncs[name]; exists {
-		panic(fmt.Sprintf("node service already exists: %q", name))
+// Name returns the name of the adapter for logging purpoeses
+func (e *ExecAdapter) Name() string {
+	return "exec-adapter"
+}
+
+// NewNode returns a new ExecNode using the given config
+func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
+	if _, exists := serviceFuncs[config.Service]; !exists {
+		return nil, fmt.Errorf("unknown node service %q", config.Service)
 	}
-	serviceFuncs[name] = f
+
+	// create the node directory using the first 12 characters of the ID
+	// as Unix socket paths cannot be longer than 256 characters
+	dir := filepath.Join(e.BaseDir, config.Id.String()[:12])
+	if err := os.Mkdir(dir, 0755); err != nil {
+		return nil, fmt.Errorf("error creating node directory: %s", err)
+	}
+
+	// generate the config
+	conf := node.DefaultConfig
+	conf.DataDir = filepath.Join(dir, "data")
+	conf.P2P.NoDiscovery = true
+	conf.P2P.NAT = nil
+
+	// listen on a random localhost port (we'll get the actual port after
+	// starting the node through the RPC admin.nodeInfo method)
+	conf.P2P.ListenAddr = "127.0.0.1:0"
+
+	node := &ExecNode{
+		ID:      config.Id,
+		Service: config.Service,
+		Dir:     dir,
+		Config:  &conf,
+		key:     config.PrivateKey,
+	}
+	node.newCmd = node.execCommand
+	return node, nil
 }
 
 // ExecNode is a NodeAdapter which starts the node by exec'ing the current
-// binary and running a registered serviceFunc.
+// binary and running a registered ServiceFunc.
 //
 // Communication with the node is performed using RPC over stdin / stdout
 // so that we don't need access to either the node's filesystem or TCP stack
@@ -61,37 +100,6 @@ type ExecNode struct {
 	key    *ecdsa.PrivateKey
 }
 
-// NewExecNode creates a new ExecNode which will run the given service using a
-// sub-directory of the given baseDir
-func NewExecNode(id *NodeId, key *ecdsa.PrivateKey, service, baseDir string) (*ExecNode, error) {
-	if _, exists := serviceFuncs[service]; !exists {
-		return nil, fmt.Errorf("unknown node service %q", service)
-	}
-
-	// create the node directory using the first 12 characters of the ID
-	dir := filepath.Join(baseDir, id.String()[0:12])
-	if err := os.Mkdir(dir, 0755); err != nil {
-		return nil, fmt.Errorf("error creating node directory: %s", err)
-	}
-
-	// generate the config
-	conf := node.DefaultConfig
-	conf.DataDir = filepath.Join(dir, "data")
-	conf.P2P.ListenAddr = "127.0.0.1:0"
-	conf.P2P.NoDiscovery = true
-	conf.P2P.NAT = nil
-
-	node := &ExecNode{
-		ID:      id,
-		Service: service,
-		Dir:     dir,
-		Config:  &conf,
-		key:     key,
-	}
-	node.newCmd = node.execCommand
-	return node, nil
-}
-
 // Addr returns the node's enode URL
 func (n *ExecNode) Addr() []byte {
 	if n.Info == nil {
@@ -100,6 +108,8 @@ func (n *ExecNode) Addr() []byte {
 	return []byte(n.Info.Enode)
 }
 
+// Client returns an rpc.Client which can be used to communicate with the
+// underlying service (it is set once the node has started)
 func (n *ExecNode) Client() (*rpc.Client, error) {
 	return n.client, nil
 }
@@ -206,8 +216,9 @@ func init() {
 }
 
 // execP2PNode starts a devp2p node when the current binary is executed with
-// argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2]
-// and the node config from the _P2P_NODE_CONFIG environment variable
+// argv[0] being "p2p-node", reading the service / ID from argv[1] / argv[2],
+// the node config from the _P2P_NODE_CONFIG environment variable and the
+// private key from the _P2P_NODE_KEY environment variable
 func execP2PNode() {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
 	glogger.Verbosity(log.LvlInfo)
@@ -374,8 +385,8 @@ func (p *PeerAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
-// stdioConn wraps os.Stdin / os.Stdout with a nop Close method so we can
-// use them to handle RPC messages
+// stdioConn wraps os.Stdin / os.Stdout with a no-op Close method so we can
+// use stdio for RPC messages
 type stdioConn struct {
 	io.Reader
 	io.Writer

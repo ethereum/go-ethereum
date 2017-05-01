@@ -8,8 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -56,7 +55,7 @@ const networkId = "420"
 // newProtocol sets up a protocol
 // the run function here demonstrates a typical protocol using peerPool, handshake
 // and messages registered to handlers
-func newProtocol(pp *p2ptest.TestPeerPool) adapters.ProtoCall {
+func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
 	ct := NewCodeMap("test", 42, 1024, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
 	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		peer := NewPeer(p, ct, rw)
@@ -118,7 +117,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.ProtoCall {
 }
 
 func protocolTester(t *testing.T, pp *p2ptest.TestPeerPool) *p2ptest.ProtocolTester {
-	conf := simulations.RandomNodeConfig()
+	conf := adapters.RandomNodeConfig()
 	return p2ptest.NewProtocolTester(t, conf.Id, 2, newProtocol(pp))
 }
 
@@ -151,12 +150,16 @@ func runProtoHandshake(t *testing.T, proto *protoHandshake, errs ...error) {
 	s := protocolTester(t, pp)
 	// TODO: make this more than one handshake
 	id := s.Ids[0]
-	s.TestExchanges(protoHandshakeExchange(id, proto)...)
+	if err := s.TestExchanges(protoHandshakeExchange(id, proto)...); err != nil {
+		t.Fatal(err)
+	}
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
 		disconnects = append(disconnects, &p2ptest.Disconnect{Peer: s.Ids[i], Error: err})
 	}
-	s.TestDisconnected(disconnects...)
+	if err := s.TestDisconnected(disconnects...); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestProtoHandshakeVersionMismatch(t *testing.T) {

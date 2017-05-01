@@ -1,32 +1,23 @@
 package testing
 
 import (
+	"errors"
 	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 type ProtocolSession struct {
-	TestNodeAdapter
-	Ids    []*adapters.NodeId
-	ignore []uint64
-}
+	*adapters.SimNode
 
-type TestMessenger interface {
-	ExpectMsg(uint64, interface{}) error
-	TriggerMsg(uint64, interface{}) error
-}
-
-type TestNodeAdapter interface {
-	p2p.Server
-	GetPeer(id *adapters.NodeId) *adapters.Peer
+	Ids     []*adapters.NodeId
+	adapter *adapters.SimAdapter
+	events  chan *p2p.PeerEvent
 }
 
 // exchanges are the basic units of protocol tests
@@ -61,32 +52,22 @@ type Disconnect struct {
 	Error error            // disconnect reason
 }
 
-func NewProtocolSession(na TestNodeAdapter, ids []*adapters.NodeId) *ProtocolSession {
-	ps := &ProtocolSession{
-		TestNodeAdapter: na,
-		Ids:             ids,
-	}
-	return ps
-}
-
-func (self *ProtocolSession) SetIgnoreCodes(ignore ...uint64) {
-	self.ignore = ignore
-}
-
 // trigger sends messages from peers
 func (self *ProtocolSession) trigger(trig Trigger) error {
-	peer := self.GetPeer(trig.Peer)
-	if peer == nil {
-		panic(fmt.Sprintf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids)))
+	simNode, ok := self.adapter.GetNode(trig.Peer.NodeID)
+	if !ok {
+		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids))
 	}
-	if peer.MsgReadWriteCloser == nil {
-		return fmt.Errorf("trigger: peer %v unreachable", trig.Peer)
+	mockNode, ok := simNode.Service().(*mockNode)
+	if !ok {
+		return fmt.Errorf("trigger: peer %v is not a mock", trig.Peer)
 	}
+
 	errc := make(chan error)
 
 	go func() {
 		log.Trace(fmt.Sprintf("trigger %v (%v)....", trig.Msg, trig.Code))
-		errc <- p2p.Send(peer, trig.Code, trig.Msg)
+		errc <- mockNode.Trigger(&trig)
 		log.Trace(fmt.Sprintf("triggered %v (%v)", trig.Msg, trig.Code))
 	}()
 
@@ -106,51 +87,21 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 // expect checks an expectation
 func (self *ProtocolSession) expect(exp Expect) error {
 	if exp.Msg == nil {
-		panic("no message to expect")
+		return errors.New("no message to expect")
 	}
-	peer := self.GetPeer(exp.Peer)
-	if peer == nil {
-		panic(fmt.Sprintf("expect: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids)))
+	simNode, ok := self.adapter.GetNode(exp.Peer.NodeID)
+	if !ok {
+		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids))
 	}
-	if peer.MsgReadWriteCloser== nil {
-		return fmt.Errorf("trigger: peer %v unreachable", exp.Peer)
+	mockNode, ok := simNode.Service().(*mockNode)
+	if !ok {
+		return fmt.Errorf("trigger: peer %v is not a mock", exp.Peer)
 	}
 
 	errc := make(chan error)
 	go func() {
-		var err error
-		ignored := true
-		log.Trace("waiting for msg", "code", exp.Code, "msg", exp.Msg)
-		for ignored {
-			ignored = false
-			err = p2p.ExpectMsg(peer, exp.Code, exp.Msg)
-			// frail, but we can't know what code expectmsg got otherwise
-			// can we do better error reporting in p2p.ExpectMsg()?
-			if err != nil {
-				if strings.Contains(err.Error(), "code") {
-					re, _ := regexp.Compile("got ([0-9]+),")
-					match := re.FindStringSubmatch(err.Error())
-					if len(match) > 1 {
-						for _, codetoignore := range self.ignore {
-							codewegot, err := strconv.ParseUint(match[1], 10, 64)
-							if err == nil {
-								if codetoignore == codewegot {
-									ignored = true
-									log.Trace("ignore msg with wrong code", "received", codewegot, "expected", exp.Code)
-									break
-								}
-							} else {
-								log.Warn("expectmsg errormsg parse error?!")
-							}
-						}
-					} else {
-						log.Warn("expectmsg errormsg parse error?!")
-						break
-					}
-				}
-			}
-		}
-		errc <- err
+		log.Trace(fmt.Sprintf("waiting for msg, %v", exp.Msg))
+		errc <- mockNode.Expect(&exp)
 	}()
 
 	t := exp.Timeout
@@ -226,29 +177,30 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 }
 
 func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error {
+	expects := make(map[discover.NodeID]error)
 	for _, disconnect := range disconnects {
-		id := disconnect.Peer
-		err := disconnect.Error
-		peer := self.GetPeer(id)
+		expects[disconnect.Peer.NodeID] = disconnect.Error
+	}
 
-		alarm := time.NewTimer(1000 * time.Millisecond)
+	timeout := time.After(time.Second)
+	for len(expects) > 0 {
 		select {
-		case derr := <-peer.Errc:
-			if !((err == nil && derr == nil) || err != nil && derr != nil && err.Error() == derr.Error()) {
-				return fmt.Errorf("unexpected error on peer %v. expected '%v', got '%v'", id, err, derr)
+		case event := <-self.events:
+			if event.Type != p2p.PeerEventTypeDrop {
+				continue
 			}
-		case <-alarm.C:
-			return fmt.Errorf("timed out waiting for peer %v to disconnect", id)
+			expectErr, ok := expects[event.Peer]
+			if !ok {
+				continue
+			}
+
+			if !((expectErr == nil && event.Error == "") || expectErr != nil && event.Error != "" && expectErr.Error() == event.Error) {
+				return fmt.Errorf("unexpected error on peer %v. expected '%v', got '%v'", event.Peer, expectErr, event.Error)
+			}
+			delete(expects, event.Peer)
+		case <-timeout:
+			return fmt.Errorf("timed out waiting for peers to disconnect")
 		}
 	}
 	return nil
-}
-
-func (self *ProtocolSession) Stop() {
-	for _, id := range self.Ids {
-		p := self.GetPeer(id)
-		if p != nil && p.MsgReadWriteCloser != nil {
-			p.Close()
-		}
-	}
 }

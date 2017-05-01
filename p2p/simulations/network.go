@@ -28,20 +28,17 @@ package simulations
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"reflect"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -53,6 +50,7 @@ type NetworkConfig struct {
 	Id                  string
 	DefaultMockerConfig *MockerConfig
 	Backend             bool
+	DefaultService      string
 }
 
 type NetworkControl interface {
@@ -241,6 +239,8 @@ func NewDebugController(journal *Journal) Controller {
 // the actual logic of bringing nodes and connections up and down and
 // messaging is implemented in the particular NodeAdapter interface
 type Network struct {
+	nodeAdapter adapters.NodeAdapter
+
 	// input trigger events and other events
 	events  *event.TypeMux // generated events a journal can subsribe to
 	lock    sync.RWMutex
@@ -250,25 +250,17 @@ type Network struct {
 	Conns   []*Conn `json:"conns"`
 	quitc   chan bool
 	conf    *NetworkConfig
-	//
-	// adapters.Messenger
-	// node adapter function that creates the node model for
-	// the particular type of network from a config
-	naf func(*NodeConfig) adapters.NodeAdapter
 }
 
-func NewNetwork(conf *NetworkConfig) *Network {
+func NewNetwork(nodeAdapter adapters.NodeAdapter, conf *NetworkConfig) *Network {
 	return &Network{
-		conf:    conf,
-		events:  &event.TypeMux{},
-		nodeMap: make(map[discover.NodeID]int),
-		connMap: make(map[string]int),
-		quitc:   make(chan bool),
+		nodeAdapter: nodeAdapter,
+		conf:        conf,
+		events:      &event.TypeMux{},
+		nodeMap:     make(map[discover.NodeID]int),
+		connMap:     make(map[string]int),
+		quitc:       make(chan bool),
 	}
-}
-
-func (self *Network) SetNaf(naf func(*NodeConfig) adapters.NodeAdapter) {
-	self.naf = naf
 }
 
 // Subscribe takes an event.TypeMux and subscibes to types
@@ -373,11 +365,11 @@ type LiveEventer interface {
 }
 
 type Node struct {
-	NodeConfig
+	adapters.Node
+	adapters.NodeConfig
 
 	Up bool
 
-	na           adapters.NodeAdapter
 	controlFired bool
 }
 
@@ -510,81 +502,10 @@ func (self *NodeEvent) ToControlEvent() *NodeControlEvent {
 	return &NodeControlEvent{self}
 }
 
-func (self *Node) Adapter() adapters.NodeAdapter {
-	return self.na
-}
-
-type NodeConfig struct {
-	Id         *adapters.NodeId
-	PrivateKey *ecdsa.PrivateKey
-}
-
-type nodeConfigJSON struct {
-	Id         string `json:"id"`
-	PrivateKey string `json:"private_key"`
-}
-
-func (n *NodeConfig) MarshalJSON() ([]byte, error) {
-	return json.Marshal(nodeConfigJSON{
-		n.Id.String(),
-		hex.EncodeToString(crypto.FromECDSA(n.PrivateKey)),
-	})
-}
-
-func (n *NodeConfig) UnmarshalJSON(data []byte) error {
-	var confJSON nodeConfigJSON
-	if err := json.Unmarshal(data, &confJSON); err != nil {
-		return err
-	}
-
-	nodeID, err := discover.HexID(confJSON.Id)
-	if err != nil {
-		return err
-	}
-	n.Id = &adapters.NodeId{NodeID: nodeID}
-
-	key, err := hex.DecodeString(confJSON.PrivateKey)
-	if err != nil {
-		return err
-	}
-	n.PrivateKey = crypto.ToECDSA(key)
-
-	return nil
-}
-
-func RandomNodeConfig() *NodeConfig {
-	key, err := crypto.GenerateKey()
-	if err != nil {
-		panic("unable to generate key")
-	}
-	var id discover.NodeID
-	pubkey := crypto.FromECDSAPub(&key.PublicKey)
-	copy(id[:], pubkey[1:])
-	return &NodeConfig{
-		Id:         &adapters.NodeId{NodeID: id},
-		PrivateKey: key,
-	}
-}
-
-// TODO: ignored for now
-type QueryConfig struct {
-	Format string // "sim.update", "journal",
-}
-
-type Know struct {
-	Subject *adapters.NodeId `json:"subject"`
-	Object  *adapters.NodeId `json:"object"`
-	// Into
-	// number of attempted connections
-	// time of attempted connections
-	// number of active connections during the session
-	// number of active connections since records began
-	// swap balance
-}
-
 // NewNode adds a new node to the network with a random ID
-func (self *Network) NewNode() (*NodeConfig, error) {
-	conf := RandomNodeConfig()
+func (self *Network) NewNode() (*adapters.NodeConfig, error) {
+	conf := adapters.RandomNodeConfig()
+	conf.Service = self.conf.DefaultService
 	if err := self.NewNodeWithConfig(conf); err != nil {
 		return nil, err
 	}
@@ -593,20 +514,27 @@ func (self *Network) NewNode() (*NodeConfig, error) {
 
 // NewNodeWithConfig adds a new node to the network with the given config
 // errors if a node by the same id already exist
-func (self *Network) NewNodeWithConfig(conf *NodeConfig) error {
+func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	id := conf.Id
+	if conf.Service == "" {
+		conf.Service = self.conf.DefaultService
+	}
 
 	_, found := self.nodeMap[id.NodeID]
 	if found {
 		return fmt.Errorf("node %v already added", id)
 	}
 	self.nodeMap[id.NodeID] = len(self.Nodes)
-	na := self.naf(conf)
+
+	adapterNode, err := self.nodeAdapter.NewNode(conf)
+	if err != nil {
+		return err
+	}
 	node := &Node{
+		Node:       adapterNode,
 		NodeConfig: *conf,
-		na:         na,
 	}
 	self.Nodes = append(self.Nodes, node)
 	log.Trace(fmt.Sprintf("node %v created", id))
@@ -655,8 +583,8 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	if node.Up {
 		return fmt.Errorf("node %v already up", id)
 	}
-	log.Trace(fmt.Sprintf("starting node %v: %v adapter %v", id, node.Up, node.Adapter()))
-	if err := node.Adapter().Start(); err != nil {
+	log.Trace(fmt.Sprintf("starting node %v: %v using %v", id, node.Up, self.nodeAdapter.Name()))
+	if err := node.Start(); err != nil {
 		return err
 	}
 	node.Up = true
@@ -665,7 +593,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	self.events.Post(node.EmitEvent(ControlEvent))
 
 	// subscribe to peer events
-	client, err := node.Adapter().Client()
+	client, err := node.Client()
 	if err != nil {
 		return fmt.Errorf("error getting rpc client  for node %v: %s", id, err)
 	}
@@ -715,7 +643,7 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 	if !node.Up {
 		return fmt.Errorf("node %v already down", id)
 	}
-	if err := node.Adapter().Stop(); err != nil {
+	if err := node.Stop(); err != nil {
 		return err
 	}
 	node.Up = false
@@ -753,11 +681,11 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	var addr []byte
 	var client *rpc.Client
 	if rev {
-		addr = conn.one.na.Addr()
-		client, err = conn.other.na.Client()
+		addr = conn.one.Addr()
+		client, err = conn.other.Client()
 	} else {
-		addr = conn.other.na.Addr()
-		client, err = conn.one.na.Client()
+		addr = conn.other.Addr()
+		client, err = conn.one.Client()
 	}
 	if err != nil {
 		return err
@@ -787,11 +715,11 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 	var client *rpc.Client
 	var err error
 	if rev {
-		addr = conn.one.na.Addr()
-		client, err = conn.other.na.Client()
+		addr = conn.one.Addr()
+		client, err = conn.other.Client()
 	} else {
-		addr = conn.other.na.Addr()
-		client, err = conn.one.na.Client()
+		addr = conn.other.Addr()
+		client, err = conn.one.Client()
 	}
 	if err != nil {
 		return err
@@ -838,18 +766,6 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 	}
 	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
 	self.events.Post(msg.EmitEvent(ControlEvent))
-}
-
-// GetNodeAdapter(id) returns the NodeAdapter for node with id
-// returns nil if node does not exist
-func (self *Network) GetNodeAdapter(id *adapters.NodeId) adapters.NodeAdapter {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	node := self.getNode(id)
-	if node == nil {
-		return nil
-	}
-	return node.na
 }
 
 // GetNode retrieves the node model for the id given as arg
@@ -918,7 +834,7 @@ func (self *Network) Shutdown() {
 	// stop all nodes
 	for _, node := range self.Nodes {
 		log.Debug(fmt.Sprintf("stopping node %s", node.Id.Label()))
-		if err := node.na.Stop(); err != nil {
+		if err := node.Stop(); err != nil {
 			log.Warn(fmt.Sprintf("error stopping node %s", node.Id.Label()), "err", err)
 		}
 	}

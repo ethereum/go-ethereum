@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -82,7 +82,7 @@ func TestRegisterAndConnect(t *testing.T) {
 		},
 		ticker: make(chan time.Time),
 	}
-	pp.Start(s.TestNodeAdapter, tc.ping)
+	pp.Start(s, tc.ping)
 	defer pp.Stop()
 	tc.ticker <- time.Now()
 

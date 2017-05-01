@@ -12,8 +12,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	p2pnode "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
@@ -22,12 +22,14 @@ import (
 // service to execute
 const serviceName = "discovery"
 
+func newService(id *adapters.NodeId) p2pnode.Service {
+	return newNode(id)
+}
+
 func init() {
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
-	adapters.RegisterService(serviceName, func(id *adapters.NodeId) p2pnode.Service {
-		return newNode(id)
-	})
+	adapters.RegisterService(serviceName, newService)
 
 	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
@@ -43,17 +45,11 @@ func TestMain(m *testing.M) {
 }
 
 func TestDiscoverySimulationDockerAdapter(t *testing.T) {
-	setup := func(net *simulations.Network) {
-		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-			node, err := adapters.NewDockerNode(conf.Id, conf.PrivateKey, serviceName)
-			if err != nil {
-				panic(err)
-			}
-			return node
-		})
+	adapter, err := adapters.NewDockerAdapter()
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	testDiscoverySimulation(t, setup)
+	testDiscoverySimulation(t, adapter)
 }
 
 func TestDiscoverySimulationExecAdapter(t *testing.T) {
@@ -62,39 +58,23 @@ func TestDiscoverySimulationExecAdapter(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(baseDir)
-
-	setup := func(net *simulations.Network) {
-		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-			node, err := adapters.NewExecNode(conf.Id, conf.PrivateKey, serviceName, baseDir)
-			if err != nil {
-				panic(err)
-			}
-			return node
-		})
-	}
-
-	testDiscoverySimulation(t, setup)
+	testDiscoverySimulation(t, adapters.NewExecAdapter(baseDir))
 }
 
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	setup := func(net *simulations.Network) {
-		net.SetNaf(func(conf *simulations.NodeConfig) adapters.NodeAdapter {
-			return adapters.NewSimNode(conf.Id, newNode(conf.Id), net)
-		})
-	}
-
-	testDiscoverySimulation(t, setup)
+	services := map[string]adapters.ServiceFunc{serviceName: newService}
+	testDiscoverySimulation(t, adapters.NewSimAdapter(services))
 }
 
-func testDiscoverySimulation(t *testing.T, setup func(net *simulations.Network)) {
+func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	// create 10 node network
 	nodeCount := 10
-	net := simulations.NewNetwork(&simulations.NetworkConfig{
-		Id:      "0",
-		Backend: true,
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		Id:             "0",
+		Backend:        true,
+		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
-	setup(net)
 	trigger := make(chan *adapters.NodeId)
 	ids := make([]*adapters.NodeId, nodeCount)
 	for i := 0; i < nodeCount; i++ {
@@ -134,7 +114,7 @@ func testDiscoverySimulation(t *testing.T, setup func(net *simulations.Network))
 		default:
 		}
 
-		node := net.GetNodeAdapter(id)
+		node := net.GetNode(id)
 		if node == nil {
 			return false, fmt.Errorf("unknown node: %s", id)
 		}
@@ -179,7 +159,7 @@ func testDiscoverySimulation(t *testing.T, setup func(net *simulations.Network))
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node
 func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *adapters.NodeId) error {
-	node := net.GetNodeAdapter(id)
+	node := net.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 // Simulation provides a framework for running actions in a simulated network
