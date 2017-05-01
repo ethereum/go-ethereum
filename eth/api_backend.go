@@ -40,7 +40,9 @@ import (
 type EthApiBackend struct {
 	eth *Ethereum
 	gpo *gasprice.Oracle
+	localNonces map[common.Address] uint64
 }
+
 
 func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
 	return b.eth.chainConfig
@@ -160,7 +162,13 @@ func (b *EthApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (
 	b.eth.txMu.Lock()
 	defer b.eth.txMu.Unlock()
 
-	return b.eth.txPool.State().GetNonce(addr), nil
+	nonce, _ := b.localNonces[addr] 
+	poolNonce := b.eth.txPool.State().GetNonce(addr)
+	if poolNonce > nonce{
+		nonce = poolNonce
+	}
+	b.localNonces[addr] = nonce+1
+	return nonce,  nil
 }
 
 func (b *EthApiBackend) Stats() (pending int, queued int) {
