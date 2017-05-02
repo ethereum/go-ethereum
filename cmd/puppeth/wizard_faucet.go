@@ -44,6 +44,7 @@ func (w *wizard) deployFaucet() {
 			host:    client.server,
 			amount:  1,
 			minutes: 1440,
+			tiers:   3,
 		}
 	}
 	infos.node.genesis, _ = json.MarshalIndent(w.conf.genesis, "", "  ")
@@ -68,6 +69,13 @@ func (w *wizard) deployFaucet() {
 	fmt.Printf("How many minutes to enforce between requests? (default = %d)\n", infos.minutes)
 	infos.minutes = w.readDefaultInt(infos.minutes)
 
+	fmt.Println()
+	fmt.Printf("How many funding tiers to feature (x2.5 amounts, x3 timeout)? (default = %d)\n", infos.tiers)
+	infos.tiers = w.readDefaultInt(infos.tiers)
+	if infos.tiers == 0 {
+		log.Error("At least one funding tier must be set")
+		return
+	}
 	// Accessing GitHub gists requires API authorization, retrieve it
 	if infos.githubUser != "" {
 		fmt.Println()
