@@ -40,63 +40,84 @@ import (
 
 var (
 	initCommand = cli.Command{
-		Action:    initGenesis,
+		Action:    utils.MigrateFlags(initGenesis),
 		Name:      "init",
 		Usage:     "Bootstrap and initialize a new genesis block",
 		ArgsUsage: "<genesisPath>",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
-`,
+
+It expects the genesis file as argument.`,
 	}
 	importCommand = cli.Command{
-		Action:    importChain,
+		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The import command imports blocks from an RLP-encoded form. The form can be one file
 with several RLP-encoded blocks, or several files can be used.
-If only one file is used, import error will result in failure. If several files are used,
-processing will proceed even if an individual RLP-file import failure occurs.
-`,
+
+If only one file is used, import error will result in failure. If several files are used, 
+processing will proceed even if an individual RLP-file import failure occurs.`,
 	}
 	exportCommand = cli.Command{
-		Action:    exportChain,
+		Action:    utils.MigrateFlags(exportChain),
 		Name:      "export",
 		Usage:     "Export blockchain into file",
 		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
-if already existing.
-`,
+if already existing.`,
 	}
 	removedbCommand = cli.Command{
-		Action:    removeDB,
+		Action:    utils.MigrateFlags(removeDB),
 		Name:      "removedb",
 		Usage:     "Remove blockchain and state databases",
 		ArgsUsage: " ",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
-TODO: Please write this
-`,
+Remove blockchain and state databases`,
 	}
 	dumpCommand = cli.Command{
-		Action:    dump,
+		Action:    utils.MigrateFlags(dump),
 		Name:      "dump",
 		Usage:     "Dump a specific block from storage",
 		ArgsUsage: "[<blockHash> | <blockNum>]...",
-		Category:  "BLOCKCHAIN COMMANDS",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.LightModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The arguments are interpreted as block numbers or hashes.
-Use "ethereum dump 0" to dump the genesis block.
-`,
+Use "ethereum dump 0" to dump the genesis block.`,
 	}
 )
 
