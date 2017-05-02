@@ -162,6 +162,11 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func newCorsHandler(srv *Server, allowedOrigins []string) http.Handler {
+	// disable CORS support if user has not specified a custom CORS configuration
+	if len(allowedOrigins) == 0 {
+		return srv
+	}
+
 	c := cors.New(cors.Options{
 		AllowedOrigins: allowedOrigins,
 		AllowedMethods: []string{"POST", "GET"},
