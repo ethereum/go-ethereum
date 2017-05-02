@@ -41,14 +41,14 @@ func (w *wizard) networkStats(tips bool) {
 	stats.SetHeader([]string{"Server", "IP", "Status", "Service", "Details"})
 	stats.SetColWidth(128)
 
-	for _, server := range w.conf.Servers {
+	for server, pubkey := range w.conf.Servers {
 		client := w.servers[server]
 		logger := log.New("server", server)
 		logger.Info("Starting remote server health-check")
 
 		// If the server is not connected, try to connect again
 		if client == nil {
-			conn, err := dial(server)
+			conn, err := dial(server, pubkey)
 			if err != nil {
 				logger.Error("Failed to establish remote connection", "err", err)
 				stats.Append([]string{server, "", err.Error(), "", ""})

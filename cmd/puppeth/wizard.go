@@ -44,14 +44,24 @@ type config struct {
 	bootLight []string      // Bootnodes to always connect to by light nodes
 	ethstats  string        // Ethstats settings to cache for node deploys
 
-	Servers []string `json:"servers,omitempty"`
+	Servers map[string][]byte `json:"servers,omitempty"`
+}
+
+// servers retrieves an alphabetically sorted list of servers.
+func (c config) servers() []string {
+	servers := make([]string, 0, len(c.Servers))
+	for server := range c.Servers {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	return servers
 }
 
 // flush dumps the contents of config to disk.
 func (c config) flush() {
 	os.MkdirAll(filepath.Dir(c.path), 0755)
 
-	sort.Strings(c.Servers)
 	out, _ := json.MarshalIndent(c, "", "  ")
 	if err := ioutil.WriteFile(c.path, out, 0644); err != nil {
 		log.Warn("Failed to save puppeth configs", "file", c.path, "err", err)
