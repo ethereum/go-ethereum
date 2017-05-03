@@ -58,10 +58,10 @@ participating.
 		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
 		Category:  "BLOCKCHAIN COMMANDS",
 		Description: `
-The import command imports blocks from an RLP-encoded form. The form can be one file 
-with several RLP-encoded blocks, or several files can be used. 
-If only one file is used, import error will result in failure. If several files are used, 
-processing will proceed even if an individual RLP-file import failure occurs.   
+The import command imports blocks from an RLP-encoded form. The form can be one file
+with several RLP-encoded blocks, or several files can be used.
+If only one file is used, import error will result in failure. If several files are used,
+processing will proceed even if an individual RLP-file import failure occurs.
 `,
 	}
 	exportCommand = cli.Command{
@@ -103,17 +103,14 @@ Use "ethereum dump 0" to dump the genesis block.
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
 func initGenesis(ctx *cli.Context) error {
+	// Make sure we have a valid genesis JSON
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
-		utils.Fatalf("must supply path to genesis JSON file")
+		utils.Fatalf("Must supply path to genesis JSON file")
 	}
-
-	stack := makeFullNode(ctx)
-	chaindb := utils.MakeChainDatabase(ctx, stack)
-
 	file, err := os.Open(genesisPath)
 	if err != nil {
-		utils.Fatalf("failed to read genesis file: %v", err)
+		utils.Fatalf("Failed to read genesis file: %v", err)
 	}
 	defer file.Close()
 
@@ -121,12 +118,19 @@ func initGenesis(ctx *cli.Context) error {
 	if err := json.NewDecoder(file).Decode(genesis); err != nil {
 		utils.Fatalf("invalid genesis file: %v", err)
 	}
-
-	_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
-	if err != nil {
-		utils.Fatalf("failed to write genesis block: %v", err)
+	// Open an initialise both full and light databases
+	stack := makeFullNode(ctx)
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+		chaindb, err := stack.OpenDatabase(name, 0, 0)
+		if err != nil {
+			utils.Fatalf("Failed to open database: %v", err)
+		}
+		_, hash, err := core.SetupGenesisBlock(chaindb, genesis)
+		if err != nil {
+			utils.Fatalf("Failed to write genesis block: %v", err)
+		}
+		log.Info("Successfully wrote genesis state", "database", name, "hash", hash)
 	}
-	log.Info("Successfully wrote genesis state", "hash", hash)
 	return nil
 }
 
@@ -245,24 +249,29 @@ func exportChain(ctx *cli.Context) error {
 
 func removeDB(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
-	dbdir := stack.ResolvePath(utils.ChainDbName(ctx))
-	if !common.FileExist(dbdir) {
-		fmt.Println(dbdir, "does not exist")
-		return nil
-	}
 
-	fmt.Println(dbdir)
-	confirm, err := console.Stdin.PromptConfirm("Remove this database?")
-	switch {
-	case err != nil:
-		utils.Fatalf("%v", err)
-	case !confirm:
-		fmt.Println("Operation aborted")
-	default:
-		fmt.Println("Removing...")
-		start := time.Now()
-		os.RemoveAll(dbdir)
-		fmt.Printf("Removed in %v\n", time.Since(start))
+	for _, name := range []string{"chaindata", "lightchaindata"} {
+		// Ensure the database exists in the first place
+		logger := log.New("database", name)
+
+		dbdir := stack.ResolvePath(name)
+		if !common.FileExist(dbdir) {
+			logger.Info("Database doesn't exist, skipping", "path", dbdir)
+			continue
+		}
+		// Confirm removal and execute
+		fmt.Println(dbdir)
+		confirm, err := console.Stdin.PromptConfirm("Remove this database?")
+		switch {
+		case err != nil:
+			utils.Fatalf("%v", err)
+		case !confirm:
+			logger.Warn("Database deletion aborted")
+		default:
+			start := time.Now()
+			os.RemoveAll(dbdir)
+			logger.Info("Database successfully deleted", "elapsed", common.PrettyDuration(time.Since(start)))
+		}
 	}
 	return nil
 }
