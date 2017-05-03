@@ -77,6 +77,7 @@ var (
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("swarm"),
+		executablePath("wnode"),
 	}
 
 	// A debian package is created for all executables listed here.
@@ -108,6 +109,10 @@ var (
 		{
 			Name:        "swarm",
 			Description: "Ethereum Swarm daemon and tools",
+		},
+		{
+			Name:        "wnode",
+			Description: "Ethereum Whisper diagnostic tool",
 		},
 	}
 
