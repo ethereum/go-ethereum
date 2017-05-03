@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"strings"
 	"time"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -1166,10 +1167,20 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	return tx.Hash(), nil
 }
+var nonceMutex sync.RWMutex // global mutex for locking chain operations
+
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
 func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args SendTxArgs) (common.Hash, error) {
+
+	if args.Nonce == nil {
+		// We'll need to set nonce from pool, and thus we need to lock here
+		nonceMutex.Lock()
+		defer nonceMutex.Unlock()
+
+	}
+
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
