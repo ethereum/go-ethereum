@@ -267,7 +267,19 @@ func (self *SimNode) PeerCount() int {
 
 // NodeInfo returns information about the node
 func (self *SimNode) NodeInfo() *p2p.NodeInfo {
-	return &p2p.NodeInfo{ID: self.Id.String()}
+	info := &p2p.NodeInfo{
+		ID:        self.Id.String(),
+		Enode:     self.Node().String(),
+		Protocols: make(map[string]interface{}),
+	}
+	for _, proto := range self.service.Protocols() {
+		nodeInfo := interface{}("unknown")
+		if query := proto.NodeInfo; query != nil {
+			nodeInfo = proto.NodeInfo()
+		}
+		info.Protocols[proto.Name] = nodeInfo
+	}
+	return info
 }
 
 // PeersInfo is a stub so that SimNode implements p2p.Server

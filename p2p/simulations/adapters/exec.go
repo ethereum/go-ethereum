@@ -210,6 +210,18 @@ func (n *ExecNode) Stop() error {
 	}
 }
 
+// NodeInfo returns information about the node
+func (n *ExecNode) NodeInfo() *p2p.NodeInfo {
+	if n.client == nil {
+		return n.Info
+	}
+	info := &p2p.NodeInfo{}
+	if err := n.client.Call(&info, "admin_nodeInfo"); err != nil {
+		return n.Info
+	}
+	return info
+}
+
 func init() {
 	// register a reexec function to start a devp2p node when the current
 	// binary is executed as "p2p-node"

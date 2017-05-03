@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/log"
 	p2pnode "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -22,26 +21,19 @@ import (
 // service to execute
 const serviceName = "discovery"
 
-func newService(id *adapters.NodeId) p2pnode.Service {
-	return newNode(id)
+var services = adapters.Services{
+	serviceName: func(id *adapters.NodeId) p2pnode.Service {
+		return newNode(id)
+	},
 }
 
 func init() {
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
-	adapters.RegisterService(serviceName, newService)
+	adapters.RegisterServices(services)
 
 	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-}
-
-func TestMain(m *testing.M) {
-	// reexec a service if we have been exec'd by the exec adapter
-	if reexec.Init() {
-		return
-	}
-
-	os.Exit(m.Run())
 }
 
 func TestDiscoverySimulationDockerAdapter(t *testing.T) {
@@ -62,7 +54,6 @@ func TestDiscoverySimulationExecAdapter(t *testing.T) {
 }
 
 func TestDiscoverySimulationSimAdapter(t *testing.T) {
-	services := map[string]adapters.ServiceFunc{serviceName: newService}
 	testDiscoverySimulation(t, adapters.NewSimAdapter(services))
 }
 

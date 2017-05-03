@@ -3,61 +3,13 @@ package simulations
 import (
 	"fmt"
 	"math/rand"
-	"reflect"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
-
-func NewMockersController(eventer *event.TypeMux, defaultMockerConfig *MockerConfig) Controller {
-	self := NewResourceContoller(
-		&ResourceHandlers{
-			// Create: n.StartNode, NodeConfig
-			Create: &ResourceHandler{
-				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					// conf := msg.(*MockerConfig)
-					conf := defaultMockerConfig
-					ids := RandomNodeIds(conf.NodeCount)
-					go MockEvents(eventer, ids, conf)
-					c := NewMockerController(conf)
-					if len(conf.Id) == 0 {
-						conf.Id = fmt.Sprintf("%d", parent.id)
-					}
-					log.Trace(fmt.Sprintf("new mocker controller on %v", conf.Id))
-					if parent != nil {
-						parent.SetResource(conf.Id, c)
-						parent.id++
-					}
-					return empty, nil
-				},
-				Type: reflect.TypeOf(&MockerConfig{}),
-			},
-		})
-	return self
-}
-
-func NewMockerController(conf *MockerConfig) Controller {
-	self := NewResourceContoller(
-		&ResourceHandlers{
-			// GET /0/mockevents/<mockerId>
-			Retrieve: &ResourceHandler{
-				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					return nil, fmt.Errorf("info about mocker not implemented")
-				},
-			},
-			// DELETE /0/mockevents/<mockerId>
-			Destroy: &ResourceHandler{
-				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					conf.ticker.Stop()
-					parent.DeleteResource(conf.Id)
-					return empty, nil
-				},
-			},
-		})
-	return self
-}
 
 type MockerConfig struct {
 	Id              string
@@ -243,4 +195,21 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 		}
 		rounds++
 	}
+}
+
+func RandomNodeId() *adapters.NodeId {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("unable to generate key")
+	}
+	pubkey := crypto.FromECDSAPub(&key.PublicKey)
+	return adapters.NewNodeId(pubkey[1:])
+}
+
+func RandomNodeIds(n int) []*adapters.NodeId {
+	var ids []*adapters.NodeId
+	for i := 0; i < n; i++ {
+		ids = append(ids, RandomNodeId())
+	}
+	return ids
 }

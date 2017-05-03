@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -219,45 +218,6 @@ type JournalPlayConfig struct {
 	SpeedUp float64
 	Journal *Journal
 	Events  []string
-}
-
-func NewJournalPlayersController(eventer *event.TypeMux) Controller {
-	self := NewResourceContoller(
-		&ResourceHandlers{
-			// POST /o/players/
-			Create: &ResourceHandler{
-				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					conf := msg.(*JournalPlayConfig)
-					go Replay(conf.SpeedUp, conf.Journal, eventer)
-					c := NewJournalPlayerController(conf)
-					parent.SetResource(conf.Id, c)
-					return empty, nil
-				},
-				Type: reflect.TypeOf(&JournalPlayConfig{}),
-			},
-		})
-	return self
-}
-
-func NewJournalPlayerController(conf *JournalPlayConfig) Controller {
-	self := NewResourceContoller(
-		&ResourceHandlers{
-			// GET /0/players/<playerId>
-			Retrieve: &ResourceHandler{
-				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					return nil, fmt.Errorf("info about journal player not implemented")
-				},
-			},
-			// DELETE /0/players/<playerId>
-			Destroy: &ResourceHandler{
-				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					conf.Journal.Close() // terminate Replay-> TimedRead routine
-					parent.DeleteResource(conf.Id)
-					return empty, nil
-				},
-			},
-		})
-	return self
 }
 
 func ConnLabel(source, target *adapters.NodeId) string {

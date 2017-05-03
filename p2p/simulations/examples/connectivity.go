@@ -1,9 +1,13 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -27,19 +31,51 @@ func main() {
 		},
 	}
 
-	c, quitc := simulations.NewSessionController(simulations.DefaultNet(services, "ping-pong"))
-	simulations.StartRestApiServer("8888", c)
-	// wait until server shuts down
-	<-quitc
+	adapters.RegisterServices(services)
 
+	config := &simulations.ServerConfig{}
+
+	adapter := flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)
+	flag.Parse()
+
+	switch *adapter {
+
+	case "sim":
+		log.Info("using sim adapter")
+		config.Adapter = adapters.NewSimAdapter(services)
+
+	case "exec":
+		tmpdir, err := ioutil.TempDir("", "p2p-example")
+		if err != nil {
+			log.Crit("error creating temp dir", "err", err)
+		}
+		defer os.RemoveAll(tmpdir)
+		log.Info("using exec adapter", "tmpdir", tmpdir)
+		config.Adapter = adapters.NewExecAdapter(tmpdir)
+
+	case "docker":
+		log.Info("using docker adapter")
+		var err error
+		config.Adapter, err = adapters.NewDockerAdapter()
+		if err != nil {
+			log.Crit("error creating docker adapter", "err", err)
+		}
+
+	default:
+		log.Crit(fmt.Sprintf("unknown node adapter %q", *adapter))
+	}
+
+	log.Info("starting simulation server on 0.0.0.0:8888...")
+	http.ListenAndServe(":8888", simulations.NewServer(config))
 }
 
 // pingPongService runs a ping-pong protocol between nodes where each node
 // sends a ping to all its connected peers every 10s and receives a pong in
 // return
 type pingPongService struct {
-	id  *adapters.NodeId
-	log log.Logger
+	id       *adapters.NodeId
+	log      log.Logger
+	received int64
 }
 
 func newPingPongService(id *adapters.NodeId) *pingPongService {
@@ -51,10 +87,11 @@ func newPingPongService(id *adapters.NodeId) *pingPongService {
 
 func (p *pingPongService) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{{
-		Name:    "ping-pong",
-		Version: 1,
-		Length:  2,
-		Run:     p.Run,
+		Name:     "ping-pong",
+		Version:  1,
+		Length:   2,
+		Run:      p.Run,
+		NodeInfo: p.Info,
 	}}
 }
 
@@ -70,6 +107,14 @@ func (p *pingPongService) Start(server p2p.Server) error {
 func (p *pingPongService) Stop() error {
 	p.log.Info("ping-pong service stopping")
 	return nil
+}
+
+func (p *pingPongService) Info() interface{} {
+	return struct {
+		Received int64 `json:"received"`
+	}{
+		atomic.LoadInt64(&p.received),
+	}
 }
 
 const (
@@ -105,6 +150,7 @@ func (p *pingPongService) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 				return
 			}
 			log.Info("received message", "msg.code", msg.Code, "msg.payload", string(payload))
+			atomic.AddInt64(&p.received, 1)
 			if msg.Code == pingMsgCode {
 				log.Info("sending pong")
 				go p2p.Send(rw, pongMsgCode, "PONG")

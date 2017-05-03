@@ -21,7 +21,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 
+	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -49,6 +51,9 @@ type Node interface {
 
 	// Stop stops the node
 	Stop() error
+
+	// NodeInfo returns information about the node
+	NodeInfo() *p2p.NodeInfo
 }
 
 // NodeAdapter is an object which creates Nodes to be used in a simulation
@@ -156,18 +161,30 @@ func RandomNodeConfig() *NodeConfig {
 	}
 }
 
+// Services is a collection of services which can be run in a simulation
+type Services map[string]ServiceFunc
+
 // ServiceFunc returns a node.Service which can be used to boot devp2p nodes
 type ServiceFunc func(id *NodeId) node.Service
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes
-var serviceFuncs = make(map[string]ServiceFunc)
+var serviceFuncs = make(Services)
 
-// RegisterService registers the given ServiceFunc which can then be used to
-// start a devp2p node with the given name
-func RegisterService(name string, f ServiceFunc) {
-	if _, exists := serviceFuncs[name]; exists {
-		panic(fmt.Sprintf("node service already exists: %q", name))
+// RegisterServices registers the given ServiceFuncs which can then be used to
+// start devp2p nodes
+func RegisterServices(services Services) {
+	for name, f := range services {
+		if _, exists := serviceFuncs[name]; exists {
+			panic(fmt.Sprintf("node service already exists: %q", name))
+		}
+		serviceFuncs[name] = f
 	}
-	serviceFuncs[name] = f
+
+	// now we have registered the services, run reexec.Init() which will
+	// potentially start one of the services if the current binary has
+	// been exec'd as a p2p-node
+	if reexec.Init() {
+		os.Exit(0)
+	}
 }
