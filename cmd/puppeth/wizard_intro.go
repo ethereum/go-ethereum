@@ -31,7 +31,10 @@ import (
 // makeWizard creates and returns a new puppeth wizard.
 func makeWizard(network string) *wizard {
 	return &wizard{
-		network:  network,
+		network: network,
+		conf: config{
+			Servers: make(map[string][]byte),
+		},
 		servers:  make(map[string]*sshClient),
 		services: make(map[string][]string),
 		in:       bufio.NewReader(os.Stdin),
@@ -77,9 +80,9 @@ func (w *wizard) run() {
 	} else if err := json.Unmarshal(blob, &w.conf); err != nil {
 		log.Crit("Previous configuration corrupted", "path", w.conf.path, "err", err)
 	} else {
-		for _, server := range w.conf.Servers {
+		for server, pubkey := range w.conf.Servers {
 			log.Info("Dialing previously configured server", "server", server)
-			client, err := dial(server)
+			client, err := dial(server, pubkey)
 			if err != nil {
 				log.Error("Previous server unreachable", "server", server, "err", err)
 			}

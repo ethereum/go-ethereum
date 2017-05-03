@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -37,17 +39,25 @@ import (
 type sshClient struct {
 	server  string // Server name or IP without port number
 	address string // IP address of the remote server
+	pubkey  []byte // RSA public key to authenticate the server
 	client  *ssh.Client
 	logger  log.Logger
 }
 
 // dial establishes an SSH connection to a remote node using the current user and
-// the user's configured private RSA key.
-func dial(server string) (*sshClient, error) {
+// the user's configured private RSA key. If that fails, password authentication
+// is fallen back to. The caller may override the login user via user@server:port.
+func dial(server string, pubkey []byte) (*sshClient, error) {
 	// Figure out a label for the server and a logger
 	label := server
 	if strings.Contains(label, ":") {
 		label = label[:strings.Index(label, ":")]
+	}
+	login := ""
+	if strings.Contains(server, "@") {
+		login = label[:strings.Index(label, "@")]
+		label = label[strings.Index(label, "@")+1:]
+		server = server[strings.Index(server, "@")+1:]
 	}
 	logger := log.New("server", label)
 	logger.Debug("Attempting to establish SSH connection")
@@ -55,6 +65,9 @@ func dial(server string) (*sshClient, error) {
 	user, err := user.Current()
 	if err != nil {
 		return nil, err
+	}
+	if login == "" {
+		login = user.Username
 	}
 	// Configure the supported authentication methods (private key and password)
 	var auths []ssh.AuthMethod
@@ -71,7 +84,7 @@ func dial(server string) (*sshClient, error) {
 		}
 	}
 	auths = append(auths, ssh.PasswordCallback(func() (string, error) {
-		fmt.Printf("What's the login password for %s at %s? (won't be echoed)\n> ", user.Username, server)
+		fmt.Printf("What's the login password for %s at %s? (won't be echoed)\n> ", login, server)
 		blob, err := terminal.ReadPassword(int(syscall.Stdin))
 
 		fmt.Println()
@@ -86,11 +99,36 @@ func dial(server string) (*sshClient, error) {
 		return nil, errors.New("no IPs associated with domain")
 	}
 	// Try to dial in to the remote server
-	logger.Trace("Dialing remote SSH server", "user", user.Username, "key", path)
+	logger.Trace("Dialing remote SSH server", "user", login)
 	if !strings.Contains(server, ":") {
 		server += ":22"
 	}
-	client, err := ssh.Dial("tcp", server, &ssh.ClientConfig{User: user.Username, Auth: auths})
+	keycheck := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		// If no public key is known for SSH, ask the user to confirm
+		if pubkey == nil {
+			fmt.Printf("The authenticity of host '%s (%s)' can't be established.\n", hostname, remote)
+			fmt.Printf("SSH key fingerprint is %s [MD5]\n", ssh.FingerprintLegacyMD5(key))
+			fmt.Printf("Are you sure you want to continue connecting (yes/no)? ")
+
+			text, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			switch {
+			case err != nil:
+				return err
+			case strings.TrimSpace(text) == "yes":
+				pubkey = key.Marshal()
+				return nil
+			default:
+				return fmt.Errorf("unknown auth choice: %v", text)
+			}
+		}
+		// If a public key exists for this SSH server, check that it matches
+		if bytes.Compare(pubkey, key.Marshal()) == 0 {
+			return nil
+		}
+		// We have a mismatch, forbid connecting
+		return errors.New("ssh key mismatch, readd the machine to update")
+	}
+	client, err := ssh.Dial("tcp", server, &ssh.ClientConfig{User: login, Auth: auths, HostKeyCallback: keycheck})
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +136,7 @@ func dial(server string) (*sshClient, error) {
 	c := &sshClient{
 		server:  label,
 		address: addr[0],
+		pubkey:  pubkey,
 		client:  client,
 		logger:  logger,
 	}
