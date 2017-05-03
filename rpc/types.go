@@ -104,17 +104,17 @@ type ServerCodec interface {
 	// Read next request
 	ReadRequestHeaders() ([]rpcRequest, bool, Error)
 	// Parse request argument to the given types
-	ParseRequestArguments([]reflect.Type, interface{}) ([]reflect.Value, Error)
+	ParseRequestArguments(argTypes []reflect.Type, params interface{}) ([]reflect.Value, Error)
 	// Assemble success response, expects response id and payload
-	CreateResponse(interface{}, interface{}) interface{}
+	CreateResponse(id interface{}, reply interface{}) interface{}
 	// Assemble error response, expects response id and error
-	CreateErrorResponse(interface{}, Error) interface{}
+	CreateErrorResponse(id interface{}, err Error) interface{}
 	// Assemble error response with extra information about the error through info
 	CreateErrorResponseWithInfo(id interface{}, err Error, info interface{}) interface{}
 	// Create notification response
-	CreateNotification(string, interface{}) interface{}
+	CreateNotification(id, namespace string, event interface{}) interface{}
 	// Write msg to client.
-	Write(interface{}) error
+	Write(msg interface{}) error
 	// Close underlying data stream
 	Close()
 	// Closed when underlying connection is closed
