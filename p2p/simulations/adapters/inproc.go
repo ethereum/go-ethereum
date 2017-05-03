@@ -234,7 +234,9 @@ func (self *SimNode) AddPeer(peer *discover.Node) {
 	if !exists {
 		panic(fmt.Sprintf("unknown peer: %s", peer.ID))
 	}
-	localRW, peerRW := p2p.MsgPipe()
+	p1, p2 := p2p.MsgPipe()
+	localRW := NewMsgReporter(p1, &self.peerFeed, peer.ID)
+	peerRW := NewMsgReporter(p2, &self.peerFeed, self.Id.NodeID)
 	self.peers[peer.ID] = peerRW
 	peerNode.RunProtocol(self, peerRW)
 	self.RunProtocol(peerNode, localRW)

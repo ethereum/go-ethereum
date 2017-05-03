@@ -30,8 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
-	
-	
 )
 
 // Msg defines the structure of a p2p message.
@@ -276,56 +274,54 @@ func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
 	return nil
 }
 
-
-// wraps a msgreadwriter to allow for emitting message events upon
-// send or receive
-type MsgReporterRW struct {
+// MsgEventer wraps a MsgReadWriter and sends events whenever a message is sent
+// or received
+type MsgEventer struct {
 	MsgReadWriter
-	feed *event.Feed
-	peerid discover.NodeID
-	closefunc func() error
+
+	feed   *event.Feed
+	peerID discover.NodeID
 }
 
-func NewMsgReporterRW(feed *event.Feed, rw MsgReadWriter, id discover.NodeID, closefunc func() error) *MsgReporterRW {
-	return &MsgReporterRW{
+func NewMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID) *MsgEventer {
+	return &MsgEventer{
 		MsgReadWriter: rw,
-		feed: feed,
-		peerid: id,
-		closefunc: closefunc,
+		feed:          feed,
+		peerID:        peerID,
 	}
 }
 
-func (self *MsgReporterRW) ReadMsg() (Msg, error) {
+func (self *MsgEventer) ReadMsg() (Msg, error) {
 	msg, err := self.MsgReadWriter.ReadMsg()
 	if err != nil {
 		return msg, err
 	}
-	event := PeerEvent{
-		Type: PeerEventTypeMsgRecv,
-		Peer: self.peerid,
-		Label: fmt.Sprintf("%d,%d", msg.Code, msg.Size),
-	}
-	self.feed.Send(event)
+	self.feed.Send(&PeerEvent{
+		Type:    PeerEventTypeMsgRecv,
+		Peer:    self.peerID,
+		MsgCode: &msg.Code,
+		MsgSize: &msg.Size,
+	})
 	return msg, nil
 }
 
-func (self *MsgReporterRW) WriteMsg(msg Msg) error {
+func (self *MsgEventer) WriteMsg(msg Msg) error {
 	err := self.MsgReadWriter.WriteMsg(msg)
 	if err != nil {
 		return err
 	}
-	event := PeerEvent{
-		Type: PeerEventTypeMsgSend,
-		Peer: self.peerid,
-		Label: fmt.Sprintf("%d,%d", msg.Code, msg.Size),
-	}
-	self.feed.Send(event)
+	self.feed.Send(&PeerEvent{
+		Type:    PeerEventTypeMsgSend,
+		Peer:    self.peerID,
+		MsgCode: &msg.Code,
+		MsgSize: &msg.Size,
+	})
 	return nil
 }
 
-func (self *MsgReporterRW) Close() error {
-	if self.closefunc != nil {
-		return self.closefunc()
+func (self *MsgEventer) Close() error {
+	if v, ok := self.MsgReadWriter.(io.Closer); ok {
+		return v.Close()
 	}
 	return nil
 }

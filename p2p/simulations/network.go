@@ -400,7 +400,8 @@ func (self *Conn) String() string {
 type Msg struct {
 	One          *adapters.NodeId `json:"one"`
 	Other        *adapters.NodeId `json:"other"`
-	Code         uint64           `json:"conn"`
+	Code         uint64           `json:"code"`
+	Received     bool             `json:"received"`
 	controlFired bool
 }
 
@@ -624,6 +625,14 @@ func (self *Network) watchPeerEvents(id *adapters.NodeId, events chan *p2p.PeerE
 				if err := self.DidDisconnect(id, peer); err != nil {
 					log.Error(fmt.Sprintf("error generating connection down event %s => %s", id.Label(), peer.Label()), "err", err)
 				}
+			case p2p.PeerEventTypeMsgSend:
+				if err := self.DidSend(id, peer, *event.MsgCode); err != nil {
+					log.Error(fmt.Sprintf("error generating msg send event %s => %s", id.Label(), peer.Label()), "err", err)
+				}
+			case p2p.PeerEventTypeMsgRecv:
+				if err := self.DidReceive(peer, id, *event.MsgCode); err != nil {
+					log.Error(fmt.Sprintf("error generating msg receive event %s => %s", peer.Label(), id.Label()), "err", err)
+				}
 			}
 		case err := <-sub.Err():
 			if err != nil {
@@ -766,6 +775,28 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 	}
 	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
 	self.events.Post(msg.EmitEvent(ControlEvent))
+}
+
+func (self *Network) DidSend(sender, receiver *adapters.NodeId, msgcode uint64) error {
+	msg := &Msg{
+		One:      sender,
+		Other:    receiver,
+		Code:     msgcode,
+		Received: false,
+	}
+	self.events.Post(msg.EmitEvent(LiveEvent))
+	return nil
+}
+
+func (self *Network) DidReceive(sender, receiver *adapters.NodeId, msgcode uint64) error {
+	msg := &Msg{
+		One:      sender,
+		Other:    receiver,
+		Code:     msgcode,
+		Received: true,
+	}
+	self.events.Post(msg.EmitEvent(LiveEvent))
+	return nil
 }
 
 // GetNode retrieves the node model for the id given as arg

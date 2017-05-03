@@ -62,6 +62,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	// generate the config
 	conf := node.DefaultConfig
 	conf.DataDir = filepath.Join(dir, "data")
+	conf.P2P.EnableMsgEvents = true
 	conf.P2P.NoDiscovery = true
 	conf.P2P.NAT = nil
 

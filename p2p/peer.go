@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -82,12 +83,13 @@ const (
 )
 
 // PeerEvent is an event emitted when peers are either added or dropped from
-// a p2p.Server
+// a p2p.Server or when a message is sent or received on a peer connection
 type PeerEvent struct {
-	Type  PeerEventType
-	Peer  discover.NodeID
-	Error string
-	Label string
+	Type    PeerEventType   `json:"type"`
+	Peer    discover.NodeID `json:"peer"`
+	Error   string          `json:"error,omitempty"`
+	MsgCode *uint64         `json:"msg_code,omitempty"`
+	MsgSize *uint32         `json:"msg_size,omitempty"`
 }
 
 // Peer represents a connected remote node.
@@ -101,6 +103,9 @@ type Peer struct {
 	protoErr chan error
 	closed   chan struct{}
 	disc     chan DiscReason
+
+	// events receives message send / receive events if set
+	events *event.Feed
 }
 
 // NewPeer returns a peer for testing purposes.
@@ -326,9 +331,13 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.closed = p.closed
 		proto.wstart = writeStart
 		proto.werr = writeErr
+		var rw MsgReadWriter = proto
+		if p.events != nil {
+			rw = NewMsgEventer(rw, p.events, p.ID())
+		}
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
 		go func() {
-			err := proto.Run(p, proto)
+			err := proto.Run(p, rw)
 			if err == nil {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
 				err = errProtocolReturned
@@ -389,10 +398,6 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 	case <-rw.closed:
 		return Msg{}, io.EOF
 	}
-}
-
-func (rw *protoRW) Close() error {
-	return nil
 }
 
 // PeerInfo represents a short summary of the information known about a connected

@@ -49,6 +49,7 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 	// generate the config
 	conf := node.DefaultConfig
 	conf.DataDir = "/data"
+	conf.P2P.EnableMsgEvents = true
 	conf.P2P.NoDiscovery = true
 	conf.P2P.NAT = nil
 

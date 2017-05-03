@@ -135,6 +135,10 @@ type Config struct {
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
+
+	// If EnableMsgEvents is set then the server will emit PeerEvents
+	// whenever a message is sent to or received from a peer
+	EnableMsgEvents bool
 }
 
 type Server interface {
@@ -567,6 +571,11 @@ running:
 			if err == nil {
 				// The handshakes are done and it passed all checks.
 				p := newPeer(c, srv.Protocols)
+				// If message events are enabled, pass the peerFeed
+				// to the peer
+				if srv.EnableMsgEvents {
+					p.events = &srv.peerFeed
+				}
 				name := truncateName(c.name)
 				log.Debug("Adding p2p peer", "id", c.id, "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				peers[c.id] = p
