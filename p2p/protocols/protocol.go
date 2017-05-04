@@ -276,8 +276,7 @@ func (self *Peer) Send(msg interface{}) error {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
 	log.Trace(fmt.Sprintf("=> msg #%d TO %v : %v", code, self.ID(), msg))
-	go p2p.Send(self.rw, uint64(code), msg)
-	return nil
+	return p2p.Send(self.rw, uint64(code), msg)
 }
 
 func (self *Peer) DisconnectHook(f func(error)) {

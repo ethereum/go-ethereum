@@ -42,7 +42,6 @@ type bzzPeer struct {
 	localAddr  *peerAddr
 	*peerAddr  // remote address
 	lastActive time.Time
-	//peers      map[discover.NodeID]bool
 }
 
 func (self *bzzPeer) LastActive() time.Time {

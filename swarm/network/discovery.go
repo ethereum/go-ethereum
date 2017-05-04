@@ -17,9 +17,8 @@ var DiscoveryMsgs = []interface{}{
 
 type discPeer struct {
 	Peer
-	overlay Overlay
-	peers   map[string]bool
-	// peers     map[discover.NodeID]bool
+	overlay   Overlay
+	peers     map[string]bool
 	proxLimit uint8 // the proximity radius advertised by remote to subscribe to peers
 	sentPeers bool  // set to true  when the peer is first notifed of peers close to them
 }
@@ -44,7 +43,7 @@ func NewDiscovery(p Peer, o Overlay) *discPeer {
 // NotifyPeer notifies the receiver remote end of a peer p or PO po.
 // callback for overlay driver
 func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
-	log.Warn(fmt.Sprintf("peers %v", self.peers))
+	log.Warn(fmt.Sprintf("peer %#v peers %v", p, self.peers))
 	if po < self.proxLimit || self.seen(p) {
 		return nil
 	}
@@ -53,9 +52,7 @@ func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
 	resp := &peersMsg{
 		Peers: []*peerAddr{&peerAddr{OAddr: p.OverlayAddr(), UAddr: p.UnderlayAddr()}}, // perhaps the PeerAddr interface is unnecessary generalization
 	}
-	self.Send(resp)
-	//return err
-	return nil
+	return self.Send(resp)
 }
 
 // NotifyProx sends a subPeers Msg to the receiver notifying them about
@@ -63,9 +60,7 @@ func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
 // or first empty row)
 // callback for overlay driver
 func (self *discPeer) NotifyProx(po uint8) error {
-	self.Send(&subPeersMsg{ProxLimit: po})
-	//return err
-	return nil
+	return self.Send(&subPeersMsg{ProxLimit: po})
 }
 
 /*
@@ -123,13 +118,16 @@ func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
 			if uint8(po) < self.proxLimit {
 				return false
 			}
-			self.seen(p)
+			log.Warn(fmt.Sprintf("peer %#v proxlimit %v", p, self.proxLimit))
+			self.seen(p.(*discPeer).Peer)
 			peers = append(peers, &peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
 			return true
 		})
 		log.Warn(fmt.Sprintf("found initial %v peers not farther than %v", len(peers), self.proxLimit))
 		if len(peers) > 0 {
-			self.Send(&peersMsg{Peers: peers})
+			if err := self.Send(&peersMsg{Peers: peers}); err != nil {
+				return err
+			}
 		}
 	}
 	self.sentPeers = true
@@ -181,8 +179,7 @@ func (self *discPeer) handleGetPeersMsg(msg interface{}) error {
 	resp := &peersMsg{
 		Peers: peers,
 	}
-	self.Send(resp)
-	return nil
+	return self.Send(resp)
 }
 
 func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
@@ -193,9 +190,8 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 	var i uint8
 	//var err error
 	k.EachLivePeer(nil, 255, func(n Peer, po int, isproxbin bool) bool {
-		log.Trace(fmt.Sprintf("%T sent to %v", req, n.ID()))
-		err := n.Send(req)
-		if err == nil {
+		log.Trace(fmt.Sprintf("%T sent to %v", req, n))
+		if err := n.Send(req); err == nil {
 			i++
 			if i >= broadcastSize {
 				return false
