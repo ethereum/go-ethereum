@@ -37,7 +37,7 @@ var (
 		Ethash:         new(EthashConfig),
 	}
 
-	// TestnetChainConfig contains the chain parameters to run a node on the ropsten test network.
+	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
 		ChainId:        big.NewInt(3),
 		HomesteadBlock: big.NewInt(0),
@@ -48,6 +48,22 @@ var (
 		EIP155Block:    big.NewInt(10),
 		EIP158Block:    big.NewInt(10),
 		Ethash:         new(EthashConfig),
+	}
+
+	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
+	RinkebyChainConfig = &ChainConfig{
+		ChainId:        big.NewInt(4),
+		HomesteadBlock: big.NewInt(1),
+		DAOForkBlock:   nil,
+		DAOForkSupport: true,
+		EIP150Block:    big.NewInt(2),
+		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:    big.NewInt(3),
+		EIP158Block:    big.NewInt(3),
+		Clique: &CliqueConfig{
+			Period: 15,
+			Epoch:  30000,
+		},
 	}
 
 	// AllProtocolChanges contains every protocol change (EIPs)
