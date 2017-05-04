@@ -331,7 +331,7 @@ var (
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
-		Usage: "Execute JavaScript statement (only in combination with console/attach)",
+		Usage: "Execute JavaScript statement",
 	}
 	PreloadJSFlag = cli.StringFlag{
 		Name:  "preload",
