@@ -154,6 +154,14 @@ func (self *SimNode) Stop() error {
 	return self.service.Stop()
 }
 
+// Running returns whether or not the service is running by checking if the
+// RPC client is set
+func (self *SimNode) Running() bool {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	return self.client != nil
+}
+
 // Service returns the underlying node.Service
 func (self *SimNode) Service() node.Service {
 	return self.service
@@ -234,9 +242,12 @@ func (self *SimNode) AddPeer(peer *discover.Node) {
 	if !exists {
 		panic(fmt.Sprintf("unknown peer: %s", peer.ID))
 	}
+	if !peerNode.Running() {
+		return
+	}
 	p1, p2 := p2p.MsgPipe()
-	localRW := NewMsgReporter(p1, &self.peerFeed, peer.ID)
-	peerRW := NewMsgReporter(p2, &self.peerFeed, self.Id.NodeID)
+	localRW := p2p.NewMsgEventer(p1, &self.peerFeed, peer.ID)
+	peerRW := p2p.NewMsgEventer(p2, &self.peerFeed, self.Id.NodeID)
 	self.peers[peer.ID] = peerRW
 	peerNode.RunProtocol(self, peerRW)
 	self.RunProtocol(peerNode, localRW)
