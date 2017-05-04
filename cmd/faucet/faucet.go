@@ -108,10 +108,11 @@ func main() {
 		if period%60 == 0 {
 			period /= 60
 			periods[i] = fmt.Sprintf("%d hours", period)
-		}
-		if period%24 == 0 {
-			period /= 24
-			periods[i] = fmt.Sprintf("%d days", period)
+
+			if period%24 == 0 {
+				period /= 24
+				periods[i] = fmt.Sprintf("%d days", period)
+			}
 		}
 		if period == 1 {
 			periods[i] = strings.TrimSuffix(periods[i], "s")
