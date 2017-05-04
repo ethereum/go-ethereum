@@ -243,6 +243,11 @@ func (ethash *Ethash) verifyHeader(chain consensus.ChainReader, header, parent *
 	if expected.Cmp(header.Difficulty) != 0 {
 		return fmt.Errorf("invalid difficulty: have %v, want %v", header.Difficulty, expected)
 	}
+	// Verify that the gas limit is < 2^63
+	if header.GasLimit.Cmp(math.TT63m1) > 0{
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, math.TT63m1)	
+	}
+
 	// Verify that the gas limit remains within allowed bounds
 	diff := new(big.Int).Set(parent.GasLimit)
 	diff = diff.Sub(diff, header.GasLimit)
