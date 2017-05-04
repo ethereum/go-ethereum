@@ -78,10 +78,11 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	node := &SimNode{
-		Id:      id,
-		adapter: s,
-		service: service,
-		peers:   make(map[discover.NodeID]MsgReadWriteCloser),
+		Id:        id,
+		adapter:   s,
+		service:   service,
+		peers:     make(map[discover.NodeID]MsgReadWriteCloser),
+		dropPeers: make(chan struct{}),
 	}
 	s.nodes[id.NodeID] = node
 	return node, nil
@@ -117,6 +118,10 @@ type SimNode struct {
 	peers    map[discover.NodeID]MsgReadWriteCloser
 	peerFeed event.Feed
 	client   *rpc.Client
+
+	// dropPeers is used to force peer disconnects when
+	// the node is stopped
+	dropPeers chan struct{}
 }
 
 // Addr returns the node's discovery address
@@ -142,15 +147,18 @@ func (self *SimNode) Client() (*rpc.Client, error) {
 
 // Start starts the RPC handler and the underlying service
 func (self *SimNode) Start() error {
+	self.dropPeers = make(chan struct{})
 	if err := self.startRPC(); err != nil {
 		return err
 	}
 	return self.service.Start(self)
 }
 
-// Stop stops the RPC handler and the underlying service
+// Stop stops the RPC handler, stops the underlying service and disconnects
+// any currently connected peers
 func (self *SimNode) Stop() error {
 	self.stopRPC()
+	close(self.dropPeers)
 	return self.service.Stop()
 }
 
@@ -288,9 +296,16 @@ func (self *SimNode) PeersInfo() (info []*p2p.PeerInfo) {
 }
 
 // RunProtocol runs the underlying service's protocol with the peer using the
-// given p2p.MsgReadWriter, emitting peer add / drop events for peer event
+// given MsgReadWriteCloser, emitting peer add / drop events for peer event
 // subscribers
-func (self *SimNode) RunProtocol(peer *SimNode, rw p2p.MsgReadWriter) {
+func (self *SimNode) RunProtocol(peer *SimNode, rw MsgReadWriteCloser) {
+	// close the rw if the node is stopped to disconnect the peer
+	go func() {
+		<-self.dropPeers
+		log.Trace("dropping peer", "self.id", self.Id, "peer.id", peer.Id)
+		rw.Close()
+	}()
+
 	id := peer.Id
 	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
 	protocol := self.service.Protocols()[0]
