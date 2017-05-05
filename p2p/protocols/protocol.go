@@ -32,6 +32,7 @@ package protocols
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -45,23 +46,21 @@ const (
 	ErrWrite
 	ErrInvalidMsgCode
 	ErrInvalidMsgType
-	ErrLocalHandshake
-	ErrRemoteHandshake
+	ErrHandshake
 	ErrNoHandler
 	ErrHandler
 )
 
 // error description strings associated with the codes
 var errorToString = map[int]string{
-	ErrMsgTooLong:      "Message too long",
-	ErrDecode:          "Invalid message (RLP error)",
-	ErrWrite:           "Error sending message",
-	ErrInvalidMsgCode:  "Invalid message code",
-	ErrInvalidMsgType:  "Invalid message type",
-	ErrLocalHandshake:  "Local handshake error",
-	ErrRemoteHandshake: "Remote handshake error",
-	ErrNoHandler:       "No handler registered error",
-	ErrHandler:         "Message handler error",
+	ErrMsgTooLong:     "Message too long",
+	ErrDecode:         "Invalid message (RLP error)",
+	ErrWrite:          "Error sending message",
+	ErrInvalidMsgCode: "Invalid message code",
+	ErrInvalidMsgType: "Invalid message type",
+	ErrHandshake:      "Handshake error",
+	ErrNoHandler:      "No handler registered error",
+	ErrHandler:        "Message handler error",
 }
 
 /*
@@ -117,15 +116,16 @@ type CodeMap struct {
 	Name       string                  // name of the protocol
 	Version    uint                    // version
 	MaxMsgSize int                     // max length of message payload size
-	codes      []reflect.Type          // index of codes to msg types - to create zero values
+	codepos    int                     // the subsequent code
+	codes      map[uint64]reflect.Type // index of codes to msg types - to create zero values
 	messages   map[reflect.Type]uint64 // index of types to codes, for sending by type
 }
 
 func (self *CodeMap) GetInterface(code uint64) (interface{}, bool) {
-	if int(code) > len(self.codes)-1 {
+	typ, found := self.codes[code]
+	if !found {
 		return nil, false
 	}
-	typ := self.codes[code]
 	val := reflect.New(typ)
 	return val.Interface(), true
 }
@@ -135,23 +135,21 @@ func (self *CodeMap) GetCode(msg interface{}) (uint64, bool) {
 	return code, found
 }
 
-func NewCodeMap(name string, version uint, maxMsgSize int, msgs ...interface{}) *CodeMap {
-	self := &CodeMap{
+func NewCodeMap(name string, version uint, maxMsgSize int) *CodeMap {
+	return &CodeMap{
 		Name:       name,
 		Version:    version,
 		MaxMsgSize: maxMsgSize,
 		messages:   make(map[reflect.Type]uint64),
 	}
-	self.Register(msgs...)
-	return self
 }
 
 func (self *CodeMap) Length() uint64 {
-	return uint64(len(self.codes))
+	return uint64(self.codepos)
 }
 
-func (self *CodeMap) Register(msgs ...interface{}) {
-	code := uint64(len(self.codes))
+func (self *CodeMap) Register(series int, msgs ...interface{}) {
+	code := series
 	for _, msg := range msgs {
 		typ := reflect.TypeOf(msg)
 		_, found := self.messages[typ]
@@ -160,9 +158,9 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 			continue
 		}
 		// next code assigned to message type typ
-		self.messages[typ] = code
-		self.codes = append(self.codes, typ)
-		code++
+		self.messages[typ] = uint64(self.codepos)
+		self.codes[uint64(self.codepos)] = typ
+		self.codepos++
 	}
 }
 
@@ -346,25 +344,35 @@ func (self *Peer) handleIncoming() (interface{}, error) {
 // * the argument is the local  handshake 	to be sent to the remote peer
 // * expects a remote handshake back of the same type
 // returns the remote hs and an error
-func (self *Peer) Handshake(hs interface{}) (interface{}, error) {
+func (self *Peer) Handshake(hs interface{}, handshakeTimeout time.Duration) (rhs interface{}, err error) {
 	typ := reflect.TypeOf(hs)
 	_, found := self.ct.messages[typ]
 	if !found {
-		return nil, errorf(ErrLocalHandshake, "unknown handshake message type: %v", typ)
+		return nil, errorf(ErrHandshake, "unknown handshake message type: %v", typ)
 	}
-	errc := make(chan error)
+	errc := make(chan error, 1)
 	go func() {
-		err := self.Send(hs)
-		if err != nil {
-			err = errorf(ErrLocalHandshake, "cannot send: %v", err)
+		if err := self.Send(hs); err != nil {
+			errc <- errorf(ErrHandshake, "cannot send: %v", err)
 		}
-		errc <- err
 	}()
-	// receiving and validating remote handshake, expect code
-	rhs, err := self.handleIncoming()
-	if err != nil {
-		return nil, errorf(ErrRemoteHandshake, "'%v': %v", self.ct.Name, err)
+
+	hsc := make(chan interface{})
+	go func() {
+		// receiving and validating remote handshake, expect code
+		rhs, err := self.handleIncoming()
+		if err != nil {
+			errc <- errorf(ErrHandshake, "'%v': %v", self.ct.Name, err)
+			return
+		}
+		hsc <- rhs
+	}()
+
+	select {
+	case err = <-errc:
+	case rhs = <-hsc:
+	case <-time.NewTimer(handshakeTimeout).C:
+		err = errorf(ErrHandshake, "timeout")
 	}
-	err = <-errc
 	return rhs, err
 }

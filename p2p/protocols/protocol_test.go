@@ -56,7 +56,8 @@ const networkId = "420"
 // the run function here demonstrates a typical protocol using peerPool, handshake
 // and messages registered to handlers
 func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
-	ct := NewCodeMap("test", 42, 1024, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
+	ct := NewCodeMap("test", 42, 1024)
+	ct.Register(0, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
 	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		peer := NewPeer(p, ct, rw)
 
@@ -70,13 +71,12 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
 
 		// for testing we can trigger self induced disconnect upon receiving drop message
 		peer.Register(&drop{}, func(msg interface{}) error {
-			log.Trace("dropped")
 			return fmt.Errorf("dropped")
 		})
 
 		// initiate one-off protohandshake and check validity
 		phs := &protoHandshake{ct.Version, networkId}
-		hs, err := peer.Handshake(phs)
+		hs, err := peer.Handshake(phs, time.Second)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
 
 		lhs := &hs0{42}
 		// module handshake demonstrating a simple repeatable exchange of same-type message
-		hs, err = peer.Handshake(lhs)
+		hs, err = peer.Handshake(lhs, time.Second)
 		if err != nil {
 			return err
 		}
