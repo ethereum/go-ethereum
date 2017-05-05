@@ -59,6 +59,7 @@ type ChainSectionProcessorBackend interface {
 	Process(idx uint64) bool
 	GetStored() uint64
 	SetStored(count uint64)
+	UpdateMsg(done, all uint64)
 }
 
 // NewChainSectionProcessor creates a new  ChainSectionProcessor
@@ -80,6 +81,7 @@ func (csp *ChainSectionProcessor) updateLoop() {
 	tryUpdate := make(chan struct{}, 1)
 	updating := false
 	var targetCnt uint64
+	updateMsg := false
 
 	for {
 		select {
@@ -93,6 +95,10 @@ func (csp *ChainSectionProcessor) updateLoop() {
 		case <-tryUpdate:
 			csp.lock.Lock()
 			if targetCnt > csp.stored {
+				if !updateMsg && targetCnt > csp.stored+1 {
+					updateMsg = true
+					csp.backend.UpdateMsg(csp.stored, targetCnt)
+				}
 				csp.calcValid = true
 				csp.calcIdx = csp.stored
 
@@ -103,12 +109,16 @@ func (csp *ChainSectionProcessor) updateLoop() {
 				if ok && csp.calcValid {
 					csp.stored = csp.calcIdx + 1
 					csp.backend.SetStored(csp.stored)
-
+					if updateMsg {
+						csp.backend.UpdateMsg(csp.stored, targetCnt)
+						if csp.stored >= targetCnt {
+							updateMsg = false
+						}
+					}
 					csp.lastForwarded = csp.stored*csp.sectionSize - 1
 					for _, cp := range csp.childProcessors {
 						cp.NewHead(csp.lastForwarded, false)
 					}
-
 				}
 				csp.calcValid = false
 			}
