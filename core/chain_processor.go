@@ -26,7 +26,8 @@ import (
 // using the canonical chain as an input. Its callback function NewHead is called every
 // time a new head is added to the chain or it gets rolled back. The callback function
 // should never block because it is called under the chain's mutex lock so that the
-// structures can stay consistent with the canonical chain.
+// structures can stay consistent with the canonical chain. It should also not call
+// any chain functions that use this mutex because that would cause a deadlock.
 // The same interface can be used for chaining processors (one using the output of the
 // other).
 type ChainProcessor interface {
@@ -42,7 +43,7 @@ type ChainSectionProcessor struct {
 	backend                        ChainSectionProcessorBackend
 	sectionSize, confirmReq        uint64
 	stop                           chan struct{}
-	updateChn                      chan uint64
+	updateCh                       chan uint64
 	lock                           sync.Mutex
 	calcValid                      bool
 	procWait                       time.Duration
@@ -56,13 +57,18 @@ type ChainSectionProcessor struct {
 // finish. If the chain gets rolled back while Process is running, the results
 // are considered invalid and SetStored is not called.
 type ChainSectionProcessorBackend interface {
-	Process(idx uint64) bool
-	GetStored() uint64
-	SetStored(count uint64)
-	UpdateMsg(done, all uint64)
+	Process(idx uint64) bool    // do the processing of section idx but do not mark it as valid yet; return false if processing failed
+	GetStored() uint64          // return the number of sections processed, stored and marked as valid
+	SetStored(count uint64)     // set the number of stored and valid processed sections (called after Process returned true if no reorg happened in the meantime)
+	UpdateMsg(done, all uint64) // print a progress update message if necessary (only called when multiple sections need to be processed)
 }
 
 // NewChainSectionProcessor creates a new  ChainSectionProcessor
+//  backend:		an implementation of ChainSectionProcessorBackend
+//  sectionSize:	the size of processable sections
+//  confirmReq:		required number of confirmation blocks before a new section is being processed
+//  procWait:		waiting time between processing sections (simple way of limiting the resource usage of a db upgrade)
+//  stop:		    quit channel
 func NewChainSectionProcessor(backend ChainSectionProcessorBackend, sectionSize, confirmReq uint64, procWait time.Duration, stop chan struct{}) *ChainSectionProcessor {
 	csp := &ChainSectionProcessor{
 		backend:     backend,
@@ -70,7 +76,7 @@ func NewChainSectionProcessor(backend ChainSectionProcessorBackend, sectionSize,
 		confirmReq:  confirmReq,
 		stop:        stop,
 		procWait:    procWait,
-		updateChn:   make(chan uint64, 100),
+		updateCh:    make(chan uint64, 100),
 		stored:      backend.GetStored(),
 	}
 	go csp.updateLoop()
@@ -80,24 +86,24 @@ func NewChainSectionProcessor(backend ChainSectionProcessorBackend, sectionSize,
 func (csp *ChainSectionProcessor) updateLoop() {
 	tryUpdate := make(chan struct{}, 1)
 	updating := false
-	var targetCnt uint64
+	var targetCount uint64
 	updateMsg := false
 
 	for {
 		select {
 		case <-csp.stop:
 			return
-		case targetCnt = <-csp.updateChn:
+		case targetCount = <-csp.updateCh:
 			if !updating {
 				updating = true
 				tryUpdate <- struct{}{}
 			}
 		case <-tryUpdate:
 			csp.lock.Lock()
-			if targetCnt > csp.stored {
-				if !updateMsg && targetCnt > csp.stored+1 {
+			if targetCount > csp.stored {
+				if !updateMsg && targetCount > csp.stored+1 {
 					updateMsg = true
-					csp.backend.UpdateMsg(csp.stored, targetCnt)
+					csp.backend.UpdateMsg(csp.stored, targetCount)
 				}
 				csp.calcValid = true
 				csp.calcIdx = csp.stored
@@ -110,8 +116,8 @@ func (csp *ChainSectionProcessor) updateLoop() {
 					csp.stored = csp.calcIdx + 1
 					csp.backend.SetStored(csp.stored)
 					if updateMsg {
-						csp.backend.UpdateMsg(csp.stored, targetCnt)
-						if csp.stored >= targetCnt {
+						csp.backend.UpdateMsg(csp.stored, targetCount)
+						if csp.stored >= targetCount {
 							updateMsg = false
 						}
 					}
@@ -125,7 +131,7 @@ func (csp *ChainSectionProcessor) updateLoop() {
 			stored := csp.stored
 			csp.lock.Unlock()
 
-			if targetCnt > stored {
+			if targetCount > stored {
 				go func() {
 					time.Sleep(csp.procWait)
 					tryUpdate <- struct{}{}
@@ -152,7 +158,7 @@ func (csp *ChainSectionProcessor) NewHead(headNum uint64, rollback bool) {
 			csp.backend.SetStored(csp.stored)
 			select {
 			case <-csp.stop:
-			case csp.updateChn <- firstChanged:
+			case csp.updateCh <- firstChanged:
 			}
 		}
 
@@ -171,7 +177,7 @@ func (csp *ChainSectionProcessor) NewHead(headNum uint64, rollback bool) {
 				go func() {
 					select {
 					case <-csp.stop:
-					case csp.updateChn <- newCount:
+					case csp.updateCh <- newCount:
 					}
 				}()
 			}
