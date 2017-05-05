@@ -13,6 +13,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     ubuntu.vm.provision "shell", :path => "provisioners/shell/ubuntu.sh"
   end
 
+  config.vm.define "debian", :primary => true do |debian|
+    debian.vm.box = "debian/jessie64"
+    debian.vm.provision "shell", :path => "provisioners/shell/debian.sh"
+  end
+  
   config.vm.define "centos", :autostart => false do |centos| 
     centos.vm.box = "centos/7"
     centos.vm.provision "shell", :path => "provisioners/shell/centos.sh"
