@@ -251,6 +251,38 @@ func TestClientSubscribe(t *testing.T) {
 	}
 }
 
+func TestClientSubscribeCustomNamespace(t *testing.T) {
+	namespace := "custom"
+	server := newTestServer(namespace, new(NotificationTestService))
+	defer server.Stop()
+	client := DialInProc(server)
+	defer client.Close()
+
+	nc := make(chan int)
+	count := 10
+	sub, err := client.Subscribe(context.Background(), namespace, nc, "someSubscription", count, 0)
+	if err != nil {
+		t.Fatal("can't subscribe:", err)
+	}
+	for i := 0; i < count; i++ {
+		if val := <-nc; val != i {
+			t.Fatalf("value mismatch: got %d, want %d", val, i)
+		}
+	}
+
+	sub.Unsubscribe()
+	select {
+	case v := <-nc:
+		t.Fatal("received value after unsubscribe:", v)
+	case err := <-sub.Err():
+		if err != nil {
+			t.Fatalf("Err returned a non-nil error after explicit unsubscribe: %q", err)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatalf("subscription not closed within 1s after unsubscribe")
+	}
+}
+
 // In this test, the connection drops while EthSubscribe is
 // waiting for a response.
 func TestClientSubscribeClose(t *testing.T) {
