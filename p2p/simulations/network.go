@@ -40,26 +40,19 @@ import (
 )
 
 type NetworkConfig struct {
-	// Type   NetworkType
-	// Config json.RawMessage // type-specific configs
-	// type
-	// Events []string
-	Id                  string
-	DefaultMockerConfig *MockerConfig
-	Backend             bool
-	DefaultService      string
-}
-
-type NetworkControl interface {
-	Events() *event.TypeMux
-	Config() *NetworkConfig
-	Subscribe(*event.TypeMux, ...interface{})
+	Id             string `json:"id"`
+	DefaultService string `json:"default_service,omitempty"`
 }
 
 // Network models a p2p network
 // the actual logic of bringing nodes and connections up and down and
 // messaging is implemented in the particular NodeAdapter interface
 type Network struct {
+	NetworkConfig
+
+	Nodes []*Node `json:"nodes"`
+	Conns []*Conn `json:"conns"`
+
 	nodeAdapter adapters.NodeAdapter
 
 	// input trigger events and other events
@@ -67,19 +60,16 @@ type Network struct {
 	lock    sync.RWMutex
 	nodeMap map[discover.NodeID]int
 	connMap map[string]int
-	Nodes   []*Node `json:"nodes"`
-	Conns   []*Conn `json:"conns"`
 	quitc   chan bool
-	conf    *NetworkConfig
 }
 
 func NewNetwork(nodeAdapter adapters.NodeAdapter, conf *NetworkConfig) *Network {
 	return &Network{
-		nodeAdapter: nodeAdapter,
-		conf:        conf,
-		nodeMap:     make(map[discover.NodeID]int),
-		connMap:     make(map[string]int),
-		quitc:       make(chan bool),
+		NetworkConfig: *conf,
+		nodeAdapter:   nodeAdapter,
+		nodeMap:       make(map[discover.NodeID]int),
+		connMap:       make(map[string]int),
+		quitc:         make(chan bool),
 	}
 }
 
@@ -122,7 +112,7 @@ func (self *Network) executeNodeEvent(e *Event) error {
 		return self.Stop(e.Node.ID())
 	}
 
-	if err := self.NewNodeWithConfig(e.Node.Config); err != nil {
+	if _, err := self.NewNodeWithConfig(e.Node.Config); err != nil {
 		return err
 	}
 	return self.Start(e.Node.ID())
@@ -158,6 +148,12 @@ func (self *Node) String() string {
 	return fmt.Sprintf("Node %v", self.ID().Label())
 }
 
+func (self *Node) NodeInfo() *p2p.NodeInfo {
+	info := self.Node.NodeInfo()
+	info.Name = self.Config.Name
+	return info
+}
+
 // active connections are represented by the Node entry object so that
 // you journal updates could filter if passive knowledge about peers is
 // irrelevant
@@ -191,34 +187,34 @@ func (self *Msg) String() string {
 }
 
 // NewNode adds a new node to the network with a random ID
-func (self *Network) NewNode() (*adapters.NodeConfig, error) {
+func (self *Network) NewNode() (*Node, error) {
 	conf := adapters.RandomNodeConfig()
-	conf.Service = self.conf.DefaultService
-	if err := self.NewNodeWithConfig(conf); err != nil {
-		return nil, err
-	}
-	return conf, nil
+	conf.Service = self.DefaultService
+	return self.NewNodeWithConfig(conf)
 }
 
 // NewNodeWithConfig adds a new node to the network with the given config
 // errors if a node by the same id already exist
-func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) error {
+func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	id := conf.Id
+	if conf.Name == "" {
+		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
+	}
 	if conf.Service == "" {
-		conf.Service = self.conf.DefaultService
+		conf.Service = self.DefaultService
 	}
 
 	_, found := self.nodeMap[id.NodeID]
 	if found {
-		return fmt.Errorf("node %v already added", id)
+		return nil, fmt.Errorf("node %v already added", id)
 	}
 	self.nodeMap[id.NodeID] = len(self.Nodes)
 
 	adapterNode, err := self.nodeAdapter.NewNode(conf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	node := &Node{
 		Node:   adapterNode,
@@ -227,11 +223,11 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) error {
 	self.Nodes = append(self.Nodes, node)
 	log.Trace(fmt.Sprintf("node %v created", id))
 	self.events.Send(ControlEvent(node))
-	return nil
+	return node, nil
 }
 
 func (self *Network) Config() *NetworkConfig {
-	return self.conf
+	return &self.NetworkConfig
 }
 
 // newConn adds a new connection to the network
@@ -493,6 +489,17 @@ func (self *Network) GetNode(id *adapters.NodeId) *Node {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	return self.getNode(id)
+}
+
+func (self *Network) GetNodeByName(name string) *Node {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	for _, node := range self.Nodes {
+		if node.Config.Name == name {
+			return node
+		}
+	}
+	return nil
 }
 
 func (self *Network) GetNodes() []*Node {

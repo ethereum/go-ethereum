@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 
 	"github.com/docker/docker/pkg/reexec"
@@ -45,6 +46,10 @@ type Node interface {
 	// Client returns the RPC client which is created once the node is
 	// up and running
 	Client() (*rpc.Client, error)
+
+	// ServeRPC serves RPC requests over the given connection using the
+	// node's RPC multiplexer
+	ServeRPC(net.Conn) error
 
 	// Start starts the node
 	Start() error
@@ -116,6 +121,9 @@ type NodeConfig struct {
 	Id         *NodeId
 	PrivateKey *ecdsa.PrivateKey
 
+	// Name is a human friendly name for the node like "node01"
+	Name string
+
 	// Service is the name of the service which should be run when starting
 	// the node (for SimNodes it should be the name of a service contained
 	// in SimAdapter.services, for other nodes it should be a service
@@ -128,15 +136,22 @@ type NodeConfig struct {
 type nodeConfigJSON struct {
 	Id         string `json:"id"`
 	PrivateKey string `json:"private_key"`
+	Name       string `json:"name"`
 	Service    string `json:"service"`
 }
 
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
-	return json.Marshal(nodeConfigJSON{
-		n.Id.String(),
-		hex.EncodeToString(crypto.FromECDSA(n.PrivateKey)),
-		n.Service,
-	})
+	confJSON := nodeConfigJSON{
+		Name:    n.Name,
+		Service: n.Service,
+	}
+	if n.Id != nil {
+		confJSON.Id = n.Id.String()
+	}
+	if n.PrivateKey != nil {
+		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
+	}
+	return json.Marshal(confJSON)
 }
 
 func (n *NodeConfig) UnmarshalJSON(data []byte) error {
@@ -145,18 +160,23 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	nodeID, err := discover.HexID(confJSON.Id)
-	if err != nil {
-		return err
+	if confJSON.Id != "" {
+		nodeID, err := discover.HexID(confJSON.Id)
+		if err != nil {
+			return err
+		}
+		n.Id = &NodeId{NodeID: nodeID}
 	}
-	n.Id = &NodeId{NodeID: nodeID}
 
-	key, err := hex.DecodeString(confJSON.PrivateKey)
-	if err != nil {
-		return err
+	if confJSON.PrivateKey != "" {
+		key, err := hex.DecodeString(confJSON.PrivateKey)
+		if err != nil {
+			return err
+		}
+		n.PrivateKey = crypto.ToECDSA(key)
 	}
-	n.PrivateKey = crypto.ToECDSA(key)
 
+	n.Name = confJSON.Name
 	n.Service = confJSON.Service
 
 	return nil

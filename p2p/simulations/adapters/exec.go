@@ -97,6 +97,7 @@ type ExecNode struct {
 	Info    *p2p.NodeInfo
 
 	client *rpc.Client
+	rpcMux *rpcMux
 	newCmd func() *exec.Cmd
 	key    *ecdsa.PrivateKey
 }
@@ -157,7 +158,8 @@ func (n *ExecNode) Start() (err error) {
 	n.Cmd = cmd
 
 	// create the RPC client and load the node info
-	n.client = rpc.NewClientWithConn(pipe2)
+	n.rpcMux = newRPCMux(pipe2)
+	n.client = n.rpcMux.Client()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var info p2p.NodeInfo
@@ -220,6 +222,16 @@ func (n *ExecNode) NodeInfo() *p2p.NodeInfo {
 		return n.Info
 	}
 	return info
+}
+
+// ServeRPC serves RPC requests over the given connection using the node's
+// RPC multiplexer
+func (n *ExecNode) ServeRPC(conn net.Conn) error {
+	if n.rpcMux == nil {
+		return errors.New("RPC not started")
+	}
+	n.rpcMux.Serve(conn)
+	return nil
 }
 
 func init() {

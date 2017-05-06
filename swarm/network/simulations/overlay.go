@@ -96,11 +96,11 @@ func mocker(net *simulations.Network) {
 
 	ids := make([]*adapters.NodeId, 10)
 	for i := 0; i < 10; i++ {
-		conf, err := net.NewNode()
+		node, err := net.NewNode()
 		if err != nil {
 			panic(err.Error())
 		}
-		ids[i] = conf.Id
+		ids[i] = node.ID()
 	}
 
 	for _, id := range ids {

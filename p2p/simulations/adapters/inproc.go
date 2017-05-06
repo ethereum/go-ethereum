@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -119,6 +120,7 @@ type SimNode struct {
 	peers    map[discover.NodeID]MsgReadWriteCloser
 	peerFeed event.Feed
 	client   *rpc.Client
+	rpcMux   *rpcMux
 
 	// dropPeers is used to force peer disconnects when
 	// the node is stopped
@@ -144,6 +146,19 @@ func (self *SimNode) Client() (*rpc.Client, error) {
 		return nil, errors.New("RPC not started")
 	}
 	return self.client, nil
+}
+
+// ServeRPC serves RPC requests over the given connection using the node's
+// RPC multiplexer
+func (self *SimNode) ServeRPC(conn net.Conn) error {
+	self.lock.Lock()
+	mux := self.rpcMux
+	self.lock.Unlock()
+	if mux == nil {
+		return errors.New("RPC not started")
+	}
+	mux.Serve(conn)
+	return nil
 }
 
 // Start starts the RPC handler and the underlying service
@@ -203,8 +218,13 @@ func (self *SimNode) startRPC() error {
 		}
 	}
 
+	// create an in-process RPC multiplexer
+	pipe1, pipe2 := net.Pipe()
+	go handler.ServeCodec(rpc.NewJSONCodec(pipe1), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
+	self.rpcMux = newRPCMux(pipe2)
+
 	// create an in-process RPC client
-	self.client = rpc.DialInProc(handler)
+	self.client = self.rpcMux.Client()
 
 	return nil
 }
@@ -216,6 +236,7 @@ func (self *SimNode) stopRPC() {
 	if self.client != nil {
 		self.client.Close()
 		self.client = nil
+		self.rpcMux = nil
 	}
 }
 
