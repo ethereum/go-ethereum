@@ -159,7 +159,7 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 		return err
 	}
 	events := make(chan *p2p.PeerEvent)
-	sub, err := client.EthSubscribe(context.Background(), events, "peerEvents")
+	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}

@@ -426,7 +426,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 		return fmt.Errorf("error getting rpc client  for node %v: %s", id, err)
 	}
 	events := make(chan *p2p.PeerEvent)
-	sub, err := client.EthSubscribe(context.Background(), events, "peerEvents")
+	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
