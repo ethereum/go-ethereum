@@ -62,7 +62,6 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	nodeCount := 10
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		Id:             "0",
-		Backend:        true,
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()

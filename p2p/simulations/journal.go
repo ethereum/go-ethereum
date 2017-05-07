@@ -16,12 +16,13 @@ import (
 // (using event.TypeMux). Network components POST events to the TypeMux, which then is
 // read by the journal. Each journal belongs to a subscription.
 type Journal struct {
-	Id      string
+	Id     string   `json:"id"`
+	Events []*Event `json:"events"`
+
 	lock    sync.Mutex
 	counter int
 	cursor  int
 	quitc   chan bool
-	Events  []*event.TypeMuxEvent
 }
 
 // NewJournal constructor
@@ -34,19 +35,19 @@ func NewJournal() *Journal {
 	return &Journal{quitc: make(chan bool)}
 }
 
-// Subscribe takes an event.TypeMux and subscibes to types
-// and launches a gorourine that appends any new event to the event log
-// used for journalling history of a network
+// Subscribe subscribes to an event.Feed and launches a gorourine that appends
+// any new event to the event log used for journalling history of a network
 // the goroutine terminates when the journal is closed
-func (self *Journal) Subscribe(eventer *event.TypeMux, types ...interface{}) {
+func (self *Journal) Subscribe(feed *event.Feed) {
 	log.Info("subscribe")
-	sub := eventer.Subscribe(types...)
+	events := make(chan *Event)
+	sub := feed.Subscribe(events)
 	go func() {
 		defer sub.Unsubscribe()
 		for {
 			select {
-			case ev := <-sub.Chan():
-				self.append(ev)
+			case event := <-events:
+				self.append(event)
 			case <-self.quitc:
 				return
 			}
@@ -75,11 +76,12 @@ func NewJournalFromJSON(b []byte) (*Journal, error) {
 // params:
 // * acc: using acceleration factor acc
 // * journal: journal to use
-// * eventer: where to post the replayed events
-func Replay(acc float64, j *Journal, eventer *event.TypeMux) {
-	f := func(d interface{}) bool {
+// * feed: where to post the replayed events
+func Replay(acc float64, j *Journal, feed *event.Feed) {
+	f := func(event *Event) bool {
 		// reposts the data with the eventer (the data receives a new timestamp)
-		eventer.Post(d)
+		event.Time = time.Now()
+		feed.Send(event)
 		return true
 	}
 	j.TimedRead(acc, f)
@@ -97,10 +99,10 @@ func (self *Journal) Close() {
 	close(self.quitc)
 }
 
-func (self *Journal) append(evs ...*event.TypeMuxEvent) {
+func (self *Journal) append(events ...*Event) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	self.Events = append(self.Events, evs...)
+	self.Events = append(self.Events, events...)
 	self.counter++
 }
 
@@ -116,7 +118,7 @@ func (self *Journal) WaitEntries(n int) {
 	}
 }
 
-func (self *Journal) Read(f func(*event.TypeMuxEvent) bool) (read int) {
+func (self *Journal) Read(f func(*Event) bool) (read int) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	ok := true
@@ -139,20 +141,20 @@ func (self *Journal) Read(f func(*event.TypeMuxEvent) bool) (read int) {
 // NOTE: the events' timestamps are supposed to be strictly ordered otherwise
 // the call panics.
 // acc is an acceleration factor
-func (self *Journal) TimedRead(acc float64, f func(interface{}) bool) (read int) {
+func (self *Journal) TimedRead(acc float64, f func(*Event) bool) (read int) {
 	var lastEvent time.Time
 	timer := time.NewTimer(0)
-	var data interface{}
-	h := func(ev *event.TypeMuxEvent) bool {
+	var event *Event
+	h := func(e *Event) bool {
 		// wait for the interval time passes event time
-		if ev.Time.Before(lastEvent) {
+		if e.Time.Before(lastEvent) {
 			panic("events not ordered")
 		}
-		interval := ev.Time.Sub(lastEvent)
+		interval := e.Time.Sub(lastEvent)
 		log.Trace(fmt.Sprintf("reset timer to interval %v", interval))
 		timer.Reset(time.Duration(acc) * interval)
-		lastEvent = ev.Time
-		data = ev.Data
+		lastEvent = e.Time
+		event = e
 		return false
 	}
 	var n int
@@ -168,7 +170,7 @@ func (self *Journal) TimedRead(acc float64, f func(interface{}) bool) (read int)
 			}
 		}
 		read += n
-		if n == 0 || !f(data) {
+		if n == 0 || !f(event) {
 			log.Trace(fmt.Sprintf("timed read ends (read %v entries)", read))
 			break
 		}

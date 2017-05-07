@@ -93,6 +93,23 @@ func (self *NodeId) Label() string {
 	return self.String()[:4]
 }
 
+func (self *NodeId) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hex.EncodeToString(self.NodeID[:]))
+}
+
+func (self *NodeId) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	id, err := discover.HexID(s)
+	if err != nil {
+		return err
+	}
+	self.NodeID = id
+	return nil
+}
+
 // NodeConfig is the configuration used to start a node in a simulation
 // network
 type NodeConfig struct {

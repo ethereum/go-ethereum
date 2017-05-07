@@ -118,7 +118,8 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) streamNetworkEvents(network *Network, w http.ResponseWriter) {
-	sub := network.events.Subscribe(ConnectivityAllEvents...)
+	events := make(chan *Event)
+	sub := network.events.Subscribe(events)
 	defer sub.Unsubscribe()
 
 	// stop the stream if the client goes away
@@ -140,23 +141,20 @@ func (s *Server) streamNetworkEvents(network *Network, w http.ResponseWriter) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/event-stream")
-	ch := sub.Chan()
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if fw, ok := w.(http.Flusher); ok {
+		fw.Flush()
+	}
 	for {
 		select {
-		case event := <-ch:
-			// convert the event to a SimUpdate
-			update, err := NewSimUpdate(event)
+		case event := <-events:
+			data, err := json.Marshal(event)
 			if err != nil {
 				write("error", err.Error())
 				return
 			}
-			data, err := json.Marshal(update)
-			if err != nil {
-				write("error", err.Error())
-				return
-			}
-			write("simupdate", string(data))
+			write("network", string(data))
 		case <-clientGone:
 			return
 		}
@@ -198,7 +196,7 @@ func (s *Server) StartNode(w http.ResponseWriter, req *http.Request) {
 	network := req.Context().Value("network").(*Network)
 	node := req.Context().Value("node").(*Node)
 
-	if err := network.Start(node.Id); err != nil {
+	if err := network.Start(node.ID()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -210,7 +208,7 @@ func (s *Server) StopNode(w http.ResponseWriter, req *http.Request) {
 	network := req.Context().Value("network").(*Network)
 	node := req.Context().Value("node").(*Node)
 
-	if err := network.Stop(node.Id); err != nil {
+	if err := network.Stop(node.ID()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -223,7 +221,7 @@ func (s *Server) ConnectNode(w http.ResponseWriter, req *http.Request) {
 	node := req.Context().Value("node").(*Node)
 	peer := req.Context().Value("peer").(*Node)
 
-	if err := network.Connect(node.Id, peer.Id); err != nil {
+	if err := network.Connect(node.ID(), peer.ID()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -236,7 +234,7 @@ func (s *Server) DisconnectNode(w http.ResponseWriter, req *http.Request) {
 	node := req.Context().Value("node").(*Node)
 	peer := req.Context().Value("peer").(*Node)
 
-	if err := network.Disconnect(node.Id, peer.Id); err != nil {
+	if err := network.Disconnect(node.ID(), peer.ID()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

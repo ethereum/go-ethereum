@@ -57,7 +57,7 @@ func DefaultMockerConfig() *MockerConfig {
 // to the eventer
 // The journal using the eventer can then be read to visualise or
 // drive connections
-func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConfig) {
+func MockEvents(eventer *event.Feed, ids []*adapters.NodeId, conf *MockerConfig) {
 
 	var onNodes []*Node
 	offNodes := ids
@@ -105,22 +105,15 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 		for i := 0; len(onNodes) > 0 && i < nodesDown; i++ {
 			c := rand.Intn(len(onNodes))
 			sn := onNodes[c]
-			err := eventer.Post(sn.EmitEvent(ControlEvent))
-			if err != nil {
-				panic(err.Error())
-			}
+			eventer.Send(ControlEvent(sn))
 			onNodes = append(onNodes[0:c], onNodes[c+1:]...)
-			offNodes = append(offNodes, sn.Id)
+			offNodes = append(offNodes, sn.ID())
 		}
 		var mustconnect []int
 		for i := 0; len(offNodes) > 0 && i < nodesUp; i++ {
 			c := rand.Intn(len(offNodes))
-			sn := &Node{}
-			sn.Id = offNodes[c]
-			err := eventer.Post(sn.EmitEvent(ControlEvent))
-			if err != nil {
-				panic(err.Error())
-			}
+			sn := &Node{Config: &adapters.NodeConfig{Id: offNodes[c]}}
+			eventer.Send(ControlEvent(sn))
 			mustconnect = append(mustconnect, len(onNodes))
 			onNodes = append(onNodes, sn)
 			offNodes = append(offNodes[0:c], offNodes[c+1:]...)
@@ -145,7 +138,7 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 			m := n + rand.Intn(len(onNodes)-n)
 			// m := n + 1 + rand.Intn(len(onNodes)-n-1)
 			for k := m; k < len(onNodes); k++ {
-				lab := ConnLabel(onNodes[n].Id, onNodes[k].Id)
+				lab := ConnLabel(onNodes[n].ID(), onNodes[k].ID())
 				var j int
 				j, found = onConnsMap[lab]
 				if found {
@@ -157,8 +150,8 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 					break
 				}
 				connected[k] = true
-				caller := onNodes[n].Id
-				callee := onNodes[k].Id
+				caller := onNodes[n].ID()
+				callee := onNodes[k].ID()
 
 				sc := &Conn{
 					One:   caller,
@@ -176,10 +169,7 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 			lab := ConnLabel(sc.One, sc.Other)
 			onConnsMap[lab] = len(onConns)
 			onConns = append(onConns, sc)
-			err := eventer.Post(sc.EmitEvent(ControlEvent))
-			if err != nil {
-				panic(err.Error())
-			}
+			eventer.Send(ControlEvent(sc))
 		}
 
 		for i := 0; len(onConns) > 0 && i < connsDown; i++ {
@@ -188,10 +178,7 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 			onConns = append(onConns[0:c], onConns[c+1:]...)
 			lab := ConnLabel(conn.One, conn.Other)
 			delete(onConnsMap, lab)
-			err := eventer.Post(conn.EmitEvent(ControlEvent))
-			if err != nil {
-				panic(err.Error())
-			}
+			eventer.Send(ControlEvent(conn))
 		}
 		rounds++
 	}
