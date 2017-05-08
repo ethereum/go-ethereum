@@ -20,36 +20,36 @@ package bitutil
 
 import "bytes"
 
-// Fuzz implements a go-fuzz fuzzer method to test various compression method
+// Fuzz implements a go-fuzz fuzzer method to test various encoding method
 // invocations.
 func Fuzz(data []byte) int {
 	if len(data) == 0 {
 		return -1
 	}
 	if data[0]%2 == 0 {
-		return fuzzCompress(data[1:])
+		return fuzzEncode(data[1:])
 	}
-	return fuzzDecompress(data[1:])
+	return fuzzDecode(data[1:])
 }
 
-// fuzzCompress implements a go-fuzz fuzzer method to test the bit compression and
-// decompression algorithm.
-func fuzzCompress(data []byte) int {
-	proc, _ := DecompressBytes(CompressBytes(data), len(data))
+// fuzzEncode implements a go-fuzz fuzzer method to test the bitset encoding and
+// decoding algorithm.
+func fuzzEncode(data []byte) int {
+	proc, _ := bitsetDecodeBytes(bitsetEncodeBytes(data), len(data))
 	if !bytes.Equal(data, proc) {
 		panic("content mismatch")
 	}
 	return 0
 }
 
-// fuzzDecompress implements a go-fuzz fuzzer method to test the bit decompression
-// and recompression algorithm.
-func fuzzDecompress(data []byte) int {
-	blob, err := DecompressBytes(data, 1024)
+// fuzzDecode implements a go-fuzz fuzzer method to test the bit decoding and
+// reencoding algorithm.
+func fuzzDecode(data []byte) int {
+	blob, err := bitsetDecodeBytes(data, 1024)
 	if err != nil {
 		return 0
 	}
-	if comp := CompressBytes(blob); !bytes.Equal(comp, data) {
+	if comp := bitsetEncodeBytes(blob); !bytes.Equal(comp, data) {
 		panic("content mismatch")
 	}
 	return 0

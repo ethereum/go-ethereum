@@ -19,21 +19,21 @@ package bitutil
 import "errors"
 
 var (
-	// ErrMissingData is returned from decompression if the byte referenced by
+	// errMissingData is returned from decompression if the byte referenced by
 	// the bitset header overflows the input data.
-	ErrMissingData = errors.New("missing bytes on input")
+	errMissingData = errors.New("missing bytes on input")
 
-	// ErrUnreferencedData is returned from decompression if not all bytes were used
+	// errUnreferencedData is returned from decompression if not all bytes were used
 	// up from the input data after decompressing it.
-	ErrUnreferencedData = errors.New("extra bytes on input")
+	errUnreferencedData = errors.New("extra bytes on input")
 
-	// ErrExceededTarget is returned from decompression if the bitset header has
+	// errExceededTarget is returned from decompression if the bitset header has
 	// more bits defined than the number of target buffer space available.
-	ErrExceededTarget = errors.New("target data size exceeded")
+	errExceededTarget = errors.New("target data size exceeded")
 
-	// ErrZeroContent is returned from decompression if a data byte referenced in
+	// errZeroContent is returned from decompression if a data byte referenced in
 	// the bitset header is actually a zero byte.
-	ErrZeroContent = errors.New("zero byte in input content")
+	errZeroContent = errors.New("zero byte in input content")
 )
 
 // The compression algorithm implemented by CompressBytes and DecompressBytes is
@@ -55,8 +55,20 @@ var (
 //         nonZeroBytes(data) contains the non-zero bytes of data in the same order
 
 // CompressBytes compresses the input byte slice according to the sparse bitset
-// representation algorithm.
+// representation algorithm. If the result is bigger than the original input, no
+// compression is done.
 func CompressBytes(data []byte) []byte {
+	if out := bitsetEncodeBytes(data); len(out) < len(data) {
+		return out
+	}
+	cpy := make([]byte, len(data))
+	copy(cpy, data)
+	return cpy
+}
+
+// bitsetEncodeBytes compresses the input byte slice according to the sparse
+// bitset representation algorithm.
+func bitsetEncodeBytes(data []byte) []byte {
 	// Empty slices get compressed to nil
 	if len(data) == 0 {
 		return nil
@@ -81,27 +93,41 @@ func CompressBytes(data []byte) []byte {
 	if len(nonZeroBytes) == 0 {
 		return nil
 	}
-	return append(CompressBytes(nonZeroBitset), nonZeroBytes...)
+	return append(bitsetEncodeBytes(nonZeroBitset), nonZeroBytes...)
 }
 
-// DecompressBytes decompresses data with a known target size. In addition to the
-// decompressed output, the function returns the length of compressed input data
-// corresponding to the output as the input slice may be longer.
+// DecompressBytes decompresses data with a known target size. If the input data
+// matches the size of the target, it means no compression was done in the first
+// place.
 func DecompressBytes(data []byte, target int) ([]byte, error) {
-	out, size, err := decompressBytes(data, target)
+	if len(data) > target {
+		return nil, errExceededTarget
+	}
+	if len(data) == target {
+		cpy := make([]byte, len(data))
+		copy(cpy, data)
+		return cpy, nil
+	}
+	return bitsetDecodeBytes(data, target)
+}
+
+// bitsetDecodeBytes decompresses data with a known target size.
+func bitsetDecodeBytes(data []byte, target int) ([]byte, error) {
+	out, size, err := bitsetDecodePartialBytes(data, target)
 	if err != nil {
 		return nil, err
 	}
 	if size != len(data) {
-		return nil, ErrUnreferencedData
+		return nil, errUnreferencedData
 	}
 	return out, nil
 }
 
-// decompressBytes decompresses data with a known target size. In addition to the
-// decompressed output, the function returns the length of compressed input data
-// corresponding to the output as the input slice may be longer.
-func decompressBytes(data []byte, target int) ([]byte, int, error) {
+// bitsetDecodePartialBytes decompresses data with a known target size, but does
+// not enforce consuming all the input bytes. In addition to the decompressed
+// output, the function returns the length of compressed input data corresponding
+// to the output as the input slice may be longer.
+func bitsetDecodePartialBytes(data []byte, target int) ([]byte, int, error) {
 	// Sanity check 0 targets to avoid infinite recursion
 	if target == 0 {
 		return nil, 0, nil
@@ -119,7 +145,7 @@ func decompressBytes(data []byte, target int) ([]byte, int, error) {
 		return decomp, 0, nil
 	}
 	// Decompress the bitset of set bytes and distribute the non zero bytes
-	nonZeroBitset, ptr, err := decompressBytes(data, (target+7)/8)
+	nonZeroBitset, ptr, err := bitsetDecodePartialBytes(data, (target+7)/8)
 	if err != nil {
 		return nil, ptr, err
 	}
@@ -127,14 +153,14 @@ func decompressBytes(data []byte, target int) ([]byte, int, error) {
 		if nonZeroBitset[i/8]&(1<<byte(7-i%8)) != 0 {
 			// Make sure we have enough data to push into the correct slot
 			if ptr >= len(data) {
-				return nil, 0, ErrMissingData
+				return nil, 0, errMissingData
 			}
 			if i >= len(decomp) {
-				return nil, 0, ErrExceededTarget
+				return nil, 0, errExceededTarget
 			}
 			// Make sure the data is valid and push into the slot
 			if data[ptr] == 0 {
-				return nil, 0, ErrZeroContent
+				return nil, 0, errZeroContent
 			}
 			decomp[i] = data[ptr]
 			ptr++
