@@ -147,7 +147,7 @@ matrix:
         - go run build/ci.go archive -type tar -signer OSX_SIGNING_KEY -upload gethstore/builds
 
         # Build the iOS framework and upload it to CocoaPods and Azure
-        - gem uninstall cocoapods -a
+        - gem uninstall cocoapods -a -x
         - gem install cocoapods
 
         - mv ~/.cocoapods/repos/master ~/.cocoapods/repos/master.bak
