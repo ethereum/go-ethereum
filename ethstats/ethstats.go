@@ -18,6 +18,7 @@
 package ethstats
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -639,7 +640,8 @@ func (s *Service) reportStats(conn *websocket.Conn) error {
 		sync := s.eth.Downloader().Progress()
 		syncing = s.eth.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock
 
-		gasprice = int(s.eth.Miner().GasPrice().Uint64())
+		price, _ := s.eth.ApiBackend.SuggestPrice(context.Background())
+		gasprice = int(price.Uint64())
 	} else {
 		sync := s.les.Downloader().Progress()
 		syncing = s.les.BlockChain().CurrentHeader().Number.Uint64() >= sync.HighestBlock

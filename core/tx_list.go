@@ -21,8 +21,11 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"unsafe"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for
@@ -53,11 +56,11 @@ type txSortedMap struct {
 	cache types.Transactions            // Cache of the transactions already sorted
 }
 
-// newTxSortedMap creates a new sorted transaction map.
+// newTxSortedMap creates a new nonce-sorted transaction map.
 func newTxSortedMap() *txSortedMap {
 	return &txSortedMap{
 		items: make(map[uint64]*types.Transaction),
-		index: &nonceHeap{},
+		index: new(nonceHeap),
 	}
 }
 
@@ -339,4 +342,212 @@ func (l *txList) Empty() bool {
 // it's requested again before any modifications are made to the contents.
 func (l *txList) Flatten() types.Transactions {
 	return l.txs.Flatten()
+}
+
+// priceHeap is a heap.Interface implementation over big integers for retrieving
+// sorted transaction prices to discard when the pool fills up.
+type priceHeap []*big.Int
+
+func (h priceHeap) Len() int           { return len(h) }
+func (h priceHeap) Less(i, j int) bool { return h[i].Cmp(h[j]) < 0 }
+func (h priceHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+
+func (h *priceHeap) Push(x interface{}) {
+	*h = append(*h, x.(*big.Int))
+}
+
+func (h *priceHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+// priceKey is the hash map key type representing an unsigned big integer.
+type priceKey [256 / int(unsafe.Sizeof(uintptr(0)))]big.Word
+
+// newPriceKey converts a bit integer to a hash map key.
+func newPriceKey(x *big.Int) priceKey {
+	var key priceKey
+	copy(key[:], x.Bits())
+	return key
+}
+
+// txPricedMap is a price->transactions hash map with a heap based index to allow
+// iterating over the contents in a price-incrementing way.
+type txPricedMap struct {
+	items  map[priceKey]map[common.Hash]*types.Transaction // Hash map storing the transaction data
+	index  *priceHeap                                      // Heap of prices of all the stored transactions
+	stales int                                             // Number of stale price points to (re-heap trigger)
+	logger log.Logger                                      // Logger reporting basic price pool stats
+}
+
+// newTxPricedMap creates a new price-sorted transaction map.
+func newTxPricedMap() *txPricedMap {
+	m := &txPricedMap{
+		items: make(map[priceKey]map[common.Hash]*types.Transaction),
+		index: new(priceHeap),
+	}
+	m.logger = log.New(
+		"prices", log.Lazy{Fn: func() int { return len(*m.index) - m.stales }},
+		"stales", log.Lazy{Fn: func() int { return m.stales }},
+	)
+	return m
+}
+
+// Put inserts a new transaction into the map, also updating the map's price index.
+func (m *txPricedMap) Put(tx *types.Transaction) {
+	price, hash := tx.GasPrice(), tx.Hash()
+
+	// Generate the key and ensure we have a valid map for it
+	key := newPriceKey(price)
+	if m.items[key] == nil {
+		m.items[key] = make(map[common.Hash]*types.Transaction)
+		heap.Push(m.index, price)
+	} else if len(m.items[key]) == 0 {
+		m.stales--
+	}
+	// Add the transaction to the map
+	m.items[key][hash] = tx
+
+	m.logger.Trace("Accepted new transaction", "hash", hash, "price", price)
+}
+
+// Remove looks up a transaction and deletes it from the sorted map. Even if no
+// more transactions are left with the same price point, the price point itself
+// is retained to achieve hysteresis, until a staleness threshold is reached.
+func (m *txPricedMap) Remove(tx *types.Transaction) {
+	price, hash := tx.GasPrice(), tx.Hash()
+
+	key := newPriceKey(price)
+	if txs := m.items[key]; txs != nil {
+		if txs[hash] != nil {
+			// Transaction found, delete and update stale counter
+			delete(m.items[key], hash)
+			if len(m.items[key]) == 0 {
+				m.stales++
+			}
+			// If the number of stale entries reached a critical threshold (25%), re-heap and clean up
+			if m.stales > len(*m.index)/4 {
+				m.reheap()
+			}
+		}
+	}
+	m.logger.Trace("Removed old transaction", "hash", hash, "price", price)
+}
+
+// reheap discards the currently cached price point heap and regenerates it based
+// on the contents of the priced transaction map.
+func (m *txPricedMap) reheap() {
+	m.stales, m.index = 0, new(priceHeap)
+	for key, txs := range m.items {
+		if len(txs) == 0 {
+			delete(m.items, key)
+		} else {
+			*m.index = append(*m.index, new(big.Int).SetBits(key[:]))
+		}
+	}
+	heap.Init(m.index)
+}
+
+// Discard finds all the transactions below the given price threshold, drops them
+// from the priced map and returs them for further removal from the entire pool.
+func (m *txPricedMap) Cap(threshold *big.Int, local *txSet) types.Transactions {
+	drop := make(types.Transactions, 0, 128) // Remote underpriced transactions to drop
+	save := make(types.Transactions, 0, 64)  // Local underpriced transactions to keep
+
+	for len(*m.index) > 0 {
+		// Discard stale price points if found during cleanup
+		price := []*big.Int(*m.index)[0]
+		key := newPriceKey(price)
+
+		if len(m.items[key]) == 0 {
+			m.stales--
+			heap.Pop(m.index)
+			delete(m.items, key)
+			continue
+		}
+		// Stop the discards if we've reached the threshold
+		if price.Cmp(threshold) >= 0 {
+			break
+		}
+		// Non stale price point found, discard its transactions
+		for hash, tx := range m.items[key] {
+			if local.contains(hash) {
+				save = append(save, tx)
+			} else {
+				drop = append(drop, tx)
+			}
+		}
+		m.items[key] = nil // will get removed in next iteration
+	}
+	for _, tx := range save {
+		m.Put(tx)
+	}
+	return drop
+}
+
+// Underpriced checks whether a transaction is cheaper than (or as cheap as) the
+// lowest priced transaction currently being tracked.
+func (m *txPricedMap) Underpriced(tx *types.Transaction, local *txSet) bool {
+	// Local transactions cannot be underpriced
+	if local.contains(tx.Hash()) {
+		return false
+	}
+	// Discard stale price points if found at the heap start
+	for len(*m.index) > 0 {
+		price := []*big.Int(*m.index)[0]
+		if key := newPriceKey(price); len(m.items[key]) == 0 {
+			m.stales--
+			heap.Pop(m.index)
+			delete(m.items, key)
+			continue
+		}
+		break
+	}
+	// Check if the transaction is underpriced or not
+	if len(*m.index) == 0 {
+		log.Error("Pricing query for empty pool") // This cannot happen, print to catch programming errors
+		return false
+	}
+	cheapest := []*big.Int(*m.index)[0]
+	return cheapest.Cmp(tx.GasPrice()) >= 0
+}
+
+// Discard finds a number of most underpriced transactions, removes them from the
+// priced map and returs them for further removal from the entire pool.
+func (m *txPricedMap) Discard(count int, local *txSet) types.Transactions {
+	drop := make(types.Transactions, 0, count) // Remote underpriced transactions to drop
+	save := make(types.Transactions, 0, 64)    // Local underpriced transactions to keep
+
+	for len(*m.index) > 0 && count > 0 {
+		// Discard stale price points if found during cleanup
+		price := []*big.Int(*m.index)[0]
+		key := newPriceKey(price)
+
+		if len(m.items[key]) == 0 {
+			m.stales--
+			heap.Pop(m.index)
+			delete(m.items, key)
+			continue
+		}
+		// Non stale price point found, discard its transactions
+		for hash, tx := range m.items[key] {
+			if count == 0 {
+				break
+			}
+			if local.contains(hash) {
+				save = append(save, tx)
+			} else {
+				drop = append(drop, tx)
+				count--
+			}
+			delete(m.items[key], hash)
+		}
+	}
+	for _, tx := range save {
+		m.Put(tx)
+	}
+	return drop
 }

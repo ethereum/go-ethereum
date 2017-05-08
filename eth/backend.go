@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -76,6 +77,7 @@ type Ethereum struct {
 	ApiBackend *EthApiBackend
 
 	miner        *miner.Miner
+	gasPrice     *big.Int
 	Mining       bool
 	MinerThreads int
 	etherbase    common.Address
@@ -167,7 +169,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
-	eth.miner.SetGasPrice(config.GasPrice)
+	eth.gasPrice = config.GasPrice
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	eth.ApiBackend = &EthApiBackend{eth, nil}
