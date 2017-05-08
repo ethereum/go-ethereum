@@ -25,8 +25,8 @@ import (
 
 const testSectionSize = 4096
 
-func matcherTestVector(b uint, s uint64) BitVector {
-	r := make(BitVector, testSectionSize/8)
+func matcherTestVector(b uint, s uint64) []byte {
+	r := make([]byte, testSectionSize/8)
 	for i, _ := range r {
 		var bb byte
 		for bit := 0; bit < 8; bit++ {
@@ -82,7 +82,7 @@ func testServeMatcher(m *Matcher, stop chan struct{}, cnt *uint32) {
 				if s == nil {
 					return
 				}
-				res := make([]BitVector, len(s))
+				res := make([][]byte, len(s))
 				for i, ss := range s {
 					res[i] = matcherTestVector(b, ss)
 					atomic.AddUint32(cnt, 1)

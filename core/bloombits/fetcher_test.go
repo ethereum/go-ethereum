@@ -27,8 +27,8 @@ import (
 
 const testFetcherReqCnt = 50000
 
-func fetcherTestVector(b uint, s uint64) BitVector {
-	r := make(BitVector, 10)
+func fetcherTestVector(b uint, s uint64) []byte {
+	r := make([]byte, 10)
 	binary.BigEndian.PutUint16(r[0:2], uint16(b))
 	binary.BigEndian.PutUint64(r[2:10], s)
 	return r
@@ -59,7 +59,7 @@ func testFetcher(t *testing.T, cnt int) {
 				}
 				time.Sleep(time.Duration(rand.Intn(1000000)))
 				atomic.AddUint32(&reqCnt, 1)
-				f.deliver([]uint64{req.sectionIdx}, []BitVector{fetcherTestVector(req.bitIdx, req.sectionIdx)})
+				f.deliver([]uint64{req.sectionIdx}, [][]byte{fetcherTestVector(req.bitIdx, req.sectionIdx)})
 			}
 		}()
 	}

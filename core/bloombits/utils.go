@@ -19,129 +19,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-type (
-	BitVector  []byte
-	CompVector []byte
-)
-
-// bvAnd binary ANDs b to a
-func bvAnd(a, b BitVector) {
-	for i, bb := range b {
-		a[i] &= bb
-	}
-}
-
-// bvOr binary ORs b to a
-func bvOr(a, b BitVector) {
-	for i, bb := range b {
-		a[i] |= bb
-	}
-}
-
-// bvZero returns an all-zero bit vector
-func bvZero(sectionSize int) BitVector {
-	return make(BitVector, sectionSize/8)
-}
-
-// bvCopy creates a copy of the given bit vector
-// If the source vector is nil, returns an all-zero bit vector
-func bvCopy(a BitVector, sectionSize int) BitVector {
-	c := make(BitVector, sectionSize/8)
-	copy(c, a)
-	return c
-}
-
-// bvIsNonZero returns true if the bit vector has at least one "1" bit
-func bvIsNonZero(a BitVector) bool {
-	for _, b := range a {
-		if b != 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// CompressBloomBits compresses a bit vector for storage/network transfer purposes
-func CompressBloomBits(bits BitVector, sectionSize int) CompVector {
-	if len(bits) != sectionSize/8 {
-		panic(nil)
-	}
-	c := compressBits(bits)
-	if len(c) >= sectionSize/8 {
-		// make a copy so that output is always detached from input
-		return CompVector(bvCopy(bits, sectionSize))
-	}
-	return CompVector(c)
-}
-
-func compressBits(bits []byte) []byte {
-	l := len(bits)
-	ll := l / 8
-	if ll == 0 {
-		ll = 1
-	}
-	b := make([]byte, ll)
-	c := make([]byte, l)
-	cl := 0
-	for i, v := range bits {
-		if v != 0 {
-			c[cl] = v
-			cl++
-			b[i/8] |= 1 << byte(7-i%8)
-		}
-	}
-	if cl == 0 {
-		return nil
-	}
-	if ll > 1 {
-		b = compressBits(b)
-	}
-	return append(b, c[0:cl]...)
-}
-
-// DeompressBloomBits decompresses a bit vector
-func DecompressBloomBits(bits CompVector, sectionSize int) BitVector {
-	if len(bits) == sectionSize/8 {
-		// make a copy so that output is always detached from input
-		return bvCopy(BitVector(bits), sectionSize)
-	}
-	dc, ofs := decompressBits(bits, sectionSize/8)
-	if ofs != len(bits) {
-		panic(nil)
-	}
-	return dc
-}
-
-func decompressBits(bits []byte, targetLen int) ([]byte, int) {
-	lb := len(bits)
-	dc := make([]byte, targetLen)
-	if lb == 0 {
-		return dc, 0
-	}
-
-	l := targetLen / 8
-	var (
-		b   []byte
-		ofs int
-	)
-	if l <= 1 {
-		b = bits[0:1]
-		ofs = 1
-	} else {
-		b, ofs = decompressBits(bits, l)
-	}
-	for i, _ := range dc {
-		if b[i/8]&(1<<byte(7-i%8)) != 0 {
-			if ofs == lb {
-				panic(nil)
-			}
-			dc[i] = bits[ofs]
-			ofs++
-		}
-	}
-	return dc, ofs
-}
-
 const BloomLength = 2048
 
 // BloomBitsCreator takes SectionSize number of header bloom filters and calculates the bloomBits vectors of the section
@@ -177,10 +54,10 @@ func (b *BloomBitsCreator) AddHeaderBloom(bloom types.Bloom) {
 }
 
 // GetBitVector returns the bit vector belonging to the given bit index after header blooms have been added
-func (b *BloomBitsCreator) GetBitVector(idx uint) BitVector {
+func (b *BloomBitsCreator) GetBitVector(idx uint) []byte {
 	if b.bitIdx != b.sectionSize {
 		panic("not enough header blooms added")
 	}
 
-	return BitVector(b.blooms[idx][:])
+	return b.blooms[idx][:]
 }

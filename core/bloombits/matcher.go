@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -36,7 +37,7 @@ type fetcher struct {
 }
 
 type req struct {
-	data    BitVector
+	data    []byte
 	queued  bool
 	fetched chan struct{}
 }
@@ -50,8 +51,8 @@ type distReq struct {
 // in the same order through the returned channel. Multiple fetch instances of the same fetcher are allowed
 // to run in parallel, in case the same bit index appears multiple times in the filter structure. Each section
 // is requested only once, requests are sent to the request distributor (part of Matcher) through distChn.
-func (f *fetcher) fetch(sectionChn chan uint64, distChn chan distReq, stop chan struct{}, wg *sync.WaitGroup) chan BitVector {
-	dataChn := make(chan BitVector, channelCap)
+func (f *fetcher) fetch(sectionChn chan uint64, distChn chan distReq, stop chan struct{}, wg *sync.WaitGroup) chan []byte {
+	dataChn := make(chan []byte, channelCap)
 	returnChn := make(chan uint64, channelCap)
 	wg.Add(2)
 
@@ -137,7 +138,7 @@ func (f *fetcher) fetch(sectionChn chan uint64, distChn chan distReq, stop chan 
 
 // deliver is called by the request distributor when a reply to a request has
 // arrived
-func (f *fetcher) deliver(sectionIdxList []uint64, data []BitVector) {
+func (f *fetcher) deliver(sectionIdxList []uint64, data [][]byte) {
 	f.reqLock.Lock()
 	defer f.reqLock.Unlock()
 
@@ -213,7 +214,7 @@ loop:
 // match creates a daisy-chain of sub-matchers, one for the address set and one for each topic set, each
 // sub-matcher receiving a section only if the previous ones have all found a potential match in one of
 // the blocks of the section, then binary and-ing its own matches and forwaring the result to the next one
-func (m *Matcher) match(sectionChn chan uint64, stop chan struct{}) (chan uint64, chan BitVector) {
+func (m *Matcher) match(sectionChn chan uint64, stop chan struct{}) (chan uint64, chan []byte) {
 	subIdx := m.topics
 	if len(m.addresses) > 0 {
 		subIdx = append([][]types.BloomIndexList{m.addresses}, subIdx...)
@@ -223,7 +224,7 @@ func (m *Matcher) match(sectionChn chan uint64, stop chan struct{}) (chan uint64
 	m.distributeRequests(stop)
 
 	s := sectionChn
-	var bv chan BitVector
+	var bv chan []byte
 	for _, idx := range subIdx {
 		s, bv = m.subMatch(s, bv, idx, stop)
 	}
@@ -246,10 +247,10 @@ func (m *Matcher) newFetcher(idx uint) {
 // binary and-s the result to the daisy-chain input (sectionChn/andVectorChn) and forwards it to the daisy-chain output.
 // The matches of each address/topic are calculated by fetching the given sections of the three bloom bit indexes belonging to
 // that address/topic, and binary and-ing those vectors together.
-func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan BitVector, idxs []types.BloomIndexList, stop chan struct{}) (chan uint64, chan BitVector) {
+func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idxs []types.BloomIndexList, stop chan struct{}) (chan uint64, chan []byte) {
 	// set up fetchers
 	fetchIdx := make([][3]chan uint64, len(idxs))
-	fetchData := make([][3]chan BitVector, len(idxs))
+	fetchData := make([][3]chan []byte, len(idxs))
 	for i, idx := range idxs {
 		for j, ii := range idx {
 			fetchIdx[i][j] = make(chan uint64, channelCap)
@@ -259,7 +260,7 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan BitVector, 
 
 	processChn := make(chan uint64, channelCap)
 	resIdxChn := make(chan uint64, channelCap)
-	resDataChn := make(chan BitVector, channelCap)
+	resDataChn := make(chan []byte, channelCap)
 
 	m.wg.Add(2)
 	// goroutine for starting retrievals
@@ -314,41 +315,42 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan BitVector, 
 					return
 				}
 
-				var orVector BitVector
+				var orVector []byte
 				for _, ff := range fetchData {
-					var andVector BitVector
+					var andVector []byte
 					for _, f := range ff {
-						var data BitVector
+						var data []byte
 						select {
 						case <-stop:
 							return
 						case data = <-f:
 						}
 						if andVector == nil {
-							andVector = bvCopy(data, int(m.sectionSize))
+							andVector = make([]byte, int(m.sectionSize/8))
+							copy(andVector, data)
 						} else {
-							bvAnd(andVector, data)
+							bitutil.ANDBytes(andVector, andVector, data)
 						}
 					}
 					if orVector == nil {
 						orVector = andVector
 					} else {
-						bvOr(orVector, andVector)
+						bitutil.ORBytes(orVector, orVector, andVector)
 					}
 				}
 
 				if orVector == nil {
-					orVector = bvZero(int(m.sectionSize))
+					orVector = make([]byte, int(m.sectionSize/8))
 				}
 				if andVectorChn != nil {
 					select {
 					case <-stop:
 						return
 					case andVector := <-andVectorChn:
-						bvAnd(orVector, andVector)
+						bitutil.ANDBytes(orVector, orVector, andVector)
 					}
 				}
-				if bvIsNonZero(orVector) {
+				if bitutil.TestBytes(orVector) {
 					select {
 					case <-stop:
 						return
@@ -411,7 +413,7 @@ func (m *Matcher) GetMatches(start, end uint64, stop chan struct{}) chan uint64 
 				if !ok {
 					return
 				}
-				var match BitVector
+				var match []byte
 				select {
 				case <-stop:
 					return
@@ -570,6 +572,6 @@ func (m *Matcher) NextRequest(stop chan struct{}) (bitIdx uint, sectionIdxList [
 // Deliver delivers a bit vector to the appropriate fetcher.
 // It is possible to deliver data even after GetMatches has been stopped. Once a vector has been
 // requested, the next call to GetMatches will keep waiting for delivery.
-func (m *Matcher) Deliver(bitIdx uint, sectionIdxList []uint64, data []BitVector) {
+func (m *Matcher) Deliver(bitIdx uint, sectionIdxList []uint64, data [][]byte) {
 	m.fetchers[bitIdx].deliver(sectionIdxList, data)
 }

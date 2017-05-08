@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -281,7 +282,8 @@ func (b *BloomBitsProcessorBackend) Process(sectionIdx uint64) bool {
 	}
 
 	for i := 0; i < bloombits.BloomLength; i++ {
-		core.StoreBloomBits(b.db, uint64(i), sectionIdx, bloombits.CompressBloomBits(bc.GetBitVector(uint(i)), bloomBitsSection))
+		compVector := bitutil.CompressBytes(bc.GetBitVector(uint(i)))
+		core.StoreBloomBits(b.db, uint64(i), sectionIdx, compVector)
 	}
 
 	return true

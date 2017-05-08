@@ -25,7 +25,6 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -633,17 +632,17 @@ func FindCommonAncestor(db ethdb.Database, a, b *types.Header) *types.Header {
 }
 
 // GetBloomBits reads the compressed bloomBits vector belonging to the given section and bit index from the db
-func GetBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64) (bloombits.CompVector, error) {
+func GetBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64) ([]byte, error) {
 	var encKey [10]byte
 	binary.BigEndian.PutUint16(encKey[0:2], uint16(bitIdx))
 	binary.BigEndian.PutUint64(encKey[2:10], sectionIdx)
 	key := append(bloomBitsPrefix, encKey[:]...)
 	bloomBits, err := db.Get(key)
-	return bloombits.CompVector(bloomBits), err
+	return bloomBits, err
 }
 
 // StoreBloomBits writes the compressed bloomBits vector belonging to the given section and bit index to the db
-func StoreBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64, bloomBits bloombits.CompVector) {
+func StoreBloomBits(db ethdb.Database, bitIdx, sectionIdx uint64, bloomBits []byte) {
 	var encKey [10]byte
 	binary.BigEndian.PutUint16(encKey[0:2], uint16(bitIdx))
 	binary.BigEndian.PutUint64(encKey[2:10], sectionIdx)

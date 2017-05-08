@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,7 +36,7 @@ type Backend interface {
 	EventMux() *event.TypeMux
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
-	GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([]bloombits.CompVector, error)
+	GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error)
 }
 
 // Filter can be used to retrieve and filter logs.
@@ -141,9 +142,13 @@ func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}) chan erro
 					errChn <- err
 					return
 				}
-				decomp := make([]bloombits.BitVector, len(data))
+				decomp := make([][]byte, len(data))
 				for i, d := range data {
-					decomp[i] = bloombits.DecompressBloomBits(bloombits.CompVector(d), int(f.bloomBitsSection))
+					var err error
+					if decomp[i], err = bitutil.DecompressBytes(d, int(f.bloomBitsSection)); err != nil {
+						errChn <- err
+						return
+					}
 				}
 				f.matcher.Deliver(b, s, decomp)
 			}
