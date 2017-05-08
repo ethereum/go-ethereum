@@ -665,10 +665,11 @@ func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts ty
 		// The transaction hash can be retrieved from the transaction itself
 		receipts[j].TxHash = transactions[j].Hash()
 
-		tx, _ := transactions[j].AsMessage(signer)
 		// The contract address can be derived from the transaction itself
-		if MessageCreatesContract(tx) {
-			receipts[j].ContractAddress = crypto.CreateAddress(tx.From(), tx.Nonce())
+		if transactions[j].To() == nil {
+			// Deriving the signer is expensive, only do if it's actually needed
+			from, _ := types.Sender(signer, transactions[j])
+			receipts[j].ContractAddress = crypto.CreateAddress(from, transactions[j].Nonce())
 		}
 		// The used gas can be calculated based on previous receipts
 		if j == 0 {

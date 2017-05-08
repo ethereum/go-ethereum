@@ -78,10 +78,6 @@ type Message interface {
 	Data() []byte
 }
 
-func MessageCreatesContract(msg Message) bool {
-	return msg.To() == nil
-}
-
 // IntrinsicGas computes the 'intrinsic gas' for a message
 // with the given data.
 //
@@ -220,7 +216,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	sender := self.from() // err checked in preCheck
 
 	homestead := self.evm.ChainConfig().IsHomestead(self.evm.BlockNumber)
-	contractCreation := MessageCreatesContract(msg)
+	contractCreation := msg.To() == nil
 	// Pay intrinsic gas
 	// TODO convert to uint64
 	intrinsicGas := IntrinsicGas(self.data, contractCreation, homestead)
