@@ -36,14 +36,15 @@ import (
 
 var (
 	// Transaction Pool Errors
-	ErrInvalidSender     = errors.New("invalid sender")
-	ErrNonce             = errors.New("nonce too low")
-	ErrUnderpriced       = errors.New("underpriced transaction")
-	ErrBalance           = errors.New("tnsufficient balance")
-	ErrInsufficientFunds = errors.New("tnsufficient funds for gas * price + value")
-	ErrIntrinsicGas      = errors.New("tntrinsic gas too low")
-	ErrGasLimit          = errors.New("exceeds block gas limit")
-	ErrNegativeValue     = errors.New("negative value")
+	ErrInvalidSender      = errors.New("invalid sender")
+	ErrNonce              = errors.New("nonce too low")
+	ErrUnderpriced        = errors.New("transaction underpriced")
+	ErrReplaceUnderpriced = errors.New("replacement transaction underpriced")
+	ErrBalance            = errors.New("insufficient balance")
+	ErrInsufficientFunds  = errors.New("insufficient funds for gas * price + value")
+	ErrIntrinsicGas       = errors.New("intrinsic gas too low")
+	ErrGasLimit           = errors.New("exceeds block gas limit")
+	ErrNegativeValue      = errors.New("negative value")
 )
 
 var (
@@ -52,6 +53,7 @@ var (
 	maxQueuedPerAccount  = uint64(64)      // Max limit of queued transactions per address
 	maxQueuedTotal       = uint64(1024)    // Max limit of queued transactions from all accounts
 	maxQueuedLifetime    = 3 * time.Hour   // Max amount of time transactions from idle accounts are queued
+	minPriceBumpPercent  = int64(10)       // Minimum price bump needed to replace an old transaction
 	evictionInterval     = time.Minute     // Time interval to check for evictable transactions
 	statsReportInterval  = 8 * time.Second // Time interval to report transaction pool stats
 )
@@ -368,19 +370,21 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 }
 
 // add validates a transaction and inserts it into the non-executable queue for
-// later pending promotion and execution.
-func (pool *TxPool) add(tx *types.Transaction) error {
+// later pending promotion and execution. If the transaction is a replacement for
+// an already pending or queued one, it overwrites the previous and returns this
+// so outer code doesn't uselessly call promote.
+func (pool *TxPool) add(tx *types.Transaction) (bool, error) {
 	// If the transaction is already known, discard it
 	hash := tx.Hash()
 	if pool.all[hash] != nil {
 		log.Trace("Discarding already known transaction", "hash", hash)
-		return fmt.Errorf("known transaction: %x", hash)
+		return false, fmt.Errorf("known transaction: %x", hash)
 	}
 	// If the transaction fails basic validation, discard it
 	if err := pool.validateTx(tx); err != nil {
 		log.Trace("Discarding invalid transaction", "hash", hash, "err", err)
 		invalidTxCounter.Inc(1)
-		return err
+		return false, err
 	}
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(len(pool.all)) >= maxPendingTotal+maxQueuedTotal {
@@ -388,7 +392,7 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 		if pool.priced.Underpriced(tx, pool.locals) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
 			underpricedTxCounter.Inc(1)
-			return ErrUnderpriced
+			return false, ErrUnderpriced
 		}
 		// New transaction is better than our worse ones, make room for it
 		drop := pool.priced.Discard(len(pool.all)-int(maxPendingTotal+maxQueuedTotal-1), pool.locals)
@@ -398,17 +402,40 @@ func (pool *TxPool) add(tx *types.Transaction) error {
 			pool.removeTx(tx.Hash())
 		}
 	}
-	// Great, queue the transaction
-	pool.enqueueTx(hash, tx)
+	// If the transaction is replacing an already pending one, do directly
+	from, _ := types.Sender(pool.signer, tx) // already validated
+	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
+		// Nonce already pending, check if required price bump is met
+		inserted, old := list.Add(tx)
+		if !inserted {
+			pendingDiscardCounter.Inc(1)
+			return false, ErrReplaceUnderpriced
+		}
+		// New transaction is better, replace old one
+		if old != nil {
+			delete(pool.all, old.Hash())
+			pool.priced.Remove(old)
+			pendingReplaceCounter.Inc(1)
+		}
+		pool.all[tx.Hash()] = tx
+		pool.priced.Put(tx)
 
-	log.Trace("Pooled new transaction", "hash", hash, "from", log.Lazy{Fn: func() common.Address { from, _ := types.Sender(pool.signer, tx); return from }}, "to", tx.To())
-	return nil
+		log.Trace("Pooled new executable transaction", "hash", hash, "from", from, "to", tx.To())
+		return old != nil, nil
+	}
+	// New transaction isn't replacing a pending one, push into queue
+	replace, err := pool.enqueueTx(hash, tx)
+	if err != nil {
+		return false, err
+	}
+	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
+	return replace, nil
 }
 
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
 //
 // Note, this method assumes the pool lock is held!
-func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
+func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, error) {
 	// Try to insert the transaction into the future queue
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if pool.queue[from] == nil {
@@ -416,18 +443,19 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) {
 	}
 	inserted, old := pool.queue[from].Add(tx)
 	if !inserted {
+		// An older transaction was better, discard this
 		queuedDiscardCounter.Inc(1)
-		return // An older transaction was better, discard this
+		return false, ErrReplaceUnderpriced
 	}
 	// Discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
 		pool.priced.Remove(old)
-
 		queuedReplaceCounter.Inc(1)
 	}
 	pool.all[hash] = tx
 	pool.priced.Put(tx)
+	return old != nil, nil
 }
 
 // promoteTx adds a transaction to the pending (processable) list of transactions.
@@ -472,15 +500,19 @@ func (pool *TxPool) Add(tx *types.Transaction) error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	if err := pool.add(tx); err != nil {
+	// Try to inject the transaction and update any state
+	replace, err := pool.add(tx)
+	if err != nil {
 		return err
 	}
 	state, err := pool.currentState()
 	if err != nil {
 		return err
 	}
-	pool.promoteExecutables(state)
-
+	// If we added a new transaction, run promotion checks and return
+	if !replace {
+		pool.promoteExecutables(state)
+	}
 	return nil
 }
 
@@ -490,10 +522,13 @@ func (pool *TxPool) AddBatch(txs []*types.Transaction) error {
 	defer pool.mu.Unlock()
 
 	// Add the batch of transaction, tracking the accepted ones
-	added := 0
+	replaced, added := true, 0
 	for _, tx := range txs {
-		if err := pool.add(tx); err == nil {
+		if replace, err := pool.add(tx); err == nil {
 			added++
+			if !replace {
+				replaced = false
+			}
 		}
 	}
 	// Only reprocess the internal state if something was actually added
@@ -502,7 +537,9 @@ func (pool *TxPool) AddBatch(txs []*types.Transaction) error {
 		if err != nil {
 			return err
 		}
-		pool.promoteExecutables(state)
+		if !replaced {
+			pool.promoteExecutables(state)
+		}
 	}
 	return nil
 }

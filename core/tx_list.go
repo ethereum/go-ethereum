@@ -236,6 +236,12 @@ func newTxList(strict bool) *txList {
 	}
 }
 
+// Overlaps returns whether the transaction specified has the same nonce as one
+// already contained within the list.
+func (l *txList) Overlaps(tx *types.Transaction) bool {
+	return l.txs.Get(tx.Nonce()) != nil
+}
+
 // Add tries to insert a new transaction into the list, returning whether the
 // transaction was accepted, and if yes, any previous transaction it replaced.
 //
@@ -244,8 +250,11 @@ func newTxList(strict bool) *txList {
 func (l *txList) Add(tx *types.Transaction) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
-	if old != nil && old.GasPrice().Cmp(tx.GasPrice()) >= 0 {
-		return false, nil
+	if old != nil {
+		threshold := new(big.Int).Div(new(big.Int).Mul(old.GasPrice(), big.NewInt(100+minPriceBumpPercent)), big.NewInt(100))
+		if threshold.Cmp(tx.GasPrice()) >= 0 {
+			return false, nil
+		}
 	}
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
