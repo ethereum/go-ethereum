@@ -52,7 +52,8 @@ type Filter struct {
 	addresses  []common.Address
 	topics     [][]common.Hash
 
-	matcher *bloombits.Matcher
+	decompress func([]byte, int) ([]byte, error)
+	matcher    *bloombits.Matcher
 }
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
@@ -63,6 +64,7 @@ func New(backend Backend, bloomBitsSection uint64) *Filter {
 		bloomBitsSection: bloomBitsSection,
 		db:               backend.ChainDb(),
 		matcher:          bloombits.NewMatcher(bloomBitsSection),
+		decompress:       bitutil.DecompressBytes,
 	}
 }
 
@@ -130,7 +132,7 @@ func (f *Filter) Find(ctx context.Context) (logs []*types.Log, err error) {
 // serveMatcher serves the bloomBits matcher by fetching the requested vectors
 // through the filter backend
 func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}, wg *sync.WaitGroup) chan error {
-	errChn := make(chan error)
+	errChn := make(chan error, 1)
 	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func(i int) {
@@ -143,14 +145,20 @@ func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}, wg *sync.
 				}
 				data, err := f.backend.GetBloomBits(ctx, uint64(b), s)
 				if err != nil {
-					errChn <- err
+					select {
+					case errChn <- err:
+					case <-stop:
+					}
 					return
 				}
 				decomp := make([][]byte, len(data))
 				for i, d := range data {
 					var err error
-					if decomp[i], err = bitutil.DecompressBytes(d, int(f.bloomBitsSection)); err != nil {
-						errChn <- err
+					if decomp[i], err = f.decompress(d, int(f.bloomBitsSection/8)); err != nil {
+						select {
+						case errChn <- err:
+						case <-stop:
+						}
 						return
 					}
 				}
