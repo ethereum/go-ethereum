@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-const testFetcherReqCnt = 50000
+const testFetcherReqCount = 50000
 
 func fetcherTestVector(b uint, s uint64) []byte {
 	r := make([]byte, 10)
@@ -46,19 +46,19 @@ func testFetcher(t *testing.T, cnt int) {
 	f := &fetcher{
 		reqMap: make(map[uint64]req),
 	}
-	distChn := make(chan distReq, channelCap)
+	distCh := make(chan distReq, channelCap)
 	stop := make(chan struct{})
-	var reqCnt uint32
+	var reqCount uint32
 
 	for i := 0; i < 10; i++ {
 		go func() {
 			for {
-				req, ok := <-distChn
+				req, ok := <-distCh
 				if !ok {
 					return
 				}
 				time.Sleep(time.Duration(rand.Intn(1000000)))
-				atomic.AddUint32(&reqCnt, 1)
+				atomic.AddUint32(&reqCount, 1)
 				f.deliver([]uint64{req.sectionIdx}, [][]byte{fetcherTestVector(req.bitIdx, req.sectionIdx)})
 			}
 		}()
@@ -68,17 +68,17 @@ func testFetcher(t *testing.T, cnt int) {
 	for cc := 0; cc < cnt; cc++ {
 		wg.Add(1)
 		in := make(chan uint64, channelCap)
-		out := f.fetch(in, distChn, stop, &wg2)
+		out := f.fetch(in, distCh, stop, &wg2)
 
 		time.Sleep(time.Millisecond * 100 * time.Duration(cc))
 		go func() {
-			for i := uint64(0); i < testFetcherReqCnt; i++ {
+			for i := uint64(0); i < testFetcherReqCount; i++ {
 				in <- i
 			}
 		}()
 
 		go func() {
-			for i := uint64(0); i < testFetcherReqCnt; i++ {
+			for i := uint64(0); i < testFetcherReqCount; i++ {
 				bv := <-out
 				if !bytes.Equal(bv, fetcherTestVector(0, i)) {
 					if len(bv) != 10 {
@@ -95,7 +95,7 @@ func testFetcher(t *testing.T, cnt int) {
 
 	wg.Wait()
 	close(stop)
-	if reqCnt != testFetcherReqCnt {
-		t.Errorf("Request count mismatch: expected %v, got %v", testFetcherReqCnt, reqCnt)
+	if reqCount != testFetcherReqCount {
+		t.Errorf("Request count mismatch: expected %v, got %v", testFetcherReqCount, reqCount)
 	}
 }

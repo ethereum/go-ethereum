@@ -158,24 +158,26 @@ func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}) chan erro
 	return errChn
 }
 
-func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.Log, blockNumber uint64, err error) {
-
-	checkBlock := func(i uint64, header *types.Header) (logs []*types.Log, blockNumber uint64, err error) {
-		// Get the logs of the block
-		receipts, err := f.backend.GetReceipts(ctx, header.Hash())
-		if err != nil {
-			return nil, end, err
-		}
-		var unfiltered []*types.Log
-		for _, receipt := range receipts {
-			unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
-		}
-		logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
-		if len(logs) > 0 {
-			return logs, i, nil
-		}
-		return nil, i, nil
+// checkMatches checks if the receipts belonging to the given header contain any log events that
+// match the filter criteria. This function is called when the bloom filter signals a potential match.
+func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs []*types.Log, err error) {
+	// Get the logs of the block
+	receipts, err := f.backend.GetReceipts(ctx, header.Hash())
+	if err != nil {
+		return nil, err
 	}
+	var unfiltered []*types.Log
+	for _, receipt := range receipts {
+		unfiltered = append(unfiltered, ([]*types.Log)(receipt.Logs)...)
+	}
+	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	if len(logs) > 0 {
+		return logs, nil
+	}
+	return nil, nil
+}
+
+func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.Log, blockNumber uint64, err error) {
 
 	haveBloomBitsBefore := core.GetBloomBitsAvailable(f.db) * f.bloomBitsSection
 	if haveBloomBitsBefore > start {
@@ -203,10 +205,12 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 					return logs, end, err
 				}
 
-				l, b, e := checkBlock(i, header)
-
-				if l != nil || e != nil {
-					return l, b, e
+				logs, err := f.checkMatches(ctx, header)
+				if err != nil {
+					return nil, end, err
+				}
+				if logs != nil {
+					return logs, i, nil
 				}
 			case err := <-errChn:
 				return logs, end, err
@@ -217,9 +221,8 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 
 		if end < haveBloomBitsBefore {
 			return logs, end, nil
-		} else {
-			start = haveBloomBitsBefore
 		}
+		start = haveBloomBitsBefore
 	}
 
 	// search the rest with regular block-by-block bloom filtering
@@ -233,9 +236,12 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 		// Use bloom filtering to see if this block is interesting given the
 		// current parameters
 		if f.bloomFilter(header.Bloom) {
-			l, b, e := checkBlock(i, header)
-			if l != nil || e != nil {
-				return l, b, e
+			logs, err := f.checkMatches(ctx, header)
+			if err != nil {
+				return nil, end, err
+			}
+			if logs != nil {
+				return logs, i, nil
 			}
 		}
 	}

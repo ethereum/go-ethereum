@@ -31,9 +31,9 @@ const (
 
 // fetcher handles bit vector retrieval pipelines for a single bit index
 type fetcher struct {
-	bitIdx, ii uint
-	reqMap     map[uint64]req
-	reqLock    sync.RWMutex
+	bitIdx  uint
+	reqMap  map[uint64]req
+	reqLock sync.RWMutex
 }
 
 type req struct {
@@ -47,26 +47,24 @@ type distReq struct {
 	sectionIdx uint64
 }
 
-// fetch creates a retrieval pipeline, receiving section indexes from sectionChn and returning the results
+// fetch creates a retrieval pipeline, receiving section indexes from sectionCh and returning the results
 // in the same order through the returned channel. Multiple fetch instances of the same fetcher are allowed
 // to run in parallel, in case the same bit index appears multiple times in the filter structure. Each section
-// is requested only once, requests are sent to the request distributor (part of Matcher) through distChn.
-func (f *fetcher) fetch(sectionChn chan uint64, distChn chan distReq, stop chan struct{}, wg *sync.WaitGroup) chan []byte {
-	dataChn := make(chan []byte, channelCap)
-	returnChn := make(chan uint64, channelCap)
+// is requested only once, requests are sent to the request distributor (part of Matcher) through distCh.
+func (f *fetcher) fetch(sectionCh chan uint64, distCh chan distReq, stop chan struct{}, wg *sync.WaitGroup) chan []byte {
+	dataCh := make(chan []byte, channelCap)
+	returnCh := make(chan uint64, channelCap)
 	wg.Add(2)
 
 	go func() {
-		defer func() {
-			close(returnChn)
-			wg.Done()
-		}()
+		defer wg.Done()
+		defer close(returnCh)
 
 		for {
 			select {
 			case <-stop:
 				return
-			case idx, ok := <-sectionChn:
+			case idx, ok := <-sectionCh:
 				if !ok {
 					return
 				}
@@ -84,28 +82,26 @@ func (f *fetcher) fetch(sectionChn chan uint64, distChn chan distReq, stop chan 
 				}
 				f.reqLock.Unlock()
 				if req {
-					distChn <- distReq{bitIdx: f.bitIdx, sectionIdx: idx} // success is guaranteed, distibuteRequests shuts down after fetch
+					distCh <- distReq{bitIdx: f.bitIdx, sectionIdx: idx} // success is guaranteed, distibuteRequests shuts down after fetch
 				}
 				select {
 				case <-stop:
 					return
-				case returnChn <- idx:
+				case returnCh <- idx:
 				}
 			}
 		}
 	}()
 
 	go func() {
-		defer func() {
-			close(dataChn)
-			wg.Done()
-		}()
+		defer wg.Done()
+		defer close(dataCh)
 
 		for {
 			select {
 			case <-stop:
 				return
-			case idx, ok := <-returnChn:
+			case idx, ok := <-returnCh:
 				if !ok {
 					return
 				}
@@ -127,13 +123,13 @@ func (f *fetcher) fetch(sectionChn chan uint64, distChn chan distReq, stop chan 
 				select {
 				case <-stop:
 					return
-				case dataChn <- r.data:
+				case dataCh <- r.data:
 				}
 			}
 		}
 	}()
 
-	return dataChn
+	return dataCh
 }
 
 // deliver is called by the request distributor when a reply to a request has
@@ -161,15 +157,15 @@ type Matcher struct {
 	fetchers    map[uint]*fetcher
 	sectionSize uint64
 
-	distChn       chan distReq
-	reqs          map[uint][]uint64
-	getNextReqChn chan chan nextRequests
-	wg, distWg    sync.WaitGroup
+	distCh       chan distReq
+	reqs         map[uint][]uint64
+	getNextReqCh chan chan nextRequests
+	wg, distWg   sync.WaitGroup
 }
 
 // NewMatcher creates a new Matcher instance
 func NewMatcher(sectionSize uint64) *Matcher {
-	return &Matcher{fetchers: make(map[uint]*fetcher), reqs: make(map[uint][]uint64), distChn: make(chan distReq, channelCap), sectionSize: sectionSize}
+	return &Matcher{fetchers: make(map[uint]*fetcher), reqs: make(map[uint][]uint64), distCh: make(chan distReq, channelCap), sectionSize: sectionSize}
 }
 
 // SetAddresses matches only logs that are generated from addresses that are included
@@ -214,16 +210,15 @@ loop:
 // match creates a daisy-chain of sub-matchers, one for the address set and one for each topic set, each
 // sub-matcher receiving a section only if the previous ones have all found a potential match in one of
 // the blocks of the section, then binary and-ing its own matches and forwaring the result to the next one
-func (m *Matcher) match(sectionChn chan uint64, stop chan struct{}) (chan uint64, chan []byte) {
+func (m *Matcher) match(sectionCh chan uint64, stop chan struct{}) (chan uint64, chan []byte) {
 	subIdx := m.topics
 	if len(m.addresses) > 0 {
 		subIdx = append([][]types.BloomIndexList{m.addresses}, subIdx...)
 	}
-	//fmt.Println("idx", subIdx)
-	m.getNextReqChn = make(chan chan nextRequests) // should be a blocking channel
+	m.getNextReqCh = make(chan chan nextRequests) // should be a blocking channel
 	m.distributeRequests(stop)
 
-	s := sectionChn
+	s := sectionCh
 	var bv chan []byte
 	for _, idx := range subIdx {
 		s, bv = m.subMatch(s, bv, idx, stop)
@@ -244,23 +239,23 @@ func (m *Matcher) newFetcher(idx uint) {
 }
 
 // subMatch creates a sub-matcher that filters for a set of addresses or topics, binary or-s those matches, then
-// binary and-s the result to the daisy-chain input (sectionChn/andVectorChn) and forwards it to the daisy-chain output.
+// binary and-s the result to the daisy-chain input (sectionCh/andVectorCh) and forwards it to the daisy-chain output.
 // The matches of each address/topic are calculated by fetching the given sections of the three bloom bit indexes belonging to
 // that address/topic, and binary and-ing those vectors together.
-func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idxs []types.BloomIndexList, stop chan struct{}) (chan uint64, chan []byte) {
+func (m *Matcher) subMatch(sectionCh chan uint64, andVectorCh chan []byte, idxs []types.BloomIndexList, stop chan struct{}) (chan uint64, chan []byte) {
 	// set up fetchers
 	fetchIdx := make([][3]chan uint64, len(idxs))
 	fetchData := make([][3]chan []byte, len(idxs))
 	for i, idx := range idxs {
 		for j, ii := range idx {
 			fetchIdx[i][j] = make(chan uint64, channelCap)
-			fetchData[i][j] = m.fetchers[ii].fetch(fetchIdx[i][j], m.distChn, stop, &m.wg)
+			fetchData[i][j] = m.fetchers[ii].fetch(fetchIdx[i][j], m.distCh, stop, &m.wg)
 		}
 	}
 
-	processChn := make(chan uint64, channelCap)
-	resIdxChn := make(chan uint64, channelCap)
-	resDataChn := make(chan []byte, channelCap)
+	processCh := make(chan uint64, channelCap)
+	resIdxCh := make(chan uint64, channelCap)
+	resDataCh := make(chan []byte, channelCap)
 
 	m.wg.Add(2)
 	// goroutine for starting retrievals
@@ -271,9 +266,9 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idx
 			select {
 			case <-stop:
 				return
-			case s, ok := <-sectionChn:
+			case s, ok := <-sectionCh:
 				if !ok {
-					close(processChn)
+					close(processCh)
 					for _, ff := range fetchIdx {
 						for _, f := range ff {
 							close(f)
@@ -285,7 +280,7 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idx
 				select {
 				case <-stop:
 					return
-				case processChn <- s:
+				case processCh <- s:
 				}
 				for _, ff := range fetchIdx {
 					for _, f := range ff {
@@ -308,10 +303,10 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idx
 			select {
 			case <-stop:
 				return
-			case s, ok := <-processChn:
+			case s, ok := <-processCh:
 				if !ok {
-					close(resIdxChn)
-					close(resDataChn)
+					close(resIdxCh)
+					close(resDataCh)
 					return
 				}
 
@@ -342,11 +337,11 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idx
 				if orVector == nil {
 					orVector = make([]byte, int(m.sectionSize/8))
 				}
-				if andVectorChn != nil {
+				if andVectorCh != nil {
 					select {
 					case <-stop:
 						return
-					case andVector := <-andVectorChn:
+					case andVector := <-andVectorCh:
 						bitutil.ANDBytes(orVector, orVector, andVector)
 					}
 				}
@@ -354,19 +349,19 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idx
 					select {
 					case <-stop:
 						return
-					case resIdxChn <- s:
+					case resIdxCh <- s:
 					}
 					select {
 					case <-stop:
 						return
-					case resDataChn <- orVector:
+					case resDataCh <- orVector:
 					}
 				}
 			}
 		}
 	}()
 
-	return resIdxChn, resDataChn
+	return resIdxCh, resDataCh
 }
 
 // GetMatches returns a stream of bloom matches in a given range of blocks.
@@ -377,24 +372,22 @@ func (m *Matcher) subMatch(sectionChn chan uint64, andVectorChn chan []byte, idx
 func (m *Matcher) GetMatches(start, end uint64, stop chan struct{}) chan uint64 {
 	m.distWg.Wait()
 
-	sectionChn := make(chan uint64, channelCap)
-	resultsChn := make(chan uint64, channelCap)
+	sectionCh := make(chan uint64, channelCap)
+	resultsCh := make(chan uint64, channelCap)
 
-	s, bv := m.match(sectionChn, stop)
+	s, bv := m.match(sectionCh, stop)
 
 	startSection := start / m.sectionSize
 	endSection := end / m.sectionSize
 
 	m.wg.Add(2)
 	go func() {
-		defer func() {
-			close(sectionChn)
-			m.wg.Done()
-		}()
+		defer m.wg.Done()
+		defer close(sectionCh)
 
 		for i := startSection; i <= endSection; i++ {
 			select {
-			case sectionChn <- i:
+			case sectionCh <- i:
 			case <-stop:
 				return
 			}
@@ -402,10 +395,8 @@ func (m *Matcher) GetMatches(start, end uint64, stop chan struct{}) chan uint64 
 	}()
 
 	go func() {
-		defer func() {
-			close(resultsChn)
-			m.wg.Done()
-		}()
+		defer m.wg.Done()
+		defer close(resultsCh)
 
 		for {
 			select {
@@ -436,7 +427,7 @@ func (m *Matcher) GetMatches(start, end uint64, stop chan struct{}) chan uint64 
 							select {
 							case <-stop:
 								return
-							case resultsChn <- i:
+							case resultsCh <- i:
 							}
 						}
 					} else {
@@ -450,7 +441,7 @@ func (m *Matcher) GetMatches(start, end uint64, stop chan struct{}) chan uint64 
 		}
 	}()
 
-	return resultsChn
+	return resultsCh
 }
 
 type nextRequests struct {
@@ -473,9 +464,9 @@ func (m *Matcher) distributeRequests(stop chan struct{}) {
 	go func() {
 		defer m.distWg.Done()
 
-		reqCnt := 0
+		reqCount := 0
 		for _, s := range m.reqs {
-			reqCnt += len(s)
+			reqCount += len(s)
 		}
 
 		storeReq := func(r distReq) {
@@ -489,7 +480,7 @@ func (m *Matcher) distributeRequests(stop chan struct{}) {
 			queue[i] = r.sectionIdx
 
 			m.reqs[r.bitIdx] = queue
-			reqCnt++
+			reqCount++
 		}
 
 		storeReqs := func(r distReq) {
@@ -499,7 +490,7 @@ func (m *Matcher) distributeRequests(stop chan struct{}) {
 				select {
 				case <-timeout:
 					return
-				case r := <-m.distChn:
+				case r := <-m.distCh:
 					storeReq(r)
 				case <-stopDist:
 					return
@@ -508,20 +499,20 @@ func (m *Matcher) distributeRequests(stop chan struct{}) {
 		}
 
 		for {
-			if reqCnt == 0 {
+			if reqCount == 0 {
 				select {
-				case r := <-m.distChn:
+				case r := <-m.distCh:
 					storeReqs(r)
 				case <-stopDist:
 					return
 				}
 			} else {
 				select {
-				case r := <-m.distChn:
+				case r := <-m.distCh:
 					storeReqs(r)
 				case <-stopDist:
 					return
-				case c := <-m.getNextReqChn:
+				case c := <-m.getNextReqCh:
 					var (
 						found       bool
 						bestBit     uint
@@ -546,7 +537,7 @@ func (m *Matcher) distributeRequests(stop chan struct{}) {
 					}
 					res := nextRequests{bestBit, bestQueue[:cnt]}
 					m.reqs[bestBit] = bestQueue[cnt:]
-					reqCnt -= cnt
+					reqCount -= cnt
 
 					c <- res
 				}
@@ -561,7 +552,7 @@ func (m *Matcher) distributeRequests(stop chan struct{}) {
 func (m *Matcher) NextRequest(stop chan struct{}) (bitIdx uint, sectionIdxList []uint64) {
 	c := make(chan nextRequests)
 	select {
-	case m.getNextReqChn <- c:
+	case m.getNextReqCh <- c:
 		r := <-c
 		return r.bitIdx, r.sectionIdxList
 	case <-stop:

@@ -93,7 +93,7 @@ func testServeMatcher(m *Matcher, stop chan struct{}, cnt *uint32) {
 	}
 }
 
-func testMatcher(t *testing.T, idxs [][]types.BloomIndexList, cnt uint64, stopOnMatches bool, expCnt uint32) uint32 {
+func testMatcher(t *testing.T, idxs [][]types.BloomIndexList, cnt uint64, stopOnMatches bool, expCount uint32) uint32 {
 	m := NewMatcher(testSectionSize)
 
 	for _, idxss := range idxs {
@@ -106,11 +106,11 @@ func testMatcher(t *testing.T, idxs [][]types.BloomIndexList, cnt uint64, stopOn
 
 	m.addresses = idxs[0]
 	m.topics = idxs[1:]
-	var reqCnt uint32
+	var reqCount uint32
 
 	stop := make(chan struct{})
 	chn := m.GetMatches(0, cnt-1, stop)
-	testServeMatcher(m, stop, &reqCnt)
+	testServeMatcher(m, stop, &reqCount)
 
 	for i := uint64(0); i < cnt; i++ {
 		if expMatch3(idxs, i) {
@@ -126,7 +126,7 @@ func testMatcher(t *testing.T, idxs [][]types.BloomIndexList, cnt uint64, stopOn
 				close(stop)
 				stop = make(chan struct{})
 				chn = m.GetMatches(i+1, cnt-1, stop)
-				testServeMatcher(m, stop, &reqCnt)
+				testServeMatcher(m, stop, &reqCount)
 			}
 		}
 	}
@@ -136,11 +136,11 @@ func testMatcher(t *testing.T, idxs [][]types.BloomIndexList, cnt uint64, stopOn
 	}
 	close(stop)
 
-	if expCnt != 0 && expCnt != reqCnt {
-		t.Errorf("Error matching idxs = %v  count = %v  stopOnMatches = %v: request count mismatch, expected #%v, got #%v", idxs, cnt, stopOnMatches, expCnt, reqCnt)
+	if expCount != 0 && expCount != reqCount {
+		t.Errorf("Error matching idxs = %v  count = %v  stopOnMatches = %v: request count mismatch, expected #%v, got #%v", idxs, cnt, stopOnMatches, expCount, reqCount)
 	}
 
-	return reqCnt
+	return reqCount
 }
 
 func testRandomIdxs(l []int, max int) [][]types.BloomIndexList {
@@ -174,7 +174,7 @@ func TestMatcherRandom(t *testing.T) {
 		testMatcher(t, testRandomIdxs([]int{2, 2, 2}, 20), 1000000, false, 0)
 		testMatcher(t, testRandomIdxs([]int{5, 5, 5}, 50), 1000000, false, 0)
 		idxs := testRandomIdxs([]int{2, 2, 2}, 20)
-		reqCnt := testMatcher(t, idxs, 100000, false, 0)
-		testMatcher(t, idxs, 100000, true, reqCnt)
+		reqCount := testMatcher(t, idxs, 100000, false, 0)
+		testMatcher(t, idxs, 100000, true, reqCount)
 	}
 }
