@@ -315,87 +315,16 @@ func startP2PNode(conf *node.Config, service node.Service) (*node.Node, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	constructor := func(s node.Service) node.ServiceConstructor {
-		return func(ctx *node.ServiceContext) (node.Service, error) {
-			return s, nil
-		}
+	constructor := func(ctx *node.ServiceContext) (node.Service, error) {
+		return service, nil
 	}
-
-	// register the peer events API
-	//
-	// TODO: move this to node.PrivateAdminAPI once the following is merged:
-	//       https://github.com/ethereum/go-ethereum/pull/13885
-	if err := stack.Register(constructor(&PeerAPI{stack.Server})); err != nil {
-		return nil, err
-	}
-
-	if err := stack.Register(constructor(service)); err != nil {
+	if err := stack.Register(constructor); err != nil {
 		return nil, err
 	}
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}
 	return stack, nil
-}
-
-// PeerAPI is used to expose peer events under the "eth" RPC namespace.
-//
-// TODO: move this to node.PrivateAdminAPI and expose under the "admin"
-//       namespace once the following is merged:
-//       https://github.com/ethereum/go-ethereum/pull/13885
-type PeerAPI struct {
-	server func() p2p.Server
-}
-
-func (p *PeerAPI) Protocols() []p2p.Protocol {
-	return nil
-}
-
-func (p *PeerAPI) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "eth",
-		Version:   "1.0",
-		Service:   p,
-	}}
-}
-
-func (p *PeerAPI) Start(p2p.Server) error {
-	return nil
-}
-
-func (p *PeerAPI) Stop() error {
-	return nil
-}
-
-// PeerEvents creates an RPC sunscription which receives peer events from the
-// underlying p2p.Server
-func (p *PeerAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		events := make(chan *p2p.PeerEvent)
-		sub := p.server().SubscribeEvents(events)
-		defer sub.Unsubscribe()
-
-		for {
-			select {
-			case event := <-events:
-				notifier.Notify(rpcSub.ID, event)
-			case <-rpcSub.Err():
-				return
-			case <-notifier.Closed():
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
 }
 
 // stdioConn wraps os.Stdin / os.Stdout with a no-op Close method so we can

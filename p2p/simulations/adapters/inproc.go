@@ -17,6 +17,7 @@
 package adapters
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -184,18 +185,13 @@ func (self *SimNode) startRPC() error {
 		return errors.New("RPC already started")
 	}
 
-	// add SimAdminAPI and PeerAPI so that the network can call the
+	// add SimAdminAPI so that the network can call the
 	// AddPeer, RemovePeer and PeerEvents RPC methods
 	apis := append(self.service.APIs(), []rpc.API{
 		{
 			Namespace: "admin",
 			Version:   "1.0",
 			Service:   &SimAdminAPI{self},
-		},
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &PeerAPI{func() p2p.Server { return self }},
 		},
 	}...)
 
@@ -355,4 +351,36 @@ func (api *SimAdminAPI) RemovePeer(url string) (bool, error) {
 	}
 	api.SimNode.RemovePeer(node)
 	return true, nil
+}
+
+// PeerEvents creates an RPC subscription which receives peer events from the
+// underlying p2p.Server
+func (api *SimAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	go func() {
+		events := make(chan *p2p.PeerEvent)
+		sub := api.SubscribeEvents(events)
+		defer sub.Unsubscribe()
+
+		for {
+			select {
+			case event := <-events:
+				notifier.Notify(rpcSub.ID, event)
+			case <-sub.Err():
+				return
+			case <-rpcSub.Err():
+				return
+			case <-notifier.Closed():
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
 }
