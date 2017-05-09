@@ -19,6 +19,7 @@ package filters
 import (
 	"context"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -128,10 +129,13 @@ func (f *Filter) Find(ctx context.Context) (logs []*types.Log, err error) {
 
 // serveMatcher serves the bloomBits matcher by fetching the requested vectors
 // through the filter backend
-func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}) chan error {
+func (f *Filter) serveMatcher(ctx context.Context, stop chan struct{}, wg *sync.WaitGroup) chan error {
 	errChn := make(chan error)
+	wg.Add(10)
 	for i := 0; i < 10; i++ {
 		go func(i int) {
+			defer wg.Done()
+
 			for {
 				b, s := f.matcher.NextRequest(stop)
 				if s == nil {
@@ -187,9 +191,12 @@ func (f *Filter) getLogs(ctx context.Context, start, end uint64) (logs []*types.
 		}
 
 		stop := make(chan struct{})
-		defer close(stop)
+		var wg sync.WaitGroup
 		matches := f.matcher.GetMatches(start, e, stop)
-		errChn := f.serveMatcher(ctx, stop)
+		errChn := f.serveMatcher(ctx, stop, &wg)
+
+		defer wg.Wait()
+		defer close(stop)
 
 	loop:
 		for {
