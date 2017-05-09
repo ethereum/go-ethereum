@@ -94,7 +94,7 @@ func testServeMatcher(m *Matcher, stop chan struct{}, cnt *uint32) {
 }
 
 func testMatcher(t *testing.T, idxs [][]types.BloomIndexList, cnt uint64, stopOnMatches bool, expCount uint32) uint32 {
-	m := NewMatcher(testSectionSize)
+	m := NewMatcher(testSectionSize, nil, nil)
 
 	for _, idxss := range idxs {
 		for _, idxs := range idxss {

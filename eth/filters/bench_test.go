@@ -167,14 +167,11 @@ func benchmarkBloomBits(b *testing.B, sectionSize uint64, comp int) {
 			db, _ = ethdb.NewLDBDatabase(benchDataDir, 128, 1024)
 			backend = &testBackend{mux, db}
 		}
-		filter := New(backend, sectionSize)
-		filter.decompress = decompressFn
 		var addr common.Address
 		addr[0] = byte(i)
 		addr[1] = byte(i / 256)
-		filter.SetAddresses([]common.Address{addr})
-		filter.SetBeginBlock(0)
-		filter.SetEndBlock(int64(cnt*sectionSize - 1))
+		filter := New(backend, 0, int64(cnt*sectionSize-1), []common.Address{addr}, nil)
+		filter.decompress = decompressFn
 		if _, err := filter.Find(context.Background()); err != nil {
 			b.Error("filter.Find error:", err)
 		}
@@ -233,11 +230,7 @@ func BenchmarkNoBloomBits(b *testing.B) {
 	start := time.Now()
 	mux := new(event.TypeMux)
 	backend := &testBackend{mux, db}
-	filter := New(backend, 4096) // give any dummy section size, no bloombits data is available
-	var addr common.Address
-	filter.SetAddresses([]common.Address{addr})
-	filter.SetBeginBlock(0)
-	filter.SetEndBlock(int64(headNum))
+	filter := New(backend, 0, int64(headNum), []common.Address{common.Address{}}, nil)
 	filter.Find(context.Background())
 	d := time.Since(start)
 	fmt.Println("Finished running filter benchmarks")

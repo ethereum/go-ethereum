@@ -164,13 +164,16 @@ type Matcher struct {
 }
 
 // NewMatcher creates a new Matcher instance
-func NewMatcher(sectionSize uint64) *Matcher {
-	return &Matcher{fetchers: make(map[uint]*fetcher), reqs: make(map[uint][]uint64), distCh: make(chan distReq, channelCap), sectionSize: sectionSize}
+func NewMatcher(sectionSize uint64, addresses []common.Address, topics [][]common.Hash) *Matcher {
+	m := &Matcher{fetchers: make(map[uint]*fetcher), reqs: make(map[uint][]uint64), distCh: make(chan distReq, channelCap), sectionSize: sectionSize}
+	m.setAddresses(addresses)
+	m.setTopics(topics)
+	return m
 }
 
-// SetAddresses matches only logs that are generated from addresses that are included
+// setAddresses matches only logs that are generated from addresses that are included
 // in the given addresses.
-func (m *Matcher) SetAddresses(addr []common.Address) {
+func (m *Matcher) setAddresses(addr []common.Address) {
 	m.addresses = make([]types.BloomIndexList, len(addr))
 	for i, b := range addr {
 		m.addresses[i] = types.BloomIndexes(b.Bytes())
@@ -183,8 +186,8 @@ func (m *Matcher) SetAddresses(addr []common.Address) {
 	}
 }
 
-// SetTopics matches only logs that have topics matching the given topics.
-func (m *Matcher) SetTopics(topics [][]common.Hash) {
+// setTopics matches only logs that have topics matching the given topics.
+func (m *Matcher) setTopics(topics [][]common.Hash) {
 	m.topics = nil
 loop:
 	for _, topicList := range topics {

@@ -213,6 +213,10 @@ func (b *EthApiBackend) GetBloomBits(ctx context.Context, bitIdx uint64, section
 	return results, nil
 }
 
+func (b *EthApiBackend) BloomBitsSectionSize() uint64 {
+	return bloomBitsSection
+}
+
 type EthApiState struct {
 	state *state.StateDB
 }

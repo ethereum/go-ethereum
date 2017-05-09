@@ -38,6 +38,7 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error)
+	BloomBitsSectionSize() uint64
 }
 
 // Filter can be used to retrieve and filter logs.
@@ -58,39 +59,18 @@ type Filter struct {
 
 // New creates a new filter which uses a bloom filter on blocks to figure out whether
 // a particular block is interesting or not.
-func New(backend Backend, bloomBitsSection uint64) *Filter {
+func New(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
 	return &Filter{
 		backend:          backend,
-		bloomBitsSection: bloomBitsSection,
+		begin:            begin,
+		end:              end,
+		addresses:        addresses,
+		topics:           topics,
+		bloomBitsSection: backend.BloomBitsSectionSize(),
 		db:               backend.ChainDb(),
-		matcher:          bloombits.NewMatcher(bloomBitsSection),
+		matcher:          bloombits.NewMatcher(backend.BloomBitsSectionSize(), addresses, topics),
 		decompress:       bitutil.DecompressBytes,
 	}
-}
-
-// SetBeginBlock sets the earliest block for filtering.
-// -1 = latest block (i.e., the current block)
-// hash = particular hash from-to
-func (f *Filter) SetBeginBlock(begin int64) {
-	f.begin = begin
-}
-
-// SetEndBlock sets the latest block for filtering.
-func (f *Filter) SetEndBlock(end int64) {
-	f.end = end
-}
-
-// SetAddresses matches only logs that are generated from addresses that are included
-// in the given addresses.
-func (f *Filter) SetAddresses(addr []common.Address) {
-	f.addresses = addr
-	f.matcher.SetAddresses(addr)
-}
-
-// SetTopics matches only logs that have topics matching the given topics.
-func (f *Filter) SetTopics(topics [][]common.Hash) {
-	f.topics = topics
-	f.matcher.SetTopics(topics)
 }
 
 // FindOnce searches the blockchain for matching log entries, returning

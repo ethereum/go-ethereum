@@ -75,6 +75,10 @@ func (b *testBackend) GetBloomBits(ctx context.Context, bitIdx uint64, sectionId
 	return results, nil
 }
 
+func (b *testBackend) BloomBitsSectionSize() uint64 {
+	return testBloomBitsSection
+}
+
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.
 // It creates multiple subscriptions:
 // - one at the start and should receive all posted chain events and a second (blockHashes)
