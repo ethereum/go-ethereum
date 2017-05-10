@@ -101,7 +101,7 @@ type TxPool struct {
 	queue   map[common.Address]*txList         // Queued but non-processable transactions
 	beats   map[common.Address]time.Time       // Last heartbeat from each known account
 	all     map[common.Hash]*types.Transaction // All transactions to allow lookups
-	priced  *txPricedMap                       // All transactions sorted by price
+	priced  *txPricedList                      // All transactions sorted by price
 
 	wg   sync.WaitGroup // for shutdown sync
 	quit chan struct{}
@@ -117,7 +117,6 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		queue:        make(map[common.Address]*txList),
 		beats:        make(map[common.Address]time.Time),
 		all:          make(map[common.Hash]*types.Transaction),
-		priced:       newTxPricedMap(),
 		eventMux:     eventMux,
 		currentState: currentStateFn,
 		gasLimit:     gasLimitFn,
@@ -127,7 +126,7 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		events:       eventMux.Subscribe(ChainHeadEvent{}, RemovedTransactionEvent{}),
 		quit:         make(chan struct{}),
 	}
-
+	pool.priced = newTxPricedList(&pool.all)
 	pool.resetState()
 
 	pool.wg.Add(2)
@@ -141,7 +140,7 @@ func (pool *TxPool) eventLoop() {
 	defer pool.wg.Done()
 
 	// Start a ticker and keep track of interesting pool stats to report
-	var prevPending, prevQueued, prevPrices, prevStales int
+	var prevPending, prevQueued, prevStales int
 
 	report := time.NewTicker(statsReportInterval)
 	defer report.Stop()
@@ -175,12 +174,12 @@ func (pool *TxPool) eventLoop() {
 		case <-report.C:
 			pool.mu.RLock()
 			pending, queued := pool.stats()
-			prices, stales := len(pool.priced.items), pool.priced.stales
+			stales := pool.priced.stales
 			pool.mu.RUnlock()
 
-			if pending != prevPending || queued != prevQueued || prices != prevPrices || stales != prevStales {
-				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "prices", prices-stales, "stales", stales)
-				prevPending, prevQueued, prevPrices, prevStales = pending, queued, prices, stales
+			if pending != prevPending || queued != prevQueued || stales != prevStales {
+				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
+				prevPending, prevQueued, prevStales = pending, queued, stales
 			}
 		}
 	}
@@ -414,7 +413,7 @@ func (pool *TxPool) add(tx *types.Transaction) (bool, error) {
 		// New transaction is better, replace old one
 		if old != nil {
 			delete(pool.all, old.Hash())
-			pool.priced.Remove(old)
+			pool.priced.Removed()
 			pendingReplaceCounter.Inc(1)
 		}
 		pool.all[tx.Hash()] = tx
@@ -450,7 +449,7 @@ func (pool *TxPool) enqueueTx(hash common.Hash, tx *types.Transaction) (bool, er
 	// Discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
-		pool.priced.Remove(old)
+		pool.priced.Removed()
 		queuedReplaceCounter.Inc(1)
 	}
 	pool.all[hash] = tx
@@ -472,7 +471,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	if !inserted {
 		// An older transaction was better, discard this
 		delete(pool.all, hash)
-		pool.priced.Remove(tx)
+		pool.priced.Removed()
 
 		pendingDiscardCounter.Inc(1)
 		return
@@ -480,7 +479,7 @@ func (pool *TxPool) promoteTx(addr common.Address, hash common.Hash, tx *types.T
 	// Otherwise discard any previous transaction and mark this
 	if old != nil {
 		delete(pool.all, old.Hash())
-		pool.priced.Remove(old)
+		pool.priced.Removed()
 
 		pendingReplaceCounter.Inc(1)
 	}
@@ -583,7 +582,7 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 
 	// Remove it from the list of known transactions
 	delete(pool.all, hash)
-	pool.priced.Remove(tx)
+	pool.priced.Removed()
 
 	// Remove the transaction from the pending lists and reset the account nonce
 	if pending := pool.pending[addr]; pending != nil {
@@ -625,7 +624,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 			hash := tx.Hash()
 			log.Trace("Removed old queued transaction", "hash", hash)
 			delete(pool.all, hash)
-			pool.priced.Remove(tx)
+			pool.priced.Removed()
 		}
 		// Drop all transactions that are too costly (low balance)
 		drops, _ := list.Filter(state.GetBalance(addr))
@@ -633,7 +632,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable queued transaction", "hash", hash)
 			delete(pool.all, hash)
-			pool.priced.Remove(tx)
+			pool.priced.Removed()
 			queuedNofundsCounter.Inc(1)
 		}
 		// Gather all executable transactions and promote them
@@ -647,7 +646,7 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 			hash := tx.Hash()
 			log.Trace("Removed cap-exceeding queued transaction", "hash", hash)
 			delete(pool.all, hash)
-			pool.priced.Remove(tx)
+			pool.priced.Removed()
 			queuedRLCounter.Inc(1)
 		}
 		queued += uint64(list.Len())
@@ -761,7 +760,7 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 			hash := tx.Hash()
 			log.Trace("Removed old pending transaction", "hash", hash)
 			delete(pool.all, hash)
-			pool.priced.Remove(tx)
+			pool.priced.Removed()
 		}
 		// Drop all transactions that are too costly (low balance), and queue any invalids back for later
 		drops, invalids := list.Filter(state.GetBalance(addr))
@@ -769,7 +768,7 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)
 			delete(pool.all, hash)
-			pool.priced.Remove(tx)
+			pool.priced.Removed()
 			pendingNofundsCounter.Inc(1)
 		}
 		for _, tx := range invalids {
