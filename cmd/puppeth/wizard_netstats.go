@@ -39,7 +39,7 @@ func (w *wizard) networkStats(tips bool) {
 	// Iterate over all the specified hosts and check their status
 	stats := tablewriter.NewWriter(os.Stdout)
 	stats.SetHeader([]string{"Server", "IP", "Status", "Service", "Details"})
-	stats.SetColWidth(128)
+	stats.SetColWidth(100)
 
 	for server, pubkey := range w.conf.Servers {
 		client := w.servers[server]
