@@ -19,10 +19,12 @@
 package geth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // A Nonce is a 64-bit hash which proves (combined with the mix-hash) that
@@ -61,6 +63,45 @@ type Header struct {
 	header *types.Header
 }
 
+// NewHeaderFromRLP parses a header from an RLP data dump.
+func NewHeaderFromRLP(data []byte) (*Header, error) {
+	h := &Header{
+		header: new(types.Header),
+	}
+	if err := rlp.DecodeBytes(data, h.header); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// EncodeRLP encodes a header into an RLP data dump.
+func (h *Header) EncodeRLP() ([]byte, error) {
+	return rlp.EncodeToBytes(h.header)
+}
+
+// NewHeaderFromJSON parses a header from an JSON data dump.
+func NewHeaderFromJSON(data string) (*Header, error) {
+	h := &Header{
+		header: new(types.Header),
+	}
+	if err := json.Unmarshal([]byte(data), h.header); err != nil {
+		return nil, err
+	}
+	return h, nil
+}
+
+// EncodeJSON encodes a header into an JSON data dump.
+func (h *Header) EncodeJSON() (string, error) {
+	data, err := json.Marshal(h.header)
+	return string(data), err
+}
+
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the header for debugging purposes.
+func (h *Header) String() string {
+	return h.header.String()
+}
+
 func (h *Header) GetParentHash() *Hash   { return &Hash{h.header.ParentHash} }
 func (h *Header) GetUncleHash() *Hash    { return &Hash{h.header.UncleHash} }
 func (h *Header) GetCoinbase() *Address  { return &Address{h.header.Coinbase} }
@@ -76,9 +117,7 @@ func (h *Header) GetTime() int64         { return h.header.Time.Int64() }
 func (h *Header) GetExtra() []byte       { return h.header.Extra }
 func (h *Header) GetMixDigest() *Hash    { return &Hash{h.header.MixDigest} }
 func (h *Header) GetNonce() *Nonce       { return &Nonce{h.header.Nonce} }
-
-func (h *Header) GetHash() *Hash        { return &Hash{h.header.Hash()} }
-func (h *Header) GetHashNoNonce() *Hash { return &Hash{h.header.HashNoNonce()} }
+func (h *Header) GetHash() *Hash         { return &Hash{h.header.Hash()} }
 
 // Headers represents a slice of headers.
 type Headers struct{ headers []*types.Header }
@@ -99,6 +138,45 @@ func (h *Headers) Get(index int) (header *Header, _ error) {
 // Block represents an entire block in the Ethereum blockchain.
 type Block struct {
 	block *types.Block
+}
+
+// NewBlockFromRLP parses a block from an RLP data dump.
+func NewBlockFromRLP(data []byte) (*Block, error) {
+	b := &Block{
+		block: new(types.Block),
+	}
+	if err := rlp.DecodeBytes(data, b.block); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// EncodeRLP encodes a block into an RLP data dump.
+func (b *Block) EncodeRLP() ([]byte, error) {
+	return rlp.EncodeToBytes(b.block)
+}
+
+// NewBlockFromJSON parses a block from an JSON data dump.
+func NewBlockFromJSON(data string) (*Block, error) {
+	b := &Block{
+		block: new(types.Block),
+	}
+	if err := json.Unmarshal([]byte(data), b.block); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// EncodeJSON encodes a block into an JSON data dump.
+func (b *Block) EncodeJSON() (string, error) {
+	data, err := json.Marshal(b.block)
+	return string(data), err
+}
+
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the block for debugging purposes.
+func (b *Block) String() string {
+	return b.block.String()
 }
 
 func (b *Block) GetParentHash() *Hash   { return &Hash{b.block.ParentHash()} }
@@ -135,6 +213,45 @@ type Transaction struct {
 // NewTransaction creates a new transaction with the given properties.
 func NewTransaction(nonce int64, to *Address, amount, gasLimit, gasPrice *BigInt, data []byte) *Transaction {
 	return &Transaction{types.NewTransaction(uint64(nonce), to.address, amount.bigint, gasLimit.bigint, gasPrice.bigint, data)}
+}
+
+// NewTransactionFromRLP parses a transaction from an RLP data dump.
+func NewTransactionFromRLP(data []byte) (*Transaction, error) {
+	tx := &Transaction{
+		tx: new(types.Transaction),
+	}
+	if err := rlp.DecodeBytes(data, tx.tx); err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+// EncodeRLP encodes a transaction into an RLP data dump.
+func (tx *Transaction) EncodeRLP() ([]byte, error) {
+	return rlp.EncodeToBytes(tx.tx)
+}
+
+// NewTransactionFromJSON parses a transaction from an JSON data dump.
+func NewTransactionFromJSON(data string) (*Transaction, error) {
+	tx := &Transaction{
+		tx: new(types.Transaction),
+	}
+	if err := json.Unmarshal([]byte(data), tx.tx); err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+// EncodeJSON encodes a transaction into an JSON data dump.
+func (tx *Transaction) EncodeJSON() (string, error) {
+	data, err := json.Marshal(tx.tx)
+	return string(data), err
+}
+
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the transaction for debugging purposes.
+func (tx *Transaction) String() string {
+	return tx.tx.String()
 }
 
 func (tx *Transaction) GetData() []byte      { return tx.tx.Data() }
@@ -183,6 +300,45 @@ func (txs *Transactions) Get(index int) (tx *Transaction, _ error) {
 // Receipt represents the results of a transaction.
 type Receipt struct {
 	receipt *types.Receipt
+}
+
+// NewReceiptFromRLP parses a transaction receipt from an RLP data dump.
+func NewReceiptFromRLP(data []byte) (*Receipt, error) {
+	r := &Receipt{
+		receipt: new(types.Receipt),
+	}
+	if err := rlp.DecodeBytes(data, r.receipt); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// EncodeRLP encodes a transaction receipt into an RLP data dump.
+func (r *Receipt) EncodeRLP() ([]byte, error) {
+	return rlp.EncodeToBytes(r.receipt)
+}
+
+// NewReceiptFromJSON parses a transaction receipt from an JSON data dump.
+func NewReceiptFromJSON(data string) (*Receipt, error) {
+	r := &Receipt{
+		receipt: new(types.Receipt),
+	}
+	if err := json.Unmarshal([]byte(data), r.receipt); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// EncodeJSON encodes a transaction receipt into an JSON data dump.
+func (r *Receipt) EncodeJSON() (string, error) {
+	data, err := rlp.EncodeToBytes(r.receipt)
+	return string(data), err
+}
+
+// String implements the fmt.Stringer interface to print some semi-meaningful
+// data dump of the transaction receipt for debugging purposes.
+func (r *Receipt) String() string {
+	return r.receipt.String()
 }
 
 func (r *Receipt) GetPostState() []byte          { return r.receipt.PostState }
