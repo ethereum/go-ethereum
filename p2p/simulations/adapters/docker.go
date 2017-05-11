@@ -47,18 +47,19 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	// generate the config
-	conf := node.DefaultConfig
-	conf.DataDir = "/data"
-	conf.P2P.EnableMsgEvents = true
-	conf.P2P.NoDiscovery = true
-	conf.P2P.NAT = nil
+	conf := &execNodeConfig{
+		Stack: node.DefaultConfig,
+		Node:  config,
+	}
+	conf.Stack.DataDir = "/data"
+	conf.Stack.P2P.EnableMsgEvents = true
+	conf.Stack.P2P.NoDiscovery = true
+	conf.Stack.P2P.NAT = nil
 
 	node := &DockerNode{
 		ExecNode: ExecNode{
-			ID:      config.Id,
-			Service: config.Service,
-			Config:  &conf,
-			key:     config.PrivateKey,
+			ID:     config.Id,
+			Config: conf,
 		},
 	}
 	node.newCmd = node.dockerCommand
@@ -80,8 +81,8 @@ func (n *DockerNode) dockerCommand() *exec.Cmd {
 	return exec.Command(
 		"sh", "-c",
 		fmt.Sprintf(
-			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" --env _P2P_NODE_KEY="${_P2P_NODE_KEY}" %s p2p-node %s %s`,
-			dockerImage, n.Service, n.ID.String(),
+			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" %s p2p-node %s %s`,
+			dockerImage, n.Config.Node.Service, n.ID.String(),
 		),
 	)
 }

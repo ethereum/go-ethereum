@@ -51,14 +51,17 @@ type Node interface {
 	// node's RPC multiplexer
 	ServeRPC(net.Conn) error
 
-	// Start starts the node
-	Start() error
+	// Start starts the node with the given snapshot
+	Start(snapshot []byte) error
 
 	// Stop stops the node
 	Stop() error
 
 	// NodeInfo returns information about the node
 	NodeInfo() *p2p.NodeInfo
+
+	// Snapshot creates a snapshot of the running service
+	Snapshot() ([]byte, error)
 }
 
 // NodeAdapter is an object which creates Nodes to be used in a simulation
@@ -202,7 +205,7 @@ func RandomNodeConfig() *NodeConfig {
 type Services map[string]ServiceFunc
 
 // ServiceFunc returns a node.Service which can be used to boot devp2p nodes
-type ServiceFunc func(id *NodeId) node.Service
+type ServiceFunc func(id *NodeId, snapshot []byte) node.Service
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes

@@ -91,6 +91,18 @@ func main() {
 					Usage:     "stream network events",
 					Action:    streamNetwork,
 				},
+				{
+					Name:      "snapshot",
+					ArgsUsage: "<network>",
+					Usage:     "create a network snapshot to stdout",
+					Action:    createSnapshot,
+				},
+				{
+					Name:      "load",
+					ArgsUsage: "<network>",
+					Usage:     "load a network snapshot from stdin",
+					Action:    loadSnapshot,
+				},
 			},
 		},
 		{
@@ -239,6 +251,32 @@ func streamNetwork(ctx *cli.Context) error {
 			return err
 		}
 	}
+}
+
+func createSnapshot(ctx *cli.Context) error {
+	args := ctx.Args()
+	if len(args) != 1 {
+		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
+	}
+	networkID := args[0]
+	snap, err := client.CreateSnapshot(networkID)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(os.Stdout).Encode(snap)
+}
+
+func loadSnapshot(ctx *cli.Context) error {
+	args := ctx.Args()
+	if len(args) != 1 {
+		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
+	}
+	networkID := args[0]
+	snap := &simulations.Snapshot{}
+	if err := json.NewDecoder(os.Stdin).Decode(snap); err != nil {
+		return err
+	}
+	return client.LoadSnapshot(networkID, snap)
 }
 
 func listNodes(ctx *cli.Context) error {
