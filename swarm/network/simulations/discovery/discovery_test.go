@@ -62,24 +62,23 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	nodeCount := 10
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		Id:             "0",
-		Backend:        true,
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
 	trigger := make(chan *adapters.NodeId)
 	ids := make([]*adapters.NodeId, nodeCount)
 	for i := 0; i < nodeCount; i++ {
-		conf, err := net.NewNode()
+		node, err := net.NewNode()
 		if err != nil {
-			t.Fatalf("error starting node %s: %s", conf.Id.Label(), err)
+			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
 		}
-		if err := net.Start(conf.Id); err != nil {
-			t.Fatalf("error starting node %s: %s", conf.Id.Label(), err)
+		if err := net.Start(node.ID()); err != nil {
+			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
 		}
-		if err := triggerChecks(trigger, net, conf.Id); err != nil {
-			t.Fatal("error triggering checks for node %s: %s", conf.Id.Label(), err)
+		if err := triggerChecks(trigger, net, node.ID()); err != nil {
+			t.Fatal("error triggering checks for node %s: %s", node.ID().Label(), err)
 		}
-		ids[i] = conf.Id
+		ids[i] = node.ID()
 	}
 
 	// run a simulation which connects the 10 nodes in a ring and waits

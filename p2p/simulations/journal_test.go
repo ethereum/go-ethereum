@@ -10,16 +10,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-func testEvents(intervals ...int) (events []*event.TypeMuxEvent) {
+func testEvents(intervals ...int) (events []*Event) {
 	t := time.Now()
 	for _, interval := range intervals {
 		t = t.Add(time.Duration(interval) * time.Millisecond)
-		events = append(events, &event.TypeMuxEvent{
+		events = append(events, &Event{
+			Type: EventTypeNode,
 			Time: t,
-			Data: interface{}(&NodeEvent{
-				Type:   "node",
-				Action: "down",
-			}),
+			Node: &Node{Up: false},
 		})
 	}
 	return events
@@ -33,8 +31,7 @@ func TestTimedRead(t *testing.T) {
 	var i int
 	acc := 0.5
 	length := 4
-	f := func(data interface{}) bool {
-		_ = data.(*NodeEvent)
+	f := func(event *Event) bool {
 		newTimes = append(newTimes, time.Now())
 		i++
 		return i <= length
@@ -68,10 +65,15 @@ func testIDs() (ids []*adapters.NodeId) {
 }
 
 func testJournal(ids []*adapters.NodeId) *Journal {
-	eventer := &event.TypeMux{}
+	eventer := &event.Feed{}
 	journal := NewJournal()
-	journal.Subscribe(eventer, ConnectivityEvents...)
-	mockNewNodes(eventer, ids)
+	journal.Subscribe(eventer)
+	for _, id := range ids {
+		eventer.Send(&Event{
+			Type: EventTypeNode,
+			Node: &Node{Config: &adapters.NodeConfig{Id: id}, Up: true},
+		})
+	}
 	journal.WaitEntries(len(ids))
 	return journal
 }
@@ -80,7 +82,7 @@ func TestSubscribe(t *testing.T) {
 	ids := testIDs()
 	journal := testJournal(ids)
 	for i, ev := range journal.Events {
-		id := ev.Data.(*NodeEvent).node.Id
+		id := ev.Node.ID()
 		if id != ids[i] {
 			t.Fatalf("incorrect id: expected %v, got %v", id, ids[i])
 		}
@@ -115,15 +117,15 @@ func TestLoadSave(t *testing.T) {
 
 func TestReplay(t *testing.T) {
 	_, jo := loadTestJournal(t)
-	eventer := &event.TypeMux{}
+	eventer := &event.Feed{}
 
 	journal := NewJournal()
-	journal.Subscribe(eventer, ConnectivityEvents...)
+	journal.Subscribe(eventer)
 
 	Replay(0, jo, eventer)
 	for i, ev := range jo.Events {
-		exp := ev.Data.(*NodeEvent).String()
-		got := journal.Events[i].Data.(*NodeEvent).String()
+		exp := ev.String()
+		got := journal.Events[i].String()
 		if exp != got {
 			t.Fatalf("incorrent replayed journal entry at pos %v: expected %v, got %v", i, exp, got)
 		}

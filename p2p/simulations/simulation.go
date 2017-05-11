@@ -68,11 +68,11 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 func (s *Simulation) watchNetwork(result *StepResult) func() {
 	stop := make(chan struct{})
 	done := make(chan struct{})
-	sub := s.network.Events().Subscribe(ConnectivityAllEvents...)
+	events := make(chan *Event)
+	sub := s.network.Events().Subscribe(events)
 	go func() {
 		defer close(done)
 		defer sub.Unsubscribe()
-		events := sub.Chan()
 		for {
 			select {
 			case event := <-events:
@@ -128,5 +128,5 @@ type StepResult struct {
 	Passes map[*adapters.NodeId]time.Time
 
 	// NetworkEvents are the network events which occurred during the step
-	NetworkEvents []interface{}
+	NetworkEvents []*Event
 }
