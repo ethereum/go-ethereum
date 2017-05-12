@@ -108,17 +108,6 @@ type Signer interface {
 	Equal(Signer) bool
 }
 
-/*
-// WithSignature returns a new transaction with the given signature. This signature
-// needs to be in the [R || S || V] format where V is 0 or 1.
-func (s EIP86Signer) WithSignature(tx *Transaction, sig []byte) (*Transaction, error) {
-}
-
-// Hash returns the hash to be signed by the sender.
-// It does not uniquely identify the transaction.
-func (s EIP86Signer) Hash(tx *Transaction) common.Hash {}
-*/
-
 // EIP155Transaction implements TransactionInterface using the
 // EIP155 rules
 type EIP155Signer struct {

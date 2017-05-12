@@ -209,9 +209,6 @@ func makeHeader(config *params.ChainConfig, parent *types.Block, state *state.St
 	} else {
 		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
 	}
-	parentHeader := parent.Header()
-	// adjust the parent time
-	parentHeader.Time = new(big.Int).Sub(time, big.NewInt(10))
 
 	return &types.Header{
 		Root:       state.IntermediateRoot(config.IsEIP158(parent.Number())),

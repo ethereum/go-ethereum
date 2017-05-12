@@ -56,14 +56,16 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		ChainId:        big.NewInt(4),
-		HomesteadBlock: big.NewInt(1),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(2),
-		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
+		ChainId:         big.NewInt(4),
+		HomesteadBlock:  big.NewInt(1),
+		DAOForkBlock:    nil,
+		DAOForkSupport:  true,
+		EIP150Block:     big.NewInt(2),
+		EIP150Hash:      common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:     big.NewInt(3),
+		EIP158Block:     big.NewInt(3),
+		MetropolisBlock: TestNetMetropolisBlock,
+
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -99,10 +101,10 @@ type ChainConfig struct {
 	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP150Hash  common.Hash `json:"eip150Hash,omitempty"`  // EIP150 HF hash (fast sync aid)
 
-	EIP155Block *big.Int `json:"eip155Block"` // EIP155 HF block
-	EIP158Block *big.Int `json:"eip158Block"` // EIP158 HF block
+	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
+	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
 
-	MetropolisBlock *big.Int `json:"metropolisBlock"` // Metropolis switch block (nil = no fork, 0 = alraedy on homestead)
+	MetropolisBlock *big.Int `json:"metropolisBlock,omitempty"` // Metropolis switch block (nil = no fork, 0 = alraedy on homestead)
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
@@ -174,6 +176,10 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 	return isForked(c.EIP158Block, num)
 }
 
+func (c *ChainConfig) IsMetropolis(num *big.Int) bool {
+	return isForked(c.MetropolisBlock, num)
+}
+
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.
@@ -231,6 +237,9 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if c.IsEIP158(head) && !configNumEqual(c.ChainId, newcfg.ChainId) {
 		return newCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
+	if isForkIncompatible(c.MetropolisBlock, newcfg.MetropolisBlock, head) {
+		return newCompatError("Metropolis fork block", c.MetropolisBlock, newcfg.MetropolisBlock)
+	}
 	return nil
 }
 
@@ -256,13 +265,6 @@ func configNumEqual(x, y *big.Int) bool {
 		return x == nil
 	}
 	return x.Cmp(y) == 0
-}
-
-func (c *ChainConfig) IsMetropolis(num *big.Int) bool {
-	if c.MetropolisBlock == nil || num == nil {
-		return false
-	}
-	return num.Cmp(c.MetropolisBlock) >= 0
 }
 
 // ConfigCompatError is raised if the locally-stored blockchain is initialised with a

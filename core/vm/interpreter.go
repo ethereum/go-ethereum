@@ -45,7 +45,7 @@ type Config struct {
 	DisableGasMetering bool
 	// Enable recording of SHA3/keccak preimages
 	EnablePreimageRecording bool
-	// JumpTable contains the in instruction table. This
+	// JumpTable contains the EVM instruction table. This
 	// may me left uninitialised and will be set the default
 	// table.
 	JumpTable [256]operation
@@ -74,7 +74,7 @@ func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
 			cfg.JumpTable = homesteadInstructionSet
 		default:
-			cfg.JumpTable = baseInstructionSet
+			cfg.JumpTable = frontierInstructionSet
 		}
 	}
 
@@ -131,14 +131,14 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		}
 	}()
 
-	log.Debug("in running contract", "hash", codehash[:])
+	log.Debug("interpreter running contract", "hash", codehash[:])
 	tstart := time.Now()
-	defer log.Debug("in finished running contract", "hash", codehash[:], "elapsed", time.Since(tstart))
+	defer log.Debug("interpreter finished running contract", "hash", codehash[:], "elapsed", time.Since(tstart))
 
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
-	// the execution of one of the operations or until the in.done is set by
-	// the parent context.Context.
+	// the execution of one of the operations or until the done flag is set by the
+	// parent context.
 	for atomic.LoadInt32(&in.evm.abort) == 0 {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)

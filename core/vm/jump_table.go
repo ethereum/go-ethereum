@@ -56,12 +56,14 @@ type operation struct {
 }
 
 var (
-	baseInstructionSet      = NewBaseInstructionSet()
+	frontierInstructionSet  = NewFrontierInstructionSet()
 	homesteadInstructionSet = NewHomesteadInstructionSet()
 )
 
+// NewHomesteadInstructionSet returns the frontier and homestead
+// instructions that can be executed during the homestead phase.
 func NewHomesteadInstructionSet() [256]operation {
-	instructionSet := NewBaseInstructionSet()
+	instructionSet := NewFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = operation{
 		execute:       opDelegateCall,
 		gasCost:       gasDelegateCall,
@@ -72,7 +74,9 @@ func NewHomesteadInstructionSet() [256]operation {
 	return instructionSet
 }
 
-func NewBaseInstructionSet() [256]operation {
+// NewFrontierInstructionSet returns the frontier instructions
+// that can be executed during the frontier phase.
+func NewFrontierInstructionSet() [256]operation {
 	return [256]operation{
 		STOP: {
 			execute:       opStop,
