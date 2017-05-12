@@ -45,6 +45,8 @@ type PotVal interface {
 	String() string
 }
 
+type AnyVal interface{}
+
 // Pot constructor. Requires  value of type PotVal to pin
 // and po to point to a span in the PotVal key
 // The pinned item counts towards the size
@@ -245,11 +247,12 @@ func remove(t *pot, val PotVal) (r *pot, po int, found bool) {
 // if f returns v' <> v then v' is inserted into the Pot
 // if v' == v the pot is not changed
 // it panics if v'.PO(k, 0) says v and k are not equal
-func (t *Pot) Swap(val PotVal, f func(v PotVal) PotVal) (po int, found bool, change bool) {
+func (t *Pot) Swap(val AnyVal, f func(v PotVal) PotVal) (po int, found bool, change bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
+	ba := NewBytesVal(val, nil)
 	var t0 *pot
-	t0, po, found, change = swap(t.pot, val, f)
+	t0, po, found, change = swap(t.pot, ba, f)
 	if change {
 		t.pot = t0
 	}

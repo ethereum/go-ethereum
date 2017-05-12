@@ -46,24 +46,20 @@ a guaranteed constant maximum limit on the number of hops needed to reach one
 node from the other.
 */
 
-type KadDiscovery interface {
-	NotifyPeer(Peer, uint8) error
-	NotifyProx(uint8) error
-}
-
+// KadParams holds the config params for Kademlia
 type KadParams struct {
 	// adjustable parameters
-	MaxProxDisplay int
-	MinProxBinSize int
-	MinBinSize     int
-	MaxBinSize     int
-	RetryInterval  int
-	RetryExponent  int
-	MaxRetries     int
-	PruneInterval  int
+	MaxProxDisplay int // number of rows the table shows
+	MinProxBinSize int // nearest neighbour core minimum cardinality
+	MinBinSize     int // minimum number of peers in a row
+	MaxBinSize     int // maximum number of peers in a row before pruning
+	RetryInterval  int // initial interval before a peer is first redialed
+	RetryExponent  int // exponent to multiply retry intervals with
+	MaxRetries     int // maximum number of redial attempts
+	PruneInterval  int // interval between peer pruning cycles
 }
 
-// NewKadParams() returns a params struct with default values
+// NewKadParams returns a params struct with default values
 func NewKadParams() *KadParams {
 	return &KadParams{
 		MaxProxDisplay: 8,
@@ -79,141 +75,94 @@ func NewKadParams() *KadParams {
 
 // Kademlia is a table of live peers and a db of known peers
 type Kademlia struct {
-	addr PeerAddr // immutable baseaddress of the table
-	// addr          *pot.HashAddress // immutable baseaddress of the table
-	*KadParams             // Kademlia configuration parameters
-	addrs, peers  *pot.Pot // pots container for peers
-	lastProxLimit uint8    // stores the last calculated proxlimit
+	*KadParams          // Kademlia configuration parameters
+	base       []byte   // immutable baseaddress of the table
+	addrs      *pot.Pot // pots container for known peer addresses
+	conns      *pot.Pot // pots container for live peer connections
+	depth      uint8    // stores the last calculated depth
 }
 
-// NewKademlia(addr, params) creates a Kademlia table for base address addr
+// NewKademlia creates a Kademlia table for base address addr
 // with parameters as in params
 // if params is nil, it uses default values
 func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
 	}
-	self := &Kademlia{
-		addr:      &peerAddr{OAddr: addr},
+	return &Kademlia{
+		base:      addr,
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
-		peers:     pot.NewPot(nil, 0),
+		conns:     pot.NewPot(nil, 0),
 	}
-	return self
 }
 
-// Prune implements a forever loop reacting to a ticker time channel given
-// as the first argument
-// the loop quits if the channel is closed
-// it checks each kademlia bin and if the peer count is higher than
-// the MaxBinSize parameter it drops the oldest n peers such that
-// the bin is reduced to MinBinSize peers thus leaving slots to newly
-// connecting peers
-func (self *Kademlia) Prune(c <-chan time.Time) {
-	go func() {
-		for _ = range c {
-			log.Debug("pruning...")
-			total := 0
-			self.peers.EachBin(self.addr, 0, func(po, size int, f func(func(pot.PotVal, int) bool) bool) bool {
-				extra := size - self.MinBinSize
-				if size > self.MaxBinSize {
-					n := 0
-					f(func(v pot.PotVal, po int) bool {
-						p := v.(*KadPeer).Peer
-						if p != nil {
-							p.Drop(fmt.Errorf("bucket full"))
-						}
-						n++
-						return n < extra
-					})
-					total += extra
-				}
-				return true
-			})
-			log.Debug(fmt.Sprintf("pruned %v peers", total))
-		}
-	}()
+type Notifier interface {
+	NotifyPeer(OverlayConn, uint8) error
+	NotifyDepth(uint8) error
 }
 
-// KadPeer represents a Kademlia Peer and extends
-// * PeerAddr interface (overlay and underlay addresses)
-// * Peer interface (id, last seen, drop)
-type KadPeer struct {
-	PeerAddr
-	Peer    Peer
+// OverlayPeer interface captures the common aspect of view of a peer from the Overlay
+// topology driver
+type OverlayPeer interface {
+	Address() []byte
+}
+
+// OverlayConn represents a connected peer
+type OverlayConn interface {
+	OverlayPeer
+	Drop(error)       // call to indicate a peer should be expunged
+	Off() OverlayAddr // call to return a persitent OverlayAddr
+}
+
+type OverlayAddr interface {
+	OverlayPeer
+	On(OverlayConn) OverlayConn     // call to return the connected peer
+	Update(OverlayAddr) OverlayAddr // returns the updated version of the original
+}
+
+// entry represents a Kademlia table entry (an extension of OverlayPeer)
+// implements the pot.PotVal interface via BytesAddress, so entry can be
+// used directly as a pot element
+type entry struct {
+	pot.PotVal
+	OverlayPeer
 	seenAt  time.Time
 	retries int
 }
 
-func (self *KadPeer) String() string {
-	if self == nil {
-		return "<nil>"
-	}
-	return fmt.Sprintf("%x", self.OverlayAddr())
-}
-
-func (self *Kademlia) callable(val pot.PotVal) *KadPeer {
-	kp := val.(*KadPeer)
-	// not callable if peer is live or exceeded maxRetries
-	if kp.Peer != nil || kp.retries > self.MaxRetries {
-		log.Trace(fmt.Sprintf("peer %v (%T) not callable", kp, kp.Peer))
-		return nil
-	}
-	// calculate the allowed number of retries based on time lapsed since last seen
-	timeAgo := time.Since(kp.seenAt)
-	var retries int
-	for delta := int(timeAgo) / self.RetryInterval; delta > 0; delta /= self.RetryExponent {
-		log.Trace(fmt.Sprintf("delta: %v", delta))
-		retries++
-	}
-
-	// this is never called concurrently, so safe to increment
-	// peer can be retried again
-	if retries < kp.retries {
-		log.Trace(fmt.Sprintf("log time needed before retry %v, wait only warrants %v", kp.retries, retries))
-		return nil
-	}
-	kp.retries++
-	log.Trace(fmt.Sprintf("peer %v is callable", kp))
-
-	return kp
-}
-
-// NewKadPeer creates a kademlia peer from a PeerAddr interface
-func NewKadPeer(na PeerAddr) *KadPeer {
-	return &KadPeer{
-		PeerAddr: na,
-		seenAt:   time.Now(),
+// newEntry creates a kademlia peer from an OverlayPeer interface
+func newEntry(p OverlayPeer) *entry {
+	return &entry{
+		PotVal:      pot.NewBytesVal(p, nil),
+		OverlayPeer: p,
+		seenAt:      time.Now(),
 	}
 }
 
-// retrieve the base address
-// which is the overlayaddress used by peers to reach us
-func (self *Kademlia) GetAddr() PeerAddr {
-	return self.addr
+func (self *entry) String() string {
+	return fmt.Sprintf("%x", self.Address())
 }
 
-// Register(nas) enters each PeerAddr as kademlia peers into the
-// database of known peers
-func (self *Kademlia) Register(nas ...PeerAddr) error {
-	label := fmt.Sprintf("%x", RandomAddr().OverlayAddr())
+// Register enters each OverlayAddr as kademlia peer record into the
+// database of known peer addresses
+func (self *Kademlia) Register(peers chan OverlayAddr) error {
+	if len(peers) == 0 {
+		return fmt.Errorf("empty peers list")
+	}
 	np := pot.NewPot(nil, 0)
-	for _, na := range nas {
-		if bytes.Equal(na.OverlayAddr(), self.addr.OverlayAddr()) {
-			log.Warn(fmt.Sprintf("[%06s] add peers: %x is self.. skipped ", label, self.addr.OverlayAddr()))
-			continue
+	defer func() { self.addrs.Merge(np) }()
+	for p := range peers {
+		// error if self received, peer should know better
+		if bytes.Equal(p.Address(), self.base) {
+			return fmt.Errorf("add peers: %x is self", self.base)
 		}
-		p := NewKadPeer(na)
-		np, _, _ = pot.Add(np, pot.PotVal(p))
+		np, _, _ = pot.Add(np, pot.PotVal(newEntry(p)))
 	}
-	oldpeers := pot.NewPot(nil, 0)
-	oldpeers.Merge(self.addrs)
-	self.addrs.Merge(np)
+	// TODO: remove this check
 	m := make(map[string]bool)
 	self.addrs.Each(func(val pot.PotVal, i int) bool {
 		_, found := m[val.String()]
-		// TODO: remove this check
-		// log.Debug(fmt.Sprintf("-> %v  %v", val, i))
 		if found {
 			panic("duplicate found")
 		}
@@ -223,148 +172,32 @@ func (self *Kademlia) Register(nas ...PeerAddr) error {
 	return nil
 }
 
-// On(p) inserts the peer as a kademlia peer into the live peers
-func (self *Kademlia) On(p Peer) {
-	kp := NewKadPeer(p)
-	kp.Peer = p
-	self.peers.Swap(kp, func(v pot.PotVal) pot.PotVal {
-		// if not found live
-		if v == nil {
-			// switch the offline peer
-			self.addrs.Swap(kp, func(v pot.PotVal) pot.PotVal {
-				return pot.PotVal(kp)
-			})
-			// insert new peer
-			return pot.PotVal(kp)
-		}
-		// found among live peers, do nothing
-		return v
-	})
-	prox := self.proxLimit()
-
-	vp, ok := kp.Peer.(KadDiscovery)
-	if !ok {
-		// log.Trace(fmt.Sprintf("not discovery peer %T", kp))
-		return
-	}
-	go vp.NotifyProx(uint8(prox))
-	f := func(val pot.PotVal, po int) {
-		dp := val.(*KadPeer).Peer.(KadDiscovery)
-		log.Debug(fmt.Sprintf("peer %v notified of %v (%v)", dp, kp, po))
-		dp.NotifyPeer(kp.Peer, uint8(po))
-		if uint8(prox) != self.lastProxLimit {
-			self.lastProxLimit = uint8(prox)
-			dp.NotifyProx(uint8(prox))
-		}
-		log.Debug("peer notified")
-	}
-	self.peers.EachNeighbourAsync(kp, 1024, 255, f, false)
-}
-
-// Off removes a peer from among live peers
-func (self *Kademlia) Off(p Peer) {
-	kp := NewKadPeer(p)
-	self.addrs.Swap(kp, func(v pot.PotVal) pot.PotVal {
-		if v != nil {
-			self.peers.Swap(kp, func(v pot.PotVal) pot.PotVal {
-				return nil
-			})
-		}
-		return nil
-	})
-}
-
-type ByteAddr struct {
-	key []byte
-}
-
-// EachLivePeer(base, po, f) is an iterator applying f to each live peer
-// that has proximity order po or less as measured from the base
-// if base is nil, kademlia base address is used
-func (self *Kademlia) EachLivePeer(base []byte, o int, f func(Peer, int, bool) bool) {
-	var p pot.PotVal
-	if base == nil {
-		p = pot.PotVal(self.addr)
-	} else {
-		p = pot.PotVal(&peerAddr{OAddr: base})
-	}
-	self.peers.EachNeighbour(p, func(val pot.PotVal, po int) bool {
-		if po > o {
-			return true
-		}
-		isproxbin := false
-		if l, _ := p.PO(val, 0); l >= self.proxLimit() {
-			isproxbin = true
-		}
-		return f(val.(*KadPeer).Peer, po, isproxbin)
-	})
-}
-
-// EachPeer(base, po, f) is an iterator applying f to each known peer
-// that has proximity order po or less as measured from the base
-// if base is nil, kademlia base address is used
-func (self *Kademlia) EachPeer(base []byte, o int, f func(PeerAddr, int) bool) {
-	var p pot.PotVal
-	if base == nil {
-		p = pot.PotVal(self.addr)
-	} else {
-		p = pot.NewHashAddressFromBytes(base)
-	}
-	self.addrs.EachNeighbour(p, func(val pot.PotVal, po int) bool {
-		if po > o {
-			return true
-		}
-		return f(val.(*KadPeer).Peer, po)
-	})
-}
-
-// proxLimit() returns the proximity order that defines the distance of
-// the nearest neighbour set with cardinality >= MinProxBinSize
-// if there is altogether less than MinProxBinSize peers it returns 0
-func (self *Kademlia) proxLimit() int {
-	if self.peers.Size() < self.MinProxBinSize {
-		return 0
-	}
-	var proxLimit int
-	var size int
-	f := func(v pot.PotVal, i int) bool {
-		size++
-		proxLimit = i
-		return size < self.MinProxBinSize
-	}
-	self.peers.EachNeighbour(pot.PotVal(self.addr), f)
-	return proxLimit
-}
-
 // SuggestPeer returns a known peer for the lowest proximity bin for the
-// lowest bincount below proxLimit
+// lowest bincount below depth
 // naturally if there is an empty row it returns a peer for that
 //
-func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
+func (self *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	minsize := self.MinBinSize
-	proxLimit := self.proxLimit()
+	depth := self.Depth()
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
-	log.Trace(fmt.Sprintf("candidate prox peer checking above PO %v", proxLimit))
+	log.Trace(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
 	var ppo int
-	self.addrs.EachNeighbour(self.addr, func(val pot.PotVal, po int) bool {
-		r := self.callable(val)
-		if r == nil {
-			return po >= proxLimit
-		}
-		p = r
+	ba := pot.NewBytesVal(self.base, nil)
+	self.addrs.EachNeighbour(ba, func(val pot.PotVal, po int) bool {
+		a = self.callable(val)
 		ppo = po
-		return false
+		return a != nil && po >= depth
 	})
-	if p != nil {
-		log.Trace(fmt.Sprintf("candidate prox peer found: %v (%v), %v", p, ppo, p))
-		return p, 0, false
+	if a != nil {
+		log.Trace(fmt.Sprintf("candidate prox peer found: %v (%v)", a, ppo))
+		return a, 0, false
 	}
-	log.Trace(fmt.Sprintf("no candidate prox peers to connect to (ProxLimit: %v, minProxSize: %v)", proxLimit, self.MinProxBinSize))
+	log.Trace(fmt.Sprintf("no candidate prox peers to connect to (Depth: %v, minProxSize: %v)", depth, self.MinProxBinSize))
 
 	var bpo []int
 	prev := -1
-	self.peers.EachBin(self.addr, 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
+	self.conns.EachBin(pot.NewBytesVal(self.base, nil), 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
 		log.Trace(fmt.Sprintf("check PO%02d: ", po))
 		prev++
 		if po > prev {
@@ -375,7 +208,7 @@ func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
 			minsize = size
 			bpo = append(bpo, po)
 		}
-		return size > 0 && po < proxLimit
+		return size > 0 && po < depth
 	})
 	// all buckets are full
 	// minsize == self.MinBinSize
@@ -387,28 +220,165 @@ func (self *Kademlia) SuggestPeer() (p PeerAddr, o int, want bool) {
 	// try to select a candidate peer
 	for i := len(bpo) - 1; i >= 0; i-- {
 		// find the first callable peer
-		self.addrs.EachBin(self.addr, bpo[i], func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
+		self.addrs.EachBin(ba, bpo[i], func(po, size int, f func(func(pot.PotVal, int) bool) bool) bool {
 			// for each bin we find callable candidate peers
-			f(func(val pot.PotVal, i int) bool {
-				r := self.callable(val)
-				log.Trace(fmt.Sprintf("check PO%02d: ", po))
-				if r == nil {
-					return i < proxLimit
-				}
-				p = r
-				return false
+			log.Trace(fmt.Sprintf("check PO%02d: ", po))
+			f(func(val pot.PotVal, j int) bool {
+				a = self.callable(val)
+				return a != nil && po < depth
 			})
 			return false
 		})
 		// found a candidate
-		if p != nil {
+		if a != nil {
 			break
 		}
 		// cannot find a candidate, ask for more for this proximity bin specifically
 		o = bpo[i]
 		want = true
 	}
-	return p, o, want
+	return a, o, want
+}
+
+// On inserts the peer as a kademlia peer into the live peers
+func (self *Kademlia) On(p OverlayPeer) {
+	e := newEntry(p)
+	self.conns.Swap(p, func(v pot.PotVal) pot.PotVal {
+		// if not found live
+		if v == nil {
+			// insert new online peer into addrs
+			self.addrs.Swap(p, func(v pot.PotVal) pot.PotVal {
+				return e
+			})
+			// insert new online peer into conns
+			return e
+		}
+		// found among live peers, do nothing
+		return v
+	})
+
+	np, ok := p.(Notifier)
+	if !ok {
+		return
+	}
+
+	depth := uint8(self.Depth())
+	if depth != self.depth {
+		self.depth = depth
+	} else {
+		depth = 0
+	}
+
+	go np.NotifyDepth(depth)
+	f := func(val pot.PotVal, po int) {
+		dp := val.(Notifier)
+		dp.NotifyPeer(p.(OverlayConn), uint8(po))
+		log.Trace(fmt.Sprintf("peer %v notified of %v (%v)", dp, p, po))
+		if depth > 0 {
+			dp.NotifyDepth(depth)
+			log.Trace("peer %v notified of new depth limit %v", dp, depth)
+		}
+	}
+	self.conns.EachNeighbourAsync(e, 1024, 255, f, false)
+}
+
+// Off removes a peer from among live peers
+func (self *Kademlia) Off(p OverlayConn) {
+	self.addrs.Swap(p, func(v pot.PotVal) pot.PotVal {
+		// v cannot be nil, must check otherwise we overwrite entry
+		if v == nil {
+			panic(fmt.Sprintf("connected peer not found %v", p))
+		}
+		self.conns.Swap(p, func(v pot.PotVal) pot.PotVal {
+			// v cannot nil, but no need to check
+			return nil
+		})
+		return newEntry(p)
+	})
+}
+
+// EachConn is an iterator with args (base, po, f) applies f to each live peer
+// that has proximity order po or less as measured from the base
+// if base is nil, kademlia base address is used
+func (self *Kademlia) EachConn(base []byte, o int, f func(OverlayConn, int, bool) bool) {
+	if len(base) == 0 {
+		base = self.base
+	}
+	p := pot.NewBytesVal(base, nil)
+	self.conns.EachNeighbour(p, func(val pot.PotVal, po int) bool {
+		if po > o {
+			return true
+		}
+		isproxbin := false
+		if l, _ := p.PO(val, 0); l >= self.Depth() {
+			isproxbin = true
+		}
+		return f(val.(OverlayConn), po, isproxbin)
+	})
+}
+
+// EachAddr(base, po, f) is an iterator applying f to each known peer
+// that has proximity order po or less as measured from the base
+// if base is nil, kademlia base address is used
+func (self *Kademlia) EachAddr(base []byte, o int, f func(OverlayAddr, int) bool) {
+	if len(base) == 0 {
+		base = self.base
+	}
+	p := pot.NewBytesVal(base, nil)
+	self.addrs.EachNeighbour(p, func(val pot.PotVal, po int) bool {
+		if po > o {
+			return true
+		}
+		return f(val.(OverlayAddr), po)
+	})
+}
+
+// Depth returns the proximity order that defines the distance of
+// the nearest neighbour set with cardinality >= MinProxBinSize
+// if there is altogether less than MinProxBinSize peers it returns 0
+func (self *Kademlia) Depth() (depth int) {
+	if self.conns.Size() < self.MinProxBinSize {
+		return 0
+	}
+	var size int
+	f := func(v pot.PotVal, i int) bool {
+		size++
+		depth = i
+		return size < self.MinProxBinSize
+	}
+	self.conns.EachNeighbour(pot.NewBytesVal(self.base, nil), f)
+	return depth
+}
+
+func (self *Kademlia) callable(val pot.PotVal) OverlayAddr {
+	e := val.(*entry)
+	// not callable if peer is live or exceeded maxRetries
+	if _, live := val.(OverlayConn); live || e.retries > self.MaxRetries {
+		log.Trace(fmt.Sprintf("peer %v (%T) not callable", e, e.OverlayPeer))
+		return nil
+	}
+	// calculate the allowed number of retries based on time lapsed since last seen
+	timeAgo := time.Since(e.seenAt)
+	var retries int
+	for delta := int(timeAgo) / self.RetryInterval; delta > 0; delta /= self.RetryExponent {
+		log.Trace(fmt.Sprintf("delta: %v", delta))
+		retries++
+	}
+
+	// this is never called concurrently, so safe to increment
+	// peer can be retried again
+	if retries < e.retries {
+		log.Trace(fmt.Sprintf("log time needed before retry %v, wait only warrants %v", e.retries, retries))
+		return nil
+	}
+	e.retries++
+	log.Trace(fmt.Sprintf("peer %v is callable", e))
+
+	return val.(OverlayAddr)
+}
+
+func (self *Kademlia) BaseAddr() []byte {
+	return self.base
 }
 
 // kademlia table + kaddb table displayed with ascii
@@ -417,16 +387,16 @@ func (self *Kademlia) String() string {
 	var rows []string
 
 	rows = append(rows, "=========================================================================")
-	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %v", time.Now().UTC().Format(time.UnixDate), fmt.Sprintf("%x", self.addr.OverlayAddr()[:3])))
-	rows = append(rows, fmt.Sprintf("population: %d (%d), MinProxBinSize: %d, MinBinSize: %d, MaxBinSize: %d", self.peers.Size(), self.addrs.Size(), self.MinProxBinSize, self.MinBinSize, self.MaxBinSize))
+	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %v", time.Now().UTC().Format(time.UnixDate), self))
+	rows = append(rows, fmt.Sprintf("population: %d (%d), MinProxBinSize: %d, MinBinSize: %d, MaxBinSize: %d", self.conns.Size(), self.addrs.Size(), self.MinProxBinSize, self.MinBinSize, self.MaxBinSize))
 
 	liverows := make([]string, self.MaxProxDisplay)
 	peersrows := make([]string, self.MaxProxDisplay)
-	var proxLimit int
+	var depth int
 	prev := -1
-	var proxLimitSet bool
-	rest := self.peers.Size()
-	self.peers.EachBin(self.addr, 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
+	var depthSet bool
+	rest := self.conns.Size()
+	self.conns.EachBin(pot.NewBytesVal(self.base, nil), 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
 		var rowlen int
 		if po >= self.MaxProxDisplay {
 			po = self.MaxProxDisplay - 1
@@ -434,13 +404,13 @@ func (self *Kademlia) String() string {
 		row := []string{fmt.Sprintf("%2d", size)}
 		rest -= size
 		f(func(val pot.PotVal, vpo int) bool {
-			row = append(row, val.(*KadPeer).String()[:6])
+			row = append(row, val.(*entry).String()[:6])
 			rowlen++
 			return rowlen < 4
 		})
-		if !proxLimitSet && (po > prev+1 || rest < self.MinProxBinSize) {
-			proxLimitSet = true
-			proxLimit = prev + 1
+		if !depthSet && (po > prev+1 || rest < self.MinProxBinSize) {
+			depthSet = true
+			depth = prev + 1
 		}
 		for ; rowlen <= 5; rowlen++ {
 			row = append(row, "      ")
@@ -450,7 +420,7 @@ func (self *Kademlia) String() string {
 		return true
 	})
 
-	self.addrs.EachBin(self.addr, 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
+	self.addrs.EachBin(pot.NewBytesVal(self.base, nil), 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
 		var rowlen int
 		if po >= self.MaxProxDisplay {
 			po = self.MaxProxDisplay - 1
@@ -461,8 +431,7 @@ func (self *Kademlia) String() string {
 		row := []string{fmt.Sprintf("%2d", size)}
 		// we are displaying live peers too
 		f(func(val pot.PotVal, vpo int) bool {
-			kp := val.(*KadPeer)
-			row = append(row, kp.String()[:6])
+			row = append(row, val.(*entry).String()[:6])
 			rowlen++
 			return rowlen < 4
 		})
@@ -471,7 +440,7 @@ func (self *Kademlia) String() string {
 	})
 
 	for i := 0; i < self.MaxProxDisplay; i++ {
-		if i == proxLimit {
+		if i == depth {
 			rows = append(rows, fmt.Sprintf("============ PROX LIMIT: %d ==========================================", i))
 		}
 		left := liverows[i]
@@ -486,4 +455,33 @@ func (self *Kademlia) String() string {
 	}
 	rows = append(rows, "=========================================================================")
 	return "\n" + strings.Join(rows, "\n")
+}
+
+// Prune implements a forever loop reacting to a ticker time channel given
+// as the first argument
+// the loop quits if the channel is closed
+// it checks each kademlia bin and if the peer count is higher than
+// the MaxBinSize parameter it drops the oldest n peers such that
+// the bin is reduced to MinBinSize peers thus leaving slots to newly
+// connecting peers
+func (self *Kademlia) Prune(c <-chan time.Time) {
+	go func() {
+		for range c {
+			total := 0
+			self.conns.EachBin(nil, 0, func(po, size int, f func(func(pot.PotVal, int) bool) bool) bool {
+				extra := size - self.MinBinSize
+				if size > self.MaxBinSize {
+					n := 0
+					f(func(v pot.PotVal, po int) bool {
+						v.(OverlayConn).Drop(fmt.Errorf("bucket full"))
+						n++
+						return n < extra
+					})
+					total += extra
+				}
+				return true
+			})
+			log.Debug(fmt.Sprintf("pruned %v peers", total))
+		}
+	}()
 }

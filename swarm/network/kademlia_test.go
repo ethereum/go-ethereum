@@ -21,13 +21,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pot"
 )
 
-func testKadPeerAddr(s string) *peerAddr {
+func testKadPeerAddr(s string) *bzzAddr {
 	a := pot.NewHashAddress(s).Bytes()
-	return &peerAddr{OAddr: a, UAddr: a}
+	return &bzzAddr{OAddr: a, UAddr: a}
 }
 
 type testDropPeer struct {
@@ -70,7 +69,7 @@ func (self *testDiscPeer) NotifyProx(po uint8) error {
 	return nil
 }
 
-func (self *testDiscPeer) NotifyPeer(p Peer, po uint8) error {
+func (self *testDiscPeer) NotifyPeer(p OverlayPeer, po uint8) error {
 	key := overlayStr(self)
 	key += overlayStr(p)
 	self.lock.Lock()
@@ -102,15 +101,15 @@ func newTestKademlia(b string) *testKademlia {
 }
 
 func (k *testKademlia) newTestKadPeer(s string) Peer {
-	dp := &testDropPeer{&bzzPeer{peerAddr: testKadPeerAddr(s)}, k.dropc}
+	dp := &testDropPeer{&bzzPeer{bzzAddr: testKadPeerAddr(s)}, k.dropc}
 	if k.Discovery {
 		return Peer(&testDiscPeer{dp, k.lock, k.notifications})
 	}
 	return Peer(dp)
 }
 
-func overlayStr(a PeerAddr) string {
-	log.Error(fmt.Sprintf("PeerAddr: %v (%T)", a, a))
+func overlayStr(a OverlayPeer) string {
+	// log.Error(fmt.Sprintf("PeerAddr: %v (%T)", a, a))
 	// if a == (*KadPeer)(nil) || a == (*testDiscPeer)(nil) || a == (*bzzPeer)(nil) || a == nil {
 	// 	return "<nil>"
 	// }
@@ -126,14 +125,15 @@ func overlayStr(a PeerAddr) string {
 	// 	return "<nil>"
 	// }
 	// return pot.NewHashAddressFromBytes(p.OverlayAddr()).Bin()[:6]
-	if a == nil {
-		return "<nil>"
-	}
-	k, ok := a.(*KadPeer)
-	if ok && k.Peer != nil {
-		return pot.ToBin(a.(*KadPeer).Peer.OverlayAddr())[:6]
-	}
-	return pot.ToBin(a.OverlayAddr())[:6]
+	// if a == nil {
+	// 	return "<nil>"
+	// }
+	// k, ok := a.(*KadPeer)
+	// if ok && k.Peer != nil {
+	// 	return pot.ToBin(a.(*KadPeer).Peer.Over())[:6]
+	// }
+	// return pot.ToBin(a.Over())[:6]
+	return pot.ToBin(a.Address())
 }
 
 func (k *testKademlia) On(ons ...string) *testKademlia {
@@ -146,16 +146,16 @@ func (k *testKademlia) On(ons ...string) *testKademlia {
 
 func (k *testKademlia) Off(offs ...string) *testKademlia {
 	for _, s := range offs {
-		k.Kademlia.Off(k.newTestKadPeer(s))
+		k.Kademlia.Off(k.newTestKadPeer(s).(OverlayConn))
 	}
 
 	return k
 }
 
 func (k *testKademlia) Register(regs ...string) *testKademlia {
-	var ps []PeerAddr
+	var ps []Addr
 	for _, s := range regs {
-		ps = append(ps, PeerAddr(testKadPeerAddr(s)))
+		ps = append(ps, Addr(testKadPeerAddr(s)))
 	}
 	k.Kademlia.Register(ps...)
 	return k

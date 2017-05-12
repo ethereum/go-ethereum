@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -182,9 +181,10 @@ func (self *Swarm) Start(net p2p.Server) error {
 		func() <-chan time.Time {
 			return time.NewTicker(time.Second).C
 		},
+		nil,
 	)
 
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.GetAddr()))
+	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.BaseAddr()))
 
 	if self.pssEnabled {
 		pssparams := network.NewPssParams()
@@ -238,48 +238,46 @@ func (self *Swarm) Stop() error {
 // implements the node.Service interface
 func (self *Swarm) Protocols() []p2p.Protocol {
 	ct := network.BzzCodeMap()
-	for _, m := range network.DiscoveryMsgs {
-		ct.Register(m)
-	}
 	if self.pssEnabled {
-		ct.Register(&network.PssMsg{})
+		ct.Register(1, &network.PssMsg{})
 	}
+	ct.Register(2, network.DiscoveryMsgs...)
 
-	srv := func(p network.Peer) error {
-		if self.pssEnabled {
-			p.Register(&network.PssMsg{}, func(msg interface{}) error {
-				pssmsg := msg.(*network.PssMsg)
-
-				if self.pss.IsSelfRecipient(pssmsg) {
-					log.Trace("pss for us, yay! ... let's process!")
-					env := pssmsg.Payload
-					umsg := env.Payload
-					f := self.pss.GetHandler(env.Topic)
-					if f == nil {
-						return fmt.Errorf("No registered handler for topic '%s'", env.Topic)
-					}
-					nid := adapters.NewNodeId(env.SenderUAddr)
-					p := p2p.NewPeer(nid.NodeID, fmt.Sprintf("%x", common.ByteLabel(nid.Bytes())), []p2p.Cap{})
-					return f(umsg, p, env.SenderOAddr)
-				} else {
-					log.Trace("pss was for someone else :'( ... forwarding")
-					return self.pss.Forward(pssmsg)
-				}
-				return nil
-			})
-		}
-		self.hive.Add(p)
-		p.DisconnectHook(func(err error) {
-			self.hive.Remove(p)
-		})
-		return nil
-	}
+	// srv := func(p network.Peer) error {
+	// 	if self.pssEnabled {
+	// 		p.Register(&network.PssMsg{}, func(msg interface{}) error {
+	// 			pssmsg := msg.(*network.PssMsg)
+	//
+	// 			if self.pss.IsSelfRecipient(pssmsg) {
+	// 				log.Trace("pss for us, yay! ... let's process!")
+	// 				env := pssmsg.Payload
+	// 				umsg := env.Payload
+	// 				f := self.pss.GetHandler(env.Topic)
+	// 				if f == nil {
+	// 					return fmt.Errorf("No registered handler for topic '%s'", env.Topic)
+	// 				}
+	// 				nid := adapters.NewNodeId(env.SenderUAddr)
+	// 				p := p2p.NewPeer(nid.NodeID, fmt.Sprintf("%x", common.ByteLabel(nid.Bytes())), []p2p.Cap{})
+	// 				return f(umsg, p, env.SenderOAddr)
+	// 			} else {
+	// 				log.Trace("pss was for someone else :'( ... forwarding")
+	// 				return self.pss.Forward(pssmsg)
+	// 			}
+	// 			return nil
+	// 		})
+	// 	}
+	// 	self.hive.Add(p)
+	// 	p.DisconnectHook(func(err error) {
+	// 		self.hive.Remove(p)
+	// 	})
+	// 	return nil
+	// }
 
 	proto := network.Bzz(
-		self.hive.Overlay.GetAddr().OverlayAddr(),
-		self.hive.Overlay.GetAddr().UnderlayAddr(),
+		self.hive.Overlay.GetAddr().Over(),
+		self.hive.Overlay.GetAddr().Under(),
 		ct,
-		srv,
+		nil,
 		nil,
 		nil,
 	)

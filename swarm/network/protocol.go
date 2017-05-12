@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/pot"
 )
 
 const (
@@ -36,51 +35,68 @@ const (
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 )
 
-// bzz is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
-type bzzPeer struct {
-	*protocols.Peer
-	localAddr  *peerAddr
-	*peerAddr  // remote address
-	lastActive time.Time
+// the Addr interface that peerPool needs
+type Addr interface {
+	OverlayPeer
+	Over() []byte
+	Under() []byte
+	String() string
 }
 
+// Peer interface represents an live peer connection
+type Peer interface {
+	Addr                   // the address of a peer
+	Conn                   // the live connection (protocols.Peer)
+	LastActive() time.Time // last time active
+}
+
+// Conn interface represents an live peer connection
+type Conn interface {
+	ID() discover.NodeID                                       // the key that uniquely identifies the Node for the peerPool
+	Handshake(interface{}, time.Duration) (interface{}, error) // can send messages
+	Send(interface{}) error                                    // can send messages
+	Drop(error)                                                // disconnect this peer
+	Register(interface{}, func(interface{}) error) uint64      // register message-handler callbacks
+	DisconnectHook(func(error))                                // register message-handler callbacks
+	Run() error                                                // the run function to run a protocol
+}
+
+// bzzPeer is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
+// implements the Peer interface and all interfaces Peer implements: Addr, OverlayPeer
+type bzzPeer struct {
+	Conn                 // represents the connection for online peers
+	localAddr  *bzzAddr  // local Peers address
+	*bzzAddr             // remote address -> implements Addr interface = protocols.Peer
+	lastActive time.Time // time is updated whenever mutexes are releasing
+}
+
+// Off returns the overlay peer record for offline persistance
+func (self *bzzPeer) Off() OverlayAddr {
+	return self.bzzAddr
+}
+
+// LastActive returns the time the peer was last active
 func (self *bzzPeer) LastActive() time.Time {
 	return self.lastActive
 }
 
-// implemented by peerAddr
-type PeerAddr interface {
-	OverlayAddr() []byte
-	UnderlayAddr() []byte
-	PO(pot.PotVal, int) (int, bool)
-	String() string
-}
-
-// the Peer interface that peerPool needs
-type Peer interface {
-	PeerAddr
-	// String() string                                       // pretty printable the Node
-	ID() discover.NodeID                                  // the key that uniquely identifies the Node for the peerPool
-	Send(interface{}) error                               // can send messages
-	Drop(error)                                           // disconnect this peer
-	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
-	DisconnectHook(func(error))
-}
-
+// BzzCodeMap compiles the message codes and message types bzz wire protocol.
+// note each call to Register can start a new series (initial code is arg1)
+// the initial offset for a series is arbitrary (to ensure u)
 func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 	ct := protocols.NewCodeMap(ProtocolName, Version, ProtocolMaxMsgSize)
-	ct.Register(&bzzHandshake{})
-	ct.Register(msgs...)
+	ct.Register(0, &bzzHandshake{})
+	ct.Register(1, msgs...)
 	return ct
 }
 
-// Bzz is the protocol constructor
+// NewBzz is the protocol constructor
 // returns p2p.Protocol that is to be offered by the node.Service
-func Bzz(oAddr, uAddr []byte, ct *protocols.CodeMap, services func(Peer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
+func NewBzz(over, under []byte, ct *protocols.CodeMap, services func(*bzzPeer) error, peerInfo func(id discover.NodeID) interface{}, nodeInfo func() interface{}) *p2p.Protocol {
 	run := func(p *protocols.Peer) error {
 		bee := &bzzPeer{
-			Peer:      p,
-			localAddr: &peerAddr{oAddr, uAddr},
+			Conn:      p,
+			localAddr: &bzzAddr{over, under},
 		}
 		// protocol handshake and its validation
 		// sets remote peer address
@@ -115,57 +131,43 @@ func Bzz(oAddr, uAddr []byte, ct *protocols.CodeMap, services func(Peer) error, 
 type bzzHandshake struct {
 	Version   uint64
 	NetworkId uint64
-	Addr      *peerAddr
+	Addr      *bzzAddr
 }
 
 func (self *bzzHandshake) String() string {
 	return fmt.Sprintf("Handshake: Version: %v, NetworkId: %v, Addr: %v", self.Version, self.NetworkId, self.Addr)
 }
 
-// peerAddr implements the PeerAddress interface
-type peerAddr struct {
+// bzzAddr implements the PeerAddr interface
+type bzzAddr struct {
 	OAddr []byte
 	UAddr []byte
 }
 
-func (self *peerAddr) OverlayAddr() []byte {
+// implements OverlayPeer interface to be used in pot package
+func (self *bzzAddr) Address() []byte {
 	return self.OAddr
 }
 
-func (self *peerAddr) UnderlayAddr() []byte {
+func (self *bzzAddr) Over() []byte {
+	return self.OAddr
+}
+
+func (self *bzzAddr) Under() []byte {
 	return self.UAddr
 }
 
-func (self *peerAddr) PO(val pot.PotVal, pos int) (int, bool) {
-	kp := val.(PeerAddr)
-	one := kp.OverlayAddr()
-	other := self.OAddr
-	for i := pos / 8; i < len(one); i++ {
-		if one[i] == other[i] {
-			continue
-		}
-		oxo := one[i] ^ other[i]
-		start := 0
-		if i == pos/8 {
-			start = pos % 8
-		}
-		for j := start; j < 8; j++ {
-			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
-				return i*8 + j, false
-			}
-		}
-	}
-	return len(one) * 8, true
-	// 	var ha *pot.HashAddress
-	// 	var left, right string
-	// 	if ok {
-	// 		ha = kp.HashAddress
-	// 	} else {
-	// 		ha = val.(*pot.HashAddress)
-	// 	}
+func (self *bzzAddr) On(p OverlayConn) OverlayConn {
+	bp := p.(*bzzPeer)
+	bp.bzzAddr = self
+	return bp
 }
 
-func (self *peerAddr) String() string {
+func (self *bzzAddr) Update(a OverlayAddr) OverlayAddr {
+	return &bzzAddr{self.OAddr, a.(Addr).Under()}
+}
+
+func (self *bzzAddr) String() string {
 	return fmt.Sprintf("%x <%x>", self.OAddr, self.UAddr)
 }
 
@@ -180,22 +182,20 @@ func (self *bzzPeer) bzzHandshake() error {
 		Addr:      self.localAddr,
 	}
 
-	hs, err := self.Handshake(lhs)
+	hs, err := self.Handshake(lhs, time.Second)
 	if err != nil {
 		log.Error(fmt.Sprintf("handshake failed: %v", err))
 		return err
 	}
 
 	rhs := hs.(*bzzHandshake)
-	self.peerAddr = rhs.Addr
+	self.bzzAddr = rhs.Addr
 	err = checkBzzHandshake(rhs)
 	if err != nil {
-		log.Error(fmt.Sprintf("handshake between %v and %v  failed: %v", self.localAddr, self.peerAddr, err))
+		log.Error(fmt.Sprintf("handshake between %v and %v  failed: %v", self.localAddr, self.bzzAddr, err))
 		return err
 	}
-
 	return nil
-
 }
 
 // checkBzzHandshake checks for the validity and compatibility of the remote handshake
@@ -213,7 +213,7 @@ func checkBzzHandshake(rhs *bzzHandshake) error {
 }
 
 // RandomAddr is a utility method generating an address from a public key
-func RandomAddr() *peerAddr {
+func RandomAddr() *bzzAddr {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic("unable to generate key")
@@ -221,23 +221,20 @@ func RandomAddr() *peerAddr {
 	pubkey := crypto.FromECDSAPub(&key.PublicKey)
 	var id discover.NodeID
 	copy(id[:], pubkey[1:])
-	return &peerAddr{
+	return &bzzAddr{
 		OAddr: crypto.Keccak256(pubkey[1:]),
 		UAddr: id[:],
 	}
 }
 
-// NodeId transforms the underlay address to an adapters.NodeId
-func NodeId(addr PeerAddr) *adapters.NodeId {
-	return adapters.NewNodeId(addr.UnderlayAddr())
+// NewNodeIdFromAddr transforms the underlay address to an adapters.NodeId
+func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
+	return adapters.NewNodeId(addr.Under())
 }
 
-// NewPeerAddrFromNodeId constucts a peerAddr from an adapters.NodeId
+// NewAddrFromNodeId constucts a bzzAddr from an adapters.NodeId
 // the overlay address is derived as the hash of the nodeId
-func NewPeerAddrFromNodeId(n *adapters.NodeId) *peerAddr {
+func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
 	id := n.NodeID
-	return &peerAddr{
-		OAddr: crypto.Keccak256(id[:]),
-		UAddr: id[:],
-	}
+	return &bzzAddr{crypto.Keccak256(id[:]), id[:]}
 }

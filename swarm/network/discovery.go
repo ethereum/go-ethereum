@@ -16,7 +16,7 @@ var DiscoveryMsgs = []interface{}{
 }
 
 type discPeer struct {
-	Peer
+	*bzzPeer
 	overlay   Overlay
 	peers     map[string]bool
 	proxLimit uint8 // the proximity radius advertised by remote to subscribe to peers
@@ -25,10 +25,10 @@ type discPeer struct {
 
 // discovery peer contructor
 // registers the handlers for discovery messages
-func NewDiscovery(p Peer, o Overlay) *discPeer {
+func NewDiscovery(p *bzzPeer, o Overlay) *discPeer {
 	self := &discPeer{
 		overlay: o,
-		Peer:    p,
+		bzzPeer: p,
 		peers:   make(map[string]bool),
 	}
 	self.seen(self)
@@ -42,15 +42,15 @@ func NewDiscovery(p Peer, o Overlay) *discPeer {
 
 // NotifyPeer notifies the receiver remote end of a peer p or PO po.
 // callback for overlay driver
-func (self *discPeer) NotifyPeer(p Peer, po uint8) error {
+func (self *discPeer) NotifyPeer(p OverlayPeer, po uint8) error {
 	log.Warn(fmt.Sprintf("peer %#v peers %v", p, self.peers))
 	if po < self.proxLimit || self.seen(p) {
 		return nil
 	}
-	log.Warn(fmt.Sprintf("notification about %x", p.OverlayAddr()))
+	log.Warn(fmt.Sprintf("notification about %x", p.Address()))
 
 	resp := &peersMsg{
-		Peers: []*peerAddr{&peerAddr{OAddr: p.OverlayAddr(), UAddr: p.UnderlayAddr()}}, // perhaps the PeerAddr interface is unnecessary generalization
+		Peers: []*bzzAddr{ToAddr(p)}, // perhaps the PeerAddr interface is unnecessary generalization
 	}
 	return self.Send(resp)
 }
@@ -83,7 +83,7 @@ disconnected
 // used for communicating about known peers
 // relevant for bootstrapping connectivity and updating peersets
 type peersMsg struct {
-	Peers []*peerAddr
+	Peers []*bzzAddr
 }
 
 func (self peersMsg) String() string {
@@ -113,14 +113,15 @@ func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
 	spm := msg.(*subPeersMsg)
 	self.proxLimit = spm.ProxLimit
 	if !self.sentPeers {
-		var peers []*peerAddr
-		self.overlay.EachLivePeer(self.OverlayAddr(), 255, func(p Peer, po int, isproxbin bool) bool {
+		var peers []*bzzAddr
+		self.overlay.EachConn(self.Over(), 255, func(p OverlayConn, po int, isproxbin bool) bool {
 			if uint8(po) < self.proxLimit {
 				return false
 			}
 			log.Warn(fmt.Sprintf("peer %#v proxlimit %v", p, self.proxLimit))
-			self.seen(p.(*discPeer).Peer)
-			peers = append(peers, &peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
+			if !self.seen(p) {
+				peers = append(peers, ToAddr(p))
+			}
 			return true
 		})
 		log.Warn(fmt.Sprintf("found initial %v peers not farther than %v", len(peers), self.proxLimit))
@@ -139,35 +140,37 @@ func (self *discPeer) handleSubPeersMsg(msg interface{}) error {
 // Register interface method
 func (self *discPeer) handlePeersMsg(msg interface{}) error {
 	// register all addresses
-	var nas []PeerAddr
-	for _, na := range msg.(*peersMsg).Peers {
-		addr := PeerAddr(na)
-		nas = append(nas, addr)
-		self.seen(addr)
-	}
-
-	if len(nas) == 0 {
+	as := msg.(*peersMsg).Peers
+	if len(as) == 0 {
 		log.Debug(fmt.Sprintf("whoops, no peers in incoming peersMsg from %v", self))
 		return nil
 	}
-	log.Debug(fmt.Sprintf("got peer addresses from %x, %v (%v)", self.OverlayAddr(), nas, len(nas)))
-	return self.overlay.Register(nas...)
+
+	var c chan OverlayAddr
+	go func() {
+		for _, a := range as {
+			self.seen(a)
+			c <- a
+		}
+	}()
+	return self.overlay.Register(c)
 }
 
 // handleGetPeersMsg is called by the protocol when receiving a
 // peerset (for target address) request
 // peers suggestions are retrieved from the overlay topology driver
-// using the EachLivePeer interface iterator method
+// using the EachConn interface iterator method
 // peers sent are remembered throughout a session and not sent twice
 func (self *discPeer) handleGetPeersMsg(msg interface{}) error {
-	var peers []*peerAddr
+	var peers []*bzzAddr
 	req := msg.(*getPeersMsg)
 	i := 0
-	self.overlay.EachLivePeer(self.OverlayAddr(), int(req.Order), func(n Peer, po int, isproxbin bool) bool {
+	self.overlay.EachConn(self.Over(), int(req.Order), func(p OverlayConn, po int, isproxbin bool) bool {
 		i++
 		// only send peers we have not sent before in this session
-		if self.seen(n) {
-			peers = append(peers, &peerAddr{n.OverlayAddr(), n.UnderlayAddr()})
+		a := ToAddr(p)
+		if self.seen(a) {
+			peers = append(peers, a)
 		}
 		return len(peers) < int(req.Max)
 	})
@@ -189,9 +192,8 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 	}
 	var i uint8
 	//var err error
-	k.EachLivePeer(nil, 255, func(n Peer, po int, isproxbin bool) bool {
-		log.Trace(fmt.Sprintf("%T sent to %v", req, n))
-		if err := n.Send(req); err == nil {
+	k.EachConn(nil, 255, func(p OverlayConn, po int, isproxbin bool) bool {
+		if err := p.(Conn).Send(req); err == nil {
 			i++
 			if i >= broadcastSize {
 				return false
@@ -202,8 +204,8 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 	log.Info(fmt.Sprintf("requesting bees of PO%03d from %v/%v (each max %v)", order, i, broadcastSize, maxPeers))
 }
 
-func (self *discPeer) seen(p PeerAddr) bool {
-	k := NodeId(p).NodeID.String()
+func (self *discPeer) seen(p OverlayPeer) bool {
+	k := string(p.Address())
 	if self.peers[k] {
 		return true
 	}

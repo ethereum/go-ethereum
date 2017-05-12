@@ -275,6 +275,7 @@ func (self *Network) startWithSnapshot(id *adapters.NodeId, snapshot []byte) err
 	}
 	log.Trace(fmt.Sprintf("starting node %v: %v using %v", id, node.Up, self.nodeAdapter.Name()))
 	if err := node.Start(snapshot); err != nil {
+		log.Warn(fmt.Sprintf("start up failed: %v", err))
 		return err
 	}
 	node.Up = true

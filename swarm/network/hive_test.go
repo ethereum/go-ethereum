@@ -30,12 +30,13 @@ func (self *testConnect) connect(na string) error {
 
 func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 	// setup
-	addr := RandomAddr()                     // tested peers peer address
-	to := NewTestOverlay(addr.OverlayAddr()) // overlay topology drive
-	pp := NewHive(params, to)                // hive
+	addr := RandomAddr() // tested peers peer address
+	// to := NewTestOverlay(addr.Over()) // overlay topology drive
+	pp := NewHive(params, nil) // hive
+	// pp := NewHive(params, to)         // hive
 
 	ct := BzzCodeMap(DiscoveryMsgs...) // bzz protocol code map
-	services := func(p Peer) error {
+	services := func(p *bzzPeer) error {
 		pp.Add(p)
 		p.DisconnectHook(func(err error) {
 			pp.Remove(p)
@@ -53,14 +54,14 @@ func TestOverlayRegistration(t *testing.T) {
 	defer s.Stop()
 
 	id := s.Ids[0]
-	raddr := NewPeerAddrFromNodeId(id)
+	raddr := NewAddrFromNodeId(id)
 
 	s.runHandshakes()
 
 	// hive should have called the overlay
-	if pp.Overlay.(*testOverlay).posMap[string(raddr.OverlayAddr())] == nil {
-		t.Fatalf("Overlay#On not called on new peer")
-	}
+	// if pp.Overlay.(*testOverlay).posMap[string(raddr.Over())] == nil {
+	// 	t.Fatalf("Overlay#On not called on new peer")
+	// }
 
 }
 
@@ -70,7 +71,7 @@ func TestRegisterAndConnect(t *testing.T) {
 	defer s.Stop()
 
 	id := s.Ids[0]
-	raddr := NewPeerAddrFromNodeId(id)
+	raddr := NewAddrFromNodeId(id)
 
 	pp.Register(raddr)
 
@@ -82,18 +83,18 @@ func TestRegisterAndConnect(t *testing.T) {
 		},
 		ticker: make(chan time.Time),
 	}
-	pp.Start(s, tc.ping)
+	pp.Start(s, tc.ping, nil)
 	defer pp.Stop()
 	tc.ticker <- time.Now()
 
 	s.runHandshakes()
 
-	if pp.Overlay.(*testOverlay).posMap[string(raddr.OverlayAddr())] == nil {
-		t.Fatalf("Overlay#On not called on new peer")
-	}
+	// if pp.Overlay.(*testOverlay).posMap[string(raddr.Over())] == nil {
+	// 	t.Fatalf("Overlay#On not called on new peer")
+	// }
 
 	// retrieve and broadcast
-	ord := order(raddr.OverlayAddr())
+	ord := order(raddr.Over())
 	o := 0
 	if ord == 0 {
 		o = 1

@@ -135,21 +135,25 @@ func (self *CodeMap) GetCode(msg interface{}) (uint64, bool) {
 	return code, found
 }
 
+// NewCodeMap construct the code to type map for the protocol
 func NewCodeMap(name string, version uint, maxMsgSize int) *CodeMap {
 	return &CodeMap{
 		Name:       name,
 		Version:    version,
 		MaxMsgSize: maxMsgSize,
 		messages:   make(map[reflect.Type]uint64),
+		codes:      make(map[uint64]reflect.Type),
 	}
 }
 
+//  Length returns the current highes codepos + 1
 func (self *CodeMap) Length() uint64 {
 	return uint64(self.codepos)
 }
 
+// Register defines a new series of codes starting on series, incrementing
 func (self *CodeMap) Register(series int, msgs ...interface{}) {
-	code := series
+	self.codepos = series
 	for _, msg := range msgs {
 		typ := reflect.TypeOf(msg)
 		_, found := self.messages[typ]
@@ -196,7 +200,7 @@ type Peer struct {
 	rw        p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers  map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
 	Errc      chan error
-	wErrc     chan error // write error channel
+	ready     chan bool // blocking send until handshake finishes
 }
 
 // NewPeer returns a new peer
@@ -204,12 +208,14 @@ type Peer struct {
 // the first two arguments are comming the arguments passed to p2p.Protocol.Run function
 // the third argument is the CodeMap describing the protocol messages and options
 func NewPeer(p *p2p.Peer, ct *CodeMap, rw p2p.MsgReadWriter) *Peer {
+	ready := make(chan bool)
+	defer close(ready)
 	return &Peer{
 		ct:       ct,
 		Peer:     p,
 		rw:       rw,
 		Errc:     make(chan error),
-		wErrc:    make(chan error),
+		ready:    ready,
 		handlers: make(map[reflect.Type][]func(interface{}) error),
 	}
 }
@@ -269,11 +275,17 @@ func (self *Peer) Drop(err error) {
 // this low level call will be wrapped by libraries providing routed or broadcast sends
 // but often just used to forward and push messages to directly connected peers
 func (self *Peer) Send(msg interface{}) error {
+	<-self.ready
+	return self.send(msg)
+}
+
+func (self *Peer) send(msg interface{}) error {
 	code, found := self.ct.GetCode(msg)
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
 	log.Trace(fmt.Sprintf("=> msg #%d TO %v : %v", code, self.ID(), msg))
+
 	return p2p.Send(self.rw, uint64(code), msg)
 }
 
@@ -350,29 +362,25 @@ func (self *Peer) Handshake(hs interface{}, handshakeTimeout time.Duration) (rhs
 	if !found {
 		return nil, errorf(ErrHandshake, "unknown handshake message type: %v", typ)
 	}
-	errc := make(chan error, 1)
+	self.ready = make(chan bool)
+	received := make(chan bool)
+	defer close(self.ready)
 	go func() {
-		if err := self.Send(hs); err != nil {
-			errc <- errorf(ErrHandshake, "cannot send: %v", err)
-		}
-	}()
-
-	hsc := make(chan interface{})
-	go func() {
+		defer close(received)
 		// receiving and validating remote handshake, expect code
-		rhs, err := self.handleIncoming()
+		rhs, err = self.handleIncoming()
 		if err != nil {
-			errc <- errorf(ErrHandshake, "'%v': %v", self.ct.Name, err)
-			return
+			err = errorf(ErrHandshake, "'%v': %v", self.ct.Name, err)
 		}
-		hsc <- rhs
 	}()
+	if e := self.send(hs); e != nil {
+		return nil, errorf(ErrHandshake, "cannot send: %v", e)
+	}
 
 	select {
-	case err = <-errc:
-	case rhs = <-hsc:
+	case <-received:
 	case <-time.NewTimer(handshakeTimeout).C:
-		err = errorf(ErrHandshake, "timeout")
+		err = errorf(ErrHandshake, "timeout after %v", handshakeTimeout)
 	}
 	return rhs, err
 }

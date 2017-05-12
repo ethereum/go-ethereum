@@ -18,7 +18,7 @@ func TestDiscovery(t *testing.T) {
 	to := NewKademlia(addr.OAddr, NewKadParams())
 	ct := BzzCodeMap(DiscoveryMsgs...)
 
-	services := func(p Peer) error {
+	services := func(p *bzzPeer) error {
 		dp := NewDiscovery(p, to)
 		to.On(dp)
 		log.Trace(fmt.Sprintf("kademlia on %v", p))
@@ -32,7 +32,6 @@ func TestDiscovery(t *testing.T) {
 	defer s.Stop()
 
 	s.runHandshakes()
-	// o := 0
 	s.TestExchanges(p2ptest.Exchange{
 		Label: "outgoing SubPeersMsg",
 		Expects: []p2ptest.Expect{

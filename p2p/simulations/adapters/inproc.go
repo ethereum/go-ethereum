@@ -211,7 +211,8 @@ func (self *SimNode) startRPC(service node.Service) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if self.client != nil {
-		return errors.New("RPC already started")
+		return nil
+		// return errors.New("RPC already started")
 	}
 
 	// add SimAdminAPI so that the network can call the

@@ -24,8 +24,29 @@ import (
 
 // SimNode is the adapter used by Swarm simulations.
 type SimNode struct {
+	id       *adapters.NodeId
+	rw       network.ReadWriter
 	hive     *network.Hive
 	protocol *p2p.Protocol
+}
+
+type simReadWriter struct {
+	m map[string][]byte
+}
+
+func (self *simReadWriter) ReadAll(s string) ([]byte, error) {
+	return self.m[s], nil
+}
+
+func (self *simReadWriter) WriteAll(s string, data []byte) error {
+	self.m[s] = data
+	return nil
+}
+
+func NewSimReadWriter() *simReadWriter {
+	return &simReadWriter{
+		make(map[string][]byte),
+	}
 }
 
 func (s *SimNode) Protocols() []p2p.Protocol {
@@ -44,19 +65,12 @@ func af() <-chan time.Time {
 // Start() starts up the hive
 // makes SimNode implement node.Service
 func (self *SimNode) Start(server p2p.Server) error {
-	return self.hive.Start(server, af)
+	self.init()
+	return self.hive.Start(server, af, self.rw)
 }
 
-// Stop() shuts down the hive
-// makes SimNode implement node.Service
-func (self *SimNode) Stop() error {
-	self.hive.Stop()
-	return nil
-}
-
-// NewSimNode creates adapters for nodes in the simulation.
-func NewSimNode(id *adapters.NodeId, snapshot []byte) node.Service {
-	addr := network.NewPeerAddrFromNodeId(id)
+func (self *SimNode) init() {
+	addr := network.NewPeerAddrFromNodeId(self.id)
 	kp := network.NewKadParams()
 
 	kp.MinProxBinSize = 2
@@ -83,11 +97,25 @@ func NewSimNode(id *adapters.NodeId, snapshot []byte) node.Service {
 
 	ct := network.BzzCodeMap(network.DiscoveryMsgs...) // bzz protocol code map
 	nodeInfo := func() interface{} { return pp.String() }
+	self.hive = pp
+	self.protocol = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nodeInfo)
+}
 
-	return &SimNode{
-		hive:     pp,
-		protocol: network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nodeInfo),
+// Stop() shuts down the hive
+// makes SimNode implement node.Service
+func (self *SimNode) Stop() error {
+	self.hive.Stop()
+	return nil
+}
+
+// NewSimNode creates adapters for nodes in the simulation.
+func NewSimNode(id *adapters.NodeId, snapshot []byte) node.Service {
+	s := &SimNode{
+		id: id,
+		rw: NewSimReadWriter(),
 	}
+	s.init()
+	return s
 }
 
 func createMockers() map[string]*simulations.MockerConfig {
