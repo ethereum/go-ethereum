@@ -62,12 +62,12 @@ func (c *Client) GetNetwork(networkID string) (*Network, error) {
 // CreateSnapshot creates a network snapshot
 func (c *Client) CreateSnapshot(networkID string) (*Snapshot, error) {
 	snap := &Snapshot{}
-	return snap, c.Post(fmt.Sprintf("/networks/%s/snapshots/create", networkID), nil, snap)
+	return snap, c.Get(fmt.Sprintf("/networks/%s/snapshot", networkID), snap)
 }
 
 // LoadSnapshot loads a snapshot into a network
 func (c *Client) LoadSnapshot(networkID string, snap *Snapshot) error {
-	return c.Post(fmt.Sprintf("/networks/%s/snapshots/load", networkID), snap, nil)
+	return c.Post(fmt.Sprintf("/networks/%s/snapshot", networkID), snap, nil)
 }
 
 // SubscribeNetwork subscribes to network events which are sent from the server
@@ -277,8 +277,8 @@ func NewServer(config *ServerConfig) *Server {
 	s.GET("/networks", s.GetNetworks)
 	s.GET("/networks/:netid", s.GetNetwork)
 	s.GET("/networks/:netid/events", s.StreamNetworkEvents)
-	s.POST("/networks/:netid/snapshots/create", s.CreateSnapshot)
-	s.POST("/networks/:netid/snapshots/load", s.LoadSnapshot)
+	s.GET("/networks/:netid/snapshot", s.CreateSnapshot)
+	s.POST("/networks/:netid/snapshot", s.LoadSnapshot)
 	s.POST("/networks/:netid/mock/:mockid", s.StartMocker)
 	s.GET("/networks/:netid/mock", s.GetMocker)
 	s.POST("/networks/:netid/nodes", s.CreateNode)
