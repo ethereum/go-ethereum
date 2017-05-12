@@ -55,7 +55,7 @@ func (self *SimNode) Stop() error {
 }
 
 // NewSimNode creates adapters for nodes in the simulation.
-func NewSimNode(id *adapters.NodeId) node.Service {
+func NewSimNode(id *adapters.NodeId, snapshot []byte) node.Service {
 	addr := network.NewPeerAddrFromNodeId(id)
 	kp := network.NewKadParams()
 
@@ -155,8 +155,8 @@ func main() {
 	adapters.RegisterServices(services)
 
 	config := &simulations.ServerConfig{
-		Adapter: adapters.NewSimAdapter(services),
-		Mocker:  mocker,
+		NewAdapter: func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
+		Mocker:     mocker,
 	}
 
 	log.Info("starting simulation server on 0.0.0.0:8888...")

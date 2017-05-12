@@ -27,6 +27,7 @@
 package simulations
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -261,6 +262,10 @@ func (self *Conn) nodesUp() error {
 
 // Start(id) starts up the node (relevant only for instance with own p2p or remote)
 func (self *Network) Start(id *adapters.NodeId) error {
+	return self.startWithSnapshot(id, nil)
+}
+
+func (self *Network) startWithSnapshot(id *adapters.NodeId, snapshot []byte) error {
 	node := self.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -269,7 +274,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 		return fmt.Errorf("node %v already up", id)
 	}
 	log.Trace(fmt.Sprintf("starting node %v: %v using %v", id, node.Up, self.nodeAdapter.Name()))
-	if err := node.Start(); err != nil {
+	if err := node.Start(snapshot); err != nil {
 		return err
 	}
 	node.Up = true
@@ -570,4 +575,76 @@ func (self *Network) Shutdown() {
 			log.Warn(fmt.Sprintf("error stopping node %s", node.ID().Label()), "err", err)
 		}
 	}
+}
+
+func ConnLabel(source, target *adapters.NodeId) string {
+	var first, second *adapters.NodeId
+	if bytes.Compare(source.Bytes(), target.Bytes()) > 0 {
+		first = target
+		second = source
+	} else {
+		first = source
+		second = target
+	}
+	return fmt.Sprintf("%v-%v", first, second)
+}
+
+// Snapshot represents the state of a network at a single point in time and can
+// be used to restore the state of a network
+type Snapshot struct {
+	Nodes []NodeSnapshot `json:"nodes,omitempty"`
+	Conns []Conn         `json:"conns,omitempty"`
+}
+
+// NodeSnapshot represents the state of a node in the network
+type NodeSnapshot struct {
+	Node
+
+	// Snapshot is arbitrary data gathered from calling node.Snapshot()
+	Snapshot []byte `json:"snapshot,omitempty"`
+}
+
+// Snapshot creates a network snapshot
+func (self *Network) Snapshot() (*Snapshot, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	snap := &Snapshot{
+		Nodes: make([]NodeSnapshot, len(self.Nodes)),
+		Conns: make([]Conn, len(self.Conns)),
+	}
+	for i, node := range self.Nodes {
+		snap.Nodes[i] = NodeSnapshot{Node: *node}
+		if !node.Up {
+			continue
+		}
+		snapshot, err := node.Snapshot()
+		if err != nil {
+			return nil, err
+		}
+		snap.Nodes[i].Snapshot = snapshot
+	}
+	for i, conn := range self.Conns {
+		snap.Conns[i] = *conn
+	}
+	return snap, nil
+}
+
+func (self *Network) Load(snap *Snapshot) error {
+	for _, node := range snap.Nodes {
+		if _, err := self.NewNodeWithConfig(node.Config); err != nil {
+			return err
+		}
+		if !node.Up {
+			continue
+		}
+		if err := self.startWithSnapshot(node.Config.Id, node.Snapshot); err != nil {
+			return err
+		}
+	}
+	for _, conn := range snap.Conns {
+		if err := self.Connect(conn.One, conn.Other); err != nil {
+			return err
+		}
+	}
+	return nil
 }

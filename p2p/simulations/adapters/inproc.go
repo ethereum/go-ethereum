@@ -70,21 +70,13 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	if !exists {
 		return nil, fmt.Errorf("unknown node service %q", config.Service)
 	}
-	service := serviceFunc(id)
-
-	// for simplicity, only support single protocol services (simulating
-	// multiple protocols on the same peer is extra effort, and we don't
-	// currently run any simulations which run multiple protocols)
-	if len(service.Protocols()) != 1 {
-		return nil, errors.New("service must have a single protocol")
-	}
 
 	node := &SimNode{
-		Id:        id,
-		adapter:   s,
-		service:   service,
-		peers:     make(map[discover.NodeID]MsgReadWriteCloser),
-		dropPeers: make(chan struct{}),
+		Id:          id,
+		adapter:     s,
+		serviceFunc: serviceFunc,
+		peers:       make(map[discover.NodeID]MsgReadWriteCloser),
+		dropPeers:   make(chan struct{}),
 	}
 	s.nodes[id.NodeID] = node
 	return node, nil
@@ -113,14 +105,15 @@ type MsgReadWriteCloser interface {
 // It implements the p2p.Server interface so it can be used transparently
 // by the underlying service.
 type SimNode struct {
-	lock     sync.RWMutex
-	Id       *NodeId
-	adapter  *SimAdapter
-	service  node.Service
-	peers    map[discover.NodeID]MsgReadWriteCloser
-	peerFeed event.Feed
-	client   *rpc.Client
-	rpcMux   *rpcMux
+	lock        sync.RWMutex
+	Id          *NodeId
+	adapter     *SimAdapter
+	running     node.Service
+	serviceFunc ServiceFunc
+	peers       map[discover.NodeID]MsgReadWriteCloser
+	peerFeed    event.Feed
+	client      *rpc.Client
+	rpcMux      *rpcMux
 
 	// dropPeers is used to force peer disconnects when
 	// the node is stopped
@@ -161,13 +154,35 @@ func (self *SimNode) ServeRPC(conn net.Conn) error {
 	return nil
 }
 
-// Start starts the RPC handler and the underlying service
-func (self *SimNode) Start() error {
+// Start initializes the service, starts the RPC handler and then starts
+// the service
+func (self *SimNode) Start(snapshot []byte) error {
+	service := self.serviceFunc(self.Id, snapshot)
+
+	// for simplicity, only support single protocol services (simulating
+	// multiple protocols on the same peer is extra effort, and we don't
+	// currently run any simulations which run multiple protocols)
+	if len(service.Protocols()) != 1 {
+		return errors.New("service must have a single protocol")
+	}
+
 	self.dropPeers = make(chan struct{})
-	if err := self.startRPC(); err != nil {
+	if err := self.startRPC(service); err != nil {
 		return err
 	}
-	return self.service.Start(self)
+	self.running = service
+	return service.Start(&simServer{self})
+}
+
+// simServer wraps a SimNode but modifies the Start method signature so that
+// it implements the p2p.Server interface (the Start method is never actually
+// called when using the SimAdapter)
+type simServer struct {
+	*SimNode
+}
+
+func (s *simServer) Start() error {
+	return nil
 }
 
 // Stop stops the RPC handler, stops the underlying service and disconnects
@@ -175,25 +190,24 @@ func (self *SimNode) Start() error {
 func (self *SimNode) Stop() error {
 	self.stopRPC()
 	close(self.dropPeers)
-	return self.service.Stop()
+	return self.running.Stop()
 }
 
-// Running returns whether or not the service is running by checking if the
-// RPC client is set
+// Running returns whether or not the service is running
 func (self *SimNode) Running() bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.client != nil
+	return self.running != nil
 }
 
-// Service returns the underlying node.Service
+// Service returns the running node.Service
 func (self *SimNode) Service() node.Service {
-	return self.service
+	return self.running
 }
 
 // startRPC starts an RPC server and connects to it using an in-process RPC
 // client
-func (self *SimNode) startRPC() error {
+func (self *SimNode) startRPC(service node.Service) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if self.client != nil {
@@ -202,7 +216,7 @@ func (self *SimNode) startRPC() error {
 
 	// add SimAdminAPI so that the network can call the
 	// AddPeer, RemovePeer and PeerEvents RPC methods
-	apis := append(self.service.APIs(), []rpc.API{
+	apis := append(service.APIs(), []rpc.API{
 		{
 			Namespace: "admin",
 			Version:   "1.0",
@@ -292,17 +306,21 @@ func (self *SimNode) PeerCount() int {
 
 // NodeInfo returns information about the node
 func (self *SimNode) NodeInfo() *p2p.NodeInfo {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	info := &p2p.NodeInfo{
 		ID:        self.Id.String(),
 		Enode:     self.Node().String(),
 		Protocols: make(map[string]interface{}),
 	}
-	for _, proto := range self.service.Protocols() {
-		nodeInfo := interface{}("unknown")
-		if query := proto.NodeInfo; query != nil {
-			nodeInfo = proto.NodeInfo()
+	if self.running != nil {
+		for _, proto := range self.running.Protocols() {
+			nodeInfo := interface{}("unknown")
+			if query := proto.NodeInfo; query != nil {
+				nodeInfo = proto.NodeInfo()
+			}
+			info.Protocols[proto.Name] = nodeInfo
 		}
-		info.Protocols[proto.Name] = nodeInfo
 	}
 	return info
 }
@@ -310,6 +328,17 @@ func (self *SimNode) NodeInfo() *p2p.NodeInfo {
 // PeersInfo is a stub so that SimNode implements p2p.Server
 func (self *SimNode) PeersInfo() (info []*p2p.PeerInfo) {
 	return nil
+}
+
+// Snapshot creates a snapshot of the running service
+func (self *SimNode) Snapshot() ([]byte, error) {
+	self.lock.Lock()
+	service := self.running
+	self.lock.Unlock()
+	if service == nil {
+		return nil, errors.New("service not running")
+	}
+	return SnapshotAPI{service}.Snapshot()
 }
 
 // RunProtocol runs the underlying service's protocol with the peer using the
@@ -325,7 +354,7 @@ func (self *SimNode) RunProtocol(peer *SimNode, rw MsgReadWriteCloser) {
 
 	id := peer.Id
 	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
-	protocol := self.service.Protocols()[0]
+	protocol := self.running.Protocols()[0]
 	p := p2p.NewPeer(id.NodeID, id.Label(), []p2p.Cap{})
 	go func() {
 		// emit peer add event

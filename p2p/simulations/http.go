@@ -59,6 +59,17 @@ func (c *Client) GetNetwork(networkID string) (*Network, error) {
 	return network, c.Get(fmt.Sprintf("/networks/%s", networkID), network)
 }
 
+// CreateSnapshot creates a network snapshot
+func (c *Client) CreateSnapshot(networkID string) (*Snapshot, error) {
+	snap := &Snapshot{}
+	return snap, c.Post(fmt.Sprintf("/networks/%s/snapshots/create", networkID), nil, snap)
+}
+
+// LoadSnapshot loads a snapshot into a network
+func (c *Client) LoadSnapshot(networkID string, snap *Snapshot) error {
+	return c.Post(fmt.Sprintf("/networks/%s/snapshots/load", networkID), snap, nil)
+}
+
 // SubscribeNetwork subscribes to network events which are sent from the server
 // as a server-sent-events stream
 func (c *Client) SubscribeNetwork(networkID string, events chan *Event) (event.Subscription, error) {
@@ -225,8 +236,9 @@ func (c *Client) Send(method, path string, in, out interface{}) error {
 
 // ServerConfig is the configuration used to start an API server
 type ServerConfig struct {
-	// Adapter is the NodeAdapter to use when creating new networks
-	Adapter adapters.NodeAdapter
+	// NewAdapter is called to create a new NodeAdapter for each new
+	// network
+	NewAdapter func() adapters.NodeAdapter
 
 	// Mocker is the function which will be called when a client sends a
 	// POST request to /networks/<netid>/mock and is expected to
@@ -246,8 +258,8 @@ type Server struct {
 
 // NewServer returns a new simulation API server
 func NewServer(config *ServerConfig) *Server {
-	if config.Adapter == nil {
-		panic("Adapter not set")
+	if config.NewAdapter == nil {
+		panic("NewAdapter not set")
 	}
 
 	s := &Server{
@@ -260,6 +272,8 @@ func NewServer(config *ServerConfig) *Server {
 	s.GET("/networks", s.GetNetworks)
 	s.GET("/networks/:netid", s.GetNetwork)
 	s.GET("/networks/:netid/events", s.StreamNetworkEvents)
+	s.POST("/networks/:netid/snapshots/create", s.CreateSnapshot)
+	s.POST("/networks/:netid/snapshots/load", s.LoadSnapshot)
 	s.POST("/networks/:netid/mock", s.StartMocker)
 	s.POST("/networks/:netid/nodes", s.CreateNode)
 	s.GET("/networks/:netid/nodes", s.GetNodes)
@@ -290,7 +304,7 @@ func (s *Server) CreateNetwork(w http.ResponseWriter, req *http.Request) {
 		if _, exists := s.networks[config.Id]; exists {
 			return nil, fmt.Errorf("network exists: %s", config.Id)
 		}
-		network := NewNetwork(s.Adapter, config)
+		network := NewNetwork(s.NewAdapter(), config)
 		s.networks[config.Id] = network
 		return network, nil
 	}()
@@ -379,6 +393,37 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+}
+
+// CreateSnapshot creates a network snapshot
+func (s *Server) CreateSnapshot(w http.ResponseWriter, req *http.Request) {
+	network := req.Context().Value("network").(*Network)
+
+	snap, err := network.Snapshot()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.JSON(w, http.StatusOK, snap)
+}
+
+// LoadSnapshot loads a snapshot into a network
+func (s *Server) LoadSnapshot(w http.ResponseWriter, req *http.Request) {
+	network := req.Context().Value("network").(*Network)
+
+	snap := &Snapshot{}
+	if err := json.NewDecoder(req.Body).Decode(snap); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := network.Load(snap); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.JSON(w, http.StatusOK, network)
 }
 
 // CreateNode creates a node in a network using the given configuration

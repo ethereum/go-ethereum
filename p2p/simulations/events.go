@@ -5,48 +5,79 @@ import (
 	"time"
 )
 
+// EventType is the type of event emitted by a simulation network
 type EventType string
 
 const (
+	// EventTypeNode is the type of event emitted when a node is either
+	// created, started or stopped
 	EventTypeNode EventType = "node"
+
+	// EventTypeConn is the type of event emitted when a connection is
+	// is either established or dropped between two nodes
 	EventTypeConn EventType = "conn"
-	EventTypeMsg  EventType = "msg"
+
+	// EventTypeMsg is the type of event emitted when a p2p message it
+	// sent between two nodes
+	EventTypeMsg EventType = "msg"
 )
 
+// Event is an event emitted by a simulation network
 type Event struct {
-	Type    EventType `json:"type"`
-	Time    time.Time `json:"time"`
-	Control bool      `json:"control"`
+	// Type is the type of the event
+	Type EventType `json:"type"`
 
+	// Time is the time the event happened
+	Time time.Time `json:"time"`
+
+	// Control indicates whether the event is the result of a controlled
+	// action in the network
+	Control bool `json:"control"`
+
+	// Node is set if the type is EventTypeNode
 	Node *Node `json:"node,omitempty"`
+
+	// Conn is set if the type is EventTypeConn
 	Conn *Conn `json:"conn,omitempty"`
-	Msg  *Msg  `json:"msg,omitempty"`
+
+	// Msg is set if the type is EventTypeMsg
+	Msg *Msg `json:"msg,omitempty"`
 }
 
+// NewEvent creates a new event for the given object which should be either a
+// Node, Conn or Msg.
+//
+// The object is copied so that the event represents the state of the object
+// when NewEvent is called.
 func NewEvent(v interface{}) *Event {
 	event := &Event{Time: time.Now()}
 	switch v := v.(type) {
 	case *Node:
 		event.Type = EventTypeNode
-		event.Node = v
+		node := *v
+		event.Node = &node
 	case *Conn:
 		event.Type = EventTypeConn
-		event.Conn = v
+		conn := *v
+		event.Conn = &conn
 	case *Msg:
 		event.Type = EventTypeMsg
-		event.Msg = v
+		msg := *v
+		event.Msg = &msg
 	default:
 		panic(fmt.Sprintf("invalid event type: %T", v))
 	}
 	return event
 }
 
+// ControlEvent creates a new control event
 func ControlEvent(v interface{}) *Event {
 	event := NewEvent(v)
 	event.Control = true
 	return event
 }
 
+// String returns the string representation of the event
 func (e *Event) String() string {
 	switch e.Type {
 	case EventTypeNode:

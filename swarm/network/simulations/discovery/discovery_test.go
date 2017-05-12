@@ -22,7 +22,7 @@ import (
 const serviceName = "discovery"
 
 var services = adapters.Services{
-	serviceName: func(id *adapters.NodeId) p2pnode.Service {
+	serviceName: func(id *adapters.NodeId, snapshot []byte) p2pnode.Service {
 		return newNode(id)
 	},
 }
