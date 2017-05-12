@@ -378,6 +378,8 @@ func (self *StateDB) Suicide(addr common.Address) bool {
 	})
 	stateObject.markSuicided()
 	stateObject.data.Balance = new(big.Int)
+	self.stateObjectsDestructed[addr] = struct{}{}
+
 	return true
 }
 
