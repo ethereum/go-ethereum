@@ -15,6 +15,8 @@ type MockerConfig struct {
 	Id              string
 	NodeCount       int
 	UpdateInterval  int
+	Mocker          func(*Network)
+	Description     string
 	SwitchonRate    int // fraction of off nodes switching on
 	DropoutRate     int // fraction of on nodes dropping out
 	NewConnCount    int // new connection per node per tick
