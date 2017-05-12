@@ -1,29 +1,38 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-Vagrant.configure(2) do |config|
-  config.vm.box = "ubuntu/trusty64"
+require 'yaml'
 
-  config.vm.provider "virtualbox" do |vb|
-    vb.memory = "2048"
+VAGRANTFILE_API_VERSION = 2
+VM_RAM = 2048
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  config.vm.define "ubuntu", :primary => true do |ubuntu| 
+    ubuntu.vm.box = "ubuntu/trusty64"
+    ubuntu.vm.provision "shell", :path => "provisioners/shell/ubuntu.sh"
   end
 
+  config.vm.define "debian", :primary => true do |debian|
+    debian.vm.box = "debian/jessie64"
+    debian.vm.provision "shell", :path => "provisioners/shell/debian.sh"
+  end
+  
+  config.vm.define "centos", :autostart => false do |centos| 
+    centos.vm.box = "centos/7"
+    centos.vm.provision "shell", :path => "provisioners/shell/centos.sh"
+  end
+  
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = VM_RAM
+  end
+
+  config.vm.provider "libvirt" do |lv|
+    lv.memory = VM_RAM
+
+    config.vm.synced_folder ".", "/home/vagrant/sync", :disabled => true
+  end
+  
+  config.vm.synced_folder ".", "/vagrant", :disabled => true
   config.vm.synced_folder "../../", "/home/vagrant/go/src/github.com/ethereum/go-ethereum"
-  config.vm.synced_folder ".", "/vagrant", disabled: true
-
-  config.vm.provision "shell", inline: <<-SHELL
-    sudo apt-get install software-properties-common
-    sudo add-apt-repository -y ppa:ethereum/ethereum
-    sudo add-apt-repository -y ppa:ethereum/ethereum-dev
-    sudo apt-get update
-
-    sudo apt-get install -y build-essential golang git-all
-
-    GOPATH=/home/vagrant/go go get github.com/tools/godep
-
-    sudo chown -R vagrant:vagrant ~vagrant/go
-
-    echo "export GOPATH=/home/vagrant/go" >> ~vagrant/.bashrc
-    echo "export PATH=\\\$PATH:\\\$GOPATH/bin:/usr/local/go/bin" >> ~vagrant/.bashrc
-  SHELL
 end
