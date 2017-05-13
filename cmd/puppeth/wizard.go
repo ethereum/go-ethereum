@@ -162,6 +162,48 @@ func (w *wizard) readDefaultInt(def int) int {
 	}
 }
 
+// readFloat reads a single line from stdin, trimming if from spaces, enforcing it
+// to parse into a float.
+func (w *wizard) readFloat() float64 {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			continue
+		}
+		val, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			log.Error("Invalid input, expected float", "err", err)
+			continue
+		}
+		return val
+	}
+}
+
+// readDefaultFloat reads a single line from stdin, trimming if from spaces, enforcing
+// it to parse into a float. If an empty line is entered, the default value is returned.
+func (w *wizard) readDefaultFloat(def float64) float64 {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return def
+		}
+		val, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			log.Error("Invalid input, expected float", "err", err)
+			continue
+		}
+		return val
+	}
+}
+
 // readPassword reads a single line from stdin, trimming it from the trailing new
 // line and returns it. The input will not be echoed.
 func (w *wizard) readPassword() string {
