@@ -62,6 +62,10 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	return self
 }
 
+func (self *ProtocolTester) Stop() error {
+	return self.Server.Stop()
+}
+
 func (self *ProtocolTester) Connect(selfId *adapters.NodeId, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.Id))
@@ -96,7 +100,7 @@ func (t *testNode) APIs() []rpc.API {
 	return nil
 }
 
-func (t *testNode) Start(server p2p.Server) error {
+func (t *testNode) Start(server *p2p.Server) error {
 	return nil
 }
 

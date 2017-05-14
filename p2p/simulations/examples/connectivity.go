@@ -99,7 +99,7 @@ func (p *pingPongService) APIs() []rpc.API {
 	return nil
 }
 
-func (p *pingPongService) Start(server p2p.Server) error {
+func (p *pingPongService) Start(server *p2p.Server) error {
 	p.log.Info("ping-pong service starting")
 	return nil
 }

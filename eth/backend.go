@@ -49,7 +49,7 @@ import (
 )
 
 type LesServer interface {
-	Start(srvr p2p.Server)
+	Start(srvr *p2p.Server)
 	Stop()
 	Protocols() []p2p.Protocol
 }
@@ -362,7 +362,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
-func (s *Ethereum) Start(srvr p2p.Server) error {
+func (s *Ethereum) Start(srvr *p2p.Server) error {
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
 
 	s.protocolManager.Start()

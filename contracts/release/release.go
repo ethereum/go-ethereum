@@ -94,7 +94,7 @@ func (r *ReleaseService) Protocols() []p2p.Protocol { return nil }
 func (r *ReleaseService) APIs() []rpc.API { return nil }
 
 // Start spawns the periodic version checker goroutine
-func (r *ReleaseService) Start(server p2p.Server) error {
+func (r *ReleaseService) Start(server *p2p.Server) error {
 	go r.checker()
 	return nil
 }

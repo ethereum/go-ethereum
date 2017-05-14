@@ -52,7 +52,7 @@ const historyUpdateRange = 50
 type Service struct {
 	stack *node.Node // Temporary workaround, remove when API finalized
 
-	server p2p.Server         // Peer-to-peer server to retrieve networking infos
+	server *p2p.Server        // Peer-to-peer server to retrieve networking infos
 	eth    *eth.Ethereum      // Full Ethereum service if monitoring a full node
 	les    *les.LightEthereum // Light Ethereum service if monitoring a light node
 	engine consensus.Engine   // Consensus engine to retrieve variadic block fields
@@ -101,7 +101,7 @@ func (s *Service) Protocols() []p2p.Protocol { return nil }
 func (s *Service) APIs() []rpc.API { return nil }
 
 // Start implements node.Service, starting up the monitoring and reporting daemon.
-func (s *Service) Start(server p2p.Server) error {
+func (s *Service) Start(server *p2p.Server) error {
 	s.server = server
 	go s.loop()
 

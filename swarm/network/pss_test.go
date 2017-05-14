@@ -89,7 +89,7 @@ func newPssTestService(t *testing.T, handlefunc func(interface{}) error, testnod
 	}
 }
 
-func (self *pssTestService) Start(server p2p.Server) error {
+func (self *pssTestService) Start(server *p2p.Server) error {
 	return self.node.Hive.Start(server)
 }
 

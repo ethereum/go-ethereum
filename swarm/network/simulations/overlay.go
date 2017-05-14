@@ -64,7 +64,7 @@ func af() <-chan time.Time {
 
 // Start() starts up the hive
 // makes SimNode implement node.Service
-func (self *SimNode) Start(server p2p.Server) error {
+func (self *SimNode) Start(server *p2p.Server) error {
 	self.init()
 	return self.hive.Start(server, af, self.rw)
 }

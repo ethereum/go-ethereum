@@ -61,10 +61,6 @@ const (
 	disableClientRemovePeer = false
 )
 
-type discV5Server interface {
-	DiscV5() *discv5.Network
-}
-
 // errIncompatibleConfig is returned if the requested protocols and configs are
 // not compatible (low protocol version restrictions and high requirements).
 var errIncompatibleConfig = errors.New("incompatible configuration")
@@ -260,10 +256,10 @@ func (pm *ProtocolManager) removePeer(id string) {
 	}
 }
 
-func (pm *ProtocolManager) Start(srvr p2p.Server) {
+func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	var topicDisc *discv5.Network
-	if v, ok := srvr.(discV5Server); ok {
-		topicDisc = v.DiscV5()
+	if srvr != nil {
+		topicDisc = srvr.DiscV5
 	}
 	lesTopic := discv5.Topic("LES@" + common.Bytes2Hex(pm.blockchain.Genesis().Hash().Bytes()[0:8]))
 	if pm.lightSync {

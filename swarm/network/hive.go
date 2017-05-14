@@ -106,7 +106,7 @@ func NewHive(params *HiveParams, overlay Overlay, store Store) *Hive {
 // these are called on the p2p.Server which runs on the node
 // af() returns an arbitrary ticker channel
 // rw is a read writer for json configs
-func (self *Hive) Start(server p2p.Server) error {
+func (self *Hive) Start(server *p2p.Server) error {
 	if self.store != nil {
 		if err := self.loadPeers(); err != nil {
 			return err

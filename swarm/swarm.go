@@ -161,7 +161,7 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(net p2p.Server) error {
+func (self *Swarm) Start(net *p2p.Server) error {
 	// set chequebook
 	if self.swapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.

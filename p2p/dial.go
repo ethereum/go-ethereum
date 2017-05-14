@@ -97,7 +97,7 @@ type pastDial struct {
 }
 
 type task interface {
-	Do(*server)
+	Do(*Server)
 }
 
 // A dialTask is generated for each node that is dialed. Its
@@ -280,7 +280,7 @@ func (s *dialstate) taskDone(t task, now time.Time) {
 	}
 }
 
-func (t *dialTask) Do(srv *server) {
+func (t *dialTask) Do(srv *Server) {
 	if t.dest.Incomplete() {
 		if !t.resolve(srv) {
 			return
@@ -301,7 +301,7 @@ func (t *dialTask) Do(srv *server) {
 // Resolve operations are throttled with backoff to avoid flooding the
 // discovery network with useless queries for nodes that don't exist.
 // The backoff delay resets when the node is found.
-func (t *dialTask) resolve(srv *server) bool {
+func (t *dialTask) resolve(srv *Server) bool {
 	if srv.ntab == nil {
 		log.Debug("Can't resolve node", "id", t.dest.ID, "err", "discovery is disabled")
 		return false
@@ -330,7 +330,7 @@ func (t *dialTask) resolve(srv *server) bool {
 }
 
 // dial performs the actual connection attempt.
-func (t *dialTask) dial(srv *server, dest *discover.Node) bool {
+func (t *dialTask) dial(srv *Server, dest *discover.Node) bool {
 	fd, err := srv.Dialer.Dial(dest)
 	if err != nil {
 		log.Trace("Dial error", "task", t, "err", err)
@@ -345,7 +345,7 @@ func (t *dialTask) String() string {
 	return fmt.Sprintf("%v %x %v:%d", t.flags, t.dest.ID[:8], t.dest.IP, t.dest.TCP)
 }
 
-func (t *discoverTask) Do(srv *server) {
+func (t *discoverTask) Do(srv *Server) {
 	// newTasks generates a lookup task whenever dynamic dials are
 	// necessary. Lookups need to take some time, otherwise the
 	// event loop spins too fast.
@@ -367,7 +367,7 @@ func (t *discoverTask) String() string {
 	return s
 }
 
-func (t waitExpireTask) Do(*server) {
+func (t waitExpireTask) Do(*Server) {
 	time.Sleep(t.Duration)
 }
 func (t waitExpireTask) String() string {

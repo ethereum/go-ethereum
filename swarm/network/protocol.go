@@ -164,7 +164,7 @@ func (b *Bzz) APIs() []rpc.API {
 	}}
 }
 
-func (b *Bzz) Start(server p2p.Server) error {
+func (b *Bzz) Start(server *p2p.Server) error {
 	return b.Hive.Start(server)
 }
 

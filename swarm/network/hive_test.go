@@ -64,7 +64,7 @@ func TestRegisterAndConnect(t *testing.T) {
 		ticker: make(chan time.Time),
 	}
 	pp.newTicker = func() hiveTicker { return tc }
-	pp.Start(s)
+	pp.Start(s.Server)
 	defer pp.Stop()
 	tc.ticker <- time.Now()
 

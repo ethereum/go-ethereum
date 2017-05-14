@@ -375,7 +375,7 @@ func NewPublicWeb3API(stack *Node) *PublicWeb3API {
 
 // ClientVersion returns the node name
 func (s *PublicWeb3API) ClientVersion() string {
-	return s.stack.serverConfig.Name
+	return s.stack.Server().Name
 }
 
 // Sha3 applies the ethereum sha3 implementation on the input.
