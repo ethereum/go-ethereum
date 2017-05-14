@@ -121,6 +121,7 @@ type pssDigest uint32
 // - a message cache to spot messages that previously have been forwarded
 type Pss struct {
 	Overlay // we can get the overlayaddress from this
+
 	//peerPool map[pot.Address]map[PssTopic]*PssReadWriter // keep track of all virtual p2p.Peers we are currently speaking to
 	peerPool map[pot.Address]map[PssTopic]p2p.MsgReadWriter     // keep track of all virtual p2p.Peers we are currently speaking to
 	handlers map[PssTopic]func([]byte, *p2p.Peer, []byte) error // topic and version based pss payload handlers
@@ -160,6 +161,20 @@ func NewPss(k Overlay, params *PssParams) *Pss {
 		hasher:   storage.MakeHashFunc,
 		baseAddr: baseAddr,
 	}
+}
+
+func (p *Pss) Run(peer *bzzPeer) error {
+	return peer.Run(p.HandleMsg)
+}
+
+func (p *Pss) HandleMsg(m interface{}) error {
+	msg, ok := m.(*PssMsg)
+	if !ok {
+		return fmt.Errorf("unknown pss protocol message type: %T", m)
+	}
+	_ = msg
+	// TODO: handle the message
+	return nil
 }
 
 // enables to set address of node, to avoid backwards forwarding
@@ -380,7 +395,7 @@ type PssReadWriter struct {
 	RecipientOAddr pot.Address
 	LastActive     time.Time
 	rw             chan p2p.Msg
-	ct             *protocols.CodeMap
+	spec           *protocols.Spec
 	topic          *PssTopic
 }
 
@@ -396,7 +411,7 @@ func (prw PssReadWriter) ReadMsg() (p2p.Msg, error) {
 // Implements p2p.MsgWriter
 func (prw PssReadWriter) WriteMsg(msg p2p.Msg) error {
 	log.Trace(fmt.Sprintf("pssrw writemsg: %v", msg))
-	ifc, found := prw.ct.GetInterface(msg.Code)
+	ifc, found := prw.spec.NewMsg(msg.Code)
 	if !found {
 		return fmt.Errorf("Writemsg couldn't find matching interface for code %d", msg.Code)
 	}
@@ -417,20 +432,20 @@ func (prw PssReadWriter) injectMsg(msg p2p.Msg) error {
 }
 
 // Convenience object for passing messages in and out of the p2p layer
-type PssProtocol struct {
+type pssProtocol struct {
 	*Pss
 	virtualProtocol *p2p.Protocol
 	topic           *PssTopic
-	ct              *protocols.CodeMap
+	spec            *protocols.Spec
 }
 
 // Constructor
-func NewPssProtocol(pss *Pss, topic *PssTopic, ct *protocols.CodeMap, targetprotocol *p2p.Protocol) *PssProtocol {
-	pp := &PssProtocol{
+func NewPssProtocol(pss *Pss, topic *PssTopic, spec *protocols.Spec, targetprotocol *p2p.Protocol) *pssProtocol {
+	pp := &pssProtocol{
 		Pss:             pss,
 		virtualProtocol: targetprotocol,
 		topic:           topic,
-		ct:              ct,
+		spec:            spec,
 	}
 	return pp
 }
@@ -438,18 +453,18 @@ func NewPssProtocol(pss *Pss, topic *PssTopic, ct *protocols.CodeMap, targetprot
 // Retrieves a convenience method for passing an incoming message into the p2p layer
 //
 // If the implementer wishes to use the p2p.Protocol (or p2p/protocols) message handling, this handler can be directly registered as a handler for the PssMsg structure
-func (self *PssProtocol) GetHandler() func([]byte, *p2p.Peer, []byte) error {
+func (self *pssProtocol) GetHandler() func([]byte, *p2p.Peer, []byte) error {
 	return self.handle
 }
 
-func (self *PssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
+func (self *pssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {
 	hashoaddr := pot.NewHashAddressFromBytes(senderAddr).Address
 	if !self.isActive(hashoaddr, *self.topic) {
 		rw := &PssReadWriter{
 			Pss:            self.Pss,
 			RecipientOAddr: hashoaddr,
 			rw:             make(chan p2p.Msg),
-			ct:             self.ct,
+			spec:           self.spec,
 			topic:          self.topic,
 		}
 		self.Pss.AddPeer(p, hashoaddr, self.virtualProtocol.Run, *self.topic, rw)

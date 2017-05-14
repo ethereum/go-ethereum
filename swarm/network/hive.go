@@ -34,7 +34,7 @@ it uses an Overlay Topology driver (e.g., generic kademlia nodetable)
 to find best peer list for any target
 this is used by the netstore to search for content in the swarm
 
-It handles the bzz protocol getPeersMsg peersMsg exchange
+It handles the hive protocol getPeersMsg peersMsg exchange
 and relay the peer request process to the Overlay module
 
 peer connections and disconnections are reported and registered
@@ -57,23 +57,19 @@ type Overlay interface {
 	BaseAddr() []byte
 }
 
-// ReadWriter interface to persist known peers, uses disk for real nodes
-type ReadWriter interface {
-	ReadAll(string) ([]byte, error)
-	WriteAll(string, []byte) error
-}
-
 // Hive implements the PeerPool interface
 type Hive struct {
-	*HiveParams            // settings
-	Overlay                // the overlay topology driver
-	RW          ReadWriter // ReadWriter
+	*HiveParams // settings
+	Overlay     // the overlay topology driver
+	store       Store
 
 	// bookkeeping
 	lock   sync.Mutex
 	quit   chan bool
 	toggle chan bool
 	more   chan bool
+
+	newTicker func() hiveTicker
 }
 
 // HiveParams holds the config options to hive
@@ -81,7 +77,7 @@ type HiveParams struct {
 	Discovery             bool  // if want discovery of not
 	PeersBroadcastSetSize uint8 // how many peers to use when relaying
 	MaxPeersPerRequest    uint8 // max size for peer address batches
-	CallInterval          uint  // polling interval fir===
+	KeepAliveInterval     time.Duration
 }
 
 // NewHiveParams returns hive config with only the
@@ -90,17 +86,18 @@ func NewHiveParams() *HiveParams {
 		Discovery:             true,
 		PeersBroadcastSetSize: 2,
 		MaxPeersPerRequest:    5,
-		CallInterval:          1000,
+		KeepAliveInterval:     time.Second,
 	}
 }
 
 // Hive constructor embeds both arguments
 // HiveParams: config parameters
 // Overlay: Topology Driver Interface
-func NewHive(params *HiveParams, overlay Overlay) *Hive {
+func NewHive(params *HiveParams, overlay Overlay, store Store) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,
+		store:      store,
 	}
 }
 
@@ -109,8 +106,8 @@ func NewHive(params *HiveParams, overlay Overlay) *Hive {
 // these are called on the p2p.Server which runs on the node
 // af() returns an arbitrary ticker channel
 // rw is a read writer for json configs
-func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time, rw ReadWriter) error {
-	if rw != nil {
+func (self *Hive) Start(server p2p.Server) error {
+	if self.store != nil {
 		if err := self.loadPeers(); err != nil {
 			return err
 		}
@@ -120,7 +117,7 @@ func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time, rw ReadWr
 	self.quit = make(chan bool)
 	log.Debug("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
-	go self.keepAlive(af)
+	go self.keepAlive()
 	go func() {
 		// each iteration, ask kademlia about most preferred peer
 		for more := range self.more {
@@ -163,16 +160,18 @@ func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time, rw ReadWr
 
 // Stop terminates the updateloop and saves the peers
 func (self *Hive) Stop() {
-	if self.RW != nil {
+	if self.store != nil {
 		self.savePeers()
 	}
 	// closing toggle channel quits the updateloop
 	close(self.quit)
 }
 
-// default ticker, tickinterval is taken from KadParams.CallInterval
-func (self *Hive) ticker() <-chan time.Time {
-	return time.NewTicker(time.Duration(self.CallInterval) * time.Millisecond).C
+func (self *Hive) Run(peer *bzzPeer) error {
+	discPeer := NewDiscovery(peer, self)
+	self.On(discPeer)
+	defer self.Off(discPeer)
+	return peer.Run(discPeer.HandleMsg)
 }
 
 // Add is called at the end of a successful protocol handshake
@@ -242,27 +241,48 @@ func ToAddr(pa OverlayPeer) *bzzAddr {
 	return pa.(*bzzPeer).bzzAddr
 }
 
+type hiveTicker interface {
+	Ch() <-chan time.Time
+	Stop()
+}
+
+type timeTicker struct {
+	*time.Ticker
+}
+
+func (t *timeTicker) Ch() <-chan time.Time {
+	return t.C
+}
+
 // keepAlive is a forever loop
 // in its awake state it periodically triggers connection attempts
 // by writing to self.more until Kademlia Table is saturated
 // wake state is toggled by writing to self.toggle
 // it goes to sleep mode if table is saturated
 // it restarts if the table becomes non-full again due to disconnections
-func (self *Hive) keepAlive(af func() <-chan time.Time) {
-	log.Trace("keep alive loop started")
-	alarm := af()
+func (self *Hive) keepAlive() {
+	if self.newTicker == nil {
+		self.newTicker = func() hiveTicker {
+			return &timeTicker{time.NewTicker(self.KeepAliveInterval)}
+		}
+	}
+	ticker := self.newTicker()
+	tick := ticker.Ch()
 	for {
 		select {
-		case <-alarm:
+		case <-tick:
 			log.Trace("wake up: make hive alive")
 			self.wake()
 		case need := <-self.toggle:
-			if alarm == nil && need {
-				alarm = af()
+			if ticker == nil && need {
+				ticker = self.newTicker()
+				tick = ticker.Ch()
 			}
 			// if hive saturated, no more peers asked
-			if alarm != nil && !need {
-				alarm = nil
+			if ticker != nil && !need {
+				ticker.Stop()
+				ticker = nil
+				tick = nil
 			}
 		case <-self.quit:
 			return
@@ -272,8 +292,7 @@ func (self *Hive) keepAlive(af func() <-chan time.Time) {
 
 // loadPeers, savePeer implement persistence callback/
 func (self *Hive) loadPeers() error {
-	rw := self.RW
-	data, err := rw.ReadAll("peers")
+	data, err := self.store.Load("peers")
 	if err != nil {
 		return err
 	}
@@ -310,7 +329,7 @@ func (self *Hive) savePeers() error {
 	if err != nil {
 		return fmt.Errorf("could not encode peers: %v", err)
 	}
-	if err := self.RW.WriteAll("peers", data); err != nil {
+	if err := self.store.Save("peers", data); err != nil {
 		return fmt.Errorf("could not save peers: %v", err)
 	}
 	return nil

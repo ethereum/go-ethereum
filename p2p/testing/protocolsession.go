@@ -13,7 +13,7 @@ import (
 )
 
 type ProtocolSession struct {
-	*adapters.SimNode
+	p2p.Server
 
 	Ids     []*adapters.NodeId
 	adapter *adapters.SimAdapter

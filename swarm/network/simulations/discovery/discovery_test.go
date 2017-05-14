@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	p2pnode "github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -22,9 +21,7 @@ import (
 const serviceName = "discovery"
 
 var services = adapters.Services{
-	serviceName: func(id *adapters.NodeId, snapshot []byte) p2pnode.Service {
-		return newNode(id)
-	},
+	serviceName: newService,
 }
 
 func init() {
@@ -70,7 +67,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
 		if err != nil {
-			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
+			t.Fatalf("error starting node: %s", err)
 		}
 		if err := net.Start(node.ID()); err != nil {
 			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
@@ -179,70 +176,24 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 	return nil
 }
 
-type node struct {
-	*network.Hive
+func newService(id *adapters.NodeId, snapshot []byte) node.Service {
+	addr := network.NewAddrFromNodeId(id)
 
-	protocol *p2p.Protocol
-}
-
-func newNode(id *adapters.NodeId) *node {
-	addr := network.NewPeerAddrFromNodeId(id)
-	kademlia := newKademlia(addr.OverlayAddr())
-	hive := newHive(kademlia)
-	codeMap := network.BzzCodeMap(network.DiscoveryMsgs...)
-	node := &node{Hive: hive}
-	services := func(peer network.Peer) error {
-		discoveryPeer := network.NewDiscovery(peer, kademlia)
-		node.Add(discoveryPeer)
-		peer.DisconnectHook(func(err error) {
-			node.Remove(discoveryPeer)
-		})
-		return nil
+	config := &network.BzzConfig{
+		OverlayAddr:  addr.Over(),
+		UnderlayAddr: addr.Under(),
+		KadParams:    network.NewKadParams(),
+		HiveParams:   network.NewHiveParams(),
 	}
-	node.protocol = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), codeMap, services, nil, nil)
-	return node
-}
 
-func newKademlia(overlayAddr []byte) *network.Kademlia {
-	params := network.NewKadParams()
-	params.MinProxBinSize = 2
-	params.MaxBinSize = 3
-	params.MinBinSize = 1
-	params.MaxRetries = 1000
-	params.RetryExponent = 2
-	params.RetryInterval = 1000000
+	config.KadParams.MinProxBinSize = 2
+	config.KadParams.MaxBinSize = 3
+	config.KadParams.MinBinSize = 1
+	config.KadParams.MaxRetries = 1000
+	config.KadParams.RetryExponent = 2
+	config.KadParams.RetryInterval = 1000000
 
-	return network.NewKademlia(overlayAddr, params)
-}
+	config.HiveParams.KeepAliveInterval = time.Second
 
-func newHive(kademlia *network.Kademlia) *network.Hive {
-	params := network.NewHiveParams()
-	params.CallInterval = 5000
-
-	return network.NewHive(params, kademlia)
-}
-
-func (n *node) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{*n.protocol}
-}
-
-func (n *node) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "hive",
-		Version:   "1.0",
-		Service:   n.Hive,
-	}}
-}
-
-func (n *node) Start(server p2p.Server) error {
-	return n.Hive.Start(server, n.hiveKeepAlive)
-}
-
-func (n *node) Stop() error {
-	n.Hive.Stop()
-	return nil
-}
-
-func (n *node) hiveKeepAlive() <-chan time.Time {
-	return time.Tick(time.Second)
+	return network.NewBzz(config)
 }

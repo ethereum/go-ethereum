@@ -20,10 +20,10 @@ type ProtocolTester struct {
 
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := map[string]adapters.ServiceFunc{
-		"test": func(id *adapters.NodeId) node.Service {
+		"test": func(id *adapters.NodeId, _ []byte) node.Service {
 			return &testNode{run}
 		},
-		"mock": func(id *adapters.NodeId) node.Service {
+		"mock": func(id *adapters.NodeId, _ []byte) node.Service {
 			return newMockNode()
 		},
 	}
@@ -47,7 +47,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	events := make(chan *p2p.PeerEvent, 1000)
 	node.SubscribeEvents(events)
 	ps := &ProtocolSession{
-		SimNode: node,
+		Server:  node.Server(),
 		Ids:     peerIDs,
 		adapter: adapter,
 		events:  events,
@@ -86,7 +86,10 @@ type testNode struct {
 }
 
 func (t *testNode) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{{Run: t.run}}
+	return []p2p.Protocol{{
+		Length: 100,
+		Run:    t.run,
+	}}
 }
 
 func (t *testNode) APIs() []rpc.API {

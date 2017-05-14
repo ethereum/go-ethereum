@@ -16,22 +16,18 @@ import (
 func TestDiscovery(t *testing.T) {
 	addr := RandomAddr()
 	to := NewKademlia(addr.OAddr, NewKadParams())
-	ct := BzzCodeMap(DiscoveryMsgs...)
 
-	services := func(p *bzzPeer) error {
+	run := func(p *bzzPeer) error {
 		dp := NewDiscovery(p, to)
-		to.On(dp)
+		to.On(p)
+		defer to.Off(p)
 		log.Trace(fmt.Sprintf("kademlia on %v", p))
-		p.DisconnectHook(func(err error) {
-			to.Off(p)
-		})
-		return nil
+		return p.Run(dp.HandleMsg)
 	}
 
-	s := newBzzBaseTester(t, 1, addr, ct, services)
+	s := newBzzBaseTester(t, 1, addr, DiscoveryProtocol, run)
 	defer s.Stop()
 
-	s.runHandshakes()
 	s.TestExchanges(p2ptest.Exchange{
 		Label: "outgoing SubPeersMsg",
 		Expects: []p2ptest.Expect{

@@ -16,8 +16,11 @@ type testConnect struct {
 	ticker   chan time.Time
 }
 
-func (self *testConnect) ping() <-chan time.Time {
+func (self *testConnect) Ch() <-chan time.Time {
 	return self.ticker
+}
+
+func (self *testConnect) Stop() {
 }
 
 func (self *testConnect) connect(na string) error {
@@ -31,38 +34,10 @@ func (self *testConnect) connect(na string) error {
 func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 	// setup
 	addr := RandomAddr() // tested peers peer address
-	// to := NewTestOverlay(addr.Over()) // overlay topology drive
-	pp := NewHive(params, nil) // hive
-	// pp := NewHive(params, to)         // hive
+	to := NewKademlia(addr.OAddr, NewKadParams())
+	pp := NewHive(params, to, nil) // hive
 
-	ct := BzzCodeMap(DiscoveryMsgs...) // bzz protocol code map
-	services := func(p *bzzPeer) error {
-		pp.Add(p)
-		p.DisconnectHook(func(err error) {
-			pp.Remove(p)
-		})
-		return nil
-	}
-
-	return newBzzBaseTester(t, 1, addr, ct, services), pp
-}
-
-func TestOverlayRegistration(t *testing.T) {
-	params := NewHiveParams()
-	params.Discovery = false
-	s, pp := newHiveTester(t, params)
-	defer s.Stop()
-
-	id := s.Ids[0]
-	raddr := NewAddrFromNodeId(id)
-
-	s.runHandshakes()
-
-	// hive should have called the overlay
-	// if pp.Overlay.(*testOverlay).posMap[string(raddr.Over())] == nil {
-	// 	t.Fatalf("Overlay#On not called on new peer")
-	// }
-
+	return newBzzBaseTester(t, 1, addr, DiscoveryProtocol, pp.Run), pp
 }
 
 func TestRegisterAndConnect(t *testing.T) {
@@ -73,7 +48,12 @@ func TestRegisterAndConnect(t *testing.T) {
 	id := s.Ids[0]
 	raddr := NewAddrFromNodeId(id)
 
-	pp.Register(raddr)
+	ch := make(chan OverlayAddr)
+	go func() {
+		ch <- raddr
+		close(ch)
+	}()
+	pp.Register(ch)
 
 	// start the hive and wait for the connection
 	tc := &testConnect{
@@ -83,18 +63,17 @@ func TestRegisterAndConnect(t *testing.T) {
 		},
 		ticker: make(chan time.Time),
 	}
-	pp.Start(s, tc.ping, nil)
+	pp.newTicker = func() hiveTicker { return tc }
+	pp.Start(s)
 	defer pp.Stop()
 	tc.ticker <- time.Now()
-
-	s.runHandshakes()
 
 	// if pp.Overlay.(*testOverlay).posMap[string(raddr.Over())] == nil {
 	// 	t.Fatalf("Overlay#On not called on new peer")
 	// }
 
 	// retrieve and broadcast
-	ord := order(raddr.Over())
+	ord := raddr.Over()[0] / 32
 	o := 0
 	if ord == 0 {
 		o = 1

@@ -2,13 +2,42 @@ package network
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
+
+type testStore struct {
+	sync.Mutex
+
+	values map[string][]byte
+}
+
+func newTestStore() *testStore {
+	return &testStore{values: make(map[string][]byte)}
+}
+
+func (t *testStore) Load(key string) ([]byte, error) {
+	t.Lock()
+	defer t.Unlock()
+	v, ok := t.values[key]
+	if !ok {
+		return nil, fmt.Errorf("key not found: %s", key)
+	}
+	return v, nil
+}
+
+func (t *testStore) Save(key string, v []byte) error {
+	t.Lock()
+	defer t.Unlock()
+	t.values[key] = v
+	return nil
+}
 
 func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest.Exchange {
 
@@ -34,19 +63,21 @@ func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest
 	}
 }
 
-func newBzzBaseTester(t *testing.T, n int, addr *bzzAddr, ct *protocols.CodeMap, services func(*bzzPeer) error) *bzzTester {
-	if ct == nil {
-		ct = BzzCodeMap()
-	}
-
+func newBzzBaseTester(t *testing.T, n int, addr *bzzAddr, spec *protocols.Spec, run func(*bzzPeer) error) *bzzTester {
 	cs := make(map[string]chan bool)
 
 	srv := func(p *bzzPeer) error {
 		defer close(cs[p.ID().String()])
-		return services(p)
+		return run(p)
 	}
 
-	protocall := NewBzz(addr.Over(), addr.Under(), ct, srv, nil, nil).Run
+	protocall := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		return srv(&bzzPeer{
+			Conn:      protocols.NewPeer(p, rw, spec),
+			localAddr: addr,
+			bzzAddr:   NewAddrFromNodeId(&adapters.NodeId{NodeID: p.ID()}),
+		})
+	}
 
 	s := p2ptest.NewProtocolTester(t, NewNodeIdFromAddr(addr), n, protocall)
 
@@ -55,7 +86,7 @@ func newBzzBaseTester(t *testing.T, n int, addr *bzzAddr, ct *protocols.CodeMap,
 	}
 
 	return &bzzTester{
-		addr:           addr.Address(),
+		addr:           addr,
 		ProtocolTester: s,
 		cs:             cs,
 	}
@@ -63,26 +94,18 @@ func newBzzBaseTester(t *testing.T, n int, addr *bzzAddr, ct *protocols.CodeMap,
 
 type bzzTester struct {
 	*p2ptest.ProtocolTester
-	addr []byte
+	addr *bzzAddr
 	cs   map[string]chan bool
 }
 
-func newBzzTester(t *testing.T, n int, addr *bzzAddr, pp *p2ptest.TestPeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
+func newBzzTester(t *testing.T, n int, addr *bzzAddr, pp *p2ptest.TestPeerPool, spec *protocols.Spec, services func(Peer) error) *bzzTester {
 
 	extraservices := func(p *bzzPeer) error {
 		pp.Add(p)
-		p.DisconnectHook(func(err error) {
-			pp.Remove(p)
-		})
-		if services != nil {
-			err := services(p)
-			if err != nil {
-				return err
-			}
-		}
-		return nil
+		defer pp.Remove(p)
+		return services(p)
 	}
-	return newBzzBaseTester(t, n, addr, ct, extraservices)
+	return newBzzBaseTester(t, n, addr, spec, extraservices)
 }
 
 // should test handshakes in one exchange? parallelisation
@@ -113,7 +136,11 @@ func (s *bzzTester) runHandshakes(ids ...*adapters.NodeId) {
 }
 
 func correctBzzHandshake(addr *bzzAddr) *bzzHandshake {
-	return &bzzHandshake{0, 322, addr}
+	return &bzzHandshake{
+		Version:   0,
+		NetworkId: 322,
+		Addr:      addr,
+	}
 }
 
 func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
@@ -125,7 +152,7 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{0, 321, NewAddrFromNodeId(id)},
+		&bzzHandshake{Version: 0, NetworkId: 321, Addr: NewAddrFromNodeId(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")},
 	)
 }
@@ -139,7 +166,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{1, 322, NewAddrFromNodeId(id)},
+		&bzzHandshake{Version: 1, NetworkId: 322, Addr: NewAddrFromNodeId(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("version mismatch 1 (!= 0)")},
 	)
 }
@@ -153,7 +180,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{0, 322, NewAddrFromNodeId(id)},
+		&bzzHandshake{Version: 0, NetworkId: 322, Addr: NewAddrFromNodeId(id)},
 	)
 }
 
@@ -215,7 +242,7 @@ func TestBzzPeerPoolNotAdd(t *testing.T) {
 	defer s.Stop()
 
 	id := s.Ids[0]
-	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{0, 321, NewAddrFromNodeId(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
+	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{Version: 0, NetworkId: 321, Addr: NewAddrFromNodeId(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
 	if pp.Has(id) {
 		t.Fatalf("peer %v incorrectly added: %v", id, pp)
 	}

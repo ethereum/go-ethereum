@@ -131,7 +131,7 @@ type Config struct {
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
-	Dialer *net.Dialer `toml:"-"`
+	Dialer NodeDialer `toml:"-"`
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
@@ -144,6 +144,7 @@ type Config struct {
 type Server interface {
 	Start() error
 	Stop() error
+	SetupConn(net.Conn, connFlag, *discover.Node)
 	AddPeer(node *discover.Node)
 	RemovePeer(node *discover.Node)
 	SubscribeEvents(ch chan *PeerEvent) event.Subscription
@@ -385,7 +386,7 @@ func (srv *server) Start() (err error) {
 		srv.newTransport = newRLPX
 	}
 	if srv.Dialer == nil {
-		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
+		srv.Dialer = TCPDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
 	srv.quit = make(chan struct{})
 	srv.addpeer = make(chan *conn)
@@ -697,7 +698,7 @@ func (srv *server) listenLoop() {
 		// Spawn the handler. It will give the slot back when the connection
 		// has been established.
 		go func() {
-			srv.setupConn(fd, inboundConn, nil)
+			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}
@@ -706,7 +707,7 @@ func (srv *server) listenLoop() {
 // setupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *server) setupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
+func (srv *server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running

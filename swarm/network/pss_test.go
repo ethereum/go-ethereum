@@ -1,25 +1,9 @@
 package network
 
 import (
-	"context"
-	"encoding/hex"
-	"fmt"
-	"math/rand"
-	"net"
-	"net/http"
 	"os"
-	"strconv"
-	"testing"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const (
@@ -32,6 +16,7 @@ func init() {
 	log.Root().SetHandler(h)
 }
 
+/*
 // example protocol implementation peer
 // message handlers are methods of this
 // channels allow receipt reporting from p2p.Protocol message handler
@@ -66,10 +51,6 @@ func (n *pssTestNode) Add(peer *bzzPeer) error {
 	return err
 }
 
-func (n *pssTestNode) hiveKeepAlive() <-chan time.Time {
-	return time.Tick(time.Millisecond * 300)
-}
-
 func (n *pssTestNode) triggerCheck() {
 	go func() { n.trigger <- n.id }()
 }
@@ -98,8 +79,9 @@ type pssTestService struct {
 
 func newPssTestService(t *testing.T, handlefunc func(interface{}) error, testnode *pssTestNode) *pssTestService {
 	hp := NewHiveParams()
-	//hp.CallInterval = 250
-	testnode.Hive = NewHive(hp, testnode.Pss.Overlay)
+	hp.KeepAliveInterval = 300
+	bzz := NewBzz(testnode.OverlayAddr(), testnode.UnderlayAddr(), newTestStore())
+	testnode.Hive = NewHive(hp, testnode.Pss.Overlay, bzz)
 	return &pssTestService{
 		//nid := adapters.NewNodeId(addr.UnderlayAddr())
 		msgFunc: handlefunc,
@@ -108,7 +90,7 @@ func newPssTestService(t *testing.T, handlefunc func(interface{}) error, testnod
 }
 
 func (self *pssTestService) Start(server p2p.Server) error {
-	return self.node.Hive.Start(server, self.node.hiveKeepAlive, nil)
+	return self.node.Hive.Start(server)
 }
 
 func (self *pssTestService) Stop() error {
@@ -117,24 +99,13 @@ func (self *pssTestService) Stop() error {
 }
 
 func (self *pssTestService) Protocols() []p2p.Protocol {
-	ct := BzzCodeMap()
-	ct.Register(0, &PssMsg{})
-	for _, m := range DiscoveryMsgs {
-		ct.Register(1, m)
-	}
-
-	srv := func(p *bzzPeer) error {
-		p.Register(&PssMsg{}, self.msgFunc)
-		self.node.Add(p)
-		p.DisconnectHook(func(err error) {
-			self.node.Remove(p)
-		})
-		return nil
-	}
-
-	proto := NewBzz(self.node.OverlayAddr(), self.node.UnderlayAddr(), ct, srv, nil, nil)
-
-	return []p2p.Protocol{*proto}
+	bzz := NewBzz(self.node.OverlayAddr(), self.node.UnderlayAddr(), newTestStore())
+	return append(self.node.Hive.Protocols(), p2p.Protocol{
+		Name:    PssProtocolName,
+		Version: PssProtocolVersion,
+		Length:  PssProtocol.Length(),
+		Run:     bzz.RunProtocol(PssProtocol, self.Run),
+	})
 }
 
 func (self *pssTestService) APIs() []rpc.API {
@@ -147,6 +118,12 @@ func (self *pssTestService) APIs() []rpc.API {
 		},
 	}
 	return nil
+}
+
+func (self *pssTestService) Run(peer *bzzPeer) error {
+	self.node.Add(peer)
+	defer self.node.Remove(peer)
+	return peer.Run(self.msgFunc)
 }
 
 func TestPssCache(t *testing.T) {
@@ -301,8 +278,9 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 	expectnodesids := []*adapters.NodeId{}                 // the nodes to expect on (needed by checker)
 	expectnodesresults := make(map[*adapters.NodeId][]int) // which messages expect actually got
 
-	vct := protocols.NewCodeMap(protocolName, protocolVersion, ProtocolMaxMsgSize)
-	vct.Register(0, &pssTestPayload{})
+	vct := protocols.NewCodeMap(map[uint64]interface{}{
+		0: pssTestPayload{},
+	})
 	topic, _ := MakeTopic(protocolName, protocolVersion)
 
 	trigger := make(chan *adapters.NodeId)
@@ -536,15 +514,15 @@ func TestPssFullLinearEcho(t *testing.T) {
 			return err
 		}
 
-		/*for i, id := range ids {
-			var peerId *adapters.NodeId
-			if i != 0 {
-				peerId = ids[i-1]
-				if err := net.Connect(id, peerId); err != nil {
-					return err
-				}
-			}
-		}*/
+		// for i, id := range ids {
+		// 	var peerId *adapters.NodeId
+		// 	if i != 0 {
+		// 		peerId = ids[i-1]
+		// 		if err := net.Connect(id, peerId); err != nil {
+		// 			return err
+		// 		}
+		// 	}
+		// }
 		return nil
 	}
 	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
@@ -1108,3 +1086,4 @@ func (ptp *pssTestPeer) SimpleHandlePssPayload(msg interface{}) error {
 
 	return nil
 }
+*/

@@ -153,11 +153,14 @@ func (k *testKademlia) Off(offs ...string) *testKademlia {
 }
 
 func (k *testKademlia) Register(regs ...string) *testKademlia {
-	var ps []Addr
-	for _, s := range regs {
-		ps = append(ps, Addr(testKadPeerAddr(s)))
-	}
-	k.Kademlia.Register(ps...)
+	ch := make(chan OverlayAddr)
+	go func() {
+		defer close(ch)
+		for _, s := range regs {
+			ch <- testKadPeerAddr(s)
+		}
+	}()
+	k.Kademlia.Register(ch)
 	return k
 }
 
