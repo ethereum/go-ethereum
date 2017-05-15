@@ -387,7 +387,7 @@ func (self *Kademlia) String() string {
 	var rows []string
 
 	rows = append(rows, "=========================================================================")
-	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %v", time.Now().UTC().Format(time.UnixDate), self))
+	rows = append(rows, fmt.Sprintf("%v KΛÐΞMLIΛ hive: queen's address: %v", time.Now().UTC().Format(time.UnixDate), self.BaseAddr()))
 	rows = append(rows, fmt.Sprintf("population: %d (%d), MinProxBinSize: %d, MinBinSize: %d, MaxBinSize: %d", self.conns.Size(), self.addrs.Size(), self.MinProxBinSize, self.MinBinSize, self.MaxBinSize))
 
 	liverows := make([]string, self.MaxProxDisplay)
