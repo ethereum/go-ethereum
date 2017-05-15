@@ -1,21 +1,397 @@
-package network
+package pss
 
 import (
+	"bytes"
+	"context"
+	"encoding/hex"
+	"fmt"
+	"io/ioutil"
 	"os"
-
+	"testing"
+	"time"
+	
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	protocolName    = "foo"
-	protocolVersion = 42
+	pssServiceName 	= "pss"
+	bzzServiceName 	= "bzz"
 )
 
+var topic PssTopic = NewTopic(pssPingProtocol.Name, int(pssPingProtocol.Version))
+
+var services = newServices()
+
 func init() {
+<<<<<<< HEAD:swarm/network/pss_test.go
 	h := log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
 	//
 	// h := log.CallerFileHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+=======
+	adapters.RegisterServices(services)
+	h := log.CallerFileHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+>>>>>>> 9c47957... swarm, swarm/pss, swarm/network: pssclient rw reads and writes from websocket:swarm/pss/pss_test.go
 	log.Root().SetHandler(h)
+}
+
+func TestPssCache(t *testing.T) {
+	var err error
+	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
+	oaddr, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+	//uaddr, _ := hex.DecodeString("101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f")
+	//proofbytes := []byte{241, 172, 117, 105, 88, 154, 82, 33, 176, 188, 91, 244, 245, 85, 86, 16, 120, 232, 70, 45, 182, 188, 99, 103, 157, 3, 202, 121, 252, 21, 129, 22}
+	proofbytes, _ := hex.DecodeString("ad312dca94df401555cfdeb85a6a1f87fb8f240f08dc36af246bd9d4d41efd89")
+	ps := newTestPss(oaddr)
+	pp := NewPssParams()
+	data := []byte("foo")
+	datatwo := []byte("bar")
+	fwdaddr := network.RandomAddr()
+	msg := &PssMsg{
+		Payload: &PssEnvelope{
+			TTL: 0,
+			From: oaddr,
+			Topic:   topic,
+			Payload: data,
+		},
+		To: to,
+	}
+	
+	msgtwo := &PssMsg{
+		Payload: &PssEnvelope{
+			TTL:  0,
+			From: oaddr,
+			Topic:   topic,
+			Payload: datatwo,
+		},
+		To: to,
+	}
+
+	digest, err := ps.storeMsg(msg)
+	if err != nil {
+		t.Fatalf("could not store cache msgone: %v", err)
+	}
+	digesttwo, err := ps.storeMsg(msgtwo)
+	if err != nil {
+		t.Fatalf("could not store cache msgtwo: %v", err)
+	}
+	
+	if !bytes.Equal(digest[:], proofbytes) {
+		t.Fatalf("digest - got: %x, expected: %x", digest, proofbytes)
+	}
+
+	if digest == digesttwo {
+		t.Fatalf("different msgs return same crc: %d", digesttwo)
+	}
+
+	// check the sender cache
+	err = ps.addFwdCacheSender(fwdaddr.Over(), digest)
+	if err != nil {
+		t.Fatalf("write to pss sender cache failed: %v", err)
+	}
+
+	if !ps.checkFwdCache(fwdaddr.Over(), digest) {
+		t.Fatalf("message %v should have SENDER record in cache but checkCache returned false", msg)
+	}
+
+	if ps.checkFwdCache(fwdaddr.Over(), digesttwo) {
+		t.Fatalf("message %v should NOT have SENDER record in cache but checkCache returned true", msgtwo)
+	}
+
+	// check the expire cache
+	err = ps.addFwdCacheExpire(digest)
+	if err != nil {
+		t.Fatalf("write to pss expire cache failed: %v", err)
+	}
+
+	if !ps.checkFwdCache(nil, digest) {
+		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", msg)
+	}
+
+	if ps.checkFwdCache(nil, digesttwo) {
+		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
+	}
+
+	time.Sleep(pp.Cachettl)
+	if ps.checkFwdCache(nil, digest) {
+		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+	}
+
+	err = ps.AddToCache(fwdaddr.Over(), msgtwo)
+	if err != nil {
+		t.Fatalf("public accessor cache write failed: %v", err)
+	}
+
+	if !ps.checkFwdCache(fwdaddr.Over(), digesttwo) {
+		t.Fatalf("message %v should have SENDER record in cache but checkCache returned false", msgtwo)
+	}
+}
+
+func TestPssRegisterHandler(t *testing.T) {
+	var err error
+	addr := network.RandomAddr()
+	ps := newTestPss(addr.OAddr)
+	from := network.RandomAddr()
+	payload := []byte("payload")
+	topic := NewTopic(pssTransportProtocol.Name, int(pssTransportProtocol.Version))
+	wrongtopic := NewTopic("foo", 42)
+	checkMsg := func(msg []byte, p *p2p.Peer, sender []byte) error {
+		if !bytes.Equal(from.OAddr, sender) {
+			return fmt.Errorf("sender mismatch. expected %x, got %x", from.OAddr, sender)
+		}
+		if !bytes.Equal(msg, payload) {
+			return fmt.Errorf("sender mismatch. expected %x, got %x", msg, payload)
+		}
+		return nil
+	}
+	deregister := ps.Register(topic, checkMsg)
+	pssmsg := &PssMsg{Payload: NewPssEnvelope(from.OAddr, topic, payload)}
+	err = ps.Process(pssmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var i int
+	err = ps.Process(&PssMsg{Payload: NewPssEnvelope(from.OAddr, wrongtopic, payload)})
+	expErr := ""
+	if err == nil || err.Error() == expErr {
+		t.Fatalf("unhandled topic expected '%v', got '%v'", expErr, err)
+	}
+	deregister2 := ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { i++; return nil })
+	err = ps.Process(pssmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i != 1 {
+		t.Fatalf("second registerer handler did not run")
+	}
+	deregister()
+	deregister2()
+	err = ps.Process(&PssMsg{Payload: NewPssEnvelope(from.OAddr, topic, payload)})
+	expErr = ""
+	if err == nil || err.Error() == expErr {
+		t.Fatalf("reregister handler expected %v, got %v", expErr, err)
+	}
+}
+
+func TestPssSimpleLinear(t *testing.T) {
+	nodeconfig := adapters.RandomNodeConfig()
+	addr := network.NewAddrFromNodeId(nodeconfig.Id)
+	pss := newTestPss(addr.OAddr)
+	
+	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, pss.Protocols()[0].Run)
+	
+	return []p2ptest.Exchange{
+		p2ptest.Exchange{
+			Expects: []p2ptest.Expect{
+				p2ptest.Expect{
+					Code: 0,
+					Msg:  lhs,
+					Peer: id,
+				},
+			},
+			Triggers: []p2ptest.Trigger{
+				p2ptest.Trigger{
+					Code: 0,
+					Msg:  ,
+					Peer: id,
+				},
+			},
+		},
+	}
+}
+
+
+func TestPssFullRandom10_5_5(t *testing.T) {
+	adapter := adapters.NewSimAdapter(services)
+	testPssFullRandom(t, adapter, 10, 5, 5)
+}
+
+func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int, fullnodecount int, msgcount int) {
+	var lastid *adapters.NodeId = nil
+	nodeCount := 5
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		Id:             "0",
+		DefaultService: bzzServiceName,
+	})
+	defer net.Shutdown()
+	
+	trigger := make(chan *adapters.NodeId)
+	ids := make([]*adapters.NodeId, nodeCount)
+	
+	for i := 0; i < nodeCount; i++ {
+		nodeconfig := adapters.RandomNodeConfig()
+		nodeconfig.Services = []string{"bzz", "pss"}
+		node, err := net.NewNodeWithConfig(nodeconfig)
+		if err != nil {
+			t.Fatalf("error starting node: %s", err)
+		}
+
+		if err := net.Start(node.ID()); err != nil {
+			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
+		}
+		
+		if err := triggerChecks(trigger, net, node.ID()); err != nil {
+			t.Fatal("error triggering checks for node %s: %s", node.ID().Label(), err)
+		}
+		ids[i] = node.ID()
+	}
+	
+	// run a simulation which connects the 10 nodes in a ring and waits
+	// for full peer discovery
+	action := func(ctx context.Context) error {
+		for i, id := range ids {
+			var peerId *adapters.NodeId
+			if i == 0 {
+				peerId = ids[len(ids)-1]
+			} else {
+				peerId = ids[i-1]
+			}
+			if err := net.Connect(id, peerId); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	check := func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+
+		node := net.GetNode(id)
+		if node == nil {
+			return false, fmt.Errorf("unknown node: %s", id)
+		}
+		client, err := node.Client()
+		if err != nil {
+			return false, fmt.Errorf("error getting node client: %s", err)
+		}
+		
+		log.Debug("in check", "node", id)
+		
+		if lastid != nil {
+			//msg := pssPingMsg{Created: time.Now(),}
+			client.CallContext(context.Background(), nil, "pss_sendRaw", topic, PssAPIMsg{
+				Addr: lastid.Bytes(),
+				Msg: []byte{1,2,3},
+			})
+		}
+		lastid = id
+	
+		return true, nil
+	}
+	
+	timeout := 5 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: ids,
+			Check: check,
+		},
+	})
+	if result.Error != nil {
+		t.Fatalf("simulation failed: %s", result.Error)
+	}
+
+	t.Log("Simulation Passed:")
+	t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
+	
+	time.Sleep(time.Second * 2)
+}
+
+// triggerChecks triggers a simulation step check whenever a peer is added or
+// removed from the given node
+func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *adapters.NodeId) error {
+	node := net.GetNode(id)
+	if node == nil {
+		return fmt.Errorf("unknown node: %s", id)
+	}
+	client, err := node.Client()
+	if err != nil {
+		return err
+	}
+	events := make(chan PssAPIMsg)
+	sub, err := client.Subscribe(context.Background(), "pss", events, "newMsg", topic)
+	if err != nil {
+		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+	}
+	go func() {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case msg := <-events:
+				log.Warn("pss rpc got msg", "msg", msg)
+				trigger <- id
+			case err := <-sub.Err():
+				if err != nil {
+					log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
+				}
+				return
+			}
+		}
+	}()
+	return nil
+}
+
+func newServices() adapters.Services {
+	
+	bzzs := make(map[*adapters.NodeId]*network.Bzz)
+	
+	adaptersservices := make(map[string]adapters.ServiceFunc)
+	
+	adaptersservices["bzz"] = func(id *adapters.NodeId) node.Service {
+		// setup hive
+		addr := network.NewAddrFromNodeId(id)
+
+		config := &network.BzzConfig{
+			OverlayAddr:  addr.Over(),
+			UnderlayAddr: addr.Under(),
+			KadParams:    network.NewKadParams(),
+			HiveParams:   network.NewHiveParams(),
+		}
+
+		config.KadParams.MinProxBinSize = 2
+		config.KadParams.MaxBinSize = 3
+		config.KadParams.MinBinSize = 1
+		config.KadParams.MaxRetries = 1000
+		config.KadParams.RetryExponent = 2
+		config.KadParams.RetryInterval = 1000000
+
+		config.HiveParams.KeepAliveInterval = time.Second
+
+		bzzs[id] = network.NewBzz(config)
+	
+		return bzzs[id]
+	}
+	
+	adaptersservices["pss"] = func(id *adapters.NodeId) node.Service {
+		// pss setup
+		cachedir, err := ioutil.TempDir("", "pss-cache")
+		if err != nil {
+			log.Error("create pss cache tmpdir failed", "error", err)
+			return nil
+		}
+		dpa, err := storage.NewLocalDPA(cachedir)
+		if err != nil {
+			log.Error("local dpa creation failed", "error", err)
+			return nil
+		}
+		pssp := NewPssParams()
+		return NewPss(bzzs[id].Kademlia, dpa, pssp)
+	}
+	
+	return adaptersservices
 }
 
 /*
@@ -127,143 +503,10 @@ func (self *pssTestService) Run(peer *bzzPeer) error {
 	defer self.node.Remove(peer)
 	return peer.Run(self.msgFunc)
 }
+*/
 
-func TestPssCache(t *testing.T) {
-	var err error
-	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
-	oaddr, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
-	uaddr, _ := hex.DecodeString("101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f")
-	ps := makePss(oaddr)
-	pp := NewPssParams()
-	topic, _ := MakeTopic(protocolName, protocolVersion)
-	data := []byte("foo")
-	fwdaddr := RandomAddr()
-	msg := &PssMsg{
-		Payload: pssEnvelope{
-			TTL:         0,
-			SenderOAddr: oaddr,
-			// SenderUAddr: uaddr,
-			Topic:   topic,
-			Payload: data,
-		},
-	}
-	msg.SetRecipient(to)
+/*
 
-	msgtwo := &PssMsg{
-		Payload: pssEnvelope{
-			TTL:         0,
-			SenderOAddr: oaddr,
-			// SenderUAddr: oaddr,
-			Topic:   topic,
-			Payload: data,
-		},
-	}
-	msgtwo.SetRecipient(to)
-
-	digest := ps.hashMsg(msg)
-	digesttwo := ps.hashMsg(msgtwo)
-
-	if digest != 3595343914 {
-		t.Fatalf("digest - got: %d, expected: %d", digest, 3595343914)
-	}
-
-	if digest == digesttwo {
-		t.Fatalf("different msgs return same crc: %d", digesttwo)
-	}
-
-	// check the sender cache
-	err = ps.addFwdCacheSender(fwdaddr.Over(), digest)
-	if err != nil {
-		t.Fatalf("write to pss sender cache failed: %v", err)
-	}
-
-	if !ps.checkFwdCache(fwdaddr.Over(), digest) {
-		t.Fatalf("message %v should have SENDER record in cache but checkCache returned false", msg)
-	}
-
-	if ps.checkFwdCache(fwdaddr.Over(), digesttwo) {
-		t.Fatalf("message %v should NOT have SENDER record in cache but checkCache returned true", msgtwo)
-	}
-
-	// check the expire cache
-	err = ps.addFwdCacheExpire(digest)
-	if err != nil {
-		t.Fatalf("write to pss expire cache failed: %v", err)
-	}
-
-	if !ps.checkFwdCache(nil, digest) {
-		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", msg)
-	}
-
-	if ps.checkFwdCache(nil, digesttwo) {
-		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
-	}
-
-	time.Sleep(pp.Cachettl)
-	if ps.checkFwdCache(nil, digest) {
-		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
-	}
-
-	err = ps.AddToCache(fwdaddr.Over(), msgtwo)
-	if err != nil {
-		t.Fatalf("public accessor cache write failed: %v", err)
-	}
-
-	if !ps.checkFwdCache(fwdaddr.Over(), digesttwo) {
-		t.Fatalf("message %v should have SENDER record in cache but checkCache returned false", msgtwo)
-	}
-}
-
-func TestPssRegisterHandler(t *testing.T) {
-	var topic PssTopic
-	var err error
-	addr := RandomAddr()
-	ps := makePss(addr.Under())
-
-	topic, _ = MakeTopic(protocolName, protocolVersion)
-	err = ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { return nil })
-	if err != nil {
-		t.Fatalf("couldnt register protocol 'foo' v 42: %v", err)
-	}
-
-	topic, _ = MakeTopic(protocolName, protocolVersion)
-	err = ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { return nil })
-	if err == nil {
-		t.Fatalf("register protocol 'abc..789' v 65536 should have failed")
-	}
-}
-
-func TestPssFullRandom10_10_5(t *testing.T) {
-	testPssFullRandom(t, 10, 10, 5)
-}
-
-func TestPssFullRandom50_50_5(t *testing.T) {
-	testPssFullRandom(t, 50, 50, 5)
-}
-
-func TestPssFullRandom50_50_25(t *testing.T) {
-	testPssFullRandom(t, 50, 50, 25)
-}
-
-func TestPssFullRandom10_100_50(t *testing.T) {
-	testPssFullRandom(t, 10, 100, 50)
-}
-
-func TestPssFullRandom50_100_50(t *testing.T) {
-	testPssFullRandom(t, 50, 100, 50)
-}
-
-func TestPssFullRandom100_100_5(t *testing.T) {
-	testPssFullRandom(t, 100, 100, 5)
-}
-
-func TestPssFullRandom100_100_25(t *testing.T) {
-	testPssFullRandom(t, 100, 100, 25)
-}
-
-func TestPssFullRandom100_100_50(t *testing.T) {
-	testPssFullRandom(t, 100, 100, 50)
-}
 
 func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes int) {
 	var action func(ctx context.Context) error
@@ -970,13 +1213,73 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 }
 
 func makePss(addr []byte) *Pss {
-	kp := NewKadParams()
+	
+	// set up storage
+	cachedir, err := ioutil.TempDir("", "pss-cache")
+	if err != nil {
+		log.Error("create pss cache tmpdir failed", "error", err)
+		os.Exit(1)
+	}
+	
+	dpa, err := storage.NewLocalDPA(cachedir)
+	if err != nil {
+		log.Error("local dpa creation failed", "error", err)
+		os.Exit(1)
+	}
+	// cannot use pyramidchunker as it still lacks joinfunc TestPssRegisterHandler(t *testing.T) {
+	addr := RandomAddr()
+	ps := newTestPss(addr.UnderlayAddr())
+	from := RandomAddr()
+	payload := []byte("payload")
+	topic := NewTopic(protocolName, protocolVersion)
+	checkMsg := func(msg []byte, p *p2p.Peer, sender []byte) error {
+		if !bytes.Equal(from.OverlayAddr(), sender) {
+			return fmt.Errorf("sender mismatch. expected %x, got %x", from.OverlayAddr(), sender)
+		}
+		if !bytes.Equal(msg, payload) {
+			return fmt.Errorf("sender mismatch. expected %x, got %x", msg, payload)
+		}
+		if !bytes.Equal(from.UnderlayAddr(), p.ID()) {
+			return fmt.Errorf("sender mismatch. expected %x, got %x", from.UnderlayAddr(), p.ID())
+		}
+	}
+	deregister := ps.Register(topic, checkMsg)
+	pssmsg := &PssMsg{Data: NewPssEnvelope(from, topic, payload)}
+	err = ps.Process(pssmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var i int
+	err = ps.Process(&PssMsg{Data: NewPssEnvelope(from, []byte("topic"), payload)})
+	expErr := ""
+	if err == nil || err.Error() != expErr {
+		t.Fatalf("unhandled topic expected %v, got %v", expErr, err)
+	}
+	deregister2 := ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { i++; return nil })
+	ps.Process(pssmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i != 1 {
+		t.Fatalf("second registerer handler did not run")
+	}
+	deregister()
+	deregister2()
+	err = ps.Process(&PssMsg{Data: NewPssEnvelope(from, topic, payload)})
+	expErr = ""
+	if err == nil || err.Error() != expErr {
+		t.Fatalf("reregister handler expected %v, got %v", expErr, err)
+	}
+}
+	// dpa.Chunker = storage.NewPyramidChunker(storage.NewChunkerParams())
+	
+	kp := network.NewKadParams()
 	kp.MinProxBinSize = 3
 
 	pp := NewPssParams()
 
-	overlay := NewKademlia(addr, kp)
-	ps := NewPss(overlay, pp)
+	overlay := network.NewKademlia(addr, kp)
+	ps := NewPss(overlay, dpa, pp)
 	//overlay.Prune(time.Tick(time.Millisecond * 250))
 	return ps
 }

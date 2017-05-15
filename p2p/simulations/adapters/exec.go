@@ -46,8 +46,10 @@ func (e *ExecAdapter) Name() string {
 
 // NewNode returns a new ExecNode using the given config
 func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
-	if _, exists := serviceFuncs[config.Service]; !exists {
-		return nil, fmt.Errorf("unknown node service %q", config.Service)
+	for _, name := range config.Services {
+		if _, exists := serviceFuncs[name]; !exists {
+			return nil, fmt.Errorf("unknown node service %q", name)
+		}
 	}
 
 	// create the node directory using the first 12 characters of the ID
@@ -75,6 +77,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		ID:     config.Id,
 		Dir:    dir,
 		Config: conf,
+		Services: config.Services,
 	}
 	node.newCmd = node.execCommand
 	return node, nil
@@ -93,6 +96,7 @@ type ExecNode struct {
 	Config *execNodeConfig
 	Cmd    *exec.Cmd
 	Info   *p2p.NodeInfo
+	Services []string
 
 	client *rpc.Client
 	rpcMux *rpcMux
@@ -164,13 +168,18 @@ func (n *ExecNode) Start(snapshot []byte) (err error) {
 	return nil
 }
 
+
+func (n *ExecNode) GetService(name string) node.Service {
+	return nil
+}
+
 // execCommand returns a command which runs the node locally by exec'ing
 // the current binary but setting argv[0] to "p2p-node" so that the child
 // runs execP2PNode
 func (n *ExecNode) execCommand() *exec.Cmd {
 	return &exec.Cmd{
 		Path: reexec.Self(),
-		Args: []string{"p2p-node", n.Config.Node.Service, n.ID.String()},
+		Args: []string{"p2p-node", n.Services[0], n.ID.String()},
 	}
 }
 

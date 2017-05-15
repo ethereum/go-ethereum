@@ -29,7 +29,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{})
-	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Service: "test"}); err != nil {
+	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Services: []string{"test"}}); err != nil {
 		panic(err.Error())
 	}
 	if err := net.Start(id); err != nil {
@@ -41,7 +41,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	peerIDs := make([]*adapters.NodeId, n)
 	for i := 0; i < n; i++ {
 		peers[i] = adapters.RandomNodeConfig()
-		peers[i].Service = "mock"
+		peers[i].Services = append(peers[i].Services, "mock")
 		peerIDs[i] = peers[i].Id
 	}
 	events := make(chan *p2p.PeerEvent, 1000)

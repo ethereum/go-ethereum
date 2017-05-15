@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -55,6 +56,8 @@ func (s *SimAdapter) Name() string {
 
 // NewNode returns a new SimNode using the given config
 func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
+	var nodeprotos []p2p.Protocol
+	
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -65,6 +68,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	// check the service is valid and initialize it
+/*
 	serviceFunc, exists := s.services[config.Service]
 	if !exists {
 		return nil, fmt.Errorf("unknown node service %q", config.Service)
@@ -75,9 +79,52 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		config:      config,
 		adapter:     s,
 		serviceFunc: serviceFunc,
+*/
+	//serviceFunc, exists := s.services[config.Service]
+	
+	//if !exists {
+	//	return nil, fmt.Errorf("unknown node service %q", config.Service)
+	//}
+	//service := serviceFunc(id)
+	
+	n, err := node.New(&node.Config{
+		P2P: p2p.Config{
+			PrivateKey:      config.PrivateKey,
+			MaxPeers:        math.MaxInt32,
+			NoDiscovery:     true,
+			Protocols:       nodeprotos,
+			Dialer:          s,
+			EnableMsgEvents: true,
+		},
+	})
+	if err != nil {
+		return nil, err
 	}
-	s.nodes[id.NodeID] = node
-	return node, nil
+	
+	services := make(map[string]node.Service)
+	
+	for name, servicefunc := range s.services {
+		service := servicefunc(id)
+		if err := n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			return service, err
+		}); err != nil {
+			return nil, err
+		}
+		for _, proto := range service.Protocols() {
+			nodeprotos = append(nodeprotos, proto)
+		}
+		services[name] = service
+	}
+	
+	simnode := &SimNode{
+		Node:    n,
+		Id:      id,
+		services: services,
+		adapter:     s,
+		config:      config,
+	}
+	s.nodes[id.NodeID] = simnode
+	return simnode, nil
 }
 
 func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
@@ -113,7 +160,7 @@ type SimNode struct {
 	Id          *NodeId
 	config      *NodeConfig
 	adapter     *SimAdapter
-	serviceFunc ServiceFunc
+	services 	map[string]node.Service
 	node        *node.Node
 	running     node.Service
 	client      *rpc.Client
@@ -233,13 +280,6 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
-// Service returns the underlying node.Service
-func (self *SimNode) Service() node.Service {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	return self.running
-}
-
 func (self *SimNode) Server() *p2p.Server {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -247,6 +287,11 @@ func (self *SimNode) Server() *p2p.Server {
 		return nil
 	}
 	return self.node.Server()
+
+// Service returns a underlying node.Service of the speficied type
+func (self *SimNode) GetService(servicename string) node.Service {
+	log.Warn("retrieving service", "name", servicename)
+	return self.services[servicename]
 }
 
 func (self *SimNode) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {

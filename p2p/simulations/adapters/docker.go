@@ -42,8 +42,10 @@ func (d *DockerAdapter) Name() string {
 
 // NewNode returns a new DockerNode using the given config
 func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
-	if _, exists := serviceFuncs[config.Service]; !exists {
-		return nil, fmt.Errorf("unknown node service %q", config.Service)
+	for _, name := range config.Services {
+		if _, exists := serviceFuncs[name]; !exists {
+			return nil, fmt.Errorf("unknown node service %q", name)
+		}
 	}
 
 	// generate the config
@@ -60,6 +62,7 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 		ExecNode: ExecNode{
 			ID:     config.Id,
 			Config: conf,
+			Services: config.Services,
 		},
 	}
 	node.newCmd = node.dockerCommand
@@ -81,10 +84,14 @@ func (n *DockerNode) dockerCommand() *exec.Cmd {
 	return exec.Command(
 		"sh", "-c",
 		fmt.Sprintf(
-			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" %s p2p-node %s %s`,
-			dockerImage, n.Config.Node.Service, n.ID.String(),
+			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" --env _P2P_NODE_KEY="${_P2P_NODE_KEY}" %s p2p-node %s %s`,
+			dockerImage, n.Services[0], n.ID.String(),
 		),
 	)
+}
+
+func (n *DockerNode) GetService(name string) node.Service {
+	return nil
 }
 
 // dockerImage is the name of the docker image
