@@ -33,7 +33,7 @@ func TestDiscovery(t *testing.T) {
 		Expects: []p2ptest.Expect{
 			p2ptest.Expect{
 				Code: 3,
-				Msg:  &subPeersMsg{ProxLimit: 0},
+				Msg:  &subPeersMsg{Depth: 0},
 				Peer: s.ProtocolTester.Ids[0],
 			},
 		},

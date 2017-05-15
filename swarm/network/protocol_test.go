@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -73,7 +72,7 @@ func newBzzBaseTester(t *testing.T, n int, addr *bzzAddr, spec *protocols.Spec, 
 
 	protocall := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return srv(&bzzPeer{
-			Conn:      protocols.NewPeer(p, rw, spec),
+			Peer:      protocols.NewPeer(p, rw, spec),
 			localAddr: addr,
 			bzzAddr:   NewAddrFromNodeId(&adapters.NodeId{NodeID: p.ID()}),
 		})
@@ -103,6 +102,9 @@ func newBzzTester(t *testing.T, n int, addr *bzzAddr, pp *p2ptest.TestPeerPool, 
 	extraservices := func(p *bzzPeer) error {
 		pp.Add(p)
 		defer pp.Remove(p)
+		if services == nil {
+			return nil
+		}
 		return services(p)
 	}
 	return newBzzBaseTester(t, n, addr, spec, extraservices)
@@ -182,68 +184,4 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 		correctBzzHandshake(addr),
 		&bzzHandshake{Version: 0, NetworkId: 322, Addr: NewAddrFromNodeId(id)},
 	)
-}
-
-func TestBzzPeerPoolAdd(t *testing.T) {
-	pp := p2ptest.NewTestPeerPool()
-	addr := RandomAddr()
-	s := newBzzTester(t, 1, addr, pp, nil, nil)
-	defer s.Stop()
-
-	id := s.Ids[0]
-	log.Trace(fmt.Sprintf("handshake with %v", id))
-	s.runHandshakes()
-
-	if !pp.Has(id) {
-		t.Fatalf("peer '%v' not added: %v", id, pp)
-	}
-}
-
-func TestBzzPeerPoolRemove(t *testing.T) {
-	addr := RandomAddr()
-	pp := p2ptest.NewTestPeerPool()
-	s := newBzzTester(t, 1, addr, pp, nil, nil)
-	defer s.Stop()
-
-	s.runHandshakes()
-
-	id := s.Ids[0]
-	pp.Get(id).Drop(fmt.Errorf("p2p: read or write on closed message pipe"))
-	s.TestDisconnected(&p2ptest.Disconnect{id, fmt.Errorf("p2p: read or write on closed message pipe")})
-	if pp.Has(id) {
-		t.Fatalf("peer '%v' not removed: %v", id, pp)
-	}
-}
-
-func TestBzzPeerPoolBothAddRemove(t *testing.T) {
-	addr := RandomAddr()
-	pp := p2ptest.NewTestPeerPool()
-	s := newBzzTester(t, 1, addr, pp, nil, nil)
-	defer s.Stop()
-
-	s.runHandshakes()
-
-	id := s.Ids[0]
-	if !pp.Has(id) {
-		t.Fatalf("peer '%v' not added: %v", id, pp)
-	}
-
-	pp.Get(id).Drop(fmt.Errorf("p2p: read or write on closed message pipe"))
-	s.TestDisconnected(&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("p2p: read or write on closed message pipe")})
-	if pp.Has(id) {
-		t.Fatalf("peer '%v' not removed: %v", id, pp)
-	}
-}
-
-func TestBzzPeerPoolNotAdd(t *testing.T) {
-	addr := RandomAddr()
-	pp := p2ptest.NewTestPeerPool()
-	s := newBzzTester(t, 1, addr, pp, nil, nil)
-	defer s.Stop()
-
-	id := s.Ids[0]
-	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{Version: 0, NetworkId: 321, Addr: NewAddrFromNodeId(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
-	if pp.Has(id) {
-		t.Fatalf("peer %v incorrectly added: %v", id, pp)
-	}
 }

@@ -12,12 +12,11 @@ type discPeer struct {
 	*bzzPeer
 	overlay   Overlay
 	peers     map[string]bool
-	proxLimit uint8 // the proximity radius advertised by remote to subscribe to peers
+	depth     uint8 // the proximity radius advertised by remote to subscribe to peers
 	sentPeers bool  // set to true  when the peer is first notifed of peers close to them
 }
 
-// discovery peer contructor
-// registers the handlers for discovery messages
+// NewDiscovery discovery peer contructor
 func NewDiscovery(p *bzzPeer, o Overlay) *discPeer {
 	self := &discPeer{
 		overlay: o,
@@ -47,25 +46,24 @@ func (self *discPeer) HandleMsg(msg interface{}) error {
 
 // NotifyPeer notifies the receiver remote end of a peer p or PO po.
 // callback for overlay driver
-func (self *discPeer) NotifyPeer(p OverlayPeer, po uint8) error {
-	log.Warn(fmt.Sprintf("peer %#v peers %v", p, self.peers))
-	if po < self.proxLimit || self.seen(p) {
+func (self *discPeer) NotifyPeer(a OverlayAddr, po uint8) error {
+	if po < self.depth || self.seen(a) {
 		return nil
 	}
-	log.Warn(fmt.Sprintf("notification about %x", p.Address()))
+	log.Warn(fmt.Sprintf("notification about %x", a.Address()))
 
 	resp := &peersMsg{
-		Peers: []*bzzAddr{ToAddr(p)}, // perhaps the PeerAddr interface is unnecessary generalization
+		Peers: []*bzzAddr{ToAddr(a)}, // perhaps the PeerAddr interface is unnecessary generalization
 	}
 	return self.Send(resp)
 }
 
-// NotifyProx sends a subPeers Msg to the receiver notifying them about
+// NotifyDepth sends a subPeers Msg to the receiver notifying them about
 // a change in the prox limit (radius of the set including the nearest X peers
 // or first empty row)
 // callback for overlay driver
-func (self *discPeer) NotifyProx(po uint8) error {
-	return self.Send(&subPeersMsg{ProxLimit: po})
+func (self *discPeer) NotifyDepth(po uint8) error {
+	return self.Send(&subPeersMsg{Depth: po})
 }
 
 /*
@@ -107,28 +105,28 @@ func (self getPeersMsg) String() string {
 
 // subPeers msg is communicating the depth/sharpness/focus  of the overlay table of a peer
 type subPeersMsg struct {
-	ProxLimit uint8
+	Depth uint8
 }
 
 func (self subPeersMsg) String() string {
-	return fmt.Sprintf("%T: request peers > PO%02d. ", self, self.ProxLimit)
+	return fmt.Sprintf("%T: request peers > PO%02d. ", self, self.Depth)
 }
 
 func (self *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
-	self.proxLimit = msg.ProxLimit
+	self.depth = msg.Depth
 	if !self.sentPeers {
 		var peers []*bzzAddr
 		self.overlay.EachConn(self.Over(), 255, func(p OverlayConn, po int, isproxbin bool) bool {
-			if uint8(po) < self.proxLimit {
+			if uint8(po) < self.depth {
 				return false
 			}
-			log.Warn(fmt.Sprintf("peer %#v proxlimit %v", p, self.proxLimit))
+			log.Warn(fmt.Sprintf("peer %#v depth %v", p, self.depth))
 			if !self.seen(p) {
 				peers = append(peers, ToAddr(p))
 			}
 			return true
 		})
-		log.Warn(fmt.Sprintf("found initial %v peers not farther than %v", len(peers), self.proxLimit))
+		log.Warn(fmt.Sprintf("found initial %v peers not farther than %v", len(peers), self.depth))
 		if len(peers) > 0 {
 			if err := self.Send(&peersMsg{Peers: peers}); err != nil {
 				return err

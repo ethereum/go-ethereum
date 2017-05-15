@@ -88,6 +88,7 @@ type Conn interface {
 	Send(interface{}) error                                      // can send messages
 	Drop(error)                                                  // disconnect this peer
 	Run(func(interface{}) error) error                           // the run function to run a protocol
+	Off() OverlayAddr
 }
 
 // TODO: implement store for exec nodes
@@ -107,6 +108,18 @@ type BzzConfig struct {
 	Store Store
 }
 
+// Bzz is the swarm protocol bundle
+type Bzz struct {
+	Kademlia *Kademlia
+	Hive     *Hive
+	Pss      *Pss
+
+	localAddr  *bzzAddr
+	mtx        sync.Mutex
+	handshakes map[discover.NodeID]*bzzHandshake
+}
+
+// NewBzz is the swarm protocol constructor
 func NewBzz(config *BzzConfig) *Bzz {
 	kademlia := NewKademlia(config.OverlayAddr, config.KadParams)
 	bzz := &Bzz{
@@ -121,16 +134,10 @@ func NewBzz(config *BzzConfig) *Bzz {
 	return bzz
 }
 
-type Bzz struct {
-	Kademlia *Kademlia
-	Hive     *Hive
-	Pss      *Pss
-
-	localAddr  *bzzAddr
-	mtx        sync.Mutex
-	handshakes map[discover.NodeID]*bzzHandshake
-}
-
+// Bzz implements the node.Service interface, offers Protocols
+// * handshake/hive
+// * discovery
+// * pss
 func (b *Bzz) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
@@ -156,6 +163,9 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 	}
 }
 
+// Bzz implements the node.Service interface, offers APIs:
+// * hive
+// * pss
 func (b *Bzz) APIs() []rpc.API {
 	return []rpc.API{{
 		Namespace: "hive",
@@ -200,7 +210,7 @@ func (b *Bzz) runProtocol(spec *protocols.Spec, run func(*bzzPeer) error) func(*
 
 		// the handshake has succeeded so run the service
 		peer := &bzzPeer{
-			Conn:      protocols.NewPeer(p, rw, spec),
+			Peer:      protocols.NewPeer(p, rw, spec),
 			localAddr: b.localAddr,
 			bzzAddr:   handshake.peerAddr,
 		}
@@ -227,15 +237,15 @@ func (b *Bzz) getHandshake(peerID discover.NodeID) *bzzHandshake {
 // bzzPeer is the bzz protocol view of a protocols.Peer (itself an extension of p2p.Peer)
 // implements the Peer interface and all interfaces Peer implements: Addr, OverlayPeer
 type bzzPeer struct {
-	Conn                 // represents the connection for online peers
-	localAddr  *bzzAddr  // local Peers address
-	*bzzAddr             // remote address -> implements Addr interface = protocols.Peer
-	lastActive time.Time // time is updated whenever mutexes are releasing
+	*protocols.Peer           // represents the connection for online peers
+	localAddr       *bzzAddr  // local Peers address
+	*bzzAddr                  // remote address -> implements Addr interface = protocols.Peer
+	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
-func newBzzPeer(conn Conn, over, under []byte) *bzzPeer {
+func newBzzPeer(p *protocols.Peer, over, under []byte) *bzzPeer {
 	return &bzzPeer{
-		Conn:      conn,
+		Peer:      p,
 		localAddr: &bzzAddr{over, under},
 	}
 }
@@ -318,21 +328,14 @@ func (self *bzzAddr) Address() []byte {
 	return self.OAddr
 }
 
-func (self *bzzAddr) Bytes() []byte {
-	return self.OAddr
-}
+// Over returns the overlay address
 func (self *bzzAddr) Over() []byte {
 	return self.OAddr
 }
 
+// Under retrun the underlay address
 func (self *bzzAddr) Under() []byte {
 	return self.UAddr
-}
-
-func (self *bzzAddr) On(p OverlayConn) OverlayConn {
-	bp := p.(*bzzPeer)
-	bp.bzzAddr = self
-	return bp
 }
 
 func (self *bzzAddr) Update(a OverlayAddr) OverlayAddr {

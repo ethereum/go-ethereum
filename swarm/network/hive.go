@@ -45,7 +45,7 @@ to keep the nodetable uptodate
 type Overlay interface {
 	Register(chan OverlayAddr) error
 
-	On(OverlayPeer)
+	On(OverlayConn)
 	Off(OverlayConn)
 
 	EachConn([]byte, int, func(OverlayConn, int, bool) bool)
@@ -55,21 +55,6 @@ type Overlay interface {
 
 	String() string
 	BaseAddr() []byte
-}
-
-// Hive implements the PeerPool interface
-type Hive struct {
-	*HiveParams // settings
-	Overlay     // the overlay topology driver
-	store       Store
-
-	// bookkeeping
-	lock   sync.Mutex
-	quit   chan bool
-	toggle chan bool
-	more   chan bool
-
-	newTicker func() hiveTicker
 }
 
 // HiveParams holds the config options to hive
@@ -88,6 +73,21 @@ func NewHiveParams() *HiveParams {
 		MaxPeersPerRequest:    5,
 		KeepAliveInterval:     time.Second,
 	}
+}
+
+// Hive implements the PeerPool interface
+type Hive struct {
+	*HiveParams // settings
+	Overlay     // the overlay topology driver
+	store       Store
+
+	// bookkeeping
+	lock   sync.Mutex
+	quit   chan bool
+	toggle chan bool
+	more   chan bool
+
+	newTicker func() hiveTicker
 }
 
 // Hive constructor embeds both arguments
@@ -167,36 +167,27 @@ func (self *Hive) Stop() {
 	close(self.quit)
 }
 
-func (self *Hive) Run(peer *bzzPeer) error {
-	discPeer := NewDiscovery(peer, self)
-	self.On(discPeer)
-	defer self.Off(discPeer)
-	return peer.Run(discPeer.HandleMsg)
-}
-
-// Add is called at the end of a successful protocol handshake
-// to register a connected (live) peer
-func (self *Hive) Add(p *bzzPeer) error {
-	defer self.wake()
+func (self *Hive) Run(p *bzzPeer) error {
 	dp := NewDiscovery(p, self.Overlay)
 	log.Debug(fmt.Sprintf("to add new bee %v", p))
 	self.On(dp)
-	self.String()
-	log.Debug(fmt.Sprintf("%v", self))
-	return nil
+	self.wake()
+	defer self.wake()
+	defer self.Off(dp)
+	return p.Run(dp.HandleMsg)
 }
 
 // Remove called after peer is disconnected
-func (self *Hive) Remove(p *bzzPeer) {
-	defer self.wake()
-	log.Debug(fmt.Sprintf("remove bee %v", p))
-	self.Off(p)
-}
+// func (self *Hive) Remove(p *bzzPeer) {
+// 	defer self.wake()
+// 	log.Debug(fmt.Sprintf("remove bee %v", p))
+// 	self.Off(p)
+// }
 
 // NodeInfo function is used by the p2p.server RPC interface to display
 // protocol specific node information
 func (self *Hive) NodeInfo() interface{} {
-	return interface{}(self.String())
+	return self.String()
 }
 
 // PeerInfo function is used by the p2p.server RPC interface to display

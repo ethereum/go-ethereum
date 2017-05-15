@@ -67,11 +67,6 @@ func TestRegisterAndConnect(t *testing.T) {
 	pp.Start(s.Server)
 	defer pp.Stop()
 	tc.ticker <- time.Now()
-
-	// if pp.Overlay.(*testOverlay).posMap[string(raddr.Over())] == nil {
-	// 	t.Fatalf("Overlay#On not called on new peer")
-	// }
-
 	// retrieve and broadcast
 	ord := raddr.Over()[0] / 32
 	o := 0

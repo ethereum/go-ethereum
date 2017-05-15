@@ -12,7 +12,9 @@ const (
 )
 
 func init() {
-	h := log.CallerFileHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	h := log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	//
+	// h := log.CallerFileHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
 	log.Root().SetHandler(h)
 }
 

@@ -289,7 +289,7 @@ func (self *BoolAddress) PO(val PotVal, pos int) (po int, eq bool) {
 }
 
 type BytesAddress interface {
-	Bytes() []byte
+	Address() []byte
 }
 
 type bytesAddress struct {
@@ -312,7 +312,7 @@ func ToBytes(v AnyVal) []byte {
 		if !ok {
 			panic(fmt.Sprintf("unsupported value type %T", v))
 		}
-		b = ba.Bytes()
+		b = ba.Address()
 	}
 	return b
 }
@@ -320,7 +320,7 @@ func ToBytes(v AnyVal) []byte {
 func (a *bytesAddress) String() string {
 	return fmt.Sprintf("%08b", a.bytes)
 }
-func (a *bytesAddress) Bytes() []byte {
+func (a *bytesAddress) Address() []byte {
 	return a.bytes
 }
 

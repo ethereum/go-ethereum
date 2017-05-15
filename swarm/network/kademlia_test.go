@@ -17,12 +17,20 @@ package network
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/pot"
 )
+
+func init() {
+	h := log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	// h := log.CallerFileHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
+	log.Root().SetHandler(h)
+}
 
 func testKadPeerAddr(s string) *bzzAddr {
 	a := pot.NewHashAddress(s).Bytes()
@@ -57,23 +65,24 @@ type dropError struct {
 }
 
 func (self *testDropPeer) Drop(err error) {
-	err2 := &dropError{err, overlayStr(self)}
+	err2 := &dropError{err, binStr(self)}
 	self.dropc <- err2
 }
 
-func (self *testDiscPeer) NotifyProx(po uint8) error {
-	key := overlayStr(self)
+func (self *testDiscPeer) NotifyDepth(po uint8) error {
+	key := binStr(self)
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	self.notifications[key] = po
 	return nil
 }
 
-func (self *testDiscPeer) NotifyPeer(p OverlayPeer, po uint8) error {
-	key := overlayStr(self)
-	key += overlayStr(p)
+func (self *testDiscPeer) NotifyPeer(p OverlayAddr, po uint8) error {
+	key := binStr(self)
+	key += binStr(p)
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	log.Trace(fmt.Sprintf("key %v=>%v", key, po))
 	self.notifications[key] = po
 	return nil
 }
@@ -108,34 +117,6 @@ func (k *testKademlia) newTestKadPeer(s string) Peer {
 	return Peer(dp)
 }
 
-func overlayStr(a OverlayPeer) string {
-	// log.Error(fmt.Sprintf("PeerAddr: %v (%T)", a, a))
-	// if a == (*KadPeer)(nil) || a == (*testDiscPeer)(nil) || a == (*bzzPeer)(nil) || a == nil {
-	// 	return "<nil>"
-	// }
-	// var p Peer
-	// s, ok := a.(*KadPeer)
-	// if ok {
-	// 	p = s.Peer
-	// } else {
-	// 	p = a.(*testDiscPeer).Peer
-	// }
-	// log.Error(fmt.Sprintf("PeerAddr: %v (%T)", p, p))
-	// if p == (Peer)(nil) || p == (*testDiscPeer)(nil) || p == (*bzzPeer)(nil) {
-	// 	return "<nil>"
-	// }
-	// return pot.NewHashAddressFromBytes(p.OverlayAddr()).Bin()[:6]
-	// if a == nil {
-	// 	return "<nil>"
-	// }
-	// k, ok := a.(*KadPeer)
-	// if ok && k.Peer != nil {
-	// 	return pot.ToBin(a.(*KadPeer).Peer.Over())[:6]
-	// }
-	// return pot.ToBin(a.Over())[:6]
-	return pot.ToBin(a.Address())
-}
-
 func (k *testKademlia) On(ons ...string) *testKademlia {
 	for _, s := range ons {
 		p := k.newTestKadPeer(s)
@@ -160,14 +141,16 @@ func (k *testKademlia) Register(regs ...string) *testKademlia {
 			ch <- testKadPeerAddr(s)
 		}
 	}()
-	k.Kademlia.Register(ch)
+	err := k.Kademlia.Register(ch)
+	log.Trace(fmt.Sprintf("register %v addresses: %v", len(regs), err))
+
 	return k
 }
 
 func testSuggestPeer(t *testing.T, k *testKademlia, expAddr string, expPo int, expWant bool) error {
 	addr, o, want := k.SuggestPeer()
-	if overlayStr(addr) != expAddr {
-		return fmt.Errorf("incorrect peer address suggested. expected %v, got %v", expAddr, overlayStr(addr))
+	if binStr(addr) != expAddr {
+		return fmt.Errorf("incorrect peer address suggested. expected %v, got %v", expAddr, binStr(addr))
 	}
 	if o != expPo {
 		return fmt.Errorf("incorrect prox order suggested. expected %v, got %v", expPo, o)
@@ -176,6 +159,13 @@ func testSuggestPeer(t *testing.T, k *testKademlia, expAddr string, expPo int, e
 		return fmt.Errorf("expected SuggestPeer to want peers: %v", expWant)
 	}
 	return nil
+}
+
+func binStr(a OverlayPeer) string {
+	if a == nil {
+		return "<nil>"
+	}
+	return pot.ToBin(a.Address())[:6]
 }
 
 func TestSuggestPeerFindPeers(t *testing.T) {
@@ -225,7 +215,6 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 
 	// second time disconnected peer not callable
 	// with reasonably set Interval
-	// err = testSuggestPeer(t, k, "010000", 2, true)
 	err = testSuggestPeer(t, k, "<nil>", 1, true)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -240,16 +229,16 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	}
 
 	k.On("010000")
-	k.Off("010000")
-	// PO1 disconnects
 	// new closer peer appears, it is immediately wanted
-	// k.Off("010000")
 	k.Register("000101")
 	err = testSuggestPeer(t, k, "000101", 0, false)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
+	// PO1 disconnects
+	k.On("000101")
+	k.Off("010000")
 	// second time, gap filling
 	err = testSuggestPeer(t, k, "010000", 0, false)
 	if err != nil {
@@ -268,6 +257,19 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
+	k.Register("010001")
+	err = testSuggestPeer(t, k, "<nil>", 0, true)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	k.On("100001")
+	log.Trace("Kad:\n%v", k.String())
+	err = testSuggestPeer(t, k, "010001", 0, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
 	k.On("100001")
 	k.On("010001")
 	err = testSuggestPeer(t, k, "<nil>", 0, false)
@@ -276,7 +278,18 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	}
 
 	k.MinBinSize = 3
+	k.Register("100010")
+	err = testSuggestPeer(t, k, "100010", 0, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
 	k.On("100010")
+	err = testSuggestPeer(t, k, "<nil>", 1, true)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
 	k.On("010010")
 	err = testSuggestPeer(t, k, "<nil>", 2, true)
 	if err != nil {
@@ -284,8 +297,16 @@ func TestSuggestPeerFindPeers(t *testing.T) {
 	}
 
 	k.On("001010")
+	err = testSuggestPeer(t, k, "<nil>", 3, true)
+	if err != nil {
+		log.Trace("Kad:\n%v", k.String())
+		t.Fatal(err.Error())
+	}
+
+	k.On("000110")
 	err = testSuggestPeer(t, k, "<nil>", 0, false)
 	if err != nil {
+		log.Trace("Kad:\n%v", k.String())
 		t.Fatal(err.Error())
 	}
 
@@ -443,7 +464,7 @@ func TestNotifications(t *testing.T) {
 	k.Discovery = true
 	k.MinProxBinSize = 3
 	k.On("010000", "001000")
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 	err := k.checkNotifications(
 		[]*testPeerNotification{
 			&testPeerNotification{"010000", "001000", 1},
