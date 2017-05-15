@@ -18,6 +18,7 @@ package vm
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -82,7 +83,13 @@ type StructLogger struct {
 	changedValues map[common.Address]Storage
 }
 
-// NewLogger returns a new logger
+// JSONLogger merely contains a writer, and immediately outputs to that channel,
+// instead of collecting logs
+type JSONLogger struct {
+	encoder *json.Encoder
+}
+
+// NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
 		changedValues: make(map[common.Address]Storage),
@@ -93,9 +100,23 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
-// captureState logs a new structured log message and pushes it out to the environment
+// NewJSONLogger returns a new JSON logger
+func NewJSONLogger(writer io.Writer) *JSONLogger {
+	logger := &JSONLogger{
+		encoder: json.NewEncoder(writer),
+	}
+	return logger
+}
+
+// CaptureState outputs state information on the logger
+func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
+	log := StructLog{pc, op, gas, cost, memory.Data(), stack.Data(), nil, env.depth, err}
+	return l.encoder.Encode(log)
+}
+
+// CaptureState logs a new structured log message and pushes it out to the environment
 //
-// captureState also tracks SSTORE ops to track dirty values.
+// CaptureState also tracks SSTORE ops to track dirty values.
 func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
