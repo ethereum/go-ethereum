@@ -218,23 +218,26 @@ func parseBatchRequest(incomingMsg json.RawMessage) ([]rpcRequest, bool, Error) 
 
 		id := &in[i].Id
 
-		// subscribe are special, they will always use `subscriptionMethod` as first param in the payload
-		if strings.HasSuffix(r.Method, subscribeMethodSuffix) {
-			requests[i] = rpcRequest{id: id, isPubSub: true}
-			if len(r.Payload) > 0 {
-				// first param must be subscription name
-				var subscribeMethod [1]string
-				if err := json.Unmarshal(r.Payload, &subscribeMethod); err != nil {
-					log.Debug(fmt.Sprintf("Unable to parse subscription method: %v\n", err))
-					return nil, false, &invalidRequestError{"Unable to parse subscription request"}
+		// shh_subscribe should not be handled in a special way
+		if !strings.HasPrefix(r.Method, "shh_") {
+			// subscribe are special, they will always use `subscriptionMethod` as first param in the payload
+			if strings.HasSuffix(r.Method, subscribeMethodSuffix) {
+				requests[i] = rpcRequest{id: id, isPubSub: true}
+				if len(r.Payload) > 0 {
+					// first param must be subscription name
+					var subscribeMethod [1]string
+					if err := json.Unmarshal(r.Payload, &subscribeMethod); err != nil {
+						log.Debug(fmt.Sprintf("Unable to parse subscription method: %v\n", err))
+						return nil, false, &invalidRequestError{"Unable to parse subscription request"}
+					}
+
+					requests[i].service, requests[i].method = strings.TrimSuffix(r.Method, subscribeMethodSuffix), subscribeMethod[0]
+					requests[i].params = r.Payload
+					continue
 				}
 
-				requests[i].service, requests[i].method = strings.TrimSuffix(r.Method, subscribeMethodSuffix), subscribeMethod[0]
-				requests[i].params = r.Payload
-				continue
+				return nil, true, &invalidRequestError{"Unable to parse (un)subscribe request arguments"}
 			}
-
-			return nil, true, &invalidRequestError{"Unable to parse (un)subscribe request arguments"}
 		}
 
 		if strings.HasSuffix(r.Method, unsubscribeMethodSuffix) {
