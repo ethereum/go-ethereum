@@ -244,6 +244,10 @@ type ServerConfig struct {
 	// POST request to /networks/<netid>/mock and is expected to
 	// generate some mock events in the network
 	Mocker func(*Network)
+	// In case of multiple mockers, set the default here
+	DefaultMockerId string
+	// map of Mockers
+	Mockers map[string]*MockerConfig
 }
 
 // Server is an HTTP server providing an API to create and manage simulation
@@ -268,13 +272,15 @@ func NewServer(config *ServerConfig) *Server {
 		networks:     make(map[string]*Network),
 	}
 
+	s.OPTIONS("/networks", s.Options)
 	s.POST("/networks", s.CreateNetwork)
 	s.GET("/networks", s.GetNetworks)
 	s.GET("/networks/:netid", s.GetNetwork)
 	s.GET("/networks/:netid/events", s.StreamNetworkEvents)
 	s.POST("/networks/:netid/snapshots/create", s.CreateSnapshot)
 	s.POST("/networks/:netid/snapshots/load", s.LoadSnapshot)
-	s.POST("/networks/:netid/mock", s.StartMocker)
+	s.POST("/networks/:netid/mock/:mockid", s.StartMocker)
+	s.GET("/networks/:netid/mock", s.GetMocker)
 	s.POST("/networks/:netid/nodes", s.CreateNode)
 	s.GET("/networks/:netid/nodes", s.GetNodes)
 	s.GET("/networks/:netid/nodes/:nodeid", s.GetNode)
@@ -335,17 +341,42 @@ func (s *Server) GetNetwork(w http.ResponseWriter, req *http.Request) {
 	s.JSON(w, http.StatusOK, network)
 }
 
+//Get the info for a particular mocker
+func (s *Server) GetMocker(w http.ResponseWriter, req *http.Request) {
+	m := make(map[string]string)
+
+	for k, v := range s.Mockers {
+		m[k] = v.Description
+	}
+
+	s.JSON(w, http.StatusOK, m)
+}
+
 func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 	network := req.Context().Value("network").(*Network)
+	mockerid := req.Context().Value("mock").(string)
 
-	if s.Mocker == nil {
+	if len(s.Mockers) == 0 {
 		http.Error(w, "mocker not configured", http.StatusInternalServerError)
 		return
 	}
 
-	go s.Mocker(network)
+	if mockerid == "default" {
+		//choose the default mocker
+		mockerid = s.DefaultMockerId
+	}
 
-	w.WriteHeader(http.StatusOK)
+	if mocker, ok := s.Mockers[mockerid]; ok {
+		if mocker.Mocker == nil {
+			http.Error(w, "mocker not configured", http.StatusInternalServerError)
+			return
+		}
+		go mocker.Mocker(network)
+		w.WriteHeader(http.StatusOK)
+	} else {
+		http.Error(w, "invalid mockerid provided", http.StatusBadRequest)
+		return
+	}
 }
 
 // StreamNetworkEvents streams network events as a server-sent-events stream
@@ -521,6 +552,12 @@ func (s *Server) DisconnectNode(w http.ResponseWriter, req *http.Request) {
 	s.JSON(w, http.StatusOK, node.NodeInfo())
 }
 
+//Options
+func (s *Server) Options(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	return
+}
+
 // NodeRPC proxies node RPC requests via a WebSocket connection
 func (s *Server) NodeRPC(w http.ResponseWriter, req *http.Request) {
 	node := req.Context().Value("node").(*Node)
@@ -551,6 +588,11 @@ func (s *Server) POST(path string, handle http.HandlerFunc) {
 // DELETE registers a handler for DELETE requests to a particular path
 func (s *Server) DELETE(path string, handle http.HandlerFunc) {
 	s.router.DELETE(path, s.wrapHandler(handle))
+}
+
+// OPTIONS registers a handler for OPTIONS requests to a particular path
+func (s *Server) OPTIONS(path string, handle http.HandlerFunc) {
+	s.router.OPTIONS("/*path", s.wrapHandler(handle))
 }
 
 // JSON sends "data" as a JSON HTTP response
@@ -616,6 +658,14 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 				return
 			}
 			ctx = context.WithValue(ctx, "peer", peer)
+		}
+
+		if id := params.ByName("mockid"); id != "" {
+			if network == nil {
+				http.NotFound(w, req)
+				return
+			}
+			ctx = context.WithValue(ctx, "mock", id)
 		}
 
 		handler(w, req.WithContext(ctx))
