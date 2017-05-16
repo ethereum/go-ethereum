@@ -17,8 +17,6 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -66,8 +64,6 @@ type ChainUncleEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
-
-type GasPriceChanged struct{ Price *big.Int }
 
 // Mining operation events
 type StartMining struct{}

@@ -33,7 +33,11 @@ import (
 )
 
 func transaction(nonce uint64, gaslimit *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
-	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, big.NewInt(1), nil), types.HomesteadSigner{}, key)
+	return pricedTransaction(nonce, gaslimit, big.NewInt(1), key)
+}
+
+func pricedTransaction(nonce uint64, gaslimit, gasprice *big.Int, key *ecdsa.PrivateKey) *types.Transaction {
+	tx, _ := types.SignTx(types.NewTransaction(nonce, common.Address{}, big.NewInt(100), gaslimit, gasprice, nil), types.HomesteadSigner{}, key)
 	return tx
 }
 
@@ -151,9 +155,9 @@ func TestInvalidTransactions(t *testing.T) {
 	}
 
 	tx = transaction(1, big.NewInt(100000), key)
-	pool.minGasPrice = big.NewInt(1000)
-	if err := pool.Add(tx); err != ErrCheap {
-		t.Error("expected", ErrCheap, "got", err)
+	pool.gasPrice = big.NewInt(1000)
+	if err := pool.Add(tx); err != ErrUnderpriced {
+		t.Error("expected", ErrUnderpriced, "got", err)
 	}
 
 	pool.SetLocal(tx)
@@ -262,14 +266,14 @@ func TestTransactionChainFork(t *testing.T) {
 	resetState()
 
 	tx := transaction(0, big.NewInt(100000), key)
-	if err := pool.add(tx); err != nil {
+	if _, err := pool.add(tx); err != nil {
 		t.Error("didn't expect error", err)
 	}
 	pool.RemoveBatch([]*types.Transaction{tx})
 
 	// reset the pool's internal state
 	resetState()
-	if err := pool.add(tx); err != nil {
+	if _, err := pool.add(tx); err != nil {
 		t.Error("didn't expect error", err)
 	}
 }
@@ -293,11 +297,11 @@ func TestTransactionDoubleNonce(t *testing.T) {
 	tx3, _ := types.SignTx(types.NewTransaction(0, common.Address{}, big.NewInt(100), big.NewInt(1000000), big.NewInt(1), nil), signer, key)
 
 	// Add the first two transaction, ensure higher priced stays only
-	if err := pool.add(tx1); err != nil {
-		t.Error("didn't expect error", err)
+	if replace, err := pool.add(tx1); err != nil || replace {
+		t.Errorf("first transaction insert failed (%v) or reported replacement (%v)", err, replace)
 	}
-	if err := pool.add(tx2); err != nil {
-		t.Error("didn't expect error", err)
+	if replace, err := pool.add(tx2); err != nil || !replace {
+		t.Errorf("second transaction insert failed (%v) or not reported replacement (%v)", err, replace)
 	}
 	state, _ := pool.currentState()
 	pool.promoteExecutables(state)
@@ -308,9 +312,7 @@ func TestTransactionDoubleNonce(t *testing.T) {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
 	// Add the thid transaction and ensure it's not saved (smaller price)
-	if err := pool.add(tx3); err != nil {
-		t.Error("didn't expect error", err)
-	}
+	pool.add(tx3)
 	pool.promoteExecutables(state)
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
@@ -330,7 +332,7 @@ func TestMissingNonce(t *testing.T) {
 	currentState, _ := pool.currentState()
 	currentState.AddBalance(addr, big.NewInt(100000000000000))
 	tx := transaction(1, big.NewInt(100000), key)
-	if err := pool.add(tx); err != nil {
+	if _, err := pool.add(tx); err != nil {
 		t.Error("didn't expect error", err)
 	}
 	if len(pool.pending) != 0 {
@@ -557,8 +559,8 @@ func TestTransactionQueueAccountLimiting(t *testing.T) {
 // some threshold, the higher transactions are dropped to prevent DOS attacks.
 func TestTransactionQueueGlobalLimiting(t *testing.T) {
 	// Reduce the queue limits to shorten test time
-	defer func(old uint64) { maxQueuedInTotal = old }(maxQueuedInTotal)
-	maxQueuedInTotal = maxQueuedPerAccount * 3
+	defer func(old uint64) { maxQueuedTotal = old }(maxQueuedTotal)
+	maxQueuedTotal = maxQueuedPerAccount * 3
 
 	// Create the pool to test the limit enforcement with
 	db, _ := ethdb.NewMemDatabase()
@@ -578,7 +580,7 @@ func TestTransactionQueueGlobalLimiting(t *testing.T) {
 	// Generate and queue a batch of transactions
 	nonces := make(map[common.Address]uint64)
 
-	txs := make(types.Transactions, 0, 3*maxQueuedInTotal)
+	txs := make(types.Transactions, 0, 3*maxQueuedTotal)
 	for len(txs) < cap(txs) {
 		key := keys[rand.Intn(len(keys))]
 		addr := crypto.PubkeyToAddress(key.PublicKey)
@@ -596,8 +598,8 @@ func TestTransactionQueueGlobalLimiting(t *testing.T) {
 		}
 		queued += list.Len()
 	}
-	if queued > int(maxQueuedInTotal) {
-		t.Fatalf("total transactions overflow allowance: %d > %d", queued, maxQueuedInTotal)
+	if queued > int(maxQueuedTotal) {
+		t.Fatalf("total transactions overflow allowance: %d > %d", queued, maxQueuedTotal)
 	}
 }
 
@@ -788,6 +790,227 @@ func TestTransactionPendingMinimumAllowance(t *testing.T) {
 		if list.Len() != int(minPendingPerAccount) {
 			t.Errorf("addr %x: total pending transactions mismatch: have %d, want %d", addr, list.Len(), minPendingPerAccount)
 		}
+	}
+}
+
+// Tests that setting the transaction pool gas price to a higher value correctly
+// discards everything cheaper than that and moves any gapped transactions back
+// from the pending pool to the queue.
+//
+// Note, local transactions are never allowed to be dropped.
+func TestTransactionPoolRepricing(t *testing.T) {
+	// Create the pool to test the pricing enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+
+	pool := NewTxPool(params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool.resetState()
+
+	// Create a number of test accounts and fund them
+	state, _ := pool.currentState()
+
+	keys := make([]*ecdsa.PrivateKey, 3)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		state.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+	// Generate and queue a batch of transactions, both pending and queued
+	txs := types.Transactions{}
+
+	txs = append(txs, pricedTransaction(0, big.NewInt(100000), big.NewInt(2), keys[0]))
+	txs = append(txs, pricedTransaction(1, big.NewInt(100000), big.NewInt(1), keys[0]))
+	txs = append(txs, pricedTransaction(2, big.NewInt(100000), big.NewInt(2), keys[0]))
+
+	txs = append(txs, pricedTransaction(1, big.NewInt(100000), big.NewInt(2), keys[1]))
+	txs = append(txs, pricedTransaction(2, big.NewInt(100000), big.NewInt(1), keys[1]))
+	txs = append(txs, pricedTransaction(3, big.NewInt(100000), big.NewInt(2), keys[1]))
+
+	txs = append(txs, pricedTransaction(0, big.NewInt(100000), big.NewInt(1), keys[2]))
+	pool.SetLocal(txs[len(txs)-1]) // prevent this one from ever being dropped
+
+	// Import the batch and that both pending and queued transactions match up
+	pool.AddBatch(txs)
+
+	pending, queued := pool.stats()
+	if pending != 4 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 4)
+	}
+	if queued != 3 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
+	}
+	// Reprice the pool and check that underpriced transactions get dropped
+	pool.SetGasPrice(big.NewInt(2))
+
+	pending, queued = pool.stats()
+	if pending != 2 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
+	}
+	if queued != 3 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 3)
+	}
+	// Check that we can't add the old transactions back
+	if err := pool.Add(pricedTransaction(1, big.NewInt(100000), big.NewInt(1), keys[0])); err != ErrUnderpriced {
+		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
+	}
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(1), keys[1])); err != ErrUnderpriced {
+		t.Fatalf("adding underpriced queued transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
+	}
+	// However we can add local underpriced transactions
+	tx := pricedTransaction(1, big.NewInt(100000), big.NewInt(1), keys[2])
+
+	pool.SetLocal(tx) // prevent this one from ever being dropped
+	if err := pool.Add(tx); err != nil {
+		t.Fatalf("failed to add underpriced local transaction: %v", err)
+	}
+	if pending, _ = pool.stats(); pending != 3 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
+	}
+}
+
+// Tests that when the pool reaches its global transaction limit, underpriced
+// transactions are gradually shifted out for more expensive ones and any gapped
+// pending transactions are moved into te queue.
+//
+// Note, local transactions are never allowed to be dropped.
+func TestTransactionPoolUnderpricing(t *testing.T) {
+	// Reduce the queue limits to shorten test time
+	defer func(old uint64) { maxPendingTotal = old }(maxPendingTotal)
+	maxPendingTotal = 2
+
+	defer func(old uint64) { maxQueuedTotal = old }(maxQueuedTotal)
+	maxQueuedTotal = 2
+
+	// Create the pool to test the pricing enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+
+	pool := NewTxPool(params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool.resetState()
+
+	// Create a number of test accounts and fund them
+	state, _ := pool.currentState()
+
+	keys := make([]*ecdsa.PrivateKey, 3)
+	for i := 0; i < len(keys); i++ {
+		keys[i], _ = crypto.GenerateKey()
+		state.AddBalance(crypto.PubkeyToAddress(keys[i].PublicKey), big.NewInt(1000000))
+	}
+	// Generate and queue a batch of transactions, both pending and queued
+	txs := types.Transactions{}
+
+	txs = append(txs, pricedTransaction(0, big.NewInt(100000), big.NewInt(1), keys[0]))
+	txs = append(txs, pricedTransaction(1, big.NewInt(100000), big.NewInt(2), keys[0]))
+
+	txs = append(txs, pricedTransaction(1, big.NewInt(100000), big.NewInt(1), keys[1]))
+
+	txs = append(txs, pricedTransaction(0, big.NewInt(100000), big.NewInt(1), keys[2]))
+	pool.SetLocal(txs[len(txs)-1]) // prevent this one from ever being dropped
+
+	// Import the batch and that both pending and queued transactions match up
+	pool.AddBatch(txs)
+
+	pending, queued := pool.stats()
+	if pending != 3 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 3)
+	}
+	if queued != 1 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 1)
+	}
+	// Ensure that adding an underpriced transaction on block limit fails
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(1), keys[1])); err != ErrUnderpriced {
+		t.Fatalf("adding underpriced pending transaction error mismatch: have %v, want %v", err, ErrUnderpriced)
+	}
+	// Ensure that adding high priced transactions drops cheap ones, but not own
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(3), keys[1])); err != nil {
+		t.Fatalf("failed to add well priced transaction: %v", err)
+	}
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(4), keys[1])); err != nil {
+		t.Fatalf("failed to add well priced transaction: %v", err)
+	}
+	if err := pool.Add(pricedTransaction(3, big.NewInt(100000), big.NewInt(5), keys[1])); err != nil {
+		t.Fatalf("failed to add well priced transaction: %v", err)
+	}
+	pending, queued = pool.stats()
+	if pending != 2 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
+	}
+	if queued != 2 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+	// Ensure that adding local transactions can push out even higher priced ones
+	tx := pricedTransaction(1, big.NewInt(100000), big.NewInt(0), keys[2])
+
+	pool.SetLocal(tx) // prevent this one from ever being dropped
+	if err := pool.Add(tx); err != nil {
+		t.Fatalf("failed to add underpriced local transaction: %v", err)
+	}
+	pending, queued = pool.stats()
+	if pending != 2 {
+		t.Fatalf("pending transactions mismatched: have %d, want %d", pending, 2)
+	}
+	if queued != 2 {
+		t.Fatalf("queued transactions mismatched: have %d, want %d", queued, 2)
+	}
+}
+
+// Tests that the pool rejects replacement transactions that don't meet the minimum
+// price bump required.
+func TestTransactionReplacement(t *testing.T) {
+	// Create the pool to test the pricing enforcement with
+	db, _ := ethdb.NewMemDatabase()
+	statedb, _ := state.New(common.Hash{}, db)
+
+	pool := NewTxPool(params.TestChainConfig, new(event.TypeMux), func() (*state.StateDB, error) { return statedb, nil }, func() *big.Int { return big.NewInt(1000000) })
+	pool.resetState()
+
+	// Create a a test account to add transactions with
+	key, _ := crypto.GenerateKey()
+
+	state, _ := pool.currentState()
+	state.AddBalance(crypto.PubkeyToAddress(key.PublicKey), big.NewInt(1000000000))
+
+	// Add pending transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
+	price := int64(100)
+	threshold := (price * (100 + minPriceBumpPercent)) / 100
+
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(1), key)); err != nil {
+		t.Fatalf("failed to add original cheap pending transaction: %v", err)
+	}
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100001), big.NewInt(1), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original cheap pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(2), key)); err != nil {
+		t.Fatalf("failed to replace original cheap pending transaction: %v", err)
+	}
+
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(price), key)); err != nil {
+		t.Fatalf("failed to add original proper pending transaction: %v", err)
+	}
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(threshold), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original proper pending transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	if err := pool.Add(pricedTransaction(0, big.NewInt(100000), big.NewInt(threshold+1), key)); err != nil {
+		t.Fatalf("failed to replace original proper pending transaction: %v", err)
+	}
+	// Add queued transactions, ensuring the minimum price bump is enforced for replacement (for ultra low prices too)
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(1), key)); err != nil {
+		t.Fatalf("failed to add original queued transaction: %v", err)
+	}
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100001), big.NewInt(1), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(2), key)); err != nil {
+		t.Fatalf("failed to replace original queued transaction: %v", err)
+	}
+
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(price), key)); err != nil {
+		t.Fatalf("failed to add original queued transaction: %v", err)
+	}
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100001), big.NewInt(threshold), key)); err != ErrReplaceUnderpriced {
+		t.Fatalf("original queued transaction replacement error mismatch: have %v, want %v", err, ErrReplaceUnderpriced)
+	}
+	if err := pool.Add(pricedTransaction(2, big.NewInt(100000), big.NewInt(threshold+1), key)); err != nil {
+		t.Fatalf("failed to replace original queued transaction: %v", err)
 	}
 }
 
