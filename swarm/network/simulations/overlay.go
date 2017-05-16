@@ -11,66 +11,57 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-// SimNode is the adapter used by Swarm simulations.
-type SimNode struct {
-	id       *adapters.NodeId
-	rw       network.ReadWriter
-	hive     *network.Hive
-	protocol *p2p.Protocol
-}
-
-type simReadWriter struct {
+type simStore struct {
 	m map[string][]byte
 }
 
-func (self *simReadWriter) ReadAll(s string) ([]byte, error) {
+func (self *simStore) Load(s string) ([]byte, error) {
 	return self.m[s], nil
 }
 
-func (self *simReadWriter) WriteAll(s string, data []byte) error {
+func (self *simStore) Save(s string, data []byte) error {
 	self.m[s] = data
 	return nil
 }
 
-func NewSimReadWriter() *simReadWriter {
-	return &simReadWriter{
+func NewSimStore() *simStore {
+	return &simStore{
 		make(map[string][]byte),
 	}
 }
 
-func (s *SimNode) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{*s.protocol}
+type Simulation struct {
+	mtx    sync.Mutex
+	stores map[discover.NodeID]*simStore
 }
 
-func (s *SimNode) APIs() []rpc.API {
-	return nil
+func NewSimulation() *Simulation {
+	return &Simulation{
+		stores: make(map[discover.NodeID]*simStore),
+	}
 }
 
-// the hive update ticker for hive
-func af() <-chan time.Time {
-	return time.NewTicker(1 * time.Second).C
-}
+func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) node.Service {
+	s.mtx.Lock()
+	store, ok := s.stores[id.NodeID]
+	if !ok {
+		store = NewSimStore()
+		s.stores[id.NodeID] = store
+	}
+	s.mtx.Unlock()
 
-// Start() starts up the hive
-// makes SimNode implement node.Service
-func (self *SimNode) Start(server *p2p.Server) error {
-	self.init()
-	return self.hive.Start(server, af, self.rw)
-}
-
-func (self *SimNode) init() {
-	addr := network.NewPeerAddrFromNodeId(self.id)
+	addr := network.NewAddrFromNodeId(id)
 	kp := network.NewKadParams()
 
 	kp.MinProxBinSize = 2
@@ -80,42 +71,16 @@ func (self *SimNode) init() {
 	kp.RetryExponent = 2
 	kp.RetryInterval = 1000000
 
-	to := network.NewKademlia(addr.OverlayAddr(), kp) // overlay topology driver
 	hp := network.NewHiveParams()
-	hp.CallInterval = 5000
-	pp := network.NewHive(hp, to) // hive
-
-	services := func(p network.Peer) error {
-		dp := network.NewDiscovery(p, to)
-		pp.Add(dp)
-		log.Trace(fmt.Sprintf("kademlia on %v", dp))
-		p.DisconnectHook(func(err error) {
-			pp.Remove(dp)
-		})
-		return nil
+	hp.KeepAliveInterval = 5 * time.Second
+	config := &network.BzzConfig{
+		OverlayAddr:  addr.Over(),
+		UnderlayAddr: addr.Under(),
+		KadParams:    kp,
+		HiveParams:   hp,
+		Store:        store,
 	}
-
-	ct := network.BzzCodeMap(network.DiscoveryMsgs...) // bzz protocol code map
-	nodeInfo := func() interface{} { return pp.String() }
-	self.hive = pp
-	self.protocol = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nodeInfo)
-}
-
-// Stop() shuts down the hive
-// makes SimNode implement node.Service
-func (self *SimNode) Stop() error {
-	self.hive.Stop()
-	return nil
-}
-
-// NewSimNode creates adapters for nodes in the simulation.
-func NewSimNode(id *adapters.NodeId, snapshot []byte) node.Service {
-	s := &SimNode{
-		id: id,
-		rw: NewSimReadWriter(),
-	}
-	s.init()
-	return s
+	return network.NewBzz(config)
 }
 
 func createMockers() map[string]*simulations.MockerConfig {
@@ -171,7 +136,12 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 		} else {
 			peerId = ids[i-1]
 		}
-		if err := net.Connect(id, peerId); err != nil {
+		ch := make(chan network.OverlayAddr)
+		go func() {
+			defer close(ch)
+			ch <- network.NewAddrFromNodeId(peerId)
+		}()
+		if err := net.GetNode(id).Node.(*adapters.SimNode).Service().(*network.Bzz).Hive.Register(ch); err != nil {
 			panic(err.Error())
 		}
 	}
@@ -243,10 +213,11 @@ func startStopMocker(net *simulations.Network) {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
+	s := NewSimulation()
 	services := adapters.Services{
-		"overlay": NewSimNode,
+		"overlay": s.NewService,
 	}
 	adapters.RegisterServices(services)
 

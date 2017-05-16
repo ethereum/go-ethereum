@@ -120,9 +120,8 @@ func (self *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
 			if uint8(po) < self.depth {
 				return false
 			}
-			log.Warn(fmt.Sprintf("peer %#v depth %v", p, self.depth))
 			if !self.seen(p) {
-				peers = append(peers, ToAddr(p))
+				peers = append(peers, ToAddr(p.Off()))
 			}
 			return true
 		})
@@ -147,13 +146,15 @@ func (self *discPeer) handlePeersMsg(msg *peersMsg) error {
 		return nil
 	}
 
-	var c chan OverlayAddr
+	c := make(chan OverlayAddr)
 	go func() {
+		defer close(c)
 		for _, a := range msg.Peers {
 			self.seen(a)
 			c <- a
 		}
 	}()
+	log.Info("discovery overlay register")
 	return self.overlay.Register(c)
 }
 
@@ -168,7 +169,7 @@ func (self *discPeer) handleGetPeersMsg(msg *getPeersMsg) error {
 	self.overlay.EachConn(self.Over(), int(msg.Order), func(p OverlayConn, po int, isproxbin bool) bool {
 		i++
 		// only send peers we have not sent before in this session
-		a := ToAddr(p)
+		a := ToAddr(p.Off())
 		if self.seen(a) {
 			peers = append(peers, a)
 		}

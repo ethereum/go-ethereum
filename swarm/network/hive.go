@@ -126,7 +126,8 @@ func (self *Hive) Start(server *p2p.Server) error {
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			log.Trace("hive delegate to overlay driver: suggest addr to connect to")
+			log.Debug("hive delegate to overlay driver: suggest addr to connect to")
+			// log.Trace("hive delegate to overlay driver: suggest addr to connect to")
 			addr, order, want := self.SuggestPeer()
 
 			if addr != nil {
@@ -143,16 +144,17 @@ func (self *Hive) Start(server *p2p.Server) error {
 
 			want = want && self.Discovery
 			if want {
+				log.Debug(fmt.Sprintf("========> request peers nearest %v", addr))
 				RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
 			}
 
+			log.Info(fmt.Sprintf("%v", self))
 			select {
 			case self.toggle <- want:
 				log.Trace(fmt.Sprintf("keep hive alive: %v", want))
 			case <-self.quit:
 				return
 			}
-			// log.Info(fmt.Sprintf("%v", self))
 		}
 	}()
 	return nil
@@ -176,13 +178,6 @@ func (self *Hive) Run(p *bzzPeer) error {
 	defer self.Off(dp)
 	return p.Run(dp.HandleMsg)
 }
-
-// Remove called after peer is disconnected
-// func (self *Hive) Remove(p *bzzPeer) {
-// 	defer self.wake()
-// 	log.Debug(fmt.Sprintf("remove bee %v", p))
-// 	self.Off(p)
-// }
 
 // NodeInfo function is used by the p2p.server RPC interface to display
 // protocol specific node information
@@ -229,6 +224,9 @@ func ToAddr(pa OverlayPeer) *bzzAddr {
 	if addr, ok := pa.(*bzzAddr); ok {
 		return addr
 	}
+	if p, ok := pa.(*discPeer); ok {
+		return p.bzzAddr
+	}
 	return pa.(*bzzPeer).bzzAddr
 }
 
@@ -262,7 +260,7 @@ func (self *Hive) keepAlive() {
 	for {
 		select {
 		case <-tick:
-			log.Trace("wake up: make hive alive")
+			log.Debug("wake up: make hive alive")
 			self.wake()
 		case need := <-self.toggle:
 			if ticker == nil && need {
@@ -295,9 +293,9 @@ func (self *Hive) loadPeers() error {
 		return err
 	}
 
-	var c chan OverlayAddr
-	defer close(c)
+	c := make(chan OverlayAddr)
 	go func() {
+		defer close(c)
 		for _, a := range as {
 			c <- a
 		}

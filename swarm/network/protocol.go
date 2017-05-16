@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -185,6 +186,7 @@ func (b *Bzz) Stop() error {
 
 func (b *Bzz) runHandshake(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	handshake := b.getHandshake(p.ID())
+	defer b.removeHandshake(p.ID())
 
 	if err := handshake.Perform(p, rw); err != nil {
 		log.Error("handshake failed", "peer", p.ID(), "err", err)
@@ -216,6 +218,12 @@ func (b *Bzz) runProtocol(spec *protocols.Spec, run func(*bzzPeer) error) func(*
 		}
 		return run(peer)
 	}
+}
+
+func (b *Bzz) removeHandshake(peerID discover.NodeID) {
+	b.mtx.Lock()
+	defer b.mtx.Unlock()
+	delete(b.handshakes, peerID)
 }
 
 func (b *Bzz) getHandshake(peerID discover.NodeID) *bzzHandshake {
@@ -370,5 +378,8 @@ func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
 // the overlay address is derived as the hash of the nodeId
 func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
 	id := n.NodeID
-	return &bzzAddr{crypto.Keccak256(id[:]), id[:]}
+	return &bzzAddr{
+		OAddr: crypto.Keccak256(id[:]),
+		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
 }

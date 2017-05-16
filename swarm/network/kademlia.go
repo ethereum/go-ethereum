@@ -162,10 +162,11 @@ func (self *Kademlia) Register(peers chan OverlayAddr) error {
 		if bytes.Equal(p.Address(), self.base) {
 			return fmt.Errorf("add peers: %x is self", self.base)
 		}
-		np, _, _ = pot.Add(np, pot.PotVal(newEntry(p)))
+		np, _, _ = pot.Add(np, newEntry(p))
 	}
 	com := self.addrs.Merge(np)
-	log.Trace(fmt.Sprintf("merged %v peers, %v known", np.Size(), com))
+	log.Debug(fmt.Sprintf("merged %v peers, %v known, total: %v", np.Size(), com, self.addrs.Size()))
+	// log.Trace(fmt.Sprintf("merged %v peers, %v known", np.Size(), com))
 
 	// TODO: remove this check
 	m := make(map[string]bool)
@@ -189,7 +190,8 @@ func (self *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	depth := self.Depth()
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
-	log.Trace(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
+	log.Debug(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
+	// log.Trace(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
 	var ppo int
 	ba := pot.NewBytesVal(self.base, nil)
 	self.addrs.EachNeighbour(ba, func(val pot.PotVal, po int) bool {
@@ -266,12 +268,10 @@ func (self *Kademlia) On(p OverlayConn) {
 		return v
 	})
 
-	log.Trace(fmt.Sprintf("Notifier:%#v", p))
 	np, ok := p.(Notifier)
 	if !ok {
 		return
 	}
-	log.Trace(fmt.Sprintf("notify:%v", p))
 
 	depth := uint8(self.Depth())
 	if depth != self.depth {
@@ -284,10 +284,12 @@ func (self *Kademlia) On(p OverlayConn) {
 	f := func(val pot.PotVal, po int) {
 		dp := val.(*entry).OverlayPeer.(Notifier)
 		dp.NotifyPeer(p.Off(), uint8(po))
-		log.Trace(fmt.Sprintf("peer %v notified of %v (%v)", dp, p, po))
+		// log.Trace(fmt.Sprintf("peer %v notified of %v (%v)", dp, p, po))
+		log.Debug(fmt.Sprintf("peer %v notified of %v (%v)", dp, p, po))
 		if depth > 0 {
 			dp.NotifyDepth(depth)
-			log.Trace("peer %v notified of new depth %v", dp, depth)
+			log.Debug(fmt.Sprintf("peer %v notified of new depth %v", dp, depth))
+			// log.Trace(fmt.Sprintf("peer %v notified of new depth %v", dp, depth))
 		}
 	}
 	self.conns.EachNeighbourAsync(e, 1024, 255, f, false)
