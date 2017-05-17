@@ -37,7 +37,7 @@ func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 	to := NewKademlia(addr.OAddr, NewKadParams())
 	pp := NewHive(params, to, nil) // hive
 
-	return newBzzBaseTester(t, 1, addr, DiscoveryProtocol, pp.Run), pp
+	return newBzzBaseTester(t, 1, addr, DiscoverySpec, pp.Run), pp
 }
 
 func TestRegisterAndConnect(t *testing.T) {

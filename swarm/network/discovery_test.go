@@ -25,7 +25,7 @@ func TestDiscovery(t *testing.T) {
 		return p.Run(dp.HandleMsg)
 	}
 
-	s := newBzzBaseTester(t, 1, addr, DiscoveryProtocol, run)
+	s := newBzzBaseTester(t, 1, addr, DiscoverySpec, run)
 	defer s.Stop()
 
 	s.TestExchanges(p2ptest.Exchange{

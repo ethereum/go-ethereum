@@ -179,21 +179,23 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 func newService(id *adapters.NodeId, snapshot []byte) node.Service {
 	addr := network.NewAddrFromNodeId(id)
 
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = 2
+	kp.MaxBinSize = 3
+	kp.MinBinSize = 1
+	kp.MaxRetries = 1000
+	kp.RetryExponent = 2
+	kp.RetryInterval = 1000000
+	kad := network.NewKademlia(addr.Over(), kp)
+
+	hp := network.NewHiveParams()
+	hp.KeepAliveInterval = time.Second
+
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),
 		UnderlayAddr: addr.Under(),
-		KadParams:    network.NewKadParams(),
-		HiveParams:   network.NewHiveParams(),
+		HiveParams:   hp,
 	}
 
-	config.KadParams.MinProxBinSize = 2
-	config.KadParams.MaxBinSize = 3
-	config.KadParams.MinBinSize = 1
-	config.KadParams.MaxRetries = 1000
-	config.KadParams.RetryExponent = 2
-	config.KadParams.RetryInterval = 1000000
-
-	config.HiveParams.KeepAliveInterval = time.Second
-
-	return network.NewBzz(config)
+	return network.NewBzz(config, kad, nil)
 }

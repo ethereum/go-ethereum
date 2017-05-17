@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -38,7 +37,7 @@ const (
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 )
 
-var BzzProtocol = &protocols.Spec{
+var BzzHandshakeSpec = &protocols.Spec{
 	Name:       "bzz",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
@@ -47,7 +46,7 @@ var BzzProtocol = &protocols.Spec{
 	},
 }
 
-var DiscoveryProtocol = &protocols.Spec{
+var DiscoverySpec = &protocols.Spec{
 	Name:       "hive",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
@@ -55,15 +54,6 @@ var DiscoveryProtocol = &protocols.Spec{
 		peersMsg{},
 		getPeersMsg{},
 		subPeersMsg{},
-	},
-}
-
-var PssProtocol = &protocols.Spec{
-	Name:       "pss",
-	Version:    1,
-	MaxMsgSize: 10 * 1024 * 1024,
-	Messages: []interface{}{
-		PssMsg{},
 	},
 }
 
@@ -98,75 +88,54 @@ type Store interface {
 	Save(string, []byte) error
 }
 
+// BzzConfig captures the config params used by the hive
 type BzzConfig struct {
 	OverlayAddr  []byte
 	UnderlayAddr []byte
-
-	KadParams  *KadParams
-	HiveParams *HiveParams
-	PssParams  *PssParams
-
-	Store Store
+	HiveParams   *HiveParams
 }
 
 // Bzz is the swarm protocol bundle
 type Bzz struct {
-	Kademlia *Kademlia
-	Hive     *Hive
-	Pss      *Pss
-
+	Hive       *Hive
 	localAddr  *bzzAddr
 	mtx        sync.Mutex
 	handshakes map[discover.NodeID]*bzzHandshake
 }
 
 // NewBzz is the swarm protocol constructor
-func NewBzz(config *BzzConfig) *Bzz {
-	kademlia := NewKademlia(config.OverlayAddr, config.KadParams)
-	bzz := &Bzz{
-		Kademlia:   kademlia,
-		Hive:       NewHive(config.HiveParams, kademlia, config.Store),
+func NewBzz(config *BzzConfig, kad Overlay, store Store) *Bzz {
+	return &Bzz{
+		Hive:       NewHive(config.HiveParams, kad, store),
 		localAddr:  &bzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes: make(map[discover.NodeID]*bzzHandshake),
 	}
-	if config.PssParams != nil {
-		bzz.Pss = NewPss(kademlia, config.PssParams)
-	}
-	return bzz
 }
 
 // Bzz implements the node.Service interface, offers Protocols
 // * handshake/hive
 // * discovery
-// * pss
 func (b *Bzz) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    BzzProtocol.Name,
-			Version: BzzProtocol.Version,
-			Length:  BzzProtocol.Length(),
+			Name:    BzzHandshakeSpec.Name,
+			Version: BzzHandshakeSpec.Version,
+			Length:  BzzHandshakeSpec.Length(),
 			Run:     b.runHandshake,
 		},
 		{
-			Name:     DiscoveryProtocol.Name,
-			Version:  DiscoveryProtocol.Version,
-			Length:   DiscoveryProtocol.Length(),
-			Run:      b.runProtocol(DiscoveryProtocol, b.Hive.Run),
+			Name:     DiscoverySpec.Name,
+			Version:  DiscoverySpec.Version,
+			Length:   DiscoverySpec.Length(),
+			Run:      b.runProtocol(DiscoverySpec, b.Hive.Run),
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
-		},
-		{
-			Name:    PssProtocol.Name,
-			Version: PssProtocol.Version,
-			Length:  PssProtocol.Length(),
-			Run:     b.runProtocol(PssProtocol, b.Pss.Run),
 		},
 	}
 }
 
 // Bzz implements the node.Service interface, offers APIs:
 // * hive
-// * pss
 func (b *Bzz) APIs() []rpc.API {
 	return []rpc.API{{
 		Namespace: "hive",
@@ -232,7 +201,7 @@ func (b *Bzz) getHandshake(peerID discover.NodeID) *bzzHandshake {
 	handshake, ok := b.handshakes[peerID]
 	if !ok {
 		handshake = &bzzHandshake{
-			Version:   uint64(BzzProtocol.Version),
+			Version:   uint64(BzzHandshakeSpec.Version),
 			NetworkId: uint64(NetworkId),
 			Addr:      b.localAddr,
 			done:      make(chan struct{}),
@@ -298,7 +267,7 @@ func (self *bzzHandshake) Perform(p *p2p.Peer, rw p2p.MsgReadWriter) (err error)
 		self.err = err
 		close(self.done)
 	}()
-	peer := protocols.NewPeer(p, rw, BzzProtocol)
+	peer := protocols.NewPeer(p, rw, BzzHandshakeSpec)
 	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
 	defer cancel()
 	hs, err := peer.Handshake(ctx, self)
@@ -378,8 +347,5 @@ func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
 // the overlay address is derived as the hash of the nodeId
 func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
 	id := n.NodeID
-	return &bzzAddr{
-		OAddr: crypto.Keccak256(id[:]),
-		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
-	}
+	return &bzzAddr{crypto.Keccak256(id[:]), id[:]}
 }
