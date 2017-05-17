@@ -24,8 +24,8 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -891,6 +891,12 @@ type PublicTransactionPoolAPI struct {
 	b Backend
 }
 
+// nonceMutex is a global mutex for locking the nonce while a transaction
+// is being submitted. This should be used when a nonce has not been provided by the user,
+// and we get a nonce from the pools. The mutex prevents the (an identical nonce) from being
+// read again during the time that the first transaction is being signed.
+var nonceMutex sync.RWMutex
+
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
 func NewPublicTransactionPoolAPI(b Backend) *PublicTransactionPoolAPI {
 	return &PublicTransactionPoolAPI{b}
@@ -1167,8 +1173,6 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	}
 	return tx.Hash(), nil
 }
-var nonceMutex sync.RWMutex // global mutex for locking chain operations
-
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
@@ -1268,6 +1272,14 @@ type SignTransactionResult struct {
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
 func (s *PublicTransactionPoolAPI) SignTransaction(ctx context.Context, args SendTxArgs) (*SignTransactionResult, error) {
+
+	if args.Nonce == nil {
+		// We'll need to set nonce from pool, and thus we need to lock here
+		nonceMutex.Lock()
+		defer nonceMutex.Unlock()
+
+	}
+
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return nil, err
 	}
