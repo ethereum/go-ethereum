@@ -55,6 +55,7 @@ type Overlay interface {
 
 	String() string
 	BaseAddr() []byte
+	Healthy([][]byte) bool
 }
 
 // HiveParams holds the config options to hive
@@ -189,14 +190,6 @@ func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
 	defer self.lock.Unlock()
 	addr := NewAddrFromNodeId(adapters.NewNodeId(id[:]))
 	return interface{}(addr)
-}
-
-// Healthy reports the health state of the kademlia connectivity
-//
-func (self *Hive) Healthy() bool {
-	// TODO: determine if we have enough peers to consider the network
-	//       to be healthy
-	return true
 }
 
 func (self *Hive) Register(peers chan OverlayAddr) error {

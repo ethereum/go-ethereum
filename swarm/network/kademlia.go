@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
 )
 
@@ -498,4 +500,67 @@ func (self *Kademlia) Prune(c <-chan time.Time) {
 			log.Debug(fmt.Sprintf("pruned %v peers", total))
 		}
 	}()
+}
+
+func NewPeerPot(kadMinProxSize int, ids ...*adapters.NodeId) map[discover.NodeID][][]byte {
+	// create a table of all nodes for health check
+	np := pot.NewPot(nil, 0)
+	for _, id := range ids {
+		o := ToOverlayAddr(id)
+		np, _, _ = pot.Add(np, pot.NewBytesVal(o, nil))
+	}
+	nnmap := make(map[discover.NodeID][][]byte)
+
+	for _, id := range ids {
+		pl := 0
+		var nns [][]byte
+		np.EachNeighbour(pot.NewBytesVal(id.Bytes(), nil), func(val pot.PotVal, po int) bool {
+			a := val.(pot.BytesAddress).Address()
+			nns = append(nns, a)
+			if len(nns) >= kadMinProxSize {
+				pl = po
+			}
+			return pl == 0 || pl == po
+		})
+		nnmap[id.NodeID] = nns
+	}
+	return nnmap
+}
+
+func (self *Kademlia) FirstEmptyBin() (i int) {
+	i = -1
+	self.conns.EachBin(pot.NewBytesVal(self.base, nil), 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
+		if po > i+1 {
+			i = po
+			return false
+		}
+		i = po
+		return true
+	})
+	return i
+}
+
+func (self *Kademlia) Full() bool {
+	return self.FirstEmptyBin() >= self.Depth()
+}
+
+// Healthy reports the health state of the kademlia connectivity
+//
+func (self *Kademlia) Healthy(peers [][]byte) bool {
+	return self.gotNearestNeighbours(peers) && self.Full()
+}
+
+func (self *Kademlia) gotNearestNeighbours(peers [][]byte) (got bool) {
+	pm := make(map[string]bool)
+	for _, p := range peers {
+		pm[string(p)] = true
+	}
+	self.EachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
+		if !nn {
+			return false
+		}
+		_, got = pm[string(p.Address())]
+		return got
+	})
+	return got
 }

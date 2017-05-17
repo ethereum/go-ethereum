@@ -64,6 +64,7 @@ type Addr interface {
 	Over() []byte
 	Under() []byte
 	String() string
+	Update(OverlayAddr) OverlayAddr
 }
 
 // Peer interface represents an live peer connection
@@ -349,7 +350,12 @@ func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
 func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
 	id := n.NodeID
 	return &bzzAddr{
-		OAddr: crypto.Keccak256(id[:]),
+		OAddr: ToOverlayAddr(n),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
 	}
+}
+
+// ToOverlayAddr creates an overlayaddress from NodeID
+func ToOverlayAddr(id *adapters.NodeId) []byte {
+	return crypto.Keccak256(id.Bytes())
 }

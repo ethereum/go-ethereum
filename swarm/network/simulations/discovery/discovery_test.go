@@ -19,6 +19,7 @@ import (
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "discovery"
+const testMinProxBinSize = 2
 
 var services = adapters.Services{
 	serviceName: newService,
@@ -94,6 +95,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		}
 		return nil
 	}
+	nnmap := network.NewPeerPot(testMinProxBinSize, ids...)
 	check := func(ctx context.Context, id *adapters.NodeId) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -110,7 +112,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		var healthy bool
-		if err := client.Call(&healthy, "hive_healthy", nil); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", nnmap[id.NodeID]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		return healthy, nil
@@ -180,7 +182,7 @@ func newService(id *adapters.NodeId, snapshot []byte) node.Service {
 	addr := network.NewAddrFromNodeId(id)
 
 	kp := network.NewKadParams()
-	kp.MinProxBinSize = 2
+	kp.MinProxBinSize = testMinProxBinSize
 	kp.MaxBinSize = 3
 	kp.MinBinSize = 1
 	kp.MaxRetries = 1000
