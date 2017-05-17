@@ -260,6 +260,30 @@ func (self *Conn) nodesUp() error {
 	return nil
 }
 
+func (self *Network) StartAll() error {
+	for _, node := range self.Nodes {
+		if node.Up {
+			continue
+		}
+		if err := self.Start(node.ID()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (self *Network) StopAll() error {
+	for _, node := range self.Nodes {
+		if !node.Up {
+			continue
+		}
+		if err := self.Stop(node.ID()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Start(id) starts up the node (relevant only for instance with own p2p or remote)
 func (self *Network) Start(id *adapters.NodeId) error {
 	return self.startWithSnapshot(id, nil)
