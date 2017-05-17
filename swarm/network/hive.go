@@ -80,7 +80,7 @@ func NewHiveParams() *HiveParams {
 type Hive struct {
 	*HiveParams // settings
 	Overlay     // the overlay topology driver
-	store       Store
+	store       StateStore
 
 	// bookkeeping
 	lock sync.Mutex
@@ -93,7 +93,7 @@ type Hive struct {
 // Hive constructor embeds both arguments
 // HiveParams: config parameters
 // Overlay: Topology Driver Interface
-func NewHive(params *HiveParams, overlay Overlay, store Store) *Hive {
+func NewHive(params *HiveParams, overlay Overlay, store StateStore) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,

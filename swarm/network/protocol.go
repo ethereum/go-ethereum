@@ -85,7 +85,7 @@ type Conn interface {
 }
 
 // TODO: implement store for exec nodes
-type Store interface {
+type StateStore interface {
 	Load(string) ([]byte, error)
 	Save(string, []byte) error
 }
@@ -106,7 +106,7 @@ type Bzz struct {
 }
 
 // NewBzz is the swarm protocol constructor
-func NewBzz(config *BzzConfig, kad Overlay, store Store) *Bzz {
+func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
 	return &Bzz{
 		Hive:       NewHive(config.HiveParams, kad, store),
 		localAddr:  &bzzAddr{config.OverlayAddr, config.UnderlayAddr},

@@ -1,11 +1,13 @@
 package pss
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -86,4 +88,18 @@ func newPssPingMsg(ps *Pss, spec *protocols.Spec, topic PssTopic, senderaddr []b
 	}
 
 	return pssmsg
+}
+
+func newPssPingProtocol(handler func (interface{}) error) *p2p.Protocol {
+	return &p2p.Protocol{
+		Name: pssPingProtocol.Name,
+		Version: pssPingProtocol.Version,
+		Length: uint64(pssPingProtocol.MaxMsgSize),
+		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+			pp := protocols.NewPeer(p, rw, pssPingProtocol)
+			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p))
+			err := pp.Run(handler)
+			return err
+		},
+	}
 }

@@ -191,14 +191,14 @@ func (self *Pss) Protocols() []p2p.Protocol {
 			Name:    pssTransportProtocol.Name,
 			Version: pssTransportProtocol.Version,
 			Length:  pssTransportProtocol.Length(),
-			Run:     func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-						pp := protocols.NewPeer(p, rw, pssTransportProtocol)
-						err := pp.Run(self.handlePssMsg)
-						log.Warn("pss protocol peer returned", "peer", p,  "err", err)
-						return nil
-					},
+			Run:     self.Run,
 		},
 	}
+}
+
+func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	pp := protocols.NewPeer(p, rw, pssTransportProtocol)
+	return pp.Run(self.handlePssMsg)
 }
 
 func (self *Pss) APIs() []rpc.API {
@@ -218,24 +218,24 @@ func (self *Pss) APIs() []rpc.API {
 // a topic allows for multiple handlers
 // returns a deregister function which needs to be called to deregister the handler
 // (similar to event.Subscription.Unsubscribe())
-func (self *Pss) Register(topic PssTopic, handler pssHandler) func() {
+func (self *Pss) Register(topic *PssTopic, handler pssHandler) func() {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	handlers := self.handlers[topic]
+	handlers := self.handlers[*topic]
 	if handlers == nil {
 		handlers = make(map[*pssHandler]bool)
-		self.handlers[topic] = handlers
+		self.handlers[*topic] = handlers
 	}
 	handlers[&handler] = true
 	return func() { self.deregister(topic, &handler) }
 }
 
-func (self *Pss) deregister(topic PssTopic, h *pssHandler) {
+func (self *Pss) deregister(topic *PssTopic, h *pssHandler) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	handlers := self.handlers[topic]
+	handlers := self.handlers[*topic]
 	if len(handlers) == 1 {
-		delete(self.handlers, topic)
+		delete(self.handlers, *topic)
 		return
 	}
 	delete(handlers, h)
@@ -497,14 +497,17 @@ type PssProtocol struct {
 }
 
 // Constructor
-func NewPssProtocol(pss *Pss, topic *PssTopic, spec *protocols.Spec, targetprotocol *p2p.Protocol) *PssProtocol {
+//func RegisterPssProtocol(pss *Pss, topic *PssTopic, spec *protocols.Spec, targetprotocol *p2p.Protocol) *PssProtocol {
+func RegisterPssProtocol(pss *Pss, topic *PssTopic, spec *protocols.Spec, targetprotocol *p2p.Protocol) error {
 	pp := &PssProtocol{
 		Pss:             pss,
 		proto: targetprotocol,
 		topic:           topic,
 		spec:			 spec,
 	}
-	return pp
+	pss.Register(topic, pp.handle)
+	//return pp
+	return nil
 }
 
 func (self *PssProtocol) handle(msg []byte, p *p2p.Peer, senderAddr []byte) error {

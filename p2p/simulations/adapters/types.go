@@ -62,9 +62,6 @@ type Node interface {
 
 	// Snapshot creates a snapshot of the running service
 	Snapshot() ([]byte, error)
-	
-	// Gets a service by name
-	GetService(string) node.Service
 }
 
 // NodeAdapter is an object which creates Nodes to be used in a simulation
@@ -130,11 +127,11 @@ type NodeConfig struct {
 	// Name is a human friendly name for the node like "node01"
 	Name string
 
-	// Services is the name of the services which should be run when starting
+	// Service is the name of the services which should be run when starting
 	// the node (for SimNodes it should be the names of services contained
 	// in SimAdapter.services, for other nodes it should be services
 	// registered by calling the RegisterService function)
-	Services []string
+	Service string
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by converting
@@ -143,13 +140,13 @@ type nodeConfigJSON struct {
 	Id         string `json:"id"`
 	PrivateKey string `json:"private_key"`
 	Name       string `json:"name"`
-	Services   []string `json:"services"`
+	Service  string `json:"service"`
 }
 
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
 		Name:    n.Name,
-		Services: n.Services,
+		Service: n.Service,
 	}
 	if n.Id != nil {
 		confJSON.Id = n.Id.String()
@@ -183,7 +180,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	n.Name = confJSON.Name
-	n.Services = confJSON.Services
+	n.Service = confJSON.Service
 
 	return nil
 }

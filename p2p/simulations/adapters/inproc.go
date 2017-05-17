@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"reflect"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -36,7 +37,6 @@ import (
 type SimAdapter struct {
 	mtx      sync.RWMutex
 	nodes    map[discover.NodeID]*SimNode
-	services map[string]ServiceFunc
 }
 
 // NewSimAdapter creates a SimAdapter which is capable of running in-memory
@@ -45,7 +45,6 @@ type SimAdapter struct {
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		nodes:    make(map[discover.NodeID]*SimNode),
-		services: services,
 	}
 }
 
@@ -100,29 +99,19 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	
-	servicefuncs := make(map[string]ServiceFunc)
-	
-	for name, servicefunc := range s.services {
-		service := servicefunc(id, nil)
-		/*if err := n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return service, err
-		}); err != nil {
-			return nil, err
-		}*/
+
+	for _, service := range serviceFuncs[config.Service](id, nil) {
 		for _, proto := range service.Protocols() {
 			nodeprotos = append(nodeprotos, proto)
 		}
-		servicefuncs[name] = servicefunc
 	}
 	
 	simnode := &SimNode{
-		//node:	n,
 		Id:      id,
-		serviceFuncs: servicefuncs,
+		serviceFunc: serviceFuncs[config.Service],
 		adapter:     s,
 		config:      config,
-		running: 	make(map[string]node.Service),
+		running:	[]node.Service{},
 	}
 	s.nodes[id.NodeID] = simnode
 	return simnode, nil
@@ -161,11 +150,11 @@ type SimNode struct {
 	Id          *NodeId
 	config      *NodeConfig
 	adapter     *SimAdapter
-	serviceFuncs 	map[string]ServiceFunc
+	serviceFunc 	ServiceFunc
 	node        *node.Node
-	running     map[string]node.Service
 	client      *rpc.Client
 	rpcMux      *rpcMux
+	running		[]node.Service
 }
 
 // Addr returns the node's discovery address
@@ -224,14 +213,16 @@ func (self *SimNode) Start(snapshot []byte) error {
 	
 	services := []node.ServiceConstructor{}
 	
+	sf := self.serviceFunc(self.Id, snapshot)
 	
-	// so we can control the order of the services if we need
-	for _, name := range self.config.Services {
-		service := self.serviceFuncs[name](self.Id, snapshot)
-		services = append(services, func(ctx *node.ServiceContext) (node.Service, error) {
-			self.running[name] = service
+	for i, _ := range sf {
+		service := sf[i]
+		sc := func(ctx *node.ServiceContext) (node.Service, error) {
 			return service, nil
-		})
+		}
+		log.Debug(fmt.Sprintf("servicefunc yield: %v %p %p", reflect.TypeOf(sf[i]), sf[i], sc))
+		services = append(services, sc)
+		self.running = append(self.running, sf[i])
 	}
 
 	node, err := node.New(&node.Config{
@@ -249,7 +240,7 @@ func (self *SimNode) Start(snapshot []byte) error {
 	}
 	
 	for _, service := range services {
-		log.Debug("registering service", "service", service)
+		log.Debug(fmt.Sprintf("service %v", service))
 		if err := node.Register(service); err != nil {
 			return err
 		}
@@ -290,6 +281,19 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
+// Service returns the underlying running node.Service matching the supplied servuce type
+func (self *SimNode) Service(servicetype interface{}) node.Service {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	typ := reflect.TypeOf(servicetype)
+	for _, service := range self.running {
+		if reflect.TypeOf(service) == typ {
+			return service
+		}
+	}
+	return nil
+}
+
 func (self *SimNode) Server() *p2p.Server {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -297,12 +301,6 @@ func (self *SimNode) Server() *p2p.Server {
 		return nil
 	}
 	return self.node.Server()
-}
-
-// Service returns a underlying node.Service of the speficied type
-func (self *SimNode) GetService(servicename string) node.Service {
-	log.Warn("retrieving service", "name", servicename)
-	return self.running[servicename]
 }
 
 func (self *SimNode) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {

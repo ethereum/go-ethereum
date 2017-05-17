@@ -44,7 +44,7 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 		}
 		return nil
 	}
-	deregf := pssapi.Pss.Register(topic, handler)
+	deregf := pssapi.Pss.Register(&topic, handler)
 
 	go func() {
 		defer deregf()

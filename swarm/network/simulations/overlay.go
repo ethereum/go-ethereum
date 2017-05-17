@@ -22,33 +22,14 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-type simStore struct {
-	m map[string][]byte
-}
-
-func (self *simStore) Load(s string) ([]byte, error) {
-	return self.m[s], nil
-}
-
-func (self *simStore) Save(s string, data []byte) error {
-	self.m[s] = data
-	return nil
-}
-
-func NewSimStore() *simStore {
-	return &simStore{
-		make(map[string][]byte),
-	}
-}
-
 type Simulation struct {
 	mtx    sync.Mutex
-	stores map[discover.NodeID]*simStore
+	stores map[discover.NodeID]*adapters.stateStore
 }
 
 func NewSimulation() *Simulation {
 	return &Simulation{
-		stores: make(map[discover.NodeID]*simStore),
+		stores: make(map[discover.NodeID]*adapters.stateStore),
 	}
 }
 

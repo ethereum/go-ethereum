@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/node"
@@ -42,10 +43,8 @@ func (d *DockerAdapter) Name() string {
 
 // NewNode returns a new DockerNode using the given config
 func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
-	for _, name := range config.Services {
-		if _, exists := serviceFuncs[name]; !exists {
-			return nil, fmt.Errorf("unknown node service %q", name)
-		}
+	if _, exists := serviceFuncs[config.Service]; !exists {
+		return nil, fmt.Errorf("unknown node service %q", config.Service)
 	}
 
 	// generate the config
@@ -62,7 +61,6 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 		ExecNode: ExecNode{
 			ID:     config.Id,
 			Config: conf,
-			Services: config.Services,
 		},
 	}
 	node.newCmd = node.dockerCommand
@@ -85,7 +83,7 @@ func (n *DockerNode) dockerCommand() *exec.Cmd {
 		"sh", "-c",
 		fmt.Sprintf(
 			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" --env _P2P_NODE_KEY="${_P2P_NODE_KEY}" %s p2p-node %s %s`,
-			dockerImage, n.Services[0], n.ID.String(),
+			dockerImage, strings.Join(n.Services, " "), n.ID.String(),
 		),
 	)
 }

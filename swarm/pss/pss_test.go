@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 	"time"
-	
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -21,11 +21,9 @@ import (
 )
 
 const (
-	pssServiceName 	= "pss"
-	bzzServiceName 	= "bzz"
+	pssServiceName = "pss"
+	bzzServiceName = "bzz"
 )
-
-var topic PssTopic = NewTopic(pssPingProtocol.Name, int(pssPingProtocol.Version))
 
 var services = newServices()
 
@@ -49,19 +47,19 @@ func TestPssCache(t *testing.T) {
 	fwdaddr := network.RandomAddr()
 	msg := &PssMsg{
 		Payload: &PssEnvelope{
-			TTL: 0,
-			From: oaddr,
-			Topic:   topic,
+			TTL:     0,
+			From:    oaddr,
+			Topic:   pssPingTopic,
 			Payload: data,
 		},
 		To: to,
 	}
-	
+
 	msgtwo := &PssMsg{
 		Payload: &PssEnvelope{
-			TTL:  0,
-			From: oaddr,
-			Topic:   topic,
+			TTL:     0,
+			From:    oaddr,
+			Topic:   pssPingTopic,
 			Payload: datatwo,
 		},
 		To: to,
@@ -75,7 +73,7 @@ func TestPssCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not store cache msgtwo: %v", err)
 	}
-	
+
 	if !bytes.Equal(digest[:], proofbytes) {
 		t.Fatalf("digest - got: %x, expected: %x", digest, proofbytes)
 	}
@@ -144,7 +142,7 @@ func TestPssRegisterHandler(t *testing.T) {
 		}
 		return nil
 	}
-	deregister := ps.Register(topic, checkMsg)
+	deregister := ps.Register(&topic, checkMsg)
 	pssmsg := &PssMsg{Payload: NewPssEnvelope(from.OAddr, topic, payload)}
 	err = ps.Process(pssmsg)
 	if err != nil {
@@ -156,7 +154,7 @@ func TestPssRegisterHandler(t *testing.T) {
 	if err == nil || err.Error() == expErr {
 		t.Fatalf("unhandled topic expected '%v', got '%v'", expErr, err)
 	}
-	deregister2 := ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { i++; return nil })
+	deregister2 := ps.Register(&topic, func(msg []byte, p *p2p.Peer, sender []byte) error { i++; return nil })
 	err = ps.Process(pssmsg)
 	if err != nil {
 		t.Fatal(err)
@@ -176,32 +174,41 @@ func TestPssRegisterHandler(t *testing.T) {
 func TestPssSimpleLinear(t *testing.T) {
 	nodeconfig := adapters.RandomNodeConfig()
 	addr := network.NewAddrFromNodeId(nodeconfig.Id)
+	_ = p2ptest.NewTestPeerPool()
 	ps := newTestPss(addr.OAddr)
-	ps.Register(pssPingTopic, pssPingHandler)
-	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, newServices(), ps.Protocols()[0].Run)
-	
-	msg := newPssPingMsg(ps, pssPingProtocol, pssPingTopic, []byte{1,2,3})
-	
+
+	ping := &pssPing{
+		quitC: make(chan struct{}),
+	}
+
+	err := RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
+
+	if err != nil {
+		t.Fatalf("Failed to register virtual protocol in pss: %v", err)
+	}
+	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, ps.Run)
+
+	msg := newPssPingMsg(ps, pssPingProtocol, pssPingTopic, []byte{1, 2, 3})
+
 	exchange := p2ptest.Exchange{
-			Expects: []p2ptest.Expect{
-				p2ptest.Expect{
-					Code: 0,
-					Msg:  msg,
-					Peer: pt.Ids[1],
-				},
+		Expects: []p2ptest.Expect{
+			p2ptest.Expect{
+				Code: 0,
+				Msg:  msg,
+				Peer: pt.Ids[0],
 			},
-			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
-					Code: 0,
-					Msg:  msg,
-					Peer:  pt.Ids[1],
-				},
+		},
+		Triggers: []p2ptest.Trigger{
+			p2ptest.Trigger{
+				Code: 0,
+				Msg:  msg,
+				Peer: pt.Ids[1],
 			},
-		}
-		
+		},
+	}
+
 	pt.TestExchanges(exchange)
 }
-
 
 func TestPssFullRandom10_5_5(t *testing.T) {
 	adapter := adapters.NewSimAdapter(services)
@@ -210,19 +217,20 @@ func TestPssFullRandom10_5_5(t *testing.T) {
 
 func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int, fullnodecount int, msgcount int) {
 	var lastid *adapters.NodeId = nil
+
 	nodeCount := 5
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		Id:             "0",
-		DefaultService: bzzServiceName,
+		DefaultService: "psstest",
 	})
 	defer net.Shutdown()
-	
+
 	trigger := make(chan *adapters.NodeId)
 	ids := make([]*adapters.NodeId, nodeCount)
-	
+
 	for i := 0; i < nodeCount; i++ {
 		nodeconfig := adapters.RandomNodeConfig()
-		nodeconfig.Services = []string{"bzz", "pss"}
+		nodeconfig.Service = "psstest"
 		node, err := net.NewNodeWithConfig(nodeconfig)
 		if err != nil {
 			t.Fatalf("error starting node: %s", err)
@@ -231,13 +239,13 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 		if err := net.Start(node.ID()); err != nil {
 			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
 		}
-		
+
 		if err := triggerChecks(trigger, net, node.ID()); err != nil {
 			t.Fatal("error triggering checks for node %s: %s", node.ID().Label(), err)
 		}
 		ids[i] = node.ID()
 	}
-	
+
 	// run a simulation which connects the 10 nodes in a ring and waits
 	// for full peer discovery
 	action := func(ctx context.Context) error {
@@ -269,21 +277,21 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 		if err != nil {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
-		
+
 		log.Debug("in check", "node", id)
-		
+
 		if lastid != nil {
 			//msg := pssPingMsg{Created: time.Now(),}
-			client.CallContext(context.Background(), nil, "pss_sendRaw", topic, PssAPIMsg{
+			client.CallContext(context.Background(), nil, "pss_sendRaw", pssPingTopic, PssAPIMsg{
 				Addr: lastid.Bytes(),
-				Msg: []byte{1,2,3},
+				Msg:  []byte{1, 2, 3},
 			})
 		}
 		lastid = id
-	
+
 		return true, nil
 	}
-	
+
 	timeout := 5 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -302,7 +310,7 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 
 	t.Log("Simulation Passed:")
 	t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
-	
+
 	time.Sleep(time.Second * 2)
 }
 
@@ -313,81 +321,77 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)
 	}
-	go func(){
+	go func() {
 		time.Sleep(time.Second)
 		trigger <- id
 	}()
 	/*
-	client, err := node.Client()
-	if err != nil {
-		return err
-	}
-	events := make(chan PssAPIMsg)
-	sub, err := client.Subscribe(context.Background(), "pss", events, "newMsg", topic)
-	if err != nil {
-		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
-	}
-	go func() {
-		defer sub.Unsubscribe()
-		for {
-			select {
-			case msg := <-events:
-				log.Warn("pss rpc got msg", "msg", msg)
-				trigger <- id
-			case err := <-sub.Err():
-				if err != nil {
-					log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
-				}
-				return
-			}
+		client, err := node.Client()
+		if err != nil {
+			return err
 		}
-	}()
+		events := make(chan PssAPIMsg)
+		sub, err := client.Subscribe(context.Background(), "pss", events, "newMsg", topic)
+		if err != nil {
+			return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+		}
+		go func() {
+			defer sub.Unsubscribe()
+			for {
+				select {
+				case msg := <-events:
+					log.Warn("pss rpc got msg", "msg", msg)
+					trigger <- id
+				case err := <-sub.Err():
+					if err != nil {
+						log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
+					}
+					return
+				}
+			}
+		}()
 	*/
 	return nil
 }
 
 func newServices() adapters.Services {
-	
-	return func(id *adapters.NodeId, snapshot []byte) []node.Service {
-		// setup hive
-		addr := network.NewAddrFromNodeId(id)
 
-		config := &network.BzzConfig{
-			OverlayAddr:  addr.Over(),
-			UnderlayAddr: addr.Under(),
-			KadParams:    network.NewKadParams(),
-			HiveParams:   network.NewHiveParams(),
-		}
+	return adapters.Services{
+		"psstest": func(id *adapters.NodeId, snapshot []byte) []node.Service {
+			addr := network.NewAddrFromNodeId(id)
 
-		config.KadParams.MinProxBinSize = 2
-		config.KadParams.MaxBinSize = 3
-		config.KadParams.MinBinSize = 1
-		config.KadParams.MaxRetries = 1000
-		config.KadParams.RetryExponent = 2
-		config.KadParams.RetryInterval = 1000000
+			kadparams := network.NewKadParams()
+			kadparams.MinProxBinSize = 2
+			kadparams.MaxBinSize = 3
+			kadparams.MinBinSize = 1
+			kadparams.MaxRetries = 1000
+			kadparams.RetryExponent = 2
+			kadparams.RetryInterval = 1000000
+			kademlia := network.NewKademlia(addr.OAddr, kadparams)
 
-		config.HiveParams.KeepAliveInterval = time.Second
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   network.NewHiveParams(),
+			}
 
-		network.NewBzz(config)
-	
-		// pss setup
-		cachedir, err := ioutil.TempDir("", "pss-cache")
-		if err != nil {
-			log.Error("create pss cache tmpdir failed", "error", err)
-			return nil
-		}
-		dpa, err := storage.NewLocalDPA(cachedir)
-		if err != nil {
-			log.Error("local dpa creation failed", "error", err)
-			return nil
-		}
-		pssp := NewPssParams()
-		for bzzs[id] == nil {
-			time.Sleep(time.Microsecond * 100)
-		}
-		return NewPss(bzzs[id].Kademlia, dpa, pssp)
+			config.HiveParams.KeepAliveInterval = time.Second
+
+			cachedir, err := ioutil.TempDir("", "pss-cache")
+			if err != nil {
+				log.Error("create pss cache tmpdir failed", "error", err)
+				return nil
+			}
+			dpa, err := storage.NewLocalDPA(cachedir)
+			if err != nil {
+				log.Error("local dpa creation failed", "error", err)
+				return nil
+			}
+			pssp := NewPssParams()
+
+			return []node.Service{network.NewBzz(config, kademlia, adapters.NewSimStateStore()), NewPss(kademlia, dpa, pssp)}
+		},
 	}
-	
 }
 
 /*
@@ -1209,14 +1213,14 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 }
 
 func makePss(addr []byte) *Pss {
-	
+
 	// set up storage
 	cachedir, err := ioutil.TempDir("", "pss-cache")
 	if err != nil {
 		log.Error("create pss cache tmpdir failed", "error", err)
 		os.Exit(1)
 	}
-	
+
 	dpa, err := storage.NewLocalDPA(cachedir)
 	if err != nil {
 		log.Error("local dpa creation failed", "error", err)
@@ -1268,7 +1272,7 @@ func makePss(addr []byte) *Pss {
 	}
 }
 	// dpa.Chunker = storage.NewPyramidChunker(storage.NewChunkerParams())
-	
+
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = 3
 

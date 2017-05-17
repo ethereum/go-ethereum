@@ -190,7 +190,7 @@ func (self *Msg) String() string {
 // NewNode adds a new node to the network with a random ID
 func (self *Network) NewNode() (*Node, error) {
 	conf := adapters.RandomNodeConfig()
-	conf.Services = append(conf.Services, self.DefaultService)
+	conf.Service = self.DefaultService
 	return self.NewNodeWithConfig(conf)
 }
 
@@ -203,8 +203,8 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 	if conf.Name == "" {
 		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
 	}
-	if len(conf.Services) == 0 {
-		conf.Services = append(conf.Services, self.DefaultService)
+	if conf.Service == "" {
+		conf.Service = self.DefaultService
 	}
 
 	_, found := self.nodeMap[id.NodeID]
