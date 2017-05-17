@@ -177,6 +177,7 @@ func TestPssSimpleLinear(t *testing.T) {
 	nodeconfig := adapters.RandomNodeConfig()
 	addr := network.NewAddrFromNodeId(nodeconfig.Id)
 	ps := newTestPss(addr.OAddr)
+	ps.Register(pssPingTopic, pssPingHandler)
 	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, newServices(), ps.Protocols()[0].Run)
 	
 	msg := newPssPingMsg(ps, pssPingProtocol, pssPingTopic, []byte{1,2,3})
@@ -347,11 +348,7 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 
 func newServices() adapters.Services {
 	
-	bzzs := make(map[*adapters.NodeId]*network.Bzz)
-	
-	adaptersservices := make(map[string]adapters.ServiceFunc)
-	
-	adaptersservices["bzz"] = func(id *adapters.NodeId, snapshot []byte) node.Service {
+	return func(id *adapters.NodeId, snapshot []byte) []node.Service {
 		// setup hive
 		addr := network.NewAddrFromNodeId(id)
 
@@ -371,12 +368,8 @@ func newServices() adapters.Services {
 
 		config.HiveParams.KeepAliveInterval = time.Second
 
-		bzzs[id] = network.NewBzz(config)
-		
-		return bzzs[id]
-	}
+		network.NewBzz(config)
 	
-	adaptersservices["pss"] = func(id *adapters.NodeId, snapshot []byte) node.Service {
 		// pss setup
 		cachedir, err := ioutil.TempDir("", "pss-cache")
 		if err != nil {
@@ -395,7 +388,6 @@ func newServices() adapters.Services {
 		return NewPss(bzzs[id].Kademlia, dpa, pssp)
 	}
 	
-	return adaptersservices
 }
 
 /*

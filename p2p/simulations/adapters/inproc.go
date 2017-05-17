@@ -225,8 +225,7 @@ func (self *SimNode) Start(snapshot []byte) error {
 	services := []node.ServiceConstructor{}
 	
 	
-	// we need to control the order of the services
-	// for example, bzz needs to start before pss
+	// so we can control the order of the services if we need
 	for _, name := range self.config.Services {
 		service := self.serviceFuncs[name](self.Id, snapshot)
 		services = append(services, func(ctx *node.ServiceContext) (node.Service, error) {

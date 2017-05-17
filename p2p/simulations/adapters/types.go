@@ -205,10 +205,11 @@ func RandomNodeConfig() *NodeConfig {
 }
 
 // Services is a collection of services which can be run in a simulation
+// it is mapped to strings representing TYPES of nodes
 type Services map[string]ServiceFunc
 
 // ServiceFunc returns a node.Service which can be used to boot devp2p nodes
-type ServiceFunc func(id *NodeId, snapshot []byte) node.Service
+type ServiceFunc func(id *NodeId, snapshot []byte) []node.Service
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes
