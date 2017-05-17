@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
@@ -347,5 +348,8 @@ func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
 // the overlay address is derived as the hash of the nodeId
 func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
 	id := n.NodeID
-	return &bzzAddr{crypto.Keccak256(id[:]), id[:]}
+	return &bzzAddr{
+		OAddr: crypto.Keccak256(id[:]),
+		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
 }
