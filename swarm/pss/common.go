@@ -34,6 +34,8 @@ var pssPingProtocol = &protocols.Spec{
 	},
 }
 
+var pssPingTopic = NewTopic(pssPingProtocol.Name, int(pssPingProtocol.Version))
+
 func newTestPss(addr []byte) *Pss {	
 	if addr == nil {
 		addr = network.RandomAddr().OAddr
@@ -64,3 +66,24 @@ func newTestPss(addr []byte) *Pss {
 	return ps
 }
 
+func newPssPingMsg(ps *Pss, spec *protocols.Spec, topic PssTopic, senderaddr []byte) PssMsg {
+	data := pssPingMsg{
+		Created: time.Now(),
+	}
+	code, found := spec.GetCode(&data)
+	if !found {
+		return PssMsg{}
+	}
+
+	rlpbundle, err := newProtocolMsg(code, data)
+	if err != nil {
+		return PssMsg{}
+	}
+
+	pssmsg := PssMsg{
+		To: ps.Overlay.BaseAddr(),
+		Payload: NewPssEnvelope(senderaddr, topic, rlpbundle),
+	}
+
+	return pssmsg
+}

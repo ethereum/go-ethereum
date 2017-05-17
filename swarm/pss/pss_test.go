@@ -176,30 +176,29 @@ func TestPssRegisterHandler(t *testing.T) {
 func TestPssSimpleLinear(t *testing.T) {
 	nodeconfig := adapters.RandomNodeConfig()
 	addr := network.NewAddrFromNodeId(nodeconfig.Id)
-	pss := newTestPss(addr.OAddr)
+	ps := newTestPss(addr.OAddr)
+	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, newServices(), ps.Protocols()[0].Run)
 	
-	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, pss.Protocols()[0].Run)
-	/*
-	return []p2ptest.Exchange{
-		p2ptest.Exchange{
+	msg := newPssPingMsg(ps, pssPingProtocol, pssPingTopic, []byte{1,2,3})
+	
+	exchange := p2ptest.Exchange{
 			Expects: []p2ptest.Expect{
 				p2ptest.Expect{
 					Code: 0,
-					Msg:  lhs,
-					Peer: id,
+					Msg:  msg,
+					Peer: pt.Ids[1],
 				},
 			},
 			Triggers: []p2ptest.Trigger{
 				p2ptest.Trigger{
 					Code: 0,
-					Msg:  ,
-					Peer: id,
+					Msg:  msg,
+					Peer:  pt.Ids[1],
 				},
 			},
-		},
-	}*/
-	
-	_ = pt
+		}
+		
+	pt.TestExchanges(exchange)
 }
 
 
@@ -373,7 +372,7 @@ func newServices() adapters.Services {
 		config.HiveParams.KeepAliveInterval = time.Second
 
 		bzzs[id] = network.NewBzz(config)
-	
+		
 		return bzzs[id]
 	}
 	
@@ -390,6 +389,9 @@ func newServices() adapters.Services {
 			return nil
 		}
 		pssp := NewPssParams()
+		for bzzs[id] == nil {
+			time.Sleep(time.Microsecond * 100)
+		}
 		return NewPss(bzzs[id].Kademlia, dpa, pssp)
 	}
 	
@@ -1299,35 +1301,6 @@ func makeCustomProtocol(name string, version int, ct *protocols.CodeMap, testpee
 	}
 
 	return protocols.NewProtocol(name, uint(version), run, ct, nil, nil)
-}
-
-func makeFakeMsg(ps *Pss, ct *protocols.CodeMap, topic PssTopic, senderaddr Addr, content string) PssMsg {
-	data := pssTestPayload{}
-	code, found := ct.GetCode(&data)
-	if !found {
-		return PssMsg{}
-	}
-
-	data.Data = content
-
-	rlpbundle, err := makeMsg(code, data)
-	if err != nil {
-		return PssMsg{}
-	}
-
-	pssenv := pssEnvelope{
-		SenderOAddr: senderaddr.Over(),
-		SenderUAddr: senderaddr.Under(),
-		Topic:       topic,
-		TTL:         DefaultTTL,
-		Payload:     rlpbundle,
-	}
-	pssmsg := PssMsg{
-		Payload: pssenv,
-	}
-	pssmsg.SetRecipient(ps.Overlay.BaseAddr())
-
-	return pssmsg
 }
 
 func makePssHandleForward(ps *Pss) func(msg interface{}) error {
