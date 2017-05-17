@@ -112,8 +112,9 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 	conf := net.Config()
 	conf.DefaultService = "overlay"
 
-	ids := make([]*adapters.NodeId, 10)
-	for i := 0; i < 10; i++ {
+	nodeCount := 30
+	ids := make([]*adapters.NodeId, nodeCount)
+	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
 		if err != nil {
 			panic(err.Error())
@@ -189,23 +190,23 @@ func randomMocker(net *simulations.Network) {
 func startStopMocker(net *simulations.Network) {
 	ids := setupMocker(net)
 
-	for i, id := range ids {
-		n := 3000 + i*1000
-		go func(id *adapters.NodeId) {
-			for {
-				// n := rand.Intn(5000)
-				// n := 3000
-				time.Sleep(time.Duration(n) * time.Millisecond)
-				log.Debug(fmt.Sprintf("node %v shutting down", id))
-				net.Stop(id)
-				// n = rand.Intn(5000)
-				n = 2000
-				time.Sleep(time.Duration(n) * time.Millisecond)
-				log.Debug(fmt.Sprintf("node %v starting up", id))
-				net.Start(id)
-				n = 5000
+	for range time.Tick(10 * time.Second) {
+		id := ids[rand.Intn(len(ids))]
+		go func() {
+			log.Error("stopping node", "id", id)
+			if err := net.Stop(id); err != nil {
+				log.Error("error stopping node", "id", id, "err", err)
+				return
 			}
-		}(id)
+
+			time.Sleep(3 * time.Second)
+
+			log.Error("starting node", "id", id)
+			if err := net.Start(id); err != nil {
+				log.Error("error starting node", "id", id, "err", err)
+				return
+			}
+		}()
 	}
 }
 
