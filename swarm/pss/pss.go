@@ -193,7 +193,8 @@ func (self *Pss) Protocols() []p2p.Protocol {
 			Length:  pssTransportProtocol.Length(),
 			Run:     func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 						pp := protocols.NewPeer(p, rw, pssTransportProtocol)
-						pp.Run(self.handlePssMsg)
+						err := pp.Run(self.handlePssMsg)
+						log.Warn("pss protocol peer returned", "peer", p,  "err", err)
 						return nil
 					},
 		},

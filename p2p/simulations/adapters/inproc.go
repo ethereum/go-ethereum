@@ -87,7 +87,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	//}
 	//service := serviceFunc(id)
 	
-	n, err := node.New(&node.Config{
+	_, err := node.New(&node.Config{
 		P2P: p2p.Config{
 			PrivateKey:      config.PrivateKey,
 			MaxPeers:        math.MaxInt32,
@@ -101,27 +101,28 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		return nil, err
 	}
 	
-	services := make(map[string]node.Service)
+	servicefuncs := make(map[string]ServiceFunc)
 	
 	for name, servicefunc := range s.services {
-		service := servicefunc(id)
-		if err := n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		service := servicefunc(id, nil)
+		/*if err := n.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return service, err
 		}); err != nil {
 			return nil, err
-		}
+		}*/
 		for _, proto := range service.Protocols() {
 			nodeprotos = append(nodeprotos, proto)
 		}
-		services[name] = service
+		servicefuncs[name] = servicefunc
 	}
 	
 	simnode := &SimNode{
-		Node:    n,
+		//node:	n,
 		Id:      id,
-		services: services,
+		serviceFuncs: servicefuncs,
 		adapter:     s,
 		config:      config,
+		running: 	make(map[string]node.Service),
 	}
 	s.nodes[id.NodeID] = simnode
 	return simnode, nil
@@ -160,9 +161,9 @@ type SimNode struct {
 	Id          *NodeId
 	config      *NodeConfig
 	adapter     *SimAdapter
-	services 	map[string]node.Service
+	serviceFuncs 	map[string]ServiceFunc
 	node        *node.Node
-	running     node.Service
+	running     map[string]node.Service
 	client      *rpc.Client
 	rpcMux      *rpcMux
 }
@@ -220,11 +221,16 @@ func (self *SimNode) Start(snapshot []byte) error {
 	if self.node != nil {
 		return errors.New("node already started")
 	}
-
-	newService := func(ctx *node.ServiceContext) (node.Service, error) {
-		service := self.serviceFunc(self.Id, snapshot)
-		self.running = service
-		return service, nil
+	
+	services := []node.ServiceConstructor{}
+	
+	for name, servicefunc := range self.serviceFuncs {
+		service := servicefunc(self.Id, snapshot)
+		
+		services = append(services, func(ctx *node.ServiceContext) (node.Service, error) {
+			self.running[name] = service
+			return service, nil
+		})
 	}
 
 	node, err := node.New(&node.Config{
@@ -240,9 +246,12 @@ func (self *SimNode) Start(snapshot []byte) error {
 	if err != nil {
 		return err
 	}
-
-	if err := node.Register(newService); err != nil {
-		return err
+	
+	for _, service := range services {
+		log.Debug("registering service", "service", service)
+		if err := node.Register(service); err != nil {
+			return err
+		}
 	}
 
 	if err := node.Start(); err != nil {
@@ -287,11 +296,12 @@ func (self *SimNode) Server() *p2p.Server {
 		return nil
 	}
 	return self.node.Server()
+}
 
 // Service returns a underlying node.Service of the speficied type
 func (self *SimNode) GetService(servicename string) node.Service {
 	log.Warn("retrieving service", "name", servicename)
-	return self.services[servicename]
+	return self.running[servicename]
 }
 
 func (self *SimNode) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {
