@@ -506,7 +506,7 @@ func NewPeerPot(kadMinProxSize int, ids ...*adapters.NodeId) map[discover.NodeID
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
 	for _, id := range ids {
-		o := ToOverlayAddr(id)
+		o := ToOverlayAddr(id.Bytes())
 		np, _, _ = pot.Add(np, pot.NewBytesVal(o, nil))
 	}
 	nnmap := make(map[discover.NodeID][][]byte)
