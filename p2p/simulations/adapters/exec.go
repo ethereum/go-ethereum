@@ -63,7 +63,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Node:  config,
 	}
 	conf.Stack.DataDir = filepath.Join(dir, "data")
-	conf.Stack.P2P.EnableMsgEvents = true
+	conf.Stack.P2P.EnableMsgEvents = false
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 
@@ -88,11 +88,12 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 // (so for example we can run the node in a remote Docker container and
 // still communicate with it).
 type ExecNode struct {
-	ID     *NodeId
-	Dir    string
-	Config *execNodeConfig
-	Cmd    *exec.Cmd
-	Info   *p2p.NodeInfo
+	ID       *NodeId
+	Dir      string
+	Config   *execNodeConfig
+	Cmd      *exec.Cmd
+	Info     *p2p.NodeInfo
+	Services []string
 
 	client *rpc.Client
 	rpcMux *rpcMux
@@ -164,13 +165,17 @@ func (n *ExecNode) Start(snapshot []byte) (err error) {
 	return nil
 }
 
+func (n *ExecNode) GetService(name string) node.Service {
+	return nil
+}
+
 // execCommand returns a command which runs the node locally by exec'ing
 // the current binary but setting argv[0] to "p2p-node" so that the child
 // runs execP2PNode
 func (n *ExecNode) execCommand() *exec.Cmd {
 	return &exec.Cmd{
 		Path: reexec.Self(),
-		Args: []string{"p2p-node", n.Config.Node.Service, n.ID.String()},
+		Args: []string{"p2p-node", n.Services[0], n.ID.String()},
 	}
 }
 
@@ -278,7 +283,7 @@ func execP2PNode() {
 	if !exists {
 		log.Crit(fmt.Sprintf("unknown node service %q", serviceName))
 	}
-	service := serviceFunc(id, conf.Snapshot)
+	services := serviceFunc(id, conf.Snapshot)
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
@@ -295,7 +300,7 @@ func execP2PNode() {
 	}
 
 	// start the devp2p stack
-	stack, err := startP2PNode(&conf.Stack, service)
+	stack, err := startP2PNode(&conf.Stack, services)
 	if err != nil {
 		log.Crit("error starting p2p node", "err", err)
 	}
@@ -321,17 +326,20 @@ func execP2PNode() {
 	stack.Wait()
 }
 
-func startP2PNode(conf *node.Config, service node.Service) (*node.Node, error) {
+func startP2PNode(conf *node.Config, services []node.Service) (*node.Node, error) {
 	stack, err := node.New(conf)
 	if err != nil {
 		return nil, err
 	}
-	constructor := func(ctx *node.ServiceContext) (node.Service, error) {
-		return &snapshotService{service}, nil
+	for _, svc := range services {
+		constructor := func(ctx *node.ServiceContext) (node.Service, error) {
+			return &snapshotService{svc}, nil
+		}
+		if err := stack.Register(constructor); err != nil {
+			return nil, err
+		}
 	}
-	if err := stack.Register(constructor); err != nil {
-		return nil, err
-	}
+
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}

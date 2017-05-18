@@ -17,6 +17,7 @@
 package network
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -33,75 +34,89 @@ it uses an Overlay Topology driver (e.g., generic kademlia nodetable)
 to find best peer list for any target
 this is used by the netstore to search for content in the swarm
 
-It handles the bzz protocol getPeersMsg peersMsg exchange
+It handles the hive protocol getPeersMsg peersMsg exchange
 and relay the peer request process to the Overlay module
 
 peer connections and disconnections are reported and registered
 to keep the nodetable uptodate
 */
+
+// Overlay is the interface to Jaak ahd ka)a
 type Overlay interface {
-	Register(...PeerAddr) error
+	Register(chan OverlayAddr) error
 
-	On(Peer)
-	Off(Peer)
+	On(OverlayConn)
+	Off(OverlayConn)
 
-	EachLivePeer([]byte, int, func(Peer, int, bool) bool)
-	EachPeer([]byte, int, func(PeerAddr, int) bool)
+	EachConn([]byte, int, func(OverlayConn, int, bool) bool)
+	EachAddr([]byte, int, func(OverlayAddr, int) bool)
 
-	SuggestPeer() (PeerAddr, int, bool)
+	SuggestPeer() (OverlayAddr, int, bool)
 
 	String() string
-	GetAddr() PeerAddr
+	BaseAddr() []byte
+	Healthy([][]byte) bool
+}
+
+// HiveParams holds the config options to hive
+type HiveParams struct {
+	Discovery             bool  // if want discovery of not
+	PeersBroadcastSetSize uint8 // how many peers to use when relaying
+	MaxPeersPerRequest    uint8 // max size for peer address batches
+	KeepAliveInterval     time.Duration
+}
+
+// NewHiveParams returns hive config with only the
+func NewHiveParams() *HiveParams {
+	return &HiveParams{
+		Discovery:             true,
+		PeersBroadcastSetSize: 2,
+		MaxPeersPerRequest:    5,
+		KeepAliveInterval:     time.Second,
+	}
 }
 
 // Hive implements the PeerPool interface
 type Hive struct {
 	*HiveParams // settings
 	Overlay     // the overlay topology driver
-	lock        sync.Mutex
-	quit        chan bool
-	toggle      chan bool
-	more        chan bool
-}
+	store       StateStore
 
-type HiveParams struct {
-	Discovery             bool
-	PeersBroadcastSetSize uint8
-	MaxPeersPerRequest    uint8
-	CallInterval          uint
-}
+	// bookkeeping
+	lock sync.Mutex
+	quit chan bool
+	more chan bool
 
-func NewHiveParams() *HiveParams {
-	return &HiveParams{
-		Discovery:             true,
-		PeersBroadcastSetSize: 2,
-		MaxPeersPerRequest:    5,
-		CallInterval:          1000,
-	}
+	tick <-chan time.Time
 }
 
 // Hive constructor embeds both arguments
-// HiveParams config parameters
-// Overlay Topology Driver Interface
-func NewHive(params *HiveParams, overlay Overlay) *Hive {
+// HiveParams: config parameters
+// Overlay: Topology Driver Interface
+func NewHive(params *HiveParams, overlay Overlay, store StateStore) *Hive {
 	return &Hive{
 		HiveParams: params,
 		Overlay:    overlay,
+		store:      store,
 	}
 }
 
 // Start receives network info only at startup
-// connectPeer is a function to connect to a peer based on its NodeID or enode URL
+// server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 // af() returns an arbitrary ticker channel
-func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time) error {
-
-	self.toggle = make(chan bool)
+// rw is a read writer for json configs
+func (self *Hive) Start(server *p2p.Server) error {
+	if self.store != nil {
+		if err := self.loadPeers(); err != nil {
+			return err
+		}
+	}
 	self.more = make(chan bool, 1)
 	self.quit = make(chan bool)
 	log.Debug("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
-	go self.keepAlive(af)
+	go self.keepAlive()
 	go func() {
 		// each iteration, ask kademlia about most preferred peer
 		for more := range self.more {
@@ -110,14 +125,15 @@ func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time) error {
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			log.Trace("hive delegate to overlay driver: suggest addr to connect to")
+			log.Debug("hive delegate to overlay driver: suggest addr to connect to")
+			// log.Trace("hive delegate to overlay driver: suggest addr to connect to")
 			addr, order, want := self.SuggestPeer()
 
 			if addr != nil {
 				log.Info(fmt.Sprintf("========> connect to bee %v", addr))
-				node, err := discover.ParseNode(NodeId(addr).NodeID.String())
+				under, err := discover.ParseNode(string(addr.(Addr).Under()))
 				if err == nil {
-					server.AddPeer(node)
+					server.AddPeer(under)
 				} else {
 					log.Error(fmt.Sprintf("===X====> connect to bee %v failed: invalid node URL: %v", addr, err))
 				}
@@ -127,75 +143,44 @@ func (self *Hive) Start(server p2p.Server, af func() <-chan time.Time) error {
 
 			want = want && self.Discovery
 			if want {
-				go RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				log.Debug(fmt.Sprintf("========> request peers nearest %v", addr))
+				RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
 			}
 
+			log.Info(fmt.Sprintf("%v", self))
 			select {
-			case self.toggle <- want:
-				log.Trace(fmt.Sprintf("keep hive alive: %v", want))
 			case <-self.quit:
 				return
+			default:
 			}
-			log.Info(fmt.Sprintf("%v", self))
 		}
 	}()
 	return nil
 }
 
-func (self *Hive) ticker() <-chan time.Time {
-	return time.NewTicker(time.Duration(self.CallInterval) * time.Millisecond).C
-}
-
-// keepAlive is a forever loop
-// in its awake state it periodically triggers connection attempts
-// by writing to self.more until Kademlia Table is saturated
-// wake state is toggled by writing to self.toggle
-// it restarts if the table becomes non-full again due to disconnections
-func (self *Hive) keepAlive(af func() <-chan time.Time) {
-	log.Trace("keep alive loop started")
-	alarm := af()
-	for {
-		select {
-		case <-alarm:
-			log.Trace("wake up: make hive alive")
-			self.wake()
-		case need := <-self.toggle:
-			if alarm == nil && need {
-				alarm = af()
-			}
-			// if hive saturated, no more peers asked
-			if alarm != nil && !need {
-				alarm = nil
-			}
-		case <-self.quit:
-			return
-		}
+// Stop terminates the updateloop and saves the peers
+func (self *Hive) Stop() {
+	if self.store != nil {
+		self.savePeers()
 	}
+	// closing toggle channel quits the updateloop
+	close(self.quit)
 }
 
-// Add is called at the end of a successful protocol handshake
-// to register a connected (live) peer
-func (self *Hive) Add(p Peer) error {
-	defer self.wake()
-	dp := NewDiscovery(p, self.Overlay)
+func (self *Hive) Run(p *bzzPeer) error {
+	dp := NewDiscovery(p, self)
 	log.Debug(fmt.Sprintf("to add new bee %v", p))
 	self.On(dp)
-	self.String()
-	log.Debug(fmt.Sprintf("%v", self))
-	return nil
-}
-
-// Remove called after peer is disconnected
-func (self *Hive) Remove(p Peer) {
+	self.wake()
 	defer self.wake()
-	log.Debug(fmt.Sprintf("remove bee %v", p))
-	self.Off(p)
+	defer self.Off(dp)
+	return p.Run(dp.HandleMsg)
 }
 
 // NodeInfo function is used by the p2p.server RPC interface to display
 // protocol specific node information
 func (self *Hive) NodeInfo() interface{} {
-	return interface{}(self.String())
+	return self.String()
 }
 
 // PeerInfo function is used by the p2p.server RPC interface to display
@@ -203,22 +188,16 @@ func (self *Hive) NodeInfo() interface{} {
 func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	addr := NewPeerAddrFromNodeId(adapters.NewNodeId(id[:]))
+	addr := NewAddrFromNodeId(adapters.NewNodeId(id[:]))
 	return interface{}(addr)
 }
 
-// Stop terminates the updateloop
-func (self *Hive) Stop() {
-	// closing toggle channel quits the updateloop
-	close(self.quit)
+func (self *Hive) Register(peers chan OverlayAddr) error {
+	defer self.wake()
+	return self.Overlay.Register(peers)
 }
 
-func (self *Hive) Healthy() bool {
-	// TODO: determine if we have enough peers to consider the network
-	//       to be healthy
-	return true
-}
-
+// wake triggers
 func (self *Hive) wake() {
 	select {
 	case self.more <- true:
@@ -229,7 +208,100 @@ func (self *Hive) wake() {
 	}
 }
 
+// HexToBytes reads a hex string ontp
 func HexToBytes(s string) []byte {
 	id := discover.MustHexID(s)
 	return id[:]
+}
+
+// ToAddr returns the serialisable version of u
+func ToAddr(pa OverlayPeer) *bzzAddr {
+	if addr, ok := pa.(*bzzAddr); ok {
+		return addr
+	}
+	if p, ok := pa.(*discPeer); ok {
+		return p.bzzAddr
+	}
+	return pa.(*bzzPeer).bzzAddr
+}
+
+type hiveTicker interface {
+	Ch() <-chan time.Time
+	Stop()
+}
+
+type timeTicker struct {
+	*time.Ticker
+}
+
+func (t *timeTicker) Ch() <-chan time.Time {
+	return t.C
+}
+
+// keepAlive is a forever loop
+// in its awake state it periodically triggers connection attempts
+// by writing to self.more until Kademlia Table is saturated
+// wake state is toggled by writing to self.toggle
+// it goes to sleep mode if table is saturated
+// it restarts if the table becomes non-full again due to disconnections
+func (self *Hive) keepAlive() {
+	if self.tick == nil {
+		ticker := time.NewTicker(self.KeepAliveInterval)
+		defer ticker.Stop()
+		self.tick = ticker.C
+	}
+	for {
+		select {
+		case <-self.tick:
+			log.Debug("wake up: make hive alive")
+			self.wake()
+		case <-self.quit:
+			return
+		}
+	}
+}
+
+// loadPeers, savePeer implement persistence callback/
+func (self *Hive) loadPeers() error {
+	data, err := self.store.Load("peers")
+	if err != nil {
+		return err
+	}
+	if data == nil {
+		return nil
+	}
+	var as []*bzzAddr
+	if err := json.Unmarshal(data, &as); err != nil {
+		return err
+	}
+
+	c := make(chan OverlayAddr)
+	go func() {
+		defer close(c)
+		for _, a := range as {
+			c <- a
+		}
+	}()
+	return self.Overlay.Register(c)
+}
+
+// savePeers, savePeer implement persistence callback/
+func (self *Hive) savePeers() error {
+	var peers []*bzzAddr
+	self.Overlay.EachAddr(nil, 256, func(pa OverlayAddr, i int) bool {
+		if pa == nil {
+			log.Warn(fmt.Sprintf("empty addr: %v", i))
+			return true
+		}
+		peers = append(peers, ToAddr(pa))
+		return true
+	})
+	data, err := json.Marshal(peers)
+	if err != nil {
+		return fmt.Errorf("could not encode peers: %v", err)
+	}
+	if err := self.store.Save("peers", data); err != nil {
+		return fmt.Errorf("could not save peers: %v", err)
+	}
+	return nil
 }

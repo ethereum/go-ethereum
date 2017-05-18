@@ -11,83 +11,58 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-// SimNode is the adapter used by Swarm simulations.
-type SimNode struct {
-	hive     *network.Hive
-	protocol *p2p.Protocol
+type Simulation struct {
+	mtx    sync.Mutex
+	stores map[discover.NodeID]*adapters.stateStore
 }
 
-func (s *SimNode) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{*s.protocol}
+func NewSimulation() *Simulation {
+	return &Simulation{
+		stores: make(map[discover.NodeID]*adapters.stateStore),
+	}
 }
 
-func (s *SimNode) APIs() []rpc.API {
-	return nil
-}
+func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) node.Service {
+	s.mtx.Lock()
+	store, ok := s.stores[id.NodeID]
+	if !ok {
+		store = NewSimStore()
+		s.stores[id.NodeID] = store
+	}
+	s.mtx.Unlock()
 
-// the hive update ticker for hive
-func af() <-chan time.Time {
-	return time.NewTicker(1 * time.Second).C
-}
+	addr := network.NewAddrFromNodeId(id)
 
-// Start() starts up the hive
-// makes SimNode implement node.Service
-func (self *SimNode) Start(server p2p.Server) error {
-	return self.hive.Start(server, af)
-}
-
-// Stop() shuts down the hive
-// makes SimNode implement node.Service
-func (self *SimNode) Stop() error {
-	self.hive.Stop()
-	return nil
-}
-
-// NewSimNode creates adapters for nodes in the simulation.
-func NewSimNode(id *adapters.NodeId, snapshot []byte) node.Service {
-	addr := network.NewPeerAddrFromNodeId(id)
 	kp := network.NewKadParams()
-
 	kp.MinProxBinSize = 2
-	kp.MaxBinSize = 3
-	kp.MinBinSize = 1
+	kp.MaxBinSize = 8
+	kp.MinBinSize = 2
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
-	kp.RetryInterval = 1000000
+	kp.RetryInterval = 1000
+	kad := network.NewKademlia(addr.Over(), kp)
 
-	to := network.NewKademlia(addr.OverlayAddr(), kp) // overlay topology driver
 	hp := network.NewHiveParams()
-	hp.CallInterval = 5000
-	pp := network.NewHive(hp, to) // hive
+	hp.KeepAliveInterval = 3 * time.Second
 
-	services := func(p network.Peer) error {
-		dp := network.NewDiscovery(p, to)
-		pp.Add(dp)
-		log.Trace(fmt.Sprintf("kademlia on %v", dp))
-		p.DisconnectHook(func(err error) {
-			pp.Remove(dp)
-		})
-		return nil
+	config := &network.BzzConfig{
+		OverlayAddr:  addr.Over(),
+		UnderlayAddr: addr.Under(),
+		HiveParams:   hp,
 	}
 
-	ct := network.BzzCodeMap(network.DiscoveryMsgs...) // bzz protocol code map
-	nodeInfo := func() interface{} { return pp.String() }
-
-	return &SimNode{
-		hive:     pp,
-		protocol: network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nodeInfo),
-	}
+	return network.NewBzz(config, kad, store)
 }
 
 func createMockers() map[string]*simulations.MockerConfig {
@@ -119,8 +94,9 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 	conf := net.Config()
 	conf.DefaultService = "overlay"
 
-	ids := make([]*adapters.NodeId, 10)
-	for i := 0; i < 10; i++ {
+	nodeCount := 50
+	ids := make([]*adapters.NodeId, nodeCount)
+	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
 		if err != nil {
 			panic(err.Error())
@@ -129,8 +105,6 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 	}
 
 	for _, id := range ids {
-		n := rand.Intn(1000)
-		time.Sleep(time.Duration(n) * time.Millisecond)
 		if err := net.Start(id); err != nil {
 			panic(err.Error())
 		}
@@ -143,7 +117,12 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 		} else {
 			peerId = ids[i-1]
 		}
-		if err := net.Connect(id, peerId); err != nil {
+		ch := make(chan network.OverlayAddr)
+		go func() {
+			defer close(ch)
+			ch <- network.NewAddrFromNodeId(peerId)
+		}()
+		if err := net.GetNode(id).Node.(*adapters.SimNode).Service().(*network.Bzz).Hive.Register(ch); err != nil {
 			panic(err.Error())
 		}
 	}
@@ -191,23 +170,23 @@ func randomMocker(net *simulations.Network) {
 func startStopMocker(net *simulations.Network) {
 	ids := setupMocker(net)
 
-	for i, id := range ids {
-		n := 3000 + i*1000
-		go func(id *adapters.NodeId) {
-			for {
-				// n := rand.Intn(5000)
-				// n := 3000
-				time.Sleep(time.Duration(n) * time.Millisecond)
-				log.Debug(fmt.Sprintf("node %v shutting down", id))
-				net.Stop(id)
-				// n = rand.Intn(5000)
-				n = 2000
-				time.Sleep(time.Duration(n) * time.Millisecond)
-				log.Debug(fmt.Sprintf("node %v starting up", id))
-				net.Start(id)
-				n = 5000
+	for range time.Tick(10 * time.Second) {
+		id := ids[rand.Intn(len(ids))]
+		go func() {
+			log.Error("stopping node", "id", id)
+			if err := net.Stop(id); err != nil {
+				log.Error("error stopping node", "id", id, "err", err)
+				return
 			}
-		}(id)
+
+			time.Sleep(3 * time.Second)
+
+			log.Error("starting node", "id", id)
+			if err := net.Start(id); err != nil {
+				log.Error("error starting node", "id", id, "err", err)
+				return
+			}
+		}()
 	}
 }
 
@@ -215,10 +194,11 @@ func startStopMocker(net *simulations.Network) {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
+	s := NewSimulation()
 	services := adapters.Services{
-		"overlay": NewSimNode,
+		"overlay": s.NewService,
 	}
 	adapters.RegisterServices(services)
 
@@ -226,7 +206,7 @@ func main() {
 
 	config := &simulations.ServerConfig{
 		NewAdapter:      func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
-		DefaultMockerId: "start-stop",
+		DefaultMockerId: "bootNet",
 		Mockers:         mockers,
 	}
 

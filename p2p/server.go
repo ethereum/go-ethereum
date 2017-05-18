@@ -131,7 +131,7 @@ type Config struct {
 
 	// If Dialer is set to a non-nil value, the given Dialer
 	// is used to dial outbound peer connections.
-	Dialer *net.Dialer `toml:"-"`
+	Dialer NodeDialer `toml:"-"`
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
@@ -141,23 +141,8 @@ type Config struct {
 	EnableMsgEvents bool
 }
 
-type Server interface {
-	Start() error
-	Stop() error
-	AddPeer(node *discover.Node)
-	RemovePeer(node *discover.Node)
-	SubscribeEvents(ch chan *PeerEvent) event.Subscription
-	PeerCount() int
-	NodeInfo() *NodeInfo
-	PeersInfo() []*PeerInfo
-}
-
-func NewServer(conf Config) Server {
-	return &server{Config: conf}
-}
-
 // Server manages all peer connections.
-type server struct {
+type Server struct {
 	// Config fields may not be modified while the server is running.
 	Config
 
@@ -266,7 +251,7 @@ func (c *conn) is(f connFlag) bool {
 }
 
 // Peers returns all connected peers.
-func (srv *server) Peers() []*Peer {
+func (srv *Server) Peers() []*Peer {
 	var ps []*Peer
 	select {
 	// Note: We'd love to put this function into a variable but
@@ -284,7 +269,7 @@ func (srv *server) Peers() []*Peer {
 }
 
 // PeerCount returns the number of connected peers.
-func (srv *server) PeerCount() int {
+func (srv *Server) PeerCount() int {
 	var count int
 	select {
 	case srv.peerOp <- func(ps map[discover.NodeID]*Peer) { count = len(ps) }:
@@ -297,7 +282,7 @@ func (srv *server) PeerCount() int {
 // AddPeer connects to the given node and maintains the connection until the
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
-func (srv *server) AddPeer(node *discover.Node) {
+func (srv *Server) AddPeer(node *discover.Node) {
 	select {
 	case srv.addstatic <- node:
 	case <-srv.quit:
@@ -305,7 +290,7 @@ func (srv *server) AddPeer(node *discover.Node) {
 }
 
 // RemovePeer disconnects from the given node
-func (srv *server) RemovePeer(node *discover.Node) {
+func (srv *Server) RemovePeer(node *discover.Node) {
 	select {
 	case srv.removestatic <- node:
 	case <-srv.quit:
@@ -313,12 +298,12 @@ func (srv *server) RemovePeer(node *discover.Node) {
 }
 
 // SubscribePeers subscribes the given channel to peer events
-func (srv *server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
+func (srv *Server) SubscribeEvents(ch chan *PeerEvent) event.Subscription {
 	return srv.peerFeed.Subscribe(ch)
 }
 
 // Self returns the local node's endpoint information.
-func (srv *server) Self() *discover.Node {
+func (srv *Server) Self() *discover.Node {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 
@@ -328,7 +313,7 @@ func (srv *server) Self() *discover.Node {
 	return srv.makeSelf(srv.listener, srv.ntab)
 }
 
-func (srv *server) makeSelf(listener net.Listener, ntab discoverTable) *discover.Node {
+func (srv *Server) makeSelf(listener net.Listener, ntab discoverTable) *discover.Node {
 	// If the server's not running, return an empty node.
 	// If the node is running but discovery is off, manually assemble the node infos.
 	if ntab == nil {
@@ -350,7 +335,7 @@ func (srv *server) makeSelf(listener net.Listener, ntab discoverTable) *discover
 
 // Stop terminates the server and all active peer connections.
 // It blocks until all active connections have been closed.
-func (srv *server) Stop() error {
+func (srv *Server) Stop() error {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 	if !srv.running {
@@ -368,7 +353,7 @@ func (srv *server) Stop() error {
 
 // Start starts running the server.
 // Servers can not be re-used after stopping.
-func (srv *server) Start() (err error) {
+func (srv *Server) Start() (err error) {
 	srv.lock.Lock()
 	defer srv.lock.Unlock()
 	if srv.running {
@@ -385,7 +370,7 @@ func (srv *server) Start() (err error) {
 		srv.newTransport = newRLPX
 	}
 	if srv.Dialer == nil {
-		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
+		srv.Dialer = TCPDialer{&net.Dialer{Timeout: defaultDialTimeout}}
 	}
 	srv.quit = make(chan struct{})
 	srv.addpeer = make(chan *conn)
@@ -446,7 +431,7 @@ func (srv *server) Start() (err error) {
 	return nil
 }
 
-func (srv *server) startListening() error {
+func (srv *Server) startListening() error {
 	// Launch the TCP listener.
 	listener, err := net.Listen("tcp", srv.ListenAddr)
 	if err != nil {
@@ -475,7 +460,7 @@ type dialer interface {
 	removeStatic(*discover.Node)
 }
 
-func (srv *server) run(dialstate dialer) {
+func (srv *Server) run(dialstate dialer) {
 	defer srv.loopWG.Done()
 	var (
 		peers        = make(map[discover.NodeID]*Peer)
@@ -616,7 +601,7 @@ running:
 	}
 }
 
-func (srv *server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn) error {
+func (srv *Server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
@@ -626,7 +611,7 @@ func (srv *server) protoHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn
 	return srv.encHandshakeChecks(peers, c)
 }
 
-func (srv *server) encHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn) error {
+func (srv *Server) encHandshakeChecks(peers map[discover.NodeID]*Peer, c *conn) error {
 	switch {
 	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
@@ -645,7 +630,7 @@ type tempError interface {
 
 // listenLoop runs in its own goroutine and accepts
 // inbound connections.
-func (srv *server) listenLoop() {
+func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
 	log.Info("RLPx listener up", "self", srv.makeSelf(srv.listener, srv.ntab))
 
@@ -697,7 +682,7 @@ func (srv *server) listenLoop() {
 		// Spawn the handler. It will give the slot back when the connection
 		// has been established.
 		go func() {
-			srv.setupConn(fd, inboundConn, nil)
+			srv.SetupConn(fd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}
@@ -706,7 +691,7 @@ func (srv *server) listenLoop() {
 // setupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *server) setupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
+func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
@@ -766,7 +751,7 @@ func truncateName(s string) string {
 
 // checkpoint sends the conn to run, which performs the
 // post-handshake checks for the stage (posthandshake, addpeer).
-func (srv *server) checkpoint(c *conn, stage chan<- *conn) error {
+func (srv *Server) checkpoint(c *conn, stage chan<- *conn) error {
 	select {
 	case stage <- c:
 	case <-srv.quit:
@@ -783,7 +768,7 @@ func (srv *server) checkpoint(c *conn, stage chan<- *conn) error {
 // runPeer runs in its own goroutine for each peer.
 // it waits until the Peer logic returns and removes
 // the peer.
-func (srv *server) runPeer(p *Peer) {
+func (srv *Server) runPeer(p *Peer) {
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
@@ -824,7 +809,7 @@ type NodeInfo struct {
 }
 
 // NodeInfo gathers and returns a collection of metadata known about the host.
-func (srv *server) NodeInfo() *NodeInfo {
+func (srv *Server) NodeInfo() *NodeInfo {
 	node := srv.Self()
 
 	// Gather and assemble the generic node infos
@@ -853,7 +838,7 @@ func (srv *server) NodeInfo() *NodeInfo {
 }
 
 // PeersInfo returns an array of metadata objects describing connected peers.
-func (srv *server) PeersInfo() []*PeerInfo {
+func (srv *Server) PeersInfo() []*PeerInfo {
 	// Gather all the generic and sub-protocol specific infos
 	infos := make([]*PeerInfo, 0, srv.PeerCount())
 	for _, peer := range srv.Peers() {
@@ -872,6 +857,6 @@ func (srv *server) PeersInfo() []*PeerInfo {
 	return infos
 }
 
-func (srv *server) DiscV5() *discv5.Network {
+func (srv *Server) DiscV5() *discv5.Network {
 	return srv.discV5
 }

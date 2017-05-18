@@ -1,6 +1,8 @@
 package protocols
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -13,7 +15,7 @@ import (
 )
 
 func init() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 // handshake message type
@@ -55,28 +57,26 @@ const networkId = "420"
 // newProtocol sets up a protocol
 // the run function here demonstrates a typical protocol using peerPool, handshake
 // and messages registered to handlers
-func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
-	ct := NewCodeMap("test", 42, 1024, &protoHandshake{}, &hs0{}, &kill{}, &drop{})
+func newProtocol(pp *p2ptest.TestPeerPool) func(*p2p.Peer, p2p.MsgReadWriter) error {
+	spec := &Spec{
+		Name:       "test",
+		Version:    42,
+		MaxMsgSize: 10 * 1024,
+		Messages: []interface{}{
+			protoHandshake{},
+			hs0{},
+			kill{},
+			drop{},
+		},
+	}
 	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		peer := NewPeer(p, ct, rw)
-
-		// demonstrates use of peerPool, killing another peer connection as a response to a message
-		peer.Register(&kill{}, func(msg interface{}) error {
-			id := msg.(*kill).C
-			pp.Get(id).Drop(fmt.Errorf("killed"))
-			log.Trace(fmt.Sprintf("id %v killed", id))
-			return nil
-		})
-
-		// for testing we can trigger self induced disconnect upon receiving drop message
-		peer.Register(&drop{}, func(msg interface{}) error {
-			log.Trace("dropped")
-			return fmt.Errorf("dropped")
-		})
+		peer := NewPeer(p, rw, spec)
 
 		// initiate one-off protohandshake and check validity
-		phs := &protoHandshake{ct.Version, networkId}
-		hs, err := peer.Handshake(phs)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		phs := &protoHandshake{42, networkId}
+		hs, err := peer.Handshake(ctx, phs)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
 
 		lhs := &hs0{42}
 		// module handshake demonstrating a simple repeatable exchange of same-type message
-		hs, err = peer.Handshake(lhs)
+		hs, err = peer.Handshake(ctx, lhs)
 		if err != nil {
 			return err
 		}
@@ -97,19 +97,40 @@ func newProtocol(pp *p2ptest.TestPeerPool) adapters.RunProtocol {
 			return fmt.Errorf("handshake mismatch remote %v > local %v", rmhs.C, lhs.C)
 		}
 
-		peer.Register(lhs, func(msg interface{}) error {
-			rhs := msg.(*hs0)
-			if rhs.C > lhs.C {
-				return fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C)
+		handle := func(msg interface{}) error {
+			switch msg := msg.(type) {
+
+			case *protoHandshake:
+				return errors.New("duplicate handshake")
+
+			case *hs0:
+				rhs := msg
+				if rhs.C > lhs.C {
+					return fmt.Errorf("handshake mismatch remote %v > local %v", rhs.C, lhs.C)
+				}
+				lhs.C += rhs.C
+				return peer.Send(lhs)
+
+			case *kill:
+				// demonstrates use of peerPool, killing another peer connection as a response to a message
+				id := msg.C
+				pp.Get(id).Drop(errors.New("killed"))
+				log.Trace(fmt.Sprintf("id %v killed", id))
+				return nil
+
+			case *drop:
+				// for testing we can trigger self induced disconnect upon receiving drop message
+				return errors.New("dropped")
+
+			default:
+				return fmt.Errorf("unknown message type: %T", msg)
 			}
-			lhs.C += rhs.C
-			return peer.Send(lhs)
-		})
+		}
 
 		log.Trace(fmt.Sprintf("adding peer  %v", peer))
 		pp.Add(peer)
 		defer pp.Remove(peer)
-		err = peer.Run()
+		err = peer.Run(handle)
 		log.Trace(fmt.Sprintf("peer  %v protocol quitting: %v", peer, err))
 
 		return err

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/ethereum/go-ethereum/node"
@@ -81,10 +82,14 @@ func (n *DockerNode) dockerCommand() *exec.Cmd {
 	return exec.Command(
 		"sh", "-c",
 		fmt.Sprintf(
-			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" %s p2p-node %s %s`,
-			dockerImage, n.Config.Node.Service, n.ID.String(),
+			`exec docker run --interactive --env _P2P_NODE_CONFIG="${_P2P_NODE_CONFIG}" --env _P2P_NODE_KEY="${_P2P_NODE_KEY}" %s p2p-node %s %s`,
+			dockerImage, strings.Join(n.Services, " "), n.ID.String(),
 		),
 	)
+}
+
+func (n *DockerNode) GetService(name string) node.Service {
+	return nil
 }
 
 // dockerImage is the name of the docker image

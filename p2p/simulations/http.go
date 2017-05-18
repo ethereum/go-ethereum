@@ -59,6 +59,21 @@ func (c *Client) GetNetwork(networkID string) (*Network, error) {
 	return network, c.Get(fmt.Sprintf("/networks/%s", networkID), network)
 }
 
+// StartNetwork starts all existing nodes in a simulation network
+func (c *Client) StartNetwork(networkID string) error {
+	return c.Post(fmt.Sprintf("/networks/%s/start", networkID), nil, nil)
+}
+
+// StopNetwork stops all existing nodes in a simulation network
+func (c *Client) StopNetwork(networkID string) error {
+	return c.Post(fmt.Sprintf("/networks/%s/stop", networkID), nil, nil)
+}
+
+// DeleteNetwork stops and deletes a simulation network
+func (c *Client) DeleteNetwork(networkID string) error {
+	return c.Delete(fmt.Sprintf("/networks/%s", networkID))
+}
+
 // CreateSnapshot creates a network snapshot
 func (c *Client) CreateSnapshot(networkID string) (*Snapshot, error) {
 	snap := &Snapshot{}
@@ -276,6 +291,9 @@ func NewServer(config *ServerConfig) *Server {
 	s.POST("/networks", s.CreateNetwork)
 	s.GET("/networks", s.GetNetworks)
 	s.GET("/networks/:netid", s.GetNetwork)
+	s.POST("/networks/:netid/start", s.StartNetwork)
+	s.POST("/networks/:netid/stop", s.StopNetwork)
+	s.DELETE("/networks/:netid", s.DeleteNetwork)
 	s.GET("/networks/:netid/events", s.StreamNetworkEvents)
 	s.GET("/networks/:netid/snapshot", s.CreateSnapshot)
 	s.POST("/networks/:netid/snapshot", s.LoadSnapshot)
@@ -339,6 +357,46 @@ func (s *Server) GetNetwork(w http.ResponseWriter, req *http.Request) {
 	network := req.Context().Value("network").(*Network)
 
 	s.JSON(w, http.StatusOK, network)
+}
+
+// StartNetwork starts all nodes in a network
+func (s *Server) StartNetwork(w http.ResponseWriter, req *http.Request) {
+	network := req.Context().Value("network").(*Network)
+
+	if err := network.StartAll(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// StopNetwork stops all nodes in a network
+func (s *Server) StopNetwork(w http.ResponseWriter, req *http.Request) {
+	network := req.Context().Value("network").(*Network)
+
+	if err := network.StopAll(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+// DeleteNetwork stops all nodes in a network and deletes it
+func (s *Server) DeleteNetwork(w http.ResponseWriter, req *http.Request) {
+	network := req.Context().Value("network").(*Network)
+
+	if err := network.StopAll(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.mtx.Lock()
+	delete(s.networks, network.Id)
+	s.mtx.Unlock()
+
+	w.WriteHeader(http.StatusOK)
 }
 
 //Get the info for a particular mocker

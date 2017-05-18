@@ -17,10 +17,11 @@
 package adapters
 
 import (
-	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
+	"reflect"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
@@ -36,7 +37,6 @@ import (
 type SimAdapter struct {
 	mtx      sync.RWMutex
 	nodes    map[discover.NodeID]*SimNode
-	services map[string]ServiceFunc
 }
 
 // NewSimAdapter creates a SimAdapter which is capable of running in-memory
@@ -45,7 +45,6 @@ type SimAdapter struct {
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		nodes:    make(map[discover.NodeID]*SimNode),
-		services: services,
 	}
 }
 
@@ -56,6 +55,8 @@ func (s *SimAdapter) Name() string {
 
 // NewNode returns a new SimNode using the given config
 func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
+	var nodeprotos []p2p.Protocol
+	
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -66,6 +67,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	// check the service is valid and initialize it
+/*
 	serviceFunc, exists := s.services[config.Service]
 	if !exists {
 		return nil, fmt.Errorf("unknown node service %q", config.Service)
@@ -73,13 +75,60 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 
 	node := &SimNode{
 		Id:          id,
+		config:      config,
 		adapter:     s,
 		serviceFunc: serviceFunc,
-		peers:       make(map[discover.NodeID]MsgReadWriteCloser),
-		dropPeers:   make(chan struct{}),
+*/
+	//serviceFunc, exists := s.services[config.Service]
+	
+	//if !exists {
+	//	return nil, fmt.Errorf("unknown node service %q", config.Service)
+	//}
+	//service := serviceFunc(id)
+	
+	_, err := node.New(&node.Config{
+		P2P: p2p.Config{
+			PrivateKey:      config.PrivateKey,
+			MaxPeers:        math.MaxInt32,
+			NoDiscovery:     true,
+			Protocols:       nodeprotos,
+			Dialer:          s,
+			EnableMsgEvents: true,
+		},
+	})
+	if err != nil {
+		return nil, err
 	}
-	s.nodes[id.NodeID] = node
-	return node, nil
+
+	for _, service := range serviceFuncs[config.Service](id, nil) {
+		for _, proto := range service.Protocols() {
+			nodeprotos = append(nodeprotos, proto)
+		}
+	}
+	
+	simnode := &SimNode{
+		Id:      id,
+		serviceFunc: serviceFuncs[config.Service],
+		adapter:     s,
+		config:      config,
+		running:	[]node.Service{},
+	}
+	s.nodes[id.NodeID] = simnode
+	return simnode, nil
+}
+
+func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
+	node, ok := s.GetNode(dest.ID)
+	if !ok {
+		return nil, fmt.Errorf("unknown node: %s", dest.ID)
+	}
+	srv := node.Server()
+	if srv == nil {
+		return nil, fmt.Errorf("node not running: %s", dest.ID)
+	}
+	pipe1, pipe2 := net.Pipe()
+	go srv.SetupConn(pipe1, 0, nil)
+	return pipe2, nil
 }
 
 // GetNode returns the node with the given ID if it exists
@@ -88,14 +137,6 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 	defer s.mtx.RUnlock()
 	node, ok := s.nodes[id]
 	return node, ok
-}
-
-// MsgReadWriteCloser wraps a MsgReadWriter with the addition of a Close method
-// so we can simulate the closing of a p2p connection (which usually happens by
-/// closing the underlying TCP connection)
-type MsgReadWriteCloser interface {
-	p2p.MsgReadWriter
-	Close() error
 }
 
 // SimNode is an in-memory node which connects to other SimNodes using an
@@ -107,17 +148,13 @@ type MsgReadWriteCloser interface {
 type SimNode struct {
 	lock        sync.RWMutex
 	Id          *NodeId
+	config      *NodeConfig
 	adapter     *SimAdapter
-	running     node.Service
-	serviceFunc ServiceFunc
-	peers       map[discover.NodeID]MsgReadWriteCloser
-	peerFeed    event.Feed
+	serviceFunc 	ServiceFunc
+	node        *node.Node
 	client      *rpc.Client
 	rpcMux      *rpcMux
-
-	// dropPeers is used to force peer disconnects when
-	// the node is stopped
-	dropPeers chan struct{}
+	running		[]node.Service
 }
 
 // Addr returns the node's discovery address
@@ -127,7 +164,7 @@ func (self *SimNode) Addr() []byte {
 
 // Node returns a discover.Node representing the SimNode
 func (self *SimNode) Node() *discover.Node {
-	return discover.NewNode(self.Id.NodeID, nil, 0, 0)
+	return discover.NewNode(self.Id.NodeID, net.IP{127, 0, 0, 1}, 30303, 30303)
 }
 
 // Client returns an rpc.Client which can be used to communicate with the
@@ -154,82 +191,68 @@ func (self *SimNode) ServeRPC(conn net.Conn) error {
 	return nil
 }
 
-// Start initializes the service, starts the RPC handler and then starts
-// the service
-func (self *SimNode) Start(snapshot []byte) error {
-	service := self.serviceFunc(self.Id, snapshot)
+// Snapshot creates a snapshot of the service state by calling the
+// simulation_snapshot RPC method
+func (self *SimNode) Snapshot() ([]byte, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.client == nil {
+		return nil, errors.New("RPC not started")
+	}
+	var snapshot []byte
+	return snapshot, self.client.Call(&snapshot, "simulation_snapshot")
+}
 
-	// for simplicity, only support single protocol services (simulating
-	// multiple protocols on the same peer is extra effort, and we don't
-	// currently run any simulations which run multiple protocols)
-	if len(service.Protocols()) != 1 {
-		return errors.New("service must have a single protocol")
+// Start starts the RPC handler and the underlying service
+func (self *SimNode) Start(snapshot []byte) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	if self.node != nil {
+		return errors.New("node already started")
+	}
+	
+	services := []node.ServiceConstructor{}
+	
+	sf := self.serviceFunc(self.Id, snapshot)
+	
+	for i, _ := range sf {
+		service := sf[i]
+		sc := func(ctx *node.ServiceContext) (node.Service, error) {
+			return service, nil
+		}
+		log.Debug(fmt.Sprintf("servicefunc yield: %v %p %p", reflect.TypeOf(sf[i]), sf[i], sc))
+		services = append(services, sc)
+		self.running = append(self.running, sf[i])
 	}
 
-	self.dropPeers = make(chan struct{})
-	if err := self.startRPC(service); err != nil {
+	node, err := node.New(&node.Config{
+		P2P: p2p.Config{
+			PrivateKey:      self.config.PrivateKey,
+			MaxPeers:        math.MaxInt32,
+			NoDiscovery:     true,
+			Dialer:          self.adapter,
+			EnableMsgEvents: false,
+		},
+		NoUSB: true,
+	})
+	if err != nil {
 		return err
 	}
-	self.running = service
-	return service.Start(&simServer{self})
-}
-
-// simServer wraps a SimNode but modifies the Start method signature so that
-// it implements the p2p.Server interface (the Start method is never actually
-// called when using the SimAdapter)
-type simServer struct {
-	*SimNode
-}
-
-func (s *simServer) Start() error {
-	return nil
-}
-
-// Stop stops the RPC handler, stops the underlying service and disconnects
-// any currently connected peers
-func (self *SimNode) Stop() error {
-	self.stopRPC()
-	close(self.dropPeers)
-	return self.running.Stop()
-}
-
-// Running returns whether or not the service is running
-func (self *SimNode) Running() bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	return self.running != nil
-}
-
-// Service returns the running node.Service
-func (self *SimNode) Service() node.Service {
-	return self.running
-}
-
-// startRPC starts an RPC server and connects to it using an in-process RPC
-// client
-func (self *SimNode) startRPC(service node.Service) error {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	if self.client != nil {
-		return errors.New("RPC already started")
+	
+	for _, service := range services {
+		log.Debug(fmt.Sprintf("service %v", service))
+		if err := node.Register(service); err != nil {
+			return err
+		}
 	}
 
-	// add SimAdminAPI so that the network can call the
-	// AddPeer, RemovePeer and PeerEvents RPC methods
-	apis := append(service.APIs(), []rpc.API{
-		{
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   &SimAdminAPI{self},
-		},
-	}...)
+	if err := node.Start(); err != nil {
+		return err
+	}
 
-	// start the RPC handler
-	handler := rpc.NewServer()
-	for _, api := range apis {
-		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
-			return fmt.Errorf("error registering RPC: %s", err)
-		}
+	handler, err := node.RPCHandler()
+	if err != nil {
+		return err
 	}
 
 	// create an in-process RPC multiplexer
@@ -240,197 +263,61 @@ func (self *SimNode) startRPC(service node.Service) error {
 	// create an in-process RPC client
 	self.client = self.rpcMux.Client()
 
+	self.node = node
+
 	return nil
 }
 
-// stopRPC closes the node's RPC client
-func (self *SimNode) stopRPC() {
+func (self *SimNode) Stop() error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	if self.client != nil {
-		self.client.Close()
-		self.client = nil
-		self.rpcMux = nil
+	if self.node == nil {
+		return nil
 	}
+	if err := self.node.Stop(); err != nil {
+		return err
+	}
+	self.node = nil
+	return nil
 }
 
-// RemovePeer removes the given node as a peer by looking up the corresponding
-// p2p.MsgReadWriter pipe and closing it (which will cause both the local
-// and peer Protocol.Run functions to exit)
-func (self *SimNode) RemovePeer(peer *discover.Node) {
+// Service returns the underlying running node.Service matching the supplied servuce type
+func (self *SimNode) Service(servicetype interface{}) node.Service {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	peerRW, exists := self.peers[peer.ID]
-	if !exists {
-		return
+	typ := reflect.TypeOf(servicetype)
+	for _, service := range self.running {
+		if reflect.TypeOf(service) == typ {
+			return service
+		}
 	}
-	peerRW.Close()
-	delete(self.peers, peer.ID)
-	log.Trace(fmt.Sprintf("dropped peer %v", peer.ID))
+	return nil
 }
 
-// AddPeer adds the given node as a peer by creating a p2p.MsgReadWriter pipe
-// and running both the local and peer's Protocol.Run function over the pipe
-func (self *SimNode) AddPeer(peer *discover.Node) {
+func (self *SimNode) Server() *p2p.Server {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	if _, exists := self.peers[peer.ID]; exists {
-		return
+	if self.node == nil {
+		return nil
 	}
-	peerNode, exists := self.adapter.GetNode(peer.ID)
-	if !exists {
-		panic(fmt.Sprintf("unknown peer: %s", peer.ID))
-	}
-	if !peerNode.Running() {
-		return
-	}
-	p1, p2 := p2p.MsgPipe()
-	localRW := p2p.NewMsgEventer(p1, &self.peerFeed, peer.ID)
-	peerRW := p2p.NewMsgEventer(p2, &self.peerFeed, self.Id.NodeID)
-	self.peers[peer.ID] = peerRW
-	peerNode.RunProtocol(self, peerRW)
-	self.RunProtocol(peerNode, localRW)
+	return self.node.Server()
 }
 
-// SubscribeEvents subscribes the given channel to p2p peer events
 func (self *SimNode) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {
-	return self.peerFeed.Subscribe(ch)
+	srv := self.Server()
+	if srv == nil {
+		panic("node not running")
+	}
+	return srv.SubscribeEvents(ch)
 }
 
-// PeerCount returns the number of currently connected peers
-func (self *SimNode) PeerCount() int {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	return len(self.peers)
-}
-
-// NodeInfo returns information about the node
 func (self *SimNode) NodeInfo() *p2p.NodeInfo {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	info := &p2p.NodeInfo{
-		ID:        self.Id.String(),
-		Enode:     self.Node().String(),
-		Protocols: make(map[string]interface{}),
-	}
-	if self.running != nil {
-		for _, proto := range self.running.Protocols() {
-			nodeInfo := interface{}("unknown")
-			if query := proto.NodeInfo; query != nil {
-				nodeInfo = proto.NodeInfo()
-			}
-			info.Protocols[proto.Name] = nodeInfo
+	server := self.Server()
+	if server == nil {
+		return &p2p.NodeInfo{
+			ID:    self.Id.String(),
+			Enode: self.Node().String(),
 		}
 	}
-	return info
-}
-
-// PeersInfo is a stub so that SimNode implements p2p.Server
-func (self *SimNode) PeersInfo() (info []*p2p.PeerInfo) {
-	return nil
-}
-
-// Snapshot creates a snapshot of the running service
-func (self *SimNode) Snapshot() ([]byte, error) {
-	self.lock.Lock()
-	service := self.running
-	self.lock.Unlock()
-	if service == nil {
-		return nil, errors.New("service not running")
-	}
-	return SnapshotAPI{service}.Snapshot()
-}
-
-// RunProtocol runs the underlying service's protocol with the peer using the
-// given MsgReadWriteCloser, emitting peer add / drop events for peer event
-// subscribers
-func (self *SimNode) RunProtocol(peer *SimNode, rw MsgReadWriteCloser) {
-	// close the rw if the node is stopped to disconnect the peer
-	go func() {
-		<-self.dropPeers
-		log.Trace("dropping peer", "self.id", self.Id, "peer.id", peer.Id)
-		rw.Close()
-	}()
-
-	id := peer.Id
-	log.Trace(fmt.Sprintf("protocol starting on peer %v (connection with %v)", self.Id, id))
-	protocol := self.running.Protocols()[0]
-	p := p2p.NewPeer(id.NodeID, id.Label(), []p2p.Cap{})
-	go func() {
-		// emit peer add event
-		self.peerFeed.Send(&p2p.PeerEvent{
-			Type: p2p.PeerEventTypeAdd,
-			Peer: id.NodeID,
-		})
-
-		// run the protocol
-		err := protocol.Run(p, rw)
-
-		// remove the peer
-		self.RemovePeer(peer.Node())
-		log.Trace(fmt.Sprintf("protocol quit on peer %v (connection with %v broken: %v)", self.Id, id, err))
-
-		// emit peer drop event
-		self.peerFeed.Send(&p2p.PeerEvent{
-			Type:  p2p.PeerEventTypeDrop,
-			Peer:  id.NodeID,
-			Error: err.Error(),
-		})
-	}()
-}
-
-// SimAdminAPI implements the AddPeer and RemovePeer RPC methods (API
-// compatible with node.PrivateAdminAPI)
-type SimAdminAPI struct {
-	*SimNode
-}
-
-func (api *SimAdminAPI) AddPeer(url string) (bool, error) {
-	node, err := discover.ParseNode(url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	api.SimNode.AddPeer(node)
-	return true, nil
-}
-
-func (api *SimAdminAPI) RemovePeer(url string) (bool, error) {
-	node, err := discover.ParseNode(url)
-	if err != nil {
-		return false, fmt.Errorf("invalid enode: %v", err)
-	}
-	api.SimNode.RemovePeer(node)
-	return true, nil
-}
-
-// PeerEvents creates an RPC subscription which receives peer events from the
-// underlying p2p.Server
-func (api *SimAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	rpcSub := notifier.CreateSubscription()
-
-	go func() {
-		events := make(chan *p2p.PeerEvent)
-		sub := api.SubscribeEvents(events)
-		defer sub.Unsubscribe()
-
-		for {
-			select {
-			case event := <-events:
-				notifier.Notify(rpcSub.ID, event)
-			case <-sub.Err():
-				return
-			case <-rpcSub.Err():
-				return
-			case <-notifier.Closed():
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
+	return server.NodeInfo()
 }

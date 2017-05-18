@@ -172,7 +172,7 @@ func (self *Whisper) Send(envelope *Envelope) error {
 
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
-func (self *Whisper) Start(p2p.Server) error {
+func (self *Whisper) Start(*p2p.Server) error {
 	log.Info(fmt.Sprint("Whisper started"))
 	go self.update()
 	return nil

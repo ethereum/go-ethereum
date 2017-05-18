@@ -13,8 +13,7 @@ import (
 )
 
 type ProtocolSession struct {
-	*adapters.SimNode
-
+	Server  *p2p.Server
 	Ids     []*adapters.NodeId
 	adapter *adapters.SimAdapter
 	events  chan *p2p.PeerEvent
@@ -58,7 +57,7 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 	if !ok {
 		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids))
 	}
-	mockNode, ok := simNode.Service().(*mockNode)
+	mockNode, ok := simNode.Service(&mockNode{}).(*mockNode)
 	if !ok {
 		return fmt.Errorf("trigger: peer %v is not a mock", trig.Peer)
 	}
@@ -93,7 +92,7 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	if !ok {
 		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids))
 	}
-	mockNode, ok := simNode.Service().(*mockNode)
+	mockNode, ok := simNode.Service(&mockNode{}).(*mockNode)
 	if !ok {
 		return fmt.Errorf("trigger: peer %v is not a mock", exp.Peer)
 	}

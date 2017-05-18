@@ -9,22 +9,20 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	p2pnode "github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "discovery"
+const testMinProxBinSize = 2
 
 var services = adapters.Services{
-	serviceName: func(id *adapters.NodeId, snapshot []byte) p2pnode.Service {
-		return newNode(id)
-	},
+	serviceName: newService,
 }
 
 func init() {
@@ -70,7 +68,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
 		if err != nil {
-			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
+			t.Fatalf("error starting node: %s", err)
 		}
 		if err := net.Start(node.ID()); err != nil {
 			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
@@ -97,6 +95,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		}
 		return nil
 	}
+	nnmap := network.NewPeerPot(testMinProxBinSize, ids...)
 	check := func(ctx context.Context, id *adapters.NodeId) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -113,7 +112,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		var healthy bool
-		if err := client.Call(&healthy, "hive_healthy", nil); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", nnmap[id.NodeID]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		return healthy, nil
@@ -179,70 +178,26 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 	return nil
 }
 
-type node struct {
-	*network.Hive
+func newService(id *adapters.NodeId, snapshot []byte) node.Service {
+	addr := network.NewAddrFromNodeId(id)
 
-	protocol *p2p.Protocol
-}
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = testMinProxBinSize
+	kp.MaxBinSize = 3
+	kp.MinBinSize = 1
+	kp.MaxRetries = 1000
+	kp.RetryExponent = 2
+	kp.RetryInterval = 1000000
+	kad := network.NewKademlia(addr.Over(), kp)
 
-func newNode(id *adapters.NodeId) *node {
-	addr := network.NewPeerAddrFromNodeId(id)
-	kademlia := newKademlia(addr.OverlayAddr())
-	hive := newHive(kademlia)
-	codeMap := network.BzzCodeMap(network.DiscoveryMsgs...)
-	node := &node{Hive: hive}
-	services := func(peer network.Peer) error {
-		discoveryPeer := network.NewDiscovery(peer, kademlia)
-		node.Add(discoveryPeer)
-		peer.DisconnectHook(func(err error) {
-			node.Remove(discoveryPeer)
-		})
-		return nil
+	hp := network.NewHiveParams()
+	hp.KeepAliveInterval = time.Second
+
+	config := &network.BzzConfig{
+		OverlayAddr:  addr.Over(),
+		UnderlayAddr: addr.Under(),
+		HiveParams:   hp,
 	}
-	node.protocol = network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), codeMap, services, nil, nil)
-	return node
-}
 
-func newKademlia(overlayAddr []byte) *network.Kademlia {
-	params := network.NewKadParams()
-	params.MinProxBinSize = 2
-	params.MaxBinSize = 3
-	params.MinBinSize = 1
-	params.MaxRetries = 1000
-	params.RetryExponent = 2
-	params.RetryInterval = 1000000
-
-	return network.NewKademlia(overlayAddr, params)
-}
-
-func newHive(kademlia *network.Kademlia) *network.Hive {
-	params := network.NewHiveParams()
-	params.CallInterval = 5000
-
-	return network.NewHive(params, kademlia)
-}
-
-func (n *node) Protocols() []p2p.Protocol {
-	return []p2p.Protocol{*n.protocol}
-}
-
-func (n *node) APIs() []rpc.API {
-	return []rpc.API{{
-		Namespace: "hive",
-		Version:   "1.0",
-		Service:   n.Hive,
-	}}
-}
-
-func (n *node) Start(server p2p.Server) error {
-	return n.Hive.Start(server, n.hiveKeepAlive)
-}
-
-func (n *node) Stop() error {
-	n.Hive.Stop()
-	return nil
-}
-
-func (n *node) hiveKeepAlive() <-chan time.Time {
-	return time.Tick(time.Second)
+	return network.NewBzz(config, kad, nil)
 }

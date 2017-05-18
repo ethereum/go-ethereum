@@ -287,3 +287,62 @@ func (self *BoolAddress) PO(val PotVal, pos int) (po int, eq bool) {
 	}
 	return po, true
 }
+
+type BytesAddress interface {
+	Address() []byte
+}
+
+type bytesAddress struct {
+	bytes   []byte
+	toBytes func(v AnyVal) []byte
+}
+
+func NewBytesVal(v AnyVal, f func(v AnyVal) []byte) *bytesAddress {
+	if f == nil {
+		f = ToBytes
+	}
+	b := f(v)
+	return &bytesAddress{b, f}
+}
+
+func ToBytes(v AnyVal) []byte {
+	b, ok := v.([]byte)
+	if !ok {
+		ba, ok := v.(BytesAddress)
+		if !ok {
+			panic(fmt.Sprintf("unsupported value type %T", v))
+		}
+		b = ba.Address()
+	}
+	return b
+}
+
+func (a *bytesAddress) String() string {
+	return fmt.Sprintf("%08b", a.bytes)
+}
+func (a *bytesAddress) Address() []byte {
+	return a.bytes
+}
+
+func (a *bytesAddress) PO(val PotVal, i int) (int, bool) {
+	return proximityOrder(a.bytes, a.toBytes(val), i)
+}
+
+func proximityOrder(one, other []byte, pos int) (int, bool) {
+	for i := pos / 8; i < len(one); i++ {
+		if one[i] == other[i] {
+			continue
+		}
+		oxo := one[i] ^ other[i]
+		start := 0
+		if i == pos/8 {
+			start = pos % 8
+		}
+		for j := start; j < 8; j++ {
+			if (uint8(oxo)>>uint8(7-j))&0x01 != 0 {
+				return i*8 + j, false
+			}
+		}
+	}
+	return len(one) * 8, true
+}
