@@ -35,8 +35,9 @@ import (
 // SimAdapter is a NodeAdapter which creates in-memory nodes and connects them
 // using an in-memory p2p.MsgReadWriter pipe
 type SimAdapter struct {
-	mtx   sync.RWMutex
-	nodes map[discover.NodeID]*SimNode
+	mtx      sync.RWMutex
+	nodes    map[discover.NodeID]*SimNode
+	services map[string]ServiceFunc
 }
 
 // NewSimAdapter creates a SimAdapter which is capable of running in-memory
@@ -44,7 +45,8 @@ type SimAdapter struct {
 // node is passed to the NewNode function in the NodeConfig)
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
-		nodes: make(map[discover.NodeID]*SimNode),
+		nodes:    make(map[discover.NodeID]*SimNode),
+		services: services,
 	}
 }
 
@@ -86,7 +88,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	//}
 	//service := serviceFunc(id)
 
-	for _, service := range serviceFuncs[config.Service](id, nil) {
+	for _, service := range s.services[config.Service](id, nil) {
 		for _, proto := range service.Protocols() {
 			nodeprotos = append(nodeprotos, proto)
 		}
@@ -101,6 +103,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 			Dialer:          s,
 			EnableMsgEvents: true,
 		},
+		NoUSB: true,
 	})
 	if err != nil {
 		return nil, err
@@ -108,7 +111,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 
 	simnode := &SimNode{
 		Id:          id,
-		serviceFunc: serviceFuncs[config.Service],
+		serviceFunc: s.services[config.Service],
 		adapter:     s,
 		config:      config,
 		running:     []node.Service{},
