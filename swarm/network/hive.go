@@ -82,12 +82,11 @@ type Hive struct {
 	store       Store
 
 	// bookkeeping
-	lock   sync.Mutex
-	quit   chan bool
-	toggle chan bool
-	more   chan bool
+	lock sync.Mutex
+	quit chan bool
+	more chan bool
 
-	newTicker func() hiveTicker
+	tick <-chan time.Time
 }
 
 // Hive constructor embeds both arguments
@@ -112,7 +111,6 @@ func (self *Hive) Start(server *p2p.Server) error {
 			return err
 		}
 	}
-	self.toggle = make(chan bool)
 	self.more = make(chan bool, 1)
 	self.quit = make(chan bool)
 	log.Debug("hive started")
@@ -150,10 +148,9 @@ func (self *Hive) Start(server *p2p.Server) error {
 
 			log.Info(fmt.Sprintf("%v", self))
 			select {
-			case self.toggle <- want:
-				log.Trace(fmt.Sprintf("keep hive alive: %v", want))
 			case <-self.quit:
 				return
+			default:
 			}
 		}
 	}()
@@ -250,29 +247,16 @@ func (t *timeTicker) Ch() <-chan time.Time {
 // it goes to sleep mode if table is saturated
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive() {
-	if self.newTicker == nil {
-		self.newTicker = func() hiveTicker {
-			return &timeTicker{time.NewTicker(self.KeepAliveInterval)}
-		}
+	if self.tick == nil {
+		ticker := time.NewTicker(self.KeepAliveInterval)
+		defer ticker.Stop()
+		self.tick = ticker.C
 	}
-	ticker := self.newTicker()
-	tick := ticker.Ch()
 	for {
 		select {
-		case <-tick:
+		case <-self.tick:
 			log.Debug("wake up: make hive alive")
 			self.wake()
-		case need := <-self.toggle:
-			if ticker == nil && need {
-				ticker = self.newTicker()
-				tick = ticker.Ch()
-			}
-			// if hive saturated, no more peers asked
-			if ticker != nil && !need {
-				ticker.Stop()
-				ticker = nil
-				tick = nil
-			}
 		case <-self.quit:
 			return
 		}

@@ -1,35 +1,11 @@
 package network
 
 import (
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
-
-type testConnect struct {
-	mu       sync.Mutex
-	conns    []string
-	connectf func(c string) error
-	ticker   chan time.Time
-}
-
-func (self *testConnect) Ch() <-chan time.Time {
-	return self.ticker
-}
-
-func (self *testConnect) Stop() {
-}
-
-func (self *testConnect) connect(na string) error {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.conns = append(self.conns, na)
-	self.connectf(na)
-	return nil
-}
 
 func newHiveTester(t *testing.T, params *HiveParams) (*bzzTester, *Hive) {
 	// setup
@@ -56,17 +32,11 @@ func TestRegisterAndConnect(t *testing.T) {
 	pp.Register(ch)
 
 	// start the hive and wait for the connection
-	tc := &testConnect{
-		connectf: func(c string) error {
-			s.Connect(adapters.NewNodeIdFromHex(c))
-			return nil
-		},
-		ticker: make(chan time.Time),
-	}
-	pp.newTicker = func() hiveTicker { return tc }
+	tick := make(chan time.Time)
+	pp.tick = tick
 	pp.Start(s.Server)
 	defer pp.Stop()
-	tc.ticker <- time.Now()
+	tick <- time.Now()
 	// retrieve and broadcast
 	ord := raddr.Over()[0] / 32
 	o := 0
