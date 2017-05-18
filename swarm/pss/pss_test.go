@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
+	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -190,10 +192,13 @@ func TestPssSimpleLinear(t *testing.T) {
 	}
 	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		id := p.ID()
+		pp := protocols.NewPeer(p, rw, pssSpec)
 		bp := &testPssPeer{
-			Peer: protocols.NewPeer(p, rw, pssSpec),
+			Peer: pp,
 			addr: network.ToOverlayAddr(id[:]),
 		}
+		h := pot.NewHashAddressFromBytes(bp.addr)
+		ps.fwdPool[h.Address] = pp
 		ps.Overlay.On(bp)
 		defer ps.Overlay.Off(bp)
 		log.Debug(fmt.Sprintf("%v", ps.Overlay))
@@ -244,6 +249,8 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 
 	trigger := make(chan *adapters.NodeId)
 	ids := make([]*adapters.NodeId, nodeCount)
+	fullids := ids[0:fullnodecount]
+	fullpeers := [][]byte{}
 
 	for i := 0; i < nodeCount; i++ {
 		nodeconfig := adapters.RandomNodeConfig()
@@ -261,6 +268,9 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 			t.Fatal("error triggering checks for node %s: %s", node.ID().Label(), err)
 		}
 		ids[i] = node.ID()
+		if i < fullnodecount {
+			fullpeers = append(fullpeers, network.ToOverlayAddr(node.ID().Bytes()))
+		}
 	}
 
 	// run a simulation which connects the 10 nodes in a ring and waits
@@ -295,14 +305,21 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 
-		log.Debug("in check", "node", id)
-
-		if lastid != nil {
-			//msg := pssPingMsg{Created: time.Now(),}
-			client.CallContext(context.Background(), nil, "pss_sendRaw", pssPingTopic, PssAPIMsg{
-				Addr: lastid.Bytes(),
-				Msg:  []byte{1, 2, 3},
-			})
+		for _, fid := range fullids {
+			if fid == id {
+				fpeeridx := rand.Int() % (fullnodecount - 1)
+				log.Debug(fmt.Sprintf("fpeeridx %d, fpeer len %d", fpeeridx, len(fullpeers)))
+				if bytes.Equal(fullpeers[fpeeridx], network.ToOverlayAddr(fid.Bytes())) {
+					fpeeridx++
+				}
+				msg := pssPingMsg{Created: time.Now()}
+				code, _ := pssPingProtocol.GetCode(&pssPingMsg{})
+				pmsg, _ := newProtocolMsg(code, msg)
+				client.CallContext(context.Background(), nil, "pss_sendRaw", pssPingTopic, PssAPIMsg{
+					Addr: fullpeers[fpeeridx],
+					Msg:  pmsg,
+				})
+			}
 		}
 		lastid = id
 
@@ -325,6 +342,36 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
 
+	trigger = make(chan *adapters.NodeId)
+
+	action = func(ctx context.Context) error {
+		return nil
+	}
+	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+
+		return true, nil
+	}
+	timeout = 5 * time.Second
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: fullids,
+			Check: check,
+		},
+	})
+	if result.Error != nil {
+		t.Fatalf("simulation failed: %s", result.Error)
+	}
+
 	t.Log("Simulation Passed:")
 	t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
 
@@ -334,40 +381,57 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node
 func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *adapters.NodeId) error {
+
+	gotpeer := make(map[*adapters.NodeId]bool)
+
 	node := net.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)
 	}
+	client, err := node.Client()
+	if err != nil {
+		return err
+	}
+
+	peerevents := make(chan *p2p.PeerEvent)
+	peersub, err := client.Subscribe(context.Background(), "admin", peerevents, "peerEvents")
+	if err != nil {
+		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+	}
+
+	msgevents := make(chan PssAPIMsg)
+	msgsub, err := client.Subscribe(context.Background(), "pss", msgevents, "newMsg", pssPingTopic)
+	if err != nil {
+		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
+	}
+
 	go func() {
-		time.Sleep(time.Second)
-		trigger <- id
-	}()
-	/*
-		client, err := node.Client()
-		if err != nil {
-			return err
-		}
-		events := make(chan PssAPIMsg)
-		sub, err := client.Subscribe(context.Background(), "pss", events, "newMsg", topic)
-		if err != nil {
-			return fmt.Errorf("error getting peer events for node %v: %s", id, err)
-		}
-		go func() {
-			defer sub.Unsubscribe()
-			for {
-				select {
-				case msg := <-events:
-					log.Warn("pss rpc got msg", "msg", msg)
+		defer msgsub.Unsubscribe()
+		defer peersub.Unsubscribe()
+		for {
+			select {
+			case event := <-peerevents:
+				nid := adapters.NewNodeId(event.Peer[:])
+				if event.Type == "add" && !gotpeer[nid] {
 					trigger <- id
-				case err := <-sub.Err():
-					if err != nil {
-						log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
-					}
-					return
+					gotpeer[nid] = true
 				}
+			case <-msgevents:
+				trigger <- id
+			case err := <-peersub.Err():
+				if err != nil {
+					log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
+				}
+				return
+
+			case err := <-msgsub.Err():
+				if err != nil {
+					log.Error(fmt.Sprintf("error getting msg for node %v", id), "err", err)
+				}
+				return
 			}
-		}()
-	*/
+		}
+	}()
 	return nil
 }
 
@@ -404,9 +468,20 @@ func newServices() adapters.Services {
 				log.Error("local dpa creation failed", "error", err)
 				return nil
 			}
-			pssp := NewPssParams()
 
-			return []node.Service{network.NewBzz(config, kademlia, adapters.NewSimStateStore()), NewPss(kademlia, dpa, pssp)}
+			pssp := NewPssParams()
+			ps := NewPss(kademlia, dpa, pssp)
+
+			ping := &pssPing{
+				quitC: make(chan struct{}),
+			}
+			err = RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
+			if err != nil {
+				log.Error("Couldnt register pss protocol", "err", err)
+				os.Exit(1)
+			}
+
+			return []node.Service{network.NewBzz(config, kademlia, adapters.NewSimStateStore()), ps}
 		},
 	}
 }

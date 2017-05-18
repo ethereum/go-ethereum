@@ -35,8 +35,8 @@ import (
 // SimAdapter is a NodeAdapter which creates in-memory nodes and connects them
 // using an in-memory p2p.MsgReadWriter pipe
 type SimAdapter struct {
-	mtx      sync.RWMutex
-	nodes    map[discover.NodeID]*SimNode
+	mtx   sync.RWMutex
+	nodes map[discover.NodeID]*SimNode
 }
 
 // NewSimAdapter creates a SimAdapter which is capable of running in-memory
@@ -44,7 +44,7 @@ type SimAdapter struct {
 // node is passed to the NewNode function in the NodeConfig)
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
-		nodes:    make(map[discover.NodeID]*SimNode),
+		nodes: make(map[discover.NodeID]*SimNode),
 	}
 }
 
@@ -56,7 +56,7 @@ func (s *SimAdapter) Name() string {
 // NewNode returns a new SimNode using the given config
 func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	var nodeprotos []p2p.Protocol
-	
+
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -67,25 +67,31 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	// check the service is valid and initialize it
-/*
-	serviceFunc, exists := s.services[config.Service]
-	if !exists {
-		return nil, fmt.Errorf("unknown node service %q", config.Service)
-	}
+	/*
+		serviceFunc, exists := s.services[config.Service]
+		if !exists {
+			return nil, fmt.Errorf("unknown node service %q", config.Service)
+		}
 
-	node := &SimNode{
-		Id:          id,
-		config:      config,
-		adapter:     s,
-		serviceFunc: serviceFunc,
-*/
+		node := &SimNode{
+			Id:          id,
+			config:      config,
+			adapter:     s,
+			serviceFunc: serviceFunc,
+	*/
 	//serviceFunc, exists := s.services[config.Service]
-	
+
 	//if !exists {
 	//	return nil, fmt.Errorf("unknown node service %q", config.Service)
 	//}
 	//service := serviceFunc(id)
-	
+
+	for _, service := range serviceFuncs[config.Service](id, nil) {
+		for _, proto := range service.Protocols() {
+			nodeprotos = append(nodeprotos, proto)
+		}
+	}
+
 	_, err := node.New(&node.Config{
 		P2P: p2p.Config{
 			PrivateKey:      config.PrivateKey,
@@ -100,18 +106,12 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		return nil, err
 	}
 
-	for _, service := range serviceFuncs[config.Service](id, nil) {
-		for _, proto := range service.Protocols() {
-			nodeprotos = append(nodeprotos, proto)
-		}
-	}
-	
 	simnode := &SimNode{
-		Id:      id,
+		Id:          id,
 		serviceFunc: serviceFuncs[config.Service],
 		adapter:     s,
 		config:      config,
-		running:	[]node.Service{},
+		running:     []node.Service{},
 	}
 	s.nodes[id.NodeID] = simnode
 	return simnode, nil
@@ -150,11 +150,11 @@ type SimNode struct {
 	Id          *NodeId
 	config      *NodeConfig
 	adapter     *SimAdapter
-	serviceFunc 	ServiceFunc
+	serviceFunc ServiceFunc
 	node        *node.Node
 	client      *rpc.Client
 	rpcMux      *rpcMux
-	running		[]node.Service
+	running     []node.Service
 }
 
 // Addr returns the node's discovery address
@@ -210,11 +210,11 @@ func (self *SimNode) Start(snapshot []byte) error {
 	if self.node != nil {
 		return errors.New("node already started")
 	}
-	
+
 	services := []node.ServiceConstructor{}
-	
+
 	sf := self.serviceFunc(self.Id, snapshot)
-	
+
 	for i, _ := range sf {
 		service := sf[i]
 		sc := func(ctx *node.ServiceContext) (node.Service, error) {
@@ -238,7 +238,7 @@ func (self *SimNode) Start(snapshot []byte) error {
 	if err != nil {
 		return err
 	}
-	
+
 	for _, service := range services {
 		log.Debug(fmt.Sprintf("service %v", service))
 		if err := node.Register(service); err != nil {

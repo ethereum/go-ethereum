@@ -36,11 +36,11 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 	psssub := notifier.CreateSubscription()
 	handler := func(msg []byte, p *p2p.Peer, from []byte) error {
 		apimsg := &PssAPIMsg{
-			Msg: msg,
+			Msg:  msg,
 			Addr: from,
 		}
 		if err := notifier.Notify(psssub.ID, apimsg); err != nil {
-				log.Warn(fmt.Sprintf("notification on pss sub topic %v rpc (sub %v) msg %v failed!", topic, psssub.ID, msg))
+			log.Warn(fmt.Sprintf("notification on pss sub topic %v rpc (sub %v) msg %v failed!", topic, psssub.ID, msg))
 		}
 		return nil
 	}
@@ -60,7 +60,7 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 	return psssub, nil
 }
 
-// SendRaw sends the message (serialised into byte slice) to a peer with topic
+// SendRaw sends the message (serialized into byte slice) to a peer with topic
 func (pssapi *PssAPI) SendRaw(topic PssTopic, msg PssAPIMsg) error {
 	err := pssapi.Pss.Send(msg.Addr, topic, msg.Msg)
 	if err != nil {
@@ -70,7 +70,7 @@ func (pssapi *PssAPI) SendRaw(topic PssTopic, msg PssAPIMsg) error {
 }
 
 // BaseAddr gets our own overlayaddress
-func (pssapi *PssAPI) BaseAddr() ([]byte, error) { 
+func (pssapi *PssAPI) BaseAddr() ([]byte, error) {
 	log.Warn("inside baseaddr")
 	return pssapi.Pss.Overlay.BaseAddr(), nil
 }
