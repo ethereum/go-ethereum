@@ -190,6 +190,7 @@ func (self *Kademlia) Register(peers chan OverlayAddr) error {
 func (self *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	minsize := self.MinBinSize
 	depth := self.Depth()
+	empty := self.FirstEmptyBin()
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
 	log.Debug(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
@@ -203,10 +204,10 @@ func (self *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		return a == nil && po >= depth
 	})
 	if a != nil {
-		log.Trace(fmt.Sprintf("candidate prox peer found: %v (%v)", a, ppo))
+		log.Debug(fmt.Sprintf("candidate prox peer found: %v (%v)", a, ppo))
 		return a, 0, false
 	}
-	log.Trace(fmt.Sprintf("no candidate prox peers to connect to (Depth: %v, minProxSize: %v) %#v", depth, self.MinProxBinSize, a))
+	log.Debug(fmt.Sprintf("no candidate prox peers to connect to (Depth: %v, minProxSize: %v) %#v", depth, self.MinProxBinSize, a))
 
 	var bpo []int
 	prev := -1
@@ -238,7 +239,10 @@ func (self *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 			log.Trace(fmt.Sprintf("check PO%02d: ", po))
 			f(func(val pot.PotVal, j int) bool {
 				a = self.callable(val)
-				return a == nil && po < depth
+				if po == empty {
+					log.Debug(fmt.Sprintf("candidate prox peer found: %v (%v)", a, ppo))
+				}
+				return a == nil && po <= depth
 			})
 			return false
 		})

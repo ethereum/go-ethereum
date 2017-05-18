@@ -24,20 +24,20 @@ import (
 
 type Simulation struct {
 	mtx    sync.Mutex
-	stores map[discover.NodeID]*adapters.stateStore
+	stores map[discover.NodeID]*adapters.SimStateStore
 }
 
 func NewSimulation() *Simulation {
 	return &Simulation{
-		stores: make(map[discover.NodeID]*adapters.stateStore),
+		stores: make(map[discover.NodeID]*adapters.SimStateStore),
 	}
 }
 
-func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) node.Service {
+func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) []node.Service {
 	s.mtx.Lock()
 	store, ok := s.stores[id.NodeID]
 	if !ok {
-		store = NewSimStore()
+		store = adapters.NewSimStateStore()
 		s.stores[id.NodeID] = store
 	}
 	s.mtx.Unlock()
@@ -62,7 +62,7 @@ func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) node.Servi
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, store)
+	return []node.Service{network.NewBzz(config, kad, store)}
 }
 
 func createMockers() map[string]*simulations.MockerConfig {
@@ -122,7 +122,7 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 			defer close(ch)
 			ch <- network.NewAddrFromNodeId(peerId)
 		}()
-		if err := net.GetNode(id).Node.(*adapters.SimNode).Service().(*network.Bzz).Hive.Register(ch); err != nil {
+		if err := net.GetNode(id).Node.(*adapters.SimNode).Service(&network.Bzz{}).(*network.Bzz).Hive.Register(ch); err != nil {
 			panic(err.Error())
 		}
 	}
