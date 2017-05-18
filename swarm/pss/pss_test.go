@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
@@ -131,7 +132,7 @@ func TestPssRegisterHandler(t *testing.T) {
 	ps := newTestPss(addr.OAddr)
 	from := network.RandomAddr()
 	payload := []byte("payload")
-	topic := NewTopic(pssTransportProtocol.Name, int(pssTransportProtocol.Version))
+	topic := NewTopic(pssSpec.Name, int(pssSpec.Version))
 	wrongtopic := NewTopic("foo", 42)
 	checkMsg := func(msg []byte, p *p2p.Peer, sender []byte) error {
 		if !bytes.Equal(from.OAddr, sender) {
@@ -172,23 +173,36 @@ func TestPssRegisterHandler(t *testing.T) {
 }
 
 func TestPssSimpleLinear(t *testing.T) {
+	var err error
 	nodeconfig := adapters.RandomNodeConfig()
 	addr := network.NewAddrFromNodeId(nodeconfig.Id)
 	_ = p2ptest.NewTestPeerPool()
-	ps := newTestPss(addr.OAddr)
+	ps := newTestPss(addr.Over())
 
 	ping := &pssPing{
 		quitC: make(chan struct{}),
 	}
 
-	err := RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
+	err = RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
 
 	if err != nil {
 		t.Fatalf("Failed to register virtual protocol in pss: %v", err)
 	}
-	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, ps.Run)
+	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		id := p.ID()
+		bp := &testPssPeer{
+			Peer: protocols.NewPeer(p, rw, pssSpec),
+			addr: network.ToOverlayAddr(id[:]),
+		}
+		ps.Overlay.On(bp)
+		defer ps.Overlay.Off(bp)
+		log.Debug(fmt.Sprintf("%v", ps.Overlay))
+		return bp.Run(ps.handlePssMsg)
+	}
 
-	msg := newPssPingMsg(ps, pssPingProtocol, pssPingTopic, []byte{1, 2, 3})
+	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, run)
+
+	msg := newPssPingMsg(ps, network.ToOverlayAddr(pt.Ids[0].Bytes()), pssPingProtocol, pssPingTopic, []byte{1, 2, 3})
 
 	exchange := p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
@@ -207,7 +221,10 @@ func TestPssSimpleLinear(t *testing.T) {
 		},
 	}
 
-	pt.TestExchanges(exchange)
+	err = pt.TestExchanges(exchange)
+	if err != nil {
+		t.Fatalf("exchange failed %v", err)
+	}
 }
 
 func TestPssFullRandom10_5_5(t *testing.T) {
@@ -367,7 +384,7 @@ func newServices() adapters.Services {
 			kadparams.MaxRetries = 1000
 			kadparams.RetryExponent = 2
 			kadparams.RetryInterval = 1000000
-			kademlia := network.NewKademlia(addr.OAddr, kadparams)
+			kademlia := network.NewKademlia(addr.Over(), kadparams)
 
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),

@@ -347,15 +347,15 @@ func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
 
 // NewAddrFromNodeId constucts a bzzAddr from an adapters.NodeId
 // the overlay address is derived as the hash of the nodeId
-func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
+func NewAddrFromNodeId(n *adapters.NodeId) Addr {
 	id := n.NodeID
 	return &bzzAddr{
-		OAddr: ToOverlayAddr(n),
+		OAddr: ToOverlayAddr(n.Bytes()),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
 	}
 }
 
 // ToOverlayAddr creates an overlayaddress from NodeID
-func ToOverlayAddr(id *adapters.NodeId) []byte {
-	return crypto.Keccak256(id.Bytes())
+func ToOverlayAddr(id []byte) []byte {
+	return crypto.Keccak256(id)
 }

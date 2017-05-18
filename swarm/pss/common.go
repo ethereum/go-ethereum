@@ -68,7 +68,7 @@ func newTestPss(addr []byte) *Pss {
 	return ps
 }
 
-func newPssPingMsg(ps *Pss, spec *protocols.Spec, topic PssTopic, senderaddr []byte) PssMsg {
+func newPssPingMsg(ps *Pss, to []byte, spec *protocols.Spec, topic PssTopic, senderaddr []byte) PssMsg {
 	data := pssPingMsg{
 		Created: time.Now(),
 	}
@@ -83,7 +83,7 @@ func newPssPingMsg(ps *Pss, spec *protocols.Spec, topic PssTopic, senderaddr []b
 	}
 
 	pssmsg := PssMsg{
-		To: ps.Overlay.BaseAddr(),
+		To: to,
 		Payload: NewPssEnvelope(senderaddr, topic, rlpbundle),
 	}
 
@@ -102,4 +102,24 @@ func newPssPingProtocol(handler func (interface{}) error) *p2p.Protocol {
 			return err
 		},
 	}
+}
+
+type testPssPeer struct {
+	*protocols.Peer
+	addr []byte
+}
+
+func (self *testPssPeer) Address() []byte {
+	return self.addr
+}
+
+func (self *testPssPeer) Off() network.OverlayAddr {
+	return self
+}
+
+func (self *testPssPeer) Drop(err error) {
+}
+
+func (self *testPssPeer) Update(o network.OverlayAddr) network.OverlayAddr {
+	return self
 }

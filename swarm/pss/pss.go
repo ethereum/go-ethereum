@@ -37,6 +37,11 @@ var (
 	errorForwardToSelf = errors.New("forward to self")
 )
 
+type senderPeer interface {
+	Address() []byte
+	Send(interface{}) error
+}
+
 // Defines params for Pss
 type PssParams struct {
 	Cachettl time.Duration
@@ -99,7 +104,7 @@ func (msg *PssMsg) serialize() []byte {
 }
 
 
-var pssTransportProtocol = &protocols.Spec{
+var pssSpec = &protocols.Spec{
 	Name:       "pss",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
@@ -188,16 +193,16 @@ func (self *Pss) Stop() error {
 func (self *Pss) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		p2p.Protocol{
-			Name:    pssTransportProtocol.Name,
-			Version: pssTransportProtocol.Version,
-			Length:  pssTransportProtocol.Length(),
+			Name:    pssSpec.Name,
+			Version: pssSpec.Version,
+			Length:  pssSpec.Length(),
 			Run:     self.Run,
 		},
 	}
 }
 
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	pp := protocols.NewPeer(p, rw, pssTransportProtocol)
+	pp := protocols.NewPeer(p, rw, pssSpec)
 	return pp.Run(self.handlePssMsg)
 }
 
@@ -371,13 +376,13 @@ func (self *Pss) Forward(msg *PssMsg) error {
 	// send with kademlia
 	// find the closest peer to the recipient and attempt to send
 	self.Overlay.EachConn(msg.To, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		p, ok := op.(network.Peer)
+		p, ok := op.(senderPeer)
 		if !ok {
 			return true
 		}
 		addr := self.Overlay.BaseAddr()
-		sendMsg := fmt.Sprintf("%x: msg to %x via %x", common.ByteLabel(addr), common.ByteLabel(msg.To), common.ByteLabel(p.Over()))
-		if self.checkFwdCache(p.Over(), digest) {
+		sendMsg := fmt.Sprintf("%x: msg to %x via %x", common.ByteLabel(addr), common.ByteLabel(msg.To), common.ByteLabel(p.Address()))
+		if self.checkFwdCache(p.Address(), digest) {
 			log.Info(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
 			return true
 		}
@@ -389,10 +394,10 @@ func (self *Pss) Forward(msg *PssMsg) error {
 		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
 		// if equality holds, p is always the first peer given in the iterator
-		if bytes.Equal(msg.To, p.Over()) || !isproxbin {
+		if bytes.Equal(msg.To, p.Address()) || !isproxbin {
 			return false
 		}
-		log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ByteLabel(p.Over())))
+		log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ByteLabel(p.Address())))
 		return true
 	})
 
