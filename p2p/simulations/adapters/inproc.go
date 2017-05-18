@@ -186,7 +186,7 @@ func (self *SimNode) Start(snapshot []byte) error {
 			MaxPeers:        math.MaxInt32,
 			NoDiscovery:     true,
 			Dialer:          self.adapter,
-			EnableMsgEvents: true,
+			EnableMsgEvents: false,
 		},
 		NoUSB: true,
 	})

@@ -63,7 +63,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Node:  config,
 	}
 	conf.Stack.DataDir = filepath.Join(dir, "data")
-	conf.Stack.P2P.EnableMsgEvents = true
+	conf.Stack.P2P.EnableMsgEvents = false
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 
