@@ -321,7 +321,7 @@ func (self *bzzAddr) Update(a OverlayAddr) OverlayAddr {
 }
 
 func (self *bzzAddr) String() string {
-	return fmt.Sprintf("%x <%x>", self.OAddr, self.UAddr)
+	return fmt.Sprintf("%x <%s>", self.OAddr, self.UAddr)
 }
 
 // RandomAddr is a utility method generating an address from a public key
