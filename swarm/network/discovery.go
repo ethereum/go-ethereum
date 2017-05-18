@@ -2,6 +2,7 @@ package network
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 )
@@ -11,6 +12,7 @@ import (
 type discPeer struct {
 	*bzzPeer
 	overlay   Overlay
+	mtx       sync.Mutex
 	peers     map[string]bool
 	depth     uint8 // the proximity radius advertised by remote to subscribe to peers
 	sentPeers bool  // set to true  when the peer is first notifed of peers close to them
@@ -206,6 +208,8 @@ func RequestOrder(k Overlay, order, broadcastSize, maxPeers uint8) {
 }
 
 func (self *discPeer) seen(p OverlayPeer) bool {
+	self.mtx.Lock()
+	defer self.mtx.Unlock()
 	k := string(p.Address())
 	if self.peers[k] {
 		return true
