@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 
@@ -215,11 +216,9 @@ var serviceFuncs = make(Services)
 // start devp2p nodes
 func RegisterServices(services Services) {
 	for name, f := range services {
-		// TODO: FIXME: protocol tester if called more than once, throws an error so for now
-		// just overwrite
-		// if _, exists := serviceFuncs[name]; exists {
-		// 	panic(fmt.Sprintf("node service already exists: %q", name))
-		// }
+		if _, exists := serviceFuncs[name]; exists {
+			panic(fmt.Sprintf("node service already exists: %q", name))
+		}
 		serviceFuncs[name] = f
 	}
 

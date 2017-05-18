@@ -19,8 +19,8 @@ type ProtocolTester struct {
 }
 
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
-//func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
-	services := adapters.Services {
+	//func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
+	services := adapters.Services{
 		"test": func(id *adapters.NodeId, _ []byte) []node.Service {
 			return []node.Service{&testNode{run}}
 		},
@@ -28,7 +28,6 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 			return []node.Service{newMockNode()}
 		},
 	}
-	adapters.RegisterServices(services)
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{})
 	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Service: "test"}); err != nil {
