@@ -65,11 +65,11 @@ func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) node.Servi
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = 2
-	kp.MaxBinSize = 3
-	kp.MinBinSize = 1
+	kp.MaxBinSize = 8
+	kp.MinBinSize = 2
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
-	kp.RetryInterval = 1000000
+	kp.RetryInterval = 1000
 	kad := network.NewKademlia(addr.Over(), kp)
 
 	hp := network.NewHiveParams()
@@ -124,8 +124,6 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 	}
 
 	for _, id := range ids {
-		n := rand.Intn(1000)
-		time.Sleep(time.Duration(n) * time.Millisecond)
 		if err := net.Start(id); err != nil {
 			panic(err.Error())
 		}
@@ -227,7 +225,7 @@ func main() {
 
 	config := &simulations.ServerConfig{
 		NewAdapter:      func() adapters.NodeAdapter { return adapters.NewSimAdapter(services) },
-		DefaultMockerId: "start-stop",
+		DefaultMockerId: "bootNet",
 		Mockers:         mockers,
 	}
 
