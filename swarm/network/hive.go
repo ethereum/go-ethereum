@@ -167,7 +167,7 @@ func (self *Hive) Stop() {
 }
 
 func (self *Hive) Run(p *bzzPeer) error {
-	dp := NewDiscovery(p, self.Overlay)
+	dp := NewDiscovery(p, self)
 	log.Debug(fmt.Sprintf("to add new bee %v", p))
 	self.On(dp)
 	self.wake()
@@ -197,6 +197,11 @@ func (self *Hive) Healthy() bool {
 	// TODO: determine if we have enough peers to consider the network
 	//       to be healthy
 	return true
+}
+
+func (self *Hive) Register(peers chan OverlayAddr) error {
+	defer self.wake()
+	return self.Overlay.Register(peers)
 }
 
 // wake triggers
