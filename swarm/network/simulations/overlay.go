@@ -46,13 +46,15 @@ func (s *Simulation) NewService(id *adapters.NodeId, snapshot []byte) []node.Ser
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = 2
-	kp.MaxBinSize = 8
-	kp.MinBinSize = 2
+	kp.MaxBinSize = 4
+	kp.MinBinSize = 1
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
 	kp.RetryInterval = 1000
+	kp.PruneInterval = 2000
 	kad := network.NewKademlia(addr.Over(), kp)
-
+	ticker := time.NewTicker(time.Duration(kad.PruneInterval) * time.Millisecond)
+	kad.Prune(ticker.C)
 	hp := network.NewHiveParams()
 	hp.KeepAliveInterval = 3 * time.Second
 
@@ -94,7 +96,7 @@ func setupMocker(net *simulations.Network) []*adapters.NodeId {
 	conf := net.Config()
 	conf.DefaultService = "overlay"
 
-	nodeCount := 50
+	nodeCount := 60
 	ids := make([]*adapters.NodeId, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
