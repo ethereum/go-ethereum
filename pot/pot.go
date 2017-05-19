@@ -375,7 +375,7 @@ func (t *Pot) Merge(t1 *Pot) (c int) {
 	return c
 }
 
-// Union(t0, t1) return the union of t0 and t1
+// Union returns the union of t0 and t1
 // it only readlocks the Pot-s to read their pots and
 // calculates the union using the applicative union
 // the second return value is the number of common elements
@@ -422,7 +422,7 @@ func union(t0, t1 *pot) (*pot, int) {
 
 		for {
 
-			if !a0 && i0 < l0 && bins0[i0].po <= po {
+			if !a0 && i0 < l0 && bins0[i0] != nil && bins0[i0].po <= po {
 				n0 = bins0[i0]
 				p0 = n0.po
 				a0 = p0 == po
@@ -430,7 +430,7 @@ func union(t0, t1 *pot) (*pot, int) {
 				a0 = true
 			}
 
-			if !a1 && i1 < l1 && bins1[i1].po <= po {
+			if !a1 && i1 < l1 && bins1[i1] != nil && bins1[i1].po <= po {
 				n1 = bins1[i1]
 				p1 = n1.po
 				a1 = p1 == po
@@ -535,6 +535,9 @@ func (t *Pot) Each(f func(PotVal, int) bool) bool {
 func (t *pot) each(f func(PotVal, int) bool) bool {
 	var next bool
 	for _, n := range t.bins {
+		if n == nil {
+			return true
+		}
 		next = n.each(f)
 		if !next {
 			return false
