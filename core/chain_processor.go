@@ -18,8 +18,13 @@
 package core
 
 import (
+	"encoding/binary"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 // ChainProcessor is an external process that creates auxiliary data structures
@@ -34,13 +39,15 @@ type ChainProcessor interface {
 	NewHead(headNum uint64, rollBack bool)
 }
 
-// ChainSectionProcessor is a ChainProcessor that does a post-processing job for
+// ChainIndexer is a ChainProcessor that does a post-processing job for
 // equally sized sections of the canonical chain (like BlooomBits and CHT structures).
 // Further child ChainProcessors can be added which use the output of this section
 // processor. These child processors receive NewHead calls only after an entire section
 // has been finished or in case of rollbacks that might affect already finished sections.
-type ChainSectionProcessor struct {
-	backend                        ChainSectionProcessorBackend
+type ChainIndexer struct {
+	db                             ethdb.Database
+	validSectionsKey               []byte
+	backend                        ChainIndex
 	sectionSize, confirmReq        uint64
 	stop                           chan struct{}
 	updateCh                       chan uint64
@@ -51,39 +58,36 @@ type ChainSectionProcessor struct {
 	childProcessors                []ChainProcessor
 }
 
-// ChainSectionProcessorBackend does the actual post-processing job.
-// GetStored and SetStored are called under the canonical chain lock and should
-// not block. Process is called without a chain lock and may take longer to
-// finish. If the chain gets rolled back while Process is running, the results
-// are considered invalid and SetStored is not called.
-type ChainSectionProcessorBackend interface {
-	Process(idx uint64) bool    // do the processing of section idx but do not mark it as valid yet; return false if processing failed
-	GetStored() uint64          // return the number of sections processed, stored and marked as valid
-	SetStored(count uint64)     // set the number of stored and valid processed sections (called after Process returned true if no reorg happened in the meantime)
+type ChainIndex interface {
+	Reset(section uint64)
+	Process(header *types.Header)
+	Commit(db ethdb.Database) error
 	UpdateMsg(done, all uint64) // print a progress update message if necessary (only called when multiple sections need to be processed)
 }
 
-// NewChainSectionProcessor creates a new  ChainSectionProcessor
-//  backend:		an implementation of ChainSectionProcessorBackend
+// NewChainIndexer creates a new  ChainIndexer
+//  backend:		an implementation of ChainIndex
 //  sectionSize:	the size of processable sections
 //  confirmReq:		required number of confirmation blocks before a new section is being processed
 //  procWait:		waiting time between processing sections (simple way of limiting the resource usage of a db upgrade)
 //  stop:		    quit channel
-func NewChainSectionProcessor(backend ChainSectionProcessorBackend, sectionSize, confirmReq uint64, procWait time.Duration, stop chan struct{}) *ChainSectionProcessor {
-	csp := &ChainSectionProcessor{
-		backend:     backend,
-		sectionSize: sectionSize,
-		confirmReq:  confirmReq,
-		stop:        stop,
-		procWait:    procWait,
-		updateCh:    make(chan uint64, 100),
-		stored:      backend.GetStored(),
+func NewChainIndexer(db ethdb.Database, validSectionsKey []byte, backend ChainIndex, sectionSize, confirmReq uint64, procWait time.Duration, stop chan struct{}) *ChainIndexer {
+	c := &ChainIndexer{
+		db:               db,
+		validSectionsKey: validSectionsKey,
+		backend:          backend,
+		sectionSize:      sectionSize,
+		confirmReq:       confirmReq,
+		stop:             stop,
+		procWait:         procWait,
+		updateCh:         make(chan uint64, 100),
 	}
-	go csp.updateLoop()
-	return csp
+	c.stored = c.ValidSections()
+	go c.updateLoop()
+	return c
 }
 
-func (csp *ChainSectionProcessor) updateLoop() {
+func (c *ChainIndexer) updateLoop() {
 	tryUpdate := make(chan struct{}, 1)
 	updating := false
 	var targetCount uint64
@@ -91,49 +95,49 @@ func (csp *ChainSectionProcessor) updateLoop() {
 
 	for {
 		select {
-		case <-csp.stop:
+		case <-c.stop:
 			return
-		case targetCount = <-csp.updateCh:
+		case targetCount = <-c.updateCh:
 			if !updating {
 				updating = true
 				tryUpdate <- struct{}{}
 			}
 		case <-tryUpdate:
-			csp.lock.Lock()
-			if targetCount > csp.stored {
-				if !updateMsg && targetCount > csp.stored+1 {
+			c.lock.Lock()
+			if targetCount > c.stored {
+				if !updateMsg && targetCount > c.stored+1 {
 					updateMsg = true
-					csp.backend.UpdateMsg(csp.stored, targetCount)
+					c.backend.UpdateMsg(c.stored, targetCount)
 				}
-				csp.calcValid = true
-				csp.calcIdx = csp.stored
+				c.calcValid = true
+				c.calcIdx = c.stored
 
-				csp.lock.Unlock()
-				ok := csp.backend.Process(csp.calcIdx)
-				csp.lock.Lock()
+				c.lock.Unlock()
+				ok := c.processSection(c.calcIdx)
+				c.lock.Lock()
 
-				if ok && csp.calcValid {
-					csp.stored = csp.calcIdx + 1
-					csp.backend.SetStored(csp.stored)
+				if ok && c.calcValid {
+					c.stored = c.calcIdx + 1
+					c.setValidSections(c.stored)
 					if updateMsg {
-						csp.backend.UpdateMsg(csp.stored, targetCount)
-						if csp.stored >= targetCount {
+						c.backend.UpdateMsg(c.stored, targetCount)
+						if c.stored >= targetCount {
 							updateMsg = false
 						}
 					}
-					csp.lastForwarded = csp.stored*csp.sectionSize - 1
-					for _, cp := range csp.childProcessors {
-						cp.NewHead(csp.lastForwarded, false)
+					c.lastForwarded = c.stored*c.sectionSize - 1
+					for _, cp := range c.childProcessors {
+						cp.NewHead(c.lastForwarded, false)
 					}
 				}
-				csp.calcValid = false
+				c.calcValid = false
 			}
-			stored := csp.stored
-			csp.lock.Unlock()
+			stored := c.stored
+			c.lock.Unlock()
 
 			if targetCount > stored {
 				go func() {
-					time.Sleep(csp.procWait)
+					time.Sleep(c.procWait)
 					tryUpdate <- struct{}{}
 				}()
 			} else {
@@ -143,41 +147,71 @@ func (csp *ChainSectionProcessor) updateLoop() {
 	}
 }
 
+func (c *ChainIndexer) processSection(section uint64) bool {
+	c.backend.Reset(section)
+	for i := section * c.sectionSize; i < (section+1)*c.sectionSize; i++ {
+		hash := GetCanonicalHash(c.db, i)
+		if hash == (common.Hash{}) {
+			return false
+		}
+		header := GetHeader(c.db, hash, i)
+		if header == nil {
+			return false
+		}
+		c.backend.Process(header)
+	}
+	return c.backend.Commit(c.db) == nil
+}
+
+func (c *ChainIndexer) ValidSections() uint64 {
+	data, _ := c.db.Get(c.validSectionsKey)
+	if len(data) == 8 {
+		return binary.BigEndian.Uint64(data[:])
+	}
+	return 0
+}
+
+func (c *ChainIndexer) setValidSections(cnt uint64) {
+	var data [8]byte
+	binary.BigEndian.PutUint64(data[:], cnt)
+	c.db.Put(c.validSectionsKey, data[:])
+}
+
 // NewHead implements the ChainProcessor interface
-func (csp *ChainSectionProcessor) NewHead(headNum uint64, rollback bool) {
-	csp.lock.Lock()
-	defer csp.lock.Unlock()
+func (c *ChainIndexer) NewHead(headNum uint64, rollback bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 
 	if rollback {
-		firstChanged := headNum / csp.sectionSize
-		if firstChanged <= csp.calcIdx {
-			csp.calcValid = false
+		firstChanged := headNum / c.sectionSize
+		if firstChanged <= c.calcIdx {
+			c.calcValid = false
 		}
-		if firstChanged < csp.stored {
-			csp.stored = firstChanged
-			csp.backend.SetStored(csp.stored)
+		if firstChanged < c.stored {
+			c.stored = firstChanged
+			c.setValidSections(c.stored)
 			select {
-			case <-csp.stop:
-			case csp.updateCh <- firstChanged:
+			case <-c.stop:
+			case c.updateCh <- firstChanged:
 			}
 		}
 
-		if headNum < csp.lastForwarded {
-			csp.lastForwarded = headNum
-			for _, cp := range csp.childProcessors {
-				cp.NewHead(csp.lastForwarded, true)
+		if headNum < c.lastForwarded {
+			c.lastForwarded = headNum
+			for _, cp := range c.childProcessors {
+				cp.NewHead(c.lastForwarded, true)
 			}
 		}
 
 	} else {
 		var newCount uint64
-		if headNum >= csp.confirmReq {
-			newCount = (headNum + 1 - csp.confirmReq) / csp.sectionSize
-			if newCount > csp.stored {
+		if headNum >= c.confirmReq {
+			newCount = (headNum + 1 - c.confirmReq) / c.sectionSize
+			if newCount > c.stored {
 				go func() {
 					select {
-					case <-csp.stop:
-					case csp.updateCh <- newCount:
+					case <-c.stop:
+					case c.updateCh <- newCount:
 					}
 				}()
 			}
@@ -187,6 +221,6 @@ func (csp *ChainSectionProcessor) NewHead(headNum uint64, rollback bool) {
 
 // AddChildProcessor adds a child ChainProcessor that can use the output of this
 // section processor.
-func (csp *ChainSectionProcessor) AddChildProcessor(cp ChainProcessor) {
-	csp.childProcessors = append(csp.childProcessors, cp)
+func (c *ChainIndexer) AddChildProcessor(cp ChainProcessor) {
+	c.childProcessors = append(c.childProcessors, cp)
 }
