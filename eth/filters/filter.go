@@ -141,7 +141,7 @@ func (f *Filter) mipFind(start, end uint64, depth int) (logs []*types.Log, block
 		// up where a previous run left off.
 		first := true
 		for _, addr := range f.addresses {
-			if first || bloom.TestBytes(addr[:]) {
+			if first && bloom.TestBytes(addr[:]) {
 				first = false
 				// range check normalised values and make sure that
 				// we're resolving the correct range instead of the
