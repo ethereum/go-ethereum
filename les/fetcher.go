@@ -417,7 +417,7 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64) {
 	f.syncing = bestSyncing
 
 	var rq *distReq
-	reqID := getNextReqID()
+	reqID := genReqID()
 	if f.syncing {
 		rq = &distReq{
 			getCost: func(dp distPeer) uint64 {

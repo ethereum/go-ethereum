@@ -114,7 +114,7 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 		pp := p
 		ll := list
 
-		reqID := getNextReqID()
+		reqID := genReqID()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
 				peer := dp.(*peer)

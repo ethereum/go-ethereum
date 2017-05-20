@@ -53,18 +53,49 @@ type peerSelector interface {
 	adjustResponseTime(*poolEntry, time.Duration, bool)
 }
 
+// sentReq represents a request sent and tracked by retrieveManager
 type sentReq struct {
-	rm                      *retrieveManager
-	req                     *distReq
-	validate                validatorFunc
-	stopChn                 chan struct{}
-	stopped                 bool
-	err                     error
-	lock                    sync.RWMutex               // protect access to sentTo map
-	sentTo                  map[distPeer]chan struct{} // channel signaling a reply from the given peer
-	reqWg                   sync.WaitGroup             // wait until every peer replied or reached hard timeout and we can forget about the request
-	sentCnt, softTimeoutCnt int
+	rm       *retrieveManager
+	req      *distReq
+	id       uint64
+	validate validatorFunc
+
+	eventsCh chan reqPeerEvent
+	stopCh   chan struct{}
+	stopped  bool
+	err      error
+
+	lock   sync.RWMutex // protect access to sentTo map
+	sentTo map[distPeer]sentReqToPeer
+
+	reqQueued    bool // a request has been queued but not sent
+	reqSent      bool // a request has been sent but not timed out
+	reqSrtoCount int  // number of requests that reached soft (but not hard) timeout
 }
+
+// sentReqToPeer notifies the request-from-peer goroutine (tryRequest) about a response
+// delivered by the given peer. Only one delivery is allowed per request per peer,
+// after which delivered is set to true, the validity of the response is sent on the
+// valid channel and no more responses are accepted.
+type sentReqToPeer struct {
+	delivered bool
+	valid     chan bool
+}
+
+// reqPeerEvent is sent by the request-from-peer goroutine (tryRequest) to the
+// request state machine (retrieveLoop) through the eventsCh channel.
+type reqPeerEvent struct {
+	event int
+	peer  distPeer
+}
+
+const (
+	rpSent = iota // if peer == nil, not sent (no suitable peers)
+	rpSoftTimeout
+	rpHardTimeout
+	rpDeliveredValid
+	rpDeliveredInvalid
+)
 
 // newRetrieveManager creates the retrieve manager
 func newRetrieveManager(peers *peerSet, dist *requestDistributor, serverPool peerSelector) *retrieveManager {
@@ -83,7 +114,7 @@ func newRetrieveManager(peers *peerSet, dist *requestDistributor, serverPool pee
 func (rm *retrieveManager) retrieve(ctx context.Context, reqID uint64, req *distReq, val validatorFunc) error {
 	sentReq := rm.sendReq(reqID, req, val)
 	select {
-	case <-sentReq.stopChn:
+	case <-sentReq.stopCh:
 	case <-ctx.Done():
 		sentReq.stop(ctx.Err())
 	}
@@ -96,33 +127,35 @@ func (rm *retrieveManager) sendReq(reqID uint64, req *distReq, val validatorFunc
 	r := &sentReq{
 		rm:       rm,
 		req:      req,
-		sentTo:   make(map[distPeer]chan struct{}),
-		stopChn:  make(chan struct{}),
+		id:       reqID,
+		sentTo:   make(map[distPeer]sentReqToPeer),
+		stopCh:   make(chan struct{}),
+		eventsCh: make(chan reqPeerEvent, 10),
 		validate: val,
 	}
 
 	canSend := req.canSend
 	req.canSend = func(p distPeer) bool {
+		// add an extra check to canSend: the request has not been sent to the same peer before
 		r.lock.RLock()
 		_, sent := r.sentTo[p]
 		r.lock.RUnlock()
 		return !sent && canSend(p)
 	}
 
+	request := req.request
+	req.request = func(p distPeer) func() {
+		// before actually sending the request, put an entry into the sentTo map
+		r.lock.Lock()
+		r.sentTo[p] = sentReqToPeer{false, make(chan bool, 1)}
+		r.lock.Unlock()
+		return request(p)
+	}
 	rm.lock.Lock()
 	rm.sentReqs[reqID] = r
 	rm.lock.Unlock()
 
-	r.reqWg.Add(1)
-	r.tryRetrieve()
-	go func() {
-		r.reqWg.Wait()
-		rm.lock.Lock()
-		delete(rm.sentReqs, reqID)
-		rm.lock.Unlock()
-	}()
-	r.reqWg.Done()
-
+	go r.retrieveLoop()
 	return r
 }
 
@@ -131,113 +164,209 @@ func (rm *retrieveManager) deliver(peer distPeer, msg *Msg) error {
 	rm.lock.RLock()
 	req, ok := rm.sentReqs[msg.ReqID]
 	rm.lock.RUnlock()
+
 	if ok {
-		ok = req.expectResponseFrom(peer)
+		return req.deliver(peer, msg)
+	}
+	return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
+}
+
+// reqStateFn represents a state of the retrieve loop state machine
+type reqStateFn func() reqStateFn
+
+// retrieveLoop is the retrieval state machine event loop
+func (r *sentReq) retrieveLoop() {
+	go r.tryRequest()
+	r.reqQueued = true
+	state := r.stateRequesting
+
+	for state != nil {
+		state = state()
 	}
 
-	if !ok {
-		return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
-	}
+	r.rm.lock.Lock()
+	delete(r.rm.sentReqs, r.id)
+	r.rm.lock.Unlock()
+}
 
-	if err := req.validate(peer, msg); err != nil {
-		req.delivered(peer, false)
-		return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
+// stateRequesting: a request has been queued or sent recently; when it reaches soft timeout,
+// a new request is sent to a new peer
+func (r *sentReq) stateRequesting() reqStateFn {
+	select {
+	case ev := <-r.eventsCh:
+		r.update(ev)
+		switch ev.event {
+		case rpSent:
+			if ev.peer == nil {
+				// request send failed, no more suitable peers
+				if r.waiting() {
+					// we are already waiting for sent requests which may succeed so keep waiting
+					return r.stateNoMorePeers
+				}
+				// nothing to wait for, no more peers to ask, return with error
+				r.stop(ErrNoPeers)
+				// no need to go to stopped state because waiting() already returned false
+				return nil
+			}
+		case rpSoftTimeout:
+			// last request timed out, try asking a new peer
+			go r.tryRequest()
+			r.reqQueued = true
+			return r.stateRequesting
+		case rpDeliveredValid:
+			r.stop(nil)
+			return r.stateStopped
+		}
+		return r.stateRequesting
+	case <-r.stopCh:
+		return r.stateStopped
 	}
-	req.delivered(peer, true)
+}
+
+// stateNoMorePeers: could not send more requests because no suitable peers are available.
+// Peers may become suitable for a certain request later or new peers may appear so we
+// keep trying.
+func (r *sentReq) stateNoMorePeers() reqStateFn {
+	select {
+	case <-time.After(retryQueue):
+		go r.tryRequest()
+		r.reqQueued = true
+		return r.stateRequesting
+	case ev := <-r.eventsCh:
+		r.update(ev)
+		if ev.event == rpDeliveredValid {
+			r.stop(nil)
+			return r.stateStopped
+		}
+		return r.stateNoMorePeers
+	case <-r.stopCh:
+		return r.stateStopped
+	}
+}
+
+// stateStopped: request succeeded or cancelled, just waiting for some peers
+// to either answer or time out hard
+func (r *sentReq) stateStopped() reqStateFn {
+	for r.waiting() {
+		r.update(<-r.eventsCh)
+	}
 	return nil
 }
 
-// tryRetrieve starts a retrieval process for a single peer. If no request has been
-// sent yet and no suitable peer found, it sets an ErrNoPeers error code and returns.
-// Otherwise it keeps trying until it sends the request to a peer, then waits for an
-// answer or a timeout.
-func (r *sentReq) tryRetrieve() {
-	r.reqWg.Add(1)
-	go func() {
-		defer r.reqWg.Done()
-
-		for {
-			sent := r.rm.dist.queue(r.req)
-			var p distPeer
-			select {
-			case p = <-sent:
-			case <-r.stopChn:
-				if r.rm.dist.cancel(r.req) {
-					p = nil
-				} else {
-					p = <-sent
-				}
-			}
-			if p == nil {
-				if r.waiting() {
-					time.Sleep(retryQueue)
-					if r.waiting() {
-						continue
-					}
-				} else {
-					r.stop(ErrNoPeers) // no effect if already stopped for another reason
-				}
-			} else {
-				r.lock.Lock()
-				if r.sentTo[p] == nil {
-					r.sentTo[p] = make(chan struct{})
-					r.sentCnt++
-				}
-				r.lock.Unlock()
-				respTime, srto, hrto := r.runTimer(p)
-				// send feedback to server pool and remove peer if hard timeout happened
-				pp, ok := p.(*peer)
-				if ok && r.rm.serverPool != nil {
-					r.rm.serverPool.adjustResponseTime(pp.poolEntry, respTime, srto)
-				}
-				if hrto {
-					pp.Log().Debug("Request timed out hard")
-					if r.rm.peers != nil {
-						r.rm.peers.Unregister(pp.id)
-					}
-				}
-			}
-			break
+// update updates the queued/sent flags and timed out peers counter according to the event
+func (r *sentReq) update(ev reqPeerEvent) {
+	switch ev.event {
+	case rpSent:
+		r.reqQueued = false
+		if ev.peer != nil {
+			r.reqSent = true
 		}
-	}()
-}
-
-// getError returns any retrieval error (either internally generated or set by the
-// stop function) after stopChn has been closed
-func (r *sentReq) getError() error {
-	return r.err
-}
-
-// expectResponseFrom tells if we are expecting a response from a given peer.
-// A response to a sent request is expected even after another peer have delivered
-// a valid response. If a hard timeout occurs, no response is expected any more.
-func (r *sentReq) expectResponseFrom(peer distPeer) bool {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	return r.sentTo[peer] != nil
-}
-
-// delivered notifies the retrieval mechanism that a reply (either valid
-// or invalid) has been received from a certain peer
-func (r *sentReq) delivered(peer distPeer, valid bool) bool {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
-	delivered, ok := r.sentTo[peer]
-	if ok {
-		close(delivered)
-		delete(r.sentTo, peer)
-		if valid && !r.stopped {
-			r.stopped = true
-			close(r.stopChn)
-		}
-		if !r.stopped && r.sentCnt == 0 {
-			r.tryRetrieve()
-		}
-
+	case rpSoftTimeout:
+		r.reqSent = false
+		r.reqSrtoCount++
+	case rpHardTimeout, rpDeliveredValid, rpDeliveredInvalid:
+		r.reqSrtoCount--
 	}
-	return ok
+}
+
+// waiting returns true if the retrieval mechanism is waiting for an answer from
+// any peer
+func (r *sentReq) waiting() bool {
+	return r.reqQueued || r.reqSent || r.reqSrtoCount > 0
+}
+
+// tryRequest tries to send the request to a new peer and waits for it to either
+// succeed or time out if it has been sent. It also sends the appropriate reqPeerEvent
+// messages to the request's event channel.
+func (r *sentReq) tryRequest() {
+	sent := r.rm.dist.queue(r.req)
+	var p distPeer
+	select {
+	case p = <-sent:
+	case <-r.stopCh:
+		if r.rm.dist.cancel(r.req) {
+			p = nil
+		} else {
+			p = <-sent
+		}
+	}
+
+	r.eventsCh <- reqPeerEvent{rpSent, p}
+	if p == nil {
+		return
+	}
+
+	reqSent := mclock.Now()
+	srto, hrto := false, false
+
+	r.lock.RLock()
+	s, ok := r.sentTo[p]
+	r.lock.RUnlock()
+	if !ok {
+		panic(nil)
+	}
+
+	defer func() {
+		// send feedback to server pool and remove peer if hard timeout happened
+		pp, ok := p.(*peer)
+		if ok && r.rm.serverPool != nil {
+			respTime := time.Duration(mclock.Now() - reqSent)
+			r.rm.serverPool.adjustResponseTime(pp.poolEntry, respTime, srto)
+		}
+		if hrto {
+			pp.Log().Debug("Request timed out hard")
+			if r.rm.peers != nil {
+				r.rm.peers.Unregister(pp.id)
+			}
+		}
+
+		r.lock.Lock()
+		delete(r.sentTo, p)
+		r.lock.Unlock()
+	}()
+
+	select {
+	case ok := <-s.valid:
+		if ok {
+			r.eventsCh <- reqPeerEvent{rpDeliveredValid, p}
+		} else {
+			r.eventsCh <- reqPeerEvent{rpDeliveredInvalid, p}
+		}
+		return
+	case <-time.After(softRequestTimeout):
+		srto = true
+		r.eventsCh <- reqPeerEvent{rpSoftTimeout, p}
+	}
+
+	select {
+	case ok := <-s.valid:
+		if ok {
+			r.eventsCh <- reqPeerEvent{rpDeliveredValid, p}
+		} else {
+			r.eventsCh <- reqPeerEvent{rpDeliveredInvalid, p}
+		}
+	case <-time.After(hardRequestTimeout):
+		hrto = true
+		r.eventsCh <- reqPeerEvent{rpHardTimeout, p}
+	}
+}
+
+// deliver a reply belonging to this request
+func (r *sentReq) deliver(peer distPeer, msg *Msg) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	s, ok := r.sentTo[peer]
+	if !ok || s.delivered {
+		return errResp(ErrUnexpectedResponse, "reqID = %v", msg.ReqID)
+	}
+	valid := r.validate(peer, msg) == nil
+	r.sentTo[peer] = sentReqToPeer{true, s.valid}
+	s.valid <- valid
+	if !valid {
+		return errResp(ErrInvalidResponse, "reqID = %v", msg.ReqID)
+	}
+	return nil
 }
 
 // stop stops the retrieval process and sets an error code that will be returned
@@ -247,69 +376,19 @@ func (r *sentReq) stop(err error) {
 	if !r.stopped {
 		r.stopped = true
 		r.err = err
-		close(r.stopChn)
+		close(r.stopCh)
 	}
 	r.lock.Unlock()
 }
 
-// waiting returns true if the retrieval mechanism is waiting for an answer from
-// any peer
-func (r *sentReq) waiting() bool {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
-	return !r.stopped && r.sentCnt+r.softTimeoutCnt != 0
+// getError returns any retrieval error (either internally generated or set by the
+// stop function) after stopCh has been closed
+func (r *sentReq) getError() error {
+	return r.err
 }
 
-// runTimer starts a request timeout for a single peer. If a certain (short) period
-// of time passes with no reply received, it switches from "sent" to "soft timeout"
-// state and the retrieval mechanism will start trying to send another request to a
-// new peer. If another (longer) timeout period passes, it switches to "hard timeout"
-// state, after which a reply is no longer expected and the peer should be dropped.
-func (r *sentReq) runTimer(peer distPeer) (respTime time.Duration, srto, hrto bool) {
-	start := mclock.Now()
-
-	r.lock.RLock()
-	delivered := r.sentTo[peer]
-	r.lock.RUnlock()
-	if delivered == nil {
-		panic(nil)
-	}
-
-	select {
-	case <-delivered:
-		r.lock.Lock()
-		r.sentCnt--
-		r.lock.Unlock()
-		return time.Duration(mclock.Now() - start), false, false
-	case <-time.After(softRequestTimeout):
-		r.lock.Lock()
-		r.sentCnt--
-		resend := !r.stopped && r.sentCnt == 0
-		r.softTimeoutCnt++
-		r.lock.Unlock()
-		if resend {
-			r.tryRetrieve()
-		}
-	}
-
-	hrto = false
-	select {
-	case <-delivered:
-	case <-time.After(hardRequestTimeout):
-		hrto = true
-	}
-
-	r.lock.Lock()
-	r.softTimeoutCnt--
-	// do not delete sentTo entry, nil means that we are not expecting an answer
-	// but we also do not want to send to that peer again
-	r.sentTo[peer] = nil
-	r.lock.Unlock()
-	return time.Duration(mclock.Now() - start), true, hrto
-}
-
-func getNextReqID() uint64 {
+// genReqID generates a new random request ID
+func genReqID() uint64 {
 	var rnd [8]byte
 	rand.Read(rnd[:])
 	return binary.BigEndian.Uint64(rnd[:])

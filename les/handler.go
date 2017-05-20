@@ -844,7 +844,7 @@ func (d *downloaderPeerNotify) registerPeer(p *peer) {
 	pm := (*ProtocolManager)(d)
 
 	requestHeadersByHash := func(origin common.Hash, amount int, skip int, reverse bool) error {
-		reqID := getNextReqID()
+		reqID := genReqID()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
 				peer := dp.(*peer)
@@ -867,7 +867,7 @@ func (d *downloaderPeerNotify) registerPeer(p *peer) {
 		return nil
 	}
 	requestHeadersByNumber := func(origin uint64, amount int, skip int, reverse bool) error {
-		reqID := getNextReqID()
+		reqID := genReqID()
 		rq := &distReq{
 			getCost: func(dp distPeer) uint64 {
 				peer := dp.(*peer)
