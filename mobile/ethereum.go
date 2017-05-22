@@ -123,3 +123,8 @@ func (fq *FilterQuery) GetFromBlock() *BigInt    { return &BigInt{fq.query.FromB
 func (fq *FilterQuery) GetToBlock() *BigInt      { return &BigInt{fq.query.ToBlock} }
 func (fq *FilterQuery) GetAddresses() *Addresses { return &Addresses{fq.query.Addresses} }
 func (fq *FilterQuery) GetTopics() *Topics       { return &Topics{fq.query.Topics} }
+
+func (fq *FilterQuery) SetFromBlock(fromBlock *BigInt)    { fq.query.FromBlock = fromBlock.bigint }
+func (fq *FilterQuery) SetToBlock(toBlock *BigInt)        { fq.query.ToBlock = toBlock.bigint }
+func (fq *FilterQuery) SetAddresses(addresses *Addresses) { fq.query.Addresses = addresses.addresses }
+func (fq *FilterQuery) SetTopics(topics *Topics)          { fq.query.Topics = topics.topics }
