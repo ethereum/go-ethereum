@@ -151,7 +151,7 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 
 		// if the op is invalid abort the process and return an error
 		if !operation.valid {
-			return nil, fmt.Errorf("invalid opcode %x", op)
+			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
 
 		// validate the stack and make sure there enough stack items available
