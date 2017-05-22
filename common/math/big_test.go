@@ -125,6 +125,7 @@ func TestPaddedBigBytes(t *testing.T) {
 		{num: big.NewInt(1), n: 4, result: []byte{0, 0, 0, 1}},
 		{num: big.NewInt(512), n: 4, result: []byte{0, 0, 2, 0}},
 		{num: BigPow(2, 32), n: 4, result: []byte{1, 0, 0, 0, 0}},
+		{num: big.NewInt(0), n: 32, result: []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
 	}
 	for _, test := range tests {
 		if result := PaddedBigBytes(test.num, test.n); !bytes.Equal(result, test.result) {

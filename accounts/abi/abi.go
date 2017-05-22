@@ -34,7 +34,8 @@ import (
 type ABI struct {
 	Constructor Method
 	Methods     map[string]Method
-	Events      map[string]Event
+	// todo: make events loggable from an interface that specifies very abstract functions.
+	Events map[string]Event
 }
 
 // JSON returns a parsed ABI interface and error if it failed.
