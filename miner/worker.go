@@ -59,14 +59,12 @@ type Work struct {
 	config *params.ChainConfig
 	signer types.Signer
 
-	state         *state.StateDB // apply state changes here
-	ancestors     *set.Set       // ancestor set (used for checking uncle parent validity)
-	family        *set.Set       // family set (used for checking uncle invalidity)
-	uncles        *set.Set       // uncle set
-	tcount        int            // tx count in cycle
-	ownedAccounts *set.Set
-	lowGasTxs     types.Transactions
-	failedTxs     types.Transactions
+	state     *state.StateDB // apply state changes here
+	ancestors *set.Set       // ancestor set (used for checking uncle parent validity)
+	family    *set.Set       // family set (used for checking uncle invalidity)
+	uncles    *set.Set       // uncle set
+	tcount    int            // tx count in cycle
+	failedTxs types.Transactions
 
 	Block *types.Block // the new block
 
@@ -103,7 +101,6 @@ type worker struct {
 	chainDb ethdb.Database
 
 	coinbase common.Address
-	gasPrice *big.Int
 	extra    []byte
 
 	currentMu sync.Mutex
@@ -132,7 +129,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		mux:            mux,
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
-		gasPrice:       new(big.Int),
 		chain:          eth.BlockChain(),
 		proc:           eth.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
@@ -252,7 +248,7 @@ func (self *worker) update() {
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(txs)
 
-				self.current.commitTransactions(self.mux, txset, self.gasPrice, self.chain, self.coinbase)
+				self.current.commitTransactions(self.mux, txset, self.chain, self.coinbase)
 				self.currentMu.Unlock()
 			}
 		}
@@ -375,20 +371,8 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 	}
 	// Keep track of transactions which return errors so they can be removed
 	work.tcount = 0
-	work.ownedAccounts = accountAddressesSet(accounts)
 	self.current = work
 	return nil
-}
-
-func (w *worker) setGasPrice(p *big.Int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	// calculate the minimal gas price the miner accepts when sorting out transactions.
-	const pct = int64(90)
-	w.gasPrice = gasprice(p, pct)
-
-	w.mux.Post(core.GasPriceChanged{Price: w.gasPrice})
 }
 
 func (self *worker) commitNewWork() {
@@ -460,9 +444,8 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	txs := types.NewTransactionsByPriceAndNonce(pending)
-	work.commitTransactions(self.mux, txs, self.gasPrice, self.chain, self.coinbase)
+	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 
-	self.eth.TxPool().RemoveBatch(work.lowGasTxs)
 	self.eth.TxPool().RemoveBatch(work.failedTxs)
 
 	// compute uncles for the new block.
@@ -515,7 +498,7 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	return nil
 }
 
-func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, gasPrice *big.Int, bc *core.BlockChain, coinbase common.Address) {
+func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain, coinbase common.Address) {
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 
 	var coalescedLogs []*types.Log
@@ -537,17 +520,6 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
 
 			txs.Pop()
-			continue
-		}
-
-		// Ignore any transactions (and accounts subsequently) with low gas limits
-		if tx.GasPrice().Cmp(gasPrice) < 0 && !env.ownedAccounts.Has(from) {
-			// Pop the current low-priced transaction without shifting in the next from the account
-			log.Warn("Transaction below gas price", "sender", from, "hash", tx.Hash(), "have", tx.GasPrice(), "want", gasPrice)
-
-			env.lowGasTxs = append(env.lowGasTxs, tx)
-			txs.Pop()
-
 			continue
 		}
 		// Start executing the transaction
@@ -606,26 +578,4 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, c
 	env.receipts = append(env.receipts, receipt)
 
 	return nil, receipt.Logs
-}
-
-// TODO: remove or use
-func (self *worker) HashRate() int64 {
-	return 0
-}
-
-// gasprice calculates a reduced gas price based on the pct
-// XXX Use big.Rat?
-func gasprice(price *big.Int, pct int64) *big.Int {
-	p := new(big.Int).Set(price)
-	p.Div(p, big.NewInt(100))
-	p.Mul(p, big.NewInt(pct))
-	return p
-}
-
-func accountAddressesSet(accounts []accounts.Account) *set.Set {
-	accountSet := set.New()
-	for _, account := range accounts {
-		accountSet.Add(account.Address)
-	}
-	return accountSet
 }

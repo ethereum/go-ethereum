@@ -84,7 +84,7 @@ $ geth --testnet --fast --cache=512 console
 ```
 
 The `--fast`, `--cache` flags and `console` subcommand have the exact same meaning as above and they
-are equially useful on the testnet too. Please see above for their explanations if you've skipped to
+are equally useful on the testnet too. Please see above for their explanations if you've skipped to
 here.
 
 Specifying the `--testnet` flag however will reconfigure your Geth instance a bit:

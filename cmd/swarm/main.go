@@ -67,6 +67,10 @@ var (
 		Name:  "bzzaccount",
 		Usage: "Swarm account key file",
 	}
+	SwarmListenAddrFlag = cli.StringFlag{
+		Name:  "httpaddr",
+		Usage: "Swarm HTTP API listening interface",
+	}
 	SwarmPortFlag = cli.StringFlag{
 		Name:  "bzzport",
 		Usage: "Swarm local http api port",
@@ -249,6 +253,7 @@ Cleans database of corrupted entries.
 		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSyncEnabledFlag,
+		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
 		SwarmNetworkIdFlag,
@@ -344,6 +349,9 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	bzzport := ctx.GlobalString(SwarmPortFlag.Name)
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
+	}
+	if bzzaddr := ctx.GlobalString(SwarmListenAddrFlag.Name); bzzaddr != "" {
+		bzzconfig.ListenAddr = bzzaddr
 	}
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)

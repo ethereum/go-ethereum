@@ -153,6 +153,8 @@ func (api *PrivateMinerAPI) Start(threads *int) error {
 	}
 	// Start the miner and return
 	if !api.e.IsMining() {
+		// Propagate the initial price point to the transaction pool
+		api.e.txPool.SetGasPrice(api.e.gasPrice)
 		return api.e.StartMining(true)
 	}
 	return nil
@@ -180,7 +182,7 @@ func (api *PrivateMinerAPI) SetExtra(extra string) (bool, error) {
 
 // SetGasPrice sets the minimum accepted gas price for the miner.
 func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
-	api.e.Miner().SetGasPrice((*big.Int)(&gasPrice))
+	api.e.txPool.SetGasPrice((*big.Int)(&gasPrice))
 	return true
 }
 

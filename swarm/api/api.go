@@ -25,12 +25,13 @@ import (
 	"sync"
 
 	"bytes"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"mime"
 	"path/filepath"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var (
@@ -84,26 +85,32 @@ type ErrResolve error
 func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
 
-	var err error
-	if !uri.Immutable() {
-		if self.dns != nil {
-			resolved, err := self.dns.Resolve(uri.Addr)
-			if err == nil {
-				return resolved[:], nil
-			}
-		} else {
-			err = fmt.Errorf("no DNS to resolve name")
+	// if the URI is immutable, check if the address is a hash
+	isHash := hashMatcher.MatchString(uri.Addr)
+	if uri.Immutable() {
+		if !isHash {
+			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
+		return common.Hex2Bytes(uri.Addr), nil
 	}
-	if hashMatcher.MatchString(uri.Addr) {
-		return storage.Key(common.Hex2Bytes(uri.Addr)), nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("'%s' does not resolve: %v but is not a content hash", uri.Addr, err)
-	}
-	return nil, fmt.Errorf("'%s' is not a content hash", uri.Addr)
-}
 
+	// if DNS is not configured, check if the address is a hash
+	if self.dns == nil {
+		if !isHash {
+			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
+		}
+		return common.Hex2Bytes(uri.Addr), nil
+	}
+
+	// try and resolve the address
+	resolved, err := self.dns.Resolve(uri.Addr)
+	if err == nil {
+		return resolved[:], nil
+	} else if !isHash {
+		return nil, err
+	}
+	return common.Hex2Bytes(uri.Addr), nil
+}
 
 // Put provides singleton manifest creation on top of dpa store
 func (self *Api) Put(content, contentType string) (storage.Key, error) {

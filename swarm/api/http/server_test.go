@@ -106,9 +106,9 @@ func TestBzzrGetPath(t *testing.T) {
 	}
 
 	nonhashresponses := []string{
-		"error resolving name: 'name' does not resolve: no DNS to resolve name but is not a content hash\n",
-		"error resolving nonhash: 'nonhash' is not a content hash\n",
-		"error resolving nonhash: 'nonhash' does not resolve: no DNS to resolve name but is not a content hash\n",
+		"error resolving name: no DNS to resolve name: \"name\"\n",
+		"error resolving nonhash: immutable address not a content hash: \"nonhash\"\n",
+		"error resolving nonhash: no DNS to resolve name: \"nonhash\"\n",
 	}
 
 	for i, url := range nonhashtests {
