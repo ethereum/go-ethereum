@@ -36,6 +36,11 @@ func NewEthereumClient(rawurl string) (client *EthereumClient, _ error) {
 	return &EthereumClient{rawClient}, err
 }
 
+// Get the raw ethclient.Client
+func (ec *EthereumClient) RawClient() *ethclient.Client {
+	return ec.client
+}
+
 // GetBlockByHash returns the given full block.
 func (ec *EthereumClient) GetBlockByHash(ctx *Context, hash *Hash) (block *Block, _ error) {
 	rawBlock, err := ec.client.BlockByHash(ctx.context, hash.hash)
