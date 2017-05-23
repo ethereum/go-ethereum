@@ -96,7 +96,10 @@ func TestConfigWriteRead(t *testing.T) {
 	}
 	defer os.RemoveAll(tmp)
 
-	prvkey := crypto.ToECDSA(common.Hex2Bytes(hexprvkey))
+	prvkey, err := crypto.HexToECDSA(hexprvkey)
+	if err != nil {
+		t.Fatalf("failed to load private key: %v", err)
+	}
 	orig, err := NewConfig(tmp, common.Address{}, prvkey, 323)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
