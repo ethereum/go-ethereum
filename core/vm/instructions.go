@@ -731,7 +731,7 @@ func makePush(size uint64, pushByteSize int) executionFunc {
 // make push instruction function
 func makeDup(size int64) executionFunc {
 	return func(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-		stack.dup(int(size))
+		stack.dup(evm.interpreter.intPool, int(size))
 		return nil, nil
 	}
 }
