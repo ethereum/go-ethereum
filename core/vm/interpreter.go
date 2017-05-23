@@ -28,6 +28,8 @@ import (
 type Config struct {
 	// Debug enabled debugging Interpreter options
 	Debug bool
+	// CollectEVMErrors enables EVM error collecting
+	CollectEVMErrors bool
 	// Tracer is the op code logger
 	Tracer Tracer
 	// NoRecursion disabled Interpreter call, callcode,
@@ -39,6 +41,15 @@ type Config struct {
 	// may be left uninitialised and will be set to the default
 	// table.
 	JumpTable [256]operation
+}
+
+type EVMError struct {
+	Err   error
+	Depth int
+}
+
+func (e EVMError) Error() string {
+	return fmt.Sprintf("%d: %v", e.Depth, e.Err)
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
@@ -154,6 +165,12 @@ func (in *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err er
 			}
 		}()
 	}
+	if in.cfg.CollectEVMErrors {
+		defer func() {
+			in.evm.InterpreterErrors = append(in.evm.InterpreterErrors, EVMError{Err: err, Depth: in.evm.depth})
+		}()
+	}
+
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
 	// the execution of one of the operations or until the done flag is set by the

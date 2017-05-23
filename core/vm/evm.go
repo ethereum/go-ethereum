@@ -104,6 +104,11 @@ type EVM struct {
 	// global (to this context) ethereum virtual machine
 	// used throughout the execution of the tx.
 	interpreter *Interpreter
+	// InterpreterErrors contain the errors returned by the EVM. The errors
+	// aren't consensus errors but rather errors that were returned by
+	// invalid opcodes, stack over and underflow, etc. This slice will only
+	// be populated if the CollectEVMErrors option is enabled.
+	InterpreterErrors []EVMError
 	// abort is used to abort the EVM calling operations
 	// NOTE: must be set atomically
 	abort int32
