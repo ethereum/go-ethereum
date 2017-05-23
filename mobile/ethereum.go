@@ -87,6 +87,18 @@ func (p *SyncProgress) GetKnownStates() int64   { return int64(p.progress.KnownS
 // Topics is a set of topic lists to filter events with.
 type Topics struct{ topics [][]common.Hash }
 
+// NewTopics creates a slice of uninitialized Topics.
+func NewTopics(size int) *Topics {
+	return &Topics{
+		topics: make([][]common.Hash, size),
+	}
+}
+
+// NewTopicsEmpty creates an empty slice of Topics values.
+func NewTopicsEmpty() *Topics {
+	return NewTopics(0)
+}
+
 // Size returns the number of topic lists inside the set
 func (t *Topics) Size() int {
 	return len(t.topics)
@@ -107,6 +119,11 @@ func (t *Topics) Set(index int, topics *Hashes) error {
 	}
 	t.topics[index] = topics.hashes
 	return nil
+}
+
+// Append adds a new topic list to the end of the slice.
+func (t *Topics) Append(topics *Hashes) {
+	t.topics = append(t.topics, topics.hashes)
 }
 
 // FilterQuery contains options for contact log filtering.
