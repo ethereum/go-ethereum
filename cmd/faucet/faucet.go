@@ -102,7 +102,7 @@ func main() {
 		if amount == 1 {
 			amounts[i] = strings.TrimSuffix(amounts[i], "s")
 		}
-		// Calcualte the period for th enext tier and format it
+		// Calculate the period for the next tier and format it
 		period := *minutesFlag * int(math.Pow(3, float64(i)))
 		periods[i] = fmt.Sprintf("%d mins", period)
 		if period%60 == 0 {
