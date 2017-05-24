@@ -52,43 +52,53 @@ type Config struct {
 }
 
 // Interpreter is used to run Ethereum based contracts and will utilise the
-// passed environment to query external sources for state information.
+// passed evmironment to query external sources for state information.
 // The Interpreter will run the byte code VM or JIT VM based on the passed
 // configuration.
 type Interpreter struct {
-	env      *EVM
+	evm      *EVM
 	cfg      Config
 	gasTable params.GasTable
 	intPool  *intPool
+
+	readonly bool
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
-func NewInterpreter(env *EVM, cfg Config) *Interpreter {
+func NewInterpreter(evm *EVM, cfg Config) *Interpreter {
 	// We use the STOP instruction whether to see
 	// the jump table was initialised. If it was not
 	// we'll set the default jump table.
 	if !cfg.JumpTable[STOP].valid {
-		cfg.JumpTable = defaultJumpTable
+		switch {
+		case evm.ChainConfig().IsHomestead(evm.BlockNumber):
+			cfg.JumpTable = homesteadInstructionSet
+		default:
+			cfg.JumpTable = frontierInstructionSet
+		}
 	}
 
 	return &Interpreter{
-		env:      env,
+		evm:      evm,
 		cfg:      cfg,
-		gasTable: env.ChainConfig().GasTable(env.BlockNumber),
+		gasTable: evm.ChainConfig().GasTable(evm.BlockNumber),
 		intPool:  newIntPool(),
 	}
 }
 
-// Run loops and evaluates the contract's code with the given input data
-func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err error) {
-	evm.env.depth++
-	defer func() { evm.env.depth-- }()
+func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack *Stack) error {
+	return nil
+}
 
-	if contract.CodeAddr != nil {
-		if p := PrecompiledContracts[*contract.CodeAddr]; p != nil {
-			return RunPrecompiledContract(p, input, contract)
-		}
-	}
+// Run loops and evaluates the contract's code with the given input data and returns
+// the return byte-slice and an error if one occured.
+//
+// It's important to note that any errors returned by the interpreter should be
+// considered a revert-and-consume-all-gas operation. No error specific checks
+// should be handled to reduce complexity and errors further down the in.
+func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+	in.evm.depth++
+	defer func() { in.evm.depth-- }()
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
@@ -105,7 +115,8 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		mem   = NewMemory() // bound memory
 		stack = newstack()  // local stack
 		// For optimisation reason we're using uint64 as the program counter.
-		// It's theoretically possible to go above 2^64. The YP defines the PC to be uint256. Practically much less so feasible.
+		// It's theoretically possible to go above 2^64. The YP defines the PC
+		// to be uint256. Practically much less so feasible.
 		pc   = uint64(0) // program counter
 		cost uint64
 	)
@@ -113,31 +124,34 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 
 	// User defer pattern to check for an error and, based on the error being nil or not, use all gas and return.
 	defer func() {
-		if err != nil && evm.cfg.Debug {
+		if err != nil && in.cfg.Debug {
 			// XXX For debugging
 			//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d ERR = %v\n", pc, op, cost, stack.len(), err)
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
 		}
 	}()
 
-	log.Debug("EVM running contract", "hash", codehash[:])
+	log.Debug("interpreter running contract", "hash", codehash[:])
 	tstart := time.Now()
-	defer log.Debug("EVM finished running contract", "hash", codehash[:], "elapsed", time.Since(tstart))
+	defer log.Debug("interpreter finished running contract", "hash", codehash[:], "elapsed", time.Since(tstart))
 
 	// The Interpreter main run loop (contextual). This loop runs until either an
 	// explicit STOP, RETURN or SELFDESTRUCT is executed, an error occurred during
-	// the execution of one of the operations or until the evm.done is set by
-	// the parent context.Context.
-	for atomic.LoadInt32(&evm.env.abort) == 0 {
+	// the execution of one of the operations or until the done flag is set by the
+	// parent context.
+	for atomic.LoadInt32(&in.evm.abort) == 0 {
 		// Get the memory location of pc
 		op = contract.GetOp(pc)
 
 		// get the operation from the jump table matching the opcode
-		operation := evm.cfg.JumpTable[op]
+		operation := in.cfg.JumpTable[op]
+		if err := in.enforceRestrictions(op, operation, stack); err != nil {
+			return nil, err
+		}
 
 		// if the op is invalid abort the process and return an error
 		if !operation.valid {
-			return nil, fmt.Errorf("invalid opcode %x", op)
+			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
 
 		// validate the stack and make sure there enough stack items available
@@ -161,10 +175,10 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 			}
 		}
 
-		if !evm.cfg.DisableGasMetering {
+		if !in.cfg.DisableGasMetering {
 			// consume the gas and return an error if not enough gas is available.
 			// cost is explicitly set so that the capture state defer method cas get the proper cost
-			cost, err = operation.gasCost(evm.gasTable, evm.env, contract, stack, mem, memorySize)
+			cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
 			if err != nil || !contract.UseGas(cost) {
 				return nil, ErrOutOfGas
 			}
@@ -173,19 +187,20 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 			mem.Resize(memorySize)
 		}
 
-		if evm.cfg.Debug {
-			evm.cfg.Tracer.CaptureState(evm.env, pc, op, contract.Gas, cost, mem, stack, contract, evm.env.depth, err)
+		if in.cfg.Debug {
+			in.cfg.Tracer.CaptureState(in.evm, pc, op, contract.Gas, cost, mem, stack, contract, in.evm.depth, err)
 		}
 		// XXX For debugging
 		//fmt.Printf("%04d: %8v    cost = %-8d stack = %-8d\n", pc, op, cost, stack.len())
 
 		// execute the operation
-		res, err := operation.execute(&pc, evm.env, contract, mem, stack)
+		res, err := operation.execute(&pc, in.evm, contract, mem, stack)
 		// verifyPool is a build flag. Pool verification makes sure the integrity
 		// of the integer pool by comparing values to a default value.
 		if verifyPool {
-			verifyIntegerPool(evm.intPool)
+			verifyIntegerPool(in.intPool)
 		}
+
 		switch {
 		case err != nil:
 			return nil, err
@@ -193,6 +208,11 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 			return res, nil
 		case !operation.jumps:
 			pc++
+		}
+		// if the operation returned a value make sure that is also set
+		// the last return data.
+		if res != nil {
+			mem.lastReturn = ret
 		}
 	}
 	return nil, nil

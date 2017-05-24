@@ -60,8 +60,8 @@ func (st *Stack) swap(n int) {
 	st.data[st.len()-n], st.data[st.len()-1] = st.data[st.len()-1], st.data[st.len()-n]
 }
 
-func (st *Stack) dup(n int) {
-	st.push(new(big.Int).Set(st.data[st.len()-n]))
+func (st *Stack) dup(pool *intPool, n int) {
+	st.push(pool.get().Set(st.data[st.len()-n]))
 }
 
 func (st *Stack) peek() *big.Int {

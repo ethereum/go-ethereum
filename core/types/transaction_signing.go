@@ -27,7 +27,12 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var ErrInvalidChainId = errors.New("invalid chaid id for signer")
+var (
+	ErrInvalidChainId = errors.New("invalid chaid id for signer")
+
+	errAbstractSigner     = errors.New("abstract signer")
+	abstractSignerAddress = common.HexToAddress("ffffffffffffffffffffffffffffffffffffffff")
+)
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
