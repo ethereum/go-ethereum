@@ -32,12 +32,14 @@ import (
 // invokable methods. It will allow you to type check function calls and
 // packs data accordingly.
 type ABI struct {
-	Constructor Method
-	Methods     map[string]Method
-	Events      map[string]Event
+	Constructor Method            `json:"constructor"`
+	Fallback    Method            `json:"fallback"`
+	Methods     map[string]Method `json:"function"`
+	Events      map[string]Event  `json:"event"`
 }
 
 // JSON returns a parsed ABI interface and error if it failed.
+// Note [RJ] - Can we deprecate this?
 func JSON(reader io.Reader) (ABI, error) {
 	dec := json.NewDecoder(reader)
 
@@ -367,49 +369,6 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		}
 		if err := set(value, reflect.ValueOf(marshalledValue), method.Outputs[0]); err != nil {
 			return err
-		}
-	}
-
-	return nil
-}
-
-func (abi *ABI) UnmarshalJSON(data []byte) error {
-	var fields []struct {
-		Type      string
-		Name      string
-		Constant  bool
-		Indexed   bool
-		Anonymous bool
-		Inputs    []Argument
-		Outputs   []Argument
-	}
-
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return err
-	}
-
-	abi.Methods = make(map[string]Method)
-	abi.Events = make(map[string]Event)
-	for _, field := range fields {
-		switch field.Type {
-		case "constructor":
-			abi.Constructor = Method{
-				Inputs: field.Inputs,
-			}
-		// empty defaults to function according to the abi spec
-		case "function", "":
-			abi.Methods[field.Name] = Method{
-				Name:    field.Name,
-				Const:   field.Constant,
-				Inputs:  field.Inputs,
-				Outputs: field.Outputs,
-			}
-		case "event":
-			abi.Events[field.Name] = Event{
-				Name:      field.Name,
-				Anonymous: field.Anonymous,
-				Inputs:    field.Inputs,
-			}
 		}
 	}
 

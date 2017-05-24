@@ -28,9 +28,9 @@ import (
 // holds type information (inputs) about the yielded output. Anonymous events
 // don't get the signature canonical representation as the first LOG topic.
 type Event struct {
-	Name      string
-	Anonymous bool
-	Inputs    []Argument
+	Name      string     `json:"name"`
+	Anonymous bool       `json:"anonymous"`
+	Inputs    []Argument `json:"inputs"`
 }
 
 // Id returns the canonical representation of the event's signature used by the
