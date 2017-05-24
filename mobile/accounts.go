@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
@@ -176,6 +177,11 @@ func (ks *KeyStore) NewAccount(passphrase string) (*Account, error) {
 	return &Account{account}, nil
 }
 
+// UpdateAccount changes the passphrase of an existing account.
+func (ks *KeyStore) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
+	return ks.keystore.Update(account.account, passphrase, newPassphrase)
+}
+
 // ExportKey exports as a JSON key, encrypted with newPassphrase.
 func (ks *KeyStore) ExportKey(account *Account, passphrase, newPassphrase string) (key []byte, _ error) {
 	return ks.keystore.Export(account.account, passphrase, newPassphrase)
@@ -190,9 +196,17 @@ func (ks *KeyStore) ImportKey(keyJSON []byte, passphrase, newPassphrase string) 
 	return &Account{acc}, nil
 }
 
-// UpdateAccount changes the passphrase of an existing account.
-func (ks *KeyStore) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
-	return ks.keystore.Update(account.account, passphrase, newPassphrase)
+// ImportECDSAKey stores the given encrypted JSON key into the key directory.
+func (ks *KeyStore) ImportECDSAKey(key []byte, passphrase string) (account *Account, _ error) {
+	privkey, err := crypto.ToECDSA(key)
+	if err != nil {
+		return nil, err
+	}
+	acc, err := ks.keystore.ImportECDSA(privkey, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return &Account{acc}, nil
 }
 
 // ImportPreSaleKey decrypts the given Ethereum presale wallet and stores
