@@ -21,11 +21,9 @@ import (
 	"fmt"
 	"math"
 	"net"
-	"reflect"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -35,8 +33,9 @@ import (
 // SimAdapter is a NodeAdapter which creates in-memory nodes and connects them
 // using an in-memory p2p.MsgReadWriter pipe
 type SimAdapter struct {
-	mtx   sync.RWMutex
-	nodes map[discover.NodeID]*SimNode
+	mtx      sync.RWMutex
+	nodes    map[discover.NodeID]*SimNode
+	services map[string]ServiceFunc
 }
 
 // NewSimAdapter creates a SimAdapter which is capable of running in-memory
@@ -44,7 +43,8 @@ type SimAdapter struct {
 // node is passed to the NewNode function in the NodeConfig)
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
-		nodes: make(map[discover.NodeID]*SimNode),
+		nodes:    make(map[discover.NodeID]*SimNode),
+		services: services,
 	}
 }
 
@@ -55,8 +55,6 @@ func (s *SimAdapter) Name() string {
 
 // NewNode returns a new SimNode using the given config
 func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
-	var nodeprotos []p2p.Protocol
-
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -66,55 +64,23 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		return nil, fmt.Errorf("node already exists: %s", id)
 	}
 
-	// check the service is valid and initialize it
-	/*
-		serviceFunc, exists := s.services[config.Service]
-		if !exists {
-			return nil, fmt.Errorf("unknown node service %q", config.Service)
-		}
-
-		node := &SimNode{
-			Id:          id,
-			config:      config,
-			adapter:     s,
-			serviceFunc: serviceFunc,
-	*/
-	//serviceFunc, exists := s.services[config.Service]
-
-	//if !exists {
-	//	return nil, fmt.Errorf("unknown node service %q", config.Service)
-	//}
-	//service := serviceFunc(id)
-
-	_, err := node.New(&node.Config{
-		P2P: p2p.Config{
-			PrivateKey:      config.PrivateKey,
-			MaxPeers:        math.MaxInt32,
-			NoDiscovery:     true,
-			Protocols:       nodeprotos,
-			Dialer:          s,
-			EnableMsgEvents: true,
-		},
-	})
-	if err != nil {
-		return nil, err
+	// check the services are valid
+	if len(config.Services) == 0 {
+		return nil, errors.New("node must have at least one service")
 	}
-
-	for _, service := range serviceFuncs[config.Service](id, nil) {
-		for _, proto := range service.Protocols() {
-			nodeprotos = append(nodeprotos, proto)
+	for _, service := range config.Services {
+		if _, exists := s.services[service]; !exists {
+			return nil, fmt.Errorf("unknown node service %q", service)
 		}
 	}
 
-	simnode := &SimNode{
-		Id:          id,
-		serviceFunc: serviceFuncs[config.Service],
-		adapter:     s,
-		config:      config,
-		running:     []node.Service{},
+	node := &SimNode{
+		Id:      id,
+		config:  config,
+		adapter: s,
 	}
-	s.nodes[id.NodeID] = simnode
-	return simnode, nil
+	s.nodes[id.NodeID] = node
+	return node, nil
 }
 
 func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
@@ -146,15 +112,14 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 // It implements the p2p.Server interface so it can be used transparently
 // by the underlying service.
 type SimNode struct {
-	lock        sync.RWMutex
-	Id          *NodeId
-	config      *NodeConfig
-	adapter     *SimAdapter
-	serviceFunc ServiceFunc
-	node        *node.Node
-	client      *rpc.Client
-	rpcMux      *rpcMux
-	running     []node.Service
+	lock    sync.RWMutex
+	Id      *NodeId
+	config  *NodeConfig
+	adapter *SimAdapter
+	node    *node.Node
+	running []node.Service
+	client  *rpc.Client
+	rpcMux  *rpcMux
 }
 
 // Addr returns the node's discovery address
@@ -191,38 +156,37 @@ func (self *SimNode) ServeRPC(conn net.Conn) error {
 	return nil
 }
 
-// Snapshot creates a snapshot of the service state by calling the
+// Snapshots creates snapshots of the services by calling the
 // simulation_snapshot RPC method
-func (self *SimNode) Snapshot() ([]byte, error) {
+func (self *SimNode) Snapshots() (map[string][]byte, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if self.client == nil {
 		return nil, errors.New("RPC not started")
 	}
-	var snapshot []byte
-	return snapshot, self.client.Call(&snapshot, "simulation_snapshot")
+	var snapshots map[string][]byte
+	return snapshots, self.client.Call(&snapshots, "simulation_snapshot")
 }
 
 // Start starts the RPC handler and the underlying service
-func (self *SimNode) Start(snapshot []byte) error {
+func (self *SimNode) Start(snapshots map[string][]byte) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if self.node != nil {
 		return errors.New("node already started")
 	}
 
-	services := []node.ServiceConstructor{}
-
-	sf := self.serviceFunc(self.Id, snapshot)
-
-	for i, _ := range sf {
-		service := sf[i]
-		sc := func(ctx *node.ServiceContext) (node.Service, error) {
+	newService := func(name string) func(ctx *node.ServiceContext) (node.Service, error) {
+		return func(ctx *node.ServiceContext) (node.Service, error) {
+			var snapshot []byte
+			if snapshots != nil {
+				snapshot = snapshots[name]
+			}
+			serviceFunc := self.adapter.services[name]
+			service := serviceFunc(self.Id, snapshot)
+			self.running = append(self.running, service)
 			return service, nil
 		}
-		log.Debug(fmt.Sprintf("servicefunc yield: %v %p %p", reflect.TypeOf(sf[i]), sf[i], sc))
-		services = append(services, sc)
-		self.running = append(self.running, sf[i])
 	}
 
 	node, err := node.New(&node.Config{
@@ -239,9 +203,8 @@ func (self *SimNode) Start(snapshot []byte) error {
 		return err
 	}
 
-	for _, service := range services {
-		log.Debug(fmt.Sprintf("service %v", service))
-		if err := node.Register(service); err != nil {
+	for _, name := range self.config.Services {
+		if err := node.Register(newService(name)); err != nil {
 			return err
 		}
 	}
@@ -281,17 +244,11 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
-// Service returns the underlying running node.Service matching the supplied service type
-func (self *SimNode) Service(servicetype interface{}) node.Service {
+// Services returns the underlying services
+func (self *SimNode) Services() []node.Service {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	typ := reflect.TypeOf(servicetype)
-	for _, service := range self.running {
-		if reflect.TypeOf(service) == typ {
-			return service
-		}
-	}
-	return nil
+	return self.running
 }
 
 func (self *SimNode) Server() *p2p.Server {

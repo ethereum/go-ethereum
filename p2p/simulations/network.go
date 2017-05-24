@@ -190,7 +190,7 @@ func (self *Msg) String() string {
 // NewNode adds a new node to the network with a random ID
 func (self *Network) NewNode() (*Node, error) {
 	conf := adapters.RandomNodeConfig()
-	conf.Service = self.DefaultService
+	conf.Services = []string{self.DefaultService}
 	return self.NewNodeWithConfig(conf)
 }
 
@@ -203,8 +203,8 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 	if conf.Name == "" {
 		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
 	}
-	if conf.Service == "" {
-		conf.Service = self.DefaultService
+	if len(conf.Services) == 0 {
+		conf.Services = []string{self.DefaultService}
 	}
 
 	_, found := self.nodeMap[id.NodeID]
@@ -286,10 +286,10 @@ func (self *Network) StopAll() error {
 
 // Start(id) starts up the node (relevant only for instance with own p2p or remote)
 func (self *Network) Start(id *adapters.NodeId) error {
-	return self.startWithSnapshot(id, nil)
+	return self.startWithSnapshots(id, nil)
 }
 
-func (self *Network) startWithSnapshot(id *adapters.NodeId, snapshot []byte) error {
+func (self *Network) startWithSnapshots(id *adapters.NodeId, snapshots map[string][]byte) error {
 	node := self.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -298,7 +298,7 @@ func (self *Network) startWithSnapshot(id *adapters.NodeId, snapshot []byte) err
 		return fmt.Errorf("node %v already up", id)
 	}
 	log.Trace(fmt.Sprintf("starting node %v: %v using %v", id, node.Up, self.nodeAdapter.Name()))
-	if err := node.Start(snapshot); err != nil {
+	if err := node.Start(snapshots); err != nil {
 		log.Warn(fmt.Sprintf("start up failed: %v", err))
 		return err
 	}
@@ -625,8 +625,8 @@ type Snapshot struct {
 type NodeSnapshot struct {
 	Node
 
-	// Snapshot is arbitrary data gathered from calling node.Snapshot()
-	Snapshot []byte `json:"snapshot,omitempty"`
+	// Snapshot is arbitrary data gathered from calling node.Snapshots()
+	Snapshots map[string][]byte `json:"snapshots,omitempty"`
 }
 
 // Snapshot creates a network snapshot
@@ -642,11 +642,11 @@ func (self *Network) Snapshot() (*Snapshot, error) {
 		if !node.Up {
 			continue
 		}
-		snapshot, err := node.Snapshot()
+		snapshots, err := node.Snapshots()
 		if err != nil {
 			return nil, err
 		}
-		snap.Nodes[i].Snapshot = snapshot
+		snap.Nodes[i].Snapshots = snapshots
 	}
 	for i, conn := range self.Conns {
 		snap.Conns[i] = *conn
@@ -662,7 +662,7 @@ func (self *Network) Load(snap *Snapshot) error {
 		if !node.Up {
 			continue
 		}
-		if err := self.startWithSnapshot(node.Config.Id, node.Snapshot); err != nil {
+		if err := self.startWithSnapshots(node.Config.Id, node.Snapshots); err != nil {
 			return err
 		}
 	}

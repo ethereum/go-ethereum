@@ -52,7 +52,7 @@ type Node interface {
 	ServeRPC(net.Conn) error
 
 	// Start starts the node with the given snapshot
-	Start(snapshot []byte) error
+	Start(snapshots map[string][]byte) error
 
 	// Stop stops the node
 	Stop() error
@@ -60,8 +60,8 @@ type Node interface {
 	// NodeInfo returns information about the node
 	NodeInfo() *p2p.NodeInfo
 
-	// Snapshot creates a snapshot of the running service
-	Snapshot() ([]byte, error)
+	// Snapshots creates snapshots of the running services
+	Snapshots() (map[string][]byte, error)
 }
 
 // NodeAdapter is an object which creates Nodes to be used in a simulation
@@ -127,26 +127,26 @@ type NodeConfig struct {
 	// Name is a human friendly name for the node like "node01"
 	Name string
 
-	// Service is the name of the services which should be run when starting
+	// Services are the names of the services which should be run when starting
 	// the node (for SimNodes it should be the names of services contained
 	// in SimAdapter.services, for other nodes it should be services
 	// registered by calling the RegisterService function)
-	Service string
+	Services []string
 }
 
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by converting
 // all fields to strings
 type nodeConfigJSON struct {
-	Id         string `json:"id"`
-	PrivateKey string `json:"private_key"`
-	Name       string `json:"name"`
-	Service    string `json:"service"`
+	Id         string   `json:"id"`
+	PrivateKey string   `json:"private_key"`
+	Name       string   `json:"name"`
+	Services   []string `json:"services"`
 }
 
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
-		Name:    n.Name,
-		Service: n.Service,
+		Name:     n.Name,
+		Services: n.Services,
 	}
 	if n.Id != nil {
 		confJSON.Id = n.Id.String()
@@ -180,7 +180,7 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	n.Name = confJSON.Name
-	n.Service = confJSON.Service
+	n.Services = confJSON.Services
 
 	return nil
 }
@@ -202,18 +202,17 @@ func RandomNodeConfig() *NodeConfig {
 }
 
 // Services is a collection of services which can be run in a simulation
-// it is mapped to strings representing TYPES of nodes
 type Services map[string]ServiceFunc
 
 // ServiceFunc returns a node.Service which can be used to boot devp2p nodes
-type ServiceFunc func(id *NodeId, snapshot []byte) []node.Service
+type ServiceFunc func(id *NodeId, snapshot []byte) node.Service
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes
 var serviceFuncs = make(Services)
 
 // RegisterServices registers the given ServiceFuncs which can then be used to
-// start devp2p nodes
+// start devp2p nodes using either the Exec or Docker adapters
 func RegisterServices(services Services) {
 	for name, f := range services {
 		if _, exists := serviceFuncs[name]; exists {
