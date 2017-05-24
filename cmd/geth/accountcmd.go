@@ -31,25 +31,40 @@ import (
 
 var (
 	walletCommand = cli.Command{
-		Name:     "wallet",
-		Usage:    "Import Ethereum presale wallets",
-		Action:   utils.MigrateFlags(importWallet),
-		Category: "ACCOUNT COMMANDS",
-		Flags: []cli.Flag{
-			utils.DataDirFlag,
-			utils.KeyStoreDirFlag,
-			utils.PasswordFileFlag,
-			utils.LightKDFFlag,
-		},
+		Name:      "wallet",
+		Usage:     "Manage Ethereum presale wallets",
+		ArgsUsage: "",
+		Category:  "ACCOUNT COMMANDS",
 		Description: `
-		    geth wallet [options] /path/to/my/presale.wallet
+    geth wallet import /path/to/my/presale.wallet
 
-		will prompt for your password and imports your ether presale account.
-		It can be used non-interactively with the --password option taking a
-		passwordfile as argument containing the wallet password in plaintext.
+will prompt for your password and imports your ether presale account.
+It can be used non-interactively with the --password option taking a
+passwordfile as argument containing the wallet password in plaintext.`,
+		Subcommands: []cli.Command{
+			{
 
-		`,
+				Name:      "import",
+				Usage:     "Import Ethereum presale wallet",
+				ArgsUsage: "<keyFile>",
+				Action:    utils.MigrateFlags(importWallet),
+				Category:  "ACCOUNT COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.KeyStoreDirFlag,
+					utils.PasswordFileFlag,
+					utils.LightKDFFlag,
+				},
+				Description: `
+	geth wallet [options] /path/to/my/presale.wallet
+
+will prompt for your password and imports your ether presale account.
+It can be used non-interactively with the --password option taking a
+passwordfile as argument containing the wallet password in plaintext.`,
+			},
+		},
 	}
+
 	accountCommand = cli.Command{
 		Name:     "account",
 		Usage:    "Manage accounts",
