@@ -266,13 +266,13 @@ func (e *gfP6) Invert(a *gfP6, pool *bnPool) *gfP6 {
 	t1.Mul(a.y, a.z, pool)
 	B.Sub(B, t1)
 
-	C := newGFp2(pool)
-	C.Square(a.y, pool)
+	C_ := newGFp2(pool)
+	C_.Square(a.y, pool)
 	t1.Mul(a.x, a.z, pool)
-	C.Sub(C, t1)
+	C_.Sub(C_, t1)
 
 	F := newGFp2(pool)
-	F.Mul(C, a.y, pool)
+	F.Mul(C_, a.y, pool)
 	F.MulXi(F, pool)
 	t1.Mul(A, a.z, pool)
 	F.Add(F, t1)
@@ -282,14 +282,14 @@ func (e *gfP6) Invert(a *gfP6, pool *bnPool) *gfP6 {
 
 	F.Invert(F, pool)
 
-	e.x.Mul(C, F, pool)
+	e.x.Mul(C_, F, pool)
 	e.y.Mul(B, F, pool)
 	e.z.Mul(A, F, pool)
 
 	t1.Put(pool)
 	A.Put(pool)
 	B.Put(pool)
-	C.Put(pool)
+	C_.Put(pool)
 	F.Put(pool)
 
 	return e

@@ -88,12 +88,12 @@ func lineFunctionDouble(r *twistPoint, q *curvePoint, pool *bnPool) (a, b, c *gf
 
 	A := newGFp2(pool).Square(r.x, pool)
 	B := newGFp2(pool).Square(r.y, pool)
-	C := newGFp2(pool).Square(B, pool)
+	C_ := newGFp2(pool).Square(B, pool)
 
 	D := newGFp2(pool).Add(r.x, B)
 	D.Square(D, pool)
 	D.Sub(D, A)
-	D.Sub(D, C)
+	D.Sub(D, C_)
 	D.Add(D, D)
 
 	E := newGFp2(pool).Add(A, A)
@@ -112,7 +112,7 @@ func lineFunctionDouble(r *twistPoint, q *curvePoint, pool *bnPool) (a, b, c *gf
 
 	rOut.y.Sub(D, rOut.x)
 	rOut.y.Mul(rOut.y, E, pool)
-	t := newGFp2(pool).Add(C, C)
+	t := newGFp2(pool).Add(C_, C_)
 	t.Add(t, t)
 	t.Add(t, t)
 	rOut.y.Sub(rOut.y, t)
@@ -142,7 +142,7 @@ func lineFunctionDouble(r *twistPoint, q *curvePoint, pool *bnPool) (a, b, c *gf
 
 	A.Put(pool)
 	B.Put(pool)
-	C.Put(pool)
+	C_.Put(pool)
 	D.Put(pool)
 	E.Put(pool)
 	G.Put(pool)
