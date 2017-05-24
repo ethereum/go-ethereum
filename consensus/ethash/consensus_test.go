@@ -74,7 +74,7 @@ func TestCalcDifficulty(t *testing.T) {
 		number := new(big.Int).Sub(test.CurrentBlocknumber, big.NewInt(1))
 		diff := CalcDifficulty(config, test.CurrentTimestamp, &types.Header{
 			Number:     number,
-			Time:       test.ParentTimestamp,
+			Time:       new(big.Int).SetUint64(test.ParentTimestamp),
 			Difficulty: test.ParentDifficulty,
 		})
 		if diff.Cmp(test.CurrentDifficulty) != 0 {
