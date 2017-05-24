@@ -19,18 +19,17 @@ type ProtocolTester struct {
 }
 
 func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
-	//func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
-		"test": func(id *adapters.NodeId, _ []byte) []node.Service {
-			return []node.Service{&testNode{run}}
+		"test": func(id *adapters.NodeId, _ []byte) node.Service {
+			return &testNode{run}
 		},
-		"mock": func(id *adapters.NodeId, _ []byte) []node.Service {
-			return []node.Service{newMockNode()}
+		"mock": func(id *adapters.NodeId, _ []byte) node.Service {
+			return newMockNode()
 		},
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{})
-	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Service: "test"}); err != nil {
+	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Services: []string{"test"}}); err != nil {
 		panic(err.Error())
 	}
 	if err := net.Start(id); err != nil {
@@ -42,7 +41,7 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 	peerIDs := make([]*adapters.NodeId, n)
 	for i := 0; i < n; i++ {
 		peers[i] = adapters.RandomNodeConfig()
-		peers[i].Service = "mock"
+		peers[i].Services = []string{"mock"}
 		peerIDs[i] = peers[i].Id
 	}
 	events := make(chan *p2p.PeerEvent, 1000)

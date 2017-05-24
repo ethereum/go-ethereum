@@ -242,8 +242,7 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 
 	nodeCount := 5
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		Id:             "0",
-		DefaultService: "psstest",
+		Id: "0",
 	})
 	defer net.Shutdown()
 
@@ -254,7 +253,7 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 
 	for i := 0; i < nodeCount; i++ {
 		nodeconfig := adapters.RandomNodeConfig()
-		nodeconfig.Service = "psstest"
+		nodeconfig.Services = []string{"bzz", "pss"}
 		node, err := net.NewNodeWithConfig(nodeconfig)
 		if err != nil {
 			t.Fatalf("error starting node: %s", err)
@@ -436,28 +435,25 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 }
 
 func newServices() adapters.Services {
-
+	stateStore := adapters.NewSimStateStore()
+	kademlias := make(map[*adapters.NodeId]*network.Kademlia)
+	kademlia := func(id *adapters.NodeId) *network.Kademlia {
+		if k, ok := kademlias[id]; ok {
+			return k
+		}
+		addr := network.NewAddrFromNodeId(id)
+		params := network.NewKadParams()
+		params.MinProxBinSize = 2
+		params.MaxBinSize = 3
+		params.MinBinSize = 1
+		params.MaxRetries = 1000
+		params.RetryExponent = 2
+		params.RetryInterval = 1000000
+		kademlias[id] = network.NewKademlia(addr.Over(), params)
+		return kademlias[id]
+	}
 	return adapters.Services{
-		"psstest": func(id *adapters.NodeId, snapshot []byte) []node.Service {
-			addr := network.NewAddrFromNodeId(id)
-
-			kadparams := network.NewKadParams()
-			kadparams.MinProxBinSize = 2
-			kadparams.MaxBinSize = 3
-			kadparams.MinBinSize = 1
-			kadparams.MaxRetries = 1000
-			kadparams.RetryExponent = 2
-			kadparams.RetryInterval = 1000000
-			kademlia := network.NewKademlia(addr.Over(), kadparams)
-
-			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   network.NewHiveParams(),
-			}
-
-			config.HiveParams.KeepAliveInterval = time.Second
-
+		"pss": func(id *adapters.NodeId, snapshot []byte) node.Service {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
 				log.Error("create pss cache tmpdir failed", "error", err)
@@ -470,7 +466,7 @@ func newServices() adapters.Services {
 			}
 
 			pssp := NewPssParams()
-			ps := NewPss(kademlia, dpa, pssp)
+			ps := NewPss(kademlia(id), dpa, pssp)
 
 			ping := &pssPing{
 				quitC: make(chan struct{}),
@@ -481,7 +477,16 @@ func newServices() adapters.Services {
 				os.Exit(1)
 			}
 
-			return []node.Service{network.NewBzz(config, kademlia, adapters.NewSimStateStore()), ps}
+			return ps
+		},
+		"bzz": func(id *adapters.NodeId, snapshot []byte) node.Service {
+			addr := network.NewAddrFromNodeId(id)
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   network.NewHiveParams(),
+			}
+			return network.NewBzz(config, kademlia(id), stateStore)
 		},
 	}
 }

@@ -46,8 +46,13 @@ func (e *ExecAdapter) Name() string {
 
 // NewNode returns a new ExecNode using the given config
 func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
-	if _, exists := serviceFuncs[config.Service]; !exists {
-		return nil, fmt.Errorf("unknown node service %q", config.Service)
+	if len(config.Services) == 0 {
+		return nil, errors.New("node must have at least one service")
+	}
+	for _, service := range config.Services {
+		if _, exists := serviceFuncs[service]; !exists {
+			return nil, fmt.Errorf("unknown node service %q", service)
+		}
 	}
 
 	// create the node directory using the first 12 characters of the ID
@@ -88,12 +93,11 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 // (so for example we can run the node in a remote Docker container and
 // still communicate with it).
 type ExecNode struct {
-	ID       *NodeId
-	Dir      string
-	Config   *execNodeConfig
-	Cmd      *exec.Cmd
-	Info     *p2p.NodeInfo
-	Services []string
+	ID     *NodeId
+	Dir    string
+	Config *execNodeConfig
+	Cmd    *exec.Cmd
+	Info   *p2p.NodeInfo
 
 	client *rpc.Client
 	rpcMux *rpcMux
@@ -118,7 +122,7 @@ func (n *ExecNode) Client() (*rpc.Client, error) {
 // Start exec's the node passing the ID and service as command line arguments
 // and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
 // variable
-func (n *ExecNode) Start(snapshot []byte) (err error) {
+func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	if n.Cmd != nil {
 		return errors.New("already started")
 	}
@@ -131,7 +135,7 @@ func (n *ExecNode) Start(snapshot []byte) (err error) {
 
 	// encode a copy of the config containing the snapshot
 	confCopy := *n.Config
-	confCopy.Snapshot = snapshot
+	confCopy.Snapshots = snapshots
 	confData, err := json.Marshal(confCopy)
 	if err != nil {
 		return fmt.Errorf("error generating node config: %s", err)
@@ -165,17 +169,13 @@ func (n *ExecNode) Start(snapshot []byte) (err error) {
 	return nil
 }
 
-func (n *ExecNode) GetService(name string) node.Service {
-	return nil
-}
-
 // execCommand returns a command which runs the node locally by exec'ing
 // the current binary but setting argv[0] to "p2p-node" so that the child
 // runs execP2PNode
 func (n *ExecNode) execCommand() *exec.Cmd {
 	return &exec.Cmd{
 		Path: reexec.Self(),
-		Args: []string{"p2p-node", n.Services[0], n.ID.String()},
+		Args: []string{"p2p-node", strings.Join(n.Config.Node.Services, ","), n.ID.String()},
 	}
 }
 
@@ -231,14 +231,14 @@ func (n *ExecNode) ServeRPC(conn net.Conn) error {
 	return nil
 }
 
-// Snapshot creates a snapshot of the service state by calling the
+// Snapshots creates snapshots of the services by calling the
 // simulation_snapshot RPC method
-func (n *ExecNode) Snapshot() ([]byte, error) {
+func (n *ExecNode) Snapshots() (map[string][]byte, error) {
 	if n.client == nil {
 		return nil, errors.New("RPC not started")
 	}
-	var snapshot []byte
-	return snapshot, n.client.Call(&snapshot, "simulation_snapshot")
+	var snapshots map[string][]byte
+	return snapshots, n.client.Call(&snapshots, "simulation_snapshot")
 }
 
 func init() {
@@ -250,9 +250,9 @@ func init() {
 // execNodeConfig is used to serialize the node configuration so it can be
 // passed to the child process as a JSON encoded environment variable
 type execNodeConfig struct {
-	Stack    node.Config `json:"stack"`
-	Node     *NodeConfig `json:"node"`
-	Snapshot []byte      `json:"snapshot,omitempty"`
+	Stack     node.Config       `json:"stack"`
+	Node      *NodeConfig       `json:"node"`
+	Snapshots map[string][]byte `json:"snapshot,omitempty"`
 }
 
 // execP2PNode starts a devp2p node when the current binary is executed with
@@ -263,8 +263,8 @@ func execP2PNode() {
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
 
-	// read the service and ID from argv
-	serviceName := os.Args[1]
+	// read the services and ID from argv
+	serviceNames := strings.Split(os.Args[1], ",")
 	id := NewNodeIdFromHex(os.Args[2])
 
 	// decode the config
@@ -278,12 +278,19 @@ func execP2PNode() {
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 
-	// initialize the service
-	serviceFunc, exists := serviceFuncs[serviceName]
-	if !exists {
-		log.Crit(fmt.Sprintf("unknown node service %q", serviceName))
+	// initialize the services
+	services := make(map[string]node.Service, len(serviceNames))
+	for _, name := range serviceNames {
+		serviceFunc, exists := serviceFuncs[name]
+		if !exists {
+			log.Crit(fmt.Sprintf("unknown node service %q", name))
+		}
+		var snapshot []byte
+		if conf.Snapshots != nil {
+			snapshot = conf.Snapshots[name]
+		}
+		services[name] = serviceFunc(id, snapshot)
 	}
-	services := serviceFunc(id, conf.Snapshot)
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
@@ -326,52 +333,75 @@ func execP2PNode() {
 	stack.Wait()
 }
 
-func startP2PNode(conf *node.Config, services []node.Service) (*node.Node, error) {
+func startP2PNode(conf *node.Config, services map[string]node.Service) (*node.Node, error) {
 	stack, err := node.New(conf)
 	if err != nil {
 		return nil, err
 	}
-	for _, svc := range services {
-		constructor := func(ctx *node.ServiceContext) (node.Service, error) {
-			return &snapshotService{svc}, nil
+	constructor := func(service node.Service) func(ctx *node.ServiceContext) (node.Service, error) {
+		return func(ctx *node.ServiceContext) (node.Service, error) {
+			return service, nil
 		}
-		if err := stack.Register(constructor); err != nil {
+	}
+	for _, service := range services {
+		if err := stack.Register(constructor(service)); err != nil {
 			return nil, err
 		}
 	}
-
+	if err := stack.Register(constructor(&snapshotService{services})); err != nil {
+		return nil, err
+	}
 	if err := stack.Start(); err != nil {
 		return nil, err
 	}
 	return stack, nil
 }
 
-// snapshotService wraps a node.Service and injects a snapshot API into the
-// list of RPC APIs
+// snapshotService is a node.Service which wraps a list of services and
+// exposes an API to generate a snapshot of those services
 type snapshotService struct {
-	node.Service
+	services map[string]node.Service
 }
 
 func (s *snapshotService) APIs() []rpc.API {
-	return append([]rpc.API{{
+	return []rpc.API{{
 		Namespace: "simulation",
 		Version:   "1.0",
-		Service:   SnapshotAPI{s.Service},
-	}}, s.Service.APIs()...)
+		Service:   SnapshotAPI{s.services},
+	}}
 }
 
-// SnapshotAPI provides an RPC method to create a snapshot of a node.Service
+func (s *snapshotService) Protocols() []p2p.Protocol {
+	return nil
+}
+
+func (s *snapshotService) Start(*p2p.Server) error {
+	return nil
+}
+
+func (s *snapshotService) Stop() error {
+	return nil
+}
+
+// SnapshotAPI provides an RPC method to create snapshots of services
 type SnapshotAPI struct {
-	service node.Service
+	services map[string]node.Service
 }
 
-func (api SnapshotAPI) Snapshot() ([]byte, error) {
-	if s, ok := api.service.(interface {
-		Snapshot() ([]byte, error)
-	}); ok {
-		return s.Snapshot()
+func (api SnapshotAPI) Snapshot() (map[string][]byte, error) {
+	snapshots := make(map[string][]byte)
+	for name, service := range api.services {
+		if s, ok := service.(interface {
+			Snapshot() ([]byte, error)
+		}); ok {
+			snap, err := s.Snapshot()
+			if err != nil {
+				return nil, err
+			}
+			snapshots[name] = snap
+		}
 	}
-	return nil, nil
+	return snapshots, nil
 }
 
 // stdioConn wraps os.Stdin / os.Stdout with a no-op Close method so we can
