@@ -70,7 +70,7 @@ This command will:
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
    as well as Geth's own [management APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
    This too is optional and if you leave it out you can always attach to an already running Geth instance
-   with `geth --attach`.
+   with `geth attach`.
 
 ### Full node on the Ethereum test network
 
