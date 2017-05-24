@@ -137,7 +137,7 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 
 		// if the op is invalid abort the process and return an error
 		if !operation.valid {
-			return nil, fmt.Errorf("invalid opcode %x", op)
+			return nil, fmt.Errorf("invalid opcode 0x%x", int(op))
 		}
 
 		// validate the stack and make sure there enough stack items available

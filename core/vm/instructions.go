@@ -640,7 +640,7 @@ func opDelegateCall(pc *uint64, evm *EVM, contract *Contract, memory *Memory, st
 	// if not homestead return an error. DELEGATECALL is not supported
 	// during pre-homestead.
 	if !evm.ChainConfig().IsHomestead(evm.BlockNumber) {
-		return nil, fmt.Errorf("invalid opcode %x", DELEGATECALL)
+		return nil, fmt.Errorf("invalid opcode 0x%x", int(DELEGATECALL))
 	}
 
 	gas, to, inOffset, inSize, outOffset, outSize := stack.pop().Uint64(), stack.pop(), stack.pop(), stack.pop(), stack.pop(), stack.pop()
