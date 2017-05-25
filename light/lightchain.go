@@ -64,6 +64,8 @@ type LightChain struct {
 	procInterrupt int32 // interrupt signaler for block processing
 	wg            sync.WaitGroup
 
+	chainProcessors []core.ChainProcessor // NewHead function called under chain lock after a new head has been written to the db
+
 	engine consensus.Engine
 }
 
@@ -114,6 +116,15 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 	return bc, nil
 }
 
+// AddChainProcessor adds a new head callback function that will be
+// called under chain lock after a new head has been written to the db
+func (self *LightChain) AddChainProcessor(cp core.ChainProcessor) {
+	self.chainmu.Lock()
+	self.chainProcessors = append(self.chainProcessors, cp)
+	cp.NewHead(self.hc.CurrentHeader().Number.Uint64(), false)
+	self.chainmu.Unlock()
+}
+
 func (self *LightChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&self.procInterrupt) == 1
 }
@@ -149,7 +160,13 @@ func (bc *LightChain) SetHead(head uint64) {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
+	oldHead := bc.hc.CurrentHeader().Number.Uint64()
 	bc.hc.SetHead(head, nil)
+	if head < oldHead {
+		for _, cp := range bc.chainProcessors {
+			cp.NewHead(head, true)
+		}
+	}
 	bc.loadLastState()
 }
 
@@ -312,11 +329,20 @@ func (self *LightChain) Rollback(chain []common.Hash) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
+	var rollbackHead *types.Header
+
 	for i := len(chain) - 1; i >= 0; i-- {
 		hash := chain[i]
 
 		if head := self.hc.CurrentHeader(); head.Hash() == hash {
-			self.hc.SetCurrentHeader(self.GetHeader(head.ParentHash, head.Number.Uint64()-1))
+			rollbackHead = self.GetHeader(head.ParentHash, head.Number.Uint64()-1)
+			self.hc.SetCurrentHeader(rollbackHead)
+		}
+	}
+
+	if rollbackHead != nil {
+		for _, cp := range self.chainProcessors {
+			cp.NewHead(rollbackHead.Number.Uint64(), true)
 		}
 	}
 }
@@ -367,7 +393,15 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		self.mu.Lock()
 		defer self.mu.Unlock()
 
-		status, err := self.hc.WriteHeader(header)
+		status, err := self.hc.WriteHeader(header, func(head *types.Header) {
+			for _, cp := range self.chainProcessors {
+				cp.NewHead(head.Number.Uint64(), true)
+			}
+		})
+
+		for _, cp := range self.chainProcessors {
+			cp.NewHead(header.Number.Uint64(), false)
+		}
 
 		switch status {
 		case core.CanonStatTy:
