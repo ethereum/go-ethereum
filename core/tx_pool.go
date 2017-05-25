@@ -209,6 +209,7 @@ func (pool *TxPool) resetState() {
 	pool.promoteExecutables(currentState)
 }
 
+// Stop terminates the transaction pool.
 func (pool *TxPool) Stop() {
 	pool.events.Unsubscribe()
 	close(pool.quit)
@@ -238,6 +239,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	log.Info("Transaction pool price threshold updated", "price", price)
 }
 
+// State returns the virtual managed state of the transaction pool.
 func (pool *TxPool) State() *state.ManagedState {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
@@ -850,22 +852,22 @@ func newTxSet() *txSet {
 
 // contains returns true if the set contains the given transaction hash
 // (not thread safe, should be called from a locked environment)
-func (self *txSet) contains(hash common.Hash) bool {
-	_, ok := self.txMap[hash]
+func (ts *txSet) contains(hash common.Hash) bool {
+	_, ok := ts.txMap[hash]
 	return ok
 }
 
 // add adds a transaction hash to the set, then removes entries older than txSetDuration
 // (not thread safe, should be called from a locked environment)
-func (self *txSet) add(hash common.Hash) {
-	self.txMap[hash] = struct{}{}
+func (ts *txSet) add(hash common.Hash) {
+	ts.txMap[hash] = struct{}{}
 	now := time.Now()
-	self.txOrd[self.addPtr] = txOrdType{hash: hash, time: now}
-	self.addPtr++
+	ts.txOrd[ts.addPtr] = txOrdType{hash: hash, time: now}
+	ts.addPtr++
 	delBefore := now.Add(-txSetDuration)
-	for self.delPtr < self.addPtr && self.txOrd[self.delPtr].time.Before(delBefore) {
-		delete(self.txMap, self.txOrd[self.delPtr].hash)
-		delete(self.txOrd, self.delPtr)
-		self.delPtr++
+	for ts.delPtr < ts.addPtr && ts.txOrd[ts.delPtr].time.Before(delBefore) {
+		delete(ts.txMap, ts.txOrd[ts.delPtr].hash)
+		delete(ts.txOrd, ts.delPtr)
+		ts.delPtr++
 	}
 }
