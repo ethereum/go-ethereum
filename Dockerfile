@@ -1,12 +1,14 @@
-FROM alpine:3.5
+FROM vertigo/go-builder as builder
 
 ADD . /go-ethereum
 RUN \
-  apk add --update git go make gcc musl-dev linux-headers && \
   (cd go-ethereum && make geth)                           && \
   cp go-ethereum/build/bin/geth /geth                     && \
-  apk del git go make gcc musl-dev linux-headers          && \
-  rm -rf /go-ethereum && rm -rf /var/cache/apk/*
+  rm -rf /go-ethereum
+
+FROM alpine:3.5
+
+COPY --from=builder /geth /geth
 
 EXPOSE 8545
 EXPOSE 30303
