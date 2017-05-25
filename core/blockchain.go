@@ -56,10 +56,10 @@ const (
 	blockCacheLimit     = 256
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
-	// BlockChainVersion must be bumped when consensus algorithm is changed, this forces the upgradedb
-	// command to be run (forces the blocks to be imported again using the new algorithm)
+	badBlockLimit       = 10
+
+	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	BlockChainVersion = 3
-	badBlockLimit     = 10
 )
 
 // BlockChain represents the canonical chain given a database with a genesis
@@ -478,7 +478,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	}
 }
 
-// Genesis Accessors
+// Genesis retrieves the chain's genesis block.
 func (bc *BlockChain) Genesis() *types.Block {
 	return bc.genesisBlock
 }
@@ -1169,7 +1169,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
 	var addedTxs types.Transactions
-	// insert blocks. Order does not matter. Last block will be written in ImportChain itbc which creates the new head properly
+	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
 	for _, block := range newChain {
 		// insert the block in the canonical way, re-writing history
 		bc.insert(block)

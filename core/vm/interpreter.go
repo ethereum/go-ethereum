@@ -91,7 +91,7 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
-// the return byte-slice and an error if one occured.
+// the return byte-slice and an error if one occurred.
 //
 // It's important to note that any errors returned by the interpreter should be
 // considered a revert-and-consume-all-gas operation. No error specific checks

@@ -209,7 +209,7 @@ func (pool *TxPool) resetState() {
 	pool.promoteExecutables(currentState)
 }
 
-// Stop stops a TxPool
+// Stop terminates the transaction pool.
 func (pool *TxPool) Stop() {
 	pool.events.Unsubscribe()
 	close(pool.quit)
@@ -239,7 +239,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	log.Info("Transaction pool price threshold updated", "price", price)
 }
 
-// State returns the state of TxPool
+// State returns the virtual managed state of the transaction pool.
 func (pool *TxPool) State() *state.ManagedState {
 	pool.mu.RLock()
 	defer pool.mu.RUnlock()
