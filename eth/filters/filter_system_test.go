@@ -63,6 +63,22 @@ func (b *testBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (t
 	return core.GetBlockReceipts(b.db, blockHash, num), nil
 }
 
+func (b *testBackend) GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error) {
+	results := make([][]byte, len(sectionIdxList))
+	var err error
+	for i, idx := range sectionIdxList {
+		results[i], err = core.GetBloomBits(b.db, bitIdx, idx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
+}
+
+func (b *testBackend) BloomBitsSectionSize() uint64 {
+	return testBloomBitsSection
+}
+
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain events.
 // It creates multiple subscriptions:
 // - one at the start and should receive all posted chain events and a second (blockHashes)
@@ -75,7 +91,7 @@ func TestBlockSubscription(t *testing.T) {
 		mux         = new(event.TypeMux)
 		db, _       = ethdb.NewMemDatabase()
 		backend     = &testBackend{mux, db}
-		api         = NewPublicFilterAPI(backend, false)
+		api         = NewPublicFilterAPI(backend, false, 0)
 		genesis     = new(core.Genesis).MustCommit(db)
 		chain, _    = core.GenerateChain(params.TestChainConfig, genesis, db, 10, func(i int, gen *core.BlockGen) {})
 		chainEvents = []core.ChainEvent{}
@@ -128,7 +144,7 @@ func TestPendingTxFilter(t *testing.T) {
 		mux     = new(event.TypeMux)
 		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false, 0)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), new(big.Int), new(big.Int), nil),
@@ -178,7 +194,7 @@ func TestLogFilterCreation(t *testing.T) {
 		mux     = new(event.TypeMux)
 		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false, 0)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -223,7 +239,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 		mux     = new(event.TypeMux)
 		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false, 0)
 	)
 
 	// different situations where log filter creation should fail.
@@ -249,7 +265,7 @@ func TestLogFilter(t *testing.T) {
 		mux     = new(event.TypeMux)
 		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false, 0)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -357,7 +373,7 @@ func TestPendingLogsSubscription(t *testing.T) {
 		mux     = new(event.TypeMux)
 		db, _   = ethdb.NewMemDatabase()
 		backend = &testBackend{mux, db}
-		api     = NewPublicFilterAPI(backend, false)
+		api     = NewPublicFilterAPI(backend, false, 0)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")

@@ -155,3 +155,11 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
 }
+
+func (b *LesApiBackend) GetBloomBits(ctx context.Context, bitIdx uint64, sectionIdxList []uint64) ([][]byte, error) {
+	return nil, nil // implemented in a subsequent PR
+}
+
+func (b *LesApiBackend) BloomBitsSectionSize() uint64 {
+	return 0
+}

@@ -20,12 +20,12 @@ package eth
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -252,45 +252,64 @@ func upgradeSequentialBlockData(db ethdb.Database, hash []byte) error {
 	return nil
 }
 
-func addMipmapBloomBins(db ethdb.Database) (err error) {
-	const mipmapVersion uint = 2
+// BloomBitsProcessorBackend implements ChainSectionProcessorBackend
+type BloomBitsProcessorBackend struct {
+	db                  ethdb.Database
+	lastCount, lastProg uint64
+}
 
-	// check if the version is set. We ignore data for now since there's
-	// only one version so we can easily ignore it for now
-	var data []byte
-	data, _ = db.Get([]byte("setting-mipmap-version"))
-	if len(data) > 0 {
-		var version uint
-		if err := rlp.DecodeBytes(data, &version); err == nil && version == mipmapVersion {
-			return nil
+// number of confirmation blocks before a section is considered probably final and its bloom bits are calculated
+const bloomBitsConfirmations = 512
+
+// NewBloomBitsProcessor returns a chain processor that generates bloom bits data for the canonical chain
+func NewBloomBitsProcessor(db ethdb.Database, stop chan struct{}) *core.ChainSectionProcessor {
+	backend := &BloomBitsProcessorBackend{db: db, lastCount: core.GetBloomBitsAvailable(db)}
+	return core.NewChainSectionProcessor(backend, bloomBitsSection, bloomBitsConfirmations, time.Millisecond*100, stop)
+}
+
+// Process calculates bloom bits for a given section
+func (b *BloomBitsProcessorBackend) Process(sectionIdx uint64) bool {
+	bc := bloombits.NewBloomBitsCreator(bloomBitsSection)
+	var header *types.Header
+	for i := sectionIdx * bloomBitsSection; i < (sectionIdx+1)*bloomBitsSection; i++ {
+		hash := core.GetCanonicalHash(b.db, i)
+		header = core.GetHeader(b.db, hash, i)
+		if header == nil {
+			log.Error("Error creating bloomBits data", "section", sectionIdx, "missing header", i)
+			return false
 		}
+		bc.AddHeaderBloom(header.Bloom)
 	}
 
-	defer func() {
-		if err == nil {
-			var val []byte
-			val, err = rlp.EncodeToBytes(mipmapVersion)
-			if err == nil {
-				err = db.Put([]byte("setting-mipmap-version"), val)
-			}
-			return
-		}
-	}()
-	latestHash := core.GetHeadBlockHash(db)
-	latestBlock := core.GetBlock(db, latestHash, core.GetBlockNumber(db, latestHash))
-	if latestBlock == nil { // clean database
-		return
+	for i := 0; i < bloombits.BloomLength; i++ {
+		compVector := bitutil.CompressBytes(bc.GetBitVector(uint(i)))
+		core.StoreBloomBits(b.db, uint64(i), sectionIdx, compVector)
 	}
 
-	tstart := time.Now()
-	log.Warn("Upgrading db log bloom bins")
-	for i := uint64(0); i <= latestBlock.NumberU64(); i++ {
-		hash := core.GetCanonicalHash(db, i)
-		if (hash == common.Hash{}) {
-			return fmt.Errorf("chain db corrupted. Could not find block %d.", i)
-		}
-		core.WriteMipmapBloom(db, i, core.GetBlockReceipts(db, hash, i))
+	return true
+}
+
+// SetStored sets the number of stored sections (last valid section is count-1)
+func (b *BloomBitsProcessorBackend) SetStored(count uint64) {
+	if count > b.lastCount {
+		log.Debug("Stored bloomBits data", "count", count)
+	} else {
+		log.Debug("Rolled back bloomBits data", "count", count)
 	}
-	log.Info("Bloom-bin upgrade completed", "elapsed", common.PrettyDuration(time.Since(tstart)))
-	return nil
+	b.lastCount = count
+	core.StoreBloomBitsAvailable(b.db, count)
+}
+
+// GetStored retrieves the number of stored sections (last valid section is count-1)
+func (b *BloomBitsProcessorBackend) GetStored() uint64 {
+	return core.GetBloomBitsAvailable(b.db)
+}
+
+// UpdateMsg prints an update message after each 5% of progress
+func (b *BloomBitsProcessorBackend) UpdateMsg(done, all uint64) {
+	prog := done * 20 / all
+	if done == 0 || prog > b.lastProg {
+		b.lastProg = prog
+		log.Info("Updating quick bloom filter database", "%", prog*5)
+	}
 }
