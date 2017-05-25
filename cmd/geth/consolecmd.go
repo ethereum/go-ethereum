@@ -30,9 +30,7 @@ import (
 
 var (
 	consoleFlags = []cli.Flag{utils.JSpathFlag, utils.ExecFlag, utils.PreloadJSFlag}
-)
 
-var (
 	consoleCommand = cli.Command{
 		Action:   utils.MigrateFlags(localConsole),
 		Name:     "console",
