@@ -98,10 +98,10 @@ func (b *BlockGen) Number() *big.Int {
 	return new(big.Int).Set(b.header.Number)
 }
 
-// AddUncheckedReceipts forcefully adds a receipts to the block without a
+// AddUncheckedReceipt forcefully adds a receipts to the block without a
 // backing transaction.
 //
-// AddUncheckedReceipts will cause consensus failures when used during real
+// AddUncheckedReceipt will cause consensus failures when used during real
 // chain processing. This is best used in conjunction with raw block insertion.
 func (b *BlockGen) AddUncheckedReceipt(receipt *types.Receipt) {
 	b.receipts = append(b.receipts, receipt)

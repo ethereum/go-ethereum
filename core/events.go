@@ -41,7 +41,7 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // RemovedTransactionEvent is posted when a reorg happens
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
-// RemovedLogEvent is posted when a reorg happens
+// RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
 
 type ChainEvent struct {

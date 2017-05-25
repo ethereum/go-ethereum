@@ -133,7 +133,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	newcfg := genesis.configOrDefault(stored)
 	storedcfg, err := GetChainConfig(db, stored)
 	if err != nil {
-		if err == ChainConfigNotFoundErr {
+		if err == ErrChainConfigNotFound {
 			// This case happens if a genesis write was interrupted.
 			log.Warn("Found genesis block without chain config")
 			err = WriteChainConfig(db, stored, newcfg)
