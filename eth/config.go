@@ -44,6 +44,7 @@ var DefaultConfig = Config{
 	DatabaseCache:        128,
 	GasPrice:             big.NewInt(18 * params.Shannon),
 
+	TxPool: core.DefaultTxPoolConfig,
 	GPO: gasprice.Config{
 		Blocks:     10,
 		Percentile: 50,
@@ -98,6 +99,9 @@ type Config struct {
 	EthashDatasetDir     string
 	EthashDatasetsInMem  int
 	EthashDatasetsOnDisk int
+
+	// Transaction pool options
+	TxPool core.TxPoolConfig
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
