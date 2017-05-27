@@ -64,7 +64,7 @@ func (d *DockerAdapter) NewNode(config *NodeConfig) (Node, error) {
 
 	node := &DockerNode{
 		ExecNode: ExecNode{
-			ID:     config.Id,
+			ID:     config.ID,
 			Config: conf,
 		},
 	}

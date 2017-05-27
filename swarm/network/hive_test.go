@@ -21,8 +21,8 @@ func TestRegisterAndConnect(t *testing.T) {
 	s, pp := newHiveTester(t, params)
 	defer s.Stop()
 
-	id := s.Ids[0]
-	raddr := NewAddrFromNodeId(id)
+	id := s.IDs[0]
+	raddr := NewAddrFromNodeID(id)
 
 	ch := make(chan OverlayAddr)
 	go func() {

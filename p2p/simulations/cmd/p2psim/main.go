@@ -189,7 +189,7 @@ func listNetworks(ctx *cli.Context) error {
 	defer w.Flush()
 	fmt.Fprintf(w, "ID\tNODES\tCONNS\n")
 	for _, network := range networks {
-		fmt.Fprintf(w, "%s\t%d\t%d\n", network.Id, len(network.Nodes), len(network.Conns))
+		fmt.Fprintf(w, "%s\t%d\t%d\n", network.ID, len(network.Nodes), len(network.Conns))
 	}
 	return nil
 }
@@ -206,7 +206,7 @@ func createNetwork(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(ctx.App.Writer, "Created network", network.Id)
+	fmt.Fprintln(ctx.App.Writer, "Created network", network.ID)
 	return nil
 }
 
@@ -222,7 +222,7 @@ func showNetwork(ctx *cli.Context) error {
 	}
 	w := tabwriter.NewWriter(ctx.App.Writer, 1, 2, 2, ' ', 0)
 	defer w.Flush()
-	fmt.Fprintf(w, "ID\t%s\n", network.Id)
+	fmt.Fprintf(w, "ID\t%s\n", network.ID)
 	fmt.Fprintf(w, "NODES\t%d\n", len(network.Nodes))
 	fmt.Fprintf(w, "CONNS\t%d\n", len(network.Conns))
 	return nil

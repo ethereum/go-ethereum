@@ -81,11 +81,11 @@ func ControlEvent(v interface{}) *Event {
 func (e *Event) String() string {
 	switch e.Type {
 	case EventTypeNode:
-		return fmt.Sprintf("<node-event> id: %s up: %t", e.Node.ID().Label(), e.Node.Up)
+		return fmt.Sprintf("<node-event> id: %s up: %t", e.Node.ID().TerminalString(), e.Node.Up)
 	case EventTypeConn:
-		return fmt.Sprintf("<conn-event> nodes: %s->%s up: %t", e.Conn.One.Label(), e.Conn.Other.Label(), e.Conn.Up)
+		return fmt.Sprintf("<conn-event> nodes: %s->%s up: %t", e.Conn.One.TerminalString(), e.Conn.Other.TerminalString(), e.Conn.Up)
 	case EventTypeMsg:
-		return fmt.Sprintf("<msg-event> nodes: %s->%s code: %d, received: %t", e.Msg.One.Label(), e.Msg.Other.Label(), e.Msg.Code, e.Msg.Received)
+		return fmt.Sprintf("<msg-event> nodes: %s->%s code: %d, received: %t", e.Msg.One.TerminalString(), e.Msg.Other.TerminalString(), e.Msg.Code, e.Msg.Received)
 	default:
 		return ""
 	}

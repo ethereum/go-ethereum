@@ -24,7 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
 )
 
@@ -506,7 +505,7 @@ func (self *Kademlia) Prune(c <-chan time.Time) {
 	}()
 }
 
-func NewPeerPot(kadMinProxSize int, ids ...*adapters.NodeId) map[discover.NodeID][][]byte {
+func NewPeerPot(kadMinProxSize int, ids ...discover.NodeID) map[discover.NodeID][][]byte {
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
 	for _, id := range ids {
@@ -526,7 +525,7 @@ func NewPeerPot(kadMinProxSize int, ids ...*adapters.NodeId) map[discover.NodeID
 			}
 			return pl == 0 || pl == po
 		})
-		nnmap[id.NodeID] = nns
+		nnmap[id] = nns
 	}
 	return nnmap
 }

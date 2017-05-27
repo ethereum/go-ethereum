@@ -260,7 +260,7 @@ type ServerConfig struct {
 	// generate some mock events in the network
 	Mocker func(*Network)
 	// In case of multiple mockers, set the default here
-	DefaultMockerId string
+	DefaultMockerID string
 	// map of Mockers
 	Mockers map[string]*MockerConfig
 }
@@ -322,14 +322,14 @@ func (s *Server) CreateNetwork(w http.ResponseWriter, req *http.Request) {
 	network, err := func() (*Network, error) {
 		s.mtx.Lock()
 		defer s.mtx.Unlock()
-		if config.Id == "" {
-			config.Id = fmt.Sprintf("net%d", len(s.networks)+1)
+		if config.ID == "" {
+			config.ID = fmt.Sprintf("net%d", len(s.networks)+1)
 		}
-		if _, exists := s.networks[config.Id]; exists {
-			return nil, fmt.Errorf("network exists: %s", config.Id)
+		if _, exists := s.networks[config.ID]; exists {
+			return nil, fmt.Errorf("network exists: %s", config.ID)
 		}
 		network := NewNetwork(s.NewAdapter(), config)
-		s.networks[config.Id] = network
+		s.networks[config.ID] = network
 		return network, nil
 	}()
 	if err != nil {
@@ -393,7 +393,7 @@ func (s *Server) DeleteNetwork(w http.ResponseWriter, req *http.Request) {
 	}
 
 	s.mtx.Lock()
-	delete(s.networks, network.Id)
+	delete(s.networks, network.ID)
 	s.mtx.Unlock()
 
 	w.WriteHeader(http.StatusOK)
@@ -421,7 +421,7 @@ func (s *Server) StartMocker(w http.ResponseWriter, req *http.Request) {
 
 	if mockerid == "default" {
 		//choose the default mocker
-		mockerid = s.DefaultMockerId
+		mockerid = s.DefaultMockerID
 	}
 
 	if mocker, ok := s.Mockers[mockerid]; ok {
@@ -689,7 +689,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 			}
 			var node *Node
 			if nodeID, err := discover.HexID(id); err == nil {
-				node = network.GetNode(&adapters.NodeId{NodeID: nodeID})
+				node = network.GetNode(nodeID)
 			} else {
 				node = network.GetNodeByName(id)
 			}
@@ -707,7 +707,7 @@ func (s *Server) wrapHandler(handler http.HandlerFunc) httprouter.Handle {
 			}
 			var peer *Node
 			if peerID, err := discover.HexID(id); err == nil {
-				peer = network.GetNode(&adapters.NodeId{NodeID: peerID})
+				peer = network.GetNode(peerID)
 			} else {
 				peer = network.GetNodeByName(id)
 			}

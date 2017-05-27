@@ -77,51 +77,10 @@ type NodeAdapter interface {
 // RunProtocol is a function which runs a p2p protocol (see p2p.Protocol.Run)
 type RunProtocol func(*p2p.Peer, p2p.MsgReadWriter) error
 
-// NodeId wraps a discover.NodeID with some convenience methods
-type NodeId struct {
-	discover.NodeID
-}
-
-func NewNodeId(id []byte) *NodeId {
-	var n discover.NodeID
-	copy(n[:], id)
-	return &NodeId{n}
-}
-
-func NewNodeIdFromHex(s string) *NodeId {
-	id := discover.MustHexID(s)
-	return &NodeId{id}
-}
-
-func (self *NodeId) Bytes() []byte {
-	return self.NodeID[:]
-}
-
-func (self *NodeId) Label() string {
-	return self.String()[:4]
-}
-
-func (self *NodeId) MarshalJSON() ([]byte, error) {
-	return json.Marshal(hex.EncodeToString(self.NodeID[:]))
-}
-
-func (self *NodeId) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	id, err := discover.HexID(s)
-	if err != nil {
-		return err
-	}
-	self.NodeID = id
-	return nil
-}
-
 // NodeConfig is the configuration used to start a node in a simulation
 // network
 type NodeConfig struct {
-	Id         *NodeId
+	ID         discover.NodeID
 	PrivateKey *ecdsa.PrivateKey
 
 	// Name is a human friendly name for the node like "node01"
@@ -137,7 +96,7 @@ type NodeConfig struct {
 // nodeConfigJSON is used to encode and decode NodeConfig as JSON by converting
 // all fields to strings
 type nodeConfigJSON struct {
-	Id         string   `json:"id"`
+	ID         string   `json:"id"`
 	PrivateKey string   `json:"private_key"`
 	Name       string   `json:"name"`
 	Services   []string `json:"services"`
@@ -145,11 +104,9 @@ type nodeConfigJSON struct {
 
 func (n *NodeConfig) MarshalJSON() ([]byte, error) {
 	confJSON := nodeConfigJSON{
+		ID:       n.ID.String(),
 		Name:     n.Name,
 		Services: n.Services,
-	}
-	if n.Id != nil {
-		confJSON.Id = n.Id.String()
 	}
 	if n.PrivateKey != nil {
 		confJSON.PrivateKey = hex.EncodeToString(crypto.FromECDSA(n.PrivateKey))
@@ -163,12 +120,12 @@ func (n *NodeConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if confJSON.Id != "" {
-		nodeID, err := discover.HexID(confJSON.Id)
+	if confJSON.ID != "" {
+		nodeID, err := discover.HexID(confJSON.ID)
 		if err != nil {
 			return err
 		}
-		n.Id = &NodeId{NodeID: nodeID}
+		n.ID = nodeID
 	}
 
 	if confJSON.PrivateKey != "" {
@@ -196,7 +153,7 @@ func RandomNodeConfig() *NodeConfig {
 	pubkey := crypto.FromECDSAPub(&key.PublicKey)
 	copy(id[:], pubkey[1:])
 	return &NodeConfig{
-		Id:         &NodeId{NodeID: id},
+		ID:         id,
 		PrivateKey: key,
 	}
 }
@@ -205,7 +162,7 @@ func RandomNodeConfig() *NodeConfig {
 type Services map[string]ServiceFunc
 
 // ServiceFunc returns a node.Service which can be used to boot devp2p nodes
-type ServiceFunc func(id *NodeId, snapshot []byte) node.Service
+type ServiceFunc func(id discover.NodeID, snapshot []byte) node.Service
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes

@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
@@ -38,7 +38,7 @@ func (t *testStore) Save(key string, v []byte) error {
 	return nil
 }
 
-func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest.Exchange {
+func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id discover.NodeID) []p2ptest.Exchange {
 
 	return []p2ptest.Exchange{
 		p2ptest.Exchange{
@@ -74,14 +74,14 @@ func newBzzBaseTester(t *testing.T, n int, addr *bzzAddr, spec *protocols.Spec, 
 		return srv(&bzzPeer{
 			Peer:      protocols.NewPeer(p, rw, spec),
 			localAddr: addr,
-			bzzAddr:   NewAddrFromNodeId(&adapters.NodeId{NodeID: p.ID()}),
+			bzzAddr:   NewAddrFromNodeID(p.ID()),
 		})
 	}
 
-	s := p2ptest.NewProtocolTester(t, NewNodeIdFromAddr(addr), n, protocall)
+	s := p2ptest.NewProtocolTester(t, NewNodeIDFromAddr(addr), n, protocall)
 
-	for _, id := range s.Ids {
-		cs[id.NodeID.String()] = make(chan bool)
+	for _, id := range s.IDs {
+		cs[id.String()] = make(chan bool)
 	}
 
 	return &bzzTester{
@@ -112,27 +112,27 @@ func newBzzTester(t *testing.T, n int, addr *bzzAddr, pp *p2ptest.TestPeerPool, 
 
 // should test handshakes in one exchange? parallelisation
 func (s *bzzTester) testHandshake(lhs, rhs *bzzHandshake, disconnects ...*p2ptest.Disconnect) {
-	var peers []*adapters.NodeId
-	id := NewNodeIdFromAddr(rhs.Addr)
+	var peers []discover.NodeID
+	id := NewNodeIDFromAddr(rhs.Addr)
 	if len(disconnects) > 0 {
 		for _, d := range disconnects {
 			peers = append(peers, d.Peer)
 		}
 	} else {
-		peers = []*adapters.NodeId{id}
+		peers = []discover.NodeID{id}
 	}
 
 	s.TestExchanges(bzzHandshakeExchange(lhs, rhs, id)...)
 	s.TestDisconnected(disconnects...)
 }
 
-func (s *bzzTester) runHandshakes(ids ...*adapters.NodeId) {
+func (s *bzzTester) runHandshakes(ids ...discover.NodeID) {
 	if len(ids) == 0 {
-		ids = s.Ids
+		ids = s.IDs
 	}
 	for _, id := range ids {
-		s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NewAddrFromNodeId(id)))
-		<-s.cs[id.NodeID.String()]
+		s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NewAddrFromNodeID(id)))
+		<-s.cs[id.String()]
 	}
 
 }
@@ -151,10 +151,10 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	defer s.Stop()
 
-	id := s.Ids[0]
+	id := s.IDs[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{Version: 0, NetworkId: 321, Addr: NewAddrFromNodeId(id)},
+		&bzzHandshake{Version: 0, NetworkId: 321, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")},
 	)
 }
@@ -165,10 +165,10 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	defer s.Stop()
 
-	id := s.Ids[0]
+	id := s.IDs[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{Version: 1, NetworkId: 322, Addr: NewAddrFromNodeId(id)},
+		&bzzHandshake{Version: 1, NetworkId: 322, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("version mismatch 1 (!= 0)")},
 	)
 }
@@ -179,9 +179,9 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	defer s.Stop()
 
-	id := s.Ids[0]
+	id := s.IDs[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
-		&bzzHandshake{Version: 0, NetworkId: 322, Addr: NewAddrFromNodeId(id)},
+		&bzzHandshake{Version: 0, NetworkId: 322, Addr: NewAddrFromNodeID(id)},
 	)
 }

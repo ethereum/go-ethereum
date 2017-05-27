@@ -34,7 +34,7 @@ func TestDiscovery(t *testing.T) {
 			p2ptest.Expect{
 				Code: 3,
 				Msg:  &subPeersMsg{Depth: 0},
-				Peer: s.ProtocolTester.Ids[0],
+				Peer: s.ProtocolTester.IDs[0],
 			},
 		},
 	})

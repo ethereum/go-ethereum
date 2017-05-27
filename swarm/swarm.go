@@ -38,7 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
 // the swarm stack
@@ -257,7 +256,7 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 	// 				if f == nil {
 	// 					return fmt.Errorf("No registered handler for topic '%s'", env.Topic)
 	// 				}
-	// 				nid := adapters.NewNodeId(env.SenderUAddr)
+	// 				nid := discover.MustBytesID(env.SenderUAddr)
 	// 				p := p2p.NewPeer(nid.NodeID, fmt.Sprintf("%x", common.ByteLabel(nid.Bytes())), []p2p.Cap{})
 	// 				return f(umsg, p, env.SenderOAddr)
 	// 			} else {

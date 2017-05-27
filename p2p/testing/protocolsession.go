@@ -14,7 +14,7 @@ import (
 
 type ProtocolSession struct {
 	Server  *p2p.Server
-	Ids     []*adapters.NodeId
+	IDs     []discover.NodeID
 	adapter *adapters.SimAdapter
 	events  chan *p2p.PeerEvent
 }
@@ -33,29 +33,29 @@ type Exchange struct {
 
 // part of the exchange, incoming message from a set of peers
 type Trigger struct {
-	Msg     interface{}      // type of message to be sent
-	Code    uint64           // code of message is given
-	Peer    *adapters.NodeId // the peer to send the message to
-	Timeout time.Duration    // timeout duration for the sending
+	Msg     interface{}     // type of message to be sent
+	Code    uint64          // code of message is given
+	Peer    discover.NodeID // the peer to send the message to
+	Timeout time.Duration   // timeout duration for the sending
 }
 
 type Expect struct {
-	Msg     interface{}      // type of message to expect
-	Code    uint64           // code of message is now given
-	Peer    *adapters.NodeId // the peer that expects the message
-	Timeout time.Duration    // timeout duration for receiving
+	Msg     interface{}     // type of message to expect
+	Code    uint64          // code of message is now given
+	Peer    discover.NodeID // the peer that expects the message
+	Timeout time.Duration   // timeout duration for receiving
 }
 
 type Disconnect struct {
-	Peer  *adapters.NodeId // discconnected peer
-	Error error            // disconnect reason
+	Peer  discover.NodeID // discconnected peer
+	Error error           // disconnect reason
 }
 
 // trigger sends messages from peers
 func (self *ProtocolSession) trigger(trig Trigger) error {
-	simNode, ok := self.adapter.GetNode(trig.Peer.NodeID)
+	simNode, ok := self.adapter.GetNode(trig.Peer)
 	if !ok {
-		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.Ids))
+		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", trig.Peer, len(self.IDs))
 	}
 	mockNode, ok := simNode.Services()[0].(*mockNode)
 	if !ok {
@@ -88,9 +88,9 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	if exp.Msg == nil {
 		return errors.New("no message to expect")
 	}
-	simNode, ok := self.adapter.GetNode(exp.Peer.NodeID)
+	simNode, ok := self.adapter.GetNode(exp.Peer)
 	if !ok {
-		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", exp.Peer, len(self.Ids))
+		return fmt.Errorf("trigger: peer %v does not exist (1- %v)", exp.Peer, len(self.IDs))
 	}
 	mockNode, ok := simNode.Services()[0].(*mockNode)
 	if !ok {
@@ -178,7 +178,7 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error {
 	expects := make(map[discover.NodeID]error)
 	for _, disconnect := range disconnects {
-		expects[disconnect.Peer.NodeID] = disconnect.Error
+		expects[disconnect.Peer] = disconnect.Error
 	}
 
 	timeout := time.After(time.Second)

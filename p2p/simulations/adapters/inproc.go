@@ -59,8 +59,8 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	defer s.mtx.Unlock()
 
 	// check a node with the ID doesn't already exist
-	id := config.Id
-	if _, exists := s.nodes[id.NodeID]; exists {
+	id := config.ID
+	if _, exists := s.nodes[id]; exists {
 		return nil, fmt.Errorf("node already exists: %s", id)
 	}
 
@@ -75,11 +75,11 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 	}
 
 	node := &SimNode{
-		Id:      id,
+		ID:      id,
 		config:  config,
 		adapter: s,
 	}
-	s.nodes[id.NodeID] = node
+	s.nodes[id] = node
 	return node, nil
 }
 
@@ -113,7 +113,7 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 // by the underlying service.
 type SimNode struct {
 	lock    sync.RWMutex
-	Id      *NodeId
+	ID      discover.NodeID
 	config  *NodeConfig
 	adapter *SimAdapter
 	node    *node.Node
@@ -129,7 +129,7 @@ func (self *SimNode) Addr() []byte {
 
 // Node returns a discover.Node representing the SimNode
 func (self *SimNode) Node() *discover.Node {
-	return discover.NewNode(self.Id.NodeID, net.IP{127, 0, 0, 1}, 30303, 30303)
+	return discover.NewNode(self.ID, net.IP{127, 0, 0, 1}, 30303, 30303)
 }
 
 // Client returns an rpc.Client which can be used to communicate with the
@@ -183,7 +183,7 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 				snapshot = snapshots[name]
 			}
 			serviceFunc := self.adapter.services[name]
-			service := serviceFunc(self.Id, snapshot)
+			service := serviceFunc(self.ID, snapshot)
 			self.running = append(self.running, service)
 			return service, nil
 		}
@@ -272,7 +272,7 @@ func (self *SimNode) NodeInfo() *p2p.NodeInfo {
 	server := self.Server()
 	if server == nil {
 		return &p2p.NodeInfo{
-			ID:    self.Id.String(),
+			ID:    self.ID.String(),
 			Enode: self.Node().String(),
 		}
 	}

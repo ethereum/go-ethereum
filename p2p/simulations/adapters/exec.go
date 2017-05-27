@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -57,7 +58,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 
 	// create the node directory using the first 12 characters of the ID
 	// as Unix socket paths cannot be longer than 256 characters
-	dir := filepath.Join(e.BaseDir, config.Id.String()[:12])
+	dir := filepath.Join(e.BaseDir, config.ID.String()[:12])
 	if err := os.Mkdir(dir, 0755); err != nil {
 		return nil, fmt.Errorf("error creating node directory: %s", err)
 	}
@@ -77,7 +78,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.ListenAddr = "127.0.0.1:0"
 
 	node := &ExecNode{
-		ID:     config.Id,
+		ID:     config.ID,
 		Dir:    dir,
 		Config: conf,
 	}
@@ -93,7 +94,7 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 // (so for example we can run the node in a remote Docker container and
 // still communicate with it).
 type ExecNode struct {
-	ID     *NodeId
+	ID     discover.NodeID
 	Dir    string
 	Config *execNodeConfig
 	Cmd    *exec.Cmd
@@ -265,7 +266,7 @@ func execP2PNode() {
 
 	// read the services and ID from argv
 	serviceNames := strings.Split(os.Args[1], ",")
-	id := NewNodeIdFromHex(os.Args[2])
+	id := discover.MustHexID(os.Args[2])
 
 	// decode the config
 	confEnv := os.Getenv("_P2P_NODE_CONFIG")

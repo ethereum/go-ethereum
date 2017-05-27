@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 /*
@@ -188,7 +187,7 @@ func (self *Hive) NodeInfo() interface{} {
 func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	addr := NewAddrFromNodeId(adapters.NewNodeId(id[:]))
+	addr := NewAddrFromNodeID(id)
 	return interface{}(addr)
 }
 
@@ -206,12 +205,6 @@ func (self *Hive) wake() {
 	default:
 		log.Trace("hive already awake")
 	}
-}
-
-// HexToBytes reads a hex string ontp
-func HexToBytes(s string) []byte {
-	id := discover.MustHexID(s)
-	return id[:]
 }
 
 // ToAddr returns the serialisable version of u
