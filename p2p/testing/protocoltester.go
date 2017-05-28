@@ -21,11 +21,11 @@ type ProtocolTester struct {
 
 func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
-		"test": func(id discover.NodeID, _ []byte) node.Service {
-			return &testNode{run}
+		"test": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			return &testNode{run}, nil
 		},
-		"mock": func(id discover.NodeID, _ []byte) node.Service {
-			return newMockNode()
+		"mock": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			return newMockNode(), nil
 		},
 	}
 	adapter := adapters.NewSimAdapter(services)

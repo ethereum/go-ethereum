@@ -97,6 +97,24 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	return pipe2, nil
 }
 
+func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+	simNode, ok := s.GetNode(id)
+	if !ok {
+		return nil, fmt.Errorf("unknown node: %s", id)
+	}
+	simNode.lock.RLock()
+	node := simNode.node
+	simNode.lock.RUnlock()
+	if node == nil {
+		return nil, errors.New("node not started")
+	}
+	handler, err := node.RPCHandler()
+	if err != nil {
+		return nil, err
+	}
+	return rpc.DialInProc(handler), nil
+}
+
 // GetNode returns the node with the given ID if it exists
 func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 	s.mtx.RLock()
@@ -180,13 +198,20 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 	}
 
 	newService := func(name string) func(ctx *node.ServiceContext) (node.Service, error) {
-		return func(ctx *node.ServiceContext) (node.Service, error) {
-			var snapshot []byte
+		return func(nodeCtx *node.ServiceContext) (node.Service, error) {
+			ctx := &ServiceContext{
+				RPCDialer:   self.adapter,
+				NodeContext: nodeCtx,
+				Config:      self.config,
+			}
 			if snapshots != nil {
-				snapshot = snapshots[name]
+				ctx.Snapshot = snapshots[name]
 			}
 			serviceFunc := self.adapter.services[name]
-			service := serviceFunc(self.ID, snapshot)
+			service, err := serviceFunc(ctx)
+			if err != nil {
+				return nil, err
+			}
 			self.running = append(self.running, service)
 			return service, nil
 		}

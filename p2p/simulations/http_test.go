@@ -24,10 +24,10 @@ type testService struct {
 	state atomic.Value
 }
 
-func newTestService(id discover.NodeID, snapshot []byte) node.Service {
-	svc := &testService{id: id}
-	svc.state.Store(snapshot)
-	return svc
+func newTestService(ctx *adapters.ServiceContext) (node.Service, error) {
+	svc := &testService{id: ctx.Config.ID}
+	svc.state.Store(ctx.Snapshot)
+	return svc, nil
 }
 
 func (t *testService) Protocols() []p2p.Protocol {

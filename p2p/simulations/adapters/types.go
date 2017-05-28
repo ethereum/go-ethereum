@@ -158,11 +158,23 @@ func RandomNodeConfig() *NodeConfig {
 	}
 }
 
+type ServiceContext struct {
+	RPCDialer
+
+	NodeContext *node.ServiceContext
+	Config      *NodeConfig
+	Snapshot    []byte
+}
+
+type RPCDialer interface {
+	DialRPC(id discover.NodeID) (*rpc.Client, error)
+}
+
 // Services is a collection of services which can be run in a simulation
 type Services map[string]ServiceFunc
 
 // ServiceFunc returns a node.Service which can be used to boot devp2p nodes
-type ServiceFunc func(id discover.NodeID, snapshot []byte) node.Service
+type ServiceFunc func(ctx *ServiceContext) (node.Service, error)
 
 // serviceFuncs is a map of registered services which are used to boot devp2p
 // nodes

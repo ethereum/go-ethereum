@@ -36,12 +36,17 @@ import (
 // execP2PNode function for more information.
 type ExecAdapter struct {
 	BaseDir string
+
+	nodes map[discover.NodeID]*ExecNode
 }
 
 // NewExecAdapter returns an ExecAdapter which stores node data in
 // subdirectories of the given base directory
 func NewExecAdapter(baseDir string) *ExecAdapter {
-	return &ExecAdapter{BaseDir: baseDir}
+	return &ExecAdapter{
+		BaseDir: baseDir,
+		nodes:   make(map[discover.NodeID]*ExecNode),
+	}
 }
 
 // Name returns the name of the adapter for logging purpoeses
@@ -86,11 +91,13 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.ListenAddr = "127.0.0.1:0"
 
 	node := &ExecNode{
-		ID:     config.ID,
-		Dir:    dir,
-		Config: conf,
+		ID:      config.ID,
+		Dir:     dir,
+		Config:  conf,
+		adapter: e,
 	}
 	node.newCmd = node.execCommand
+	e.nodes[node.ID] = node
 	return node, nil
 }
 
@@ -108,10 +115,11 @@ type ExecNode struct {
 	Cmd    *exec.Cmd
 	Info   *p2p.NodeInfo
 
-	client *rpc.Client
-	wsAddr string
-	newCmd func() *exec.Cmd
-	key    *ecdsa.PrivateKey
+	adapter *ExecAdapter
+	client  *rpc.Client
+	wsAddr  string
+	newCmd  func() *exec.Cmd
+	key     *ecdsa.PrivateKey
 }
 
 // Addr returns the node's enode URL
@@ -149,6 +157,10 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	// encode a copy of the config containing the snapshot
 	confCopy := *n.Config
 	confCopy.Snapshots = snapshots
+	confCopy.PeerAddrs = make(map[string]string)
+	for id, node := range n.adapter.nodes {
+		confCopy.PeerAddrs[id.String()] = node.wsAddr
+	}
 	confData, err := json.Marshal(confCopy)
 	if err != nil {
 		return fmt.Errorf("error generating node config: %s", err)
@@ -315,7 +327,8 @@ func init() {
 type execNodeConfig struct {
 	Stack     node.Config       `json:"stack"`
 	Node      *NodeConfig       `json:"node"`
-	Snapshots map[string][]byte `json:"snapshot,omitempty"`
+	Snapshots map[string][]byte `json:"snapshots,omitempty"`
+	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
 // execP2PNode starts a devp2p node when the current binary is executed with
@@ -326,9 +339,8 @@ func execP2PNode() {
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
 
-	// read the services and ID from argv
+	// read the services from argv
 	serviceNames := strings.Split(os.Args[1], ",")
-	id := discover.MustHexID(os.Args[2])
 
 	// decode the config
 	confEnv := os.Getenv("_P2P_NODE_CONFIG")
@@ -340,20 +352,6 @@ func execP2PNode() {
 		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
-
-	// initialize the services
-	services := make(map[string]node.Service, len(serviceNames))
-	for _, name := range serviceNames {
-		serviceFunc, exists := serviceFuncs[name]
-		if !exists {
-			log.Crit(fmt.Sprintf("unknown node service %q", name))
-		}
-		var snapshot []byte
-		if conf.Snapshots != nil {
-			snapshot = conf.Snapshots[name]
-		}
-		services[name] = serviceFunc(id, snapshot)
-	}
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
@@ -369,12 +367,54 @@ func execP2PNode() {
 		}
 	}
 
-	// start the devp2p stack
-	stack, err := startP2PNode(&conf.Stack, services)
+	// initialize the devp2p stack
+	stack, err := node.New(&conf.Stack)
 	if err != nil {
-		log.Crit("error starting p2p node", "err", err)
+		log.Crit("error creating node stack", "err", err)
 	}
 
+	// register the services, collecting them into a map so we can wrap
+	// them in a snapshot service
+	services := make(map[string]node.Service, len(serviceNames))
+	for _, name := range serviceNames {
+		serviceFunc, exists := serviceFuncs[name]
+		if !exists {
+			log.Crit("unknown node service", "name", name)
+		}
+		constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
+			ctx := &ServiceContext{
+				RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
+				NodeContext: nodeCtx,
+				Config:      conf.Node,
+			}
+			if conf.Snapshots != nil {
+				ctx.Snapshot = conf.Snapshots[name]
+			}
+			service, err := serviceFunc(ctx)
+			if err != nil {
+				return nil, err
+			}
+			services[name] = service
+			return service, nil
+		}
+		if err := stack.Register(constructor); err != nil {
+			log.Crit("error starting service", "name", name, "err", err)
+		}
+	}
+
+	// register the snapshot service
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return &snapshotService{services}, nil
+	}); err != nil {
+		log.Crit("error starting snapshot service", "err", err)
+	}
+
+	// start the stack
+	if err := stack.Start(); err != nil {
+		log.Crit("error stating node stack", "err", err)
+	}
+
+	// stop the stack if we get a SIGTERM signal
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGTERM)
@@ -384,31 +424,8 @@ func execP2PNode() {
 		stack.Stop()
 	}()
 
+	// wait for the stack to exit
 	stack.Wait()
-}
-
-func startP2PNode(conf *node.Config, services map[string]node.Service) (*node.Node, error) {
-	stack, err := node.New(conf)
-	if err != nil {
-		return nil, err
-	}
-	constructor := func(service node.Service) func(ctx *node.ServiceContext) (node.Service, error) {
-		return func(ctx *node.ServiceContext) (node.Service, error) {
-			return service, nil
-		}
-	}
-	for _, service := range services {
-		if err := stack.Register(constructor(service)); err != nil {
-			return nil, err
-		}
-	}
-	if err := stack.Register(constructor(&snapshotService{services})); err != nil {
-		return nil, err
-	}
-	if err := stack.Start(); err != nil {
-		return nil, err
-	}
-	return stack, nil
 }
 
 // snapshotService is a node.Service which wraps a list of services and
@@ -456,4 +473,16 @@ func (api SnapshotAPI) Snapshot() (map[string][]byte, error) {
 		}
 	}
 	return snapshots, nil
+}
+
+type wsRPCDialer struct {
+	addrs map[string]string
+}
+
+func (w *wsRPCDialer) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+	addr, ok := w.addrs[id.String()]
+	if !ok {
+		return nil, fmt.Errorf("unknown node: %s", id)
+	}
+	return rpc.DialWebsocket(context.Background(), addr, "http://localhost")
 }

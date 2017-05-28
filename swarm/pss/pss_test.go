@@ -453,16 +453,15 @@ func newServices() adapters.Services {
 		return kademlias[id]
 	}
 	return adapters.Services{
-		"pss": func(id discover.NodeID, snapshot []byte) node.Service {
+		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			id := ctx.Config.ID
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				log.Error("create pss cache tmpdir failed", "error", err)
-				return nil
+				return nil, err
 			}
 			dpa, err := storage.NewLocalDPA(cachedir)
 			if err != nil {
-				log.Error("local dpa creation failed", "error", err)
-				return nil
+				return nil, err
 			}
 
 			pssp := NewPssParams()
@@ -473,20 +472,20 @@ func newServices() adapters.Services {
 			}
 			err = RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
 			if err != nil {
-				log.Error("Couldnt register pss protocol", "err", err)
-				os.Exit(1)
+				return nil, err
 			}
 
-			return ps
+			return ps, nil
 		},
-		"bzz": func(id discover.NodeID, snapshot []byte) node.Service {
+		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			id := ctx.Config.ID
 			addr := network.NewAddrFromNodeID(id)
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),
 				HiveParams:   network.NewHiveParams(),
 			}
-			return network.NewBzz(config, kademlia(id), stateStore)
+			return network.NewBzz(config, kademlia(id), stateStore), nil
 		},
 	}
 }
