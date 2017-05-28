@@ -8,11 +8,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 type MockerConfig struct {
-	Id              string
+	ID              string
 	NodeCount       int
 	UpdateInterval  int
 	Mocker          func(*Network)
@@ -30,7 +31,7 @@ type MockerConfig struct {
 
 func DefaultMockerConfig() *MockerConfig {
 	return &MockerConfig{
-		Id:              "0",
+		ID:              "0",
 		NodeCount:       100,
 		UpdateInterval:  1000,
 		SwitchonRate:    5,
@@ -59,7 +60,7 @@ func DefaultMockerConfig() *MockerConfig {
 // to the eventer
 // The journal using the eventer can then be read to visualise or
 // drive connections
-func MockEvents(eventer *event.Feed, ids []*adapters.NodeId, conf *MockerConfig) {
+func MockEvents(eventer *event.Feed, ids []discover.NodeID, conf *MockerConfig) {
 
 	var onNodes []*Node
 	offNodes := ids
@@ -114,7 +115,7 @@ func MockEvents(eventer *event.Feed, ids []*adapters.NodeId, conf *MockerConfig)
 		var mustconnect []int
 		for i := 0; len(offNodes) > 0 && i < nodesUp; i++ {
 			c := rand.Intn(len(offNodes))
-			sn := &Node{Config: &adapters.NodeConfig{Id: offNodes[c]}}
+			sn := &Node{Config: &adapters.NodeConfig{ID: offNodes[c]}}
 			eventer.Send(ControlEvent(sn))
 			mustconnect = append(mustconnect, len(onNodes))
 			onNodes = append(onNodes, sn)
@@ -186,19 +187,21 @@ func MockEvents(eventer *event.Feed, ids []*adapters.NodeId, conf *MockerConfig)
 	}
 }
 
-func RandomNodeId() *adapters.NodeId {
+func RandomNodeID() discover.NodeID {
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		panic("unable to generate key")
 	}
 	pubkey := crypto.FromECDSAPub(&key.PublicKey)
-	return adapters.NewNodeId(pubkey[1:])
+	var id discover.NodeID
+	copy(id[:], pubkey[1:])
+	return id
 }
 
-func RandomNodeIds(n int) []*adapters.NodeId {
-	var ids []*adapters.NodeId
+func RandomNodeIDs(n int) []discover.NodeID {
+	ids := make([]discover.NodeID, n)
 	for i := 0; i < n; i++ {
-		ids = append(ids, RandomNodeId())
+		ids[i] = RandomNodeID()
 	}
 	return ids
 }

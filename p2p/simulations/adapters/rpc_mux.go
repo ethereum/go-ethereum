@@ -44,7 +44,7 @@ type rpcMux struct {
 type rpcMsg struct {
 	Method  string          `json:"method,omitempty"`
 	Version string          `json:"jsonrpc,omitempty"`
-	Id      json.RawMessage `json:"id,omitempty"`
+	ID      json.RawMessage `json:"id,omitempty"`
 	Payload json.RawMessage `json:"params,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   json.RawMessage `json:"error,omitempty"`
@@ -174,7 +174,7 @@ func (mux *rpcMux) newMsg(msg *rpcMsg) *rpcMsg {
 	mux.idCounter++
 	mux.msgMap[id] = msg
 	newMsg := *msg
-	newMsg.Id = json.RawMessage(strconv.FormatUint(id, 10))
+	newMsg.ID = json.RawMessage(strconv.FormatUint(id, 10))
 	return &newMsg
 }
 
@@ -185,7 +185,7 @@ func (mux *rpcMux) lookup(msg *rpcMsg) *rpcReply {
 
 	// if the message has no ID, it is a subscription notification so
 	// lookup the original subscribe message
-	if msg.Id == nil {
+	if msg.ID == nil {
 		sub := &rpcSub{}
 		if err := json.Unmarshal(msg.Payload, sub); err != nil {
 			return nil
@@ -194,7 +194,7 @@ func (mux *rpcMux) lookup(msg *rpcMsg) *rpcReply {
 	}
 
 	// lookup the original message and restore the ID
-	id, err := strconv.ParseUint(string(msg.Id), 10, 64)
+	id, err := strconv.ParseUint(string(msg.ID), 10, 64)
 	if err != nil {
 		return nil
 	}
@@ -203,7 +203,7 @@ func (mux *rpcMux) lookup(msg *rpcMsg) *rpcReply {
 		return nil
 	}
 	delete(mux.msgMap, id)
-	msg.Id = origMsg.Id
+	msg.ID = origMsg.ID
 
 	// if the original message was a subscription, store the subscription
 	// ID so we can detect notifications

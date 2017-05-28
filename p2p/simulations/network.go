@@ -41,7 +41,7 @@ import (
 )
 
 type NetworkConfig struct {
-	Id             string `json:"id"`
+	ID             string `json:"id"`
 	DefaultService string `json:"default_service,omitempty"`
 }
 
@@ -141,12 +141,12 @@ type Node struct {
 	controlFired bool
 }
 
-func (self *Node) ID() *adapters.NodeId {
-	return self.Config.Id
+func (self *Node) ID() discover.NodeID {
+	return self.Config.ID
 }
 
 func (self *Node) String() string {
-	return fmt.Sprintf("Node %v", self.ID().Label())
+	return fmt.Sprintf("Node %v", self.ID().TerminalString())
 }
 
 func (self *Node) NodeInfo() *p2p.NodeInfo {
@@ -159,8 +159,8 @@ func (self *Node) NodeInfo() *p2p.NodeInfo {
 // you journal updates could filter if passive knowledge about peers is
 // irrelevant
 type Conn struct {
-	One        *adapters.NodeId `json:"one"`
-	Other      *adapters.NodeId `json:"other"`
+	One        discover.NodeID `json:"one"`
+	Other      discover.NodeID `json:"other"`
 	one, other *Node
 	// connection down by default
 	Up bool `json:"up"`
@@ -172,19 +172,19 @@ type Conn struct {
 }
 
 func (self *Conn) String() string {
-	return fmt.Sprintf("Conn %v->%v", self.One.Label(), self.Other.Label())
+	return fmt.Sprintf("Conn %v->%v", self.One.TerminalString(), self.Other.TerminalString())
 }
 
 type Msg struct {
-	One          *adapters.NodeId `json:"one"`
-	Other        *adapters.NodeId `json:"other"`
-	Code         uint64           `json:"code"`
-	Received     bool             `json:"received"`
+	One          discover.NodeID `json:"one"`
+	Other        discover.NodeID `json:"other"`
+	Code         uint64          `json:"code"`
+	Received     bool            `json:"received"`
 	controlFired bool
 }
 
 func (self *Msg) String() string {
-	return fmt.Sprintf("Msg(%d) %v->%v", self.Code, self.One.Label(), self.Other.Label())
+	return fmt.Sprintf("Msg(%d) %v->%v", self.Code, self.One.TerminalString(), self.Other.TerminalString())
 }
 
 // NewNode adds a new node to the network with a random ID
@@ -199,7 +199,7 @@ func (self *Network) NewNode() (*Node, error) {
 func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	id := conf.Id
+	id := conf.ID
 	if conf.Name == "" {
 		conf.Name = fmt.Sprintf("node%02d", len(self.Nodes)+1)
 	}
@@ -207,11 +207,11 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 		conf.Services = []string{self.DefaultService}
 	}
 
-	_, found := self.nodeMap[id.NodeID]
+	_, found := self.nodeMap[id]
 	if found {
 		return nil, fmt.Errorf("node %v already added", id)
 	}
-	self.nodeMap[id.NodeID] = len(self.Nodes)
+	self.nodeMap[id] = len(self.Nodes)
 
 	adapterNode, err := self.nodeAdapter.NewNode(conf)
 	if err != nil {
@@ -233,18 +233,18 @@ func (self *Network) Config() *NetworkConfig {
 
 // newConn adds a new connection to the network
 // it errors if the respective nodes do not exist
-func (self *Network) newConn(oneId, otherId *adapters.NodeId) (*Conn, error) {
-	one := self.getNode(oneId)
+func (self *Network) newConn(oneID, otherID discover.NodeID) (*Conn, error) {
+	one := self.getNode(oneID)
 	if one == nil {
 		return nil, fmt.Errorf("one %v does not exist", one)
 	}
-	other := self.getNode(otherId)
+	other := self.getNode(otherID)
 	if other == nil {
 		return nil, fmt.Errorf("other %v does not exist", other)
 	}
 	return &Conn{
-		One:   oneId,
-		Other: otherId,
+		One:   oneID,
+		Other: otherID,
 		one:   one,
 		other: other,
 	}, nil
@@ -285,11 +285,11 @@ func (self *Network) StopAll() error {
 }
 
 // Start(id) starts up the node (relevant only for instance with own p2p or remote)
-func (self *Network) Start(id *adapters.NodeId) error {
+func (self *Network) Start(id discover.NodeID) error {
 	return self.startWithSnapshots(id, nil)
 }
 
-func (self *Network) startWithSnapshots(id *adapters.NodeId, snapshots map[string][]byte) error {
+func (self *Network) startWithSnapshots(id discover.NodeID, snapshots map[string][]byte) error {
 	node := self.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -321,7 +321,7 @@ func (self *Network) startWithSnapshots(id *adapters.NodeId, snapshots map[strin
 	return nil
 }
 
-func (self *Network) watchPeerEvents(id *adapters.NodeId, events chan *p2p.PeerEvent, sub event.Subscription) {
+func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEvent, sub event.Subscription) {
 	defer sub.Unsubscribe()
 	for {
 		select {
@@ -329,23 +329,23 @@ func (self *Network) watchPeerEvents(id *adapters.NodeId, events chan *p2p.PeerE
 			if !ok {
 				return
 			}
-			peer := &adapters.NodeId{NodeID: event.Peer}
+			peer := event.Peer
 			switch event.Type {
 			case p2p.PeerEventTypeAdd:
 				if err := self.DidConnect(id, peer); err != nil {
-					log.Error(fmt.Sprintf("error generating connection up event %s => %s", id.Label(), peer.Label()), "err", err)
+					log.Error(fmt.Sprintf("error generating connection up event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
 				}
 			case p2p.PeerEventTypeDrop:
 				if err := self.DidDisconnect(id, peer); err != nil {
-					log.Error(fmt.Sprintf("error generating connection down event %s => %s", id.Label(), peer.Label()), "err", err)
+					log.Error(fmt.Sprintf("error generating connection down event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
 				}
 			case p2p.PeerEventTypeMsgSend:
 				if err := self.DidSend(id, peer, *event.MsgCode); err != nil {
-					log.Error(fmt.Sprintf("error generating msg send event %s => %s", id.Label(), peer.Label()), "err", err)
+					log.Error(fmt.Sprintf("error generating msg send event %s => %s", id.TerminalString(), peer.TerminalString()), "err", err)
 				}
 			case p2p.PeerEventTypeMsgRecv:
 				if err := self.DidReceive(peer, id, *event.MsgCode); err != nil {
-					log.Error(fmt.Sprintf("error generating msg receive event %s => %s", peer.Label(), id.Label()), "err", err)
+					log.Error(fmt.Sprintf("error generating msg receive event %s => %s", peer.TerminalString(), id.TerminalString()), "err", err)
 				}
 			}
 		case err := <-sub.Err():
@@ -358,7 +358,7 @@ func (self *Network) watchPeerEvents(id *adapters.NodeId, events chan *p2p.PeerE
 }
 
 // Stop(id) shuts down the node (relevant only for instance with own p2p or remote)
-func (self *Network) Stop(id *adapters.NodeId) error {
+func (self *Network) Stop(id discover.NodeID) error {
 	node := self.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
@@ -376,24 +376,24 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 	return nil
 }
 
-// Connect(i, j) attempts to connect nodes i and j (args given as nodeId)
+// Connect(i, j) attempts to connect nodes i and j (args given as nodeID)
 // calling the node's nodadapters Connect method
 // connection is established (as if) the first node dials out to the other
-func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
-	log.Debug(fmt.Sprintf("connecting %s to %s", oneId, otherId))
-	conn, err := self.GetOrCreateConn(oneId, otherId)
+func (self *Network) Connect(oneID, otherID discover.NodeID) error {
+	log.Debug(fmt.Sprintf("connecting %s to %s", oneID, otherID))
+	conn, err := self.GetOrCreateConn(oneID, otherID)
 	if err != nil {
 		return err
 	}
 	if conn.Up {
-		return fmt.Errorf("%v and %v already connected", oneId, otherId)
+		return fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
 	err = conn.nodesUp()
 	if err != nil {
 		return err
 	}
 	var rev bool
-	if conn.One.NodeID != oneId.NodeID {
+	if conn.One != oneID {
 		rev = true
 	}
 	// if Connect is called because of external trigger, it needs to call
@@ -417,21 +417,21 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	return client.Call(nil, "admin_addPeer", string(addr))
 }
 
-// Disconnect(i, j) attempts to disconnect nodes i and j (args given as nodeId)
+// Disconnect(i, j) attempts to disconnect nodes i and j (args given as nodeID)
 // calling the node's nodadapters Disconnect method
 // sets the Conn model to Down
 // the disconnect will be initiated (the connection is dropped by) the first node
 // it errors if either of the nodes is down (or does not exist)
-func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
-	conn := self.GetConn(oneId, otherId)
+func (self *Network) Disconnect(oneID, otherID discover.NodeID) error {
+	conn := self.GetConn(oneID, otherID)
 	if conn == nil {
-		return fmt.Errorf("connection between %v and %v does not exist", oneId, otherId)
+		return fmt.Errorf("connection between %v and %v does not exist", oneID, otherID)
 	}
 	if !conn.Up {
-		return fmt.Errorf("%v and %v already disconnected", oneId, otherId)
+		return fmt.Errorf("%v and %v already disconnected", oneID, otherID)
 	}
 	var rev bool
-	if conn.One.NodeID != oneId.NodeID {
+	if conn.One != oneID {
 		rev = true
 	}
 	var addr []byte
@@ -451,7 +451,7 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 	return client.Call(nil, "admin_removePeer", string(addr))
 }
 
-func (self *Network) DidConnect(one, other *adapters.NodeId) error {
+func (self *Network) DidConnect(one, other discover.NodeID) error {
 	conn, err := self.GetOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
@@ -459,14 +459,14 @@ func (self *Network) DidConnect(one, other *adapters.NodeId) error {
 	if conn.Up {
 		return fmt.Errorf("%v and %v already connected", one, other)
 	}
-	conn.Reverse = conn.One.NodeID != one.NodeID
+	conn.Reverse = conn.One != one
 	conn.Up = true
 	// connection event posted
 	self.events.Send(NewEvent(conn))
 	return nil
 }
 
-func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
+func (self *Network) DidDisconnect(one, other discover.NodeID) error {
 	conn, err := self.GetOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
@@ -474,14 +474,14 @@ func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
 	if !conn.Up {
 		return fmt.Errorf("%v and %v already disconnected", one, other)
 	}
-	conn.Reverse = conn.One.NodeID != one.NodeID
+	conn.Reverse = conn.One != one
 	conn.Up = false
 	self.events.Send(NewEvent(conn))
 	return nil
 }
 
 // Send(senderid, receiverid) sends a message from one node to another
-func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64, protomsg interface{}) {
+func (self *Network) Send(senderid, receiverid discover.NodeID, msgcode uint64, protomsg interface{}) {
 	msg := &Msg{
 		One:   senderid,
 		Other: receiverid,
@@ -491,7 +491,7 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 	self.events.Send(ControlEvent(msg))
 }
 
-func (self *Network) DidSend(sender, receiver *adapters.NodeId, msgcode uint64) error {
+func (self *Network) DidSend(sender, receiver discover.NodeID, msgcode uint64) error {
 	msg := &Msg{
 		One:      sender,
 		Other:    receiver,
@@ -502,7 +502,7 @@ func (self *Network) DidSend(sender, receiver *adapters.NodeId, msgcode uint64) 
 	return nil
 }
 
-func (self *Network) DidReceive(sender, receiver *adapters.NodeId, msgcode uint64) error {
+func (self *Network) DidReceive(sender, receiver discover.NodeID, msgcode uint64) error {
 	msg := &Msg{
 		One:      sender,
 		Other:    receiver,
@@ -515,7 +515,7 @@ func (self *Network) DidReceive(sender, receiver *adapters.NodeId, msgcode uint6
 
 // GetNode retrieves the node model for the id given as arg
 // returns nil if the node does not exist
-func (self *Network) GetNode(id *adapters.NodeId) *Node {
+func (self *Network) GetNode(id discover.NodeID) *Node {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	return self.getNode(id)
@@ -538,8 +538,8 @@ func (self *Network) GetNodes() []*Node {
 	return self.Nodes
 }
 
-func (self *Network) getNode(id *adapters.NodeId) *Node {
-	i, found := self.nodeMap[id.NodeID]
+func (self *Network) getNode(id discover.NodeID) *Node {
+	i, found := self.nodeMap[id]
 	if !found {
 		return nil
 	}
@@ -549,34 +549,34 @@ func (self *Network) getNode(id *adapters.NodeId) *Node {
 // GetConn(i, j) retrieves the connectiton model for the connection between
 // the order of nodes does not matter, i.e., GetConn(i,j) == GetConn(j, i)
 // returns nil if the node does not exist
-func (self *Network) GetConn(oneId, otherId *adapters.NodeId) *Conn {
+func (self *Network) GetConn(oneID, otherID discover.NodeID) *Conn {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.getConn(oneId, otherId)
+	return self.getConn(oneID, otherID)
 }
 
 // GetConn(i, j) retrieves the connectiton model for the connection between
 // i and j, or creates a new one if it does not exist
 // the order of nodes does not matter, i.e., GetConn(i,j) == GetConn(j, i)
-func (self *Network) GetOrCreateConn(oneId, otherId *adapters.NodeId) (*Conn, error) {
+func (self *Network) GetOrCreateConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	conn := self.getConn(oneId, otherId)
+	conn := self.getConn(oneID, otherID)
 	if conn != nil {
 		return conn, nil
 	}
-	conn, err := self.newConn(oneId, otherId)
+	conn, err := self.newConn(oneID, otherID)
 	if err != nil {
 		return nil, err
 	}
-	label := ConnLabel(oneId, otherId)
+	label := ConnLabel(oneID, otherID)
 	self.connMap[label] = len(self.Conns)
 	self.Conns = append(self.Conns, conn)
 	return conn, nil
 }
 
-func (self *Network) getConn(oneId, otherId *adapters.NodeId) *Conn {
-	label := ConnLabel(oneId, otherId)
+func (self *Network) getConn(oneID, otherID discover.NodeID) *Conn {
+	label := ConnLabel(oneID, otherID)
 	i, found := self.connMap[label]
 	if !found {
 		return nil
@@ -587,23 +587,23 @@ func (self *Network) getConn(oneId, otherId *adapters.NodeId) *Conn {
 func (self *Network) Shutdown() {
 	// disconnect all nodes
 	for _, conn := range self.Conns {
-		log.Debug(fmt.Sprintf("disconnecting %s from %s", conn.One.Label(), conn.Other.Label()))
+		log.Debug(fmt.Sprintf("disconnecting %s from %s", conn.One.TerminalString(), conn.Other.TerminalString()))
 		if err := self.Disconnect(conn.One, conn.Other); err != nil {
-			log.Warn(fmt.Sprintf("error disconnecting %s from %s", conn.One.Label(), conn.Other.Label()), "err", err)
+			log.Warn(fmt.Sprintf("error disconnecting %s from %s", conn.One.TerminalString(), conn.Other.TerminalString()), "err", err)
 		}
 	}
 
 	// stop all nodes
 	for _, node := range self.Nodes {
-		log.Debug(fmt.Sprintf("stopping node %s", node.ID().Label()))
+		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
 		if err := node.Stop(); err != nil {
-			log.Warn(fmt.Sprintf("error stopping node %s", node.ID().Label()), "err", err)
+			log.Warn(fmt.Sprintf("error stopping node %s", node.ID().TerminalString()), "err", err)
 		}
 	}
 }
 
-func ConnLabel(source, target *adapters.NodeId) string {
-	var first, second *adapters.NodeId
+func ConnLabel(source, target discover.NodeID) string {
+	var first, second discover.NodeID
 	if bytes.Compare(source.Bytes(), target.Bytes()) > 0 {
 		first = target
 		second = source
@@ -662,7 +662,7 @@ func (self *Network) Load(snap *Snapshot) error {
 		if !node.Up {
 			continue
 		}
-		if err := self.startWithSnapshots(node.Config.Id, node.Snapshots); err != nil {
+		if err := self.startWithSnapshots(node.Config.ID, node.Snapshots); err != nil {
 			return err
 		}
 	}

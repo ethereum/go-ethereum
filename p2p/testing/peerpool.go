@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 type TestPeer interface {
@@ -38,15 +37,15 @@ func (self *TestPeerPool) Remove(p TestPeer) {
 	delete(self.peers, p.ID())
 }
 
-func (self *TestPeerPool) Has(n *adapters.NodeId) bool {
+func (self *TestPeerPool) Has(id discover.NodeID) bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	_, ok := self.peers[n.NodeID]
+	_, ok := self.peers[id]
 	return ok
 }
 
-func (self *TestPeerPool) Get(n *adapters.NodeId) TestPeer {
+func (self *TestPeerPool) Get(id discover.NodeID) TestPeer {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.peers[n.NodeID]
+	return self.peers[id]
 }

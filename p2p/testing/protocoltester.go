@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -18,18 +19,18 @@ type ProtocolTester struct {
 	network *simulations.Network
 }
 
-func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
+func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
-		"test": func(id *adapters.NodeId, _ []byte) node.Service {
+		"test": func(id discover.NodeID, _ []byte) node.Service {
 			return &testNode{run}
 		},
-		"mock": func(id *adapters.NodeId, _ []byte) node.Service {
+		"mock": func(id discover.NodeID, _ []byte) node.Service {
 			return newMockNode()
 		},
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{})
-	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{Id: id, Services: []string{"test"}}); err != nil {
+	if _, err := net.NewNodeWithConfig(&adapters.NodeConfig{ID: id, Services: []string{"test"}}); err != nil {
 		panic(err.Error())
 	}
 	if err := net.Start(id); err != nil {
@@ -38,17 +39,17 @@ func NewProtocolTester(t *testing.T, id *adapters.NodeId, n int, run func(*p2p.P
 
 	node := net.GetNode(id).Node.(*adapters.SimNode)
 	peers := make([]*adapters.NodeConfig, n)
-	peerIDs := make([]*adapters.NodeId, n)
+	peerIDs := make([]discover.NodeID, n)
 	for i := 0; i < n; i++ {
 		peers[i] = adapters.RandomNodeConfig()
 		peers[i].Services = []string{"mock"}
-		peerIDs[i] = peers[i].Id
+		peerIDs[i] = peers[i].ID
 	}
 	events := make(chan *p2p.PeerEvent, 1000)
 	node.SubscribeEvents(events)
 	ps := &ProtocolSession{
 		Server:  node.Server(),
-		Ids:     peerIDs,
+		IDs:     peerIDs,
 		adapter: adapter,
 		events:  events,
 	}
@@ -66,18 +67,18 @@ func (self *ProtocolTester) Stop() error {
 	return self.Server.Stop()
 }
 
-func (self *ProtocolTester) Connect(selfId *adapters.NodeId, peers ...*adapters.NodeConfig) {
+func (self *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
-		log.Trace(fmt.Sprintf("start node %v", peer.Id))
+		log.Trace(fmt.Sprintf("start node %v", peer.ID))
 		if _, err := self.network.NewNodeWithConfig(peer); err != nil {
-			panic(fmt.Sprintf("error starting peer %v: %v", peer.Id, err))
+			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
-		if err := self.network.Start(peer.Id); err != nil {
-			panic(fmt.Sprintf("error starting peer %v: %v", peer.Id, err))
+		if err := self.network.Start(peer.ID); err != nil {
+			panic(fmt.Sprintf("error starting peer %v: %v", peer.ID, err))
 		}
-		log.Trace(fmt.Sprintf("connect to %v", peer.Id))
-		if err := self.network.Connect(selfId, peer.Id); err != nil {
-			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.Id, err))
+		log.Trace(fmt.Sprintf("connect to %v", peer.ID))
+		if err := self.network.Connect(selfID, peer.ID); err != nil {
+			panic(fmt.Sprintf("error connecting to peer %v: %v", peer.ID, err))
 		}
 	}
 

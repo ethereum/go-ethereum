@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -59,22 +60,22 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	// create 10 node network
 	nodeCount := 10
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		Id:             "0",
+		ID:             "0",
 		DefaultService: serviceName,
 	})
 	defer net.Shutdown()
-	trigger := make(chan *adapters.NodeId)
-	ids := make([]*adapters.NodeId, nodeCount)
+	trigger := make(chan discover.NodeID)
+	ids := make([]discover.NodeID, nodeCount)
 	for i := 0; i < nodeCount; i++ {
 		node, err := net.NewNode()
 		if err != nil {
 			t.Fatalf("error starting node: %s", err)
 		}
 		if err := net.Start(node.ID()); err != nil {
-			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
+			t.Fatalf("error starting node %s: %s", node.ID().TerminalString(), err)
 		}
 		if err := triggerChecks(trigger, net, node.ID()); err != nil {
-			t.Fatal("error triggering checks for node %s: %s", node.ID().Label(), err)
+			t.Fatal("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
 		}
 		ids[i] = node.ID()
 	}
@@ -83,20 +84,20 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	// for full peer discovery
 	action := func(ctx context.Context) error {
 		for i, id := range ids {
-			var peerId *adapters.NodeId
+			var peerID discover.NodeID
 			if i == 0 {
-				peerId = ids[len(ids)-1]
+				peerID = ids[len(ids)-1]
 			} else {
-				peerId = ids[i-1]
+				peerID = ids[i-1]
 			}
-			if err := net.Connect(id, peerId); err != nil {
+			if err := net.Connect(id, peerID); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 	nnmap := network.NewPeerPot(testMinProxBinSize, ids...)
-	check := func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -112,7 +113,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		var healthy bool
-		if err := client.Call(&healthy, "hive_healthy", nnmap[id.NodeID]); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", nnmap[id]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
 		return healthy, nil
@@ -137,7 +138,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 	t.Log("Simulation Passed:")
 	t.Logf("Duration: %s", result.FinishedAt.Sub(result.StartedAt))
 	for _, id := range ids {
-		t.Logf("Node %s passed in %s", id.Label(), result.Passes[id].Sub(result.StartedAt))
+		t.Logf("Node %s passed in %s", id.TerminalString(), result.Passes[id].Sub(result.StartedAt))
 	}
 	t.Logf("Events:")
 	for _, event := range result.NetworkEvents {
@@ -147,7 +148,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node
-func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *adapters.NodeId) error {
+func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id discover.NodeID) error {
 	node := net.GetNode(id)
 	if node == nil {
 		return fmt.Errorf("unknown node: %s", id)
@@ -178,8 +179,8 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 	return nil
 }
 
-func newService(id *adapters.NodeId, snapshot []byte) node.Service {
-	addr := network.NewAddrFromNodeId(id)
+func newService(id discover.NodeID, snapshot []byte) node.Service {
+	addr := network.NewAddrFromNodeID(id)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize

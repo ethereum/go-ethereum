@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -177,7 +178,7 @@ func TestPssRegisterHandler(t *testing.T) {
 func TestPssSimpleLinear(t *testing.T) {
 	var err error
 	nodeconfig := adapters.RandomNodeConfig()
-	addr := network.NewAddrFromNodeId(nodeconfig.Id)
+	addr := network.NewAddrFromNodeID(nodeconfig.ID)
 	_ = p2ptest.NewTestPeerPool()
 	ps := newTestPss(addr.Over())
 
@@ -205,23 +206,23 @@ func TestPssSimpleLinear(t *testing.T) {
 		return bp.Run(ps.handlePssMsg)
 	}
 
-	pt := p2ptest.NewProtocolTester(t, nodeconfig.Id, 2, run)
+	pt := p2ptest.NewProtocolTester(t, nodeconfig.ID, 2, run)
 
-	msg := newPssPingMsg(ps, network.ToOverlayAddr(pt.Ids[0].Bytes()), pssPingProtocol, pssPingTopic, []byte{1, 2, 3})
+	msg := newPssPingMsg(ps, network.ToOverlayAddr(pt.IDs[0].Bytes()), pssPingProtocol, pssPingTopic, []byte{1, 2, 3})
 
 	exchange := p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
 			p2ptest.Expect{
 				Code: 0,
 				Msg:  msg,
-				Peer: pt.Ids[0],
+				Peer: pt.IDs[0],
 			},
 		},
 		Triggers: []p2ptest.Trigger{
 			p2ptest.Trigger{
 				Code: 0,
 				Msg:  msg,
-				Peer: pt.Ids[1],
+				Peer: pt.IDs[1],
 			},
 		},
 	}
@@ -238,16 +239,16 @@ func TestPssFullRandom10_5_5(t *testing.T) {
 }
 
 func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int, fullnodecount int, msgcount int) {
-	var lastid *adapters.NodeId = nil
+	var lastid discover.NodeID
 
 	nodeCount := 5
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		Id: "0",
+		ID: "0",
 	})
 	defer net.Shutdown()
 
-	trigger := make(chan *adapters.NodeId)
-	ids := make([]*adapters.NodeId, nodeCount)
+	trigger := make(chan discover.NodeID)
+	ids := make([]discover.NodeID, nodeCount)
 	fullids := ids[0:fullnodecount]
 	fullpeers := [][]byte{}
 
@@ -260,11 +261,11 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 		}
 
 		if err := net.Start(node.ID()); err != nil {
-			t.Fatalf("error starting node %s: %s", node.ID().Label(), err)
+			t.Fatalf("error starting node %s: %s", node.ID().TerminalString(), err)
 		}
 
 		if err := triggerChecks(trigger, net, node.ID()); err != nil {
-			t.Fatal("error triggering checks for node %s: %s", node.ID().Label(), err)
+			t.Fatal("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
 		}
 		ids[i] = node.ID()
 		if i < fullnodecount {
@@ -276,19 +277,19 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 	// for full peer discovery
 	action := func(ctx context.Context) error {
 		for i, id := range ids {
-			var peerId *adapters.NodeId
+			var peerID discover.NodeID
 			if i == 0 {
-				peerId = ids[len(ids)-1]
+				peerID = ids[len(ids)-1]
 			} else {
-				peerId = ids[i-1]
+				peerID = ids[i-1]
 			}
-			if err := net.Connect(id, peerId); err != nil {
+			if err := net.Connect(id, peerID); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
-	check := func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -341,12 +342,12 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
 
-	trigger = make(chan *adapters.NodeId)
+	trigger = make(chan discover.NodeID)
 
 	action = func(ctx context.Context) error {
 		return nil
 	}
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -379,9 +380,9 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node
-func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *adapters.NodeId) error {
+func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id discover.NodeID) error {
 
-	gotpeer := make(map[*adapters.NodeId]bool)
+	gotpeer := make(map[discover.NodeID]bool)
 
 	node := net.GetNode(id)
 	if node == nil {
@@ -410,10 +411,9 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 		for {
 			select {
 			case event := <-peerevents:
-				nid := adapters.NewNodeId(event.Peer[:])
-				if event.Type == "add" && !gotpeer[nid] {
+				if event.Type == "add" && !gotpeer[event.Peer] {
 					trigger <- id
-					gotpeer[nid] = true
+					gotpeer[event.Peer] = true
 				}
 			case <-msgevents:
 				trigger <- id
@@ -436,12 +436,12 @@ func triggerChecks(trigger chan *adapters.NodeId, net *simulations.Network, id *
 
 func newServices() adapters.Services {
 	stateStore := adapters.NewSimStateStore()
-	kademlias := make(map[*adapters.NodeId]*network.Kademlia)
-	kademlia := func(id *adapters.NodeId) *network.Kademlia {
+	kademlias := make(map[discover.NodeID]*network.Kademlia)
+	kademlia := func(id discover.NodeID) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		addr := network.NewAddrFromNodeId(id)
+		addr := network.NewAddrFromNodeID(id)
 		params := network.NewKadParams()
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
@@ -453,7 +453,7 @@ func newServices() adapters.Services {
 		return kademlias[id]
 	}
 	return adapters.Services{
-		"pss": func(id *adapters.NodeId, snapshot []byte) node.Service {
+		"pss": func(id discover.NodeID, snapshot []byte) node.Service {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
 				log.Error("create pss cache tmpdir failed", "error", err)
@@ -479,8 +479,8 @@ func newServices() adapters.Services {
 
 			return ps
 		},
-		"bzz": func(id *adapters.NodeId, snapshot []byte) node.Service {
-			addr := network.NewAddrFromNodeId(id)
+		"bzz": func(id discover.NodeID, snapshot []byte) node.Service {
+			addr := network.NewAddrFromNodeID(id)
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),
@@ -509,9 +509,9 @@ type pssTestNode struct {
 	*Hive
 	*Pss
 
-	id      *adapters.NodeId
+	id      discover.NodeID
 	network *simulations.Network
-	trigger chan *adapters.NodeId
+	trigger chan discover.NodeID
 	run     adapters.RunProtocol
 	ct      *protocols.CodeMap
 	expectC chan []int
@@ -558,7 +558,7 @@ func newPssTestService(t *testing.T, handlefunc func(interface{}) error, testnod
 	bzz := NewBzz(testnode.OverlayAddr(), testnode.UnderlayAddr(), newTestStore())
 	testnode.Hive = NewHive(hp, testnode.Pss.Overlay, bzz)
 	return &pssTestService{
-		//nid := adapters.NewNodeId(addr.UnderlayAddr())
+		//nid := adapters.NewNodeID(addr.UnderlayAddr())
 		msgFunc: handlefunc,
 		node:    testnode,
 	}
@@ -608,28 +608,28 @@ func (self *pssTestService) Run(peer *bzzPeer) error {
 func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes int) {
 	var action func(ctx context.Context) error
 	var i int
-	var check func(ctx context.Context, id *adapters.NodeId) (bool, error)
+	var check func(ctx context.Context, id discover.NodeID) (bool, error)
 	var ctx context.Context
 	var result *simulations.StepResult
 	var timeout time.Duration
 	var cancel context.CancelFunc
 
-	fullnodes := []*adapters.NodeId{}
+	fullnodes := []discover.NodeID{}
 	sends := []int{}                                       // sender/receiver ids array indices pairs
-	expectnodes := make(map[*adapters.NodeId]int)          // how many messages we're expecting on each respective node
-	expectnodesids := []*adapters.NodeId{}                 // the nodes to expect on (needed by checker)
-	expectnodesresults := make(map[*adapters.NodeId][]int) // which messages expect actually got
+	expectnodes := make(map[discover.NodeID]int)          // how many messages we're expecting on each respective node
+	expectnodesids := []discover.NodeID{}                 // the nodes to expect on (needed by checker)
+	expectnodesresults := make(map[discover.NodeID][]int) // which messages expect actually got
 
 	vct := protocols.NewCodeMap(map[uint64]interface{}{
 		0: pssTestPayload{},
 	})
 	topic, _ := MakeTopic(protocolName, protocolVersion)
 
-	trigger := make(chan *adapters.NodeId)
-	testpeers := make(map[*adapters.NodeId]*pssTestPeer)
+	trigger := make(chan discover.NodeID)
+	testpeers := make(map[discover.NodeID]*pssTestPeer)
 	net, nodes := newPssSimulationTester(t, numnodes, numfullnodes, trigger, vct, protocolName, protocolVersion, testpeers)
 
-	ids := []*adapters.NodeId{}
+	ids := []discover.NodeID{}
 
 	// connect the peers
 	action = func(ctx context.Context) error {
@@ -641,17 +641,17 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 			}
 		}
 		for i, id := range ids {
-			var peerId *adapters.NodeId
+			var peerID discover.NodeID
 			if i != 0 {
-				peerId = ids[i-1]
-				if err := net.Connect(id, peerId); err != nil {
+				peerID = ids[i-1]
+				if err := net.Connect(id, peerID); err != nil {
 					return err
 				}
 			}
 		}
 		return nil
 	}
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -690,7 +690,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 	}
 
 	// ensure that the channel is clean
-	trigger = make(chan *adapters.NodeId)
+	trigger = make(chan discover.NodeID)
 
 	// randomly decide which nodes to send to and from
 	rand.Seed(time.Now().Unix())
@@ -725,7 +725,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 			msgbytes, _ := makeMsg(code, &pssTestPayload{
 				Data: fmt.Sprintf("%v", i+1),
 			})
-			go func(i int, expectnodesresults map[*adapters.NodeId][]int) {
+			go func(i int, expectnodesresults map[discover.NodeID][]int) {
 				expectnode := fullnodes[sends[i+1]] // the receiving node
 				sendnode := fullnodes[sends[i]]     // the sending node
 				oaddr := nodes[expectnode].OverlayAddr()
@@ -756,7 +756,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 	}
 
 	// results
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -819,27 +819,27 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 func TestPssFullLinearEcho(t *testing.T) {
 
 	var action func(ctx context.Context) error
-	var check func(ctx context.Context, id *adapters.NodeId) (bool, error)
+	var check func(ctx context.Context, id discover.NodeID) (bool, error)
 	var ctx context.Context
 	var result *simulations.StepResult
 	var timeout time.Duration
 	var cancel context.CancelFunc
 
-	var firstpssnode *adapters.NodeId
-	var secondpssnode *adapters.NodeId
+	var firstpssnode discover.NodeID
+	var secondpssnode discover.NodeID
 
 	vct := protocols.NewCodeMap(protocolName, protocolVersion, ProtocolMaxMsgSize)
 	vct.Register(0, &pssTestPayload{})
 	topic, _ := MakeTopic(protocolName, protocolVersion)
 
-	fullnodes := []*adapters.NodeId{}
-	trigger := make(chan *adapters.NodeId)
-	testpeers := make(map[*adapters.NodeId]*pssTestPeer)
+	fullnodes := []discover.NodeID{}
+	trigger := make(chan discover.NodeID)
+	testpeers := make(map[discover.NodeID]*pssTestPeer)
 	net, nodes := newPssSimulationTester(t, 3, 2, trigger, vct, protocolName, protocolVersion, testpeers)
-	ids := []*adapters.NodeId{} // ohh risky! but the action for a specific id should come before the expect anyway
+	ids := []discover.NodeID{} // ohh risky! but the action for a specific id should come before the expect anyway
 
 	action = func(ctx context.Context) error {
-		var thinnodeid *adapters.NodeId
+		var thinnodeid discover.NodeID
 		for id, _ := range nodes {
 			ids = append(ids, id)
 			if _, ok := testpeers[id]; ok {
@@ -857,17 +857,17 @@ func TestPssFullLinearEcho(t *testing.T) {
 		}
 
 		// for i, id := range ids {
-		// 	var peerId *adapters.NodeId
+		// 	var peerID discover.NodeID
 		// 	if i != 0 {
-		// 		peerId = ids[i-1]
-		// 		if err := net.Connect(id, peerId); err != nil {
+		// 		peerID = ids[i-1]
+		// 		if err := net.Connect(id, peerID); err != nil {
 		// 			return err
 		// 		}
 		// 	}
 		// }
 		return nil
 	}
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -899,7 +899,7 @@ func TestPssFullLinearEcho(t *testing.T) {
 	}
 	cancel()
 
-	nonode := &adapters.NodeId{}
+	nonode := &adapters.NodeID{}
 	firstpssnode = nonode
 	secondpssnode = nonode
 
@@ -960,7 +960,7 @@ func TestPssFullLinearEcho(t *testing.T) {
 
 		return nil
 	}
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -981,7 +981,7 @@ func TestPssFullLinearEcho(t *testing.T) {
 		Action:  action,
 		Trigger: trigger,
 		Expect: &simulations.Expectation{
-			Nodes: []*adapters.NodeId{ids[0]},
+			Nodes: []discover.NodeID{ids[0]},
 			Check: check,
 		},
 	})
@@ -1001,25 +1001,25 @@ func TestPssFullWS(t *testing.T) {
 	var clientrecv, clientsend *rpc.Client
 
 	var action func(ctx context.Context) error
-	var check func(ctx context.Context, id *adapters.NodeId) (bool, error)
+	var check func(ctx context.Context, id discover.NodeID) (bool, error)
 	var ctx context.Context
 	var result *simulations.StepResult
 	var timeout time.Duration
 	var cancel context.CancelFunc
 
-	var firstpssnode, secondpssnode *adapters.NodeId
-	fullnodes := []*adapters.NodeId{}
+	var firstpssnode, secondpssnode discover.NodeID
+	fullnodes := []discover.NodeID{}
 	vct := protocols.NewCodeMap(protocolName, protocolVersion, ProtocolMaxMsgSize)
 	vct.Register(0, &pssTestPayload{})
 	topic, _ := MakeTopic(pingTopicName, pingTopicVersion)
 
-	trigger := make(chan *adapters.NodeId)
-	testpeers := make(map[*adapters.NodeId]*pssTestPeer)
+	trigger := make(chan discover.NodeID)
+	testpeers := make(map[discover.NodeID]*pssTestPeer)
 	simnet, nodes := newPssSimulationTester(t, 3, 2, trigger, vct, protocolName, protocolVersion, testpeers)
-	ids := []*adapters.NodeId{} // ohh risky! but the action for a specific id should come before the expect anyway
+	ids := []discover.NodeID{} // ohh risky! but the action for a specific id should come before the expect anyway
 
 	action = func(ctx context.Context) error {
-		var thinnodeid *adapters.NodeId
+		var thinnodeid discover.NodeID
 		for id, node := range nodes {
 			ids = append(ids, id)
 			if _, ok := testpeers[id]; ok {
@@ -1046,7 +1046,7 @@ func TestPssFullWS(t *testing.T) {
 		return nil
 	}
 
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -1079,7 +1079,7 @@ func TestPssFullWS(t *testing.T) {
 	}
 	cancel()
 
-	nonode := &adapters.NodeId{}
+	nonode := &adapters.NodeID{}
 	firstpssnode = nonode
 	secondpssnode = nonode
 
@@ -1167,7 +1167,7 @@ func TestPssFullWS(t *testing.T) {
 		}
 	}
 
-	trigger = make(chan *adapters.NodeId)
+	trigger = make(chan discover.NodeID)
 	ch := make(chan string)
 
 	action = func(ctx context.Context) error {
@@ -1178,7 +1178,7 @@ func TestPssFullWS(t *testing.T) {
 		}()
 		return nil
 	}
-	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
 			return false, ctx.Err()
@@ -1204,7 +1204,7 @@ func TestPssFullWS(t *testing.T) {
 		Action:  action,
 		Trigger: trigger,
 		Expect: &simulations.Expectation{
-			Nodes: []*adapters.NodeId{secondpssnode},
+			Nodes: []discover.NodeID{secondpssnode},
 			Check: check,
 		},
 	})
@@ -1228,12 +1228,12 @@ func TestPssFullWS(t *testing.T) {
 
 // the simulation tester constructor is currently a hack to fit previous code with later stack using node.Services to start SimNodes
 
-func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigger chan *adapters.NodeId, vct *protocols.CodeMap, name string, version int, testpeers map[*adapters.NodeId]*pssTestPeer) (*simulations.Network, map[*adapters.NodeId]*pssTestNode) {
+func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigger chan discover.NodeID, vct *protocols.CodeMap, name string, version int, testpeers map[discover.NodeID]*pssTestPeer) (*simulations.Network, map[discover.NodeID]*pssTestNode) {
 	topic, _ := MakeTopic(name, version)
-	nodes := make(map[*adapters.NodeId]*pssTestNode, numnodes)
-	psss := make(map[*adapters.NodeId]*Pss)
+	nodes := make(map[discover.NodeID]*pssTestNode, numnodes)
+	psss := make(map[discover.NodeID]*Pss)
 	var simnet *simulations.Network
-	serviceFunc := func(id *adapters.NodeId) node.Service {
+	serviceFunc := func(id discover.NodeID) node.Service {
 		node := &pssTestNode{
 			Pss:     psss[id],
 			Hive:    nil,
@@ -1249,7 +1249,7 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 
 		var handlefunc func(interface{}) error
 
-		addr := NewPeerAddrFromNodeId(id)
+		addr := NewPeerAddrFromNodeID(id)
 
 		if testpeers[id] != nil {
 			handlefunc = makePssHandleProtocol(psss[id])
@@ -1273,7 +1273,7 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 	}
 	adapter := adapters.NewSimAdapter(map[string]adapters.ServiceFunc{"pss": serviceFunc})
 	simnet = simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		Id:      "0",
+		ID:      "0",
 		Backend: true,
 	})
 	configs := make([]*adapters.NodeConfig, numnodes)
@@ -1282,8 +1282,8 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 		configs[i].Service = "pss"
 	}
 	for i, conf := range configs {
-		addr := NewPeerAddrFromNodeId(conf.Id)
-		psss[conf.Id] = makePss(addr.Over())
+		addr := NewPeerAddrFromNodeID(conf.ID)
+		psss[conf.ID] = makePss(addr.Over())
 		if i < numfullnodes {
 			tp := &pssTestPeer{
 				Peer: &protocols.Peer{
@@ -1292,17 +1292,17 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 				successC: make(chan bool),
 				resultC:  make(chan int),
 			}
-			testpeers[conf.Id] = tp
-			targetprotocol := makeCustomProtocol(name, version, vct, testpeers[conf.Id])
-			pssprotocol := NewPssProtocol(psss[conf.Id], &topic, vct, targetprotocol)
-			psss[conf.Id].Register(topic, pssprotocol.GetHandler())
+			testpeers[conf.ID] = tp
+			targetprotocol := makeCustomProtocol(name, version, vct, testpeers[conf.ID])
+			pssprotocol := NewPssProtocol(psss[conf.ID], &topic, vct, targetprotocol)
+			psss[conf.ID].Register(topic, pssprotocol.GetHandler())
 		}
 
 		if err := simnet.NewNodeWithConfig(conf); err != nil {
-			t.Fatalf("error creating node %s: %s", conf.Id.Label(), err)
+			t.Fatalf("error creating node %s: %s", conf.ID.Label(), err)
 		}
-		if err := simnet.Start(conf.Id); err != nil {
-			t.Fatalf("error starting node %s: %s", conf.Id.Label(), err)
+		if err := simnet.Start(conf.ID); err != nil {
+			t.Fatalf("error starting node %s: %s", conf.ID.Label(), err)
 		}
 	}
 
@@ -1422,7 +1422,7 @@ func makePssHandleProtocol(ps *Pss) func(msg interface{}) error {
 			if f == nil {
 				return fmt.Errorf("No registered handler for topic '%s'", env.Topic)
 			}
-			nid := adapters.NewNodeId(env.SenderUAddr)
+			nid := adapters.NewNodeID(env.SenderUAddr)
 			p := p2p.NewPeer(nid.NodeID, fmt.Sprintf("%x", common.ByteLabel(nid.Bytes())), []p2p.Cap{})
 			return f(umsg, p, env.SenderOAddr)
 		} else {

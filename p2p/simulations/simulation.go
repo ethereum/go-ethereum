@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 // Simulation provides a framework for running actions in a simulated network
@@ -94,7 +94,7 @@ type Step struct {
 
 	// Trigger is a channel which receives node ids and triggers an
 	// expectation check for that node
-	Trigger chan *adapters.NodeId
+	Trigger chan discover.NodeID
 
 	// Expect is the expectation to wait for when performing this step
 	Expect *Expectation
@@ -102,15 +102,15 @@ type Step struct {
 
 type Expectation struct {
 	// Nodes is a list of nodes to check
-	Nodes []*adapters.NodeId
+	Nodes []discover.NodeID
 
 	// Check checks whether a given node meets the expectation
-	Check func(context.Context, *adapters.NodeId) (bool, error)
+	Check func(context.Context, discover.NodeID) (bool, error)
 }
 
 func newStepResult() *StepResult {
 	return &StepResult{
-		Passes: make(map[*adapters.NodeId]time.Time),
+		Passes: make(map[discover.NodeID]time.Time),
 	}
 }
 
@@ -125,7 +125,7 @@ type StepResult struct {
 	FinishedAt time.Time
 
 	// Passes are the timestamps of the successful node expectations
-	Passes map[*adapters.NodeId]time.Time
+	Passes map[discover.NodeID]time.Time
 
 	// NetworkEvents are the network events which occurred during the step
 	NetworkEvents []*Event

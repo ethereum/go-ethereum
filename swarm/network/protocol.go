@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -243,7 +242,7 @@ func (self *bzzPeer) LastActive() time.Time {
  Handshake
 
 * Version: 8 byte integer version of the protocol
-* NetworkID: 8 byte integer network identifier
+* NetworkId: 8 byte integer network identifier
 * Addr: the address advertised by the node including underlay and overlay connecctions
 */
 type bzzHandshake struct {
@@ -340,17 +339,16 @@ func RandomAddr() *bzzAddr {
 	}
 }
 
-// NewNodeIdFromAddr transforms the underlay address to an adapters.NodeId
-func NewNodeIdFromAddr(addr Addr) *adapters.NodeId {
-	return adapters.NewNodeId(addr.Under())
+// NewNodeIDFromAddr transforms the underlay address to an adapters.NodeID
+func NewNodeIDFromAddr(addr Addr) discover.NodeID {
+	return discover.MustBytesID(addr.Under())
 }
 
-// NewAddrFromNodeId constucts a bzzAddr from an adapters.NodeId
-// the overlay address is derived as the hash of the nodeId
-func NewAddrFromNodeId(n *adapters.NodeId) *bzzAddr {
-	id := n.NodeID
+// NewAddrFromNodeID constucts a bzzAddr from a discover.NodeID
+// the overlay address is derived as the hash of the nodeID
+func NewAddrFromNodeID(id discover.NodeID) *bzzAddr {
 	return &bzzAddr{
-		OAddr: ToOverlayAddr(n.Bytes()),
+		OAddr: ToOverlayAddr(id.Bytes()),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
 	}
 }
