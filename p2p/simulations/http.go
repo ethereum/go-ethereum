@@ -466,6 +466,7 @@ func (s *Server) StreamNetworkEvents(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "\n\n")
 	if fw, ok := w.(http.Flusher); ok {
 		fw.Flush()
 	}
