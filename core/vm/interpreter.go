@@ -61,6 +61,8 @@ type Interpreter struct {
 	intPool  *intPool
 
 	readonly bool
+	// returnData contains the last call's return data
+	returnData []byte
 }
 
 // NewInterpreter returns a new instance of the Interpreter.
@@ -108,8 +110,12 @@ func (in *Interpreter) enforceRestrictions(op OpCode, operation operation, stack
 // considered a revert-and-consume-all-gas operation. No error specific checks
 // should be handled to reduce complexity and errors further down the in.
 func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret []byte, err error) {
+	// Increment the call depth which is restricted to 1024.
 	in.evm.depth++
 	defer func() { in.evm.depth-- }()
+	// Reset the previous call's return data. It's unimportant to preserve the old buffer
+	// as every returning call will return new data anyway.
+	in.returnData = nil
 
 	// Don't bother with the execution if there's no code.
 	if len(contract.Code) == 0 {
@@ -228,7 +234,7 @@ func (in *Interpreter) Run(snapshot int, contract *Contract, input []byte) (ret 
 		// if the operation returned a value make sure that is also set
 		// the last return data.
 		if res != nil {
-			mem.lastReturn = ret
+			in.returnData = res
 		}
 	}
 	return nil, nil

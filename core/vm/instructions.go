@@ -718,7 +718,7 @@ func opSuicide(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *
 }
 
 func opReturnDataSize(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(memory.lastReturn))))
+	stack.push(evm.interpreter.intPool.get().SetUint64(uint64(len(evm.interpreter.returnData))))
 	return nil, nil
 }
 
@@ -728,7 +728,7 @@ func opReturnDataCopy(pc *uint64, evm *EVM, contract *Contract, memory *Memory, 
 		cOff = stack.pop()
 		l    = stack.pop()
 	)
-	memory.Set(mOff.Uint64(), l.Uint64(), getData(memory.lastReturn, cOff, l))
+	memory.Set(mOff.Uint64(), l.Uint64(), getData(evm.interpreter.returnData, cOff, l))
 
 	evm.interpreter.intPool.put(mOff, cOff, l)
 	return nil, nil
