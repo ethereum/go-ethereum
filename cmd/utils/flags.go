@@ -123,35 +123,6 @@ var (
 		Name:  "nousb",
 		Usage: "Disables monitoring for and managine USB hardware wallets",
 	}
-	EthashCacheDirFlag = DirectoryFlag{
-		Name:  "ethash.cachedir",
-		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
-	}
-	EthashCachesInMemoryFlag = cli.IntFlag{
-		Name:  "ethash.cachesinmem",
-		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
-		Value: eth.DefaultConfig.EthashCachesInMem,
-	}
-	EthashCachesOnDiskFlag = cli.IntFlag{
-		Name:  "ethash.cachesondisk",
-		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
-		Value: eth.DefaultConfig.EthashCachesOnDisk,
-	}
-	EthashDatasetDirFlag = DirectoryFlag{
-		Name:  "ethash.dagdir",
-		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
-		Value: DirectoryString{eth.DefaultConfig.EthashDatasetDir},
-	}
-	EthashDatasetsInMemoryFlag = cli.IntFlag{
-		Name:  "ethash.dagsinmem",
-		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
-		Value: eth.DefaultConfig.EthashDatasetsInMem,
-	}
-	EthashDatasetsOnDiskFlag = cli.IntFlag{
-		Name:  "ethash.dagsondisk",
-		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
-		Value: eth.DefaultConfig.EthashDatasetsOnDisk,
-	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby)",
@@ -206,6 +177,72 @@ var (
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	}
+	// Ethash settings
+	EthashCacheDirFlag = DirectoryFlag{
+		Name:  "ethash.cachedir",
+		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
+	}
+	EthashCachesInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.cachesinmem",
+		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
+		Value: eth.DefaultConfig.EthashCachesInMem,
+	}
+	EthashCachesOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.cachesondisk",
+		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
+		Value: eth.DefaultConfig.EthashCachesOnDisk,
+	}
+	EthashDatasetDirFlag = DirectoryFlag{
+		Name:  "ethash.dagdir",
+		Usage: "Directory to store the ethash mining DAGs (default = inside home folder)",
+		Value: DirectoryString{eth.DefaultConfig.EthashDatasetDir},
+	}
+	EthashDatasetsInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.dagsinmem",
+		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
+		Value: eth.DefaultConfig.EthashDatasetsInMem,
+	}
+	EthashDatasetsOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.dagsondisk",
+		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
+		Value: eth.DefaultConfig.EthashDatasetsOnDisk,
+	}
+	// Transaction pool settings
+	TxPoolPriceLimitFlag = cli.Uint64Flag{
+		Name:  "txpool.pricelimit",
+		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
+		Value: eth.DefaultConfig.TxPool.PriceLimit,
+	}
+	TxPoolPriceBumpFlag = cli.Uint64Flag{
+		Name:  "txpool.pricebump",
+		Usage: "Price bump percentage to replace an already existing transaction",
+		Value: eth.DefaultConfig.TxPool.PriceBump,
+	}
+	TxPoolAccountSlotsFlag = cli.Uint64Flag{
+		Name:  "txpool.accountslots",
+		Usage: "Minimum number of executable transaction slots guaranteed per account",
+		Value: eth.DefaultConfig.TxPool.AccountSlots,
+	}
+	TxPoolGlobalSlotsFlag = cli.Uint64Flag{
+		Name:  "txpool.globalslots",
+		Usage: "Maximum number of executable transaction slots for all accounts",
+		Value: eth.DefaultConfig.TxPool.GlobalSlots,
+	}
+	TxPoolAccountQueueFlag = cli.Uint64Flag{
+		Name:  "txpool.accountqueue",
+		Usage: "Maximum number of non-executable transaction slots permitted per account",
+		Value: eth.DefaultConfig.TxPool.AccountQueue,
+	}
+	TxPoolGlobalQueueFlag = cli.Uint64Flag{
+		Name:  "txpool.globalqueue",
+		Usage: "Maximum number of non-executable transaction slots for all accounts",
+		Value: eth.DefaultConfig.TxPool.GlobalQueue,
+	}
+	TxPoolLifetimeFlag = cli.DurationFlag{
+		Name:  "txpool.lifetime",
+		Usage: "Maximum amount of time non-executable transaction are queued",
+		Value: eth.DefaultConfig.TxPool.Lifetime,
 	}
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
@@ -784,6 +821,30 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
 	}
 }
 
+func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
+	if ctx.GlobalIsSet(TxPoolPriceLimitFlag.Name) {
+		cfg.PriceLimit = ctx.GlobalUint64(TxPoolPriceLimitFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolPriceBumpFlag.Name) {
+		cfg.PriceBump = ctx.GlobalUint64(TxPoolPriceBumpFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolAccountSlotsFlag.Name) {
+		cfg.AccountSlots = ctx.GlobalUint64(TxPoolAccountSlotsFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolGlobalSlotsFlag.Name) {
+		cfg.GlobalSlots = ctx.GlobalUint64(TxPoolGlobalSlotsFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolAccountQueueFlag.Name) {
+		cfg.AccountQueue = ctx.GlobalUint64(TxPoolAccountQueueFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolGlobalQueueFlag.Name) {
+		cfg.GlobalQueue = ctx.GlobalUint64(TxPoolGlobalQueueFlag.Name)
+	}
+	if ctx.GlobalIsSet(TxPoolLifetimeFlag.Name) {
+		cfg.Lifetime = ctx.GlobalDuration(TxPoolLifetimeFlag.Name)
+	}
+}
+
 func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
 		cfg.EthashCacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
@@ -826,6 +887,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO)
+	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
 
 	switch {

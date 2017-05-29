@@ -93,6 +93,18 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "TRANSACTION POOL",
+		Flags: []cli.Flag{
+			utils.TxPoolPriceLimitFlag,
+			utils.TxPoolPriceBumpFlag,
+			utils.TxPoolAccountSlotsFlag,
+			utils.TxPoolGlobalSlotsFlag,
+			utils.TxPoolAccountQueueFlag,
+			utils.TxPoolGlobalQueueFlag,
+			utils.TxPoolLifetimeFlag,
+		},
+	},
+	{
 		Name: "PERFORMANCE TUNING",
 		Flags: []cli.Flag{
 			utils.CacheFlag,
