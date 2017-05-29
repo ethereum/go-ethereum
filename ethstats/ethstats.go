@@ -427,21 +427,15 @@ type blockStats struct {
 	GasLimit   *big.Int       `json:"gasLimit"`
 	Diff       string         `json:"difficulty"`
 	TotalDiff  string         `json:"totalDifficulty"`
-	Txs        txStats        `json:"transactions"`
+	Txs        []txStats      `json:"transactions"`
 	TxHash     common.Hash    `json:"transactionsRoot"`
 	Root       common.Hash    `json:"stateRoot"`
 	Uncles     uncleStats     `json:"uncles"`
 }
 
-// txStats is a custom wrapper around a transaction array to force serializing
-// empty arrays instead of returning null for them.
-type txStats []*types.Transaction
-
-func (s txStats) MarshalJSON() ([]byte, error) {
-	if txs := ([]*types.Transaction)(s); len(txs) > 0 {
-		return json.Marshal(txs)
-	}
-	return []byte("[]"), nil
+// txStats is the information to report about individual transactions.
+type txStats struct {
+	Hash common.Hash `json:"hash"`
 }
 
 // uncleStats is a custom wrapper around an uncle array to force serializing
@@ -480,7 +474,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 	var (
 		header *types.Header
 		td     *big.Int
-		txs    []*types.Transaction
+		txs    []txStats
 		uncles []*types.Header
 	)
 	if s.eth != nil {
@@ -491,7 +485,10 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 		header = block.Header()
 		td = s.eth.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
 
-		txs = block.Transactions()
+		txs = make([]txStats, len(block.Transactions()))
+		for i, tx := range block.Transactions() {
+			txs[i].Hash = tx.Hash()
+		}
 		uncles = block.Uncles()
 	} else {
 		// Light nodes would need on-demand lookups for transactions/uncles, skip
@@ -501,6 +498,7 @@ func (s *Service) assembleBlockStats(block *types.Block) *blockStats {
 			header = s.les.BlockChain().CurrentHeader()
 		}
 		td = s.les.BlockChain().GetTd(header.Hash(), header.Number.Uint64())
+		txs = []txStats{}
 	}
 	// Assemble and return the block stats
 	author, _ := s.engine.Author(header)
