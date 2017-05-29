@@ -245,6 +245,21 @@ func (n NodeID) TerminalString() string {
 	return hex.EncodeToString(n[:8])
 }
 
+// MarshalText implements the encoding.TextMarshaler interface.
+func (n NodeID) MarshalText() ([]byte, error) {
+	return []byte(hex.EncodeToString(n[:])), nil
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (n *NodeID) UnmarshalText(text []byte) error {
+	id, err := HexID(string(text))
+	if err != nil {
+		return err
+	}
+	*n = id
+	return nil
+}
+
 // BytesID converts a byte slice to a NodeID
 func BytesID(b []byte) (NodeID, error) {
 	var id NodeID
