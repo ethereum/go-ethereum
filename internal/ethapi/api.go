@@ -118,16 +118,16 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
-		for nonce, tx := range txs {
-			dump[fmt.Sprintf("%d", nonce)] = newRPCPendingTransaction(tx)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
 	for account, txs := range queue {
 		dump := make(map[string]*RPCTransaction)
-		for nonce, tx := range txs {
-			dump[fmt.Sprintf("%d", nonce)] = newRPCPendingTransaction(tx)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = newRPCPendingTransaction(tx)
 		}
 		content["queued"][account.Hex()] = dump
 	}
@@ -162,16 +162,16 @@ func (s *PublicTxPoolAPI) Inspect() map[string]map[string]map[string]string {
 	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]string)
-		for nonce, tx := range txs {
-			dump[fmt.Sprintf("%d", nonce)] = format(tx)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx)
 		}
 		content["pending"][account.Hex()] = dump
 	}
 	// Flatten the queued transactions
 	for account, txs := range queue {
 		dump := make(map[string]string)
-		for nonce, tx := range txs {
-			dump[fmt.Sprintf("%d", nonce)] = format(tx)
+		for _, tx := range txs {
+			dump[fmt.Sprintf("%d", tx.Nonce())] = format(tx)
 		}
 		content["queued"][account.Hex()] = dump
 	}
