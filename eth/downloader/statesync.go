@@ -77,19 +77,15 @@ func (d *Downloader) stateFetcher() {
 // runStateSync runs s until it completes or another stateSync is requested.
 func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 	var (
-		activeReqs    = make(map[string]*stateReq)
-		finishedReqs  []*stateReq
-		timeout       = make(chan *stateReq)
-		cancelTimeout = make(chan struct{})
+		activeReqs   = make(map[string]*stateReq)
+		finishedReqs []*stateReq
+		timeout      = make(chan *stateReq)
 	)
 	// Cancel active request timers on exit.
-	// The cancelTimeout channel prevents leaking of timer goroutines
-	// in the unlikely case where a timer is fired just before canceling it.
 	defer func() {
 		for _, req := range activeReqs {
 			req.timer.Stop()
 		}
-		close(cancelTimeout)
 	}()
 	// Run the state sync.
 	go s.run()
@@ -141,7 +137,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.timer = time.AfterFunc(req.timeout, func() {
 				select {
 				case timeout <- req:
-				case <-cancelTimeout:
+				case <-s.done:
+					// Prevent leaking of timer goroutines in the unlikely case where a
+					// timer is fired just before exiting runStateSync.
 				}
 			})
 		}
