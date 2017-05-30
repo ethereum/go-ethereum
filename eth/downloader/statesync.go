@@ -31,9 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
-// If a single state node is tried more than this many times, sync fails.
-const maxStateNodeRetries = 50
-
 type stateReq struct {
 	items    []common.Hash
 	tasks    map[common.Hash]*stateTask
@@ -315,12 +312,9 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 			// to a protocol limit.
 			delete(task.triedPeers, req.peer.id)
 		}
-		// Check retry limits.
+		// Check retry limit.
 		if len(task.triedPeers) >= npeers {
 			return nproc, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.triedPeers), npeers)
-		}
-		if task.numTries > maxStateNodeRetries && task.numTries >= npeers {
-			return nproc, fmt.Errorf("download of state node %s failed %d times", hash.TerminalString(), task.numTries)
 		}
 		s.tasksAvailable[hash] = task
 	}
