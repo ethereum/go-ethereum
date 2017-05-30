@@ -85,10 +85,12 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		finishedReqs []*stateReq
 		timeout      = make(chan *stateReq)
 	)
-	// Cancel active request timers on exit.
 	defer func() {
+		// Cancel active request timers on exit. Also set peers to idle so they're
+		// available for the next sync.
 		for _, req := range activeReqs {
 			req.timer.Stop()
+			req.peer.SetNodeDataIdle(0)
 		}
 	}()
 	// Run the state sync.
