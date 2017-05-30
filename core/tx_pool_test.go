@@ -397,49 +397,78 @@ func TestTransactionDropping(t *testing.T) {
 	var (
 		tx0  = transaction(0, big.NewInt(100), key)
 		tx1  = transaction(1, big.NewInt(200), key)
+		tx2  = transaction(2, big.NewInt(300), key)
 		tx10 = transaction(10, big.NewInt(100), key)
 		tx11 = transaction(11, big.NewInt(200), key)
+		tx12 = transaction(12, big.NewInt(300), key)
 	)
 	pool.promoteTx(account, tx0.Hash(), tx0)
 	pool.promoteTx(account, tx1.Hash(), tx1)
+	pool.promoteTx(account, tx1.Hash(), tx2)
 	pool.enqueueTx(tx10.Hash(), tx10)
 	pool.enqueueTx(tx11.Hash(), tx11)
+	pool.enqueueTx(tx11.Hash(), tx12)
 
 	// Check that pre and post validations leave the pool as is
-	if pool.pending[account].Len() != 2 {
-		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 2)
+	if pool.pending[account].Len() != 3 {
+		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
-	if pool.queue[account].Len() != 2 {
-		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 2)
+	if pool.queue[account].Len() != 3 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
 	if len(pool.all) != 4 {
 		t.Errorf("total transaction mismatch: have %d, want %d", len(pool.all), 4)
 	}
 	pool.resetState()
-	if pool.pending[account].Len() != 2 {
-		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 2)
+	if pool.pending[account].Len() != 3 {
+		t.Errorf("pending transaction mismatch: have %d, want %d", pool.pending[account].Len(), 3)
 	}
-	if pool.queue[account].Len() != 2 {
-		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 2)
+	if pool.queue[account].Len() != 3 {
+		t.Errorf("queued transaction mismatch: have %d, want %d", pool.queue[account].Len(), 3)
 	}
 	if len(pool.all) != 4 {
 		t.Errorf("total transaction mismatch: have %d, want %d", len(pool.all), 4)
 	}
 	// Reduce the balance of the account, and check that invalidated transactions are dropped
-	state.AddBalance(account, big.NewInt(-750))
+	state.AddBalance(account, big.NewInt(-650))
+	pool.resetState()
+
+	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
+		t.Errorf("funded pending transaction missing: %v", tx0)
+	}
+	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; !ok {
+		t.Errorf("funded pending transaction missing: %v", tx0)
+	}
+	if _, ok := pool.pending[account].txs.items[tx2.Nonce()]; ok {
+		t.Errorf("out-of-fund pending transaction present: %v", tx1)
+	}
+	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
+		t.Errorf("funded queued transaction missing: %v", tx10)
+	}
+	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; !ok {
+		t.Errorf("funded queued transaction missing: %v", tx10)
+	}
+	if _, ok := pool.queue[account].txs.items[tx12.Nonce()]; ok {
+		t.Errorf("out-of-fund queued transaction present: %v", tx11)
+	}
+	if len(pool.all) != 4 {
+		t.Errorf("total transaction mismatch: have %d, want %d", len(pool.all), 4)
+	}
+	// Reduce the block gas limit, check that invalidated transactions are dropped
+	pool.gasLimit = func() *big.Int { return big.NewInt(100) }
 	pool.resetState()
 
 	if _, ok := pool.pending[account].txs.items[tx0.Nonce()]; !ok {
 		t.Errorf("funded pending transaction missing: %v", tx0)
 	}
 	if _, ok := pool.pending[account].txs.items[tx1.Nonce()]; ok {
-		t.Errorf("out-of-fund pending transaction present: %v", tx1)
+		t.Errorf("over-gased pending transaction present: %v", tx1)
 	}
 	if _, ok := pool.queue[account].txs.items[tx10.Nonce()]; !ok {
 		t.Errorf("funded queued transaction missing: %v", tx10)
 	}
 	if _, ok := pool.queue[account].txs.items[tx11.Nonce()]; ok {
-		t.Errorf("out-of-fund queued transaction present: %v", tx11)
+		t.Errorf("over-gased queued transaction present: %v", tx11)
 	}
 	if len(pool.all) != 2 {
 		t.Errorf("total transaction mismatch: have %d, want %d", len(pool.all), 2)

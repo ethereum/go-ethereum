@@ -663,6 +663,8 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *TxPool) promoteExecutables(state *state.StateDB) {
+	gaslimit := pool.gasLimit()
+
 	// Iterate over all accounts and promote any executable transactions
 	queued := uint64(0)
 	for addr, list := range pool.queue {
@@ -673,8 +675,8 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 			delete(pool.all, hash)
 			pool.priced.Removed()
 		}
-		// Drop all transactions that are too costly (low balance)
-		drops, _ := list.Filter(state.GetBalance(addr))
+		// Drop all transactions that are too costly (low balance or out of gas)
+		drops, _ := list.Filter(state.GetBalance(addr), gaslimit)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable queued transaction", "hash", hash)
@@ -798,6 +800,8 @@ func (pool *TxPool) promoteExecutables(state *state.StateDB) {
 // executable/pending queue and any subsequent transactions that become unexecutable
 // are moved back into the future queue.
 func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
+	gaslimit := pool.gasLimit()
+
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := state.GetNonce(addr)
@@ -809,8 +813,8 @@ func (pool *TxPool) demoteUnexecutables(state *state.StateDB) {
 			delete(pool.all, hash)
 			pool.priced.Removed()
 		}
-		// Drop all transactions that are too costly (low balance), and queue any invalids back for later
-		drops, invalids := list.Filter(state.GetBalance(addr))
+		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
+		drops, invalids := list.Filter(state.GetBalance(addr), gaslimit)
 		for _, tx := range drops {
 			hash := tx.Hash()
 			log.Trace("Removed unpayable pending transaction", "hash", hash)

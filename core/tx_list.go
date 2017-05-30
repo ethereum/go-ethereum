@@ -220,9 +220,11 @@ func (m *txSortedMap) Flatten() types.Transactions {
 // the executable/pending queue; and for storing gapped transactions for the non-
 // executable/future queue, with minor behavioral changes.
 type txList struct {
-	strict  bool         // Whether nonces are strictly continuous or not
-	txs     *txSortedMap // Heap indexed sorted hash map of the transactions
-	costcap *big.Int     // Price of the highest costing transaction (reset only if exceeds balance)
+	strict bool         // Whether nonces are strictly continuous or not
+	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
+
+	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
+	gascap  *big.Int // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
@@ -232,6 +234,7 @@ func newTxList(strict bool) *txList {
 		strict:  strict,
 		txs:     newTxSortedMap(),
 		costcap: new(big.Int),
+		gascap:  new(big.Int),
 	}
 }
 
@@ -244,8 +247,8 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 // Add tries to insert a new transaction into the list, returning whether the
 // transaction was accepted, and if yes, any previous transaction it replaced.
 //
-// If the new transaction is accepted into the list, the lists' cost threshold
-// is also potentially updated.
+// If the new transaction is accepted into the list, the lists' cost and gas
+// thresholds are also potentially updated.
 func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
@@ -260,6 +263,9 @@ func (l *txList) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Tran
 	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
+	if gas := tx.Gas(); l.gascap.Cmp(gas) < 0 {
+		l.gascap = gas
+	}
 	return true, old
 }
 
@@ -270,23 +276,25 @@ func (l *txList) Forward(threshold uint64) types.Transactions {
 	return l.txs.Forward(threshold)
 }
 
-// Filter removes all transactions from the list with a cost higher than the
-// provided threshold. Every removed transaction is returned for any post-removal
-// maintenance. Strict-mode invalidated transactions are also returned.
+// Filter removes all transactions from the list with a cost or gas limit higher
+// than the provided thresholds. Every removed transaction is returned for any
+// post-removal maintenance. Strict-mode invalidated transactions are also
+// returned.
 //
-// This method uses the cached costcap to quickly decide if there's even a point
-// in calculating all the costs or if the balance covers all. If the threshold is
-// lower than the costcap, the costcap will be reset to a new high after removing
-// expensive the too transactions.
-func (l *txList) Filter(threshold *big.Int) (types.Transactions, types.Transactions) {
+// This method uses the cached costcap and gascap to quickly decide if there's even
+// a point in calculating all the costs or if the balance covers all. If the threshold
+// is lower than the costgas cap, the caps will be reset to a new high after removing
+// the newly invalidated transactions.
+func (l *txList) Filter(costLimit, gasLimit *big.Int) (types.Transactions, types.Transactions) {
 	// If all transactions are below the threshold, short circuit
-	if l.costcap.Cmp(threshold) <= 0 {
+	if l.costcap.Cmp(costLimit) <= 0 && l.gascap.Cmp(gasLimit) <= 0 {
 		return nil, nil
 	}
-	l.costcap = new(big.Int).Set(threshold) // Lower the cap to the threshold
+	l.costcap = new(big.Int).Set(costLimit) // Lower the caps to the thresholds
+	l.gascap = new(big.Int).Set(gasLimit)
 
 	// Filter out all the transactions above the account's funds
-	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost().Cmp(threshold) > 0 })
+	removed := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Cost().Cmp(costLimit) > 0 || tx.Gas().Cmp(gasLimit) > 0 })
 
 	// If the list was strict, filter anything above the lowest nonce
 	var invalids types.Transactions
