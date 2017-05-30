@@ -182,25 +182,16 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	}
 }
 
-// wait blocks until the sync is done or canceled.
-func (s *stateSync) wait() error {
+// Wait blocks until the sync is done or canceled.
+func (s *stateSync) Wait() error {
 	<-s.done
 	return s.err
 }
 
-// wait blocks until the sync is done or canceled.
-func (s *stateSync) checkDone() (bool, error) {
-	select {
-	case <-s.done:
-		return true, s.err
-	default:
-		return false, nil
-	}
-}
-
+// Cancel cancels the sync and waits until it has shut down.
 func (s *stateSync) Cancel() error {
 	s.cancelOnce.Do(func() { close(s.cancel) })
-	return s.wait()
+	return s.Wait()
 }
 
 func (s *stateSync) run() {

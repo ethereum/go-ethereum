@@ -377,25 +377,15 @@ func (q *queue) countProcessableItems() int {
 		if result == nil || result.Pending > 0 {
 			return i
 		}
-		// Special handling for the fast-sync pivot block:
-		if q.mode == FastSync {
-			bnum := result.Header.Number.Uint64()
-			if bnum == q.fastSyncPivot {
-				// Stop before processing the pivot block to ensure that
-				// resultCache has space for fsHeaderForceVerify items. Not
-				// doing this could leave us unable to download the required
-				// amount of headers.
-				for j := 0; j < fsHeaderForceVerify; j++ {
-					if i+j+1 >= len(q.resultCache) || q.resultCache[i+j+1] == nil {
-						return i
-					}
+		// Stop before processing the pivot block to ensure that
+		// resultCache has space for fsHeaderForceVerify items. Not
+		// doing this could leave us unable to download the required
+		// amount of headers.
+		if q.mode == FastSync && result.Header.Number.Uint64() == q.fastSyncPivot {
+			for j := 0; j < fsHeaderForceVerify; j++ {
+				if i+j+1 >= len(q.resultCache) || q.resultCache[i+j+1] == nil {
+					return i
 				}
-			}
-			// If we're just the after fast sync pivot, stop as well
-			// because the following batch needs different insertion.
-			// This simplifies handling the switchover in d.processContent.
-			if bnum == q.fastSyncPivot+1 && i > 0 {
-				return i
 			}
 		}
 	}
