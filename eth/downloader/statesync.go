@@ -40,6 +40,10 @@ type stateReq struct {
 	response [][]byte    // the response. this is nil for timed-out requests.
 }
 
+func (req *stateReq) timedOut() bool {
+	return req.response == nil
+}
+
 type stateSyncStats struct {
 	done    uint64 // number of entries pulled
 	pending uint64 // number of pending entries
@@ -219,6 +223,7 @@ func (s *stateSync) loop() error {
 			return errCancelStateFetch
 		case req := <-s.deliver:
 			// response or timeout
+			log.Trace("Received node data response", "peer", req.peer.id, "count", len(req.items), "timeout", req.timedOut())
 			req.peer.SetNodeDataIdle(len(req.response))
 			procStart := time.Now()
 			n, err := s.process(req)
@@ -226,7 +231,7 @@ func (s *stateSync) loop() error {
 				log.Warn("Node data write error", "err", err)
 				return err
 			}
-			if len(req.items) == 1 && req.response == nil {
+			if len(req.items) == 1 && req.timedOut() {
 				log.Warn("Node data timeout, dropping peer", "peer", req.peer.id)
 				s.d.dropPeer(req.peer.id)
 			}
@@ -303,6 +308,11 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 	}
 	// Put unfulfilled tasks back.
 	for hash, task := range req.tasks {
+		if len(req.response) > 0 || req.timedOut() {
+			// Ensure that the item will be retried if the response contained some data or
+			// timed out.
+			delete(task.triedPeers, req.peer.id)
+		}
 		if npeers := s.d.peers.Len(); len(task.triedPeers) >= npeers {
 			return nproc, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.triedPeers), npeers)
 		}
