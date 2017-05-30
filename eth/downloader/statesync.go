@@ -292,7 +292,10 @@ func (s *stateSync) popTasks(n int, req *stateReq) error {
 func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 	batch := s.d.stateDB.NewBatch()
 	for _, blob := range req.response {
-		if hash, ok := s.processNodeData(blob, batch); ok {
+		hash, err := s.processNodeData(blob, batch)
+		if err != nil && err != trie.ErrNotRequested {
+			return 0, fmt.Errorf("invalid state node %s: %v", err)
+		} else if err == nil {
 			nproc++
 			delete(req.tasks, hash)
 		}
@@ -305,16 +308,18 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 		atomic.StoreUint32(&s.d.fsPivotFails, 1) // Don't ever reset to 0, as that will unlock the pivot block
 	}
 	// Put unfulfilled tasks back.
+	npeers := s.d.peers.Len()
 	for hash, task := range req.tasks {
 		if len(req.response) > 0 || req.timedOut() {
 			// Ensure that the item will be retried because it may have been excluded due
 			// to a protocol limit.
 			delete(task.triedPeers, req.peer.id)
 		}
-		if npeers := s.d.peers.Len(); len(task.triedPeers) >= npeers {
+		// Check retry limits.
+		if len(task.triedPeers) >= npeers {
 			return nproc, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.triedPeers), npeers)
 		}
-		if task.numTries > maxStateNodeRetries {
+		if task.numTries > maxStateNodeRetries && task.numTries >= npeers {
 			return nproc, fmt.Errorf("download of state node %s failed %d times", hash.TerminalString(), task.numTries)
 		}
 		s.tasksAvailable[hash] = task
@@ -322,13 +327,13 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 	return nproc, nil
 }
 
-func (s *stateSync) processNodeData(blob []byte, batch ethdb.Batch) (common.Hash, bool) {
+func (s *stateSync) processNodeData(blob []byte, batch ethdb.Batch) (common.Hash, error) {
 	res := trie.SyncResult{Data: blob}
 	s.keccak.Reset()
 	s.keccak.Write(blob)
 	s.keccak.Sum(res.Hash[:0])
 	_, _, err := s.sched.Process([]trie.SyncResult{res}, batch)
-	return res.Hash, err == nil
+	return res.Hash, err
 }
 
 func (s *stateSync) updateStats(processed int, duration time.Duration) {
