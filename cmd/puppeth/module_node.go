@@ -135,7 +135,7 @@ func deployNode(client *sshClient, network string, bootv4, bootv5 []string, conf
 	}
 	defer client.Run("rm -rf " + workdir)
 
-	// Build and deploy the bootnode service
+	// Build and deploy the boot or seal node service
 	return nil, client.Stream(fmt.Sprintf("cd %s && docker-compose -p %s up -d --build", workdir, network))
 }
 
