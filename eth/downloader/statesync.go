@@ -31,6 +31,9 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// If a single state node is tried more than this many times, sync fails.
+const maxStateNodeRetries = 50
+
 type stateReq struct {
 	items    []common.Hash
 	tasks    map[common.Hash]*stateTask
@@ -168,6 +171,7 @@ type stateSync struct {
 
 type stateTask struct {
 	triedPeers map[string]struct{}
+	numTries   int
 }
 
 func newStateSync(d *Downloader, root common.Hash) *stateSync {
@@ -263,7 +267,7 @@ func (s *stateSync) popTasks(n int, req *stateReq) error {
 	if len(s.tasksAvailable) < n {
 		new := s.sched.Missing(n - len(s.tasksAvailable))
 		for _, hash := range new {
-			s.tasksAvailable[hash] = &stateTask{make(map[string]struct{})}
+			s.tasksAvailable[hash] = &stateTask{make(map[string]struct{}), 0}
 		}
 	}
 	// Find tasks that haven't been tried with the request's peer.
@@ -277,6 +281,7 @@ func (s *stateSync) popTasks(n int, req *stateReq) error {
 			continue
 		}
 		t.triedPeers[req.peer.id] = struct{}{}
+		t.numTries++
 		req.items = append(req.items, hash)
 		req.tasks[hash] = t
 		delete(s.tasksAvailable, hash)
@@ -308,6 +313,9 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 		}
 		if npeers := s.d.peers.Len(); len(task.triedPeers) >= npeers {
 			return nproc, fmt.Errorf("state node %s failed with all peers (%d tries, %d peers)", hash.TerminalString(), len(task.triedPeers), npeers)
+		}
+		if task.numTries > maxStateNodeRetries {
+			return nproc, fmt.Errorf("download of state node %s failed %d times", hash.TerminalString(), task.numTries)
 		}
 		s.tasksAvailable[hash] = task
 	}
