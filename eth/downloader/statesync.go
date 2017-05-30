@@ -309,8 +309,8 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 	// Put unfulfilled tasks back.
 	for hash, task := range req.tasks {
 		if len(req.response) > 0 || req.timedOut() {
-			// Ensure that the item will be retried if the response contained some data or
-			// timed out.
+			// Ensure that the item will be retried because it may have been excluded due
+			// to a protocol limit.
 			delete(task.triedPeers, req.peer.id)
 		}
 		if npeers := s.d.peers.Len(); len(task.triedPeers) >= npeers {
