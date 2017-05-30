@@ -109,8 +109,7 @@ func (w *wizard) deployNode(boot bool) {
 		} else if w.conf.genesis.Config.Clique != nil {
 			// If a previous signer was already set, offer to reuse it
 			if infos.keyJSON != "" {
-				var key keystore.Key
-				if err := json.Unmarshal([]byte(infos.keyJSON), &key); err != nil {
+				if key, err := keystore.DecryptKey([]byte(infos.keyJSON), infos.keyPass); err != nil {
 					infos.keyJSON, infos.keyPass = "", ""
 				} else {
 					fmt.Println()
