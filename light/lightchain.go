@@ -20,7 +20,6 @@ import (
 	"context"
 	"math/big"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -60,9 +59,7 @@ type LightChain struct {
 
 	quit    chan struct{}
 	running int32 // running must be called automically
-	// procInterrupt must be atomically called
-	procInterrupt int32 // interrupt signaler for block processing
-	wg            sync.WaitGroup
+	wg      sync.WaitGroup
 
 	engine consensus.Engine
 }
@@ -86,7 +83,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		engine:       engine,
 	}
 	var err error
-	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
+	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine)
 	if err != nil {
 		return nil, err
 	}
@@ -112,10 +109,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		}
 	}
 	return bc, nil
-}
-
-func (self *LightChain) getProcInterrupt() bool {
-	return atomic.LoadInt32(&self.procInterrupt) == 1
 }
 
 // Odr returns the ODR backend of the chain
@@ -293,15 +286,9 @@ func (self *LightChain) GetBlockByNumber(ctx context.Context, number uint64) (*t
 	return self.GetBlock(ctx, hash, number)
 }
 
-// Stop stops the blockchain service. If any imports are currently in progress
-// it will abort them using the procInterrupt.
+// Stop stops the blockchain service.
 func (bc *LightChain) Stop() {
-	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
-		return
-	}
 	close(bc.quit)
-	atomic.StoreInt32(&bc.procInterrupt, 1)
-
 	bc.wg.Wait()
 	log.Info("Blockchain manager stopped")
 }
