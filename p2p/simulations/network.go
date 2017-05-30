@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -166,8 +167,9 @@ type Conn struct {
 	Up bool `json:"up"`
 	// reverse is false by default (One dialled/dropped the Other)
 	Reverse bool `json:"reverse"`
-	// Info
-	// average throughput, recent average throughput etc
+	// A scalar distance value denoting how "far" Other is from One (Kademlia table)
+	Distance int `json:"distance"`
+	// indicates if a ControlEvent has already been fired for this connection
 	controlFired bool
 }
 
@@ -242,11 +244,13 @@ func (self *Network) newConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	if other == nil {
 		return nil, fmt.Errorf("other %v does not exist", other)
 	}
+	distance, _ := pot.NewBytesVal(one.Addr(), nil).PO(pot.NewBytesVal(other.Addr(), nil), 0)
 	return &Conn{
-		One:   oneID,
-		Other: otherID,
-		one:   one,
-		other: other,
+		One:      oneID,
+		Other:    otherID,
+		one:      one,
+		other:    other,
+		Distance: distance,
 	}, nil
 }
 
