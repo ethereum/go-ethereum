@@ -339,17 +339,6 @@ func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	state, err := pool.currentState()
-	if err != nil {
-		return nil, err
-	}
-
-	// check queue first
-	pool.promoteExecutables(state)
-
-	// invalidate any txs
-	pool.demoteUnexecutables(state)
-
 	pending := make(map[common.Address]types.Transactions)
 	for addr, list := range pool.pending {
 		pending[addr] = list.Flatten()
@@ -551,12 +540,12 @@ func (pool *TxPool) Add(tx *types.Transaction) error {
 	if err != nil {
 		return err
 	}
-	state, err := pool.currentState()
-	if err != nil {
-		return err
-	}
 	// If we added a new transaction, run promotion checks and return
 	if !replace {
+		state, err := pool.currentState()
+		if err != nil {
+			return err
+		}
 		pool.promoteExecutables(state)
 	}
 	return nil
@@ -579,11 +568,11 @@ func (pool *TxPool) AddBatch(txs []*types.Transaction) error {
 	}
 	// Only reprocess the internal state if something was actually added
 	if added > 0 {
-		state, err := pool.currentState()
-		if err != nil {
-			return err
-		}
 		if !replaced {
+			state, err := pool.currentState()
+			if err != nil {
+				return err
+			}
 			pool.promoteExecutables(state)
 		}
 	}
