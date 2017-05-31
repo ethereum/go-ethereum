@@ -54,7 +54,7 @@ func (d *Downloader) syncState(root common.Hash) *stateSync {
 	s := newStateSync(d, root)
 	select {
 	case d.stateSyncStart <- s:
-	case <-d.cancelCh:
+	case <-d.quitCh:
 		s.err = errCancelStateFetch
 		close(s.done)
 	}
