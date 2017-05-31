@@ -291,7 +291,7 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 	for _, blob := range req.response {
 		hash, err := s.processNodeData(blob, batch)
 		if err != nil && err != trie.ErrNotRequested {
-			return 0, fmt.Errorf("invalid state node %s: %v", err)
+			return 0, fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		} else if err == nil {
 			nproc++
 			delete(req.tasks, hash)
