@@ -46,7 +46,7 @@ func NewIterator(it NodeIterator) *Iterator {
 func (it *Iterator) Next() bool {
 	for it.nodeIt.Next(true) {
 		if it.nodeIt.Leaf() {
-			it.Key = hexToKeybytes(it.nodeIt.Path())
+			it.Key = it.nodeIt.LeafKey()
 			it.Value = it.nodeIt.LeafBlob()
 			return true
 		}
@@ -59,23 +59,27 @@ func (it *Iterator) Next() bool {
 
 // NodeIterator is an iterator to traverse the trie pre-order.
 type NodeIterator interface {
-	// Hash returns the hash of the current node
-	Hash() common.Hash
-	// Parent returns the hash of the parent of the current node
-	Parent() common.Hash
-	// Leaf returns true iff the current node is a leaf node.
-	Leaf() bool
-	// LeafBlob returns the contents of the node, if it is a leaf.
-	// Callers must not retain references to the return value after calling Next()
-	LeafBlob() []byte
-	// Path returns the hex-encoded path to the current node.
-	// Callers must not retain references to the return value after calling Next()
-	Path() []byte
 	// Next moves the iterator to the next node. If the parameter is false, any child
 	// nodes will be skipped.
 	Next(bool) bool
 	// Error returns the error status of the iterator.
 	Error() error
+
+	// Hash returns the hash of the current node.
+	Hash() common.Hash
+	// Parent returns the hash of the parent of the current node.
+	Parent() common.Hash
+	// Path returns the hex-encoded path to the current node.
+	// Callers must not retain references to the return value after calling Next
+	Path() []byte
+
+	// Leaf returns true iff the current node is a leaf node.
+	// LeafBlob, LeafKey return the contents and key of the leaf node. These
+	// method panic if the iterator is not positioned at a leaf.
+	// Callers must not retain references to their return value after calling Next
+	Leaf() bool
+	LeafBlob() []byte
+	LeafKey() []byte
 }
 
 // nodeIteratorState represents the iteration state at one particular node of the
@@ -104,52 +108,50 @@ func newNodeIterator(trie *Trie, start []byte) NodeIterator {
 	return it
 }
 
-// Hash returns the hash of the current node
 func (it *nodeIterator) Hash() common.Hash {
 	if len(it.stack) == 0 {
 		return common.Hash{}
 	}
-
 	return it.stack[len(it.stack)-1].hash
 }
 
-// Parent returns the hash of the parent node
 func (it *nodeIterator) Parent() common.Hash {
 	if len(it.stack) == 0 {
 		return common.Hash{}
 	}
-
 	return it.stack[len(it.stack)-1].parent
 }
 
-// Leaf returns true if the current node is a leaf
 func (it *nodeIterator) Leaf() bool {
-	if len(it.stack) == 0 {
-		return false
+	if len(it.stack) > 0 {
+		_, ok := it.stack[len(it.stack)-1].node.(valueNode)
+		return ok
 	}
-
-	_, ok := it.stack[len(it.stack)-1].node.(valueNode)
-	return ok
+	return false
 }
 
-// LeafBlob returns the data for the current node, if it is a leaf
 func (it *nodeIterator) LeafBlob() []byte {
-	if len(it.stack) == 0 {
-		return nil
+	if len(it.stack) > 0 {
+		if node, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
+			return []byte(node)
+		}
 	}
-
-	if node, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
-		return []byte(node)
-	}
-	return nil
+	panic("not at leaf")
 }
 
-// Path returns the hex-encoded path to the current node
+func (it *nodeIterator) LeafKey() []byte {
+	if len(it.stack) > 0 {
+		if _, ok := it.stack[len(it.stack)-1].node.(valueNode); ok {
+			return hexToKeybytes(it.path)
+		}
+	}
+	panic("not at leaf")
+}
+
 func (it *nodeIterator) Path() []byte {
 	return it.path
 }
 
-// Error returns the error set in case of an internal error in the iterator
 func (it *nodeIterator) Error() error {
 	if it.err == iteratorEnd {
 		return nil
@@ -216,7 +218,8 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		if (ancestor == common.Hash{}) {
 			ancestor = parent.parent
 		}
-		if node, ok := parent.node.(*fullNode); ok {
+		switch node := parent.node.(type) {
+		case *fullNode:
 			// Full node, move to the first non-nil child.
 			for i := parent.index + 1; i < len(node.Children); i++ {
 				child := node.Children[i]
@@ -234,7 +237,7 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 					return state, &parent.index, path, nil
 				}
 			}
-		} else if node, ok := parent.node.(*shortNode); ok {
+		case *shortNode:
 			// Short node, return the pointer singleton child
 			if parent.index < 0 {
 				hash, _ := node.Val.cache()
@@ -253,10 +256,11 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 				}
 				return state, &parent.index, path, nil
 			}
-		} else if hash, ok := parent.node.(hashNode); ok {
+		case hashNode:
 			// Hash node, resolve the hash child from the database
+			hash := node
 			if parent.index < 0 {
-				node, err := it.trie.resolveHash(hash, nil, nil)
+				node, err := it.trie.resolveHash(node, nil, nil)
 				if err != nil {
 					return it.stack[len(it.stack)-1], &parent.index, it.path, err
 				}
@@ -290,23 +294,21 @@ func (it *nodeIterator) pop() {
 }
 
 func compareNodes(a, b NodeIterator) int {
-	cmp := bytes.Compare(a.Path(), b.Path())
-	if cmp != 0 {
+	if cmp := bytes.Compare(a.Path(), b.Path()); cmp != 0 {
 		return cmp
 	}
-
 	if a.Leaf() && !b.Leaf() {
 		return -1
 	} else if b.Leaf() && !a.Leaf() {
 		return 1
 	}
-
-	cmp = bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes())
-	if cmp != 0 {
+	if cmp := bytes.Compare(a.Hash().Bytes(), b.Hash().Bytes()); cmp != 0 {
 		return cmp
 	}
-
-	return bytes.Compare(a.LeafBlob(), b.LeafBlob())
+	if a.Leaf() && b.Leaf() {
+		return bytes.Compare(a.LeafBlob(), b.LeafBlob())
+	}
+	return 0
 }
 
 type differenceIterator struct {
@@ -341,6 +343,10 @@ func (it *differenceIterator) Leaf() bool {
 
 func (it *differenceIterator) LeafBlob() []byte {
 	return it.b.LeafBlob()
+}
+
+func (it *differenceIterator) LeafKey() []byte {
+	return it.b.LeafKey()
 }
 
 func (it *differenceIterator) Path() []byte {
@@ -443,6 +449,10 @@ func (it *unionIterator) Leaf() bool {
 
 func (it *unionIterator) LeafBlob() []byte {
 	return (*it.items)[0].LeafBlob()
+}
+
+func (it *unionIterator) LeafKey() []byte {
+	return (*it.items)[0].LeafKey()
 }
 
 func (it *unionIterator) Path() []byte {
