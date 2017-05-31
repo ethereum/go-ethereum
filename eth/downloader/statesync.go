@@ -294,8 +294,8 @@ func (s *stateSync) process(req *stateReq) (nproc int, err error) {
 			return 0, fmt.Errorf("invalid state node %s: %v", hash.TerminalString(), err)
 		} else if err == nil {
 			nproc++
-			delete(req.tasks, hash)
 		}
+		delete(req.tasks, hash)
 	}
 	if err := batch.Write(); err != nil {
 		return 0, err
