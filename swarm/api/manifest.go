@@ -462,7 +462,7 @@ func RegularSlashes(path string) (res string) {
 }
 
 func (self *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, fullpath string) {
-	path := RegularSlashes(spath)
+	path := RegularSlashes(spath) + "/"
 	var pos int
 	quitC := make(chan bool)
 	entry, pos = self.findPrefixOf(path, quitC)
