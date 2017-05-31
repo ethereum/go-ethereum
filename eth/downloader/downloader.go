@@ -1293,8 +1293,7 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 	}
 }
 
-// processBlocks takes fetch results from the queue and tries to import them
-// into the chain.
+// processFullSyncContent takes fetch results from the queue and imports them into the chain.
 func (d *Downloader) processFullSyncContent() error {
 	for {
 		results := d.queue.WaitResults()
@@ -1339,6 +1338,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 	return nil
 }
 
+// processFastSyncContent takes fetch results from the queue and writes them to the
+// database. It also controls the synchronisation of state nodes of the pivot block.
 func (d *Downloader) processFastSyncContent(latest *types.Header) error {
 	// Start syncing state of the reported head block.
 	// This should get us most of the state of the pivot block.
