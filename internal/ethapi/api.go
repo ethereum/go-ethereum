@@ -211,8 +211,9 @@ type PrivateAccountAPI struct {
 // NewPrivateAccountAPI create a new PrivateAccountAPI.
 func NewPrivateAccountAPI(b Backend, nonceLock *AddrLocker) *PrivateAccountAPI {
 	return &PrivateAccountAPI{
-		am: b.AccountManager(),
-		b:  b,
+		am:        b.AccountManager(),
+		nonceLock: nonceLock,
+		b:         b,
 	}
 }
 
