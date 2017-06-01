@@ -251,7 +251,7 @@ func (pool *TxPool) resetState() {
 	}
 	// Check the queue and move transactions over to the pending if possible
 	// or remove those that have become invalid
-	pool.promoteExecutables(currentState)
+	pool.promoteExecutables(currentState, nil)
 }
 
 // Stop terminates the transaction pool.
@@ -338,17 +338,6 @@ func (pool *TxPool) Content() (map[common.Address]types.Transactions, map[common
 func (pool *TxPool) Pending() (map[common.Address]types.Transactions, error) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-
-	state, err := pool.currentState()
-	if err != nil {
-		return nil, err
-	}
-
-	// check queue first
-	pool.promoteExecutables(state)
-
-	// invalidate any txs
-	pool.demoteUnexecutables(state)
 
 	pending := make(map[common.Address]types.Transactions)
 	for addr, list := range pool.pending {
@@ -551,13 +540,14 @@ func (pool *TxPool) Add(tx *types.Transaction) error {
 	if err != nil {
 		return err
 	}
-	state, err := pool.currentState()
-	if err != nil {
-		return err
-	}
 	// If we added a new transaction, run promotion checks and return
 	if !replace {
-		pool.promoteExecutables(state)
+		state, err := pool.currentState()
+		if err != nil {
+			return err
+		}
+		from, _ := types.Sender(pool.signer, tx) // already validated
+		pool.promoteExecutables(state, []common.Address{from})
 	}
 	return nil
 }
@@ -568,24 +558,26 @@ func (pool *TxPool) AddBatch(txs []*types.Transaction) error {
 	defer pool.mu.Unlock()
 
 	// Add the batch of transaction, tracking the accepted ones
-	replaced, added := true, 0
+	dirty := make(map[common.Address]struct{})
 	for _, tx := range txs {
 		if replace, err := pool.add(tx); err == nil {
-			added++
 			if !replace {
-				replaced = false
+				from, _ := types.Sender(pool.signer, tx) // already validated
+				dirty[from] = struct{}{}
 			}
 		}
 	}
 	// Only reprocess the internal state if something was actually added
-	if added > 0 {
+	if len(dirty) > 0 {
 		state, err := pool.currentState()
 		if err != nil {
 			return err
 		}
-		if !replaced {
-			pool.promoteExecutables(state)
+		addrs := make([]common.Address, 0, len(dirty))
+		for addr, _ := range dirty {
+			addrs = append(addrs, addr)
 		}
+		pool.promoteExecutables(state, addrs)
 	}
 	return nil
 }
@@ -662,12 +654,23 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 // promoteExecutables moves transactions that have become processable from the
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
-func (pool *TxPool) promoteExecutables(state *state.StateDB) {
+func (pool *TxPool) promoteExecutables(state *state.StateDB, accounts []common.Address) {
 	gaslimit := pool.gasLimit()
 
+	// Gather all the accounts potentially needing updates
+	if accounts == nil {
+		accounts = make([]common.Address, 0, len(pool.queue))
+		for addr, _ := range pool.queue {
+			accounts = append(accounts, addr)
+		}
+	}
 	// Iterate over all accounts and promote any executable transactions
 	queued := uint64(0)
-	for addr, list := range pool.queue {
+	for _, addr := range accounts {
+		list := pool.queue[addr]
+		if list == nil {
+			continue // Just in case someone calls with a non existing account
+		}
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(state.GetNonce(addr)) {
 			hash := tx.Hash()

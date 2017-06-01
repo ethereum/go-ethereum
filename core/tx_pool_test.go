@@ -175,7 +175,7 @@ func TestTransactionQueue(t *testing.T) {
 	pool.resetState()
 	pool.enqueueTx(tx.Hash(), tx)
 
-	pool.promoteExecutables(currentState)
+	pool.promoteExecutables(currentState, []common.Address{from})
 	if len(pool.pending) != 1 {
 		t.Error("expected valid txs to be 1 is", len(pool.pending))
 	}
@@ -184,7 +184,7 @@ func TestTransactionQueue(t *testing.T) {
 	from, _ = deriveSender(tx)
 	currentState.SetNonce(from, 2)
 	pool.enqueueTx(tx.Hash(), tx)
-	pool.promoteExecutables(currentState)
+	pool.promoteExecutables(currentState, []common.Address{from})
 	if _, ok := pool.pending[from].txs.items[tx.Nonce()]; ok {
 		t.Error("expected transaction to be in tx pool")
 	}
@@ -206,7 +206,7 @@ func TestTransactionQueue(t *testing.T) {
 	pool.enqueueTx(tx2.Hash(), tx2)
 	pool.enqueueTx(tx3.Hash(), tx3)
 
-	pool.promoteExecutables(currentState)
+	pool.promoteExecutables(currentState, []common.Address{from})
 
 	if len(pool.pending) != 1 {
 		t.Error("expected tx pool to be 1, got", len(pool.pending))
@@ -304,16 +304,16 @@ func TestTransactionDoubleNonce(t *testing.T) {
 		t.Errorf("second transaction insert failed (%v) or not reported replacement (%v)", err, replace)
 	}
 	state, _ := pool.currentState()
-	pool.promoteExecutables(state)
+	pool.promoteExecutables(state, []common.Address{addr})
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
 	if tx := pool.pending[addr].txs.items[0]; tx.Hash() != tx2.Hash() {
 		t.Errorf("transaction mismatch: have %x, want %x", tx.Hash(), tx2.Hash())
 	}
-	// Add the thid transaction and ensure it's not saved (smaller price)
+	// Add the third transaction and ensure it's not saved (smaller price)
 	pool.add(tx3)
-	pool.promoteExecutables(state)
+	pool.promoteExecutables(state, []common.Address{addr})
 	if pool.pending[addr].Len() != 1 {
 		t.Error("expected 1 pending transactions, got", pool.pending[addr].Len())
 	}
@@ -1087,7 +1087,7 @@ func benchmarkFuturePromotion(b *testing.B, size int) {
 	// Benchmark the speed of pool validation
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		pool.promoteExecutables(state)
+		pool.promoteExecutables(state, nil)
 	}
 }
 
