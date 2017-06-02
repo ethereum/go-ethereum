@@ -86,8 +86,9 @@ func runCmd(ctx *cli.Context) error {
 	} else if ctx.GlobalBool(DebugFlag.Name) {
 		debugLogger = vm.NewStructLogger(nil)
 		tracer = debugLogger
+	} else {
+		debugLogger = vm.NewStructLogger(nil)
 	}
-
 	if ctx.GlobalString(GenesisFlag.Name) != "" {
 		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
 		_, statedb = gen.ToBlock()
@@ -216,11 +217,14 @@ GC calls:           %d
 
 `, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC)
 	}
-
-	fmt.Printf("0x%x", ret)
-	if err != nil {
-		fmt.Printf(" error: %v", err)
+	if tracer != nil {
+		tracer.CaptureEnd(ret, 0, execTime)
+	} else {
+		fmt.Printf("0x%x\n", ret)
 	}
-	fmt.Println()
+
+	if err != nil {
+		fmt.Printf(" error: %v\n", err)
+	}
 	return nil
 }

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -61,6 +62,50 @@ type StructLog struct {
 	Depth   int
 	Err     error
 }
+type StructLogJsonOut struct {
+	Pc      uint64              `json:"pc"`
+	Op      OpCode              `json:"op"`
+	OpName  string              `json:"opName"`
+	Gas     math.HexOrDecimal64 `json:"gas"`
+	GasCost math.HexOrDecimal64 `json:"gasCost"`
+	Memory  string              `json:"memory"`
+	Stack   hexArray            `json:"stack"`
+	//Storage map[common.Hash]common.Hash `json:"storage"`
+	Depth int `json:"depth"`
+	//Err     error
+}
+type hexArray []*big.Int
+
+// MarshalJSON encodes the memory as 32-byte hex strings instead of bigints
+func (a hexArray) MarshalJSON() ([]byte, error) {
+
+	if items := ([]*big.Int)(a); len(items) > 0 {
+		hexitems := make([]*math.HexOrDecimal256, len(items))
+		for i, item := range items {
+			x := math.HexOrDecimal256(*item)
+			hexitems[i] = &x
+		}
+		return json.Marshal(hexitems)
+	}
+	return []byte("[]"), nil
+}
+
+// MarshalJSON encodes StructLog for json output
+func (s StructLog) MarshalJSON() ([]byte, error) {
+	var enc StructLogJsonOut
+	enc.Pc = s.Pc
+	enc.Op = s.Op
+	enc.OpName = s.Op.String()
+	enc.Gas = math.HexOrDecimal64(s.Gas)
+	enc.GasCost = math.HexOrDecimal64(s.GasCost)
+	//enc.Memory = fmt.Sprintf("0x%v", len(common.Bytes2Hex(s.Memory))/2)
+	enc.Memory = fmt.Sprintf("%v bytes", len(s.Memory))
+
+	enc.Stack = s.Stack
+	//enc.Storage = s.Storage
+	enc.Depth = s.Depth
+	return json.Marshal(&enc)
+}
 
 // Tracer is used to collect execution traces from an EVM transaction
 // execution. CaptureState is called for each step of the VM with the
@@ -69,6 +114,7 @@ type StructLog struct {
 // if you need to retain them beyond the current call.
 type Tracer interface {
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
+	CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -110,8 +156,19 @@ func NewJSONLogger(writer io.Writer) *JSONLogger {
 
 // CaptureState outputs state information on the logger
 func (l *JSONLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
-	log := StructLog{pc, op, gas, cost, memory.Data(), stack.Data(), nil, env.depth, err}
+	log := StructLog{pc, op, gas + cost, cost, memory.Data(), stack.Data(), nil, env.depth, err}
 	return l.encoder.Encode(log)
+}
+func (l *JSONLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
+	type endLog struct {
+		Output  string              `json:"output"`
+		GasUsed math.HexOrDecimal64 `json:"gasUsed"`
+		Time    time.Duration       `json:"time"`
+	}
+
+	log := endLog{common.Bytes2Hex(output), math.HexOrDecimal64(gasUsed), t}
+	return l.encoder.Encode(log)
+
 }
 
 // CaptureState logs a new structured log message and pushes it out to the environment
@@ -182,6 +239,10 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	log := StructLog{pc, op, gas, cost, mem, stck, storage, env.depth, err}
 
 	l.logs = append(l.logs, log)
+	return nil
+}
+func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
+	fmt.Printf("0x%x", output)
 	return nil
 }
 
