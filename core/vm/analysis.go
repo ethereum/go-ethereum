@@ -41,21 +41,47 @@ func (d destinations) has(codehash common.Hash, code []byte, dest *big.Int) bool
 		m = jumpdests(code)
 		d[codehash] = m
 	}
-	return (m[udest/8] & (1 << (udest % 8))) != 0
+	return OpCode(code[udest]) == JUMPDEST && (m[udest/8]&(0x80>>(udest%8))) == 0
+	//	return (m[udest/8] & (1 << (udest % 8))) != 0
+}
+
+type bitvec struct {
+	m []byte
+}
+
+func (bits *bitvec) addone(pos uint64) {
+	bits.m[pos/8] |= 0x80 >> (pos % 8)
+}
+func (bits *bitvec) addOneByte(pos uint64) {
+	bits.m[pos/8] |= 0xFF >> (pos % 8)
+	bits.m[pos/8+1] |= ^(0xFF >> (pos % 8))
 }
 
 // jumpdests creates a map that contains an entry for each
 // PC location that is a JUMPDEST instruction.
 func jumpdests(code []byte) []byte {
-	m := make([]byte, len(code)/8+1)
-	for pc := uint64(0); pc < uint64(len(code)); pc++ {
+	//The map is 4 bytes longer than necessary, in case the code
+	// ends with a PUSH32, the algorithm will push zeroes onto the
+	// bitvector outside the bounds of the actual code.
+	m := make([]byte, len(code)/8+1+4)
+	bits := &bitvec{m}
+	for pc := uint64(0); pc < uint64(len(code)); {
 		op := OpCode(code[pc])
-		if op == JUMPDEST {
-			m[pc/8] |= 1 << (pc % 8)
-		} else if op >= PUSH1 && op <= PUSH32 {
-			a := uint64(op) - uint64(PUSH1) + 1
-			pc += a
+
+		if op >= PUSH1 && op <= PUSH32 {
+			numbits := op - PUSH1 + 1
+			pc++
+			for ; numbits >= 8; numbits -= 8 {
+				bits.addOneByte(pc) // 8
+				pc += 8
+			}
+			for ; numbits > 0; numbits-- {
+				bits.addone(pc)
+				pc++
+			}
+		} else {
+			pc++
 		}
 	}
-	return m
+	return bits.m
 }
