@@ -56,43 +56,12 @@ type operation struct {
 }
 
 var (
-	frontierInstructionSet   = NewFrontierInstructionSet()
-	homesteadInstructionSet  = NewHomesteadInstructionSet()
-	metropolisInstructionSet = NewMetropolisInstructionSet()
+	frontierInstructionSet  = NewFrontierInstructionSet()
+	homesteadInstructionSet = NewHomesteadInstructionSet()
 )
 
-func NewMetropolisInstructionSet() [256]operation {
-	instructionSet := NewHomesteadInstructionSet()
-	instructionSet[STATIC_CALL] = operation{
-		execute:       opStaticCall,
-		gasCost:       gasStaticCall,
-		validateStack: makeStackFunc(6, 1),
-		memorySize:    memoryStaticCall,
-		valid:         true,
-	}
-	instructionSet[REVERT] = operation{
-		execute:       opRevert,
-		gasCost:       constGasFunc(GasFastestStep),
-		validateStack: makeStackFunc(2, 0),
-		valid:         true,
-		reverts:       true,
-	}
-	instructionSet[RETURNDATASIZE] = operation{
-		execute:       opReturnDataSize,
-		gasCost:       constGasFunc(0), // TODO
-		validateStack: makeStackFunc(0, 1),
-		valid:         true,
-	}
-	instructionSet[RETURNDATACOPY] = operation{
-		execute:       opReturnDataCopy,
-		gasCost:       gasReturnDataCopy,
-		validateStack: makeStackFunc(3, 0),
-		memorySize:    memoryReturnDataCopy,
-		valid:         true,
-	}
-	return instructionSet
-}
-
+// NewHomesteadInstructionSet returns the frontier and homestead
+// instructions that can be executed during the homestead phase.
 func NewHomesteadInstructionSet() [256]operation {
 	instructionSet := NewFrontierInstructionSet()
 	instructionSet[DELEGATECALL] = operation{
@@ -841,6 +810,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(2, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG1: {
 			execute:       makeLog(1),
@@ -848,6 +818,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(3, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG2: {
 			execute:       makeLog(2),
@@ -855,6 +826,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(4, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG3: {
 			execute:       makeLog(3),
@@ -862,6 +834,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(5, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		LOG4: {
 			execute:       makeLog(4),
@@ -869,6 +842,7 @@ func NewFrontierInstructionSet() [256]operation {
 			validateStack: makeStackFunc(6, 0),
 			memorySize:    memoryLog,
 			valid:         true,
+			writes:        true,
 		},
 		CREATE: {
 			execute:       opCreate,

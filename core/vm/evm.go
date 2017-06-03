@@ -104,8 +104,8 @@ type EVM struct {
 	abort int32
 }
 
-// NewEVM retutrns a new EVM evmironment. The returned EVM is not thread safe
-// and should only ever be used *once*.
+// NewEVM retutrns a new EVM . The returned EVM is not thread safe and should
+// only ever be used *once*.
 func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmConfig Config) *EVM {
 	evm := &EVM{
 		Context:     ctx,
@@ -153,7 +153,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 
 	// initialise a new contract and set the code that is to be used by the
-	// E The contract is a scoped evmironment for this execution context
+	// EVM. The contract is a scoped evmironment for this execution context
 	// only.
 	contract := NewContract(caller, to, new(big.Int), gas)
 	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))

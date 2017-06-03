@@ -57,7 +57,7 @@ var PrecompiledContractsMetropolis = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{4}): &dataCopy{},
 	common.BytesToAddress([]byte{5}): &bigModexp{},
 	common.BytesToAddress([]byte{6}): &bn256Add{},
-	common.BytesToAddress([]byte{6}): &bn256ScalarMul{},
+	common.BytesToAddress([]byte{7}): &bn256ScalarMul{},
 	common.BytesToAddress([]byte{8}): &pairing{},
 }
 
@@ -206,7 +206,7 @@ func (c *bigModexp) Run(input []byte) ([]byte, error) {
 	}
 	mod := new(big.Int).SetBytes(input[:modLen])
 
-	return base.Exp(base, exp, mod).Bytes(), nil
+	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), len(input[:modLen])), nil
 }
 
 type bn256Add struct{}
@@ -220,37 +220,7 @@ func (c *bn256Add) RequiredGas(input []byte) uint64 {
 }
 
 func (c *bn256Add) Run(in []byte) ([]byte, error) {
-	if len(in) != 96 {
-		return nil, errBadPrecompileInput
-	}
-
-	g1, onCurve := new(bn256.G1).Unmarshal(in[:64])
-	if !onCurve {
-		return nil, errNotOnCurve
-	}
-	x, y, _, _ := g1.CurvePoints()
-	if x.Cmp(bn256.P) >= 0 || y.Cmp(bn256.P) >= 0 {
-		return nil, errInvalidCurvePoint
-	}
-	g1.ScalarMult(g1, new(big.Int).SetBytes(in[64:]))
-
-	return g1.Marshal(), nil
-}
-
-type bn256ScalarMul struct{}
-
-// RequiredGas returns the gas required to execute the pre-compiled contract.
-//
-// This method does not require any overflow checking as the input size gas costs
-// required for anything significant is so high it's impossible to pay for.
-func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
-	return 0 // TODO
-}
-
-func (c *bn256ScalarMul) Run(in []byte) ([]byte, error) {
-	if len(in) != 128 {
-		return nil, errBadPrecompileInput
-	}
+	in = common.RightPadBytes(in, 128)
 
 	x, onCurve := new(bn256.G1).Unmarshal(in[:64])
 	if !onCurve {
@@ -269,8 +239,35 @@ func (c *bn256ScalarMul) Run(in []byte) ([]byte, error) {
 	if gx.Cmp(bn256.P) >= 0 || gy.Cmp(bn256.P) >= 0 {
 		return nil, errInvalidCurvePoint
 	}
+	x.Add(x, y)
 
-	return x.Add(x, y).Marshal(), nil
+	return x.Marshal(), nil
+}
+
+type bn256ScalarMul struct{}
+
+// RequiredGas returns the gas required to execute the pre-compiled contract.
+//
+// This method does not require any overflow checking as the input size gas costs
+// required for anything significant is so high it's impossible to pay for.
+func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
+	return 0 // TODO
+}
+
+func (c *bn256ScalarMul) Run(in []byte) ([]byte, error) {
+	in = common.RightPadBytes(in, 96)
+
+	g1, onCurve := new(bn256.G1).Unmarshal(in[:64])
+	if !onCurve {
+		return nil, errNotOnCurve
+	}
+	x, y, _, _ := g1.CurvePoints()
+	if x.Cmp(bn256.P) >= 0 || y.Cmp(bn256.P) >= 0 {
+		return nil, errInvalidCurvePoint
+	}
+	g1.ScalarMult(g1, new(big.Int).SetBytes(in[64:96]))
+
+	return g1.Marshal(), nil
 }
 
 // pairing implements a pairing pre-compile for the bn256 curve
