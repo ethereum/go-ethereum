@@ -17,6 +17,7 @@
 package params
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/expanse-org/go-expanse/common"
@@ -38,6 +39,9 @@ var (
 
 	TestNetSpuriousDragon = big.NewInt(10)
 	MainNetSpuriousDragon = big.NewInt(600000)
+
+	TestNetMetropolisBlock = big.NewInt(math.MaxInt64)
+	MainNetMetropolisBlock = big.NewInt(math.MaxInt64)
 
 	TestNetChainID = big.NewInt(3) // Test net default chain ID
 	MainNetChainID = big.NewInt(2) // main net default chain ID

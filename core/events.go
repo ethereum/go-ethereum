@@ -17,8 +17,6 @@
 package core
 
 import (
-	"math/big"
-
 	"github.com/expanse-org/go-expanse/common"
 	"github.com/expanse-org/go-expanse/core/types"
 )
@@ -43,14 +41,8 @@ type NewMinedBlockEvent struct{ Block *types.Block }
 // RemovedTransactionEvent is posted when a reorg happens
 type RemovedTransactionEvent struct{ Txs types.Transactions }
 
-// RemovedLogEvent is posted when a reorg happens
+// RemovedLogsEvent is posted when a reorg happens
 type RemovedLogsEvent struct{ Logs []*types.Log }
-
-// ChainSplit is posted when a new head is detected
-type ChainSplitEvent struct {
-	Block *types.Block
-	Logs  []*types.Log
-}
 
 type ChainEvent struct {
 	Block *types.Block
@@ -72,8 +64,6 @@ type ChainUncleEvent struct {
 }
 
 type ChainHeadEvent struct{ Block *types.Block }
-
-type GasPriceChanged struct{ Price *big.Int }
 
 // Mining operation events
 type StartMining struct{}

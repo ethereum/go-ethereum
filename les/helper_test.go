@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/expanse-org/go-expanse/common"
+	"github.com/expanse-org/go-expanse/consensus/ethash"
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/core/types"
 	"github.com/expanse-org/go-expanse/core/vm"
@@ -39,7 +40,6 @@ import (
 	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/p2p/discover"
 	"github.com/expanse-org/go-expanse/params"
-	"github.com/expanse-org/go-expanse/pow"
 )
 
 var (
@@ -134,10 +134,10 @@ func testRCL() RequestCostList {
 // channels for different events.
 func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *core.BlockGen)) (*ProtocolManager, ethdb.Database, *LesOdr, error) {
 	var (
-		evmux = new(event.TypeMux)
-		pow   = new(pow.FakePow)
-		db, _ = ethdb.NewMemDatabase()
-		gspec = core.Genesis{
+		evmux  = new(event.TypeMux)
+		engine = ethash.NewFaker()
+		db, _  = ethdb.NewMemDatabase()
+		gspec  = core.Genesis{
 			Config: params.TestChainConfig,
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
@@ -148,9 +148,9 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 
 	if lightSync {
 		odr = NewLesOdr(db)
-		chain, _ = light.NewLightChain(odr, gspec.Config, pow, evmux)
+		chain, _ = light.NewLightChain(odr, gspec.Config, engine, evmux)
 	} else {
-		blockchain, _ := core.NewBlockChain(db, gspec.Config, pow, evmux, vm.Config{})
+		blockchain, _ := core.NewBlockChain(db, gspec.Config, engine, evmux, vm.Config{})
 		gchain, _ := core.GenerateChain(gspec.Config, genesis, db, blocks, generator)
 		if _, err := blockchain.InsertChain(gchain); err != nil {
 			panic(err)
@@ -158,7 +158,7 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		chain = blockchain
 	}
 
-	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, pow, chain, nil, db, odr, nil)
+	pm, err := NewProtocolManager(gspec.Config, lightSync, NetworkId, evmux, engine, chain, nil, db, odr, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}

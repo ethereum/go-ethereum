@@ -25,6 +25,7 @@ import (
 
 	"github.com/expanse-org/go-expanse/accounts"
 	"github.com/expanse-org/go-expanse/accounts/keystore"
+	"github.com/expanse-org/go-expanse/crypto"
 )
 
 const (
@@ -115,6 +116,9 @@ func (ks *KeyStore) SignHash(address *Address, hash []byte) (signature []byte, _
 
 // SignTx signs the given transaction with the requested account.
 func (ks *KeyStore) SignTx(account *Account, tx *Transaction, chainID *BigInt) (*Transaction, error) {
+	if chainID == nil { // Null passed from mobile app
+		chainID = new(BigInt)
+	}
 	signed, err := ks.keystore.SignTx(account.account, tx.tx, chainID.bigint)
 	if err != nil {
 		return nil, err
@@ -132,6 +136,9 @@ func (ks *KeyStore) SignHashPassphrase(account *Account, passphrase string, hash
 // SignTxPassphrase signs the transaction if the private key matching the
 // given address can be decrypted with the given passphrase.
 func (ks *KeyStore) SignTxPassphrase(account *Account, passphrase string, tx *Transaction, chainID *BigInt) (*Transaction, error) {
+	if chainID == nil { // Null passed from mobile app
+		chainID = new(BigInt)
+	}
 	signed, err := ks.keystore.SignTxWithPassphrase(account.account, passphrase, tx.tx, chainID.bigint)
 	if err != nil {
 		return nil, err
@@ -170,6 +177,11 @@ func (ks *KeyStore) NewAccount(passphrase string) (*Account, error) {
 	return &Account{account}, nil
 }
 
+// UpdateAccount changes the passphrase of an existing account.
+func (ks *KeyStore) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
+	return ks.keystore.Update(account.account, passphrase, newPassphrase)
+}
+
 // ExportKey exports as a JSON key, encrypted with newPassphrase.
 func (ks *KeyStore) ExportKey(account *Account, passphrase, newPassphrase string) (key []byte, _ error) {
 	return ks.keystore.Export(account.account, passphrase, newPassphrase)
@@ -184,9 +196,17 @@ func (ks *KeyStore) ImportKey(keyJSON []byte, passphrase, newPassphrase string) 
 	return &Account{acc}, nil
 }
 
-// UpdateAccount changes the passphrase of an existing account.
-func (ks *KeyStore) UpdateAccount(account *Account, passphrase, newPassphrase string) error {
-	return ks.keystore.Update(account.account, passphrase, newPassphrase)
+// ImportECDSAKey stores the given encrypted JSON key into the key directory.
+func (ks *KeyStore) ImportECDSAKey(key []byte, passphrase string) (account *Account, _ error) {
+	privkey, err := crypto.ToECDSA(key)
+	if err != nil {
+		return nil, err
+	}
+	acc, err := ks.keystore.ImportECDSA(privkey, passphrase)
+	if err != nil {
+		return nil, err
+	}
+	return &Account{acc}, nil
 }
 
 // ImportPreSaleKey decrypts the given Ethereum presale wallet and stores

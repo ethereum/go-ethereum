@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 
@@ -43,6 +44,8 @@ func NewFileSystem(api *Api) *FileSystem {
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
 // TODO: localpath should point to a manifest
+//
+// DEPRECATED: Use the HTTP API instead
 func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	var list []*manifestTrieEntry
 	localpath, err := filepath.Abs(filepath.Clean(lpath))
@@ -65,16 +68,13 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		log.Debug(fmt.Sprintf("uploading '%s'", localpath))
 		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 			if (err == nil) && !info.IsDir() {
-				//fmt.Printf("lp %s  path %s\n", localpath, path)
 				if len(path) <= start {
 					return fmt.Errorf("Path is too short")
 				}
 				if path[:start] != localpath {
 					return fmt.Errorf("Path prefix of '%s' does not match localpath '%s'", path, localpath)
 				}
-				entry := &manifestTrieEntry{
-					Path: filepath.ToSlash(path),
-				}
+				entry := newManifestTrieEntry(&ManifestEntry{Path: filepath.ToSlash(path)}, nil)
 				list = append(list, entry)
 			}
 			return err
@@ -91,9 +91,7 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		if localpath[:start] != dir {
 			return "", fmt.Errorf("Path prefix of '%s' does not match dir '%s'", localpath, dir)
 		}
-		entry := &manifestTrieEntry{
-			Path: filepath.ToSlash(localpath),
-		}
+		entry := newManifestTrieEntry(&ManifestEntry{Path: filepath.ToSlash(localpath)}, nil)
 		list = append(list, entry)
 	}
 
@@ -153,11 +151,10 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 		}
 		entry.Path = RegularSlashes(entry.Path[start:])
 		if entry.Path == index {
-			ientry := &manifestTrieEntry{
-				Path:        "",
-				Hash:        entry.Hash,
+			ientry := newManifestTrieEntry(&ManifestEntry{
 				ContentType: entry.ContentType,
-			}
+			}, nil)
+			ientry.Hash = entry.Hash
 			trie.addEntry(ientry, quitC)
 		}
 		trie.addEntry(entry, quitC)
@@ -172,8 +169,10 @@ func (self *FileSystem) Upload(lpath, index string) (string, error) {
 	return hs, err2
 }
 
-// Download replicates the manifest path structure on the local filesystem
+// Download replicates the manifest basePath structure on the local filesystem
 // under localpath
+//
+// DEPRECATED: Use the HTTP API instead
 func (self *FileSystem) Download(bzzpath, localpath string) error {
 	lpath, err := filepath.Abs(filepath.Clean(localpath))
 	if err != nil {
@@ -185,10 +184,15 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	//resolving host and port
-	key, _, path, err := self.api.parseAndResolve(bzzpath, true)
+	uri, err := Parse(path.Join("bzz:/", bzzpath))
 	if err != nil {
 		return err
 	}
+	key, err := self.api.Resolve(uri)
+	if err != nil {
+		return err
+	}
+	path := uri.Path
 
 	if len(path) > 0 {
 		path += "/"
@@ -264,7 +268,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 }
 
 func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Key, path string) error {
-	f, err := os.Create(path) // TODO: path separators
+	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err
 	}

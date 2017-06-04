@@ -43,13 +43,13 @@ func tmpDatadirWithKeystore(t *testing.T) string {
 }
 
 func TestAccountListEmpty(t *testing.T) {
-	gexp := runGeth(t, "account")
+	gexp := runGeth(t, "account", "list")
 	gexp.expectExit()
 }
 
 func TestAccountList(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	gexp := runGeth(t, "--datadir", datadir, "account")
+	gexp := runGeth(t, "account", "list", "--datadir", datadir)
 	defer gexp.expectExit()
 	if runtime.GOOS == "windows" {
 		gexp.expect(`
@@ -67,7 +67,7 @@ Account #2: {289d485d9771714cce91d3393d764e1311907acc} keystore://{{.Datadir}}/k
 }
 
 func TestAccountNew(t *testing.T) {
-	gexp := runGeth(t, "--lightkdf", "account", "new")
+	gexp := runGeth(t, "account", "new", "--lightkdf")
 	defer gexp.expectExit()
 	gexp.expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
@@ -79,7 +79,7 @@ Repeat passphrase: {{.InputLine "foobar"}}
 }
 
 func TestAccountNewBadRepeat(t *testing.T) {
-	gexp := runGeth(t, "--lightkdf", "account", "new")
+	gexp := runGeth(t, "account", "new", "--lightkdf")
 	defer gexp.expectExit()
 	gexp.expect(`
 Your new account is locked with a password. Please give a password. Do not forget this password.
@@ -92,9 +92,9 @@ Fatal: Passphrases do not match
 
 func TestAccountUpdate(t *testing.T) {
 	datadir := tmpDatadirWithKeystore(t)
-	gexp := runGeth(t,
+	gexp := runGeth(t, "account", "update",
 		"--datadir", datadir, "--lightkdf",
-		"account", "update", "f466859ead1932d743d622cb74fc058882e8648a")
+		"f466859ead1932d743d622cb74fc058882e8648a")
 	defer gexp.expectExit()
 	gexp.expect(`
 Unlocking account f466859ead1932d743d622cb74fc058882e8648a | Attempt 1/3
@@ -107,7 +107,7 @@ Repeat passphrase: {{.InputLine "foobar2"}}
 }
 
 func TestWalletImport(t *testing.T) {
-	gexp := runGeth(t, "--lightkdf", "wallet", "import", "testdata/guswallet.json")
+	gexp := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
 	defer gexp.expectExit()
 	gexp.expect(`
 !! Unsupported terminal, password will be echoed.
@@ -122,7 +122,8 @@ Address: {d4584b5f6229b7be90727b0fc8c6b91bb427821f}
 }
 
 func TestWalletImportBadPassword(t *testing.T) {
-	gexp := runGeth(t, "--lightkdf", "wallet", "import", "testdata/guswallet.json")
+
+	gexp := runGeth(t, "wallet", "import", "--lightkdf", "testdata/guswallet.json")
 	defer gexp.expectExit()
 	gexp.expect(`
 !! Unsupported terminal, password will be echoed.

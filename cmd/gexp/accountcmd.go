@@ -40,32 +40,39 @@ var (
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
-passwordfile as argument containing the wallet password in plaintext.
-
-`,
+passwordfile as argument containing the wallet password in plaintext.`,
 		Subcommands: []cli.Command{
 			{
-				Action:    importWallet,
+
 				Name:      "import",
 				Usage:     "Import Expanse presale wallet",
 				ArgsUsage: "<keyFile>",
+				Action:    utils.MigrateFlags(importWallet),
+				Category:  "ACCOUNT COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.KeyStoreDirFlag,
+					utils.PasswordFileFlag,
+					utils.LightKDFFlag,
+				},
 				Description: `
-TODO: Please write this
-`,
+	geth wallet [options] /path/to/my/presale.wallet
+
+will prompt for your password and imports your ether presale account.
+It can be used non-interactively with the --password option taking a
+passwordfile as argument containing the wallet password in plaintext.`,
 			},
 		},
 	}
-	accountCommand = cli.Command{
-		Action:    accountList,
-		Name:      "account",
-		Usage:     "Manage accounts",
-		ArgsUsage: "",
-		Category:  "ACCOUNT COMMANDS",
-		Description: `
-Manage accounts lets you create new accounts, list all existing accounts,
-import a private key into a new account.
 
-'            help' shows a list of subcommands or help for one subcommand.
+	accountCommand = cli.Command{
+		Name:     "account",
+		Usage:    "Manage accounts",
+		Category: "ACCOUNT COMMANDS",
+		Description: `
+
+Manage accounts, list all existing accounts, import a private key into a new
+account, create a new account or update an existing account.
 
 It supports interactive mode, when you are prompted for password as well as
 non-interactive mode where passwords are supplied via a given password file.
@@ -80,36 +87,34 @@ Note that exporting your key in unencrypted format is NOT supported.
 Keys are stored under <DATADIR>/keystore.
 It is safe to transfer the entire directory or the individual keys therein
 between expanse nodes by simply copying.
-Make sure you backup your keys regularly.
 
-In order to use your account to send transactions, you need to unlock them using
-the '--unlock' option. The argument is a space separated list of addresses or
-indexes. If used non-interactively with a passwordfile, the file should contain
-the respective passwords one per line. If you unlock n accounts and the password
-file contains less than n entries, then the last password is meant to apply to
-all remaining accounts.
-
-And finally. DO NOT FORGET YOUR PASSWORD.
-`,
+Make sure you backup your keys regularly.`,
 		Subcommands: []cli.Command{
 			{
-				Action:    accountList,
-				Name:      "list",
-				Usage:     "Print account addresses",
-				ArgsUsage: " ",
+				Name:   "list",
+				Usage:  "Print summary of existing accounts",
+				Action: utils.MigrateFlags(accountList),
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.KeyStoreDirFlag,
+				},
 				Description: `
-TODO: Please write this
-`,
+Print a short summary of all accounts`,
 			},
 			{
-				Action:    accountCreate,
-				Name:      "new",
-				Usage:     "Create a new account",
-				ArgsUsage: " ",
+				Name:   "new",
+				Usage:  "Create a new account",
+				Action: utils.MigrateFlags(accountCreate),
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.KeyStoreDirFlag,
+					utils.PasswordFileFlag,
+					utils.LightKDFFlag,
+				},
 				Description: `
     gexp account new
 
-Creates a new account. Prints the address.
+Creates a new account and prints the address.
 
 The account is saved in encrypted format, you are prompted for a passphrase.
 
@@ -117,17 +122,20 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    gexp --password <passwordfile> account new
-
 Note, this is meant to be used for testing only, it is a bad idea to save your
 password to file or expose in any other way.
 `,
 			},
 			{
-				Action:    accountUpdate,
 				Name:      "update",
 				Usage:     "Update an existing account",
+				Action:    utils.MigrateFlags(accountUpdate),
 				ArgsUsage: "<address>",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.KeyStoreDirFlag,
+					utils.LightKDFFlag,
+				},
 				Description: `
     gexp account update <address>
 
@@ -141,16 +149,22 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    gexp --password <passwordfile> account update <address>
+    gexp account update [options] <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
 `,
 			},
 			{
-				Action:    accountImport,
-				Name:      "import",
-				Usage:     "Import a private key into a new account",
+				Name:   "import",
+				Usage:  "Import a private key into a new account",
+				Action: utils.MigrateFlags(accountImport),
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+					utils.KeyStoreDirFlag,
+					utils.PasswordFileFlag,
+					utils.LightKDFFlag,
+				},
 				ArgsUsage: "<keyFile>",
 				Description: `
     gexp account import <keyfile>
@@ -166,7 +180,7 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the -password flag:
 
-    gexp --password <passwordfile> account import <keyfile>
+    gexp account import [options] <keyfile>
 
 Note:
 As you can directly copy your encrypted accounts to another expanse instance,
@@ -179,8 +193,7 @@ nodes.
 )
 
 func accountList(ctx *cli.Context) error {
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
-
+	stack, _ := makeConfigNode(ctx)
 	var index int
 	for _, wallet := range stack.AccountManager().Wallets() {
 		for _, account := range wallet.Accounts() {
@@ -278,7 +291,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	stack, _ := makeConfigNode(ctx)
 	password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -296,13 +309,15 @@ func accountUpdate(ctx *cli.Context) error {
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
 	}
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	stack, _ := makeConfigNode(ctx)
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
-	account, oldPassword := unlockAccount(ctx, ks, ctx.Args().First(), 0, nil)
-	newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
-	if err := ks.Update(account, oldPassword, newPassword); err != nil {
-		utils.Fatalf("Could not update the account: %v", err)
+	for _, addr := range ctx.Args() {
+		account, oldPassword := unlockAccount(ctx, ks, addr, 0, nil)
+		newPassword := getPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
+		if err := ks.Update(account, oldPassword, newPassword); err != nil {
+			utils.Fatalf("Could not update the account: %v", err)
+		}
 	}
 	return nil
 }
@@ -317,7 +332,7 @@ func importWallet(ctx *cli.Context) error {
 		utils.Fatalf("Could not read wallet file: %v", err)
 	}
 
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	stack, _ := makeConfigNode(ctx)
 	passphrase := getPassPhrase("", false, 0, utils.MakePasswordList(ctx))
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -338,7 +353,7 @@ func accountImport(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to load the private key: %v", err)
 	}
-	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	stack, _ := makeConfigNode(ctx)
 	passphrase := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)

@@ -55,13 +55,13 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // into the network.
 func (p *Peer) start() {
 	go p.update()
-	log.Debug(fmt.Sprintf("%v: whisper started", p.peer))
+	log.Trace("start", "peer", p.ID())
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
 func (p *Peer) stop() {
 	close(p.quit)
-	log.Debug(fmt.Sprintf("%v: whisper stopped", p.peer))
+	log.Trace("stop", "peer", p.ID())
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
@@ -78,19 +78,19 @@ func (p *Peer) handshake() error {
 		return err
 	}
 	if packet.Code != statusCode {
-		return fmt.Errorf("peer sent %x before status packet", packet.Code)
+		return fmt.Errorf("peer [%x] sent packet %x before status packet", p.ID(), packet.Code)
 	}
 	s := rlp.NewStream(packet.Payload, uint64(packet.Size))
 	peerVersion, err := s.Uint()
 	if err != nil {
-		return fmt.Errorf("bad status message: %v", err)
+		return fmt.Errorf("peer [%x] sent bad status message: %v", p.ID(), err)
 	}
 	if peerVersion != ProtocolVersion {
-		return fmt.Errorf("protocol version mismatch %d != %d", peerVersion, ProtocolVersion)
+		return fmt.Errorf("peer [%x]: protocol version mismatch %d != %d", p.ID(), peerVersion, ProtocolVersion)
 	}
 	// Wait until out own status is consumed too
 	if err := <-errc; err != nil {
-		return fmt.Errorf("failed to send status packet: %v", err)
+		return fmt.Errorf("peer [%x] failed to send status packet: %v", p.ID(), err)
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func (p *Peer) update() {
 
 		case <-transmit.C:
 			if err := p.broadcast(); err != nil {
-				log.Info(fmt.Sprintf("%v: broadcast failed: %v", p.peer, err))
+				log.Trace("broadcast failed", "reason", err, "peer", p.ID())
 				return
 			}
 
@@ -149,23 +149,22 @@ func (peer *Peer) expire() {
 // broadcast iterates over the collection of envelopes and transmits yet unknown
 // ones over the network.
 func (p *Peer) broadcast() error {
-	// Fetch the envelopes and collect the unknown ones
+	var cnt int
 	envelopes := p.host.Envelopes()
-	transmit := make([]*Envelope, 0, len(envelopes))
 	for _, envelope := range envelopes {
 		if !p.marked(envelope) {
-			transmit = append(transmit, envelope)
-			p.mark(envelope)
+			err := p2p.Send(p.ws, messagesCode, envelope)
+			if err != nil {
+				return err
+			} else {
+				p.mark(envelope)
+				cnt++
+			}
 		}
 	}
-	if len(transmit) == 0 {
-		return nil
+	if cnt > 0 {
+		log.Trace("broadcast", "num. messages", cnt)
 	}
-	// Transmit the unknown batch (potentially empty)
-	if err := p2p.Send(p.ws, messagesCode, transmit); err != nil {
-		return err
-	}
-	log.Trace(fmt.Sprint(p.peer, "broadcasted", len(transmit), "message(s)"))
 	return nil
 }
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -31,9 +32,7 @@ import (
 const (
 	notificationBufferSize = 10000 // max buffered notifications before codec is closed
 
-	MetadataApi     = "rpc"
-	DefaultIPCApis  = "admin,debug,eth,exp,miner,net,personal,shh,txpool,web3"
-	DefaultHTTPApis = "eth,exp,net,web3"
+	MetadataApi = "rpc"
 )
 
 // CodecOption specifies which type of messages this codec supports
@@ -98,32 +97,30 @@ func (s *Server) RegisterName(name string, rcvr interface{}) error {
 		return fmt.Errorf("%s is not exported", reflect.Indirect(rcvrVal).Type().Name())
 	}
 
+	methods, subscriptions := suitableCallbacks(rcvrVal, svc.typ)
+
 	// already a previous service register under given sname, merge methods/subscriptions
 	if regsvc, present := s.services[name]; present {
-		methods, subscriptions := suitableCallbacks(rcvrVal, svc.typ)
 		if len(methods) == 0 && len(subscriptions) == 0 {
 			return fmt.Errorf("Service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
 		}
-
 		for _, m := range methods {
 			regsvc.callbacks[formatName(m.method.Name)] = m
 		}
 		for _, s := range subscriptions {
 			regsvc.subscriptions[formatName(s.method.Name)] = s
 		}
-
 		return nil
 	}
 
 	svc.name = name
-	svc.callbacks, svc.subscriptions = suitableCallbacks(rcvrVal, svc.typ)
+	svc.callbacks, svc.subscriptions = methods, subscriptions
 
 	if len(svc.callbacks) == 0 && len(svc.subscriptions) == 0 {
 		return fmt.Errorf("Service %T doesn't have any suitable methods/subscriptions to expose", rcvr)
 	}
 
 	s.services[svc.name] = svc
-
 	return nil
 }
 
@@ -305,7 +302,7 @@ func (s *Server) handle(ctx context.Context, codec ServerCodec, req *serverReque
 		// active the subscription after the sub id was successfully sent to the client
 		activateSub := func() {
 			notifier, _ := NotifierFromContext(ctx)
-			notifier.activate(subid)
+			notifier.activate(subid, req.svcname)
 		}
 
 		return codec.CreateResponse(req.id, subid), activateSub
@@ -385,7 +382,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 		codec.Close()
 	}
 
-	// when request holds one of more subscribe requests this allows these subscriptions to be actived
+	// when request holds one of more subscribe requests this allows these subscriptions to be activated
 	for _, c := range callbacks {
 		c()
 	}
@@ -412,7 +409,7 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, Error) 
 			continue
 		}
 
-		if r.isPubSub && r.method == unsubscribeMethod {
+		if r.isPubSub && strings.HasSuffix(r.method, unsubscribeMethodSuffix) {
 			requests[i] = &serverRequest{id: r.id, isUnsubscribe: true}
 			argTypes := []reflect.Type{reflect.TypeOf("")} // expect subscription id as first arg
 			if args, err := codec.ParseRequestArguments(argTypes, r.params); err == nil {
@@ -441,7 +438,7 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, Error) 
 					}
 				}
 			} else {
-				requests[i] = &serverRequest{id: r.id, err: &methodNotFoundError{subscribeMethod, r.method}}
+				requests[i] = &serverRequest{id: r.id, err: &methodNotFoundError{r.method, r.method}}
 			}
 			continue
 		}

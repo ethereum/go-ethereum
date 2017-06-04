@@ -30,10 +30,6 @@ import (
 //
 // RootHash is the original root of the trie that contains the node
 //
-// Key is a binary-encoded key that contains the prefix that leads to the first
-// missing node and optionally a suffix that hints on which further nodes should
-// also be retrieved
-//
 // PrefixLen is the nibble length of the key prefix that leads from the root to
 // the missing node
 //
@@ -42,7 +38,6 @@ import (
 // such hints in the error message)
 type MissingNodeError struct {
 	RootHash, NodeHash   common.Hash
-	Key                  []byte
 	PrefixLen, SuffixLen int
 }
 

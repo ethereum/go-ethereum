@@ -153,27 +153,20 @@ func (n *Node) Start() error {
 
 	// Initialize the p2p server. This creates the node key and
 	// discovery databases.
-	n.serverConfig = p2p.Config{
-		PrivateKey:       n.config.NodeKey(),
-		Name:             n.config.NodeName(),
-		Discovery:        !n.config.NoDiscovery,
-		DiscoveryV5:      n.config.DiscoveryV5,
-		DiscoveryV5Addr:  n.config.DiscoveryV5Addr,
-		BootstrapNodes:   n.config.BootstrapNodes,
-		BootstrapNodesV5: n.config.BootstrapNodesV5,
-		StaticNodes:      n.config.StaticNodes(),
-		TrustedNodes:     n.config.TrusterNodes(),
-		NodeDatabase:     n.config.NodeDB(),
-		ListenAddr:       n.config.ListenAddr,
-		NetRestrict:      n.config.NetRestrict,
-		NAT:              n.config.NAT,
-		Dialer:           n.config.Dialer,
-		NoDial:           n.config.NoDial,
-		MaxPeers:         n.config.MaxPeers,
-		MaxPendingPeers:  n.config.MaxPendingPeers,
+	n.serverConfig = n.config.P2P
+	n.serverConfig.PrivateKey = n.config.NodeKey()
+	n.serverConfig.Name = n.config.NodeName()
+	if n.serverConfig.StaticNodes == nil {
+		n.serverConfig.StaticNodes = n.config.StaticNodes()
+	}
+	if n.serverConfig.TrustedNodes == nil {
+		n.serverConfig.TrustedNodes = n.config.TrusterNodes()
+	}
+	if n.serverConfig.NodeDatabase == "" {
+		n.serverConfig.NodeDatabase = n.config.NodeDB()
 	}
 	running := &p2p.Server{Config: n.serverConfig}
-	log.Info(fmt.Sprint("instance:", n.serverConfig.Name))
+	log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
@@ -379,7 +372,7 @@ func (n *Node) stopIPC() {
 }
 
 // startHTTP initializes and starts the HTTP RPC endpoint.
-func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors string) error {
+func (n *Node) startHTTP(endpoint string, apis []rpc.API, modules []string, cors []string) error {
 	// Short circuit if the HTTP endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -433,7 +426,7 @@ func (n *Node) stopHTTP() {
 }
 
 // startWS initializes and starts the websocket RPC endpoint.
-func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins string) error {
+func (n *Node) startWS(endpoint string, apis []rpc.API, modules []string, wsOrigins []string) error {
 	// Short circuit if the WS endpoint isn't being exposed
 	if endpoint == "" {
 		return nil
@@ -543,6 +536,7 @@ func (n *Node) Stop() error {
 func (n *Node) Wait() {
 	n.lock.RLock()
 	if n.server == nil {
+		n.lock.RUnlock()
 		return
 	}
 	stop := n.stop

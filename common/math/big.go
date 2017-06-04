@@ -27,6 +27,8 @@ var (
 	tt256     = BigPow(2, 256)
 	tt256m1   = new(big.Int).Sub(tt256, big.NewInt(1))
 	MaxBig256 = new(big.Int).Set(tt256m1)
+	tt63      = BigPow(2, 63)
+	MaxBig63  = new(big.Int).Sub(tt63, big.NewInt(1))
 )
 
 const (
@@ -51,6 +53,9 @@ func (i *HexOrDecimal256) UnmarshalText(input []byte) error {
 
 // MarshalText implements encoding.TextMarshaler.
 func (i *HexOrDecimal256) MarshalText() ([]byte, error) {
+	if i == nil {
+		return []byte("0x0"), nil
+	}
 	return []byte(fmt.Sprintf("%#x", (*big.Int)(i))), nil
 }
 

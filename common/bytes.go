@@ -89,18 +89,18 @@ func Hex2BytesFixed(str string, flen int) []byte {
 }
 
 func RightPadBytes(slice []byte, l int) []byte {
-	if l < len(slice) {
+	if l <= len(slice) {
 		return slice
 	}
 
 	padded := make([]byte, l)
-	copy(padded[0:len(slice)], slice)
+	copy(padded, slice)
 
 	return padded
 }
 
 func LeftPadBytes(slice []byte, l int) []byte {
-	if l < len(slice) {
+	if l <= len(slice) {
 		return slice
 	}
 

@@ -38,7 +38,7 @@ import (
 
 type LesApiBackend struct {
 	eth *LightEthereum
-	gpo *gasprice.LightPriceOracle
+	gpo *gasprice.Oracle
 }
 
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
@@ -100,7 +100,7 @@ func (b *LesApiBackend) GetEVM(ctx context.Context, msg core.Message, state etha
 	from.SetBalance(math.MaxBig256)
 
 	vmstate := light.NewVMState(ctx, stateDb)
-	context := core.NewEVMContext(msg, header, b.eth.blockchain)
+	context := core.NewEVMContext(msg, header, b.eth.blockchain, nil)
 	return vm.NewEVM(context, vmstate, b.eth.chainConfig, vmCfg), vmstate.Error, nil
 }
 

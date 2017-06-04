@@ -20,6 +20,7 @@ package web3ext
 var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
+	"clique":     Clique_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -29,9 +30,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
-
 }
-
 
 const Chequebook_JS = `
 web3._extend({
@@ -65,6 +64,54 @@ web3._extend({
 });
 `
 
+const Clique_JS = `
+web3._extend({
+  property: 'clique',
+  methods:
+  [
+		new web3._extend.Method({
+			name: 'getSnapshot',
+			call: 'clique_getSnapshot',
+			params: 1,
+      inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'getSnapshotAtHash',
+			call: 'clique_getSnapshotAtHash',
+			params: 1
+		}),
+    new web3._extend.Method({
+      name: 'getSigners',
+      call: 'clique_getSigners',
+      params: 1,
+      inputFormatter: [null]
+    }),
+		new web3._extend.Method({
+			name: 'getSignersAtHash',
+			call: 'clique_getSignersAtHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'propose',
+			call: 'clique_propose',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'discard',
+			call: 'clique_discard',
+			params: 1
+		})
+  ],
+	properties:
+	[
+		new web3._extend.Property({
+			name: 'proposals',
+			getter: 'clique_proposals'
+		}),
+	]
+});
+`
+
 const Admin_JS = `
 web3._extend({
 	property: 'admin',
@@ -95,11 +142,6 @@ web3._extend({
 			name: 'sleepBlocks',
 			call: 'admin_sleepBlocks',
 			params: 2
-		}),
-		new web3._extend.Method({
-			name: 'setSolc',
-			call: 'admin_setSolc',
-			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'startRPC',
@@ -303,6 +345,11 @@ web3._extend({
 			call: 'debug_getBadBlocks',
 			params: 0,
 		}),
+		new web3._extend.Method({
+			name: 'storageRangeAt',
+			call: 'debug_storageRangeAt',
+			params: 5,
+		}),
 	],
 	properties: []
 });
@@ -478,7 +525,105 @@ web3._extend({
 const Shh_JS = `
 web3._extend({
 	property: 'shh',
-	methods: [],
+	methods: [
+		new web3._extend.Method({
+			name: 'info',
+			call: 'shh_info'
+		}),
+		new web3._extend.Method({
+			name: 'setMaxMessageLength',
+			call: 'shh_setMaxMessageLength',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'setMinimumPoW',
+			call: 'shh_setMinimumPoW',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'allowP2PMessagesFromPeer',
+			call: 'shh_allowP2PMessagesFromPeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'hasKeyPair',
+			call: 'shh_hasKeyPair',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteKeyPair',
+			call: 'shh_deleteKeyPair',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'newKeyPair',
+			call: 'shh_newKeyPair'
+		}),
+		new web3._extend.Method({
+			name: 'getPublicKey',
+			call: 'shh_getPublicKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getPrivateKey',
+			call: 'shh_getPrivateKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'generateSymmetricKey',
+			call: 'shh_generateSymmetricKey',
+		}),
+		new web3._extend.Method({
+			name: 'addSymmetricKeyDirect',
+			call: 'shh_addSymmetricKeyDirect',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'addSymmetricKeyFromPassword',
+			call: 'shh_addSymmetricKeyFromPassword',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'hasSymmetricKey',
+			call: 'shh_hasSymmetricKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getSymmetricKey',
+			call: 'shh_getSymmetricKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'deleteSymmetricKey',
+			call: 'shh_deleteSymmetricKey',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'subscribe',
+			call: 'shh_subscribe',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'unsubscribe',
+			call: 'shh_unsubscribe',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getNewSubscriptionMessages',
+			call: 'shh_getNewSubscriptionMessages',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getFloatingMessages',
+			call: 'shh_getFloatingMessages',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'post',
+			call: 'shh_post',
+			params: 1
+		})
+	],
 	properties:
 	[
 		new web3._extend.Property({
@@ -489,30 +634,28 @@ web3._extend({
 	]
 });
 `
+
 const SWARMFS_JS = `
 web3._extend({
-  property: 'swarmfs',
-  methods:
-  [
-    new web3._extend.Method({
-      name: 'mount',
-      call: 'swarmfs_mount',
-      params: 2,
-      inputFormatter: [null,null]
-    }),
-    new web3._extend.Method({
-      name: 'unmount',
-      call: 'swarmfs_unmount',
-      params: 1,
-      inputFormatter: [null]
-    }),
-    new web3._extend.Method({
-      name: 'listmounts',
-      call: 'swarmfs_listmounts',
-      params: 0,
-      inputFormatter: []
-    })
-  ]
+	property: 'swarmfs',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'mount',
+			call: 'swarmfs_mount',
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'unmount',
+			call: 'swarmfs_unmount',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'listmounts',
+			call: 'swarmfs_listmounts',
+			params: 0
+		})
+	]
 });
 `
 

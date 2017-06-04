@@ -41,16 +41,16 @@ var errGenesisNoConfig = errors.New("genesis has no chain configuration")
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
 type Genesis struct {
-	Config     *params.ChainConfig `json:"config" optional:"true"`
-	Nonce      uint64              `json:"nonce" optional:"true"`
-	Timestamp  uint64              `json:"timestamp" optional:"true"`
-	ParentHash common.Hash         `json:"parentHash" optional:"true"`
-	ExtraData  []byte              `json:"extraData" optional:"true"`
-	GasLimit   uint64              `json:"gasLimit"`
-	Difficulty *big.Int            `json:"difficulty"`
-	Mixhash    common.Hash         `json:"mixHash" optional:"true"`
-	Coinbase   common.Address      `json:"coinbase" optional:"true"`
-	Alloc      GenesisAlloc        `json:"alloc"`
+	Config     *params.ChainConfig `json:"config"`
+	Nonce      uint64              `json:"nonce"`
+	Timestamp  uint64              `json:"timestamp"`
+	ParentHash common.Hash         `json:"parentHash"`
+	ExtraData  []byte              `json:"extraData"`
+	GasLimit   uint64              `json:"gasLimit"   gencodec:"required"`
+	Difficulty *big.Int            `json:"difficulty" gencodec:"required"`
+	Mixhash    common.Hash         `json:"mixHash"`
+	Coinbase   common.Address      `json:"coinbase"`
+	Alloc      GenesisAlloc        `json:"alloc"      gencodec:"required"`
 }
 
 // GenesisAlloc specifies the initial state that is part of the genesis block.
@@ -58,10 +58,10 @@ type GenesisAlloc map[common.Address]GenesisAccount
 
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
-	Code    []byte                      `json:"code,omitempty" optional:"true"`
-	Storage map[common.Hash]common.Hash `json:"storage,omitempty" optional:"true"`
-	Balance *big.Int                    `json:"balance"`
-	Nonce   uint64                      `json:"nonce,omitempty" optional:"true"`
+	Code    []byte                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance *big.Int                    `json:"balance" gencodec:"required"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
 }
 
 // field type overrides for gencodec
@@ -86,7 +86,7 @@ type GenesisMismatchError struct {
 }
 
 func (e *GenesisMismatchError) Error() string {
-	return fmt.Sprintf("wrong genesis block in database (have %x, new %x)", e.Stored[:8], e.New[:8])
+	return fmt.Sprintf("database already contains an incompatible genesis block (have %x, new %x)", e.Stored[:8], e.New[:8])
 }
 
 // SetupGenesisBlock writes or updates the genesis block in db.
@@ -133,7 +133,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	newcfg := genesis.configOrDefault(stored)
 	storedcfg, err := GetChainConfig(db, stored)
 	if err != nil {
-		if err == ChainConfigNotFoundErr {
+		if err == ErrChainConfigNotFound {
 			// This case happens if a genesis write was interrupted.
 			log.Warn("Found genesis block without chain config")
 			err = WriteChainConfig(db, stored, newcfg)
@@ -276,6 +276,18 @@ func DefaultTestnetGenesisBlock() *Genesis {
 		GasLimit:   16777216,
 		Difficulty: big.NewInt(1048576),
 		Alloc:      decodePrealloc(testnetAllocData),
+	}
+}
+
+// DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
+func DefaultRinkebyGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.RinkebyChainConfig,
+		Timestamp:  1492009146,
+		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   4700000,
+		Difficulty: big.NewInt(1),
+		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
 }
 

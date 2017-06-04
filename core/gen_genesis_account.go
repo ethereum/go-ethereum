@@ -13,13 +13,13 @@ import (
 )
 
 func (g GenesisAccount) MarshalJSON() ([]byte, error) {
-	type GenesisAccountJSON struct {
-		Code    hexutil.Bytes               `json:"code,omitempty" optional:"true"`
-		Storage map[common.Hash]common.Hash `json:"storage,omitempty" optional:"true"`
-		Balance *math.HexOrDecimal256       `json:"balance"`
-		Nonce   math.HexOrDecimal64         `json:"nonce,omitempty" optional:"true"`
+	type GenesisAccount struct {
+		Code    hexutil.Bytes               `json:"code,omitempty"`
+		Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+		Balance *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
+		Nonce   math.HexOrDecimal64         `json:"nonce,omitempty"`
 	}
-	var enc GenesisAccountJSON
+	var enc GenesisAccount
 	enc.Code = g.Code
 	enc.Storage = g.Storage
 	enc.Balance = (*math.HexOrDecimal256)(g.Balance)
@@ -28,30 +28,28 @@ func (g GenesisAccount) MarshalJSON() ([]byte, error) {
 }
 
 func (g *GenesisAccount) UnmarshalJSON(input []byte) error {
-	type GenesisAccountJSON struct {
-		Code    hexutil.Bytes               `json:"code,omitempty" optional:"true"`
-		Storage map[common.Hash]common.Hash `json:"storage,omitempty" optional:"true"`
-		Balance *math.HexOrDecimal256       `json:"balance"`
-		Nonce   *math.HexOrDecimal64        `json:"nonce,omitempty" optional:"true"`
+	type GenesisAccount struct {
+		Code    hexutil.Bytes               `json:"code,omitempty"`
+		Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+		Balance *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
+		Nonce   *math.HexOrDecimal64        `json:"nonce,omitempty"`
 	}
-	var dec GenesisAccountJSON
+	var dec GenesisAccount
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
-	var x GenesisAccount
 	if dec.Code != nil {
-		x.Code = dec.Code
+		g.Code = dec.Code
 	}
 	if dec.Storage != nil {
-		x.Storage = dec.Storage
+		g.Storage = dec.Storage
 	}
 	if dec.Balance == nil {
 		return errors.New("missing required field 'balance' for GenesisAccount")
 	}
-	x.Balance = (*big.Int)(dec.Balance)
+	g.Balance = (*big.Int)(dec.Balance)
 	if dec.Nonce != nil {
-		x.Nonce = uint64(*dec.Nonce)
+		g.Nonce = uint64(*dec.Nonce)
 	}
-	*g = x
 	return nil
 }

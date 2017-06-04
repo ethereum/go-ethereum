@@ -17,6 +17,8 @@
 package trie
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/expanse-org/go-expanse/common"
@@ -42,7 +44,7 @@ func TestIterator(t *testing.T) {
 	trie.Commit()
 
 	found := make(map[string]string)
-	it := NewIterator(trie)
+	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -72,7 +74,7 @@ func TestIteratorLargeData(t *testing.T) {
 		vals[string(value2.k)] = value2
 	}
 
-	it := NewIterator(trie)
+	it := NewIterator(trie.NodeIterator(nil))
 	for it.Next() {
 		vals[string(it.Key)].t = true
 	}
@@ -99,7 +101,7 @@ func TestNodeIteratorCoverage(t *testing.T) {
 
 	// Gather all the node hashes found by the iterator
 	hashes := make(map[common.Hash]struct{})
-	for it := NewNodeIterator(trie); it.Next(true); {
+	for it := trie.NodeIterator(nil); it.Next(true); {
 		if it.Hash() != (common.Hash{}) {
 			hashes[it.Hash()] = struct{}{}
 		}
@@ -117,43 +119,88 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	}
 }
 
+type kvs struct{ k, v string }
+
+var testdata1 = []kvs{
+	{"barb", "ba"},
+	{"bard", "bc"},
+	{"bars", "bb"},
+	{"bar", "b"},
+	{"fab", "z"},
+	{"food", "ab"},
+	{"foos", "aa"},
+	{"foo", "a"},
+}
+
+var testdata2 = []kvs{
+	{"aardvark", "c"},
+	{"bar", "b"},
+	{"barb", "bd"},
+	{"bars", "be"},
+	{"fab", "z"},
+	{"foo", "a"},
+	{"foos", "aa"},
+	{"food", "ab"},
+	{"jars", "d"},
+}
+
+func TestIteratorSeek(t *testing.T) {
+	trie := newEmpty()
+	for _, val := range testdata1 {
+		trie.Update([]byte(val.k), []byte(val.v))
+	}
+
+	// Seek to the middle.
+	it := NewIterator(trie.NodeIterator([]byte("fab")))
+	if err := checkIteratorOrder(testdata1[4:], it); err != nil {
+		t.Fatal(err)
+	}
+
+	// Seek to a non-existent key.
+	it = NewIterator(trie.NodeIterator([]byte("barc")))
+	if err := checkIteratorOrder(testdata1[1:], it); err != nil {
+		t.Fatal(err)
+	}
+
+	// Seek beyond the end.
+	it = NewIterator(trie.NodeIterator([]byte("z")))
+	if err := checkIteratorOrder(nil, it); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func checkIteratorOrder(want []kvs, it *Iterator) error {
+	for it.Next() {
+		if len(want) == 0 {
+			return fmt.Errorf("didn't expect any more values, got key %q", it.Key)
+		}
+		if !bytes.Equal(it.Key, []byte(want[0].k)) {
+			return fmt.Errorf("wrong key: got %q, want %q", it.Key, want[0].k)
+		}
+		want = want[1:]
+	}
+	if len(want) > 0 {
+		return fmt.Errorf("iterator ended early, want key %q", want[0])
+	}
+	return nil
+}
+
 func TestDifferenceIterator(t *testing.T) {
 	triea := newEmpty()
-	valsa := []struct{ k, v string }{
-		{"bar", "b"},
-		{"barb", "ba"},
-		{"bars", "bb"},
-		{"bard", "bc"},
-		{"fab", "z"},
-		{"foo", "a"},
-		{"food", "ab"},
-		{"foos", "aa"},
-	}
-	for _, val := range valsa {
+	for _, val := range testdata1 {
 		triea.Update([]byte(val.k), []byte(val.v))
 	}
 	triea.Commit()
 
 	trieb := newEmpty()
-	valsb := []struct{ k, v string }{
-		{"aardvark", "c"},
-		{"bar", "b"},
-		{"barb", "bd"},
-		{"bars", "be"},
-		{"fab", "z"},
-		{"foo", "a"},
-		{"foos", "aa"},
-		{"food", "ab"},
-		{"jars", "d"},
-	}
-	for _, val := range valsb {
+	for _, val := range testdata2 {
 		trieb.Update([]byte(val.k), []byte(val.v))
 	}
 	trieb.Commit()
 
 	found := make(map[string]string)
-	di, _ := NewDifferenceIterator(NewNodeIterator(triea), NewNodeIterator(trieb))
-	it := NewIteratorFromNodeIterator(di)
+	di, _ := NewDifferenceIterator(triea.NodeIterator(nil), trieb.NodeIterator(nil))
+	it := NewIterator(di)
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -166,10 +213,57 @@ func TestDifferenceIterator(t *testing.T) {
 	}
 	for _, item := range all {
 		if found[item.k] != item.v {
-			t.Errorf("iterator value mismatch for %s: got %q want %q", item.k, found[item.k], item.v)
+			t.Errorf("iterator value mismatch for %s: got %v want %v", item.k, found[item.k], item.v)
 		}
 	}
 	if len(found) != len(all) {
 		t.Errorf("iterator count mismatch: got %d values, want %d", len(found), len(all))
+	}
+}
+
+func TestUnionIterator(t *testing.T) {
+	triea := newEmpty()
+	for _, val := range testdata1 {
+		triea.Update([]byte(val.k), []byte(val.v))
+	}
+	triea.Commit()
+
+	trieb := newEmpty()
+	for _, val := range testdata2 {
+		trieb.Update([]byte(val.k), []byte(val.v))
+	}
+	trieb.Commit()
+
+	di, _ := NewUnionIterator([]NodeIterator{triea.NodeIterator(nil), trieb.NodeIterator(nil)})
+	it := NewIterator(di)
+
+	all := []struct{ k, v string }{
+		{"aardvark", "c"},
+		{"barb", "bd"},
+		{"barb", "ba"},
+		{"bard", "bc"},
+		{"bars", "bb"},
+		{"bars", "be"},
+		{"bar", "b"},
+		{"fab", "z"},
+		{"food", "ab"},
+		{"foos", "aa"},
+		{"foo", "a"},
+		{"jars", "d"},
+	}
+
+	for i, kv := range all {
+		if !it.Next() {
+			t.Errorf("Iterator ends prematurely at element %d", i)
+		}
+		if kv.k != string(it.Key) {
+			t.Errorf("iterator value mismatch for element %d: got key %s want %s", i, it.Key, kv.k)
+		}
+		if kv.v != string(it.Value) {
+			t.Errorf("iterator value mismatch for element %d: got value %s want %s", i, it.Value, kv.v)
+		}
+	}
+	if it.Next() {
+		t.Errorf("Iterator returned extra values.")
 	}
 }

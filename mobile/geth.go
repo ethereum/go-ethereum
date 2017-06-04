@@ -22,18 +22,19 @@ package gexp
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"path/filepath"
 
 	"github.com/expanse-org/go-expanse/core"
 	"github.com/expanse-org/go-expanse/eth"
+	"github.com/expanse-org/go-expanse/eth/downloader"
 	"github.com/expanse-org/go-expanse/ethclient"
 	"github.com/expanse-org/go-expanse/ethstats"
 	"github.com/expanse-org/go-expanse/les"
 	"github.com/expanse-org/go-expanse/node"
+	"github.com/expanse-org/go-expanse/p2p"
 	"github.com/expanse-org/go-expanse/p2p/nat"
 	"github.com/expanse-org/go-expanse/params"
-	whisper "github.com/expanse-org/go-expanse/whisper/whisperv2"
+	whisper "github.com/expanse-org/go-expanse/whisper/whisperv5"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Gexp
@@ -53,11 +54,7 @@ type NodeConfig struct {
 
 	// EthereumNetworkID is the network identifier used by the Ethereum protocol to
 	// decide if remote peers should be accepted or not.
-	EthereumNetworkID int
-
-	// EthereumChainConfig is the default parameters of the blockchain to use. If no
-	// configuration is specified, it defaults to the main network.
-	EthereumChainConfig *ChainConfig
+	EthereumNetworkID int64 // uint64 in truth, but Java can't handle that...
 
 	// EthereumGenesis is the genesis JSON to use to seed the blockchain with. An
 	// empty genesis state is equivalent to using the mainnet's state.
@@ -84,7 +81,6 @@ var defaultNodeConfig = &NodeConfig{
 	MaxPeers:              25,
 	EthereumEnabled:       true,
 	EthereumNetworkID:     1,
-	EthereumChainConfig:   MainnetChainConfig(),
 	EthereumDatabaseCache: 16,
 }
 
@@ -92,18 +88,6 @@ var defaultNodeConfig = &NodeConfig{
 func NewNodeConfig() *NodeConfig {
 	config := *defaultNodeConfig
 	return &config
-}
-
-// SetMainnet sets up the node for use on the Ethereum mainnet.
-func (cfg *NodeConfig) SetMainnet() {
-	cfg.EthereumGenesis = ""
-	cfg.EthereumChainConfig = MainnetChainConfig()
-}
-
-// SetTestnet sets up the node for use on the Ethereum testnet.
-func (cfg *NodeConfig) SetTestnet() {
-	cfg.EthereumGenesis = TestnetGenesis()
-	cfg.EthereumChainConfig = TestnetChainConfig()
 }
 
 // Node represents a Geth Ethereum node instance.
@@ -125,17 +109,19 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Create the empty networking stack
 	nodeConf := &node.Config{
-		Name:             clientIdentifier,
-		Version:          params.Version,
-		DataDir:          datadir,
-		KeyStoreDir:      filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
-		NoDiscovery:      true,
-		DiscoveryV5:      true,
-		DiscoveryV5Addr:  ":0",
-		BootstrapNodesV5: config.BootstrapNodes.nodes,
-		ListenAddr:       ":0",
-		NAT:              nat.Any(),
-		MaxPeers:         config.MaxPeers,
+		Name:        clientIdentifier,
+		Version:     params.Version,
+		DataDir:     datadir,
+		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
+		P2P: p2p.Config{
+			NoDiscovery:      true,
+			DiscoveryV5:      true,
+			DiscoveryV5Addr:  ":0",
+			BootstrapNodesV5: config.BootstrapNodes.nodes,
+			ListenAddr:       ":0",
+			NAT:              nat.Any(),
+			MaxPeers:         config.MaxPeers,
+		},
 	}
 	rawStack, err := node.New(nodeConf)
 	if err != nil {
@@ -144,47 +130,28 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 
 	var genesis *core.Genesis
 	if config.EthereumGenesis != "" {
+		// Parse the user supplied genesis spec if not mainnet
 		genesis = new(core.Genesis)
 		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
-			return nil, fmt.Errorf("invalid EthereumGenesis: %v", err)
+			return nil, fmt.Errorf("invalid genesis spec: %v", err)
+		}
+		// If we have the testnet, hard code the chain configs too
+		if config.EthereumGenesis == TestnetGenesis() {
+			genesis.Config = params.TestnetChainConfig
+			if config.EthereumNetworkID == 1 {
+				config.EthereumNetworkID = 3
+			}
 		}
 	}
-	if config.EthereumChainConfig != nil {
-		if genesis == nil {
-			genesis = core.DefaultGenesisBlock()
-		}
-		genesis.Config = &params.ChainConfig{
-			ChainId:        big.NewInt(config.EthereumChainConfig.ChainID),
-			HomesteadBlock: big.NewInt(config.EthereumChainConfig.HomesteadBlock),
-			DAOForkBlock:   big.NewInt(config.EthereumChainConfig.DAOForkBlock),
-			DAOForkSupport: config.EthereumChainConfig.DAOForkSupport,
-			EIP150Block:    big.NewInt(config.EthereumChainConfig.EIP150Block),
-			EIP150Hash:     config.EthereumChainConfig.EIP150Hash.hash,
-			EIP155Block:    big.NewInt(config.EthereumChainConfig.EIP155Block),
-			EIP158Block:    big.NewInt(config.EthereumChainConfig.EIP158Block),
-		}
-	}
-
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
-		ethConf := &eth.Config{
-			Genesis:                 genesis,
-			LightMode:               true,
-			DatabaseCache:           config.EthereumDatabaseCache,
-			NetworkId:               config.EthereumNetworkID,
-			GasPrice:                new(big.Int).SetUint64(20 * params.Shannon),
-			GpoMinGasPrice:          new(big.Int).SetUint64(50 * params.Shannon),
-			GpoMaxGasPrice:          new(big.Int).SetUint64(500 * params.Shannon),
-			GpoFullBlockRatio:       80,
-			GpobaseStepDown:         10,
-			GpobaseStepUp:           100,
-			GpobaseCorrectionFactor: 110,
-			EthashCacheDir:          "ethash",
-			EthashCachesInMem:       2,
-			EthashCachesOnDisk:      3,
-		}
+		ethConf := eth.DefaultConfig
+		ethConf.Genesis = genesis
+		ethConf.SyncMode = downloader.LightSync
+		ethConf.NetworkId = uint64(config.EthereumNetworkID)
+		ethConf.DatabaseCache = config.EthereumDatabaseCache
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, ethConf)
+			return les.New(ctx, &ethConf)
 		}); err != nil {
 			return nil, fmt.Errorf("expanse init: %v", err)
 		}

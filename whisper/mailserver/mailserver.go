@@ -1,18 +1,18 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package mailserver
 
@@ -30,8 +30,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
-
-const MailServerKeyName = "958e04ab302fb36ad2616a352cbac79d"
 
 type WMailServer struct {
 	db  *leveldb.DB
@@ -75,11 +73,14 @@ func (s *WMailServer) Init(shh *whisper.Whisper, path string, password string, p
 	s.w = shh
 	s.pow = pow
 
-	err = s.w.AddSymKey(MailServerKeyName, []byte(password))
+	MailServerKeyID, err := s.w.AddSymKeyFromPassword(password)
 	if err != nil {
 		utils.Fatalf("Failed to create symmetric key for MailServer: %s", err)
 	}
-	s.key = s.w.GetSymKey(MailServerKeyName)
+	s.key, err = s.w.GetSymKey(MailServerKeyID)
+	if err != nil {
+		utils.Fatalf("Failed to save symmetric key for MailServer")
+	}
 }
 
 func (s *WMailServer) Close() {
