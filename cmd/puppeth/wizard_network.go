@@ -28,7 +28,9 @@ import (
 func (w *wizard) manageServers() {
 	// List all the servers we can disconnect, along with an entry to connect a new one
 	fmt.Println()
-	for i, server := range w.conf.Servers {
+
+	servers := w.conf.servers()
+	for i, server := range servers {
 		fmt.Printf(" %d. Disconnect %s\n", i+1, server)
 	}
 	fmt.Printf(" %d. Connect another server\n", len(w.conf.Servers)+1)
@@ -40,14 +42,14 @@ func (w *wizard) manageServers() {
 	}
 	// If the user selected an existing server, drop it
 	if choice <= len(w.conf.Servers) {
-		server := w.conf.Servers[choice-1]
+		server := servers[choice-1]
 		client := w.servers[server]
 
 		delete(w.servers, server)
 		if client != nil {
 			client.Close()
 		}
-		w.conf.Servers = append(w.conf.Servers[:choice-1], w.conf.Servers[choice:]...)
+		delete(w.conf.Servers, server)
 		w.conf.flush()
 
 		log.Info("Disconnected existing server", "server", server)
@@ -73,14 +75,14 @@ func (w *wizard) makeServer() string {
 		// Read and fial the server to ensure docker is present
 		input := w.readString()
 
-		client, err := dial(input)
+		client, err := dial(input, nil)
 		if err != nil {
 			log.Error("Server not ready for puppeth", "err", err)
 			return ""
 		}
 		// All checks passed, start tracking the server
 		w.servers[input] = client
-		w.conf.Servers = append(w.conf.Servers, input)
+		w.conf.Servers[input] = client.pubkey
 		w.conf.flush()
 
 		return input
@@ -93,7 +95,9 @@ func (w *wizard) selectServer() string {
 	// List the available server to the user and wait for a choice
 	fmt.Println()
 	fmt.Println("Which server do you want to interact with?")
-	for i, server := range w.conf.Servers {
+
+	servers := w.conf.servers()
+	for i, server := range servers {
 		fmt.Printf(" %d. %s\n", i+1, server)
 	}
 	fmt.Printf(" %d. Connect another server\n", len(w.conf.Servers)+1)
@@ -105,7 +109,7 @@ func (w *wizard) selectServer() string {
 	}
 	// If the user requested connecting to a new server, go for it
 	if choice <= len(w.conf.Servers) {
-		return w.conf.Servers[choice-1]
+		return servers[choice-1]
 	}
 	return w.makeServer()
 }

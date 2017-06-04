@@ -35,6 +35,18 @@ var (
 		Name:  "debug",
 		Usage: "output full trace logs",
 	}
+	MemProfileFlag = cli.StringFlag{
+		Name:  "memprofile",
+		Usage: "creates a memory profile at the given path",
+	}
+	CPUProfileFlag = cli.StringFlag{
+		Name:  "cpuprofile",
+		Usage: "creates a CPU profile at the given path",
+	}
+	StatDumpFlag = cli.BoolFlag{
+		Name:  "statdump",
+		Usage: "displays stack and heap memory information",
+	}
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
 		Usage: "EVM code",
@@ -93,6 +105,9 @@ func init() {
 		DumpFlag,
 		InputFlag,
 		DisableGasMeteringFlag,
+		MemProfileFlag,
+		CPUProfileFlag,
+		StatDumpFlag,
 	}
 	app.Commands = []cli.Command{
 		compileCommand,

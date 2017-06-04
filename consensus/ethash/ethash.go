@@ -468,8 +468,9 @@ func (ethash *Ethash) cache(block uint64) []uint32 {
 			future = &cache{epoch: epoch + 1}
 			ethash.fcache = future
 		}
+		// New current cache, set its initial timestamp
+		current.used = time.Now()
 	}
-	current.used = time.Now()
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache
@@ -530,8 +531,9 @@ func (ethash *Ethash) dataset(block uint64) []uint32 {
 			future = &dataset{epoch: epoch + 1}
 			ethash.fdataset = future
 		}
+		// New current dataset, set its initial timestamp
+		current.used = time.Now()
 	}
-	current.used = time.Now()
 	ethash.lock.Unlock()
 
 	// Wait for generation finish, bump the timestamp and finalize the cache

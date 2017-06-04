@@ -1491,6 +1491,10 @@ func (d *Downloader) qosTuner() {
 func (d *Downloader) qosReduceConfidence() {
 	// If we have a single peer, confidence is always 1
 	peers := uint64(d.peers.Len())
+	if peers == 0 {
+		// Ensure peer connectivity races don't catch us off guard
+		return
+	}
 	if peers == 1 {
 		atomic.StoreUint64(&d.rttConfidence, 1000000)
 		return

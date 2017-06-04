@@ -27,6 +27,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -373,14 +374,14 @@ func (c *Client) EthSubscribe(ctx context.Context, channel interface{}, args ...
 		return nil, ErrNotificationsUnsupported
 	}
 
-	msg, err := c.newMessage(subscribeMethod, args...)
+	msg, err := c.newMessage("eth"+subscribeMethodSuffix, args...)
 	if err != nil {
 		return nil, err
 	}
 	op := &requestOp{
 		ids:  []json.RawMessage{msg.ID},
 		resp: make(chan *jsonrpcMessage),
-		sub:  newClientSubscription(c, chanVal),
+		sub:  newClientSubscription(c, "eth", chanVal),
 	}
 
 	// Send the subscription request.
@@ -575,7 +576,7 @@ func (c *Client) closeRequestOps(err error) {
 }
 
 func (c *Client) handleNotification(msg *jsonrpcMessage) {
-	if msg.Method != notificationMethod {
+	if !strings.HasSuffix(msg.Method, notificationMethodSuffix) {
 		log.Debug(fmt.Sprint("dropping non-subscription message: ", msg))
 		return
 	}
@@ -653,11 +654,12 @@ func (c *Client) read(conn net.Conn) error {
 
 // A ClientSubscription represents a subscription established through EthSubscribe.
 type ClientSubscription struct {
-	client  *Client
-	etype   reflect.Type
-	channel reflect.Value
-	subid   string
-	in      chan json.RawMessage
+	client    *Client
+	etype     reflect.Type
+	channel   reflect.Value
+	namespace string
+	subid     string
+	in        chan json.RawMessage
 
 	quitOnce sync.Once     // ensures quit is closed once
 	quit     chan struct{} // quit is closed when the subscription exits
@@ -665,14 +667,15 @@ type ClientSubscription struct {
 	err      chan error
 }
 
-func newClientSubscription(c *Client, channel reflect.Value) *ClientSubscription {
+func newClientSubscription(c *Client, namespace string, channel reflect.Value) *ClientSubscription {
 	sub := &ClientSubscription{
-		client:  c,
-		etype:   channel.Type().Elem(),
-		channel: channel,
-		quit:    make(chan struct{}),
-		err:     make(chan error, 1),
-		in:      make(chan json.RawMessage),
+		client:    c,
+		namespace: namespace,
+		etype:     channel.Type().Elem(),
+		channel:   channel,
+		quit:      make(chan struct{}),
+		err:       make(chan error, 1),
+		in:        make(chan json.RawMessage),
 	}
 	return sub
 }
@@ -774,5 +777,5 @@ func (sub *ClientSubscription) unmarshal(result json.RawMessage) (interface{}, e
 
 func (sub *ClientSubscription) requestUnsubscribe() error {
 	var result interface{}
-	return sub.client.Call(&result, unsubscribeMethod, sub.subid)
+	return sub.client.Call(&result, sub.namespace+unsubscribeMethodSuffix, sub.subid)
 }

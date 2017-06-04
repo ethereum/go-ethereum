@@ -44,14 +44,24 @@ type config struct {
 	bootLight []string      // Bootnodes to always connect to by light nodes
 	ethstats  string        // Ethstats settings to cache for node deploys
 
-	Servers []string `json:"servers,omitempty"`
+	Servers map[string][]byte `json:"servers,omitempty"`
+}
+
+// servers retrieves an alphabetically sorted list of servers.
+func (c config) servers() []string {
+	servers := make([]string, 0, len(c.Servers))
+	for server := range c.Servers {
+		servers = append(servers, server)
+	}
+	sort.Strings(servers)
+
+	return servers
 }
 
 // flush dumps the contents of config to disk.
 func (c config) flush() {
 	os.MkdirAll(filepath.Dir(c.path), 0755)
 
-	sort.Strings(c.Servers)
 	out, _ := json.MarshalIndent(c, "", "  ")
 	if err := ioutil.WriteFile(c.path, out, 0644); err != nil {
 		log.Warn("Failed to save puppeth configs", "file", c.path, "err", err)
@@ -146,6 +156,48 @@ func (w *wizard) readDefaultInt(def int) int {
 		val, err := strconv.Atoi(strings.TrimSpace(text))
 		if err != nil {
 			log.Error("Invalid input, expected integer", "err", err)
+			continue
+		}
+		return val
+	}
+}
+
+// readFloat reads a single line from stdin, trimming if from spaces, enforcing it
+// to parse into a float.
+func (w *wizard) readFloat() float64 {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			continue
+		}
+		val, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			log.Error("Invalid input, expected float", "err", err)
+			continue
+		}
+		return val
+	}
+}
+
+// readDefaultFloat reads a single line from stdin, trimming if from spaces, enforcing
+// it to parse into a float. If an empty line is entered, the default value is returned.
+func (w *wizard) readDefaultFloat(def float64) float64 {
+	for {
+		fmt.Printf("> ")
+		text, err := w.in.ReadString('\n')
+		if err != nil {
+			log.Crit("Failed to read user input", "err", err)
+		}
+		if text = strings.TrimSpace(text); text == "" {
+			return def
+		}
+		val, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			log.Error("Invalid input, expected float", "err", err)
 			continue
 		}
 		return val

@@ -50,7 +50,7 @@ func (w *wizard) deployNode(boot bool) {
 		if boot {
 			infos = &nodeInfos{portFull: 30303, peersTotal: 512, peersLight: 256}
 		} else {
-			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0}
+			infos = &nodeInfos{portFull: 30303, peersTotal: 50, peersLight: 0, gasTarget: 4.7, gasPrice: 18}
 		}
 	}
 	infos.genesis, _ = json.MarshalIndent(w.conf.genesis, "", "  ")
@@ -109,8 +109,7 @@ func (w *wizard) deployNode(boot bool) {
 		} else if w.conf.genesis.Config.Clique != nil {
 			// If a previous signer was already set, offer to reuse it
 			if infos.keyJSON != "" {
-				var key keystore.Key
-				if err := json.Unmarshal([]byte(infos.keyJSON), &key); err != nil {
+				if key, err := keystore.DecryptKey([]byte(infos.keyJSON), infos.keyPass); err != nil {
 					infos.keyJSON, infos.keyPass = "", ""
 				} else {
 					fmt.Println()
@@ -136,9 +135,17 @@ func (w *wizard) deployNode(boot bool) {
 				}
 			}
 		}
+		// Establish the gas dynamics to be enforced by the signer
+		fmt.Println()
+		fmt.Printf("What gas limit should empty blocks target (MGas)? (default = %0.3f)\n", infos.gasTarget)
+		infos.gasTarget = w.readDefaultFloat(infos.gasTarget)
+
+		fmt.Println()
+		fmt.Printf("What gas price should the signer require (GWei)? (default = %0.3f)\n", infos.gasPrice)
+		infos.gasPrice = w.readDefaultFloat(infos.gasPrice)
 	}
 	// Try to deploy the full node on the host
-	if out, err := deployNode(client, w.network, w.conf.bootFull, infos); err != nil {
+	if out, err := deployNode(client, w.network, w.conf.bootFull, w.conf.bootLight, infos); err != nil {
 		log.Error("Failed to deploy Ethereum node container", "err", err)
 		if len(out) > 0 {
 			fmt.Printf("%s\n", out)

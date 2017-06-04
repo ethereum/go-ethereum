@@ -183,6 +183,7 @@ func (pm *ProtocolManager) synchronise(peer *peer) {
 		// The only scenario where this can happen is if the user manually (or via a
 		// bad block) rolled back a fast sync node below the sync point. In this case
 		// however it's safe to reenable fast sync.
+		atomic.StoreUint32(&pm.fastSync, 1)
 		mode = downloader.FastSync
 	}
 	if err := pm.downloader.Synchronise(peer.id, pHead, pTd, mode); err != nil {

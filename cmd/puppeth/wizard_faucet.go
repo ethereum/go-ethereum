@@ -44,6 +44,7 @@ func (w *wizard) deployFaucet() {
 			host:    client.server,
 			amount:  1,
 			minutes: 1440,
+			tiers:   3,
 		}
 	}
 	infos.node.genesis, _ = json.MarshalIndent(w.conf.genesis, "", "  ")
@@ -68,10 +69,17 @@ func (w *wizard) deployFaucet() {
 	fmt.Printf("How many minutes to enforce between requests? (default = %d)\n", infos.minutes)
 	infos.minutes = w.readDefaultInt(infos.minutes)
 
+	fmt.Println()
+	fmt.Printf("How many funding tiers to feature (x2.5 amounts, x3 timeout)? (default = %d)\n", infos.tiers)
+	infos.tiers = w.readDefaultInt(infos.tiers)
+	if infos.tiers == 0 {
+		log.Error("At least one funding tier must be set")
+		return
+	}
 	// Accessing GitHub gists requires API authorization, retrieve it
 	if infos.githubUser != "" {
 		fmt.Println()
-		fmt.Printf("Reused previous (%s) GitHub API authorization (y/n)? (default = yes)\n", infos.githubUser)
+		fmt.Printf("Reuse previous (%s) GitHub API authorization (y/n)? (default = yes)\n", infos.githubUser)
 		if w.readDefaultString("y") != "y" {
 			infos.githubUser, infos.githubToken = "", ""
 		}
@@ -107,6 +115,29 @@ func (w *wizard) deployFaucet() {
 		if msg.Login != infos.githubUser {
 			log.Error("GitHub authorization failed", "user", infos.githubUser, "message", msg.Message)
 			return
+		}
+	}
+	// Accessing the reCaptcha service requires API authorizations, request it
+	if infos.captchaToken != "" {
+		fmt.Println()
+		fmt.Println("Reuse previous reCaptcha API authorization (y/n)? (default = yes)")
+		if w.readDefaultString("y") != "y" {
+			infos.captchaToken, infos.captchaSecret = "", ""
+		}
+	}
+	if infos.captchaToken == "" {
+		// No previous authorization (or old one discarded)
+		fmt.Println()
+		fmt.Println("Enable reCaptcha protection against robots (y/n)? (default = no)")
+		if w.readDefaultString("n") == "y" {
+			// Captcha protection explicitly requested, read the site and secret keys
+			fmt.Println()
+			fmt.Printf("What is the reCaptcha site key to authenticate human users?\n")
+			infos.captchaToken = w.readString()
+
+			fmt.Println()
+			fmt.Printf("What is the reCaptcha secret key to verify authentications? (won't be echoed)\n")
+			infos.captchaSecret = w.readPassword()
 		}
 	}
 	// Figure out where the user wants to store the persistent data

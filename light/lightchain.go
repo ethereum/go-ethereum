@@ -377,9 +377,6 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 		case core.SideStatTy:
 			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
-
-		case core.SplitStatTy:
-			events = append(events, core.ChainSplitEvent{Block: types.NewBlockWithHeader(header)})
 		}
 		return err
 	}

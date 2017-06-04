@@ -21,8 +21,6 @@ import (
 	"fmt"
 
 	"github.com/expanse-org/go-expanse/core/types"
-	// "github.com/expanse-org/go-expanse/crypto"
-
 	"github.com/expanse-org/go-expanse/ethdb"
 	"github.com/expanse-org/go-expanse/event"
 )
@@ -38,24 +36,24 @@ type TestManager struct {
 	Blocks     []*types.Block
 }
 
-func (s *TestManager) IsListening() bool {
+func (tm *TestManager) IsListening() bool {
 	return false
 }
 
-func (s *TestManager) IsMining() bool {
+func (tm *TestManager) IsMining() bool {
 	return false
 }
 
-func (s *TestManager) PeerCount() int {
+func (tm *TestManager) PeerCount() int {
 	return 0
 }
 
-func (s *TestManager) Peers() *list.List {
+func (tm *TestManager) Peers() *list.List {
 	return list.New()
 }
 
-func (s *TestManager) BlockChain() *BlockChain {
-	return s.blockChain
+func (tm *TestManager) BlockChain() *BlockChain {
+	return tm.blockChain
 }
 
 func (tm *TestManager) TxPool() *TxPool {

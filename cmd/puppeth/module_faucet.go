@@ -51,9 +51,10 @@ ADD account.pass /account.pass
 EXPOSE 8080
 
 CMD [ \
-	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}",            \
-	"--ethport", "{{.EthPort}}", "--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", \
-	"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", "--account.json", "/account.json", "--account.pass", "/account.pass"     \
+	"/faucet", "--genesis", "/genesis.json", "--network", "{{.NetworkID}}", "--bootnodes", "{{.Bootnodes}}", "--ethstats", "{{.Ethstats}}", "--ethport", "{{.EthPort}}", \
+	"--faucet.name", "{{.FaucetName}}", "--faucet.amount", "{{.FaucetAmount}}", "--faucet.minutes", "{{.FaucetMinutes}}", "--faucet.tiers", "{{.FaucetTiers}}",          \
+	"--github.user", "{{.GitHubUser}}", "--github.token", "{{.GitHubToken}}", "--account.json", "/account.json", "--account.pass", "/account.pass"                       \
+	{{if .CaptchaToken}}, "--captcha.token", "{{.CaptchaToken}}", "--captcha.secret", "{{.CaptchaSecret}}"{{end}}                                                        \
 ]`
 
 // faucetComposefile is the docker-compose.yml file required to deploy and maintain
@@ -74,8 +75,11 @@ services:
       - ETH_NAME={{.EthName}}
       - FAUCET_AMOUNT={{.FaucetAmount}}
       - FAUCET_MINUTES={{.FaucetMinutes}}
+      - FAUCET_TIERS={{.FaucetTiers}}
       - GITHUB_USER={{.GitHubUser}}
-      - GITHUB_TOKEN={{.GitHubToken}}{{if .VHost}}
+      - GITHUB_TOKEN={{.GitHubToken}}
+      - CAPTCHA_TOKEN={{.CaptchaToken}}
+      - CAPTCHA_SECRET={{.CaptchaSecret}}{{if .VHost}}
       - VIRTUAL_HOST={{.VHost}}
       - VIRTUAL_PORT=8080{{end}}
     restart: always
@@ -97,9 +101,12 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"EthPort":       config.node.portFull,
 		"GitHubUser":    config.githubUser,
 		"GitHubToken":   config.githubToken,
+		"CaptchaToken":  config.captchaToken,
+		"CaptchaSecret": config.captchaSecret,
 		"FaucetName":    strings.Title(network),
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
+		"FaucetTiers":   config.tiers,
 	})
 	files[filepath.Join(workdir, "Dockerfile")] = dockerfile.Bytes()
 
@@ -113,8 +120,11 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 		"EthName":       config.node.ethstats[:strings.Index(config.node.ethstats, ":")],
 		"GitHubUser":    config.githubUser,
 		"GitHubToken":   config.githubToken,
+		"CaptchaToken":  config.captchaToken,
+		"CaptchaSecret": config.captchaSecret,
 		"FaucetAmount":  config.amount,
 		"FaucetMinutes": config.minutes,
+		"FaucetTiers":   config.tiers,
 	})
 	files[filepath.Join(workdir, "docker-compose.yaml")] = composefile.Bytes()
 
@@ -135,18 +145,21 @@ func deployFaucet(client *sshClient, network string, bootnodes []string, config 
 // faucetInfos is returned from an faucet status check to allow reporting various
 // configuration parameters.
 type faucetInfos struct {
-	node        *nodeInfos
-	host        string
-	port        int
-	amount      int
-	minutes     int
-	githubUser  string
-	githubToken string
+	node          *nodeInfos
+	host          string
+	port          int
+	amount        int
+	minutes       int
+	tiers         int
+	githubUser    string
+	githubToken   string
+	captchaToken  string
+	captchaSecret string
 }
 
 // String implements the stringer interface.
 func (info *faucetInfos) String() string {
-	return fmt.Sprintf("host=%s, api=%d, eth=%d, amount=%d, minutes=%d, github=%s, ethstats=%s", info.host, info.port, info.node.portFull, info.amount, info.minutes, info.githubUser, info.node.ethstats)
+	return fmt.Sprintf("host=%s, api=%d, eth=%d, amount=%d, minutes=%d, tiers=%d, github=%s, captcha=%v, ethstats=%s", info.host, info.port, info.node.portFull, info.amount, info.minutes, info.tiers, info.githubUser, info.captchaToken != "", info.node.ethstats)
 }
 
 // checkFaucet does a health-check against an faucet server to verify whether
@@ -177,6 +190,7 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 	}
 	amount, _ := strconv.Atoi(infos.envvars["FAUCET_AMOUNT"])
 	minutes, _ := strconv.Atoi(infos.envvars["FAUCET_MINUTES"])
+	tiers, _ := strconv.Atoi(infos.envvars["FAUCET_TIERS"])
 
 	// Retrieve the funding account informations
 	var out []byte
@@ -200,11 +214,14 @@ func checkFaucet(client *sshClient, network string) (*faucetInfos, error) {
 			keyJSON:  keyJSON,
 			keyPass:  keyPass,
 		},
-		host:        host,
-		port:        port,
-		amount:      amount,
-		minutes:     minutes,
-		githubUser:  infos.envvars["GITHUB_USER"],
-		githubToken: infos.envvars["GITHUB_TOKEN"],
+		host:          host,
+		port:          port,
+		amount:        amount,
+		minutes:       minutes,
+		tiers:         tiers,
+		githubUser:    infos.envvars["GITHUB_USER"],
+		githubToken:   infos.envvars["GITHUB_TOKEN"],
+		captchaToken:  infos.envvars["CAPTCHA_TOKEN"],
+		captchaSecret: infos.envvars["CAPTCHA_SECRET"],
 	}, nil
 }

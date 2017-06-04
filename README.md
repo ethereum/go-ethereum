@@ -70,7 +70,7 @@ This command will:
    (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/expanse-org/wiki/wiki/JavaScript-API)
    as well as Gexp's own [management APIs](https://github.com/expanse-org/go-expanse/wiki/Management-APIs).
    This too is optional and if you leave it out you can always attach to an already running Gexp instance
-   with `gexp --attach`.
+   with `gexp attach`.
 
 ### Full node on the Expanse test network
 
@@ -84,21 +84,24 @@ $ gexp --testnet --fast --cache=512 console
 ```
 
 The `--fast`, `--cache` flags and `console` subcommand have the exact same meaning as above and they
-are equially useful on the testnet too. Please see above for their explanations if you've skipped to
+are equally useful on the testnet too. Please see above for their explanations if you've skipped to
 here.
 
 Specifying the `--testnet` flag however will reconfigure your Gexp instance a bit:
 
  * Instead of using the default data directory (`~/.expanse` on Linux for example), Gexp will nest
-   itself one level deeper into a `testnet` subfolder (`~/.expanse/testnet` on Linux).
- * Instead of connecting the main Expanse network, the client will connect to the test network,
+   itself one level deeper into a `testnet` subfolder (`~/.expanse/testnet` on Linux). Note, on OSX
+   and Linux this also means that attaching to a running testnet node requires the use of a custom
+   endpoint since `gexp attach` will try to attach to a production node endpoint by default. E.g.
+   `gexp attach <datadir>/testnet/gexp.ipc`. Windows users are not affected by this.
+ * Instead of connecting the main Ethereum network, the client will connect to the test network,
+>>>>>>> 6171d01b1195abd7ac75044dcd507d4758d83cde
    which uses different P2P bootnodes, different network IDs and genesis states.
 
 *Note: Although there are some internal protective measures to prevent transactions from crossing
-over between the main network and test network (different starting nonces), you should make sure to
-always use separate accounts for play-money and real-money. Unless you manually move accounts, Gexp
-will by default correctly separate the two networks and will not make any accounts available between
-them.*
+over between the main network and test network, you should make sure to always use separate accounts
+for play-money and real-money. Unless you manually move accounts, Gexp will by default correctly
+separate the two networks and will not make any accounts available between them.*
 
 #### Docker quick start
 
@@ -162,6 +165,12 @@ and agree upon. This consists of a small JSON file (e.g. call it `genesis.json`)
 
 ```json
 {
+  "config": {
+        "chainId": 0,
+        "homesteadBlock": 0,
+        "eip155Block": 0,
+        "eip158Block": 0
+    },
   "alloc"      : {},
   "coinbase"   : "0x0000000000000000000000000000000000000000",
   "difficulty" : "0x20000",

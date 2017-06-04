@@ -29,11 +29,12 @@ import (
 	"github.com/expanse-org/go-expanse/cmd/internal/browser"
 	"github.com/expanse-org/go-expanse/params"
 
+	"github.com/expanse-org/go-expanse/cmd/utils"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
 var bugCommand = cli.Command{
-	Action:    reportBug,
+	Action:    utils.MigrateFlags(reportBug),
 	Name:      "bug",
 	Usage:     "opens a window to report a bug on the gexp repo",
 	ArgsUsage: " ",

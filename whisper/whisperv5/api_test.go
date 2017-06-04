@@ -43,7 +43,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("wrong version: %d.", ver)
 	}
 
-	mail := api.GetSubscriptionMessages("non-existent-id")
+	mail := api.GetNewSubscriptionMessages("non-existent-id")
 	if len(mail) != 0 {
 		t.Fatalf("failed GetFilterChanges: premature result")
 	}
@@ -173,7 +173,7 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 	s := []byte(`{
 	"type":"sym",
 	"key":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
-	"signedWith":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
+	"sig":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
 	"minPoW":2.34,
 	"topics":["0x00000000", "0x007f80ff", "0xff807f00", "0xf26e7779"],
 	"allowP2P":true
@@ -191,8 +191,8 @@ func TestUnmarshalFilterArgs(t *testing.T) {
 	if f.Key != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
 		t.Fatalf("wrong key: %s.", f.Key)
 	}
-	if f.SignedWith != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
-		t.Fatalf("wrong SignedWith: %s.", f.SignedWith)
+	if f.Sig != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
+		t.Fatalf("wrong sig: %s.", f.Sig)
 	}
 	if f.MinPoW != 2.34 {
 		t.Fatalf("wrong MinPoW: %f.", f.MinPoW)
@@ -229,7 +229,7 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	s := []byte(`{
 	"type":"sym",
 	"ttl":12345,
-	"signWith":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
+	"sig":"0x70c87d191324e6712a591f304b4eedef6ad9bb9d",
 	"key":"0x9b2055d370f73ec7d8a03e965129118dc8f5bf83",
 	"topic":"0xf26e7779",
 	"padding":"0x74686973206973206D79207465737420737472696E67",
@@ -251,8 +251,8 @@ func TestUnmarshalPostArgs(t *testing.T) {
 	if a.TTL != 12345 {
 		t.Fatalf("wrong ttl: %d.", a.TTL)
 	}
-	if a.SignWith != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
-		t.Fatalf("wrong From: %s.", a.SignWith)
+	if a.Sig != "0x70c87d191324e6712a591f304b4eedef6ad9bb9d" {
+		t.Fatalf("wrong From: %s.", a.Sig)
 	}
 	if a.Key != "0x9b2055d370f73ec7d8a03e965129118dc8f5bf83" {
 		t.Fatalf("wrong Key: %s.", a.Key)
@@ -282,7 +282,7 @@ func waitForMessages(api *PublicWhisperAPI, id string, target int) []*WhisperMes
 	// timeout: 2 seconds
 	result := make([]*WhisperMessage, 0, target)
 	for i := 0; i < 100; i++ {
-		mail := api.GetSubscriptionMessages(id)
+		mail := api.GetNewSubscriptionMessages(id)
 		if len(mail) > 0 {
 			for _, m := range mail {
 				result = append(result, m)
@@ -347,7 +347,7 @@ func TestIntegrationAsym(t *testing.T) {
 	var f WhisperFilterArgs
 	f.Symmetric = false
 	f.Key = key
-	f.SignedWith = sigPubKey.String()
+	f.Sig = sigPubKey.String()
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
@@ -362,7 +362,7 @@ func TestIntegrationAsym(t *testing.T) {
 	var p PostArgs
 	p.Type = "asym"
 	p.TTL = 2
-	p.SignWith = sig
+	p.Sig = sig
 	p.Key = dstPubKey.String()
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
@@ -448,8 +448,8 @@ func TestIntegrationSym(t *testing.T) {
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
-	f.MinPoW = 0.324
-	f.SignedWith = sigPubKey.String()
+	f.MinPoW = DefaultMinimumPoW / 2
+	f.Sig = sigPubKey.String()
 	f.AllowP2P = false
 
 	id, err := api.Subscribe(f)
@@ -461,7 +461,7 @@ func TestIntegrationSym(t *testing.T) {
 	p.Type = "sym"
 	p.TTL = 1
 	p.Key = symKeyID
-	p.SignWith = sig
+	p.Sig = sig
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
 	p.PowTarget = DefaultMinimumPoW
@@ -546,8 +546,8 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	f.Topics = make([][]byte, 2)
 	f.Topics[0] = topics[0][:]
 	f.Topics[1] = topics[1][:]
-	f.MinPoW = 0.324
-	f.SignedWith = sigPubKey.String()
+	f.MinPoW = DefaultMinimumPoW / 2
+	f.Sig = sigPubKey.String()
 	f.AllowP2P = false
 
 	id, err := api.Subscribe(f)
@@ -559,7 +559,7 @@ func TestIntegrationSymWithFilter(t *testing.T) {
 	p.Type = "sym"
 	p.TTL = 1
 	p.Key = symKeyID
-	p.SignWith = sigKeyID
+	p.Sig = sigKeyID
 	p.Padding = []byte("test string")
 	p.Payload = []byte("extended test string")
 	p.PowTarget = DefaultMinimumPoW

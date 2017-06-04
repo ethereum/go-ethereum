@@ -265,7 +265,10 @@ func sendMsg(t *testing.T, expected bool, id int) {
 		opt.Payload = opt.Payload[1:]
 	}
 
-	msg := NewSentMessage(&opt)
+	msg, err := NewSentMessage(&opt)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	envelope, err := msg.Wrap(&opt)
 	if err != nil {
 		t.Fatalf("failed to seal message: %s", err)
@@ -286,7 +289,10 @@ func TestPeerBasic(t *testing.T) {
 	}
 
 	params.PoW = 0.001
-	msg := NewSentMessage(params)
+	msg, err := NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed Wrap with seed %d.", seed)

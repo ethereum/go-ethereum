@@ -69,7 +69,6 @@ func StartHttpServer(api *api.Api, config *ServerConfig) {
 	hdlr := c.Handler(NewServer(api))
 
 	go http.ListenAndServe(config.Addr, hdlr)
-	log.Info(fmt.Sprintf("Swarm HTTP proxy started on localhost:%s", config.Addr))
 }
 
 func NewServer(api *api.Api) *Server {

@@ -27,10 +27,13 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,18 +63,22 @@ var (
 	apiPortFlag = flag.Int("apiport", 8080, "Listener port for the HTTP API connection")
 	ethPortFlag = flag.Int("ethport", 30303, "Listener port for the devp2p connection")
 	bootFlag    = flag.String("bootnodes", "", "Comma separated bootnode enode URLs to seed with")
-	netFlag     = flag.Int("network", 0, "Network ID to use for the Ethereum protocol")
+	netFlag     = flag.Uint64("network", 0, "Network ID to use for the Ethereum protocol")
 	statsFlag   = flag.String("ethstats", "", "Ethstats network monitoring auth string")
 
 	netnameFlag = flag.String("faucet.name", "", "Network name to assign to the faucet")
 	payoutFlag  = flag.Int("faucet.amount", 1, "Number of Ethers to pay out per user request")
 	minutesFlag = flag.Int("faucet.minutes", 1440, "Number of minutes to wait between funding rounds")
+	tiersFlag   = flag.Int("faucet.tiers", 3, "Number of funding tiers to enable (x3 time, x2.5 funds)")
 
 	accJSONFlag = flag.String("account.json", "", "Key json file to fund user requests with")
 	accPassFlag = flag.String("account.pass", "", "Decryption password to access faucet funds")
 
 	githubUser  = flag.String("github.user", "", "GitHub user to authenticate with for Gist access")
 	githubToken = flag.String("github.token", "", "GitHub personal token to access Gists with")
+
+	captchaToken  = flag.String("captcha.token", "", "Recaptcha site key to authenticate client side")
+	captchaSecret = flag.String("captcha.secret", "", "Recaptcha secret key to authenticate server side")
 
 	logFlag = flag.Int("loglevel", 3, "Log level to use for Ethereum and the faucet")
 )
@@ -85,21 +92,47 @@ func main() {
 	flag.Parse()
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*logFlag), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
+	// Construct the payout tiers
+	amounts := make([]string, *tiersFlag)
+	periods := make([]string, *tiersFlag)
+	for i := 0; i < *tiersFlag; i++ {
+		// Calculate the amount for the next tier and format it
+		amount := float64(*payoutFlag) * math.Pow(2.5, float64(i))
+		amounts[i] = fmt.Sprintf("%s Ethers", strconv.FormatFloat(amount, 'f', -1, 64))
+		if amount == 1 {
+			amounts[i] = strings.TrimSuffix(amounts[i], "s")
+		}
+		// Calculate the period for the next tier and format it
+		period := *minutesFlag * int(math.Pow(3, float64(i)))
+		periods[i] = fmt.Sprintf("%d mins", period)
+		if period%60 == 0 {
+			period /= 60
+			periods[i] = fmt.Sprintf("%d hours", period)
+
+			if period%24 == 0 {
+				period /= 24
+				periods[i] = fmt.Sprintf("%d days", period)
+			}
+		}
+		if period == 1 {
+			periods[i] = strings.TrimSuffix(periods[i], "s")
+		}
+	}
 	// Load up and render the faucet website
 	tmpl, err := Asset("faucet.html")
 	if err != nil {
 		log.Crit("Failed to load the faucet template", "err", err)
 	}
-	period := fmt.Sprintf("%d minute(s)", *minutesFlag)
-	if *minutesFlag%60 == 0 {
-		period = fmt.Sprintf("%d hour(s)", *minutesFlag/60)
-	}
 	website := new(bytes.Buffer)
-	template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
-		"Network": *netnameFlag,
-		"Amount":  *payoutFlag,
-		"Period":  period,
+	err = template.Must(template.New("").Parse(string(tmpl))).Execute(website, map[string]interface{}{
+		"Network":   *netnameFlag,
+		"Amounts":   amounts,
+		"Periods":   periods,
+		"Recaptcha": *captchaToken,
 	})
+	if err != nil {
+		log.Crit("Failed to render the faucet template", "err", err)
+	}
 	// Load and parse the genesis block requested by the user
 	blob, err := ioutil.ReadFile(*genesisFlag)
 	if err != nil {
@@ -166,15 +199,15 @@ type faucet struct {
 	nonce    uint64             // Current pending nonce of the faucet
 	price    *big.Int           // Current gas price to issue funds with
 
-	conns   []*websocket.Conn    // Currently live websocket connections
-	history map[string]time.Time // History of users and their funding requests
-	reqs    []*request           // Currently pending funding requests
-	update  chan struct{}        // Channel to signal request updates
+	conns    []*websocket.Conn    // Currently live websocket connections
+	timeouts map[string]time.Time // History of users and their funding timeouts
+	reqs     []*request           // Currently pending funding requests
+	update   chan struct{}        // Channel to signal request updates
 
 	lock sync.RWMutex // Lock protecting the faucet's internals
 }
 
-func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network int, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
+func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network uint64, stats string, ks *keystore.KeyStore, index []byte) (*faucet, error) {
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
@@ -236,7 +269,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network i
 		index:    index,
 		keystore: ks,
 		account:  ks.Accounts()[0],
-		history:  make(map[string]time.Time),
+		timeouts: make(map[string]time.Time),
 		update:   make(chan struct{}, 1),
 	}, nil
 }
@@ -290,14 +323,23 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 		"peers":    f.stack.Server().PeerCount(),
 		"requests": f.reqs,
 	})
-	header, _ := f.client.HeaderByNumber(context.Background(), nil)
-	websocket.JSON.Send(conn, header)
+	// Send the initial block to the client
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	header, err := f.client.HeaderByNumber(ctx, nil)
+	cancel()
 
+	if err != nil {
+		log.Error("Failed to retrieve latest header", "err", err)
+	} else {
+		websocket.JSON.Send(conn, header)
+	}
 	// Keep reading requests from the websocket until the connection breaks
 	for {
 		// Fetch the next funding request and validate against github
 		var msg struct {
-			URL string `json:"url"`
+			URL     string `json:"url"`
+			Tier    uint   `json:"tier"`
+			Captcha string `json:"captcha"`
 		}
 		if err := websocket.JSON.Receive(conn, &msg); err != nil {
 			return
@@ -306,8 +348,39 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			websocket.JSON.Send(conn, map[string]string{"error": "URL doesn't link to GitHub Gists"})
 			continue
 		}
-		log.Info("Faucet funds requested", "gist", msg.URL)
+		if msg.Tier >= uint(*tiersFlag) {
+			websocket.JSON.Send(conn, map[string]string{"error": "Invalid funding tier requested"})
+			continue
+		}
+		log.Info("Faucet funds requested", "gist", msg.URL, "tier", msg.Tier)
 
+		// If captcha verifications are enabled, make sure we're not dealing with a robot
+		if *captchaToken != "" {
+			form := url.Values{}
+			form.Add("secret", *captchaSecret)
+			form.Add("response", msg.Captcha)
+
+			res, err := http.PostForm("https://www.google.com/recaptcha/api/siteverify", form)
+			if err != nil {
+				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+				continue
+			}
+			var result struct {
+				Success bool            `json:"success"`
+				Errors  json.RawMessage `json:"error-codes"`
+			}
+			err = json.NewDecoder(res.Body).Decode(&result)
+			res.Body.Close()
+			if err != nil {
+				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+				continue
+			}
+			if !result.Success {
+				log.Warn("Captcha verification failed", "err", string(result.Errors))
+				websocket.JSON.Send(conn, map[string]string{"error": "Beep-bop, you're a robot!"})
+				continue
+			}
+		}
 		// Retrieve the gist from the GitHub Gist APIs
 		parts := strings.Split(msg.URL, "/")
 		req, _ := http.NewRequest("GET", "https://api.github.com/gists/"+parts[len(parts)-1], nil)
@@ -334,7 +407,7 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			continue
 		}
 		if gist.Owner.Login == "" {
-			websocket.JSON.Send(conn, map[string]string{"error": "Nice try ;)"})
+			websocket.JSON.Send(conn, map[string]string{"error": "Anonymous Gists not allowed"})
 			continue
 		}
 		// Iterate over all the files and look for Ethereum addresses
@@ -348,15 +421,30 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 			websocket.JSON.Send(conn, map[string]string{"error": "No Ethereum address found to fund"})
 			continue
 		}
+		// Validate the user's existence since the API is unhelpful here
+		if res, err = http.Head("https://github.com/" + gist.Owner.Login); err != nil {
+			websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
+			continue
+		}
+		res.Body.Close()
+
+		if res.StatusCode != 200 {
+			websocket.JSON.Send(conn, map[string]string{"error": "Invalid user... boom!"})
+			continue
+		}
 		// Ensure the user didn't request funds too recently
 		f.lock.Lock()
 		var (
 			fund    bool
-			elapsed time.Duration
+			timeout time.Time
 		)
-		if elapsed = time.Since(f.history[gist.Owner.Login]); elapsed > time.Duration(*minutesFlag)*time.Minute {
+		if timeout = f.timeouts[gist.Owner.Login]; time.Now().After(timeout) {
 			// User wasn't funded recently, create the funding transaction
-			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), ether), big.NewInt(21000), f.price, nil)
+			amount := new(big.Int).Mul(big.NewInt(int64(*payoutFlag)), ether)
+			amount = new(big.Int).Mul(amount, new(big.Int).Exp(big.NewInt(5), big.NewInt(int64(msg.Tier)), nil))
+			amount = new(big.Int).Div(amount, new(big.Int).Exp(big.NewInt(2), big.NewInt(int64(msg.Tier)), nil))
+
+			tx := types.NewTransaction(f.nonce+uint64(len(f.reqs)), address, amount, big.NewInt(21000), f.price, nil)
 			signed, err := f.keystore.SignTx(f.account, tx, f.config.ChainId)
 			if err != nil {
 				websocket.JSON.Send(conn, map[string]string{"error": err.Error()})
@@ -375,14 +463,14 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				Time:     time.Now(),
 				Tx:       signed,
 			})
-			f.history[gist.Owner.Login] = time.Now()
+			f.timeouts[gist.Owner.Login] = time.Now().Add(time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute)
 			fund = true
 		}
 		f.lock.Unlock()
 
 		// Send an error if too frequent funding, othewise a success
 		if !fund {
-			websocket.JSON.Send(conn, map[string]string{"error": fmt.Sprintf("User already funded %s ago", common.PrettyDuration(elapsed))})
+			websocket.JSON.Send(conn, map[string]string{"error": fmt.Sprintf("%s left until next allowance", common.PrettyDuration(timeout.Sub(time.Now())))})
 			continue
 		}
 		websocket.JSON.Send(conn, map[string]string{"success": fmt.Sprintf("Funding request accepted for %s into %s", gist.Owner.Login, address.Hex())})

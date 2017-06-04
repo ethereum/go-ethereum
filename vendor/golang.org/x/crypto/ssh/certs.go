@@ -268,7 +268,7 @@ type CertChecker struct {
 	// HostKeyFallback is called when CertChecker.CheckHostKey encounters a
 	// public key that is not a certificate. It must implement host key
 	// validation or else, if nil, all such keys are rejected.
-	HostKeyFallback func(addr string, remote net.Addr, key PublicKey) error
+	HostKeyFallback HostKeyCallback
 
 	// IsRevoked is called for each certificate so that revocation checking
 	// can be implemented. It should return true if the given certificate
