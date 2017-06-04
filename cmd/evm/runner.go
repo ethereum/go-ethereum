@@ -137,11 +137,11 @@ func runCmd(ctx *cli.Context) error {
 		}
 		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
 	}
-
+	initialGas := ctx.GlobalUint64(GasFlag.Name)
 	runtimeConfig := runtime.Config{
 		Origin:   sender,
 		State:    statedb,
-		GasLimit: ctx.GlobalUint64(GasFlag.Name),
+		GasLimit: initialGas,
 		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 		EVMConfig: vm.Config{
@@ -168,14 +168,15 @@ func runCmd(ctx *cli.Context) error {
 		runtimeConfig.ChainConfig = chainConfig
 	}
 	tstart := time.Now()
+	var leftOverGas uint64
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, err = runtime.Create(input, &runtimeConfig)
+		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
 	} else {
 		receiver := common.StringToAddress("receiver")
 		statedb.SetCode(receiver, code)
 
-		ret, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
+		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
 	execTime := time.Since(tstart)
 
@@ -214,11 +215,12 @@ heap objects:       %d
 allocations:        %d
 total allocations:  %d
 GC calls:           %d
+Gas used:           %d
 
-`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC)
+`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
 	}
 	if tracer != nil {
-		tracer.CaptureEnd(ret, 0, execTime)
+		tracer.CaptureEnd(ret, initialGas-leftOverGas, execTime)
 	} else {
 		fmt.Printf("0x%x\n", ret)
 	}
