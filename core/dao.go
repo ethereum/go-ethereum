@@ -73,3 +73,19 @@ func ApplyDAOHardFork(statedb *state.StateDB) {
 		statedb.SetBalance(addr, new(big.Int))
 	}
 }
+
+// ApplyQuadHardFork modifies the state database according to the Quad hard-fork
+// rules, transferring all balances of a set of DAO accounts to a single refund
+// contract.
+func ApplyQuadHardFork(statedb *state.StateDB) {
+	// Retrieve the contract to refund balances into
+	if !statedb.Exist(params.QuadRefundContract) {
+		statedb.CreateAccount(params.QuadRefundContract)
+	}
+
+	// Move every DAO account and extra-balance account funds into the refund contract
+	for _, addr := range params.QuadDrainList() {
+		statedb.AddBalance(params.QuadRefundContract, statedb.GetBalance(addr))
+		statedb.SetBalance(addr, new(big.Int))
+	}
+}

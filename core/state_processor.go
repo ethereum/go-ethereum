@@ -67,6 +67,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	// Mutate the the block and state according to any hard-fork specs
+	if p.config.QuadForkSupport && p.config.QuadForkBlock != nil && p.config.QuadForkBlock.Cmp(block.Number()) == 0 {
+		misc.ApplyQuadHardFork(statedb)
+	}
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
