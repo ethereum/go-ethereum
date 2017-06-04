@@ -40,7 +40,7 @@ var (
 )
 
 // CacheMisses retrieves a global counter measuring the number of cache misses
-// the trie did since process startup. This isn't useful for anything apart from
+// the trie had since process startup. This isn't useful for anything apart from
 // trie debugging purposes.
 func CacheMisses() int64 {
 	return cacheMissCounter.Count()
@@ -87,14 +87,14 @@ type Trie struct {
 	originalRoot common.Hash
 
 	// Cache generation values.
-	// cachegen increase by one with each commit operation.
+	// cachegen increases by one with each commit operation.
 	// new nodes are tagged with the current generation and unloaded
 	// when their generation is older than than cachegen-cachelimit.
 	cachegen, cachelimit uint16
 }
 
 // SetCacheLimit sets the number of 'cache generations' to keep.
-// A cache generations is created by a call to Commit.
+// A cache generation is created by a call to Commit.
 func (t *Trie) SetCacheLimit(l uint16) {
 	t.cachelimit = l
 }

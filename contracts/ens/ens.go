@@ -52,7 +52,7 @@ func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contra
 	}, nil
 }
 
-// DeployENS deploys an instance of the ENS nameservice, with a 'first in first served' root registrar.
+// DeployENS deploys an instance of the ENS nameservice, with a 'first-in, first-served' root registrar.
 func DeployENS(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (*ENS, error) {
 	// Deploy the ENS registry
 	ensAddr, _, _, err := contract.DeployENS(transactOpts, contractBackend, transactOpts.From)

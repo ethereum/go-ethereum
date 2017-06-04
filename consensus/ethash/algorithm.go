@@ -53,7 +53,6 @@ type hasher func(dest []byte, data []byte)
 
 // makeHasher creates a repetitive hasher, allowing the same hash data structures
 // to be reused between hash runs instead of requiring new ones to be created.
-//
 // The returned function is not thread safe!
 func makeHasher(h hash.Hash) hasher {
 	return func(dest []byte, data []byte) {
@@ -82,7 +81,6 @@ func seedHash(block uint64) []byte {
 // memory, then performing two passes of Sergio Demian Lerner's RandMemoHash
 // algorithm from Strict Memory Hard Hashing Functions (2014). The output is a
 // set of 524288 64-byte values.
-//
 // This method places the result into dest in machine byte order.
 func generateCache(dest []uint32, epoch uint64, seed []byte) {
 	// Print some debug logs to allow analysis on low end devices
@@ -220,7 +218,6 @@ func generateDatasetItem(cache []uint32, index uint32, keccak512 hasher) []byte 
 }
 
 // generateDataset generates the entire ethash dataset for mining.
-//
 // This method places the result into dest in machine byte order.
 func generateDataset(dest []uint32, epoch uint64, cache []uint32) {
 	// Print some debug logs to allow analysis on low end devices

@@ -478,7 +478,7 @@ func writeEncoder(val reflect.Value, w *encbuf) error {
 // with a pointer receiver.
 func writeEncoderNoPtr(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
-		// We can't get the address. It would be possible make the
+		// We can't get the address. It would be possible to make the
 		// value addressable by creating a shallow copy, but this
 		// creates other problems so we're not doing it (yet).
 		//
@@ -583,7 +583,7 @@ func makePtrWriter(typ reflect.Type) (writer, error) {
 	return writer, err
 }
 
-// putint writes i to the beginning of b in with big endian byte
+// putint writes i to the beginning of b in big endian byte
 // order, using the least number of bytes needed to represent i.
 func putint(b []byte, i uint64) (size int) {
 	switch {

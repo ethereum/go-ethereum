@@ -243,7 +243,7 @@ func TestVoting(t *testing.T) {
 			},
 			results: []string{"A", "B"},
 		}, {
-			// Cascading changes are not allowed, only the the account being voted on may change
+			// Cascading changes are not allowed, only the account being voted on may change
 			signers: []string{"A", "B", "C", "D"},
 			votes: []testerVote{
 				{signer: "A", voted: "C", auth: false},
@@ -293,7 +293,7 @@ func TestVoting(t *testing.T) {
 			results: []string{"A", "B", "C"},
 		}, {
 			// Ensure that pending votes don't survive authorization status changes. This
-			// corner case can only appear if a signer is quickly added, remove and then
+			// corner case can only appear if a signer is quickly added, removed and then
 			// readded (or the inverse), while one of the original voters dropped. If a
 			// past vote is left cached in the system somewhere, this will interfere with
 			// the final signer outcome.

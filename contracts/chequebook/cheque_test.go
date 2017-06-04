@@ -414,20 +414,9 @@ func TestCash(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-	// expBalance := big.NewInt(2)
-	// gotBalance := backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 	// after 3x interval time and 2 cheques received, exactly one cashing tx is sent
 	time.Sleep(4 * interval)
 	backend.Commit()
-
-	// expBalance = big.NewInt(4)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 
 	// after stopping autocash no more tx are sent
 	ch2, err := chbook.Issue(addr1, amount)
@@ -441,11 +430,6 @@ func TestCash(t *testing.T) {
 	}
 	time.Sleep(2 * interval)
 	backend.Commit()
-	// expBalance = big.NewInt(4)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 
 	// autocash below 1
 	chbook.balance = big.NewInt(2)
@@ -456,11 +440,6 @@ func TestCash(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-	// expBalance = big.NewInt(4)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 
 	ch4, err := chbook.Issue(addr1, amount)
 	if err != nil {
@@ -479,13 +458,6 @@ func TestCash(t *testing.T) {
 	}
 	backend.Commit()
 
-	// 2 checks of amount 1 received, exactly 1 tx is sent
-	// expBalance = big.NewInt(6)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
-
 	// autochash on receipt when maxUncashed is 0
 	chbook.balance = new(big.Int).Set(common.Big2)
 	chbox.AutoCash(0, common.Big0)
@@ -495,11 +467,6 @@ func TestCash(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-	// expBalance = big.NewInt(5)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 
 	ch6, err := chbook.Issue(addr1, amount)
 	if err != nil {
@@ -511,21 +478,11 @@ func TestCash(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-	// expBalance = big.NewInt(4)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 
 	_, err = chbox.Receive(ch6)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	backend.Commit()
-	// expBalance = big.NewInt(6)
-	// gotBalance = backend.BalanceAt(addr1)
-	// if gotBalance.Cmp(expBalance) != 0 {
-	// 	t.Fatalf("expected beneficiary balance %v, got %v", expBalance, gotBalance)
-	// }
 
 }
