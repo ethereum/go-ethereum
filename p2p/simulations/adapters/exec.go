@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -12,7 +13,9 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rpc"
+	"golang.org/x/net/websocket"
 )
 
 // ExecAdapter is a NodeAdapter which runs nodes by executing the current
@@ -32,12 +36,17 @@ import (
 // execP2PNode function for more information.
 type ExecAdapter struct {
 	BaseDir string
+
+	nodes map[discover.NodeID]*ExecNode
 }
 
 // NewExecAdapter returns an ExecAdapter which stores node data in
 // subdirectories of the given base directory
 func NewExecAdapter(baseDir string) *ExecAdapter {
-	return &ExecAdapter{BaseDir: baseDir}
+	return &ExecAdapter{
+		BaseDir: baseDir,
+		nodes:   make(map[discover.NodeID]*ExecNode),
+	}
 }
 
 // Name returns the name of the adapter for logging purpoeses
@@ -69,6 +78,10 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		Node:  config,
 	}
 	conf.Stack.DataDir = filepath.Join(dir, "data")
+	conf.Stack.WSHost = "127.0.0.1"
+	conf.Stack.WSPort = 0
+	conf.Stack.WSOrigins = []string{"*"}
+	conf.Stack.WSExposeAll = true
 	conf.Stack.P2P.EnableMsgEvents = false
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
@@ -78,11 +91,13 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 	conf.Stack.P2P.ListenAddr = "127.0.0.1:0"
 
 	node := &ExecNode{
-		ID:     config.ID,
-		Dir:    dir,
-		Config: conf,
+		ID:      config.ID,
+		Dir:     dir,
+		Config:  conf,
+		adapter: e,
 	}
 	node.newCmd = node.execCommand
+	e.nodes[node.ID] = node
 	return node, nil
 }
 
@@ -100,10 +115,11 @@ type ExecNode struct {
 	Cmd    *exec.Cmd
 	Info   *p2p.NodeInfo
 
-	client *rpc.Client
-	rpcMux *rpcMux
-	newCmd func() *exec.Cmd
-	key    *ecdsa.PrivateKey
+	adapter *ExecAdapter
+	client  *rpc.Client
+	wsAddr  string
+	newCmd  func() *exec.Cmd
+	key     *ecdsa.PrivateKey
 }
 
 // Addr returns the node's enode URL
@@ -119,6 +135,10 @@ func (n *ExecNode) Addr() []byte {
 func (n *ExecNode) Client() (*rpc.Client, error) {
 	return n.client, nil
 }
+
+// wsAddrPattern is a regex used to read the WebSocket address from the node's
+// log
+var wsAddrPattern = regexp.MustCompile(`ws://[\d.:]+`)
 
 // Start exec's the node passing the ID and service as command line arguments
 // and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
@@ -137,34 +157,70 @@ func (n *ExecNode) Start(snapshots map[string][]byte) (err error) {
 	// encode a copy of the config containing the snapshot
 	confCopy := *n.Config
 	confCopy.Snapshots = snapshots
+	confCopy.PeerAddrs = make(map[string]string)
+	for id, node := range n.adapter.nodes {
+		confCopy.PeerAddrs[id.String()] = node.wsAddr
+	}
 	confData, err := json.Marshal(confCopy)
 	if err != nil {
 		return fmt.Errorf("error generating node config: %s", err)
 	}
 
-	// create a net.Pipe for RPC communication over stdin / stdout
-	pipe1, pipe2 := net.Pipe()
+	// use a pipe for stderr so we can both copy the node's stderr to
+	// os.Stderr and read the WebSocket address from the logs
+	stderrR, stderrW := io.Pipe()
+	stderr := io.MultiWriter(os.Stderr, stderrW)
 
 	// start the node
 	cmd := n.newCmd()
-	cmd.Stdin = pipe1
-	cmd.Stdout = pipe1
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = stderr
 	cmd.Env = append(os.Environ(), fmt.Sprintf("_P2P_NODE_CONFIG=%s", confData))
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("error starting node: %s", err)
 	}
 	n.Cmd = cmd
 
+	// read the WebSocket address from the stderr logs
+	var wsAddr string
+	errC := make(chan error)
+	go func() {
+		s := bufio.NewScanner(stderrR)
+		for s.Scan() {
+			if strings.Contains(s.Text(), "WebSocket endpoint opened:") {
+				wsAddr = wsAddrPattern.FindString(s.Text())
+				break
+			}
+		}
+		select {
+		case errC <- s.Err():
+		default:
+		}
+	}()
+	select {
+	case err := <-errC:
+		if err != nil {
+			return fmt.Errorf("error reading WebSocket address from stderr: %s", err)
+		} else if wsAddr == "" {
+			return errors.New("failed to read WebSocket address from stderr")
+		}
+	case <-time.After(10 * time.Second):
+		return errors.New("timed out waiting for WebSocket address on stderr")
+	}
+
 	// create the RPC client and load the node info
-	n.rpcMux = newRPCMux(pipe2)
-	n.client = n.rpcMux.Client()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	client, err := rpc.DialWebsocket(ctx, wsAddr, "")
+	if err != nil {
+		return fmt.Errorf("error dialing rpc websocket: %s", err)
+	}
 	var info p2p.NodeInfo
-	if err := n.client.CallContext(ctx, &info, "admin_nodeInfo"); err != nil {
+	if err := client.CallContext(ctx, &info, "admin_nodeInfo"); err != nil {
 		return fmt.Errorf("error getting node info: %s", err)
 	}
+	n.client = client
+	n.wsAddr = wsAddr
 	n.Info = &info
 
 	return nil
@@ -193,6 +249,7 @@ func (n *ExecNode) Stop() error {
 	if n.client != nil {
 		n.client.Close()
 		n.client = nil
+		n.wsAddr = ""
 		n.Info = nil
 	}
 
@@ -222,13 +279,30 @@ func (n *ExecNode) NodeInfo() *p2p.NodeInfo {
 	return info
 }
 
-// ServeRPC serves RPC requests over the given connection using the node's
-// RPC multiplexer
-func (n *ExecNode) ServeRPC(conn net.Conn) error {
-	if n.rpcMux == nil {
-		return errors.New("RPC not started")
+// ServeRPC serves RPC requests over the given connection by dialling the
+// node's WebSocket address and joining the two connections
+func (n *ExecNode) ServeRPC(clientConn net.Conn) error {
+	conn, err := websocket.Dial(n.wsAddr, "", "http://localhost")
+	if err != nil {
+		return err
 	}
-	n.rpcMux.Serve(conn)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	join := func(src, dst net.Conn) {
+		defer wg.Done()
+		io.Copy(dst, src)
+		// close the write end of the destination connection
+		if cw, ok := dst.(interface {
+			CloseWrite() error
+		}); ok {
+			cw.CloseWrite()
+		} else {
+			dst.Close()
+		}
+	}
+	go join(conn, clientConn)
+	go join(clientConn, conn)
+	wg.Wait()
 	return nil
 }
 
@@ -253,7 +327,8 @@ func init() {
 type execNodeConfig struct {
 	Stack     node.Config       `json:"stack"`
 	Node      *NodeConfig       `json:"node"`
-	Snapshots map[string][]byte `json:"snapshot,omitempty"`
+	Snapshots map[string][]byte `json:"snapshots,omitempty"`
+	PeerAddrs map[string]string `json:"peer_addrs,omitempty"`
 }
 
 // execP2PNode starts a devp2p node when the current binary is executed with
@@ -264,9 +339,8 @@ func execP2PNode() {
 	glogger.Verbosity(log.LvlInfo)
 	log.Root().SetHandler(glogger)
 
-	// read the services and ID from argv
+	// read the services from argv
 	serviceNames := strings.Split(os.Args[1], ",")
-	id := discover.MustHexID(os.Args[2])
 
 	// decode the config
 	confEnv := os.Getenv("_P2P_NODE_CONFIG")
@@ -278,20 +352,6 @@ func execP2PNode() {
 		log.Crit("error decoding _P2P_NODE_CONFIG", "err", err)
 	}
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
-
-	// initialize the services
-	services := make(map[string]node.Service, len(serviceNames))
-	for _, name := range serviceNames {
-		serviceFunc, exists := serviceFuncs[name]
-		if !exists {
-			log.Crit(fmt.Sprintf("unknown node service %q", name))
-		}
-		var snapshot []byte
-		if conf.Snapshots != nil {
-			snapshot = conf.Snapshots[name]
-		}
-		services[name] = serviceFunc(id, snapshot)
-	}
 
 	// use explicit IP address in ListenAddr so that Enode URL is usable
 	if strings.HasPrefix(conf.Stack.P2P.ListenAddr, ":") {
@@ -307,21 +367,54 @@ func execP2PNode() {
 		}
 	}
 
-	// start the devp2p stack
-	stack, err := startP2PNode(&conf.Stack, services)
+	// initialize the devp2p stack
+	stack, err := node.New(&conf.Stack)
 	if err != nil {
-		log.Crit("error starting p2p node", "err", err)
+		log.Crit("error creating node stack", "err", err)
 	}
 
-	// use stdin / stdout for RPC to avoid the parent needing to access
-	// either the local filesystem or TCP stack (useful when running in
-	// Docker)
-	handler, err := stack.RPCHandler()
-	if err != nil {
-		log.Crit("error getting RPC server", "err", err)
+	// register the services, collecting them into a map so we can wrap
+	// them in a snapshot service
+	services := make(map[string]node.Service, len(serviceNames))
+	for _, name := range serviceNames {
+		serviceFunc, exists := serviceFuncs[name]
+		if !exists {
+			log.Crit("unknown node service", "name", name)
+		}
+		constructor := func(nodeCtx *node.ServiceContext) (node.Service, error) {
+			ctx := &ServiceContext{
+				RPCDialer:   &wsRPCDialer{addrs: conf.PeerAddrs},
+				NodeContext: nodeCtx,
+				Config:      conf.Node,
+			}
+			if conf.Snapshots != nil {
+				ctx.Snapshot = conf.Snapshots[name]
+			}
+			service, err := serviceFunc(ctx)
+			if err != nil {
+				return nil, err
+			}
+			services[name] = service
+			return service, nil
+		}
+		if err := stack.Register(constructor); err != nil {
+			log.Crit("error starting service", "name", name, "err", err)
+		}
 	}
-	go handler.ServeCodec(rpc.NewJSONCodec(&stdioConn{os.Stdin, os.Stdout}), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
 
+	// register the snapshot service
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return &snapshotService{services}, nil
+	}); err != nil {
+		log.Crit("error starting snapshot service", "err", err)
+	}
+
+	// start the stack
+	if err := stack.Start(); err != nil {
+		log.Crit("error stating node stack", "err", err)
+	}
+
+	// stop the stack if we get a SIGTERM signal
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGTERM)
@@ -331,31 +424,8 @@ func execP2PNode() {
 		stack.Stop()
 	}()
 
+	// wait for the stack to exit
 	stack.Wait()
-}
-
-func startP2PNode(conf *node.Config, services map[string]node.Service) (*node.Node, error) {
-	stack, err := node.New(conf)
-	if err != nil {
-		return nil, err
-	}
-	constructor := func(service node.Service) func(ctx *node.ServiceContext) (node.Service, error) {
-		return func(ctx *node.ServiceContext) (node.Service, error) {
-			return service, nil
-		}
-	}
-	for _, service := range services {
-		if err := stack.Register(constructor(service)); err != nil {
-			return nil, err
-		}
-	}
-	if err := stack.Register(constructor(&snapshotService{services})); err != nil {
-		return nil, err
-	}
-	if err := stack.Start(); err != nil {
-		return nil, err
-	}
-	return stack, nil
 }
 
 // snapshotService is a node.Service which wraps a list of services and
@@ -405,13 +475,14 @@ func (api SnapshotAPI) Snapshot() (map[string][]byte, error) {
 	return snapshots, nil
 }
 
-// stdioConn wraps os.Stdin / os.Stdout with a no-op Close method so we can
-// use stdio for RPC messages
-type stdioConn struct {
-	io.Reader
-	io.Writer
+type wsRPCDialer struct {
+	addrs map[string]string
 }
 
-func (r *stdioConn) Close() error {
-	return nil
+func (w *wsRPCDialer) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+	addr, ok := w.addrs[id.String()]
+	if !ok {
+		return nil, fmt.Errorf("unknown node: %s", id)
+	}
+	return rpc.DialWebsocket(context.Background(), addr, "http://localhost")
 }

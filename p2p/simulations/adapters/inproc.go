@@ -78,6 +78,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		ID:      id,
 		config:  config,
 		adapter: s,
+		running: make(map[string]node.Service),
 	}
 	s.nodes[id] = node
 	return node, nil
@@ -95,6 +96,24 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	pipe1, pipe2 := net.Pipe()
 	go srv.SetupConn(pipe1, 0, nil)
 	return pipe2, nil
+}
+
+func (s *SimAdapter) DialRPC(id discover.NodeID) (*rpc.Client, error) {
+	simNode, ok := s.GetNode(id)
+	if !ok {
+		return nil, fmt.Errorf("unknown node: %s", id)
+	}
+	simNode.lock.RLock()
+	node := simNode.node
+	simNode.lock.RUnlock()
+	if node == nil {
+		return nil, errors.New("node not started")
+	}
+	handler, err := node.RPCHandler()
+	if err != nil {
+		return nil, err
+	}
+	return rpc.DialInProc(handler), nil
 }
 
 // GetNode returns the node with the given ID if it exists
@@ -117,9 +136,8 @@ type SimNode struct {
 	config  *NodeConfig
 	adapter *SimAdapter
 	node    *node.Node
-	running []node.Service
+	running map[string]node.Service
 	client  *rpc.Client
-	rpcMux  *rpcMux
 }
 
 // Addr returns the node's discovery address
@@ -135,24 +153,28 @@ func (self *SimNode) Node() *discover.Node {
 // Client returns an rpc.Client which can be used to communicate with the
 // underlying service (it is set once the node has started)
 func (self *SimNode) Client() (*rpc.Client, error) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+	self.lock.RLock()
+	defer self.lock.RUnlock()
 	if self.client == nil {
-		return nil, errors.New("RPC not started")
+		return nil, errors.New("node not started")
 	}
 	return self.client, nil
 }
 
-// ServeRPC serves RPC requests over the given connection using the node's
-// RPC multiplexer
+// ServeRPC serves RPC requests over the given connection by creating an
+// in-process client to the node's RPC server
 func (self *SimNode) ServeRPC(conn net.Conn) error {
-	self.lock.Lock()
-	mux := self.rpcMux
-	self.lock.Unlock()
-	if mux == nil {
-		return errors.New("RPC not started")
+	self.lock.RLock()
+	node := self.node
+	self.lock.RUnlock()
+	if node == nil {
+		return errors.New("node not started")
 	}
-	mux.Serve(conn)
+	handler, err := node.RPCHandler()
+	if err != nil {
+		return err
+	}
+	handler.ServeCodec(rpc.NewJSONCodec(conn), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
 	return nil
 }
 
@@ -160,12 +182,24 @@ func (self *SimNode) ServeRPC(conn net.Conn) error {
 // simulation_snapshot RPC method
 func (self *SimNode) Snapshots() (map[string][]byte, error) {
 	self.lock.Lock()
-	defer self.lock.Unlock()
-	if self.client == nil {
-		return nil, errors.New("RPC not started")
+	services := self.running
+	self.lock.Unlock()
+	if len(services) == 0 {
+		return nil, errors.New("no running services")
 	}
-	var snapshots map[string][]byte
-	return snapshots, self.client.Call(&snapshots, "simulation_snapshot")
+	snapshots := make(map[string][]byte)
+	for name, service := range services {
+		if s, ok := service.(interface {
+			Snapshot() ([]byte, error)
+		}); ok {
+			snap, err := s.Snapshot()
+			if err != nil {
+				return nil, err
+			}
+			snapshots[name] = snap
+		}
+	}
+	return snapshots, nil
 }
 
 // Start starts the RPC handler and the underlying service
@@ -177,14 +211,21 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 	}
 
 	newService := func(name string) func(ctx *node.ServiceContext) (node.Service, error) {
-		return func(ctx *node.ServiceContext) (node.Service, error) {
-			var snapshot []byte
+		return func(nodeCtx *node.ServiceContext) (node.Service, error) {
+			ctx := &ServiceContext{
+				RPCDialer:   self.adapter,
+				NodeContext: nodeCtx,
+				Config:      self.config,
+			}
 			if snapshots != nil {
-				snapshot = snapshots[name]
+				ctx.Snapshot = snapshots[name]
 			}
 			serviceFunc := self.adapter.services[name]
-			service := serviceFunc(self.ID, snapshot)
-			self.running = append(self.running, service)
+			service, err := serviceFunc(ctx)
+			if err != nil {
+				return nil, err
+			}
+			self.running[name] = service
 			return service, nil
 		}
 	}
@@ -213,18 +254,12 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 		return err
 	}
 
+	// create an in-process RPC client
 	handler, err := node.RPCHandler()
 	if err != nil {
 		return err
 	}
-
-	// create an in-process RPC multiplexer
-	pipe1, pipe2 := net.Pipe()
-	go handler.ServeCodec(rpc.NewJSONCodec(pipe1), rpc.OptionMethodInvocation|rpc.OptionSubscriptions)
-	self.rpcMux = newRPCMux(pipe2)
-
-	// create an in-process RPC client
-	self.client = self.rpcMux.Client()
+	self.client = rpc.DialInProc(handler)
 
 	self.node = node
 
@@ -248,7 +283,11 @@ func (self *SimNode) Stop() error {
 func (self *SimNode) Services() []node.Service {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.running
+	services := make([]node.Service, 0, len(self.running))
+	for _, service := range self.running {
+		services = append(services, service)
+	}
+	return services
 }
 
 func (self *SimNode) Server() *p2p.Server {

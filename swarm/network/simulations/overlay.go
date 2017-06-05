@@ -33,7 +33,8 @@ func NewSimulation() *Simulation {
 	}
 }
 
-func (s *Simulation) NewService(id discover.NodeID, snapshot []byte) node.Service {
+func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, error) {
+	id := ctx.Config.ID
 	s.mtx.Lock()
 	store, ok := s.stores[id]
 	if !ok {
@@ -64,7 +65,7 @@ func (s *Simulation) NewService(id discover.NodeID, snapshot []byte) node.Servic
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, store)
+	return network.NewBzz(config, kad, store), nil
 }
 
 func createMockers() map[string]*simulations.MockerConfig {

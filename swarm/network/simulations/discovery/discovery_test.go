@@ -179,8 +179,8 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 	return nil
 }
 
-func newService(id discover.NodeID, snapshot []byte) node.Service {
-	addr := network.NewAddrFromNodeID(id)
+func newService(ctx *adapters.ServiceContext) (node.Service, error) {
+	addr := network.NewAddrFromNodeID(ctx.Config.ID)
 
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = testMinProxBinSize
@@ -200,5 +200,5 @@ func newService(id discover.NodeID, snapshot []byte) node.Service {
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, nil)
+	return network.NewBzz(config, kad, nil), nil
 }

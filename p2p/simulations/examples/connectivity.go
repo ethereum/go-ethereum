@@ -27,8 +27,8 @@ func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	services := map[string]adapters.ServiceFunc{
-		"ping-pong": func(id discover.NodeID, snapshot []byte) node.Service {
-			return newPingPongService(id)
+		"ping-pong": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			return newPingPongService(ctx.Config.ID), nil
 		},
 	}
 
