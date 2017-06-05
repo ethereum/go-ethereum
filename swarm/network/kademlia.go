@@ -192,68 +192,79 @@ func (self *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	empty := self.FirstEmptyBin()
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
-	log.Debug(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
-	// log.Trace(fmt.Sprintf("candidate prox peer checking above PO %v", depth))
+	log.Debug(fmt.Sprintf("candidate nearest neighbour checking above PO %v", depth))
+	// log.Trace(fmt.Sprintf("candidate nearest neighbour checking above PO %v", depth))
 	var ppo int
 	ba := pot.NewBytesVal(self.base, nil)
 	self.addrs.EachNeighbour(ba, func(val pot.PotVal, po int) bool {
 		a = self.callable(val)
-		log.Trace(fmt.Sprintf("candidate prox peer at %x: %v (%v). a == nil is %v", val.(*entry).Address(), a, po, a == nil))
+		log.Trace(fmt.Sprintf("candidate nearest neighbour at %x: %v (%v). a == nil is %v", val.(*entry).Address(), a, po, a == nil))
 		ppo = po
 		return a == nil && po >= depth
 	})
 	if a != nil {
-		log.Debug(fmt.Sprintf("candidate prox peer found: %v (%v)", a, ppo))
+		log.Debug(fmt.Sprintf("candidate nearest neighbour found: %v (%v)", a, ppo))
 		return a, 0, false
 	}
-	log.Debug(fmt.Sprintf("no candidate prox peers to connect to (Depth: %v, minProxSize: %v) %#v", depth, self.MinProxBinSize, a))
+	log.Debug(fmt.Sprintf("no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", depth, self.MinProxBinSize, a))
 
 	var bpo []int
 	prev := -1
 	self.conns.EachBin(pot.NewBytesVal(self.base, nil), 0, func(po, size int, f func(func(val pot.PotVal, i int) bool) bool) bool {
 		log.Trace(fmt.Sprintf("check PO%02d: ", po))
 		prev++
-		if po > prev {
-			size = 0
-			po = prev
+		for ; prev < po; prev++ {
+			bpo = append(bpo, prev)
+			minsize = 0
 		}
 		if size < minsize {
-			minsize = size
 			bpo = append(bpo, po)
+			minsize = size
 		}
 		return size > 0 && po < depth
 	})
 	// all buckets are full
 	// minsize == self.MinBinSize
 	if len(bpo) == 0 {
+		log.Trace(fmt.Sprintf("all bins saturated"))
 		return nil, 0, false
 	}
 	// as long as we got candidate peers to connect to
 	// dont ask for new peers (want = false)
 	// try to select a candidate peer
-	for i := len(bpo) - 1; i >= 0; i-- {
-		// find the first callable peer
-		self.addrs.EachBin(ba, bpo[i], func(po, size int, f func(func(pot.PotVal, int) bool) bool) bool {
-			// for each bin we find callable candidate peers
-			log.Trace(fmt.Sprintf("check PO%02d: ", po))
-			f(func(val pot.PotVal, j int) bool {
-				a = self.callable(val)
-				if po == empty {
-					log.Debug(fmt.Sprintf("candidate prox peer found: %v (%v)", a, ppo))
-				}
-				return a == nil && po <= depth
-			})
-			return false
-		})
-		// found a candidate
-		if a != nil {
-			break
+	// for i := len(bpo) - 1; i >= 0; i-- {
+	// find the first callable peer
+	i := 0
+	nxt := bpo[0]
+	self.addrs.EachBin(ba, nxt, func(po, size int, f func(func(pot.PotVal, int) bool) bool) bool {
+		// for each bin we find callable candidate peers
+		if po == nxt {
+			if i == len(bpo)-1 {
+				return false
+			}
+			i++
+			nxt = bpo[i]
 		}
-		// cannot find a candidate, ask for more for this proximity bin specifically
-		o = bpo[i]
-		want = true
+		log.Trace(fmt.Sprintf("check PO%02d: ", po))
+		f(func(val pot.PotVal, j int) bool {
+			a = self.callable(val)
+			if po == empty {
+				log.Debug(fmt.Sprintf("candidate nearest neighbour found: %v (%v)", a, ppo))
+			}
+			return a == nil && po <= depth
+		})
+		return false
+	})
+	// found a candidate
+	if a != nil {
+		return a, 0, false
 	}
-	return a, o, want
+	return a, bpo[i], true
+	// cannot find a candidate, ask for more for this proximity bin specifically
+	// o = bpo[i]
+	// want = true
+	// // }
+	// return a, o, want
 }
 
 // On inserts the peer as a kademlia peer into the live peers
@@ -323,15 +334,12 @@ func (self *Kademlia) EachConn(base []byte, o int, f func(OverlayConn, int, bool
 		base = self.base
 	}
 	p := pot.NewBytesVal(base, nil)
+	depth := self.Depth()
 	self.conns.EachNeighbour(p, func(val pot.PotVal, po int) bool {
 		if po > o {
 			return true
 		}
-		isproxbin := false
-		if l, _ := p.PO(val, 0); l >= self.Depth() {
-			isproxbin = true
-		}
-		return f(val.(*entry).conn(), po, isproxbin)
+		return f(val.(*entry).conn(), po, po >= depth)
 	})
 }
 
@@ -423,6 +431,9 @@ func (self *Kademlia) String() string {
 		row := []string{fmt.Sprintf("%2d", size)}
 		rest -= size
 		f(func(val pot.PotVal, vpo int) bool {
+			e := val.(*entry)
+			label := e.String()[:6]
+			row = append(row, fmt.Sprintf("%s (%d)", label, e.retries))
 			row = append(row, val.(*entry).String()[:6])
 			rowlen++
 			return rowlen < 4
@@ -460,7 +471,7 @@ func (self *Kademlia) String() string {
 
 	for i := 0; i < self.MaxProxDisplay; i++ {
 		if i == depth {
-			rows = append(rows, fmt.Sprintf("============ PROX LIMIT: %d ==========================================", i))
+			rows = append(rows, fmt.Sprintf("============ DEPTH: %d ==========================================", i))
 		}
 		left := liverows[i]
 		right := peersrows[i]
