@@ -255,6 +255,10 @@ type ServerConfig struct {
 	// network
 	NewAdapter func() adapters.NodeAdapter
 
+	// ExternalNetworks are externally defined networks to expose via the
+	// HTTP server
+	ExternalNetworks map[string]*Network
+
 	// Mocker is the function which will be called when a client sends a
 	// POST request to /networks/<netid>/mock and is expected to
 	// generate some mock events in the network
@@ -285,6 +289,9 @@ func NewServer(config *ServerConfig) *Server {
 		ServerConfig: *config,
 		router:       httprouter.New(),
 		networks:     make(map[string]*Network),
+	}
+	for name, network := range config.ExternalNetworks {
+		s.networks[name] = network
 	}
 
 	s.OPTIONS("/networks", s.Options)
