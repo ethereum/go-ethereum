@@ -78,6 +78,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 		ID:      id,
 		config:  config,
 		adapter: s,
+		running: make(map[string]node.Service),
 	}
 	s.nodes[id] = node
 	return node, nil
@@ -135,7 +136,7 @@ type SimNode struct {
 	config  *NodeConfig
 	adapter *SimAdapter
 	node    *node.Node
-	running []node.Service
+	running map[string]node.Service
 	client  *rpc.Client
 }
 
@@ -181,12 +182,24 @@ func (self *SimNode) ServeRPC(conn net.Conn) error {
 // simulation_snapshot RPC method
 func (self *SimNode) Snapshots() (map[string][]byte, error) {
 	self.lock.Lock()
-	defer self.lock.Unlock()
-	if self.client == nil {
-		return nil, errors.New("RPC not started")
+	services := self.running
+	self.lock.Unlock()
+	if len(services) == 0 {
+		return nil, errors.New("no running services")
 	}
-	var snapshots map[string][]byte
-	return snapshots, self.client.Call(&snapshots, "simulation_snapshot")
+	snapshots := make(map[string][]byte)
+	for name, service := range services {
+		if s, ok := service.(interface {
+			Snapshot() ([]byte, error)
+		}); ok {
+			snap, err := s.Snapshot()
+			if err != nil {
+				return nil, err
+			}
+			snapshots[name] = snap
+		}
+	}
+	return snapshots, nil
 }
 
 // Start starts the RPC handler and the underlying service
@@ -212,7 +225,7 @@ func (self *SimNode) Start(snapshots map[string][]byte) error {
 			if err != nil {
 				return nil, err
 			}
-			self.running = append(self.running, service)
+			self.running[name] = service
 			return service, nil
 		}
 	}
@@ -270,7 +283,11 @@ func (self *SimNode) Stop() error {
 func (self *SimNode) Services() []node.Service {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	return self.running
+	services := make([]node.Service, 0, len(self.running))
+	for _, service := range self.running {
+		services = append(services, service)
+	}
+	return services
 }
 
 func (self *SimNode) Server() *p2p.Server {
