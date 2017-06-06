@@ -1,4 +1,4 @@
-package pss
+package client
 
 import (
 	"context"
@@ -9,19 +9,40 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/pot"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
 const (
 	inboxCapacity  = 3000
 	outboxCapacity = 100
+	defaultWSHost  = 8546
 	addrLen        = common.HashLength
 )
+
+// RemoteHost: hostname of node running websockets proxy to pss (default localhost)
+// RemotePort: port of node running websockets proxy to pss (0 = go-ethereum node default)
+// Secure: whether or not to use secure connection
+// SelfHost: local if host to connect from
+type PssClientConfig struct {
+	SelfHost   string
+	RemoteHost string
+	RemotePort int
+	Secure     bool
+}
+
+func NewPssClientConfig() *PssClientConfig {
+	return &PssClientConfig{
+		SelfHost:   "localhost",
+		RemoteHost: "localhost",
+		RemotePort: 8546,
+	}
+}
 
 type PssClient struct {
 	localuri     string
@@ -30,28 +51,26 @@ type PssClient struct {
 	cancel       func()
 	subscription *rpc.ClientSubscription
 	topicsC      chan []byte
-	msgC         chan PssAPIMsg
+	msgC         chan pss.PssAPIMsg
 	quitC        chan struct{}
 	quitting     uint32
 	ws           *rpc.Client
 	lock         sync.Mutex
-	peerPool     map[PssTopic]map[pot.Address]*pssRPCRW
-	protos       []*p2p.Protocol
+	peerPool     map[pss.PssTopic]map[pot.Address]*pssRPCRW
+	protos       map[pss.PssTopic]*p2p.Protocol
 }
 
 type pssRPCRW struct {
 	*PssClient
-	topic *PssTopic
-	spec  *protocols.Spec
+	topic *pss.PssTopic
 	msgC  chan []byte
 	addr  pot.Address
 }
 
-func (self *PssClient) newpssRPCRW(addr pot.Address, spec *protocols.Spec, topic *PssTopic) *pssRPCRW {
+func (self *PssClient) newpssRPCRW(addr pot.Address, topic *pss.PssTopic) *pssRPCRW {
 	return &pssRPCRW{
 		PssClient: self,
 		topic:     topic,
-		spec:      spec,
 		msgC:      make(chan []byte),
 		addr:      addr,
 	}
@@ -59,8 +78,8 @@ func (self *PssClient) newpssRPCRW(addr pot.Address, spec *protocols.Spec, topic
 
 func (rw *pssRPCRW) ReadMsg() (p2p.Msg, error) {
 	msg := <-rw.msgC
-	log.Warn("pssrpcrw read", "msg", msg)
-	pmsg, err := ToP2pMsg(msg)
+	log.Trace("pssrpcrw read", "msg", msg)
+	pmsg, err := pss.ToP2pMsg(msg)
 	if err != nil {
 		return p2p.Msg{}, err
 	}
@@ -69,64 +88,73 @@ func (rw *pssRPCRW) ReadMsg() (p2p.Msg, error) {
 }
 
 func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
-
-	ifc, found := rw.spec.NewMsg(msg.Code)
-	if !found {
-		return fmt.Errorf("could not find interface for msg #%d", msg.Code)
-	}
-	msg.Decode(ifc)
-	pmsg, err := newProtocolMsg(msg.Code, ifc)
+	log.Trace("got writemsg pssclient", "msg", msg)
+	rlpdata := make([]byte, msg.Size)
+	msg.Payload.Read(rlpdata)
+	pmsg, err := rlp.EncodeToBytes(pss.PssProtocolMsg{
+		Code:    msg.Code,
+		Size:    msg.Size,
+		Payload: rlpdata,
+	})
 	if err != nil {
-		return fmt.Errorf("Could not render protocolmessage", "error", err)
+		return err
 	}
-
-	return rw.PssClient.ws.CallContext(rw.PssClient.ctx, nil, "pss_sendRaw", rw.topic, PssAPIMsg{
+	return rw.PssClient.ws.CallContext(rw.PssClient.ctx, nil, "pss_sendPss", rw.topic, pss.PssAPIMsg{
 		Addr: rw.addr.Bytes(),
 		Msg:  pmsg,
 	})
-
 }
 
-// remotehost: hostname of node running websockets proxy to pss (default localhost)
-// remoteport: port of node running websockets proxy to pss (0 = go-ethereum node default)
-// secure: whether or not to use secure connection
-// originhost: local if host to connect from
-
-func NewPssClient(ctx context.Context, cancel func(), remotehost string, remoteport int, secure bool, originhost string) *PssClient {
+func NewPssClient(ctx context.Context, cancel func(), config *PssClientConfig) *PssClient {
 	prefix := "ws"
 
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if cancel == nil {
 		cancel = func() { return }
 	}
+
 	pssc := &PssClient{
-		msgC:     make(chan PssAPIMsg),
+		msgC:     make(chan pss.PssAPIMsg),
 		quitC:    make(chan struct{}),
-		peerPool: make(map[PssTopic]map[pot.Address]*pssRPCRW),
+		peerPool: make(map[pss.PssTopic]map[pot.Address]*pssRPCRW),
+		protos:   make(map[pss.PssTopic]*p2p.Protocol),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
 
-	if remotehost == "" {
-		remotehost = "localhost"
+	if config.RemoteHost == "" {
+		config.RemoteHost = "localhost"
 	}
 
-	if remoteport == 0 {
-		remoteport = node.DefaultWSPort
+	if config.RemotePort == 0 {
+		config.RemotePort = defaultWSHost
 	}
 
-	if originhost == "" {
-		originhost = "localhost"
+	if config.SelfHost == "" {
+		config.SelfHost = "localhost"
 	}
 
-	if secure {
+	if config.Secure {
 		prefix = "wss"
 	}
 
-	pssc.remoteuri = fmt.Sprintf("%s://%s:%d", prefix, remotehost, remoteport)
-	pssc.localuri = fmt.Sprintf("%s://%s", prefix, originhost)
+	pssc.remoteuri = fmt.Sprintf("%s://%s:%d", prefix, config.RemoteHost, config.RemotePort)
+	pssc.localuri = fmt.Sprintf("%s://%s", prefix, config.SelfHost)
 
 	return pssc
+}
+
+func NewPssClientWithRPC(ctx context.Context, client *rpc.Client) *PssClient {
+	return &PssClient{
+		msgC:     make(chan pss.PssAPIMsg),
+		quitC:    make(chan struct{}),
+		peerPool: make(map[pss.PssTopic]map[pot.Address]*pssRPCRW),
+		protos:   make(map[pss.PssTopic]*p2p.Protocol),
+		ws:       client,
+		ctx:      ctx,
+	}
 }
 
 func (self *PssClient) shutdown() {
@@ -135,6 +163,9 @@ func (self *PssClient) shutdown() {
 }
 
 func (self *PssClient) Start() error {
+	if self.ws != nil {
+		return nil
+	}
 	log.Debug("Dialing ws", "src", self.localuri, "dst", self.remoteuri)
 	ws, err := rpc.DialWebsocket(self.ctx, self.remoteuri, self.localuri)
 	if err != nil {
@@ -146,11 +177,11 @@ func (self *PssClient) Start() error {
 	return nil
 }
 
-func (self *PssClient) RunProtocol(proto *p2p.Protocol, spec *protocols.Spec) error {
-	topic := NewTopic(spec.Name, int(spec.Version))
-	msgC := make(chan PssAPIMsg)
+func (self *PssClient) RunProtocol(proto *p2p.Protocol) error {
+	topic := pss.NewTopic(proto.Name, int(proto.Version))
+	msgC := make(chan pss.PssAPIMsg)
 	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
-	sub, err := self.ws.Subscribe(self.ctx, "pss", msgC, "newMsg", topic)
+	sub, err := self.ws.Subscribe(self.ctx, "pss", msgC, "receivePss", topic)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
@@ -165,7 +196,7 @@ func (self *PssClient) RunProtocol(proto *p2p.Protocol, spec *protocols.Spec) er
 				var addr pot.Address
 				copy(addr[:], msg.Addr)
 				if self.peerPool[topic][addr] == nil {
-					self.peerPool[topic][addr] = self.newpssRPCRW(addr, spec, &topic)
+					self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
 					nid, _ := discover.HexID("0x00")
 					p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
 					go proto.Run(p, self.peerPool[topic][addr])
@@ -180,7 +211,7 @@ func (self *PssClient) RunProtocol(proto *p2p.Protocol, spec *protocols.Spec) er
 		}
 	}()
 
-	self.protos = append(self.protos, proto)
+	self.protos[topic] = proto
 	return nil
 }
 
@@ -190,14 +221,17 @@ func (self *PssClient) Stop() error {
 }
 
 func (self *PssClient) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
-	topic := NewTopic(spec.Name, int(spec.Version))
+	topic := pss.NewTopic(spec.Name, int(spec.Version))
 	if self.peerPool[topic][addr] == nil {
-		self.peerPool[topic][addr] = self.newpssRPCRW(addr, spec, &topic)
+		self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
+		nid, _ := discover.HexID("0x00")
+		p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
+		go self.protos[topic].Run(p, self.peerPool[topic][addr])
 	}
 }
 
 func (self *PssClient) RemovePssPeer(addr pot.Address, spec *protocols.Spec) {
-	topic := NewTopic(spec.Name, int(spec.Version))
+	topic := pss.NewTopic(spec.Name, int(spec.Version))
 	delete(self.peerPool[topic], addr)
 }
 
