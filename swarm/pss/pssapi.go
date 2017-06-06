@@ -11,18 +11,18 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-// PssAPI is the RPC API module for Pss
-type PssAPI struct {
+// API is the RPC API module for Pss
+type API struct {
 	*Pss
 }
 
-// NewPssAPI constructs a PssAPI instance
-func NewPssAPI(ps *Pss) *PssAPI {
-	return &PssAPI{Pss: ps}
+// NewAPI constructs a PssAPI instance
+func NewAPI(ps *Pss) *API {
+	return &API{Pss: ps}
 }
 
 // NewMsg API endpoint creates an RPC subscription
-func (pssapi *PssAPI) ReceivePss(ctx context.Context, topic PssTopic) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -30,7 +30,7 @@ func (pssapi *PssAPI) ReceivePss(ctx context.Context, topic PssTopic) (*rpc.Subs
 
 	psssub := notifier.CreateSubscription()
 	handler := func(msg []byte, p *p2p.Peer, from []byte) error {
-		apimsg := &PssAPIMsg{
+		apimsg := &APIMsg{
 			Msg:  msg,
 			Addr: from,
 		}
@@ -39,7 +39,7 @@ func (pssapi *PssAPI) ReceivePss(ctx context.Context, topic PssTopic) (*rpc.Subs
 		}
 		return nil
 	}
-	deregf := pssapi.Pss.Register(&topic, handler)
+	deregf := pssapi.Register(&topic, handler)
 
 	go func() {
 		defer deregf()
@@ -55,39 +55,35 @@ func (pssapi *PssAPI) ReceivePss(ctx context.Context, topic PssTopic) (*rpc.Subs
 }
 
 // SendRaw sends the message (serialized into byte slice) to a peer with topic
-func (pssapi *PssAPI) SendPss(topic PssTopic, msg PssAPIMsg) error {
-	if pssapi.Pss.debug && bytes.Equal(msg.Addr, pssapi.Pss.BaseAddr()) {
+func (pssapi *API) Send(topic Topic, msg APIMsg) error {
+	if pssapi.debug && bytes.Equal(msg.Addr, pssapi.BaseAddr()) {
 		log.Warn("Pss debug enabled; send to self shortcircuit", "apimsg", msg, "topic", topic)
-		env := NewPssEnvelope(msg.Addr, topic, msg.Msg)
-		return pssapi.Pss.Process(&PssMsg{
-			To: pssapi.Pss.BaseAddr(),
+		env := NewEnvelope(msg.Addr, topic, msg.Msg)
+		return pssapi.Process(&PssMsg{
+			To:      pssapi.BaseAddr(),
 			Payload: env,
 		})
 	}
-	return pssapi.Pss.Send(msg.Addr, topic, msg.Msg)
-	/*if err != nil {
-		return fmt.Errorf("send error: %v", err)
-	}
-	return fmt.Errorf("ok sent")*/
+	return pssapi.SendRaw(msg.Addr, topic, msg.Msg)
 }
 
 // PssAPITest are temporary API calls for development use only
 // These symbols should not be included in production environment
-type PssAPITest struct {
+type APITest struct {
 	*Pss
 }
 
-// NewPssAPI constructs a PssAPI instance
-func NewPssAPITest(ps *Pss) *PssAPITest {
-	return &PssAPITest{Pss: ps}
+// NewAPI constructs a API instance
+func NewAPITest(ps *Pss) *APITest {
+	return &APITest{Pss: ps}
 }
 
 // temporary for access to overlay while faking kademlia healthy routines
-func (pssapitest *PssAPITest) GetForwarder(addr []byte) (fwd struct {
+func (pssapitest *APITest) GetForwarder(addr []byte) (fwd struct {
 	Addr  []byte
 	Count int
 }) {
-	pssapitest.Pss.Overlay.EachConn(addr, 255, func(op network.OverlayConn, po int, isproxbin bool) bool {
+	pssapitest.Overlay.EachConn(addr, 255, func(op network.OverlayConn, po int, isproxbin bool) bool {
 		if bytes.Equal(fwd.Addr, []byte{}) {
 			fwd.Addr = op.Address()
 		}
@@ -98,6 +94,6 @@ func (pssapitest *PssAPITest) GetForwarder(addr []byte) (fwd struct {
 }
 
 // BaseAddr gets our own overlayaddress
-func (pssapitest *PssAPITest) BaseAddr() ([]byte, error) {
+func (pssapitest *APITest) BaseAddr() ([]byte, error) {
 	return pssapitest.Pss.BaseAddr(), nil
 }

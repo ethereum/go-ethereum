@@ -21,21 +21,21 @@ const (
 // Defines params for Pss
 type PssParams struct {
 	Cachettl time.Duration
-	Debug bool
+	Debug    bool
 }
 
 // Initializes default params for Pss
 func NewPssParams(debug bool) *PssParams {
 	return &PssParams{
 		Cachettl: defaultDigestCacheTTL,
-		Debug: debug,
+		Debug:    debug,
 	}
 }
 
 // Encapsulates the message transported over pss.
 type PssMsg struct {
 	To      []byte
-	Payload *PssEnvelope
+	Payload *Envelope
 }
 
 func (msg *PssMsg) Serialize() []byte {
@@ -51,23 +51,23 @@ func (self *PssMsg) String() string {
 // Topic defines the context of a message being transported over pss
 // It is used by pss to determine what action is to be taken on an incoming message
 // Typically, one can map protocol handlers for the message payloads by mapping topic to them; see *Pss.Register()
-type PssTopic [TopicLength]byte
+type Topic [TopicLength]byte
 
-func (self *PssTopic) String() string {
+func (self *Topic) String() string {
 	return fmt.Sprintf("%x", self)
 }
 
 // Pre-Whisper placeholder, payload of PssMsg
-type PssEnvelope struct {
-	Topic   PssTopic
+type Envelope struct {
+	Topic   Topic
 	TTL     uint16
 	Payload []byte
 	From    []byte
 }
 
 // creates Pss envelope from sender address, topic and raw payload
-func NewPssEnvelope(addr []byte, topic PssTopic, payload []byte) *PssEnvelope {
-	return &PssEnvelope{
+func NewEnvelope(addr []byte, topic Topic, payload []byte) *Envelope {
+	return &Envelope{
 		From:    addr,
 		Topic:   topic,
 		TTL:     DefaultTTL,
@@ -76,7 +76,7 @@ func NewPssEnvelope(addr []byte, topic PssTopic, payload []byte) *PssEnvelope {
 }
 
 // encapsulates a protocol msg as PssEnvelope data
-type PssProtocolMsg struct {
+type ProtocolMsg struct {
 	Code       uint64
 	Size       uint32
 	Payload    []byte
@@ -85,7 +85,7 @@ type PssProtocolMsg struct {
 
 // PssAPIMsg is the type for messages, it extends the rlp encoded protocol Msg
 // with the Sender's overlay address
-type PssAPIMsg struct {
+type APIMsg struct {
 	Msg  []byte
 	Addr []byte
 }
@@ -100,7 +100,7 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 	// previous attempts corrupted nested structs in the payload iself upon deserializing
 	// therefore we use two separate []byte fields instead of peerAddr
 	// TODO verify that nested structs cannot be used in rlp
-	smsg := &PssProtocolMsg{
+	smsg := &ProtocolMsg{
 		Code:    code,
 		Size:    uint32(len(rlpdata)),
 		Payload: rlpdata,
@@ -110,12 +110,12 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 }
 
 // Message handler func for a topic
-type PssHandler func(msg []byte, p *p2p.Peer, from []byte) error
+type Handler func(msg []byte, p *p2p.Peer, from []byte) error
 
 // constructs a new PssTopic from a given name and version.
 //
 // Analogous to the name and version members of p2p.Protocol
-func NewTopic(s string, v int) (topic PssTopic) {
+func NewTopic(s string, v int) (topic Topic) {
 	h := sha3.NewKeccak256()
 	h.Write([]byte(s))
 	buf := make([]byte, TopicLength/8)
@@ -126,7 +126,7 @@ func NewTopic(s string, v int) (topic PssTopic) {
 }
 
 func ToP2pMsg(msg []byte) (p2p.Msg, error) {
-	payload := &PssProtocolMsg{}
+	payload := &ProtocolMsg{}
 	if err := rlp.DecodeBytes(msg, payload); err != nil {
 		return p2p.Msg{}, fmt.Errorf("pss protocol handler unable to decode payload as p2p message: %v", err)
 	}

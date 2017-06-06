@@ -31,7 +31,7 @@ func init() {
 // TestPssProtocol starts a pss network along with two test nodes which run
 // protocols via the pss network, connects those two test nodes and then
 // waits for them to handshake
-func TestPssProtocol(t *testing.T) {
+func TestProtocol(t *testing.T) {
 	// define the services
 	w := &testWrapper{}
 	services := adapters.Services{
@@ -141,7 +141,7 @@ func (t *testWrapper) newTestService(ctx *adapters.ServiceContext) (node.Service
 	}
 	return &testService{
 		id:         ctx.Config.ID,
-		pss:        client.NewPssClientWithRPC(context.Background(), rpcClient),
+		pss:        client.NewClientWithRPC(context.Background(), rpcClient),
 		handshakes: make(chan *testHandshake),
 	}, nil
 }
@@ -154,7 +154,7 @@ type testHandshake struct {
 // so that clients can wait for handshakes to complete
 type testService struct {
 	id         discover.NodeID
-	pss        *client.PssClient
+	pss        *client.Client
 	handshakes chan *testHandshake
 }
 
@@ -199,7 +199,7 @@ func (t *testService) run(_ *p2p.Peer, rw p2p.MsgReadWriter) error {
 }
 
 type TestAPI struct {
-	pss        *client.PssClient
+	pss        *client.Client
 	handshakes chan *testHandshake
 }
 

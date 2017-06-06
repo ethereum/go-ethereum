@@ -127,23 +127,23 @@ func (self *Hive) Start(server *p2p.Server) error {
 			log.Debug("hive delegate to overlay driver: suggest addr to connect to")
 			// log.Trace("hive delegate to overlay driver: suggest addr to connect to")
 			addr, order, want := self.SuggestPeer()
-
-			if addr != nil {
-				log.Info(fmt.Sprintf("========> connect to bee %v", addr))
-				under, err := discover.ParseNode(string(addr.(Addr).Under()))
-				if err == nil {
-					server.AddPeer(under)
+			if self.Discovery {
+				if addr != nil {
+					log.Info(fmt.Sprintf("========> connect to bee %v", addr))
+					under, err := discover.ParseNode(string(addr.(Addr).Under()))
+					if err == nil {
+						server.AddPeer(under)
+					} else {
+						log.Error(fmt.Sprintf("===X====> connect to bee %v failed: invalid node URL: %v", addr, err))
+					}
 				} else {
-					log.Error(fmt.Sprintf("===X====> connect to bee %v failed: invalid node URL: %v", addr, err))
+					log.Trace("cannot suggest peers")
 				}
-			} else {
-				log.Trace("cannot suggest peers")
-			}
 
-			want = want && self.Discovery
-			if want {
-				log.Debug(fmt.Sprintf("========> request peers nearest %v", addr))
-				RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				if want {
+					log.Debug(fmt.Sprintf("========> request peers nearest %v", addr))
+					RequestOrder(self.Overlay, uint8(order), self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				}
 			}
 
 			log.Info(fmt.Sprintf("%v", self))

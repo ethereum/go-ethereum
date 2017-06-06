@@ -13,33 +13,33 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-type PssPingMsg struct {
+type PingMsg struct {
 	Created time.Time
 }
 
-type PssPing struct {
-	QuitC chan struct{}
+type Ping struct {
+	C chan struct{}
 }
 
-func (self *PssPing) PssPingHandler(msg interface{}) error {
+func (self *Ping) PingHandler(msg interface{}) error {
 	log.Warn("got ping", "msg", msg)
-	self.QuitC <- struct{}{}
+	self.C <- struct{}{}
 	return nil
 }
 
-var PssPingProtocol = &protocols.Spec{
+var PingProtocol = &protocols.Spec{
 	Name:       "psstest",
 	Version:    1,
 	MaxMsgSize: 10 * 1024 * 1024,
 	Messages: []interface{}{
-		PssPingMsg{},
+		PingMsg{},
 	},
 }
 
-var PssPingTopic = NewTopic(PssPingProtocol.Name, int(PssPingProtocol.Version))
+var PingTopic = NewTopic(PingProtocol.Name, int(PingProtocol.Version))
 
-func NewPssPingMsg(to []byte, spec *protocols.Spec, topic PssTopic, senderaddr []byte) PssMsg {
-	data := PssPingMsg{
+func NewPingMsg(to []byte, spec *protocols.Spec, topic Topic, senderaddr []byte) PssMsg {
+	data := PingMsg{
 		Created: time.Now(),
 	}
 	code, found := spec.GetCode(&data)
@@ -54,19 +54,19 @@ func NewPssPingMsg(to []byte, spec *protocols.Spec, topic PssTopic, senderaddr [
 
 	pssmsg := PssMsg{
 		To:      to,
-		Payload: NewPssEnvelope(senderaddr, topic, rlpbundle),
+		Payload: NewEnvelope(senderaddr, topic, rlpbundle),
 	}
 
 	return pssmsg
 }
 
-func NewPssPingProtocol(handler func(interface{}) error) *p2p.Protocol {
+func NewPingProtocol(handler func(interface{}) error) *p2p.Protocol {
 	return &p2p.Protocol{
-		Name:    PssPingProtocol.Name,
-		Version: PssPingProtocol.Version,
-		Length:  uint64(PssPingProtocol.MaxMsgSize),
+		Name:    PingProtocol.Name,
+		Version: PingProtocol.Version,
+		Length:  uint64(PingProtocol.MaxMsgSize),
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			pp := protocols.NewPeer(p, rw, PssPingProtocol)
+			pp := protocols.NewPeer(p, rw, PingProtocol)
 			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p))
 			err := pp.Run(handler)
 			return err

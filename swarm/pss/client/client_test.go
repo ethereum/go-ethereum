@@ -26,8 +26,8 @@ func init() {
 func TestRunProtocol(t *testing.T) {
 	quitC := make(chan struct{})
 	ps := pss.NewTestPss(nil)
-	ping := &pss.PssPing{
-		QuitC: make(chan struct{}),
+	ping := &pss.Ping{
+		C: make(chan struct{}),
 	}
 	proto := newProtocol(ping)
 	_, err := baseTester(t, proto, ps, nil, nil, quitC)
@@ -42,8 +42,8 @@ func TestIncoming(t *testing.T) {
 	ps := pss.NewTestPss(nil)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	var addr []byte
-	ping := &pss.PssPing{
-		QuitC: make(chan struct{}),
+	ping := &pss.Ping{
+		C: make(chan struct{}),
 	}
 	proto := newProtocol(ping)
 	client, err := baseTester(t, proto, ps, ctx, cancel, quitC)
@@ -53,37 +53,28 @@ func TestIncoming(t *testing.T) {
 
 	client.ws.Call(&addr, "psstest_baseAddr")
 
-	code, _ := pss.PssPingProtocol.GetCode(&pss.PssPingMsg{})
-	rlpbundle, err := pss.NewProtocolMsg(code, &pss.PssPingMsg{
+	code, _ := pss.PingProtocol.GetCode(&pss.PingMsg{})
+	rlpbundle, err := pss.NewProtocolMsg(code, &pss.PingMsg{
 		Created: time.Now(),
 	})
 	if err != nil {
-		t.Fatalf("couldn't make pssmsg")
+		t.Fatalf("couldn't make pssmsg: %v", err)
 	}
 
-	pssenv := pss.PssEnvelope{
-		From:    addr,
-		Topic:   pss.NewTopic(proto.Name, int(proto.Version)),
-		TTL:     pss.DefaultTTL,
-		Payload: rlpbundle,
-	}
+	pssenv := pss.NewEnvelope(addr, pss.NewTopic(proto.Name, int(proto.Version)), rlpbundle)
 	pssmsg := pss.PssMsg{
 		To:      addr,
-		Payload: &pssenv,
+		Payload: pssenv,
 	}
 
 	ps.Process(&pssmsg)
 
-	go func() {
-		<-ping.QuitC
-		client.cancel()
-	}()
-
 	select {
 	case <-client.ctx.Done():
 		t.Fatalf("outgoing timed out or canceled")
-	default:
+	case <-ping.C:
 	}
+
 	quitC <- struct{}{}
 }
 
@@ -94,8 +85,8 @@ func TestOutgoing(t *testing.T) {
 	var addr []byte
 	var potaddr pot.Address
 
-	ping := &pss.PssPing{
-		QuitC: make(chan struct{}),
+	ping := &pss.Ping{
+		C: make(chan struct{}),
 	}
 	proto := newProtocol(ping)
 	client, err := baseTester(t, proto, ps, ctx, cancel, quitC)
@@ -106,25 +97,25 @@ func TestOutgoing(t *testing.T) {
 	client.ws.Call(&addr, "psstest_baseAddr")
 	copy(potaddr[:], addr)
 
-	msg := &pss.PssPingMsg{
+	msg := &pss.PingMsg{
 		Created: time.Now(),
 	}
 
-	topic := pss.NewTopic(pss.PssPingProtocol.Name, int(pss.PssPingProtocol.Version))
-	client.AddPssPeer(potaddr, pss.PssPingProtocol)
+	topic := pss.NewTopic(pss.PingProtocol.Name, int(pss.PingProtocol.Version))
+	client.AddPssPeer(potaddr, pss.PingProtocol)
 	nid, _ := discover.HexID("0x00")
 	p := p2p.NewPeer(nid, fmt.Sprintf("%v", potaddr), []p2p.Cap{})
-	pp := protocols.NewPeer(p, client.peerPool[topic][potaddr], pss.PssPingProtocol)
+	pp := protocols.NewPeer(p, client.peerPool[topic][potaddr], pss.PingProtocol)
 	pp.Send(msg)
 	select {
 	case <-client.ctx.Done():
 		t.Fatalf("outgoing timed out or canceled")
-	default:
+	case <-ping.C:
 	}
 	quitC <- struct{}{}
 }
 
-func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, cancel func(), quitC chan struct{}) (*PssClient, error) {
+func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, cancel func(), quitC chan struct{}) (*Client, error) {
 	var err error
 
 	client := newClient(t, ctx, cancel, quitC)
@@ -143,30 +134,30 @@ func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Cont
 	return client, nil
 }
 
-func newProtocol(ping *pss.PssPing) *p2p.Protocol {
+func newProtocol(ping *pss.Ping) *p2p.Protocol {
 
 	return &p2p.Protocol{
-		Name:    pss.PssPingProtocol.Name,
-		Version: pss.PssPingProtocol.Version,
+		Name:    pss.PingProtocol.Name,
+		Version: pss.PingProtocol.Version,
 		Length:  1,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			pp := protocols.NewPeer(p, rw, pss.PssPingProtocol)
-			pp.Run(ping.PssPingHandler)
+			pp := protocols.NewPeer(p, rw, pss.PingProtocol)
+			pp.Run(ping.PingHandler)
 			return nil
 		},
 	}
 }
 
-func newClient(t *testing.T, ctx context.Context, cancel func(), quitC chan struct{}) *PssClient {
+func newClient(t *testing.T, ctx context.Context, cancel func(), quitC chan struct{}) *Client {
 
-	conf := NewPssClientConfig()
+	conf := NewClientConfig()
 
-	pssclient := NewPssClient(ctx, cancel, conf)
+	pssclient := NewClient(ctx, cancel, conf)
 
 	ps := pss.NewTestPss(nil)
 	srv := rpc.NewServer()
-	srv.RegisterName("pss", pss.NewPssAPI(ps))
-	srv.RegisterName("psstest", pss.NewPssAPITest(ps))
+	srv.RegisterName("pss", pss.NewAPI(ps))
+	srv.RegisterName("psstest", pss.NewAPITest(ps))
 	ws := srv.WebsocketHandler([]string{"*"})
 	uri := fmt.Sprintf("%s:%d", "localhost", 8546)
 

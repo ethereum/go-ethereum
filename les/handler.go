@@ -259,7 +259,7 @@ func (pm *ProtocolManager) removePeer(id string) {
 func (pm *ProtocolManager) Start(srvr *p2p.Server) {
 	var topicDisc *discv5.Network
 	if srvr != nil {
-		topicDisc = srvr.DiscV5
+		topicDisc = srvr.DiscV5()
 	}
 	lesTopic := discv5.Topic("LES@" + common.Bytes2Hex(pm.blockchain.Genesis().Hash().Bytes()[0:8]))
 	if pm.lightSync {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
@@ -29,50 +28,49 @@ const (
 // RemotePort: port of node running websockets proxy to pss (0 = go-ethereum node default)
 // Secure: whether or not to use secure connection
 // SelfHost: local if host to connect from
-type PssClientConfig struct {
+type ClientConfig struct {
 	SelfHost   string
 	RemoteHost string
 	RemotePort int
 	Secure     bool
 }
 
-func NewPssClientConfig() *PssClientConfig {
-	return &PssClientConfig{
+func NewClientConfig() *ClientConfig {
+	return &ClientConfig{
 		SelfHost:   "localhost",
 		RemoteHost: "localhost",
 		RemotePort: 8546,
 	}
 }
 
-type PssClient struct {
+type Client struct {
 	localuri     string
 	remoteuri    string
 	ctx          context.Context
 	cancel       func()
 	subscription *rpc.ClientSubscription
 	topicsC      chan []byte
-	msgC         chan pss.PssAPIMsg
+	msgC         chan pss.APIMsg
 	quitC        chan struct{}
-	quitting     uint32
 	ws           *rpc.Client
 	lock         sync.Mutex
-	peerPool     map[pss.PssTopic]map[pot.Address]*pssRPCRW
-	protos       map[pss.PssTopic]*p2p.Protocol
+	peerPool     map[pss.Topic]map[pot.Address]*pssRPCRW
+	protos       map[pss.Topic]*p2p.Protocol
 }
 
 type pssRPCRW struct {
-	*PssClient
-	topic *pss.PssTopic
+	*Client
+	topic *pss.Topic
 	msgC  chan []byte
 	addr  pot.Address
 }
 
-func (self *PssClient) newpssRPCRW(addr pot.Address, topic *pss.PssTopic) *pssRPCRW {
+func (self *Client) newpssRPCRW(addr pot.Address, topic *pss.Topic) *pssRPCRW {
 	return &pssRPCRW{
-		PssClient: self,
-		topic:     topic,
-		msgC:      make(chan []byte),
-		addr:      addr,
+		Client: self,
+		topic:  topic,
+		msgC:   make(chan []byte),
+		addr:   addr,
 	}
 }
 
@@ -91,7 +89,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	log.Trace("got writemsg pssclient", "msg", msg)
 	rlpdata := make([]byte, msg.Size)
 	msg.Payload.Read(rlpdata)
-	pmsg, err := rlp.EncodeToBytes(pss.PssProtocolMsg{
+	pmsg, err := rlp.EncodeToBytes(pss.ProtocolMsg{
 		Code:    msg.Code,
 		Size:    msg.Size,
 		Payload: rlpdata,
@@ -99,13 +97,13 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return err
 	}
-	return rw.PssClient.ws.CallContext(rw.PssClient.ctx, nil, "pss_sendPss", rw.topic, pss.PssAPIMsg{
+	return rw.Client.ws.CallContext(rw.Client.ctx, nil, "pss_send", rw.topic, pss.APIMsg{
 		Addr: rw.addr.Bytes(),
 		Msg:  pmsg,
 	})
 }
 
-func NewPssClient(ctx context.Context, cancel func(), config *PssClientConfig) *PssClient {
+func NewClient(ctx context.Context, cancel func(), config *ClientConfig) *Client {
 	prefix := "ws"
 
 	if ctx == nil {
@@ -115,25 +113,13 @@ func NewPssClient(ctx context.Context, cancel func(), config *PssClientConfig) *
 		cancel = func() { return }
 	}
 
-	pssc := &PssClient{
-		msgC:     make(chan pss.PssAPIMsg),
+	pssc := &Client{
+		msgC:     make(chan pss.APIMsg),
 		quitC:    make(chan struct{}),
-		peerPool: make(map[pss.PssTopic]map[pot.Address]*pssRPCRW),
-		protos:   make(map[pss.PssTopic]*p2p.Protocol),
+		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
+		protos:   make(map[pss.Topic]*p2p.Protocol),
 		ctx:      ctx,
 		cancel:   cancel,
-	}
-
-	if config.RemoteHost == "" {
-		config.RemoteHost = "localhost"
-	}
-
-	if config.RemotePort == 0 {
-		config.RemotePort = defaultWSHost
-	}
-
-	if config.SelfHost == "" {
-		config.SelfHost = "localhost"
 	}
 
 	if config.Secure {
@@ -146,23 +132,22 @@ func NewPssClient(ctx context.Context, cancel func(), config *PssClientConfig) *
 	return pssc
 }
 
-func NewPssClientWithRPC(ctx context.Context, client *rpc.Client) *PssClient {
-	return &PssClient{
-		msgC:     make(chan pss.PssAPIMsg),
+func NewClientWithRPC(ctx context.Context, client *rpc.Client) *Client {
+	return &Client{
+		msgC:     make(chan pss.APIMsg),
 		quitC:    make(chan struct{}),
-		peerPool: make(map[pss.PssTopic]map[pot.Address]*pssRPCRW),
-		protos:   make(map[pss.PssTopic]*p2p.Protocol),
+		peerPool: make(map[pss.Topic]map[pot.Address]*pssRPCRW),
+		protos:   make(map[pss.Topic]*p2p.Protocol),
 		ws:       client,
 		ctx:      ctx,
 	}
 }
 
-func (self *PssClient) shutdown() {
-	atomic.StoreUint32(&self.quitting, 1)
+func (self *Client) shutdown() {
 	self.cancel()
 }
 
-func (self *PssClient) Start() error {
+func (self *Client) Start() error {
 	if self.ws != nil {
 		return nil
 	}
@@ -177,11 +162,11 @@ func (self *PssClient) Start() error {
 	return nil
 }
 
-func (self *PssClient) RunProtocol(proto *p2p.Protocol) error {
+func (self *Client) RunProtocol(proto *p2p.Protocol) error {
 	topic := pss.NewTopic(proto.Name, int(proto.Version))
-	msgC := make(chan pss.PssAPIMsg)
+	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
-	sub, err := self.ws.Subscribe(self.ctx, "pss", msgC, "receivePss", topic)
+	sub, err := self.ws.Subscribe(self.ctx, "pss", msgC, "receive", topic)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
@@ -215,12 +200,12 @@ func (self *PssClient) RunProtocol(proto *p2p.Protocol) error {
 	return nil
 }
 
-func (self *PssClient) Stop() error {
+func (self *Client) Stop() error {
 	self.cancel()
 	return nil
 }
 
-func (self *PssClient) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
+func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
 	topic := pss.NewTopic(spec.Name, int(spec.Version))
 	if self.peerPool[topic][addr] == nil {
 		self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
@@ -230,31 +215,31 @@ func (self *PssClient) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
 	}
 }
 
-func (self *PssClient) RemovePssPeer(addr pot.Address, spec *protocols.Spec) {
+func (self *Client) RemovePssPeer(addr pot.Address, spec *protocols.Spec) {
 	topic := pss.NewTopic(spec.Name, int(spec.Version))
 	delete(self.peerPool[topic], addr)
 }
 
-func (self *PssClient) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {
+func (self *Client) SubscribeEvents(ch chan *p2p.PeerEvent) event.Subscription {
 	log.Error("PSS client handles events internally, use the read functions instead")
 	return nil
 }
 
-func (self *PssClient) PeerCount() int {
+func (self *Client) PeerCount() int {
 	return len(self.peerPool)
 }
 
-func (self *PssClient) NodeInfo() *p2p.NodeInfo {
+func (self *Client) NodeInfo() *p2p.NodeInfo {
 	return nil
 }
 
-func (self *PssClient) PeersInfo() []*p2p.PeerInfo {
+func (self *Client) PeersInfo() []*p2p.PeerInfo {
 	return nil
 }
-func (self *PssClient) AddPeer(node *discover.Node) {
+func (self *Client) AddPeer(node *discover.Node) {
 	log.Error("Cannot add peer in PSS with discover.Node, need swarm overlay address")
 }
 
-func (self *PssClient) RemovePeer(node *discover.Node) {
+func (self *Client) RemovePeer(node *discover.Node) {
 	log.Error("Cannot remove peer in PSS with discover.Node, need swarm overlay address")
 }
