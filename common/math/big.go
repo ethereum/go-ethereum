@@ -130,10 +130,10 @@ func PaddedBigBytes(bigint *big.Int, n int) []byte {
 	return ret
 }
 
-// LittleEndianByteAt returns the byte at position n,
-// if bigint is considered little-endian.
-// So n==0 gives the least significant byte
-func LittleEndianByteAt(bigint *big.Int, n int) byte {
+// bigEndianByteAt returns the byte at position n,
+// if bigint is considered big-endian.
+// So n==0 returns the least significant byte
+func bigEndianByteAt(bigint *big.Int, n int) byte {
 	words := bigint.Bits()
 	// Check word-bucket the byte will reside in
 	i := n / wordBytes
@@ -147,15 +147,15 @@ func LittleEndianByteAt(bigint *big.Int, n int) byte {
 	return byte(word >> shift)
 }
 
-// BigEndian32ByteAt returns the byte at position n,
-// if bigint is considered big-endian.
-// So n==0 gives the most significant byte
-// WARNING: Only works for bigints in 32-byte range
-func BigEndian32ByteAt(bigint *big.Int, n int) byte {
-	if n > 31 {
+// Byte returns the byte at position n,
+// if bigint is considered little-endian with the supplied padlength.
+// n==0 returns the most significant byte
+// bigint '5', padlength 32, n=31 => 5
+func Byte(bigint *big.Int, padlength, n int) byte {
+	if n >= padlength {
 		return byte(0)
 	}
-	return LittleEndianByteAt(bigint, 31-n)
+	return bigEndianByteAt(bigint, padlength-1-n)
 }
 
 // ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure

@@ -157,13 +157,13 @@ func BenchmarkPaddedBigBytesSmallOnePadding(b *testing.B) {
 func BenchmarkByteAtBrandNew(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
-		BigEndian32ByteAt(bigint, 15)
+		bigEndianByteAt(bigint, 15)
 	}
 }
 func BenchmarkByteAt(b *testing.B) {
 	bigint := MustParseBig256("0x18F8F8F1000111000110011100222004330052300000000000000000FEFCF3CC")
 	for i := 0; i < b.N; i++ {
-		BigEndian32ByteAt(bigint, 15)
+		bigEndianByteAt(bigint, 15)
 	}
 }
 func BenchmarkByteAtOld(b *testing.B) {
@@ -225,7 +225,7 @@ func TestLittleEndianByteAt(t *testing.T) {
 	}
 	for _, test := range tests {
 		v := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		actual := LittleEndianByteAt(v, test.y)
+		actual := bigEndianByteAt(v, test.y)
 		if actual != test.exp {
 			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.x, test.y, test.exp, actual)
 		}
@@ -254,11 +254,12 @@ func TestBigEndianByteAt(t *testing.T) {
 		{"0000000000000000000000000000000000000000000000000000000000102030", 31, 0x30},
 		{"0000000000000000000000000000000000000000000000000000000000102030", 30, 0x20},
 		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 32, 0x0},
-		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0xFFFFFFFF, 0x0},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 31, 0xFF},
+		{"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 0xFFFF, 0x0},
 	}
 	for _, test := range tests {
 		v := new(big.Int).SetBytes(common.Hex2Bytes(test.x))
-		actual := BigEndian32ByteAt(v, test.y)
+		actual := Byte(v, 32, test.y)
 		if actual != test.exp {
 			t.Fatalf("Expected  [%v] %v:th byte to be %v, was %v.", test.x, test.y, test.exp, actual)
 		}

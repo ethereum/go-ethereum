@@ -258,8 +258,8 @@ func opXor(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stac
 func opByte(pc *uint64, evm *EVM, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	th, val := stack.pop(), stack.peek()
 	if th.Cmp(common.Big32) < 0 {
-		b := math.BigEndian32ByteAt(val, int(th.Int64()))
-		val.SetInt64(int64(b))
+		b := math.Byte(val, 32, int(th.Int64()))
+		val.SetUint64(uint64(b))
 	} else {
 		val.SetUint64(0)
 	}
