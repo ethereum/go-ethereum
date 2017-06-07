@@ -102,6 +102,7 @@ type queue struct {
 	stateDatabase  ethdb.Database   // [eth/63] Trie database to populate during state reassembly
 	stateScheduler *state.StateSync // [eth/63] State trie synchronisation scheduler and integrator
 	stateWriters   int              // [eth/63] Number of running state DB writer goroutines
+	stateSchedLock sync.RWMutex     // [eth/63] Lock serialising access to the state scheduler
 
 	resultCache  []*fetchResult // Downloaded but not yet delivered fetch results
 	resultOffset uint64         // Offset of the first cached fetch result in the block chain
@@ -139,6 +140,9 @@ func newQueue(stateDb ethdb.Database) *queue {
 func (q *queue) Reset() {
 	q.lock.Lock()
 	defer q.lock.Unlock()
+
+	q.stateSchedLock.Lock()
+	defer q.stateSchedLock.Unlock()
 
 	q.closed = false
 	q.mode = FullSync
@@ -203,15 +207,9 @@ func (q *queue) PendingReceipts() int {
 
 // PendingNodeData retrieves the number of node data entries pending for retrieval.
 func (q *queue) PendingNodeData() int {
-	q.lock.Lock()
-	defer q.lock.Unlock()
+	q.stateSchedLock.RLock()
+	defer q.stateSchedLock.RUnlock()
 
-	return q.pendingNodeDataLocked()
-}
-
-// pendingNodeDataLocked retrieves the number of node data entries pending for retrieval.
-// The caller must hold q.lock.
-func (q *queue) pendingNodeDataLocked() int {
 	var n int
 	if q.stateScheduler != nil {
 		n = q.stateScheduler.Pending()
@@ -269,9 +267,12 @@ func (q *queue) Idle() bool {
 	pending := len(q.blockPendPool) + len(q.receiptPendPool) + len(q.statePendPool)
 	cached := len(q.blockDonePool) + len(q.receiptDonePool)
 
+	q.stateSchedLock.RLock()
 	if q.stateScheduler != nil {
 		queued += q.stateScheduler.Pending()
 	}
+	q.stateSchedLock.RUnlock()
+
 	return (queued + pending + cached) == 0
 }
 
@@ -399,8 +400,9 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 			for _, req := range q.statePendPool {
 				req.Hashes = make(map[common.Hash]int) // Make sure executing requests fail, but don't disappear
 			}
-
+			q.stateSchedLock.Lock()
 			q.stateScheduler = state.NewStateSync(header.Root, q.stateDatabase)
+			q.stateSchedLock.Unlock()
 		}
 		inserts = append(inserts, header)
 		q.headerHead = hash
@@ -459,7 +461,7 @@ func (q *queue) countProcessableItems() int {
 				// resultCache has space for fsHeaderForceVerify items. Not
 				// doing this could leave us unable to download the required
 				// amount of headers.
-				if i > 0 || len(q.stateTaskPool) > 0 || q.pendingNodeDataLocked() > 0 {
+				if i > 0 || len(q.stateTaskPool) > 0 || q.PendingNodeData() > 0 {
 					return i
 				}
 				for j := 0; j < fsHeaderForceVerify; j++ {
@@ -525,6 +527,9 @@ func (q *queue) ReserveNodeData(p *peer, count int) *fetchRequest {
 	// Create a task generator to fetch status-fetch tasks if all schedules ones are done
 	generator := func(max int) {
 		if q.stateScheduler != nil {
+			q.stateSchedLock.Lock()
+			defer q.stateSchedLock.Unlock()
+
 			for _, hash := range q.stateScheduler.Missing(max) {
 				q.stateTaskPool[hash] = q.stateTaskIndex
 				q.stateTaskQueue.Push(hash, -float32(q.stateTaskIndex))
@@ -1083,18 +1088,27 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 	for hash, index := range request.Hashes {
 		q.stateTaskQueue.Push(hash, float32(index))
 	}
-	if q.stateScheduler == nil {
-		return 0, errNoFetchesPending
-	}
-
 	// Run valid nodes through the trie download scheduler. It writes completed nodes to a
-	// batch, which is committed asynchronously. This may lead to over-fetches because the
+	// batch and commits them asynchronously. This may lead to over-fetches because the
 	// scheduler treats everything as written after Process has returned, but it's
 	// unlikely to be an issue in practice.
-	batch := q.stateDatabase.NewBatch()
-	progressed, nproc, procerr := q.stateScheduler.Process(process, batch)
-	q.stateWriters += 1
+	q.stateWriters++
 	go func() {
+		var (
+			progressed bool
+			nproc      int
+			procerr    error
+			batch      ethdb.Batch
+		)
+		q.stateSchedLock.Lock()
+		if q.stateScheduler == nil {
+			procerr = errNoFetchesPending
+		} else {
+			batch = q.stateDatabase.NewBatch()
+			progressed, nproc, procerr = q.stateScheduler.Process(process, batch)
+		}
+		q.stateSchedLock.Unlock()
+
 		if procerr == nil {
 			nproc = len(process)
 			procerr = batch.Write()
@@ -1103,8 +1117,9 @@ func (q *queue) DeliverNodeData(id string, data [][]byte, callback func(int, boo
 		// number of writers is decremented prior to the call so PendingNodeData will
 		// return zero when the callback runs.
 		q.lock.Lock()
-		q.stateWriters -= 1
+		q.stateWriters--
 		q.lock.Unlock()
+
 		callback(nproc, progressed, procerr)
 		// Wake up WaitResults after the state has been written because it might be
 		// waiting for completion of the pivot block's state download.
