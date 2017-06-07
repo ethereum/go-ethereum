@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -145,7 +145,7 @@ var app = utils.NewApp(gitCommit, "Ethereum Swarm")
 func init() {
 	app.Action = bzzd
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2017 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		{
 			Action:    version,
@@ -236,6 +236,7 @@ Cleans database of corrupted entries.
 		utils.DataDirFlag,
 		utils.BootnodesFlag,
 		utils.KeyStoreDirFlag,
+		utils.TestNetFlag,
 		utils.ListenPortFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
