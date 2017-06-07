@@ -49,9 +49,10 @@ type LogConfig struct {
 	Limit          int  // maximum length of output, but zero means unlimited
 }
 
+//go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
-//go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 type StructLog struct {
 	Pc      uint64                      `json:"pc"`
 	Op      OpCode                      `json:"op"`
@@ -64,14 +65,7 @@ type StructLog struct {
 	Err     error                       `json:"error"`
 }
 
-func (s *StructLog) OpName() string {
-	return s.Op.String()
-}
-
-func (s *StructLog) MemorySize() int {
-	return len(s.Memory)
-}
-
+// overrides for gencodec
 type structLogMarshaling struct {
 	Stack      []*math.HexOrDecimal256
 	Gas        math.HexOrDecimal64
@@ -79,6 +73,14 @@ type structLogMarshaling struct {
 	Memory     hexutil.Bytes
 	OpName     string `json:"opName"`
 	MemorySize int    `json:"memSize"`
+}
+
+func (s *StructLog) OpName() string {
+	return s.Op.String()
+}
+
+func (s *StructLog) MemorySize() int {
+	return len(s.Memory)
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
@@ -184,6 +186,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	l.logs = append(l.logs, log)
 	return nil
 }
+
 func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
 	fmt.Printf("0x%x", output)
 	return nil
