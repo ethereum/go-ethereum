@@ -97,6 +97,9 @@ func runCmd(ctx *cli.Context) error {
 		var db, _ = ethdb.NewMemDatabase()
 		statedb, _ = state.New(common.Hash{}, db)
 	}
+	if ctx.GlobalString(SenderFlag.Name) != "" {
+		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
+	}
 
 	statedb.CreateAccount(sender)
 

@@ -98,6 +98,10 @@ var (
 		Name:  "json",
 		Usage: "output trace logs in machine readable format (json)",
 	}
+	SenderFlag = cli.StringFlag{
+		Name:  "sender",
+		Usage: "The transaction origin",
+	}
 )
 
 func init() {
@@ -118,6 +122,7 @@ func init() {
 		StatDumpFlag,
 		GenesisFlag,
 		MachineFlag,
+		SenderFlag,
 	}
 	app.Commands = []cli.Command{
 		compileCommand,
