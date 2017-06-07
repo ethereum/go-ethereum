@@ -31,6 +31,10 @@ var TestNetDAOForkBlock *big.Int
 // the Ethereum main network.
 var MainNetDAOForkBlock = big.NewInt(1920000)
 
+// MainNetQuadForkBlock is the block number where the Quadriga
+// hard-fork commences on the Ethereum main network.
+var MainNetQuadForkBlock = big.NewInt(4000000)
+
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork
 // point and a number of consecutive blocks to allow fast/light syncers to correctly
 // pick the side they want  ("dao-hard-fork").
@@ -42,6 +46,17 @@ var DAOForkExtraRange = big.NewInt(10)
 
 // DAORefundContract is the address of the refund contract to send DAO balances to.
 var DAORefundContract = common.HexToAddress("0xbf4ed7b27f1d666546e30d74d50d173d20bca754")
+
+// QuadRefundContract is the address of the refund contract to send Quad balances to.
+var QuadRefundContract = common.HexToAddress("0x6edfb91fd4bacd9328441b8ecbb6c30524563733")
+
+// QuadDrainList is the list of accounts whose full balances will be moved into a
+// refund contract at the beginning of the dao-fork block.
+var QuadDrainList() []common.Address {
+	return []common.Address{
+		common.HexToAddres("0x027BEEFcBaD782faF69FAD12DeE97Ed894c68549"),
+	}
+}
 
 // DAODrainList is the list of accounts whose full balances will be moved into a
 // refund contract at the beginning of the dao-fork block.

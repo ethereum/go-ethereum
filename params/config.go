@@ -29,7 +29,9 @@ var (
 		ChainId:         MainNetChainID,
 		HomesteadBlock:  MainNetHomesteadBlock,
 		DAOForkBlock:    MainNetDAOForkBlock,
+		QuadForkBlock:   MainNetQuadForkBlock,
 		DAOForkSupport:  true,
+		QuadForkSupport: true,
 		EIP150Block:     MainNetHomesteadGasRepriceBlock,
 		EIP150Hash:      MainNetHomesteadGasRepriceHash,
 		EIP155Block:     MainNetSpuriousDragon,
@@ -44,7 +46,9 @@ var (
 		ChainId:         big.NewInt(3),
 		HomesteadBlock:  big.NewInt(0),
 		DAOForkBlock:    nil,
+		QuadForkBlock:   nil,
 		DAOForkSupport:  true,
+		QuadForkSupport: true,
 		EIP150Block:     big.NewInt(0),
 		EIP150Hash:      common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:     big.NewInt(10),
@@ -59,7 +63,9 @@ var (
 		ChainId:         big.NewInt(4),
 		HomesteadBlock:  big.NewInt(1),
 		DAOForkBlock:    nil,
+		QuadForkBlock:   nil,
 		DAOForkSupport:  true,
+		QuadForkSupport: true,
 		EIP150Block:     big.NewInt(2),
 		EIP150Hash:      common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
 		EIP155Block:     big.NewInt(3),
@@ -95,7 +101,9 @@ type ChainConfig struct {
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 	DAOForkBlock   *big.Int `json:"daoForkBlock,omitempty"`   // TheDAO hard-fork switch block (nil = no fork)
+	QuadForkBlock  *big.Int `json:"quadForkBlock,omitempty"`  // TheQuad hard-fork switch block (nil = no fork)
 	DAOForkSupport bool     `json:"daoForkSupport,omitempty"` // Whether the nodes supports or opposes the DAO hard-fork
+	QuadForkSupport bool    `json:"quadForkSupport,omitempty"` // Whether the nodes supports or opposes the Quad hard-fork
 
 	// EIP150 implements the Gas price changes (https://github.com/ethereum/EIPs/issues/150)
 	EIP150Block *big.Int    `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
