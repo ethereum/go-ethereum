@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -29,11 +30,13 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -45,17 +48,59 @@ var runCommand = cli.Command{
 	Description: `The run command runs arbitrary EVM code.`,
 }
 
+// readGenesis will read the given JSON format genesis file and return
+// the initialized Genesis structure
+func readGenesis(genesisPath string) *core.Genesis {
+	// Make sure we have a valid genesis JSON
+	//genesisPath := ctx.Args().First()
+	if len(genesisPath) == 0 {
+		utils.Fatalf("Must supply path to genesis JSON file")
+	}
+	file, err := os.Open(genesisPath)
+	if err != nil {
+		utils.Fatalf("Failed to read genesis file: %v", err)
+	}
+	defer file.Close()
+
+	genesis := new(core.Genesis)
+	if err := json.NewDecoder(file).Decode(genesis); err != nil {
+		utils.Fatalf("invalid genesis file: %v", err)
+	}
+	return genesis
+}
+
 func runCmd(ctx *cli.Context) error {
 	glogger := log.NewGlogHandler(log.StreamHandler(os.Stderr, log.TerminalFormat(false)))
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(VerbosityFlag.Name)))
 	log.Root().SetHandler(glogger)
 
 	var (
-		db, _      = ethdb.NewMemDatabase()
-		statedb, _ = state.New(common.Hash{}, db)
-		sender     = common.StringToAddress("sender")
-		logger     = vm.NewStructLogger(nil)
+		tracer      vm.Tracer
+		debugLogger *vm.StructLogger
+		statedb     *state.StateDB
+		chainConfig *params.ChainConfig
+		sender      = common.StringToAddress("sender")
 	)
+	if ctx.GlobalBool(MachineFlag.Name) {
+		tracer = NewJSONLogger(os.Stdout)
+	} else if ctx.GlobalBool(DebugFlag.Name) {
+		debugLogger = vm.NewStructLogger(nil)
+		tracer = debugLogger
+	} else {
+		debugLogger = vm.NewStructLogger(nil)
+	}
+	if ctx.GlobalString(GenesisFlag.Name) != "" {
+		gen := readGenesis(ctx.GlobalString(GenesisFlag.Name))
+		_, statedb = gen.ToBlock()
+		chainConfig = gen.Config
+	} else {
+		var db, _ = ethdb.NewMemDatabase()
+		statedb, _ = state.New(common.Hash{}, db)
+	}
+	if ctx.GlobalString(SenderFlag.Name) != "" {
+		sender = common.HexToAddress(ctx.GlobalString(SenderFlag.Name))
+	}
+
 	statedb.CreateAccount(sender)
 
 	var (
@@ -95,16 +140,16 @@ func runCmd(ctx *cli.Context) error {
 		}
 		code = common.Hex2Bytes(string(bytes.TrimRight(hexcode, "\n")))
 	}
-
+	initialGas := ctx.GlobalUint64(GasFlag.Name)
 	runtimeConfig := runtime.Config{
 		Origin:   sender,
 		State:    statedb,
-		GasLimit: ctx.GlobalUint64(GasFlag.Name),
+		GasLimit: initialGas,
 		GasPrice: utils.GlobalBig(ctx, PriceFlag.Name),
 		Value:    utils.GlobalBig(ctx, ValueFlag.Name),
 		EVMConfig: vm.Config{
-			Tracer:             logger,
-			Debug:              ctx.GlobalBool(DebugFlag.Name),
+			Tracer:             tracer,
+			Debug:              ctx.GlobalBool(DebugFlag.Name) || ctx.GlobalBool(MachineFlag.Name),
 			DisableGasMetering: ctx.GlobalBool(DisableGasMeteringFlag.Name),
 		},
 	}
@@ -122,15 +167,19 @@ func runCmd(ctx *cli.Context) error {
 		defer pprof.StopCPUProfile()
 	}
 
+	if chainConfig != nil {
+		runtimeConfig.ChainConfig = chainConfig
+	}
 	tstart := time.Now()
+	var leftOverGas uint64
 	if ctx.GlobalBool(CreateFlag.Name) {
 		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
-		ret, _, err = runtime.Create(input, &runtimeConfig)
+		ret, _, leftOverGas, err = runtime.Create(input, &runtimeConfig)
 	} else {
 		receiver := common.StringToAddress("receiver")
 		statedb.SetCode(receiver, code)
 
-		ret, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
+		ret, leftOverGas, err = runtime.Call(receiver, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)), &runtimeConfig)
 	}
 	execTime := time.Since(tstart)
 
@@ -153,8 +202,10 @@ func runCmd(ctx *cli.Context) error {
 	}
 
 	if ctx.GlobalBool(DebugFlag.Name) {
-		fmt.Fprintln(os.Stderr, "#### TRACE ####")
-		vm.WriteTrace(os.Stderr, logger.StructLogs())
+		if debugLogger != nil {
+			fmt.Fprintln(os.Stderr, "#### TRACE ####")
+			vm.WriteTrace(os.Stderr, debugLogger.StructLogs())
+		}
 		fmt.Fprintln(os.Stderr, "#### LOGS ####")
 		vm.WriteLogs(os.Stderr, statedb.Logs())
 	}
@@ -167,14 +218,18 @@ heap objects:       %d
 allocations:        %d
 total allocations:  %d
 GC calls:           %d
+Gas used:           %d
 
-`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC)
+`, execTime, mem.HeapObjects, mem.Alloc, mem.TotalAlloc, mem.NumGC, initialGas-leftOverGas)
+	}
+	if tracer != nil {
+		tracer.CaptureEnd(ret, initialGas-leftOverGas, execTime)
+	} else {
+		fmt.Printf("0x%x\n", ret)
 	}
 
-	fmt.Printf("0x%x", ret)
 	if err != nil {
-		fmt.Printf(" error: %v", err)
+		fmt.Printf(" error: %v\n", err)
 	}
-	fmt.Println()
 	return nil
 }

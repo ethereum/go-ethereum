@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -47,18 +49,38 @@ type LogConfig struct {
 	Limit          int  // maximum length of output, but zero means unlimited
 }
 
+//go:generate gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
+
 // StructLog is emitted to the EVM each cycle and lists information about the current internal state
 // prior to the execution of the statement.
 type StructLog struct {
-	Pc      uint64
-	Op      OpCode
-	Gas     uint64
-	GasCost uint64
-	Memory  []byte
-	Stack   []*big.Int
-	Storage map[common.Hash]common.Hash
-	Depth   int
-	Err     error
+	Pc      uint64                      `json:"pc"`
+	Op      OpCode                      `json:"op"`
+	Gas     uint64                      `json:"gas"`
+	GasCost uint64                      `json:"gasCost"`
+	Memory  []byte                      `json:"memory"`
+	Stack   []*big.Int                  `json:"stack"`
+	Storage map[common.Hash]common.Hash `json:"-"`
+	Depth   int                         `json:"depth"`
+	Err     error                       `json:"error"`
+}
+
+// overrides for gencodec
+type structLogMarshaling struct {
+	Stack      []*math.HexOrDecimal256
+	Gas        math.HexOrDecimal64
+	GasCost    math.HexOrDecimal64
+	Memory     hexutil.Bytes
+	OpName     string `json:"opName"`
+	MemorySize int    `json:"memSize"`
+}
+
+func (s *StructLog) OpName() string {
+	return s.Op.String()
+}
+
+func (s *StructLog) MemorySize() int {
+	return len(s.Memory)
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
@@ -68,6 +90,7 @@ type StructLog struct {
 // if you need to retain them beyond the current call.
 type Tracer interface {
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error
+	CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -82,7 +105,7 @@ type StructLogger struct {
 	changedValues map[common.Address]Storage
 }
 
-// NewLogger returns a new logger
+// NewStructLogger returns a new logger
 func NewStructLogger(cfg *LogConfig) *StructLogger {
 	logger := &StructLogger{
 		changedValues: make(map[common.Address]Storage),
@@ -93,9 +116,9 @@ func NewStructLogger(cfg *LogConfig) *StructLogger {
 	return logger
 }
 
-// captureState logs a new structured log message and pushes it out to the environment
+// CaptureState logs a new structured log message and pushes it out to the environment
 //
-// captureState also tracks SSTORE ops to track dirty values.
+// CaptureState also tracks SSTORE ops to track dirty values.
 func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, memory *Memory, stack *Stack, contract *Contract, depth int, err error) error {
 	// check if already accumulated the specified number of logs
 	if l.cfg.Limit != 0 && l.cfg.Limit <= len(l.logs) {
@@ -161,6 +184,11 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	log := StructLog{pc, op, gas, cost, mem, stck, storage, env.depth, err}
 
 	l.logs = append(l.logs, log)
+	return nil
+}
+
+func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration) error {
+	fmt.Printf("0x%x", output)
 	return nil
 }
 
