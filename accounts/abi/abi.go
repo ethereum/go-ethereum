@@ -283,7 +283,19 @@ var (
 
 // Unpack output in v according to the abi specification
 func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
-	var method = abi.Methods[name]
+	var isEvent bool
+
+	// first look for name in the methods map, otherwise look in the events map, since there will
+	// be a name collision for one ABI if there are two of the same names.
+	// If we can't find it, error.
+	method, ok := abi.Methods[name]
+	if !ok {
+		method, ok = abi.Events[name]
+		if !ok {
+			return fmt.Errorf("abi: could not find requested method or event %v", name)
+		}
+		isEvent = true
+	}
 
 	if len(output) == 0 {
 		return fmt.Errorf("abi: unmarshalling empty output")

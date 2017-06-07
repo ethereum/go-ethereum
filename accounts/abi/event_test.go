@@ -54,3 +54,66 @@ func TestEventId(t *testing.T) {
 		}
 	}
 }
+
+/*func TestEventUnpacking(t *testing.T) {
+
+	var isErrCorrect = func(expectedErr string, receivedError error) bool {
+		if expectedErr != receivedError.Error() {
+			t.Errorf("Expected error %v, receieved error %v", expectedErr, receivedError)
+		}
+		return true
+	}
+
+	for i, test := range []struct {
+		definition     string      //abi definition
+		data           []byte      //log data gotten from the event
+		expectedOutput interface{} // the expected output
+		err            string      // empty or error if expected
+	}{
+		{
+			`[{"anonymous":false,"inputs":[{"indexed":false,"name":"a","type":"uint256"},{"indexed":true,"name":"b","type":"uint256"},{"indexed":false,"name":"c","type":"uint256"}],"name":"testEvent","type":"event"}]`,
+			append(pad([]byte{1}, 32, true), pad([]byte{3}, 32, true)...),
+			[]interface{}{*big.Int.SetUInt64(int(1)), *big.Int{3}},
+			"",
+		},
+		{
+			`[{"anonymous":false,"inputs":[{"indexed":false,"name":"a","type":"int256"},{"indexed":true,"name":"b","type":"int256"},{"indexed":false,"name":"c","type":"int256"}],"name":"testEvent","type":"event"}]`,
+			append(pad([]byte{1}, 32, true), pad([]byte{3}, 32, true)...),
+			[]interface{}{*big.Int{1}, *big.Int{3}},
+			"",
+		},
+		{
+			`[{"anonymous":false,"inputs":[{"indexed":false,"name":"a","type":"bool"},{"indexed":false,"name":"b","type":"int256"},{"indexed":false,"name":"c","type":"uint256"}],"name":"testEvent","type":"event"}]`,
+			append(pad([]byte{0}, 32, true), append(pad([]byte{1}, 32, true), pad([]byte{3}, 32, true)...)...),
+			[]interface{}{false, *big.Int{1}, *big.Int{3}},
+			"",
+		},
+		{
+			`[{"anonymous":false,"inputs":[{"indexed":false,"name":"a","type":"string"},{"indexed":false,"name":"b","type":"string"},{"indexed":false,"name":"c","type":"string"}],"name":"testEvent","type":"event"}]`,
+			common.Hex2Bytes("000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e0000000000000000000000000000000000000000000000000000000000000000568656c6c6f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000076675636b696e67000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000005776f726c64000000000000000000000000000000000000000000000000000000"),
+			[]interface{}{"bring", "me", "ether"},
+			"",
+		},
+		{
+			`[{"anonymous":false,"inputs":[{"indexed":true,"name":"a","type":"string"},{"indexed":true,"name":"b","type":"string"},{"indexed":true,"name":"c","type":"string"}],"name":"testEvent","type":"event"}]`,
+			[]byte(nil),
+			[]interface{}{},
+			"",
+		},
+	} {
+		abi, err := JSON(strings.NewReader(test.definition))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var v interface{}
+		if err = abi.Events["method"].UnpackLog(&v, data); err == nil {
+			if !reflect.DeepEqual(test.expectedOutput, v) {
+				t.Errorf("\nabi: %v\ndoes not match exp: %v", abi, exp)
+			}
+		} else {
+			t.Errorf("abi: Unexpected error %v during event unpacking.")
+		}
+
+	}
+}*/
