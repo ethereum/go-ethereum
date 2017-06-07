@@ -24,8 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-var iteratorEnd = errors.New("end of iteration")
-
 // Iterator is a key-value trie iterator that traverses a Trie.
 type Iterator struct {
 	nodeIt NodeIterator
@@ -67,10 +65,12 @@ type NodeIterator interface {
 
 	// Hash returns the hash of the current node.
 	Hash() common.Hash
-	// Parent returns the hash of the parent of the current node.
+	// Parent returns the hash of the parent of the current node. The hash may be the one
+	// grandparent if the immediate parent is an internal node with no hash.
 	Parent() common.Hash
 	// Path returns the hex-encoded path to the current node.
-	// Callers must not retain references to the return value after calling Next
+	// Callers must not retain references to the return value after calling Next.
+	// For leaf nodes, the last element of the path is the 'terminator symbol' 0x10.
 	Path() []byte
 
 	// Leaf returns true iff the current node is a leaf node.
@@ -95,8 +95,21 @@ type nodeIteratorState struct {
 type nodeIterator struct {
 	trie  *Trie                // Trie being iterated
 	stack []*nodeIteratorState // Hierarchy of trie nodes persisting the iteration state
-	err   error                // Failure set in case of an internal error in the iterator
 	path  []byte               // Path to the current node
+	err   error                // Failure set in case of an internal error in the iterator
+}
+
+// iteratorEnd is stored in nodeIterator.err when iteration is done.
+var iteratorEnd = errors.New("end of iteration")
+
+// seekError is stored in nodeIterator.err if the initial seek has failed.
+type seekError struct {
+	key []byte
+	err error
+}
+
+func (e seekError) Error() string {
+	return "seek error: " + e.err.Error()
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
@@ -104,7 +117,7 @@ func newNodeIterator(trie *Trie, start []byte) NodeIterator {
 		return new(nodeIterator)
 	}
 	it := &nodeIterator{trie: trie}
-	it.seek(start)
+	it.err = it.seek(start)
 	return it
 }
 
@@ -123,11 +136,7 @@ func (it *nodeIterator) Parent() common.Hash {
 }
 
 func (it *nodeIterator) Leaf() bool {
-	if len(it.stack) > 0 {
-		_, ok := it.stack[len(it.stack)-1].node.(valueNode)
-		return ok
-	}
-	return false
+	return hasTerm(it.path)
 }
 
 func (it *nodeIterator) LeafBlob() []byte {
@@ -156,6 +165,9 @@ func (it *nodeIterator) Error() error {
 	if it.err == iteratorEnd {
 		return nil
 	}
+	if seek, ok := it.err.(seekError); ok {
+		return seek.err
+	}
 	return it.err
 }
 
@@ -164,29 +176,37 @@ func (it *nodeIterator) Error() error {
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
 func (it *nodeIterator) Next(descend bool) bool {
-	if it.err != nil {
+	if it.err == iteratorEnd {
 		return false
 	}
-	// Otherwise step forward with the iterator and report any errors
+	if seek, ok := it.err.(seekError); ok {
+		if it.err = it.seek(seek.key); it.err != nil {
+			return false
+		}
+	}
+	// Otherwise step forward with the iterator and report any errors.
 	state, parentIndex, path, err := it.peek(descend)
 	it.err = err
-	if err != nil {
+	if it.err != nil {
 		return false
 	}
 	it.push(state, parentIndex, path)
 	return true
 }
 
-func (it *nodeIterator) seek(prefix []byte) {
+func (it *nodeIterator) seek(prefix []byte) error {
 	// The path we're looking for is the hex encoded key without terminator.
 	key := keybytesToHex(prefix)
 	key = key[:len(key)-1]
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peek(bytes.HasPrefix(key, it.path))
-		it.err = err
-		if err != nil || bytes.Compare(path, key) >= 0 {
-			return
+		if err == iteratorEnd {
+			return iteratorEnd
+		} else if err != nil {
+			return seekError{prefix, err}
+		} else if bytes.Compare(path, key) >= 0 {
+			return nil
 		}
 		it.push(state, parentIndex, path)
 	}
@@ -201,7 +221,8 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 		if root != emptyRoot {
 			state.hash = root
 		}
-		return state, nil, nil, nil
+		err := state.resolve(it.trie)
+		return state, nil, nil, err
 	}
 	if !descend {
 		// If we're skipping children, pop the current node first
@@ -209,74 +230,73 @@ func (it *nodeIterator) peek(descend bool) (*nodeIteratorState, *int, []byte, er
 	}
 
 	// Continue iteration to the next child
-	for {
-		if len(it.stack) == 0 {
-			return nil, nil, nil, iteratorEnd
-		}
+	for len(it.stack) > 0 {
 		parent := it.stack[len(it.stack)-1]
 		ancestor := parent.hash
 		if (ancestor == common.Hash{}) {
 			ancestor = parent.parent
 		}
-		switch node := parent.node.(type) {
-		case *fullNode:
-			// Full node, move to the first non-nil child.
-			for i := parent.index + 1; i < len(node.Children); i++ {
-				child := node.Children[i]
-				if child != nil {
-					hash, _ := child.cache()
-					state := &nodeIteratorState{
-						hash:    common.BytesToHash(hash),
-						node:    child,
-						parent:  ancestor,
-						index:   -1,
-						pathlen: len(it.path),
-					}
-					path := append(it.path, byte(i))
-					parent.index = i - 1
-					return state, &parent.index, path, nil
-				}
+		state, path, ok := it.nextChild(parent, ancestor)
+		if ok {
+			if err := state.resolve(it.trie); err != nil {
+				return parent, &parent.index, it.path, err
 			}
-		case *shortNode:
-			// Short node, return the pointer singleton child
-			if parent.index < 0 {
-				hash, _ := node.Val.cache()
-				state := &nodeIteratorState{
-					hash:    common.BytesToHash(hash),
-					node:    node.Val,
-					parent:  ancestor,
-					index:   -1,
-					pathlen: len(it.path),
-				}
-				var path []byte
-				if hasTerm(node.Key) {
-					path = append(it.path, node.Key[:len(node.Key)-1]...)
-				} else {
-					path = append(it.path, node.Key...)
-				}
-				return state, &parent.index, path, nil
-			}
-		case hashNode:
-			// Hash node, resolve the hash child from the database
-			hash := node
-			if parent.index < 0 {
-				node, err := it.trie.resolveHash(node, nil, nil)
-				if err != nil {
-					return it.stack[len(it.stack)-1], &parent.index, it.path, err
-				}
-				state := &nodeIteratorState{
-					hash:    common.BytesToHash(hash),
-					node:    node,
-					parent:  ancestor,
-					index:   -1,
-					pathlen: len(it.path),
-				}
-				return state, &parent.index, it.path, nil
-			}
+			return state, &parent.index, path, nil
 		}
 		// No more child nodes, move back up.
 		it.pop()
 	}
+	return nil, nil, nil, iteratorEnd
+}
+
+func (st *nodeIteratorState) resolve(tr *Trie) error {
+	if hash, ok := st.node.(hashNode); ok {
+		resolved, err := tr.resolveHash(hash, nil, nil)
+		if err != nil {
+			return err
+		}
+		st.node = resolved
+		st.hash = common.BytesToHash(hash)
+	}
+	return nil
+}
+
+func (it *nodeIterator) nextChild(parent *nodeIteratorState, ancestor common.Hash) (*nodeIteratorState, []byte, bool) {
+	switch node := parent.node.(type) {
+	case *fullNode:
+		// Full node, move to the first non-nil child.
+		for i := parent.index + 1; i < len(node.Children); i++ {
+			child := node.Children[i]
+			if child != nil {
+				hash, _ := child.cache()
+				state := &nodeIteratorState{
+					hash:    common.BytesToHash(hash),
+					node:    child,
+					parent:  ancestor,
+					index:   -1,
+					pathlen: len(it.path),
+				}
+				path := append(it.path, byte(i))
+				parent.index = i - 1
+				return state, path, true
+			}
+		}
+	case *shortNode:
+		// Short node, return the pointer singleton child
+		if parent.index < 0 {
+			hash, _ := node.Val.cache()
+			state := &nodeIteratorState{
+				hash:    common.BytesToHash(hash),
+				node:    node.Val,
+				parent:  ancestor,
+				index:   -1,
+				pathlen: len(it.path),
+			}
+			path := append(it.path, node.Key...)
+			return state, path, true
+		}
+	}
+	return parent, it.path, false
 }
 
 func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []byte) {
@@ -418,7 +438,6 @@ func (h *nodeIteratorHeap) Pop() interface{} {
 type unionIterator struct {
 	items *nodeIteratorHeap // Nodes returned are the union of the ones in these iterators
 	count int               // Number of nodes scanned across all tries
-	err   error             // The error, if one has been encountered
 }
 
 // NewUnionIterator constructs a NodeIterator that iterates over elements in the union
@@ -429,9 +448,7 @@ func NewUnionIterator(iters []NodeIterator) (NodeIterator, *int) {
 	copy(h, iters)
 	heap.Init(&h)
 
-	ui := &unionIterator{
-		items: &h,
-	}
+	ui := &unionIterator{items: &h}
 	return ui, &ui.count
 }
 
