@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 )
 
@@ -16,13 +17,13 @@ func (s StructLog) MarshalJSON() ([]byte, error) {
 		Op         OpCode                      `json:"op"`
 		Gas        math.HexOrDecimal64         `json:"gas"`
 		GasCost    math.HexOrDecimal64         `json:"gasCost"`
-		Memory     []byte                      `json:"memory"`
+		Memory     hexutil.Bytes               `json:"memory"`
 		Stack      []*math.HexOrDecimal256     `json:"stack"`
-		Storage    map[common.Hash]common.Hash `json:-`
+		Storage    map[common.Hash]common.Hash `json:"-"`
 		Depth      int                         `json:"depth"`
 		Err        error                       `json:"error"`
 		OpName     string                      `json:"opName"`
-		MemorySize string                      `json:"memSize"`
+		MemorySize int                         `json:"memSize"`
 	}
 	var enc StructLog
 	enc.Pc = s.Pc
@@ -50,9 +51,9 @@ func (s *StructLog) UnmarshalJSON(input []byte) error {
 		Op      *OpCode                     `json:"op"`
 		Gas     *math.HexOrDecimal64        `json:"gas"`
 		GasCost *math.HexOrDecimal64        `json:"gasCost"`
-		Memory  []byte                      `json:"memory"`
+		Memory  hexutil.Bytes               `json:"memory"`
 		Stack   []*math.HexOrDecimal256     `json:"stack"`
-		Storage map[common.Hash]common.Hash `json:-`
+		Storage map[common.Hash]common.Hash `json:"-"`
 		Depth   *int                        `json:"depth"`
 		Err     *error                      `json:"error"`
 	}

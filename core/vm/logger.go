@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -58,7 +59,7 @@ type StructLog struct {
 	GasCost uint64                      `json:"gasCost"`
 	Memory  []byte                      `json:"memory"`
 	Stack   []*big.Int                  `json:"stack"`
-	Storage map[common.Hash]common.Hash `json:-`
+	Storage map[common.Hash]common.Hash `json:"-"`
 	Depth   int                         `json:"depth"`
 	Err     error                       `json:"error"`
 }
@@ -67,16 +68,17 @@ func (s *StructLog) OpName() string {
 	return s.Op.String()
 }
 
-func (s *StructLog) MemorySize() string {
-	return fmt.Sprintf("%v", len(s.Memory))
+func (s *StructLog) MemorySize() int {
+	return len(s.Memory)
 }
 
 type structLogMarshaling struct {
 	Stack      []*math.HexOrDecimal256
 	Gas        math.HexOrDecimal64
 	GasCost    math.HexOrDecimal64
+	Memory     hexutil.Bytes
 	OpName     string `json:"opName"`
-	MemorySize string `json:"memSize"`
+	MemorySize int    `json:"memSize"`
 }
 
 // Tracer is used to collect execution traces from an EVM transaction
