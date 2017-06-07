@@ -81,10 +81,14 @@ func NewClientManager(rcTarget, maxSimReq, maxRcSum uint64) *ClientManager {
 	cm := &ClientManager{
 		nodes:       make(map[*cmNode]struct{}),
 		resumeQueue: make(chan chan bool),
-		rcRecharge:  rcConst * rcConst / (100*rcConst/rcTarget - rcConst),
+		rcRecharge:  rcConst * rcConst,
 		maxSimReq:   maxSimReq,
 		maxRcSum:    maxRcSum,
 	}
+	if rcTarget < 100 {
+		cm.rcRecharge /= (100*rcConst/rcTarget - rcConst)
+	}
+
 	go cm.queueProc()
 	return cm
 }
