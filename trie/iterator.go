@@ -32,6 +32,7 @@ type Iterator struct {
 
 	Key   []byte // Current data key on which the iterator is positioned on
 	Value []byte // Current data value on which the iterator is positioned on
+	Err   error
 }
 
 // NewIterator creates a new key-value iterator from a node iterator
@@ -52,6 +53,7 @@ func (it *Iterator) Next() bool {
 	}
 	it.Key = nil
 	it.Value = nil
+	it.Err = it.nodeIt.Error()
 	return false
 }
 
@@ -165,8 +167,8 @@ func (it *nodeIterator) Next(descend bool) bool {
 	}
 	// Otherwise step forward with the iterator and report any errors
 	state, parentIndex, path, err := it.peek(descend)
+	it.err = err
 	if err != nil {
-		it.err = err
 		return false
 	}
 	it.push(state, parentIndex, path)
@@ -180,8 +182,8 @@ func (it *nodeIterator) seek(prefix []byte) {
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peek(bytes.HasPrefix(key, it.path))
+		it.err = err
 		if err != nil || bytes.Compare(path, key) >= 0 {
-			it.err = err
 			return
 		}
 		it.push(state, parentIndex, path)
