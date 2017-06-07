@@ -82,7 +82,7 @@ func runCmd(ctx *cli.Context) error {
 		sender      = common.StringToAddress("sender")
 	)
 	if ctx.GlobalBool(MachineFlag.Name) {
-		tracer = vm.NewJSONLogger(os.Stdout)
+		tracer = NewJSONLogger(os.Stdout)
 	} else if ctx.GlobalBool(DebugFlag.Name) {
 		debugLogger = vm.NewStructLogger(nil)
 		tracer = debugLogger
