@@ -143,7 +143,7 @@ func newServerPool(db ethdb.Database, dbPrefix []byte, server *p2p.Server, topic
 		pool.discSetPeriod = make(chan time.Duration, 1)
 		pool.discNodes = make(chan *discv5.Node, 100)
 		pool.discLookups = make(chan bool, 100)
-		go pool.server.DiscV5.SearchTopic(topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
+		go pool.server.DiscV5().SearchTopic(topic, pool.discSetPeriod, pool.discNodes, pool.discLookups)
 	}
 
 	go pool.eventLoop()

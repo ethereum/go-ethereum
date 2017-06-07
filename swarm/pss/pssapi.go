@@ -1,33 +1,28 @@
 package pss
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-// PssAPI is the RPC API module for Pss
-type PssAPI struct {
+// API is the RPC API module for Pss
+type API struct {
 	*Pss
 }
 
-// NewPssAPI constructs a PssAPI instance
-func NewPssAPI(ps *Pss) *PssAPI {
-	return &PssAPI{Pss: ps}
-}
-
-// PssAPIMsg is the type for messages, it extends the rlp encoded protocol Msg
-// with the Sender's overlay address
-type PssAPIMsg struct {
-	Msg  []byte
-	Addr []byte
+// NewAPI constructs a PssAPI instance
+func NewAPI(ps *Pss) *API {
+	return &API{Pss: ps}
 }
 
 // NewMsg API endpoint creates an RPC subscription
-func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -35,7 +30,7 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 
 	psssub := notifier.CreateSubscription()
 	handler := func(msg []byte, p *p2p.Peer, from []byte) error {
-		apimsg := &PssAPIMsg{
+		apimsg := &APIMsg{
 			Msg:  msg,
 			Addr: from,
 		}
@@ -44,14 +39,13 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 		}
 		return nil
 	}
-	deregf := pssapi.Pss.Register(&topic, handler)
+	deregf := pssapi.Register(&topic, handler)
 
 	go func() {
 		defer deregf()
-		//defer psssub.Unsubscribe()
 		select {
 		case err := <-psssub.Err():
-			log.Warn(fmt.Sprintf("caught subscription error in pss sub topic: %v", topic, err))
+			log.Warn(fmt.Sprintf("caught subscription error in pss sub topic %x: %v", topic, err))
 		case <-notifier.Closed():
 			log.Warn(fmt.Sprintf("rpc sub notifier closed"))
 		}
@@ -61,16 +55,45 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 }
 
 // SendRaw sends the message (serialized into byte slice) to a peer with topic
-func (pssapi *PssAPI) SendRaw(topic PssTopic, msg PssAPIMsg) error {
-	err := pssapi.Pss.Send(msg.Addr, topic, msg.Msg)
-	if err != nil {
-		return fmt.Errorf("send error: %v", err)
+func (pssapi *API) Send(topic Topic, msg APIMsg) error {
+	if pssapi.debug && bytes.Equal(msg.Addr, pssapi.BaseAddr()) {
+		log.Warn("Pss debug enabled; send to self shortcircuit", "apimsg", msg, "topic", topic)
+		env := NewEnvelope(msg.Addr, topic, msg.Msg)
+		return pssapi.Process(&PssMsg{
+			To:      pssapi.BaseAddr(),
+			Payload: env,
+		})
 	}
-	return fmt.Errorf("ok sent")
+	return pssapi.SendRaw(msg.Addr, topic, msg.Msg)
+}
+
+// PssAPITest are temporary API calls for development use only
+// These symbols should not be included in production environment
+type APITest struct {
+	*Pss
+}
+
+// NewAPI constructs a API instance
+func NewAPITest(ps *Pss) *APITest {
+	return &APITest{Pss: ps}
+}
+
+// temporary for access to overlay while faking kademlia healthy routines
+func (pssapitest *APITest) GetForwarder(addr []byte) (fwd struct {
+	Addr  []byte
+	Count int
+}) {
+	pssapitest.Overlay.EachConn(addr, 255, func(op network.OverlayConn, po int, isproxbin bool) bool {
+		if bytes.Equal(fwd.Addr, []byte{}) {
+			fwd.Addr = op.Address()
+		}
+		fwd.Count++
+		return true
+	})
+	return
 }
 
 // BaseAddr gets our own overlayaddress
-func (pssapi *PssAPI) BaseAddr() ([]byte, error) {
-	log.Warn("inside baseaddr")
-	return pssapi.Pss.Overlay.BaseAddr(), nil
+func (pssapitest *APITest) BaseAddr() ([]byte, error) {
+	return pssapitest.Pss.BaseAddr(), nil
 }
