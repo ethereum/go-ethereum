@@ -39,6 +39,8 @@ func FromHex(s string) []byte {
 			s = "0" + s
 		}
 		return Hex2Bytes(s)
+	} else if len(s) == 1 {
+		return Hex2Bytes("0" + s)
 	}
 	return nil
 }
