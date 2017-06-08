@@ -33,10 +33,12 @@ import (
 // be flagged `true`.
 // Input specifies the required input parameters for this gives method.
 type Method struct {
-	Name    string
-	Const   bool
-	Inputs  []Argument
-	Outputs []Argument
+	Name    string     `json:"name"`
+	Const   bool       `json:"constant"`
+	Inputs  []Argument `json:"inputs"`
+	Outputs []Argument `json:"outputs"`
+	//to add
+	// Payable bool `json:"payable"`
 }
 
 func (m Method) pack(method Method, args ...interface{}) ([]byte, error) {
